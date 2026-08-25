@@ -107,7 +107,8 @@ def _match(path: Path, diff_path: str) -> bool:
 
 
 def _resolve_diff_path(
-    path: Path, ranges_by_path: dict[str, list[tuple[int, int]]]
+    path: Path,
+    ranges_by_path: dict[str, list[tuple[int, int]]],
 ) -> str | None:
     """Resolve path to exactly ONE diff path: the candidate agreeing on
     the most trailing segments wins. An equal-depth tie is ambiguous -
@@ -156,7 +157,7 @@ def violations(
                     start <= re_ and rs <= end for rs, re_ in ranges
                 ):
                     results.append(
-                        f"FUNCTION | {path}:{start} | {name} | {length} lines"
+                        f"FUNCTION | {path}:{start} | {name} | {length} lines",
                     )
         ins, dels = counts.get(diff_path, (0, 0))
         try:
