@@ -63,3 +63,17 @@ def test_prd00136_cycle1_replay_exits_one_with_the_two_lines(
     line1, line2 = _expected_lines(paths)
     assert exit_code == 1
     assert capsys.readouterr().out == line1 + "\n" + line2 + "\n"
+
+
+def test_diff_paths_covers_every_new_side_path_in_the_replayed_diff() -> None:
+    diff_text = (_FIXTURE_DIR / "changes.diff").read_text(encoding="utf-8")
+    expected = {
+        line[len("+++ b/") :]
+        for line in diff_text.splitlines()
+        if line.startswith("+++ b/")
+    }
+    actual = set(_DIFF_PATHS)
+    missing = expected - actual
+    assert not missing, (
+        f"_DIFF_PATHS is missing paths present in changes.diff: {sorted(missing)}"
+    )
