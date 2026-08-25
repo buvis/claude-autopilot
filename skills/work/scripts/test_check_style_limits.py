@@ -318,7 +318,9 @@ def test_pooled_ranges_do_not_leak_a_root_files_hunk_onto_a_same_named_nested_fi
 
 
 def test_equal_depth_ambiguous_matches_are_skipped_with_the_rest_still_reported(
-    tmp_path: Path, capsys, monkeypatch
+    tmp_path: Path,
+    capsys,
+    monkeypatch,
 ) -> None:
     monkeypatch.chdir(tmp_path)
     _write(tmp_path, "c.py", "def small():\n    return 1\n")
@@ -424,7 +426,8 @@ def test_violations_skips_a_missing_path_and_still_reports_the_surviving_path(
 
 
 def test_violations_notes_a_skipped_unreadable_path_on_stderr(
-    tmp_path: Path, capsys
+    tmp_path: Path,
+    capsys,
 ) -> None:
     py_file, over_limit_diff = _write_over_limit_diff(tmp_path)
     missing_path = tmp_path / "missing.py"
@@ -460,7 +463,8 @@ def test_violations_skips_a_file_with_invalid_utf8_bytes(tmp_path: Path) -> None
 
 
 def test_clean_diff_via_main_exits_zero_with_empty_output(
-    tmp_path: Path, capsys
+    tmp_path: Path,
+    capsys,
 ) -> None:
     py_file, diff_text = _write_clean_diff(tmp_path)
     diff_file = _write(tmp_path, "changes.diff", diff_text)
@@ -495,7 +499,8 @@ def test_main_exits_two_and_names_the_path_when_the_diff_file_is_missing(
 
 
 def test_main_exits_two_and_names_the_path_for_invalid_utf8_diff_bytes(
-    tmp_path: Path, capsys
+    tmp_path: Path,
+    capsys,
 ) -> None:
     bad_diff = tmp_path / "bad.diff"
     bad_diff.write_bytes(b"\xff\xfe\x00\x01binary garbage")

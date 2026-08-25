@@ -255,6 +255,6 @@ def test_step_7_0_branches_on_a_gate_that_could_not_run() -> None:
         "'stderr' as the source of the '<reason>' substituted into "
         "'style_gate: failed:<reason>' — not found. The exit-1 clause "
         "spells out its substitution ('the violation lines, joined by "
-        "\"; \"'); exit 2 leaves <reason> undefined, so an agent executing "
+        '"; "\'); exit 2 leaves <reason> undefined, so an agent executing '
         "this literally has to guess what to record."
     )
