@@ -117,7 +117,13 @@ def test_step_7_runs_the_style_limit_gate_and_declares_compute_mech_facts() -> N
     end = _TEXT.index("## Reference Files", start)
     step_7 = _TEXT[start:end]
 
-    for needle in ("check_style_limits.py", "style_gate: clean", "fixed:", "failed:"):
+    for needle in (
+        "check_style_limits.py",
+        "style_gate: clean",
+        "fixed:",
+        "failed:",
+        "work_start_sha",
+    ):
         assert needle in step_7, (
             f"{_SKILL_MD}: expected step 7 to contain {needle!r} — not found."
         )
