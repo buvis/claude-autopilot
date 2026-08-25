@@ -285,6 +285,109 @@ def test_unparseable_file_still_reports_a_file_crossing(tmp_path: Path) -> None:
     assert csl.violations(diff_text, [py_file]) == [f"FILE | {py_file} | 805 lines"]
 
 
+# --- diff-path resolution (same-basename collisions) --------------------------
+
+
+def test_pooled_ranges_do_not_leak_a_root_files_hunk_onto_a_same_named_nested_file(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "tests").mkdir()
+    edited = ["def edited():", "    x = 1", "    x = 2"]
+    gap = [""] * 12
+    text = "\n".join(edited + gap) + "\n" + _long_function("never_touched", 51)
+    py_file = _write(tmp_path, "tests/conftest.py", text)
+    diff_text = (
+        "diff --git a/conftest.py b/conftest.py\n"
+        "--- a/conftest.py\n"
+        "+++ b/conftest.py\n"
+        "@@ -16,51 +16,51 @@\n"
+        "-old line\n"
+        "+new line\n"
+        "diff --git a/tests/conftest.py b/tests/conftest.py\n"
+        "--- a/tests/conftest.py\n"
+        "+++ b/tests/conftest.py\n"
+        "@@ -1,3 +1,3 @@\n"
+        "-def edited():\n"
+        "-    x = 1\n"
+        "-    x = 1\n"
+        "+def edited():\n"
+        "+    x = 1\n"
+        "+    x = 2\n"
+    )
+    assert csl.violations(diff_text, [py_file]) == []
+
+
+def test_equal_depth_ambiguous_matches_are_skipped_with_the_rest_still_reported(
+    tmp_path: Path, capsys, monkeypatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    _write(tmp_path, "c.py", "def small():\n    return 1\n")
+    ambiguous_path = Path("c.py")
+    other_file, over_limit_diff = _write_over_limit_diff(tmp_path)
+    diff_text = (
+        "diff --git a/a/c.py b/a/c.py\n"
+        "--- a/a/c.py\n"
+        "+++ b/a/c.py\n"
+        "@@ -1,2 +1,2 @@\n"
+        "-def small():\n"
+        "-    return 0\n"
+        "+def small():\n"
+        "+    return 1\n"
+        "diff --git a/b/c.py b/b/c.py\n"
+        "--- a/b/c.py\n"
+        "+++ b/b/c.py\n"
+        "@@ -1,2 +1,2 @@\n"
+        "-def small():\n"
+        "-    return 0\n"
+        "+def small():\n"
+        "+    return 1\n"
+    ) + over_limit_diff
+    result = csl.violations(diff_text, [ambiguous_path, other_file])
+    captured = capsys.readouterr()
+    assert result == [f"FUNCTION | {other_file}:1 | over_limit | 51 lines"]
+    assert str(ambiguous_path) in captured.err
+
+
+def test_file_arithmetic_uses_only_the_matched_files_own_counts(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "pkg").mkdir()
+    text = "x = 1\n" * 805
+    py_file = _write(tmp_path, "pkg/cfg.py", text)
+    root_deletions = "".join("-old line\n" for _ in range(20))
+    own_deletions = "".join("-x = 1\n" for _ in range(5))
+    own_additions = "".join("+x = 1\n" for _ in range(10))
+    diff_text = (
+        "diff --git a/cfg.py b/cfg.py\n"
+        "--- a/cfg.py\n"
+        "+++ b/cfg.py\n"
+        "@@ -1,20 +1,0 @@\n" + root_deletions + "diff --git a/pkg/cfg.py b/pkg/cfg.py\n"
+        "--- a/pkg/cfg.py\n"
+        "+++ b/pkg/cfg.py\n"
+        "@@ -1,5 +1,10 @@\n" + own_deletions + own_additions
+    )
+    assert csl.violations(diff_text, [py_file]) == [f"FILE | {py_file} | 805 lines"]
+
+
+def test_match_normalises_dot_slash_and_double_slash_diff_paths(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "a").mkdir()
+    func_text = _long_function("over_limit", 51)
+    py_file = _write(tmp_path, "a/b.py", func_text)
+    diff_text = (
+        "diff --git a/a/b.py b/a/b.py\n"
+        "--- a/a/b.py\n"
+        "+++ b/./a/b.py\n"
+        "@@ -1,2 +1,51 @@\n"
+        "-def over_limit():\n"
+        "-    pass\n" + "".join(f"+{line}\n" for line in func_text.splitlines())
+    )
+    assert csl.violations(diff_text, [py_file]) == [
+        f"FUNCTION | {py_file}:1 | over_limit | 51 lines",
+    ]
+
+
 # --- non-Python skip -----------------------------------------------------------
 
 
