@@ -41,9 +41,15 @@ def _expected_lines(paths: list[Path]) -> list[str]:
         "TestDispatcherRegistration."
         "test_degraded_hook_line_reaches_real_stderr_through_the_dispatcher"
     )
+    enforce_write_scope_path = next(
+        p for p in paths if p.name == "test_enforce_write_scope.py"
+    )
+    handler_run_parity_path = next(
+        p for p in paths if p.name == "test_handler_run_parity.py"
+    )
     return [
-        f"FUNCTION | {paths[2]}:642 | {qualified_name} | 57 lines",
-        f"FILE | {paths[3]} | 817 lines",
+        f"FUNCTION | {enforce_write_scope_path}:642 | {qualified_name} | 57 lines",
+        f"FILE | {handler_run_parity_path} | 817 lines",
     ]
 
 
