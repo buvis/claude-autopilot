@@ -131,7 +131,7 @@ def violations(
                     start <= re_ and rs <= end for rs, re_ in ranges
                 ):
                     results.append(
-                        f"FUNCTION | {path}:{start} | {name} | {length} lines",
+                        f"FUNCTION | {path}:{start} | {name} | {length} lines"
                     )
         ins = sum(counts.get(dp, (0, 0))[0] for dp in matched)
         dels = sum(counts.get(dp, (0, 0))[1] for dp in matched)
