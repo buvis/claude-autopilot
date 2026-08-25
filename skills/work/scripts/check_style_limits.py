@@ -98,12 +98,11 @@ def _line_counts(diff_text: str) -> dict[str, tuple[int, int]]:
     return counts
 
 
-def _match(path: Path, diff_path: str) -> bool:
-    """Same file when the trailing path segments agree for the last
-    min(len) segments, so `<tmp>/test_x.py` matches `hooks/tests/test_x.py`."""
+def _match_depth(path: Path, diff_path: str) -> int | None:
+    """Trailing-segment match depth, or None when the paths do not match."""
     a, d = path.parts, Path(diff_path).parts
     n = min(len(a), len(d))
-    return n > 0 and a[-n:] == d[-n:]
+    return n if n > 0 and a[-n:] == d[-n:] else None
 
 
 def _resolve_diff_path(
@@ -116,8 +115,8 @@ def _resolve_diff_path(
     than silently picking one or pooling them."""
     by_depth: dict[int, list[str]] = {}
     for dp in ranges_by_path:
-        if _match(path, dp):
-            depth = min(len(path.parts), len(Path(dp).parts))
+        depth = _match_depth(path, dp)
+        if depth is not None:
             by_depth.setdefault(depth, []).append(dp)
     if not by_depth:
         return None
