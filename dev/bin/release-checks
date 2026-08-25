@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Pre-release checks for autopilot. Run by claude-plugins/scripts/release-plugin
+# with CWD = repo root.
+#
+# The gate is the pack's own test suites. They pin the reviewer registry
+# (no lane can write to the repo it reviews, every persona dispatches),
+# the runner recursion guard, and the state schema the loop depends on.
+# Shipping past a red suite would ship a pipeline whose promises are untrue.
+set -euo pipefail
+
+echo "[checks] reviewer registry"
+uv run --no-project --with pytest python -m pytest -q \
+  skills/review-work-completion/scripts/test_agent_registry.py
+
+echo "[checks] runner recursion guard"
+bash skills/use-codex/scripts/test_codex_run.sh
+bash skills/use-gemini/scripts/test_gemini_run.sh
+bash skills/use-sonnet/scripts/test_sonnet_run.sh

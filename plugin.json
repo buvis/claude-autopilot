@@ -1,0 +1,11 @@
+{
+  "name": "autopilot",
+  "version": "0.1.0",
+  "description": "PRD-driven autonomous build and multi-lens review pipeline",
+  "extensions": {
+    "org.anthropic.claude": {
+      "agents": "agents/",
+      "hooks": "hooks/"
+    }
+  }
+}

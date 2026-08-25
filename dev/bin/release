@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Thin shim: the shared release logic lives in the claude-plugins repo, next
+# to the central marketplace.json it stamps. Repo-specific steps hook in via
+# dev/bin/release-checks (pre-bump) and dev/bin/release-build (post-bump).
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+CENTRAL_REPO="$REPO_ROOT/../claude-plugins"
+RELEASE="$CENTRAL_REPO/scripts/release-plugin"
+
+if [ ! -x "$RELEASE" ]; then
+  echo "Error: $RELEASE not found - clone buvis/claude-plugins beside this repo" >&2
+  exit 1
+fi
+
+echo "[release] pulling latest claude-plugins (shared script + marketplace)"
+git -C "$CENTRAL_REPO" pull --ff-only
+
+cd "$REPO_ROOT"
+exec "$RELEASE" "$@"
