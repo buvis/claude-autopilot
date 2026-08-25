@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The `enforce_prd_location` hook now actually runs. It shipped in 0.1.0 as a
+  bare `.py` file with no `hooks/hooks.json`, so Claude Code registered zero
+  hooks and the file was inert. It is now wired to `PreToolUse` on
+  `Edit|Write|MultiEdit` and on `Bash`, and `hooks/_common.py` ships alongside
+  it — without that sibling the hook raised `ImportError` on every invocation.
+
 ## [0.1.0] - 2026-08-25
 
 ### Added

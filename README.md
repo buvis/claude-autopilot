@@ -29,7 +29,13 @@ tests, `mallory` security, `trent` rubric, `victor` adversarial verification,
 `pat` per-task patches).
 
 One hook: `enforce_prd_location.py`, which keeps working documents in their
-declared homes instead of scattered through the repo.
+declared homes instead of scattered through the repo. It runs on `PreToolUse`
+for `Edit`, `Write`, `MultiEdit` and `Bash`: file mode blocks a PRD written
+outside a `dev/local/prds/` lifecycle directory, and Bash mode blocks a command
+that references a repo-root `backlog/`, `wip/`, `hold/` or `done/`.
+
+**If you already run this hook from your own config, disable one of them** —
+otherwise both fire and you get the same block twice.
 
 ## Recursion guard
 
