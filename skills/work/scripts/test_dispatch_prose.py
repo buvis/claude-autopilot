@@ -122,6 +122,8 @@ def test_step_7_runs_the_style_limit_gate_and_declares_compute_mech_facts() -> N
         "style_gate: clean",
         "fixed:",
         "failed:",
+        # work_start_sha: pins the reworked diff base (PRD 00140 recorded
+        # deviation), not a gate-behavior check
         "work_start_sha",
     ):
         assert needle in step_7, (
