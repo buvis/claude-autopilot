@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-08-25
+
 ### Fixed
 
 - Reviewer personas are dispatched as `autopilot:<name>`, not by bare name. The
