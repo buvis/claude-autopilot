@@ -19,6 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than silently, and a diff file that cannot be read exits 2 ("the gate could not
   run") instead of crashing to exit 1, which the caller reads as "violations
   found" and which made it dispatch a fix agent with an empty findings list.
+- **work**: step 7 no longer contradicts itself about when a work phase may end.
+  "Only stop the work phase once step 7 is fully green" sat above a sub-step that
+  records a style-gate failure and proceeds, so a literal reader could stall the
+  phase or loop on it. The stop condition is now scoped to the test suite, and a
+  recorded `style_gate: failed:` is named as a sanctioned way to complete.
+- **work**: step 7.0's bare-repo `--git-dir`/`--work-tree` rule now governs both
+  of its `git diff` invocations. It trailed only the first, so in a bare-repo
+  home the second could be run without the flags and fail with "fatal: not a git
+  repository". Step 7.0 also gained the missing branch for the gate's new exit
+  code 2, which records the failure without dispatching a fix agent that would
+  have nothing to fix.
 
 ## [0.1.2] - 2026-08-25
 
