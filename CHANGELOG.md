@@ -24,6 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   records a style-gate failure and proceeds, so a literal reader could stall the
   phase or loop on it. The stop condition is now scoped to the test suite, and a
   recorded `style_gate: failed:` is named as a sanctioned way to complete.
+- **work**: the style-limit gate resolves each changed file to exactly one diff
+  path instead of pooling every same-basename match. A diff touching both
+  `conftest.py` and `tests/conftest.py` used to give one of them the other's hunk
+  ranges and line counts, which could report a function as touched when its own
+  hunk never touched it, and could invent or suppress a file-length violation
+  through the pooled pre-image arithmetic. The deepest matching path now wins,
+  and a genuine tie is skipped with both candidates named on stderr rather than
+  silently picked.
 - **work**: step 7.0's bare-repo `--git-dir`/`--work-tree` rule now governs both
   of its `git diff` invocations. It trailed only the first, so in a bare-repo
   home the second could be run without the flags and fail with "fatal: not a git

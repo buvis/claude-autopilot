@@ -101,9 +101,34 @@ def _line_counts(diff_text: str) -> dict[str, tuple[int, int]]:
 def _match(path: Path, diff_path: str) -> bool:
     """Same file when the trailing path segments agree for the last
     min(len) segments, so `<tmp>/test_x.py` matches `hooks/tests/test_x.py`."""
-    a, d = path.parts, tuple(diff_path.split("/"))
+    a, d = path.parts, Path(diff_path).parts
     n = min(len(a), len(d))
     return n > 0 and a[-n:] == d[-n:]
+
+
+def _resolve_diff_path(
+    path: Path, ranges_by_path: dict[str, list[tuple[int, int]]]
+) -> str | None:
+    """Resolve path to exactly ONE diff path: the candidate agreeing on
+    the most trailing segments wins. An equal-depth tie is ambiguous -
+    skip it (print the file and the tied candidates to stderr) rather
+    than silently picking one or pooling them."""
+    by_depth: dict[int, list[str]] = {}
+    for dp in ranges_by_path:
+        if _match(path, dp):
+            depth = min(len(path.parts), len(Path(dp).parts))
+            by_depth.setdefault(depth, []).append(dp)
+    if not by_depth:
+        return None
+    candidates = by_depth[max(by_depth)]
+    if len(candidates) > 1:
+        print(
+            f"check_style_limits: ambiguous diff-path match for {path}: "
+            f"{candidates} - skipping",
+            file=sys.stderr,
+        )
+        return None
+    return candidates[0]
 
 
 def violations(
@@ -117,13 +142,13 @@ def violations(
     counts = _line_counts(diff_text)
     results: list[str] = []
     for path in paths:
-        matched = [dp for dp in ranges_by_path if _match(path, dp)]
-        if not matched:
+        diff_path = _resolve_diff_path(path, ranges_by_path)
+        if diff_path is None:
             continue
         status, funcs = facts_for_file(path)
         if status == "skipped (non-python)":
             continue
-        ranges = [r for dp in matched for r in ranges_by_path[dp]]
+        ranges = ranges_by_path[diff_path]
         if status == "ok":
             for name, start, length in funcs:
                 end = start + length - 1
@@ -133,8 +158,7 @@ def violations(
                     results.append(
                         f"FUNCTION | {path}:{start} | {name} | {length} lines"
                     )
-        ins = sum(counts.get(dp, (0, 0))[0] for dp in matched)
-        dels = sum(counts.get(dp, (0, 0))[1] for dp in matched)
+        ins, dels = counts.get(diff_path, (0, 0))
         try:
             n = len(path.read_text(encoding="utf-8").splitlines())
         except (OSError, SyntaxError, ValueError, UnicodeDecodeError) as exc:
