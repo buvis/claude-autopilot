@@ -1,98 +1,114 @@
-"""Contract test: review_coverage_hook.py must be wired as a Stop route in
-hooks/dispatch.py's ROUTES table (PRD 00071 moved the per-handler Stop
-registrations out of settings.json into ROUTES, so settings.json no longer
-names this script). The retired orchestration hooks (PRD 00014) must not be
-registered in settings.json or in ROUTES.
+"""Contract test: the pack's hooks are wired in its OWN hooks/hooks.json.
+
+History. PRD 00071 moved the per-handler registrations out of settings.json into
+`~/.claude/hooks/dispatch.py`'s ROUTES table, and this test followed them there.
+PRD 00144 extracted the pack into a plugin, at which point reading `~/.claude`
+from here became a plugin inspecting a personal config file it does not own —
+and the test broke outright, because its `parents[3]` now resolves to the pack
+root rather than `~/.claude`. All four hooks are registered in the plugin's own
+`hooks/hooks.json` now, so that manifest is what this binds.
 
 The coverage Stop hook is a backstop — if it is wired nowhere, a session ending
 at a review handoff with incomplete coverage would not be blocked. The stop and
-yield-clear hooks were deleted with the headless-loop conversion; a resurrected
-registration would point at a nonexistent script on every Stop. This test
-fails loud if either invariant breaks, or if settings.json is malformed.
+yield-clear hooks were deleted with the headless-loop conversion (PRD 00014); a
+resurrected registration would point at a nonexistent script on every Stop. This
+test fails loud if either invariant breaks, or if hooks.json is malformed.
 
 Stdlib-only unittest.
 """
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 import unittest
 from pathlib import Path
 
-_CLAUDE_DIR = Path(__file__).resolve().parents[3]
-_SETTINGS_PATH = _CLAUDE_DIR / "settings.json"
-_HOOKS_DIR = _CLAUDE_DIR / "hooks"
+# scripts -> run-autopilot -> skills -> pack root.
+_PACK_ROOT = Path(__file__).resolve().parents[3]
+_HOOKS_JSON = _PACK_ROOT / "hooks" / "hooks.json"
 
 _COVERAGE_HOOK_NAME = "review_coverage_hook.py"
 _RETIRED_HOOKS = ("autopilot_stop_hook.py", "autopilot_yield_clear_hook.py")
 
-
-def _hook_commands() -> list[str]:
-    data = json.loads(_SETTINGS_PATH.read_text())
-    commands: list[str] = []
-    for entries in data.get("hooks", {}).values():
-        for entry in entries:
-            for hook in entry.get("hooks", []):
-                cmd = hook.get("command")
-                if cmd is not None:
-                    commands.append(cmd)
-    return commands
+# Every handler the plugin owns, and the event each must be registered on.
+# dispatch.py carries a PLUGIN_OWNED set that must stay the complement of this;
+# routing one of these in both places fires it twice for the same tool call.
+_EXPECTED_REGISTRATIONS = {
+    "enforce_prd_location.py": "PreToolUse",
+    "autopilot_context_cap_hook.py": "PostToolUse",
+    "validate_state_json_hook.py": "PostToolUse",
+    _COVERAGE_HOOK_NAME: "Stop",
+}
 
 
-def _load_dispatch():
-    """Import hooks/dispatch.py by absolute path so dispatch.ROUTES can be
-    inspected without relying on hooks/ already being on sys.path."""
-    if "dispatch" in sys.modules:
-        return sys.modules["dispatch"]
-    if str(_HOOKS_DIR) not in sys.path:
-        sys.path.insert(0, str(_HOOKS_DIR))  # dispatch.py does `from _common import ...`
-    spec = importlib.util.spec_from_file_location("dispatch", str(_HOOKS_DIR / "dispatch.py"))
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules["dispatch"] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def _dispatch_route_basenames(event: str | None = None) -> list[str]:
-    """Basenames of dispatch.ROUTES handler paths, optionally filtered to one
-    event ("PreToolUse" / "PostToolUse" / "Stop")."""
-    dispatch = _load_dispatch()
-    return [Path(r.path).name for r in dispatch.ROUTES if event is None or r.event == event]
+def _commands_by_event() -> dict[str, list[str]]:
+    data = json.loads(_HOOKS_JSON.read_text(encoding="utf-8"))
+    out: dict[str, list[str]] = {}
+    for event, blocks in data.get("hooks", {}).items():
+        for block in blocks:
+            for hook in block.get("hooks", []):
+                command = hook.get("command")
+                if command is not None:
+                    out.setdefault(event, []).append(command)
+    return out
 
 
 class ReviewCoverageHookRegistrationTests(unittest.TestCase):
-    def test_settings_json_is_valid(self) -> None:
-        # Must parse — a malformed settings.json breaks the harness.
-        json.loads(_SETTINGS_PATH.read_text())
+    def test_hooks_json_is_valid(self) -> None:
+        # Must parse — a malformed manifest silently unregisters every hook.
+        json.loads(_HOOKS_JSON.read_text(encoding="utf-8"))
 
-    def test_coverage_hook_registered_as_stop_route(self) -> None:
+    def test_coverage_hook_registered_on_stop(self) -> None:
+        stop = " ".join(_commands_by_event().get("Stop", []))
         self.assertIn(
             _COVERAGE_HOOK_NAME,
-            _dispatch_route_basenames("Stop"),
-            "review_coverage_hook.py must be wired as a Stop route in "
-            "hooks/dispatch.py's ROUTES table; the coverage Stop hook is a "
-            "backstop - if it is wired nowhere, a session ending at a "
-            "review handoff with incomplete coverage would not be blocked",
+            stop,
+            "review_coverage_hook.py must be registered on Stop in "
+            "hooks/hooks.json; the coverage Stop hook is a backstop - if it is "
+            "wired nowhere, a session ending at a review handoff with "
+            "incomplete coverage would not be blocked",
         )
+
+    def test_every_plugin_owned_handler_is_registered_on_its_event(self) -> None:
+        commands = _commands_by_event()
+        for script, event in _EXPECTED_REGISTRATIONS.items():
+            self.assertIn(
+                script,
+                " ".join(commands.get(event, [])),
+                f"{script} must be registered on {event} in hooks/hooks.json; "
+                f"~/.claude/hooks/dispatch.py no longer routes it, so an "
+                f"absent entry here means it never runs",
+            )
+
+    def test_registered_commands_point_at_files_that_exist(self) -> None:
+        # A registration naming a moved or deleted script fails on every hook
+        # firing, and the harness surfaces that as a hook error, not as ours.
+        for event, commands in _commands_by_event().items():
+            for command in commands:
+                target = command.split()[-1]
+                self.assertTrue(
+                    target.startswith("${CLAUDE_PLUGIN_ROOT}/"),
+                    f"{event} command is not pack-relative: {command!r}",
+                )
+                resolved = _PACK_ROOT / target.removeprefix("${CLAUDE_PLUGIN_ROOT}/")
+                self.assertTrue(
+                    resolved.is_file(),
+                    f"{event} registration points at a missing file: {resolved}",
+                )
 
     def test_retired_orchestration_hooks_not_registered(self) -> None:
         # PRD 00014 deleted these scripts; a registration would fail every Stop.
-        route_basenames = _dispatch_route_basenames()
+        every_command = " ".join(
+            command
+            for commands in _commands_by_event().values()
+            for command in commands
+        )
         for retired in _RETIRED_HOOKS:
-            for cmd in _hook_commands():
-                self.assertNotIn(
-                    retired,
-                    cmd,
-                    f"{retired} was retired by PRD 00014 and must not be "
-                    "registered in settings.json",
-                )
             self.assertNotIn(
                 retired,
-                route_basenames,
+                every_command,
                 f"{retired} was retired by PRD 00014 and must not be "
-                "registered in hooks/dispatch.py's ROUTES table",
+                "registered in hooks/hooks.json",
             )
 
 

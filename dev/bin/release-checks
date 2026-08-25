@@ -12,6 +12,10 @@ echo "[checks] reviewer registry"
 uv run --no-project --with pytest python -m pytest -q \
   skills/review-work-completion/scripts/test_agent_registry.py
 
+echo "[checks] hook registration"
+uv run --no-project --with pytest python -m pytest -q \
+  skills/run-autopilot/scripts/test_review_coverage_hook_registration.py
+
 echo "[checks] runner recursion guard"
 bash skills/use-codex/scripts/test_codex_run.sh
 bash skills/use-gemini/scripts/test_gemini_run.sh

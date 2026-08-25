@@ -267,6 +267,30 @@ def test_no_persona_prompt_text_survives_outside_the_registry() -> None:
                 )
 
 
+def test_native_dispatch_names_are_namespaced() -> None:
+    """A roster persona dispatches as `autopilot:<name>`, never bare.
+
+    These agents ship inside a plugin, so the harness registers them under the
+    plugin namespace only; a bare `subagent_type` fails with "Agent type 'rita'
+    not found". The extraction (PRD 00144) moved the personas out of
+    ~/.claude/agents/ and left every dispatch site naming them bare, which
+    silently degraded each affected reviewer to "failed".
+    """
+    pattern = re.compile(r"subagent_type:\s*([A-Za-z0-9_:-]+)")
+    seen = 0
+    for path in (_PACK_ROOT / "skills").rglob("*.md"):
+        for value in pattern.findall(path.read_text(encoding="utf-8")):
+            stem = value.rpartition(":")[2]
+            if stem not in ROSTER:
+                continue  # a foreign pack's persona, not ours to namespace
+            seen += 1
+            assert value == f"autopilot:{stem}", (
+                f"{path} dispatches {value!r}; a plugin-owned persona only "
+                f"resolves as 'autopilot:{stem}'"
+            )
+    assert seen, "no roster dispatch site found; the sweep matched nothing"
+
+
 def test_placeholders_are_declared_in_the_conventions(registry) -> None:
     """Every {PLACEHOLDER} a persona uses must be documented, or a consuming
     skill will have nothing telling it what to substitute."""

@@ -12,7 +12,7 @@ Frontmatter carries:
 
 | Key | Required | Notes |
 |-----|----------|-------|
-| `name` | yes | Matches the filename stem. This is the dispatch name. |
+| `name` | yes | Matches the filename stem. The dispatch name is this stem namespaced: `autopilot:<name>` (§ Dispatch mechanism). |
 | `description` | yes | One line, ≤120 characters. It lands in the boot prefix, so length is a budget, not a style preference. |
 | `tools` | yes, every persona | **Never omit it.** An absent `tools` key does not mean "no tools" — the harness registers every file here as a native agent type, and one with no `tools` key inherits the full set, Edit and Write included. Absence is the hazard; the hygiene suite asserts presence. |
 | `model` | only when pinned | Eve pins `model: fable`. |
@@ -91,6 +91,12 @@ Registry personas dispatch by name:
 
 - **Native lanes** — the Agent tool's `subagent_type`, with the persona file
   supplying the system prompt and run inputs supplied in the prompt argument.
+  **The dispatch name is `autopilot:<persona>`, never the bare persona name.**
+  These agents ship inside a plugin, and the harness registers a plugin's agents
+  under its namespace only: dispatching the bare name `rita` fails outright with
+  `Agent type 'rita' not found`, listing `autopilot:rita` among the available
+  types. This bites every lane that names a persona — Alice, Blake, Eve, Bob's
+  Claude fallback, Eve's Claude substitute — and any lane added later. Prefix it.
 - **CLI lanes** — the skill assembles persona body + substitutions into a
   prompt file and passes it to the runner with `-f`, unchanged.
 - **Workflow lanes** — the orchestrating skill reads the seven bodies and

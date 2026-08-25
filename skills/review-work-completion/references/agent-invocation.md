@@ -11,7 +11,7 @@ Alice runs as a direct subagent (not a nested CLI invocation - `claude -p` insid
 
 ```
 Task tool:
-  subagent_type: alice
+  subagent_type: autopilot:alice
   description: "Alice reviews work against PRD requirements"
   prompt: |
     {run inputs — the substituted context/diff paths for this cycle}
@@ -65,7 +65,7 @@ Eve's persona is `agents/eve.md`, which is also the base Bob's doubt appendix is
 
 ```
 Task tool:
-  subagent_type: eve
+  subagent_type: autopilot:eve
   description: "Eve doubt-reviews the work against the PRD"
   prompt: |
     ## PRD

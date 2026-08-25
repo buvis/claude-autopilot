@@ -20,7 +20,7 @@ Makes autonomous decisions backed by research (dependencies, recurring issues, A
 
 ## Dependencies
 
-- Personal skills (invoked as phases): `design-solution`, `plan-tasks`, `work`,
+- Pack skills (invoked as phases): `design-solution`, `plan-tasks`, `work`,
   `review-work-completion`
 - Plugin skills: `git-ferry:catchup` (Phase 1, unless the PRD sets `catchup: skip`)
 - Files read from other skill dirs:

@@ -21,6 +21,39 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|Read|Agent|WebFetch|WebSearch|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/autopilot_context_cap_hook.py",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/validate_state_json_hook.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/review_coverage_hook.py",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }

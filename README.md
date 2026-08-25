@@ -10,11 +10,12 @@ reviewer who cannot see your reasoning says otherwise.
 
 ## What's inside
 
-Nine skills:
+Ten skills:
 
 | Skill | Does |
 |---|---|
 | `run-autopilot` | Drives the whole lifecycle: catchup, design, plan, work, review-rework loop |
+| `design-solution` | Turns a PRD into a reviewed design doc before planning |
 | `plan-tasks` | Breaks a PRD into sequenced, session-sized tasks |
 | `work` | Executes one task at a time, dispatching an implementor and committing after each |
 | `review-work-completion` | Consensus review of finished work against the PRD |
@@ -96,6 +97,14 @@ and naming the resolved root. Scripts locate their own siblings from `$0` or
 - **The qwen lane.** `work` can route a task to a local Qwen model through
   `use-qwen`, which is not part of this pack. Without it that route is simply
   unavailable; nothing else changes.
+- **`review-fanout.workflow.js`.** The fan-out consensus engine is a host-local
+  workflow file, conventionally `~/.claude/workflows/review-fanout.workflow.js`.
+  It is needed only by the opt-in `workflow` and `shadow` values of a PRD's
+  `consensus_engine`. Absent, both fall back to `legacy`, which is the default
+  and needs no such file.
+- **`rules-library/rationalizations.md`.** `design-solution` reads it for the
+  synonym sets that drive its reuse sweep. Absent, the sweep runs on the model's
+  own synonyms and says so in its summary line.
 
 ## Development
 

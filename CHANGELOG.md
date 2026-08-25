@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Reviewer personas are dispatched as `autopilot:<name>`, not by bare name. The
+  harness registers a plugin's agents under its namespace only, so every native
+  lane that named a persona bare (Alice, Blake, Eve, and the two Claude
+  fallbacks) failed its dispatch with `Agent type 'alice' not found` and was
+  marked a failed reviewer — degrading the cycle quietly rather than loudly.
+
+### Added
+
+- **design-solution**: the pack now ships the design phase it drives. Every PRD
+  that does not set `design_mode: skip` invokes `/design-solution`, and a missing
+  sub-skill pauses the run — so an installed pack broke on its own default path.
+  Its severity taxonomy ships with it as `references/cardinal-sins.md`.
+
+### Changed
+
+- The plugin registers all four of its hooks itself. `autopilot_context_cap_hook`
+  (PostToolUse), `validate_state_json_hook` (PostToolUse) and
+  `review_coverage_hook` (Stop) join `enforce_prd_location` in
+  `hooks/hooks.json`. They were reached through a personal `~/.claude` dispatcher
+  that globbed the installed plugin cache to find them, which worked but broke
+  silently whenever the cache layout changed.
+
+### Documentation
+
+- The "What intentionally stays out" list now names `review-fanout.workflow.js`
+  and `rules-library/rationalizations.md`, the two host-local files the pack
+  reads but does not ship. Both degrade gracefully; neither was documented.
+
 ## [0.1.1] - 2026-08-25
 
 ### Fixed
