@@ -22,7 +22,9 @@ _TEXT = _SKILL_MD.read_text()
 def test_tess_dispatch_is_rendered_through_render_prompt_py() -> None:
     # Step 2.7 must dispatch Tess via render_prompt.py naming tess-prompt.md,
     # never author her prompt text inline.
-    needle = "render_prompt.py ${CLAUDE_PLUGIN_ROOT}/skills/work/references/tess-prompt.md"
+    needle = (
+        "render_prompt.py ${CLAUDE_PLUGIN_ROOT}/skills/work/references/tess-prompt.md"
+    )
 
     assert needle in _TEXT, (
         f"{_SKILL_MD}: expected the Tess dispatch (step 2.7) to invoke "
@@ -88,7 +90,9 @@ def test_task_authored_prose_flags_never_cross_the_shell_via_set() -> None:
         )
 
 
-def test_step_5_7_gives_in_task_medium_findings_one_retry_stamped_medium_retry() -> None:
+def test_step_5_7_gives_in_task_medium_findings_one_retry_stamped_medium_retry() -> (
+    None
+):
     # Step 5.7: a MEDIUM inside the task's FILES_TOUCHED gets one Ivan retry
     # and a Pat re-run before step 6, stamped "medium-retry:<fixed|unfixed>";
     # other MEDIUMs and all LOWs keep today's note-and-proceed behaviour.
@@ -125,4 +129,91 @@ def test_step_7_runs_the_style_limit_gate_and_declares_compute_mech_facts() -> N
     assert "compute_mech_facts.py" in dependencies, (
         f"{_SKILL_MD}: expected '## Dependencies' to name compute_mech_facts.py "
         "— not found."
+    )
+
+
+def test_step_7_stop_condition_permits_a_recorded_style_gate_failure() -> None:
+    # Step 7.0 sanctions a recorded `style_gate: failed:<violations>` and
+    # explicitly proceeds to the suite anyway (fail loud, never silent).
+    # Step 7's stop-condition sentence sets the phase's "fully green" bar
+    # unqualified today — step 7.0 is a sub-step of step 7, so a recorded
+    # style-gate failure leaves step 7 not fully green, and that sentence
+    # then forbids ending the phase, contradicting the sanctioned exit.
+    # The paragraph that states "fully green" must itself scope that bar
+    # to the test suite and name the style-gate-failure exception, so a
+    # future reword of the sentence can't silently drop the exception and
+    # leave the contradiction behind. Checked per-paragraph (never
+    # .index()) so a full rewrite of the sentence fails this assertion
+    # cleanly instead of raising.
+    start = _TEXT.index("### 7.")
+    end = _TEXT.index("## Reference Files", start)
+    step_7 = _TEXT[start:end]
+
+    stop_condition_paragraphs = [
+        paragraph for paragraph in step_7.split("\n\n") if "fully green" in paragraph
+    ]
+
+    assert stop_condition_paragraphs, (
+        f"{_SKILL_MD}: expected a paragraph in step 7 to state its stop "
+        "condition using 'fully green' — none found. If this wording was "
+        "deliberately replaced, this test needs updating to locate the "
+        "new stop-condition wording."
+    )
+
+    for paragraph in stop_condition_paragraphs:
+        assert "suite" in paragraph, (
+            f"{_SKILL_MD}: expected the paragraph stating step 7's 'fully "
+            "green' stop condition to scope it to the test suite — "
+            "'suite' not found in that paragraph. Today it reads 'once "
+            "step 7 is fully green', unqualified, which also covers step "
+            "7.0's style gate."
+        )
+        assert "style_gate: failed" in paragraph, (
+            f"{_SKILL_MD}: expected the paragraph stating step 7's 'fully "
+            "green' stop condition to name a recorded 'style_gate: "
+            "failed:' outcome as a sanctioned way to complete the phase "
+            "— not found in that paragraph. Without it, the stop "
+            "condition still contradicts step 7.0's 'proceed to the "
+            "suite anyway' instruction on a style-gate failure."
+        )
+
+
+def test_step_7_0_bare_repo_git_flags_govern_both_diff_invocations() -> None:
+    # Step 7.0 runs two `git diff` invocations: one writing the phase diff
+    # (--output=) and one listing changed Python files (--name-only
+    # --diff-filter=d). The `--git-dir`/`--work-tree` bare-repo-home
+    # parenthetical trails only the first today, so a literal reader could
+    # run the second invocation without the flags and hit
+    # `fatal: not a git repository` in a bare-repo home.
+    start = _TEXT.index("#### 7.0.")
+    end = _TEXT.index("**What to run**", start)
+    step_7_0 = _TEXT[start:end]
+
+    first_idx = step_7_0.index("git diff <base>..HEAD --output=")
+    second_idx = step_7_0.index("git diff --name-only --diff-filter=d")
+
+    flag_occurrences = []
+    search_from = 0
+    while True:
+        pos = step_7_0.find("--git-dir", search_from)
+        if pos == -1:
+            break
+        flag_occurrences.append(pos)
+        search_from = pos + 1
+
+    assert flag_occurrences, (
+        f"{_SKILL_MD}: expected step 7.0 to mention '--git-dir' at all — not found."
+    )
+
+    scopes_whole_block = any(pos < first_idx for pos in flag_occurrences)
+    attached_to_second_too = any(pos >= second_idx for pos in flag_occurrences)
+
+    assert scopes_whole_block or attached_to_second_too, (
+        f"{_SKILL_MD}: expected the '--git-dir'/'--work-tree' bare-repo "
+        "flags to be named before the first `git diff` invocation "
+        "(scoping the whole block) or to appear again at/after the second "
+        "invocation ('git diff --name-only --diff-filter=d') — every "
+        "occurrence found trails only the first invocation, exactly like "
+        "today's single parenthetical, and a literal reader could run the "
+        "second `git diff` without the flags."
     )
