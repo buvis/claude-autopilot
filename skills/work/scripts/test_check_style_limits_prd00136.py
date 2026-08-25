@@ -18,6 +18,7 @@ _DIFF_PATHS = [
     ".claude/hooks/dispatch.py",
     ".claude/hooks/tests/test_enforce_write_scope.py",
     ".claude/hooks/tests/test_handler_run_parity.py",
+    ".claude/hooks/tests/test_dispatch.py",
 ]
 
 
@@ -55,7 +56,8 @@ def test_prd00136_cycle1_replay_reports_exactly_the_two_reviewer_findings(
 
 
 def test_prd00136_cycle1_replay_exits_one_with_the_two_lines(
-    tmp_path: Path, capsys
+    tmp_path: Path,
+    capsys,
 ) -> None:
     paths = _copy_fixtures(tmp_path)
     diff_path = _FIXTURE_DIR / "changes.diff"
