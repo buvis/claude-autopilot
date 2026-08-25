@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **work**: the style-limit gate no longer flags a long function that a
+  deletion-only hunk merely surrounds. `git diff` emits three lines of context
+  around a deletion, which the gate counted as "touched", so removing code above
+  a pre-existing over-limit function reported that function as a new violation —
+  the opposite of the introduced-only rule the gate exists to enforce.
+- **work**: the style-limit gate fails loud instead of masquerading as a clean
+  run. An unreadable changed file is now skipped with a note on stderr rather
+  than silently, and a diff file that cannot be read exits 2 ("the gate could not
+  run") instead of crashing to exit 1, which the caller reads as "violations
+  found" and which made it dispatch a fix agent with an empty findings list.
+
 ## [0.1.2] - 2026-08-25
 
 ### Fixed

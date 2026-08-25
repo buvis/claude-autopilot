@@ -17,7 +17,12 @@ import re
 import sys
 from pathlib import Path
 
-_MECH = Path(__file__).resolve().parents[2] / "review-work-completion" / "scripts" / "compute_mech_facts.py"
+_MECH = (
+    Path(__file__).resolve().parents[2]
+    / "review-work-completion"
+    / "scripts"
+    / "compute_mech_facts.py"
+)
 _spec = importlib.util.spec_from_file_location("compute_mech_facts", _MECH)
 assert _spec is not None and _spec.loader is not None
 _compute_mech_facts = importlib.util.module_from_spec(_spec)
@@ -32,23 +37,46 @@ def touched_ranges(diff_text: str) -> dict[str, list[tuple[int, int]]]:
     """Parse diff text and return per-file new-side line ranges.
 
     Returns a dict mapping diff path (b/ stripped) to a list of
-    (start, end) tuples for each hunk's new-side range.
+    (start, end) tuples for each hunk's new-side range. A hunk only
+    contributes its range when it adds at least one line; a hunk that is
+    pure deletion (with or without trailing context) touches nothing.
     """
     result: dict[str, list[tuple[int, int]]] = {}
     current_path = ""
+    pending: tuple[int, int] | None = None
+    has_addition = False
+
+    def flush() -> None:
+        if pending is not None and has_addition:
+            result[current_path].append(pending)
+
     for line in diff_text.splitlines():
         if line.startswith("+++ b/"):
+            flush()
             current_path = line[6:]
             result.setdefault(current_path, [])
+            pending = None
+            has_addition = False
         elif line.startswith("+++"):
+            flush()
             current_path = ""
+            pending = None
+            has_addition = False
         elif current_path and line.startswith("@@ "):
+            flush()
             m = _HUNK_RE.match(line)
             if m:
                 start = int(m.group(1))
                 count = int(m.group(2)) if m.group(2) else 1
-                if count > 0:
-                    result[current_path].append((start, start + count - 1))
+                pending = (start, start + count - 1) if count > 0 else None
+            else:
+                pending = None
+            has_addition = False
+        elif (
+            pending is not None and line.startswith("+") and not line.startswith("+++")
+        ):
+            has_addition = True
+    flush()
     return result
 
 
@@ -99,11 +127,22 @@ def violations(
         if status == "ok":
             for name, start, length in funcs:
                 end = start + length - 1
-                if length > function_limit and any(start <= re_ and rs <= end for rs, re_ in ranges):
-                    results.append(f"FUNCTION | {path}:{start} | {name} | {length} lines")
+                if length > function_limit and any(
+                    start <= re_ and rs <= end for rs, re_ in ranges
+                ):
+                    results.append(
+                        f"FUNCTION | {path}:{start} | {name} | {length} lines",
+                    )
         ins = sum(counts.get(dp, (0, 0))[0] for dp in matched)
         dels = sum(counts.get(dp, (0, 0))[1] for dp in matched)
-        n = len(path.read_text(encoding="utf-8").splitlines())
+        try:
+            n = len(path.read_text(encoding="utf-8").splitlines())
+        except (OSError, SyntaxError, ValueError, UnicodeDecodeError) as exc:
+            print(
+                f"check_style_limits: skipping unreadable file {path}: {exc}",
+                file=sys.stderr,
+            )
+            continue
         if n > file_limit and n - ins + dels <= file_limit:
             results.append(f"FILE | {path} | {n} lines")
     return results
@@ -117,7 +156,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--diff", required=True, type=Path)
     parser.add_argument("files", nargs="+", type=Path)
     args = parser.parse_args(argv)
-    diff_text = args.diff.read_text(encoding="utf-8")
+    try:
+        diff_text = args.diff.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(
+            f"check_style_limits: cannot read diff file {args.diff}: {exc}",
+            file=sys.stderr,
+        )
+        return 2
     found = violations(diff_text, args.files)
     for line in found:
         print(line)
