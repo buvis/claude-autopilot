@@ -1,0 +1,19 @@
+{
+  "name": "autopilot",
+  "description": "PRD-driven build and review pipeline for Claude Code",
+  "owner": {
+    "name": "buvis"
+  },
+  "plugins": [
+    {
+      "name": "autopilot",
+      "description": "Plans a PRD into tasks, implements them one at a time, then runs consensus, blind and doubt reviewers every cycle until the work converges",
+      "version": "0.1.0",
+      "author": {
+        "name": "buvis"
+      },
+      "source": "./",
+      "category": "workflow"
+    }
+  ]
+}
