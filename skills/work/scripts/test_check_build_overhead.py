@@ -16,11 +16,12 @@ check_build_overhead = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(check_build_overhead)
 
 
+_ENGRAM_REPO = Path.home() / "git" / "src" / "github.com" / "buvis" / "engram"
 GOLDEN_TRANSCRIPT = (
     Path.home()
     / ".claude"
     / "projects"
-    / "-Users-dev-git-src-github-com-buvis-engram"
+    / str(_ENGRAM_REPO).replace("/", "-").replace(".", "-")
     / "4bddd2d6-0c28-4a2d-aa41-bbf06873027d.jsonl"
 )
 
