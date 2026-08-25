@@ -170,6 +170,53 @@ def test_all_deletions_diff_never_reports_a_function_line(tmp_path: Path) -> Non
     assert csl.violations(diff_text, [py_file]) == []
 
 
+def test_deletion_hunk_with_trailing_context_does_not_report_the_function_it_surrounds(
+    tmp_path: Path,
+) -> None:
+    py_file = _write(tmp_path, "mod.py", _long_function("survivor", 51))
+    diff_text = (
+        "diff --git a/mod.py b/mod.py\n"
+        "--- a/mod.py\n"
+        "+++ b/mod.py\n"
+        "@@ -1,8 +1,3 @@\n"
+        "-def old_helper():\n"
+        "-    x = 1\n"
+        "-    x = 2\n"
+        "-    x = 3\n"
+        "-    x = 4\n"
+        " def survivor():\n"
+        "     x = 1\n"
+        "     x = 1\n"
+    )
+    assert csl.violations(diff_text, [py_file]) == []
+
+
+def test_hunk_with_an_addition_still_contributes_its_range_and_reports_the_function(
+    tmp_path: Path,
+) -> None:
+    text = "# note\n" + _long_function("survivor", 51)
+    py_file = _write(tmp_path, "mod.py", text)
+    diff_text = (
+        "diff --git a/mod.py b/mod.py\n"
+        "--- a/mod.py\n"
+        "+++ b/mod.py\n"
+        "@@ -1,8 +1,4 @@\n"
+        "-def old_helper():\n"
+        "-    x = 1\n"
+        "-    x = 2\n"
+        "-    x = 3\n"
+        "-    x = 4\n"
+        "+# note\n"
+        " def survivor():\n"
+        "     x = 1\n"
+        "     x = 1\n"
+    )
+    assert csl.touched_ranges(diff_text)["mod.py"] == [(1, 4)]
+    assert csl.violations(diff_text, [py_file]) == [
+        f"FUNCTION | {py_file}:2 | survivor | 51 lines"
+    ]
+
+
 # --- file violations ----------------------------------------------------------
 
 
@@ -252,6 +299,41 @@ def test_non_python_changed_file_is_skipped_silently(tmp_path: Path) -> None:
     assert csl.violations(diff_text, [md_file]) == []
 
 
+# --- unreadable / missing files ------------------------------------------------
+
+
+def test_violations_skips_a_missing_path_and_still_reports_the_surviving_path(
+    tmp_path: Path,
+) -> None:
+    py_file, over_limit_diff = _write_over_limit_diff(tmp_path)
+    missing_path = tmp_path / "missing.py"
+    diff_text = (
+        "diff --git a/missing.py b/missing.py\n"
+        "--- a/missing.py\n"
+        "+++ b/missing.py\n"
+        "@@ -1,1 +1,1 @@\n"
+        "-old line\n"
+        "+new line\n"
+    ) + over_limit_diff
+    assert csl.violations(diff_text, [missing_path, py_file]) == [
+        f"FUNCTION | {py_file}:1 | over_limit | 51 lines"
+    ]
+
+
+def test_violations_skips_a_file_with_invalid_utf8_bytes(tmp_path: Path) -> None:
+    py_file = tmp_path / "mod.py"
+    py_file.write_bytes(b"\xff\xfe\x00\x01binary garbage")
+    diff_text = (
+        "diff --git a/mod.py b/mod.py\n"
+        "--- a/mod.py\n"
+        "+++ b/mod.py\n"
+        "@@ -1,1 +1,1 @@\n"
+        "-old line\n"
+        "+new line\n"
+    )
+    assert csl.violations(diff_text, [py_file]) == []
+
+
 # --- main / CLI ------------------------------------------------------------
 
 
@@ -272,6 +354,18 @@ def test_violating_diff_via_main_exits_one_and_prints_the_lines(
     out = capsys.readouterr().out
     assert exit_code == 1
     assert out == f"FUNCTION | {py_file}:1 | over_limit | 51 lines\n"
+
+
+def test_main_exits_two_and_names_the_path_when_the_diff_file_is_missing(
+    tmp_path: Path, capsys
+) -> None:
+    missing_diff = tmp_path / "absent.diff"
+    py_file = _write(tmp_path, "mod.py", "def small():\n    return 1\n")
+    exit_code = csl.main(["--diff", str(missing_diff), str(py_file)])
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert str(missing_diff) in captured.err
+    assert captured.out == ""
 
 
 def test_cli_subprocess_exits_one_and_prints_violation_lines(tmp_path: Path) -> None:
