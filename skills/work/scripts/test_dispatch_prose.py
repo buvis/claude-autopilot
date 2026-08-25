@@ -217,3 +217,44 @@ def test_step_7_0_bare_repo_git_flags_govern_both_diff_invocations() -> None:
         "today's single parenthetical, and a literal reader could run the "
         "second `git diff` without the flags."
     )
+
+
+def test_step_7_0_branches_on_a_gate_that_could_not_run() -> None:
+    # Step 7.0's exit-2 branch ("the gate could not run at all") must handle
+    # exit 2 specifically, record a `style_gate: failed:` outcome, and must
+    # NOT dispatch Ivan — there are no violation lines to hand him, and
+    # dispatching on an empty findings list is the failure this branch exists
+    # to prevent. The clause must also name what `<reason>` is substituted
+    # from: the exit-1 clause spells out its substitution ("the violation
+    # lines, joined by '; '"), but exit 2 leaves <reason> undefined today.
+    # The script writes its failure message to stderr, so a correct fix
+    # names stderr as the source.
+    start = _TEXT.index("#### 7.0.")
+    end = _TEXT.index("**What to run**", start)
+    step_7_0 = _TEXT[start:end]
+
+    assert "Exit 2" in step_7_0, (
+        f"{_SKILL_MD}: expected step 7.0 to branch on 'Exit 2' (the gate "
+        "could not run at all) — not found."
+    )
+
+    exit_2_clause = step_7_0.split("Exit 2", 1)[1]
+
+    assert "style_gate: failed:" in exit_2_clause, (
+        f"{_SKILL_MD}: expected the exit-2 branch of step 7.0 to record a "
+        "'style_gate: failed:' outcome — not found."
+    )
+    assert "do NOT dispatch Ivan" in exit_2_clause, (
+        f"{_SKILL_MD}: expected the exit-2 branch of step 7.0 to say it "
+        "does NOT dispatch Ivan — not found. There are no violation lines "
+        "to hand a fix agent on this branch, so dispatching one is the "
+        "failure exit 2 was introduced to prevent."
+    )
+    assert "stderr" in exit_2_clause, (
+        f"{_SKILL_MD}: expected the exit-2 branch of step 7.0 to name "
+        "'stderr' as the source of the '<reason>' substituted into "
+        "'style_gate: failed:<reason>' — not found. The exit-1 clause "
+        "spells out its substitution ('the violation lines, joined by "
+        "\"; \"'); exit 2 leaves <reason> undefined, so an agent executing "
+        "this literally has to guess what to record."
+    )
