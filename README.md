@@ -80,7 +80,7 @@ and naming the resolved root. Scripts locate their own siblings from `$0` or
 ## Alternative: install directly from this repo
 
 ```
-/plugin marketplace add buvis/autopilot
+/plugin marketplace add buvis/claude-autopilot
 ```
 
 ## What intentionally stays out
