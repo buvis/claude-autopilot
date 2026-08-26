@@ -68,6 +68,15 @@ Subcommands:
         bash wrapper loop did. Its exit code IS the loop outcome (0
         drained/paused-on-purpose, 1 halted, 130/143/129 on signals),
         not the state-CLI codes below.
+    review-once
+        loop.Loop().run_once() - the loop's preflights, ONE routed
+        session for state.next_phase, the decision read and one metrics
+        row, then exit. No relaunch, no park, no notification, and the
+        pause marker is left where it is. Refuses before spawning when
+        next_phase is anything but `review` or `done` (a build needs the
+        loop's acting branches). Flagless for the same reason as `loop`.
+        Exits 0 when the session touched state and left no
+        state-write-failed marker, else 1.
 
 --state, when omitted, resolves by walking up from cwd via
 _walk_up.find_autopilot_dir() to <dir>/state.json. park's --autopilot-dir,
@@ -807,6 +816,17 @@ def _run_loop_cmd(args: argparse.Namespace) -> int:
     return loop.Loop().run()
 
 
+def _add_review_once(subparsers) -> None:
+    subparsers.add_parser("review-once")
+    # No flags, same rationale as `loop`.
+
+
+def _run_review_once(args: argparse.Namespace) -> int:
+    from cli import loop
+
+    return loop.Loop().run_once()
+
+
 def _add_status(subparsers) -> None:
     p = subparsers.add_parser("status")
     p.add_argument("--state")
@@ -859,6 +879,7 @@ _SUBCOMMANDS: dict[str, tuple] = {
     "render": (_add_render, _run_render),
     "status": (_add_status, _run_status),
     "loop": (_add_loop, _run_loop_cmd),
+    "review-once": (_add_review_once, _run_review_once),
 }
 
 

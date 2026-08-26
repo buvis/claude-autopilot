@@ -1054,6 +1054,20 @@ class Loop:
 
     # ── run ──
     def run(self) -> int:
+        return self._guarded(self._run_loop)
+
+    def run_once(self) -> int:
+        """`autopilot review-once`: one review or finalize session for
+        state.next_phase, then exit. No relaunch, no park, no
+        notification, and the operator's pause marker is left alone."""
+        return self._guarded(self._run_once)
+
+    def _guarded(self, body) -> int:
+        """Signal contract shared by the loop and the one-shot: SIGTERM
+        and SIGHUP exit 128+signum, Ctrl-C exits 130, both after a
+        teardown, and the caller's own handlers are restored on the way
+        out."""
+
         def _on_term(signum, frame):
             raise _Terminated(128 + signum)
 
@@ -1064,7 +1078,7 @@ class Loop:
             except (ValueError, OSError):
                 pass  # not the main thread (tests) - handlers stay default
         try:
-            return self._run_loop()
+            return body()
         except KeyboardInterrupt:
             self._teardown()
             return 130
@@ -1077,6 +1091,82 @@ class Loop:
                     signal_mod.signal(sig, handler)
                 except (ValueError, OSError):
                     pass
+
+    def _launch(self, plan: routing.Route, ap_dir: Path) -> None:
+        """One routed session, plus the slot reset and orphan sweep that
+        always follow it. The keyword set is the contract every spawn_fn
+        (runner.spawn and the tests' ScriptedSpawn) is written against."""
+        self._spawn(
+            plan.model,
+            plan.effort,
+            cap_secs=plan.cap_secs,
+            autopilot_dir=ap_dir,
+            env=self.env,
+            runner_bin=self.runner_bin,
+            proc_slot=self._proc_slot,
+        )
+        self._proc_slot[0] = None
+        self._cleanup_orphans()
+
+    def _one_shot_phase(self, state, state_path: Path) -> str | None:
+        """The phase guard. Only `review` and `done` may be driven by a
+        single session; a build needs the loop's acting branches, so
+        refusing here is what keeps the operator from starting one by
+        accident. None = refused, and the reason is already printed."""
+        value = state.get("next_phase") or "" if isinstance(state, dict) else "missing"
+        if value in ("review", "done"):
+            return value
+        print(
+            f"autopilot review-once: next_phase is '{value}' ({state_path}); "
+            "this verb runs review and finalize sessions only. Drive the "
+            "build in your session, or run autoclaude.",
+            file=self.err,
+        )
+        return None
+
+    def _run_once(self) -> int:
+        code = self._memory_gate()
+        if code is not None:
+            self._teardown()
+            return code
+
+        ap_dir = self._resolve_ap_dir()
+        for gate in (self._register, self._plugin_gate, self._schema_gate):
+            code = gate(ap_dir)
+            if code is not None:
+                self._teardown()
+                return code
+
+        state = _load_json(ap_dir / "state.json")
+        next_phase = self._one_shot_phase(state, ap_dir / "state.json")
+        if next_phase is None:
+            self._teardown()
+            return 1
+
+        ts_start = self._clock()
+        prd = (state.get("prd") or "") if isinstance(state, dict) else ""
+        plan = routing.route(next_phase, ap_dir, env=self.env)
+        stamp = _dt.datetime.now().strftime("%H:%M:%S")
+        print(
+            f"\n━━ {stamp} · phase {next_phase} · prd {prd or 'no-prd'} · "
+            f"{plan.model}/{plan.effort} ━━",
+            file=self.out,
+        )
+        self._launch(plan, ap_dir)
+
+        decision = self._decide(ap_dir, ts_start)
+        # NOT _fingerprint_bound: it parks.
+        self._append_metrics(
+            ap_dir, ts_start, self._clock(), decision, next_phase, plan.model
+        )
+        print(
+            f"autopilot review-once: signal {decision['signal']} · next phase "
+            f"'{decision['next']}' · {decision['detail']}",
+            file=self.out,
+        )
+        self._teardown()
+        touched = decision["state_touched"]
+        return 0 if touched and decision["signal"] != "state_write_failed" else 1
 
     def _run_loop(self) -> int:
         while True:
@@ -1142,17 +1232,7 @@ class Loop:
                 file=self.out,
             )
 
-            self._spawn(
-                plan.model,
-                plan.effort,
-                cap_secs=plan.cap_secs,
-                autopilot_dir=ap_dir,
-                env=self.env,
-                runner_bin=self.runner_bin,
-                proc_slot=self._proc_slot,
-            )
-            self._proc_slot[0] = None
-            self._cleanup_orphans()
+            self._launch(plan, ap_dir)
 
             decision = self._decide(ap_dir, ts_start)
             self._fingerprint_bound(decision, ap_dir / "state.json")

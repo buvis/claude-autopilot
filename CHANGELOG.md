@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **run-autopilot**: `autopilot review-once` runs exactly one headless
+  review or finalize session for `state.next_phase` (refusing a build phase
+  before spawning) and exits, replacing the throwaway `dev/local/tmp` review
+  drivers.
 - **run-autopilot**: `autopilot render report` exits 12 and names every
   pending deferred item its rendered section does not contain, so a deferral
   that never reaches the report stops the finalize step instead of passing

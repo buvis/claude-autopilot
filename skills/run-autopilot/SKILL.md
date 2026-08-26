@@ -150,7 +150,7 @@ Print a banner at each phase transition:
 
 ## Session Loop
 
-Unattended mode runs each session headless: the `autoclaude` wrapper (in `~/.config/bash/plugins/development.plugin.bash`) hands off to `autopilot loop` — the CLI loop driver, `cli/loop.py` (PRD 00106) — which launches `claude -p "/autopilot:run-autopilot"`; the session runs exactly one turn, and the process exits at turn end. There is no signal file and no Stop-hook choreography — **`state.json` is the entire hand-off contract** (`references/design-rationale.md` § Headless sessions).
+Unattended mode runs each session headless: the `autoclaude` wrapper (in `~/.config/bash/plugins/development.plugin.bash`) hands off to `autopilot loop` — the CLI loop driver, `cli/loop.py` (PRD 00106) — which launches `claude -p "/autopilot:run-autopilot"`; the session runs exactly one turn, and the process exits at turn end. There is no signal file and no Stop-hook choreography — **`state.json` is the entire hand-off contract** (`references/design-rationale.md` § Headless sessions). For a single hand-off rather than a whole batch — the hybrid track's fresh-session review and finalize hops — run `autopilot review-once`: it runs the same preflights and one routed session for `state.next_phase`, then exits, never relaunching or parking, and refuses any phase but `review` or `done` before spawning. Export `_AUTOPILOT_WRITE_SCOPE_EXTRA` first when the project spans roots outside its repo (`~/.claude/AGENTS.md` § Toolchain), same as for a batch.
 
 **Hand-off = write state, print banner, end the turn.** After the process exits, the loop driver reads `state.json` and branches:
 
