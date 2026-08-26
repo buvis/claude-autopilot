@@ -83,3 +83,9 @@ Both forms create the array if absent, append under an advisory lock, and replac
 Two top-level fields, `qwen_gate_failures_consecutive` and `qwen_breaker`, track the qwen capability breaker across the batch (PRD 00065); see `run-autopilot/references/state-schema.md` Field Descriptions for their canonical shape.
 
 Cross-reference: `run-autopilot/references/state-schema.md` `tasks[].attempts` row defines the canonical shape.
+
+## Dispatch-provenance fields (moved from SKILL.md, PRD 00119-v2)
+
+- **`implementor`** — `"claude"`, `"gemini"`, `"qwen"`, or `"codex"`, reflecting what actually dispatched, NOT what the step-3 routing table initially picked (a qwen pick that fell back to Claude on preflight failure records `"claude"`).
+- **`preflight_outcome`** — from the step-3 preflight probe. Always written explicitly — never omit the key. Qwen-eligible attempts record one of `"healthy"`, `"pi_missing"`, `"endpoint_unreachable"`, `"model_id_missing"`, `"completion_failed"`; non-qwen-eligible attempts record the literal JSON `null`. A pressure-gated attempt (row 4 fired, the probe never ran) also records the literal JSON `null` — the same carve-out already granted to a breaker-skipped attempt (row 3).
+- **`qwen_excluded_reason`** — `"memory_pressure"` (row 4 fired, `check_memory_pressure.py` exited 1) or `"memory_probe_failed"` (row 4 fired, exited 2); key omitted when row 4 did not fire. Attempt-scoped RUNTIME field — distinct from the plan-time `state.tasks[i].qwen_excluded_reason` (`"ui"`/`"tier"`/`"files"`/`"contract"`) that `/plan-tasks` writes; `/work` never rewrites planner metadata. Absent on every attempt written before PRD 00075 — readers treat absence as "no pressure exclusion", never an error.

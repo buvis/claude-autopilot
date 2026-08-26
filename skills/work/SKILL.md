@@ -43,10 +43,7 @@ This skill runs inside an **automated autopilot loop**. The user is not watching
 1. A genuinely irreversible action that requires explicit confirmation (e.g. force-pushing a shared branch).
 2. More than two consecutive failed attempts at the same automated step with no remaining fallback.
 
-**When test verification is blocked** (e.g. all cargo processes were backgrounded and the build lock was contended): if the code compiles cleanly and the logic change is correct by inspection, commit and proceed — and record `verification: skipped:<cause>` in the task's attempt entry and the phase report (fail loud; a skipped check must never read as a passed one). The full-suite verification run at the end of the phase will catch regressions. Do not stop and ask the user to run anything.
-
-**When cargo commands get backgrounded by the session**: the Bash tool may background long-running commands regardless of the `run_in_background` flag. Wait for background completions via Monitor (up to 20 minutes for full test suites). Never launch a second cargo command while one is still running — they contend on the build lock and jam the shell. If a Monitor times out, read the output file directly; if the file is empty the build lock was still held, wait longer before retrying.
-
+**A blocked or backgrounded verification is never a reason to ask.** Record `verification: skipped:<cause>` in the attempt entry and the phase report (fail loud) and proceed; `references/subagent-dispatch.md` § Blocked verification carries the build-lock and Monitor rules.
 ## CRITICAL: One Task at a Time
 
 **STOP.** Before dispatching ANY Agent or helper-script call, verify you are sending it EXACTLY ONE task. Batching tasks into one Agent call leaves `state.tasks` (and every dashboard reading state.json) stale for the entire duration and collapses per-task attempt logging.
@@ -68,11 +65,6 @@ for each pending task:
 after all tasks complete:
     j. run full verification suite ONCE (see step 7 below)
 ```
-
-The loop steps above are lettered on purpose — they are a conceptual
-sequence, distinct from the numbered section headers (`### 1`…`### 7`)
-that the rest of this skill cross-references. "step 7" always means the
-section, never a loop step.
 
 **Per-task verification runs only the tests Tess wrote in step 2.7, not the full project suite.** The full suite runs once at the end (why: `references/design-rationale.md` § narrow verification).
 
@@ -126,18 +118,9 @@ Every Tess and Ivan dispatch prompt - initial and retry, regardless of mechanism
 
 ## Passing values to render_prompt.py
 
-Every render call in this skill (Tess 2.7, Ivan 3 / 5.5 / 7, Pat 5.7) picks a flag by where the value comes from, not by convenience:
-
-| Value | Flag |
-|---|---|
-| Task-authored prose — subject, description, acceptance criteria, Contract file paths, findings blocks | `--set-file`, from a scratch file written with the **Write tool** |
-| A file that already exists on disk | `--set-file <path>` |
-| Several existing files concatenated | `--set-cmd "cat $(printf '%q ' <paths>)"` |
-| A fixed string this skill composes itself, containing no task text | `--set` |
+**Read `references/subagent-dispatch.md` § Passing values to render_prompt.py before your first render call in a session** — it carries the flag-per-source table (task-authored prose, existing file, concatenation, fixed string) and the `--set-cmd` quoting rule.
 
 **Task-authored prose must never be passed with `--set`.** A `--set KEY=VALUE` word is expanded by the shell before `render_prompt.py` ever sees it, and task text in this repo routinely contains backticks and `$( )` — bash executes the command substitution and strips it, so the subagent silently receives a corrupted prompt, and the substituted command runs. Writing the prose to a scratch file and passing the path removes the shell from the path entirely; it costs one Write call, which the render call was already saving.
-
-The `--set-cmd` quoting rule is separate and still applies: any path interpolated into a `--set-cmd` value crosses into a nested shell (`subprocess.run(..., shell=True)`), so quote it with `printf '%q '` or `shlex.quote()` before composing the flag.
 
 **Dispatch-target preflight (mandatory).** Every file path written into dispatch prose (descriptions, contracts, `FILE_PATHS` lists) is spelled **absolute** — never repo-relative. And every target file the task touches is passed to the render as a flag: `--require-file /abs/path` for a file the subagent edits (must exist), `--require-parent /abs/path` for a file it creates (parent directory must exist). The render exits 7 when a path is relative or does not resolve — that is a **blocked dispatch**: never dispatch, never "fix" the path by guessing; treat it exactly like a failed `Premise:` check (step 2, interactive: stop and report; loop mode: the loop-mode stall path). Why: a subagent handed the unanchored path `debrief-meeting/app/smoke.test.js` went hunting for it, and `rg` sweeps can't see into dot-directories — the only visible match was a suffix-matching copy in a synced directory outside the repo, which it edited and an external daemon pushed (2026-08-18, batch 202608180438).
 
@@ -145,9 +128,7 @@ The `--set-cmd` quoting rule is separate and still applies: any path interpolate
 
 At every task exit — success in step 6, abort in step 4 (timeout / context exceeded / error after debug), or via the Subagent Dispatch Budget overrun path — append one entry to `state.tasks[i].attempts[]`. Each entry carries:
 
-- **`implementor`** — `"claude"`, `"gemini"`, `"qwen"`, or `"codex"`, reflecting what actually dispatched, NOT what the step-3 routing table initially picked (a qwen pick that fell back to Claude on preflight failure records `"claude"`).
-- **`preflight_outcome`** — from the step-3 preflight probe. Always written explicitly — never omit the key. Qwen-eligible attempts record one of `"healthy"`, `"pi_missing"`, `"endpoint_unreachable"`, `"model_id_missing"`, `"completion_failed"`; non-qwen-eligible attempts record the literal JSON `null`. A pressure-gated attempt (row 4 fired, the probe never ran) also records the literal JSON `null` — the same carve-out already granted to a breaker-skipped attempt (row 3).
-- **`qwen_excluded_reason`** — `"memory_pressure"` (row 4 fired, `check_memory_pressure.py` exited 1) or `"memory_probe_failed"` (row 4 fired, exited 2); key omitted when row 4 did not fire. Attempt-scoped RUNTIME field — distinct from the plan-time `state.tasks[i].qwen_excluded_reason` (`"ui"`/`"tier"`/`"files"`/`"contract"`) that `/plan-tasks` writes; `/work` never rewrites planner metadata. Absent on every attempt written before PRD 00075 — readers treat absence as "no pressure exclusion", never an error.
+- **`implementor`**, **`preflight_outcome`** and **`qwen_excluded_reason`** — the dispatch-provenance trio, spelled out in `references/attempt-logging.md` § Dispatch-provenance fields: what actually dispatched (never what the table picked), the probe verdict written explicitly on every entry, and the row-4 pressure exclusion.
 - **`pipeline`** — the tier-gated depth this attempt ran, keyed on `state.tasks[i].model`: `haiku` → `"minimal"` (Tess + Ivan), `sonnet` → `"lean"` (+ step-5.7 reviewer), `opus` → `"full"` (+ Devon at step 2.85); absent/legacy is treated as `sonnet` → `"lean"`. `fable` → `"full"` as well — the rescue rung runs the deepest pipeline, like `opus`. Written at every task exit; a Phase-6 escalation to `opus` records `"full"`.
 
 See `references/attempt-logging.md` for the full entry schema, field semantics, and the atomic write procedure.
@@ -224,8 +205,6 @@ Before dispatching the implementor, load relevant context into the prompt:
 - Active PRD from `dev/local/prds/wip/`
 - Key module interfaces relevant to the task
 
-1M context makes this practical — richer prompts produce better first-pass results.
-
 **Ambiguity check (Think Before Coding):** Re-read the task description. If scope, data shape, target surface, or success criteria are unclear, stop and ask the user rather than picking silently. See `references/code-quality-principles.md` §1 and `references/code-quality-examples.md` §1 for what counts as a hidden assumption worth surfacing.
 
 **Premise check:** If the task description carries a `Premise:` line, verify each stated fact against the current tree (`ls`, `rg`, `git ls-files` as fits) BEFORE dispatching any implementor — cheap read-only probes only, never a mutation. If any fact no longer holds, do not dispatch. Interactively: stop and report which fact failed; the task stays in_progress for the user or the decision gate. In loop mode (post-00017): a failed premise is never assumed through — it takes the loop-mode stall path (`run-autopilot/references/recovery.md` "Loop-mode stall procedure"), unlike ambiguities, which 00017 resolves by simplest safe assumption. If a probe command itself errors, treat the premise as unverified and surface it as a blocker — never proceed on an unknown. Tasks without a `Premise:` line skip this check entirely (zero behavior change for legacy plans).
@@ -297,6 +276,7 @@ Hold the returned SHA in-session as `<test_commit_sha>` for this task; step 5.5'
 Run the newly committed tests once, before any Ivan dispatch, at the narrowest scope (the same commands step 5.5 uses). Red is the point: a failure proves the tests bind behavior that does not exist yet (rules/testing.md fail-first). Implicitly skipped when step 2.7 was skipped (no new tests).
 
 **Read `references/red-check.md` before the first red-check of a batch** — it resolves the target module from the task's `Contract` section and carries the outcome ladder (expected red -> step 3; accidentally green -> back to Tess; cannot run -> `red_check: skipped:<cause>`, fail loud). One verdict stays here: when an **imported** Contract-named target path does not exist on disk yet, skip the invocation entirely and write `red_check = "n/a:new_module"` to the attempt entry.
+
 ### 3. Implement against tests (Ivan - implementor)
 
 Ivan's job: make the failing tests pass. Tests ARE the spec.
@@ -315,7 +295,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUG
   --require-parent <each absolute FILE_PATHS entry the task creates, one flag per path>
 ```
 `FILE_PATHS` is the newline-separated list from the task's Contract section, written to that scratch file — a Contract path can contain a space or a shell metacharacter, so it is never passed as a `--set` word. Every entry is absolute and every entry appears in a `--require-file`/`--require-parent` flag (§ Passing values to render_prompt.py, Dispatch-target preflight).
-When architecture context spans more than one file, use the same `--set-cmd ARCHITECTURE_CONTEXT="cat $(printf '%q ' <file_1> <file_2>)"` shape. `RETRY_INSTRUCTION` is the literal empty string on this, the initial dispatch. The stdout integer from this call **is** the Subagent Dispatch Budget measurement — no separate `wc -c`. If the printed size exceeds 50 000, trim per the existing one-pass rule in `references/subagent-dispatch.md`, then re-render (still one call). Dispatch the Agent tool with the file at `dev/local/tmp/dispatch-ivan-<task-id>.txt` as the prompt source, watchdog per the existing Subagent Watchdog section — unchanged. `ivan.md` bakes in the code-quality rules block, the abort-instruction line, the read-only-scope note, the dispatch prologue, and the Assumptions/FILES_TOUCHED footers permanently — nothing further needs adding to the prompt by hand.
+When architecture context spans more than one file, use the same `--set-cmd ARCHITECTURE_CONTEXT="cat $(printf '%q ' <file_1> <file_2>)"` shape. `RETRY_INSTRUCTION` is the literal empty string on this, the initial dispatch. The stdout integer from this call **is** the Subagent Dispatch Budget measurement — no separate `wc -c`; oversize handling and what `ivan.md` already bakes in are in `references/subagent-dispatch.md`. Dispatch the Agent tool with the file at `dev/local/tmp/dispatch-ivan-<task-id>.txt` as the prompt source, watchdog per the existing Subagent Watchdog section — unchanged.
 
 **If the task description is ambiguous** (multiple interpretations, unclear scope, unstated format/fields/location), stop before dispatching Ivan and surface the ambiguity to the user. See Example 1 in `references/code-quality-examples.md`. Do not dispatch with guessed-at requirements.
 
@@ -335,7 +315,7 @@ Apply the rows in this order — the first match wins (in practice `qwen_eligibl
 
 **Codex rung interception.** After the table above yields its verdict, dispatch **codex** instead of the Claude implementor the table named when all six fences hold (verdict is "Claude at the task's tier"/"ORIGINAL tier", `codex_eligible(task)`, `_WORK_CODEX_RUNG != "off"`, `_AUTOPILOT_ESCALATION != "legacy"`, a `"healthy"` batch probe, and a terminal attempt that was not itself codex). **Read `references/codex-implementor.md` § Codex rung interception before the first codex dispatch of a batch** — it states each fence exactly and why fence 4 is not optional.
 
-`scripts/work_routing.py` is a decision model of the table and this interception, tested in isolation by `scripts/test_work_routing.py`; it is kept in sync with this prose by review, not by a test that flips red when the prose changes. The one exception is the `codex_eligible` fence itself: `test_work_routing.py` extracts it live from `model-ladder.md` § Codex rung, so editing a clause's field or value, adding or removing a clause, or changing the `OR` that joins them, all flip a test red (see `test_codex_eligible_agrees_with_every_clause_extracted_from_the_real_ladder` and `test_extractor_raises_when_the_fence_joins_clauses_with_a_non_or_combinator`). A cosmetic reword of the fence's own opening line (e.g. renaming the pseudocode parameter) does not — the extractor's fence-selection match is deliberately loose there. The guard binds the fence to `_codex_eligible`, not the reverse: widening `_codex_eligible` to a value no clause and no candidate in `_CODEX_ELIGIBLE_CANDIDATES` names is not caught, so an edit there still needs review.
+`scripts/work_routing.py` is a decision model of the table and this interception, kept in sync with this prose by review (`references/design-rationale.md` § routing model); only the `codex_eligible` fence is bound live to `model-ladder.md` by `scripts/test_work_routing.py`.
 
 The memory-pressure gate (row 4) runs only when the table would otherwise reach qwen (now row 5) — it never runs for UI, `opus`, `qwen_eligible == false`, or breaker-skipped tasks.
 
@@ -499,28 +479,7 @@ After all tasks in the phase are marked completed, run the project's full verifi
 
 Before the suite, measure what this phase's diff introduced. Base = `state.work_start_sha` (`statectl get work_start_sha`; captured once per PRD before the first `/work` pass, so it survives task-boundary handoffs and a first task that wrote no tests); every git invocation below runs with the repo's own `--git-dir`/`--work-tree` flags in a bare-repo home. Write the diff with `git diff <base>..HEAD --output=dev/local/tmp/phase-diff.txt` and list the changed Python files with `git diff --name-only --diff-filter=d <base>..HEAD -- '*.py'` (deleted files excluded: the script reads every path it is given). No `.py` file changed: skip the script and record `style_gate: clean`. Otherwise run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_style_limits.py --diff dev/local/tmp/phase-diff.txt <those files as absolute paths>`; exit 0: record `style_gate: clean`. Exit 1: write the violation lines to the `FAILING_TESTS` scratch file and dispatch Ivan once with the full retry command shape from step 5.5 and `--set RETRY_INSTRUCTION="Fix only the listed style-limit violations; do not touch other code"`, commit per step 5, re-run the gate: clean -> `style_gate: fixed:<sha of the fix commit>`; still exit 1 -> `style_gate: failed:<the violation lines, joined by "; ">` and proceed to the suite anyway (fail loud, never silent). Exit 2 (or any other non-0/1 exit): the gate could not run at all, so there are no violation lines to hand a fix agent — record `style_gate: failed:<the script's stderr message>`, do NOT dispatch Ivan, and proceed to the suite anyway (fail loud, never silent, same as the still-failing exit-1 case). Function spans come from `review-work-completion/scripts/compute_mech_facts.py`, reused by import (see `## Dependencies`).
 
-**What to run** (project-dependent — use the commands documented in `AGENTS.md` / `CLAUDE.md` / project README):
-
-- Full workspace tests — Rust: `cargo nextest run --workspace` when nextest is installed (probe once with `cargo nextest --version`; on any nextest infra error fall back to `cargo test --workspace` — doc-tests are NOT run by nextest, so add `cargo test --workspace --doc` when the project has doc-tests); otherwise `cargo test --workspace`. Other stacks: `pytest`, `npm test`
-- Lint (e.g., `cargo clippy --workspace`, `ruff check`, `eslint .`)
-- Smoke tests if the project defines them (e.g., `./tests/smoke.sh`)
-- Integration / e2e tests if the project defines them (e.g., `./tests/integration.sh`, `cargo test -p <crate>-e2e`)
-- Any project-specific "definition of done" checks
-
-**When the repo documents no verification commands** (no test/lint/build commands in `AGENTS.md`/`CLAUDE.md`/README): do NOT silently skip verification. Detect the stack from its manifest and improvise the standard suite — `Cargo.toml` → `cargo test --workspace` (+ `cargo clippy --workspace`); `pyproject.toml`/`setup.py` → `pytest` (+ `ruff check` if configured); `package.json` → `npm test` (only if a `test` script exists). Run the improvised set, and **state the exact improvised command set in the phase report** (fail loud — an improvised suite must not read as the project's own documented one). If no stack manifest is detectable and nothing runs, record `verification: none (no suite found)` in the phase report and surface it as a gap for the review phase — never report the phase green on an unverified tree.
-
-Run each as a separate Bash call. Do not chain with `&&`.
-
-**Handling failures at this step:**
-
-1. Identify which task(s) introduced the regression. The failing test output usually points at a specific module; cross-reference against the task commits.
-2. Re-open the offending task via `task-start <task-id>`.
-3. Dispatch Ivan with the failure output to fix it: re-render `ivan.md` using the **full** retry command shape from step 5.5 (every placeholder filled, explicit `--out`), with `FAILING_TESTS` filled from the step-7 failure output and `--set RETRY_INSTRUCTION="Fix only the regression identified below. Do not touch unrelated files or refactor adjacent code."`. The code-quality rules block is already permanent in `ivan.md`. Do NOT relax the failing test.
-4. After the fix commits, re-run **only** the previously failing commands from step 7 (not the whole suite again) to confirm the fix.
-5. Mark the task completed and re-sync.
-6. Repeat until the full suite is green.
-
-Max 3 fix cycles at this step before escalating to the user — regressions clustering here usually indicate a design issue that needs human input.
+**What to run** (project-dependent — use the commands documented in `AGENTS.md` / `CLAUDE.md` / project README): **read `references/final-verification.md` before running the suite.** It lists the per-stack commands, the improvised-suite rule for a repo that documents none (state the improvised set in the phase report; record `verification: none (no suite found)` when nothing runs — never report the phase green on an unverified tree), and the failure-handling loop (identify the task, re-open it, one Ivan fix, re-run only the failed commands, max 3 cycles, never relax a failing test). Run each command as a separate Bash call; do not chain with `&&`.
 
 Only stop the work phase once step 7's test suite is fully green — a recorded `style_gate: failed:<violations>` from step 7.0 is a sanctioned way for the phase to complete, not a reason to keep looping or stall; the suite itself still has to pass.
 

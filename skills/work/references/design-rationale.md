@@ -99,3 +99,34 @@ Per-task full-suite runs compound to 40+ minutes of redundant test time across
 a 20-task phase, so step 5.5 runs only the tests Tess wrote for the task and
 the full suite (workspace tests, smoke, integration, lint) runs exactly once
 in step 7.
+
+## Why the loop steps are lettered (2026-08)
+
+The per-task loop steps in `SKILL.md` § CRITICAL: One Task at a Time are
+lettered on purpose - they are a conceptual sequence, distinct from the numbered
+section headers (`### 1`...`### 7`) that the rest of the skill cross-references.
+"step 7" always means the section, never a loop step.
+
+## Why step 2.5 loads rich context
+
+1M context makes it practical - richer prompts produce better first-pass
+results, so the main session front-loads AGENTS.md, the active PRD and the
+relevant module interfaces instead of making the implementor hunt for them.
+
+## Why the routing model is kept in sync by review
+
+`scripts/work_routing.py` is a decision model of step 3's table and the codex
+interception, tested in isolation by `scripts/test_work_routing.py`; it is kept
+in sync with the prose by review, not by a test that flips red when the prose
+changes. The one exception is the `codex_eligible` fence itself:
+`test_work_routing.py` extracts it live from `model-ladder.md` § Codex rung, so
+editing a clause's field or value, adding or removing a clause, or changing the
+`OR` that joins them, all flip a test red (see
+`test_codex_eligible_agrees_with_every_clause_extracted_from_the_real_ladder`
+and `test_extractor_raises_when_the_fence_joins_clauses_with_a_non_or_combinator`).
+A cosmetic reword of the fence's own opening line (e.g. renaming the pseudocode
+parameter) does not - the extractor's fence-selection match is deliberately
+loose there. The guard binds the fence to `_codex_eligible`, not the reverse:
+widening `_codex_eligible` to a value no clause and no candidate in
+`_CODEX_ELIGIBLE_CANDIDATES` names is not caught, so an edit there still needs
+review.

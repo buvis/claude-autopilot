@@ -88,3 +88,31 @@ A background dispatch does **not** relax the one-task-at-a-time rule: dispatch o
 - **20 min** — `Monitor` waits on backgrounded `cargo` full-suite runs (see `SKILL.md` "CRITICAL: Never Ask the User to Run Commands").
 
 They differ because the work differs — a full Rust test suite legitimately runs longer than a single-task subagent. Do not unify them into one number.
+
+## Blocked verification and backgrounded commands
+
+Moved verbatim out of `SKILL.md` § CRITICAL: Never Ask the User to Run Commands
+(PRD 00119-v2). Read this when a verification run will not complete.
+
+**When test verification is blocked** (e.g. all cargo processes were backgrounded and the build lock was contended): if the code compiles cleanly and the logic change is correct by inspection, commit and proceed — and record `verification: skipped:<cause>` in the task's attempt entry and the phase report (fail loud; a skipped check must never read as a passed one). The full-suite verification run at the end of the phase will catch regressions. Do not stop and ask the user to run anything.
+
+**When cargo commands get backgrounded by the session**: the Bash tool may background long-running commands regardless of the `run_in_background` flag. Wait for background completions via Monitor (up to 20 minutes for full test suites). Never launch a second cargo command while one is still running — they contend on the build lock and jam the shell. If a Monitor times out, read the output file directly; if the file is empty the build lock was still held, wait longer before retrying.
+
+## Passing values to render_prompt.py
+
+Moved verbatim out of `SKILL.md` § Passing values to render_prompt.py (PRD
+00119-v2). SKILL.md keeps the never-`--set` rule and the dispatch-target
+preflight. **Read this section before your first render call in a session.**
+
+Every render call in the work skill (Tess 2.7, Ivan 3 / 5.5 / 7, Pat 5.7) picks a flag by where the value comes from, not by convenience:
+
+| Value | Flag |
+|---|---|
+| Task-authored prose — subject, description, acceptance criteria, Contract file paths, findings blocks | `--set-file`, from a scratch file written with the **Write tool** |
+| A file that already exists on disk | `--set-file <path>` |
+| Several existing files concatenated | `--set-cmd "cat $(printf '%q ' <paths>)"` |
+| A fixed string this skill composes itself, containing no task text | `--set` |
+
+The `--set-cmd` quoting rule is separate and still applies: any path interpolated into a `--set-cmd` value crosses into a nested shell (`subprocess.run(..., shell=True)`), so quote it with `printf '%q '` or `shlex.quote()` before composing the flag.
+
+A render fills EVERY placeholder the persona carries or exits 1 naming the first missing one. If the printed size exceeds 50 000, trim per the one-pass rule above, then re-render (still one call). `ivan.md` bakes in the code-quality rules block, the abort-instruction line, the read-only-scope note, the dispatch prologue, and the Assumptions/FILES_TOUCHED footers permanently — nothing further needs adding to the prompt by hand.
