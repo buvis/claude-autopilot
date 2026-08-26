@@ -280,6 +280,19 @@ def test_completed_tasks_counts_each_call_even_when_batched_in_one_turn(
     assert "completed tasks: 2" in captured.out.splitlines()
 
 
+def test_count_completed_tasks_survives_unbalanced_quotes_and_a_missing_id() -> None:
+    # shlex.split raises on an unbalanced quote; the count must still be made
+    # from the whitespace split rather than losing the whole session. A verb
+    # with no id after it counts nothing instead of raising.
+    commands = [
+        'python3 /p/statectl.py state.json task-done task-1 "unclosed',
+        "python3 /p/statectl.py state.json task-done",
+        "python3 /p/statectl.py state.json task-set-status task-2",
+    ]
+
+    assert check_build_overhead.count_completed_tasks(commands) == 1
+
+
 # --- Agent dispatch counting -------------------------------------------------
 
 
