@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **work**: the always-read SKILL.md body now sits under the 500-line ceiling
+  (situational mechanics moved to references/ with read-at-trigger pointers) and
+  a contract test fails when it grows past it.
+
 ### Fixed
 
 - **work**: step 5.6 treats an empty-string task `description` as absent and

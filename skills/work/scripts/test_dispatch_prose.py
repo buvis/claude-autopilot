@@ -19,6 +19,27 @@ _SKILL_MD = Path(__file__).resolve().parent.parent / "SKILL.md"
 _TEXT = _SKILL_MD.read_text()
 
 
+_MAX_SKILL_MD_LINES = 500
+
+
+def test_work_skill_body_stays_under_the_500_line_ceiling() -> None:
+    # SKILL.md is loaded in full on every /work invocation, so its length is a
+    # per-session token cost, not a style preference. Counted the way
+    # create-skill's validate_skill.py counts it (content.count("\n") + 1,
+    # one more than `wc -l`), so this gate and that validator agree at the
+    # boundary instead of disagreeing by one line.
+    lines = _TEXT.count("\n") + 1
+
+    assert lines <= _MAX_SKILL_MD_LINES, (
+        f"{_SKILL_MD} is {lines} lines, over the {_MAX_SKILL_MD_LINES}-line "
+        "ceiling. Move situational prose to references/ with a read-first "
+        "pointer at its trigger point (the pattern every reference in "
+        "'## Reference Files' follows): leave the rule, the tables a routing "
+        "or gate decision reads, and any sentence a contract test pins, and "
+        "move the mechanics. Do not raise this ceiling."
+    )
+
+
 def test_tess_dispatch_is_rendered_through_render_prompt_py() -> None:
     # Step 2.7 must dispatch Tess via render_prompt.py naming tess-prompt.md,
     # never author her prompt text inline.
