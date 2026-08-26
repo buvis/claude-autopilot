@@ -265,11 +265,7 @@ git commit -m "test(<scope>): add tests for <feature>"
 
 Tests are committed separately before implementation, making the TDD boundary auditable in git history.
 
-**Capture this task's test-commit SHA** immediately — step 5.5's ESCALATE reset resets to exactly this commit (never a prior task's):
-```bash
-git rev-parse HEAD
-```
-Hold the returned SHA in-session as `<test_commit_sha>` for this task; step 5.5's ESCALATE path reads it.
+**Capture this task's test-commit SHA** immediately and hold it in-session as `<test_commit_sha>` — `references/gate-failure.md` § Test-commit SHA has the command and the two readers (step 5.5's ESCALATE reset, step 5.7's `BASE_SHA`).
 
 ### 2.95. Red-check — watch the tests fail
 
@@ -339,15 +335,7 @@ qwen never sees `opus`-tier or UI tasks — `state.tasks[i].qwen_eligible` is al
 
 ### 4. Handle result
 
-| Result | Action |
-|--------|--------|
-| Success | Continue to step 5. |
-| Timeout | Append attempt-log entry (`outcome: "aborted"`, `cause: "timeout"`). Split task per `references/task-splitting.md`, mark original as blocked. |
-| Context exceeded | Append attempt-log entry (`outcome: "aborted"`, `cause: "context_overrun"`). Split task per `references/task-splitting.md`, mark original as blocked. |
-| Error | Invoke `debug-stuck-agent` (step 4.5). On unrecoverable error, append attempt-log entry (`outcome: "aborted"`, `cause: "error"`). Report to user. |
-| Result lost / hung | The Agent result is empty, is `[Tool result missing due to internal error]`, or the Subagent Watchdog killed a hung agent. This is an infrastructure failure, not real work — apply the **infrastructure-failure circuit breaker** (step 4.2). |
-
-**Codex carve-out.** A codex dispatch's timeout, missing/empty `-o` output, and a watchdog-killed hang are all arm 1 (Infra) per `model-ladder.md` § Codex rung — never the generic Timeout / Result-lost-hung rows above, never split-task, never the 4.2 breaker. On timeout, apply the kill-before-fallback rule from the codex dispatch checklist (`references/codex-implementor.md` § Codex dispatch): `TaskStop` the codex background task and verify it is gone BEFORE dispatching the Claude fallback — an orphaned `--sandbox workspace-write` codex keeps write access to the very files the fallback implementor is about to edit, so its late writes either get swept into the fallback's commit or land as unexplained foreign paths. Fall back to Claude at the task's tier, no escalation stamp. The `codex_no_edit` / `codex_no_edit_probe_exit` flags latched during dispatch (step 3) are likewise not resolved here — they are consumed by step 5.5's classification (arm 2), per the same ladder section.
+A **Success** continues to step 5. Anything else — timeout, context exceeded, error, lost/hung result, or a codex dispatch that timed out or wrote nothing — is a failure branch: **read `references/gate-failure.md` § Step 4 result table before acting on it.** It carries the per-result actions (attempt-log `cause`, task splitting, `debug-stuck-agent`, the step-4.2 breaker) and the codex carve-out that routes every codex infra failure to arm 1 with kill-before-fallback.
 
 ### 4.2. Infrastructure-failure circuit breaker
 
@@ -385,10 +373,7 @@ Before committing a `feat`/`fix` (or breaking) change, verify CHANGELOG.md is st
 
 Run **only** the specific tests Tess wrote in step 2.7. Do NOT run the full project test suite, smoke tests, integration tests, or lint here — those run once at the end of the phase (step 7).
 
-- Target the narrowest scope that covers the new tests:
-  - Rust: run `cargo check -p <crate>` first — a compile failure IS the gate failure (skip the test run, go straight to the retry path with the compiler output); then `cargo test -p <crate> --test <test_file>` or `cargo test -p <crate> <module::test_name>`
-  - Python: `pytest path/to/test_file.py::test_name`
-  - JS/TS: `vitest run path/to/test_file` or `jest path/to/test_file`
+- Target the narrowest scope that covers the new tests — the per-language commands are in `references/gate-failure.md` § Narrow scope.
 - Never dispatch Tess to weaken tests.
 - **Retry prompts** (feedback retry, repair re-dispatch, escalation dispatch, step 5.7's confirmed findings, step 7's regression fix) re-render `ivan.md` in full from `references/gate-failure.md` § Retry render — only `FAILING_TESTS` and `RETRY_INSTRUCTION` change, and a missing placeholder exits 1.
 
@@ -459,9 +444,7 @@ Skip for documentation-only or configuration-only tasks.
    python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py <state.json> task-done <task-id> dev/local/tmp/attempt-task-<id>.json
    ```
 
-   `task-done` sets `tasks[i].status = "completed"`, appends the record to `tasks[i].attempts`, and **recomputes `tasks_completed` from the task array** — all three inside one locked atomic write. Do NOT set `status`, append the attempt, or set `tasks_completed` separately here; the count is derived and is not passed in. The task is resolved by matching `tasks[].id`, so the `tasks[N]` index form is not used here (rework appends `[D{cycle}]` follow-ups, after which array position stops matching id).
-
-   The matching call at task start (step 2) is `statectl <state.json> task-start <task-id>`.
+   Do NOT set `status`, append the attempt, or set `tasks_completed` separately here — `task-done` lands all three in one locked atomic write and derives the count (`references/attempt-logging.md` § task-done semantics). The matching call at task start (step 2) is `statectl <state.json> task-start <task-id>`.
 3. **Append `ASSUMPTIONS:` lines** from this task's Tess and Ivan reports (any entry beyond `none`) to `dev/local/meta/assumptions.md` per the **Assumptions footer** section
 4. Proceed to step 6.5 (task-boundary handoff check) — it routes to the next task, a clean handoff, or final verification.
 
@@ -500,7 +483,12 @@ When reporting the phase result, include the `style_gate: <value>` line from ste
 - `references/subagent-dispatch.md` - Dispatch Budget + Watchdog: how to safely make an Agent call
 - `references/task-splitting.md` - Splitting a timed-out or oversized task, plus the parallel-rework cap
 - `references/attempt-logging.md` - `state.tasks[].attempts[]` entry schema and write procedure
-- `references/gate-failure.md` - Step 5.5 diagnose→repair/escalate flow (read before the first gate failure of a batch)
+- `references/gate-failure.md` - Step 5.5 diagnose→repair/escalate flow, the retry render, step 4's result table and the 4.2 breaker (read before the first gate or infrastructure failure of a batch)
+- `references/rework-mode.md` - Step 1.5 rework lifecycle, attempt fields and abort semantics (read when `rework_task_ids` is non-empty)
+- `references/red-check.md` - Step 2.95 target resolution and outcome ladder (read before the first red-check of a batch)
+- `references/per-task-review.md` - Step 5.7 reviewer dispatch and result handling (read before the first per-task review of a batch)
+- `references/task-boundary-handoff.md` - Step 6.5 handoff procedure (read when `.handoff-requested` is present)
+- `references/final-verification.md` - Step 7 suite commands, improvised-suite rule and regression loop (read before the phase's one full-suite run)
 - `references/self-deslop-prompt.md` - Step 5.6 prompt template (placeholders + `{{slop_catalog}}` substitution)
 - `references/simplification-mandate.md` - Step 5.7 reviewer-prompt appendix (append verbatim)
 - `references/design-rationale.md` - incident history behind the rules (non-normative)

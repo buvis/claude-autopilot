@@ -165,3 +165,38 @@ one-re-dispatch rule; the steps live here.
 ## Debug on error (step 4.5)
 
 If the tool returned an error, invoke the `debug-stuck-agent` skill to diagnose the root cause before reporting to the user. If debugging resolves the issue, continue to step 5. If not, report to user and keep task in_progress.
+
+## Step 4 result table
+
+Moved verbatim out of SKILL.md step 4 (PRD 00119-v2). SKILL.md keeps the
+success row and the pointer; every failure branch is here.
+
+| Result | Action |
+|--------|--------|
+| Success | Continue to step 5. |
+| Timeout | Append attempt-log entry (`outcome: "aborted"`, `cause: "timeout"`). Split task per `references/task-splitting.md`, mark original as blocked. |
+| Context exceeded | Append attempt-log entry (`outcome: "aborted"`, `cause: "context_overrun"`). Split task per `references/task-splitting.md`, mark original as blocked. |
+| Error | Invoke `debug-stuck-agent` (step 4.5). On unrecoverable error, append attempt-log entry (`outcome: "aborted"`, `cause: "error"`). Report to user. |
+| Result lost / hung | The Agent result is empty, is `[Tool result missing due to internal error]`, or the Subagent Watchdog killed a hung agent. This is an infrastructure failure, not real work — apply the **infrastructure-failure circuit breaker** (step 4.2). |
+
+**Codex carve-out.** A codex dispatch's timeout, missing/empty `-o` output, and a watchdog-killed hang are all arm 1 (Infra) per `model-ladder.md` § Codex rung — never the generic Timeout / Result-lost-hung rows above, never split-task, never the 4.2 breaker. On timeout, apply the kill-before-fallback rule from the codex dispatch checklist (`references/codex-implementor.md` § Codex dispatch): `TaskStop` the codex background task and verify it is gone BEFORE dispatching the Claude fallback — an orphaned `--sandbox workspace-write` codex keeps write access to the very files the fallback implementor is about to edit, so its late writes either get swept into the fallback's commit or land as unexplained foreign paths. Fall back to Claude at the task's tier, no escalation stamp. The `codex_no_edit` / `codex_no_edit_probe_exit` flags latched during dispatch (step 3) are likewise not resolved here — they are consumed by step 5.5's classification (arm 2), per the same ladder section.
+
+## Narrow scope (step 5.5)
+
+Moved verbatim out of SKILL.md step 5.5 (PRD 00119-v2). Target the narrowest scope that covers the new tests:
+
+- Rust: run `cargo check -p <crate>` first — a compile failure IS the gate failure (skip the test run, go straight to the retry path with the compiler output); then `cargo test -p <crate> --test <test_file>` or `cargo test -p <crate> <module::test_name>`
+- Python: `pytest path/to/test_file.py::test_name`
+- JS/TS: `vitest run path/to/test_file` or `jest path/to/test_file`
+
+## Test-commit SHA (step 2.9)
+
+Moved verbatim out of SKILL.md step 2.9 (PRD 00119-v2). The ESCALATE reset in
+the flow above resets to exactly this commit, and step 5.7's `BASE_SHA` is its
+parent.
+
+**Capture this task's test-commit SHA** immediately — step 5.5's ESCALATE reset resets to exactly this commit (never a prior task's):
+```bash
+git rev-parse HEAD
+```
+Hold the returned SHA in-session as `<test_commit_sha>` for this task; step 5.5's ESCALATE path reads it.
