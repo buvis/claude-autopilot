@@ -399,6 +399,19 @@ def _prd_text(path: Path) -> str:
         return ""
 
 
+def _project_root(prds_dir: Path) -> Path:
+    """The directory holding `dev/local` - where an eligibility check's
+    repo-relative paths resolve from.
+
+    Falls back to the prds dir itself when the path is too shallow to be the
+    standard `<root>/dev/local/prds` shape. `--prds` accepts any path, and a
+    two-deep one (`/prds`) has no third parent: a misconfigured flag must cost
+    a failed check, not a traceback out of a verb that never crashed before.
+    """
+    resolved = prds_dir.resolve()
+    return resolved.parents[2] if len(resolved.parents) > 2 else resolved
+
+
 def _record_skips(state_path: Path, skipped: list[dict]) -> int:
     """Append `skipped` to `state.batch.skips[]` in one validated write.
 
@@ -422,9 +435,7 @@ def _run_select(args: argparse.Namespace) -> int:
         prds_dir = Path(args.prds)
     else:
         prds_dir = _walk_up_or_exit("--prds").parent / "prds"
-    # The project root: the directory holding dev/local, which is where an
-    # eligibility check's repo-relative paths resolve from.
-    project_root = prds_dir.resolve().parents[2]
+    project_root = _project_root(prds_dir)
     in_wip = _listdir(prds_dir / "wip")
     in_backlog = _listdir(prds_dir / "backlog")
     skipped: list[dict] = []

@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: a PRD may declare `eligibility: <shell command>`; when it
   exits non-zero, errors or times out the drain skips the PRD (it stays in
   `backlog/`, no session, no park) and records the skip in the batch summary.
+  The check's own output never reaches `select`'s stdout, and a failure to
+  record the skip exits 2 after printing the pick rather than losing it.
 - **work**: the always-read SKILL.md body now sits under the 500-line ceiling
   (situational mechanics moved to references/ with read-at-trigger pointers) and
   a contract test fails when it grows past it.

@@ -117,11 +117,12 @@ class EvaluateTests(unittest.TestCase):
         self.assertEqual(code, -1)
         self.assertTrue(note.startswith("error: "), note)
 
-    def test_command_output_never_reaches_this_process(self) -> None:
-        # capture_output: a check that prints must not pollute select's stdout,
-        # which carries the machine-read pick JSON.
-        code, note = eligibility.evaluate("echo loud; exit 0", self.cwd)
-        self.assertEqual((code, note), (0, ""))
+    def test_a_chatty_command_still_reports_only_its_exit_code(self) -> None:
+        # Whether the output was really captured is proven where it matters, at
+        # the CLI: test_lifecycle_cli.py's
+        # SelectEligibilityTests::test_a_chatty_check_does_not_corrupt_the_pick_json.
+        code, note = eligibility.evaluate("echo loud; exit 3", self.cwd)
+        self.assertEqual((code, note), (3, ""))
 
 
 class Hold00110FixtureTests(unittest.TestCase):

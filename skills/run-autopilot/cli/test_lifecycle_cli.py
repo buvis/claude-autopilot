@@ -228,6 +228,42 @@ class SelectEligibilityTests(_ProjectTestCase):
         self.assertEqual(len(out["skipped"]), 1)
         self.assertFalse(self.state_path.exists())
 
+    def test_a_chatty_check_does_not_corrupt_the_pick_json(self) -> None:
+        # stdout carries the machine-read pick; a check that prints must not
+        # land in the middle of it. This is what capture_output actually buys.
+        # The markers are ARITHMETIC, not literals: the skip record echoes the
+        # command text back on stdout, so a literal marker would be found there
+        # whether or not the child's own output leaked.
+        self.put_prd(
+            "backlog",
+            "00090-noisy-v1.md",
+            _eligibility_prd("echo $((21+21)); echo $((15+5)) >&2; exit 1"),
+        )
+        self.put_prd("backlog", "00091-ready-v1.md", _eligibility_prd("true"))
+        proc = _run(["select", "--prds", str(self.prds_dir)], cwd=self.root)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertNotIn("42", proc.stdout)
+        self.assertNotIn("20", proc.stderr)
+        self.assertEqual(json.loads(proc.stdout)["prd"], "00091-ready-v1.md")
+
+    def test_a_failed_skip_write_exits_2_and_names_the_failure(self) -> None:
+        # The pick still reaches stdout: a bookkeeping failure must not swallow
+        # the answer the caller asked for.
+        self.state_path.write_text("{ not json", encoding="utf-8")
+        self.put_prd("backlog", "00090-blocked-v1.md", _eligibility_prd("false"))
+        self.put_prd("backlog", "00091-ready-v1.md", _eligibility_prd("true"))
+        proc = _run(["select", "--prds", str(self.prds_dir)], cwd=self.root)
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("recording skips failed", proc.stderr)
+        self.assertEqual(json.loads(proc.stdout)["prd"], "00091-ready-v1.md")
+
+    def test_a_shallow_prds_path_does_not_crash_the_pick(self) -> None:
+        # --prds takes any path; a two-deep one has no <root>/dev/local/prds
+        # shape to climb out of, and must not raise out of the verb.
+        proc = _run(["select", "--prds", "/prds"], cwd=self.root)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(json.loads(proc.stdout)["source"], "drained")
+
     def test_a_met_check_writes_no_skips_key_at_all(self) -> None:
         self.write_state()
         self.put_prd("backlog", "00090-ready-v1.md", _eligibility_prd("true"))
