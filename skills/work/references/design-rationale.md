@@ -89,9 +89,23 @@ depends on them being there.
 | 12 | § 4.2 infrastructure circuit-breaker steps and § 4.5 | 471-475, 479 | `gate-failure.md` | the two headings, the one-re-dispatch rule, the escalate-on-second rule | none |
 | 13 | § 7 "What to run", improvised-suite rule, failure handling | 658-679 | `final-verification.md` (new) | heading, the run-once mandate, all of § 7.0, the `fully green` stop condition, the report line | `test_dispatch_prose.py::test_step_7_*` (all four read § 7 / § 7.0 - nothing they touch moves) |
 | 14 | § CRITICAL blocked-verification and cargo-backgrounding paragraphs | 46, 48 | `subagent-dispatch.md` | the never-ask rule and its two exceptions | none |
+| 15 | § 4 result table and the codex carve-out | 342-350 | `gate-failure.md` § Step 4 result table | the Success row and the pointer | none |
+| 16 | § 5.5 per-language narrow-scope commands | 388-391 | `gate-failure.md` § Narrow scope | the narrowest-scope rule | none |
+| 17 | § 2.9 test-commit SHA capture block | 268-272 | `gate-failure.md` § Test-commit SHA | capture-it-here and the `<test_commit_sha>` name | none |
+| 18 | § 6 `task-done` write semantics | 462-464 | `attempt-logging.md` § task-done semantics | the do-NOT-set-separately rule and the `task-start` pair | none |
+| 19 | § Attempt logging `implementor` / `preflight_outcome` / `qwen_excluded_reason` bullets | 145-147 | `attempt-logging.md` § Dispatch-provenance fields | the `pipeline` bullet (a pinned tier enumeration) | `test_fablectl.py` `check_line_enumerations` scans `SKILL.md`, not this reference - tier enumerations must not move |
+| 20 | § Passing values flag table and the `--set-cmd` quoting rule | 126-137 | `subagent-dispatch.md` § Passing values to render_prompt.py | the never-`--set` rule and the dispatch-target preflight | `test_dispatch_prose.py::test_task_authored_prose_flags_never_cross_the_shell_via_set` (an absence check - unaffected) |
+| 21 | § 3 Gemini availability check and design-authority pointer | 406, 158 | `gemini-integration.md` § Availability | one line naming both references | none |
+| 22 | § Assumptions footer ledger paragraph | 116 | `attempt-logging.md` § Assumption ledger | the append-at-step-6 rule | none |
+| 23 | loop-letter note, § 2.5 rationale, `work_routing.py` sync paragraph | 69-72, 224, 409 | `design-rationale.md` | the rules; a one-line sync note in step 3 | none |
 
-Rows 13-14 extend the PRD's candidate list: rows 1-12 alone land at ~510 lines,
-above the 500-line hard bar.
+Rows 13-23 extend the PRD's candidate list: rows 1-12 alone land at ~510 lines,
+above the 500-line hard bar. Result: 487 lines (`wc -l`), 488 by the gate's
+`content.count("\\n") + 1`. The PRD's 480 stretch target was not reached - the
+remaining body is rules, pinned sentences, decision tables and the
+always-read skeleton the PRD's Non-Goals fence off, so the next ~8 lines would
+have had to come out of orientation content (§ Dependencies, the per-task loop
+letters) rather than situational machinery.
 
 ## Why per-task verification stays narrow
 
