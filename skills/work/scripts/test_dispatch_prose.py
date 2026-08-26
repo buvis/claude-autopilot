@@ -13,6 +13,7 @@ spelling), each with a failure message naming what drifted and where to look.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 _SKILL_MD = Path(__file__).resolve().parent.parent / "SKILL.md"
@@ -37,6 +38,40 @@ def test_work_skill_body_stays_under_the_500_line_ceiling() -> None:
         "'## Reference Files' follows): leave the rule, the tables a routing "
         "or gate decision reads, and any sentence a contract test pins, and "
         "move the mechanics. Do not raise this ceiling."
+    )
+
+
+def test_every_reference_the_body_points_at_exists() -> None:
+    # The body now delegates its situational mechanics to references/ through
+    # read-first pointers, so a pointer naming a file that is not there is a
+    # silently missing procedure at the worst moment (a gate failure, a handoff)
+    # — the "missed pointer" risk PRD 00119-v2 names. Cross-skill paths carry
+    # their own skill segment (`run-autopilot/references/...`) and resolve
+    # against the skills root; bare ones resolve against this skill.
+    skills_root = _SKILL_MD.parent.parent
+    pattern = re.compile(r"`?([A-Za-z0-9_-]+/)?references/([A-Za-z0-9_-]+\.md)")
+
+    missing = sorted(
+        {
+            match.group(0).lstrip("`")
+            for match in pattern.finditer(_TEXT)
+            if not (
+                (
+                    _SKILL_MD.parent
+                    if match.group(1) is None
+                    else skills_root / match.group(1).rstrip("/")
+                )
+                / "references"
+                / match.group(2)
+            ).exists()
+        }
+    )
+
+    assert not missing, (
+        f"{_SKILL_MD} points at reference files that do not exist: "
+        f"{missing}. Either the file was renamed or deleted without updating "
+        "the pointer, or the pointer has a typo — both leave the step's "
+        "procedure unreachable at its trigger point."
     )
 
 
@@ -141,24 +176,34 @@ def test_step_5_6_treats_an_empty_description_as_absent() -> None:
     end = _TEXT.index("### 5.7.", start)
     section = _TEXT[start:end]
 
-    fallback_sentences = [
-        sentence
-        for sentence in section.split(".")
-        if "fall" in sentence and "description" in sentence
-    ]
-
-    assert fallback_sentences, (
+    assert "fall" in section and "description" in section, (
         f"{_SKILL_MD}: expected step 5.6 to state a `description` fallback — "
-        "no sentence in the section mentions falling back. If the wording "
-        "moved, retarget this test to wherever the fallback now lives."
+        "the section never mentions falling back. If the wording moved, "
+        "retarget this test to wherever the fallback now lives."
     )
 
-    assert any("empty" in sentence for sentence in fallback_sentences), (
-        f"{_SKILL_MD}: step 5.6 states a `description` fallback but the "
-        "sentence stating it never mentions the empty string. The contract "
-        "is that an empty-string description counts as absent and falls back "
-        "to the task name; a bare 'when `description` is absent' reads an "
-        "empty string as present and dispatches an empty description body."
+    # The two words have to be NEIGHBOURS and unnegated, not merely both
+    # present: the section already says "when `description` is absent" for the
+    # missing-key case, so a bare "empty" anywhere — including in a sentence
+    # DENYING the contract — would satisfy a two-substring check while the rule
+    # stayed unstated. Same idiom as test_fablectl.py's CLEAN_GAP patterns.
+    gap = r"(?:(?!\b(?:not|never|neither|nor)\b)[^.])"
+    empty_counts_as_absent = (
+        # "an empty-string description counts as absent"
+        re.compile(rf"empty{gap}{{0,80}}?absent", re.IGNORECASE),
+        # the reverse wording, but only as one tight phrase: a loose
+        # "absent ... empty" window matches the missing-key clause that
+        # already sits next door, whatever the empty-string clause says.
+        re.compile(r"absent or (?:an )?empty", re.IGNORECASE),
+    )
+
+    assert any(pattern.search(section) for pattern in empty_counts_as_absent), (
+        f"{_SKILL_MD}: step 5.6 never states that an empty-string "
+        "`description` counts as ABSENT. A bare 'when `description` is "
+        "absent' reads an empty string as present and dispatches an empty "
+        "description body. Say it in one clause — 'empty' and 'absent' "
+        "within 80 characters of each other, no negation between them and "
+        "no sentence break."
     )
 
 
