@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **work**: the style-limit gate never reports a clean phase for a file it could
+  not inspect. An unreadable changed file, or one skipped for an ambiguous
+  diff-path tie, now exits 2 ("the gate could not run") instead of 0, which step
+  7.0 records as `style_gate: clean`. Reproduced before the fix: the same file
+  and diff reported a 61-line function and exit 1 when readable, and exited 0
+  with only a note on stderr when unreadable — so the phase report certified a
+  file the gate never opened.
 - **work**: the style-limit gate no longer flags a long function that a
   deletion-only hunk merely surrounds. `git diff` emits three lines of context
   around a deletion, which the gate counted as "touched", so removing code above

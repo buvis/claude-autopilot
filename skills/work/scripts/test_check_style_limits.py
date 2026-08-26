@@ -485,6 +485,78 @@ def test_violating_diff_via_main_exits_one_and_prints_the_lines(
     assert out == f"FUNCTION | {py_file}:1 | over_limit | 51 lines\n"
 
 
+def test_main_exits_two_when_a_changed_file_could_not_be_read(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    """The gate must never certify a file it could not open. Reproduced at
+    PRD 00140 review cycle 2: the same file and diff exit 1 when readable
+    and exited 0 when unreadable, and step 7.0 records exit 0 as
+    `style_gate: clean` - so the phase report certified a file the gate
+    never inspected. An uninspected file is exit 2, not a pass."""
+    py_file, diff_text = _write_over_limit_diff(tmp_path)
+    diff_file = _write(tmp_path, "changes.diff", diff_text)
+    py_file.chmod(0o000)
+    try:
+        exit_code = csl.main(["--diff", str(diff_file), str(py_file)])
+    finally:
+        py_file.chmod(0o644)
+    captured = capsys.readouterr()
+    assert exit_code == 2, "an unreadable changed file must not exit 0 (clean)"
+    assert str(py_file) in captured.err
+    assert "gate incomplete" in captured.err
+
+
+def test_main_exits_two_when_a_changed_file_is_an_ambiguous_diff_path_tie(
+    tmp_path: Path,
+    capsys,
+    monkeypatch,
+) -> None:
+    """The other fail-open route into the same exit: an equal-depth tie is
+    skipped, so that file went uninspected too. The tie needs a RELATIVE
+    single-segment argument (as in the sibling ambiguity test) - step 7.0
+    passes absolute paths, which is why this path is far harder to reach
+    in real use than the unreadable-file one above."""
+    monkeypatch.chdir(tmp_path)
+    _write(tmp_path, "c.py", "def small():\n    return 1\n")
+    diff_text = (
+        "diff --git a/a/c.py b/a/c.py\n"
+        "--- a/a/c.py\n"
+        "+++ b/a/c.py\n"
+        "@@ -1,2 +1,2 @@\n"
+        "+def small():\n"
+        "+    return 1\n"
+        "diff --git a/b/c.py b/b/c.py\n"
+        "--- a/b/c.py\n"
+        "+++ b/b/c.py\n"
+        "@@ -1,2 +1,2 @@\n"
+        "+def small():\n"
+        "+    return 1\n"
+    )
+    diff_file = _write(tmp_path, "changes.diff", diff_text)
+    exit_code = csl.main(["--diff", str(diff_file), "c.py"])
+    captured = capsys.readouterr()
+    assert exit_code == 2, "an ambiguous tie must not exit 0 (clean)"
+    assert "ambiguous diff-path match" in captured.err
+    assert "gate incomplete" in captured.err
+
+
+def test_violations_records_an_unreadable_path_in_the_skipped_list(
+    tmp_path: Path,
+) -> None:
+    """`skipped` is what lets main() tell 'found nothing' from 'did not
+    look'; a path that simply is not in the diff is NOT a skip."""
+    py_file, diff_text = _write_over_limit_diff(tmp_path)
+    absent = _write(tmp_path, "not_in_diff.py", "def tiny():\n    return 1\n")
+    skipped: list[str] = []
+    py_file.chmod(0o000)
+    try:
+        csl.violations(diff_text, [py_file, absent], skipped=skipped)
+    finally:
+        py_file.chmod(0o644)
+    assert skipped == [str(py_file)]
+
+
 def test_main_exits_two_and_names_the_path_when_the_diff_file_is_missing(
     tmp_path: Path,
     capsys,

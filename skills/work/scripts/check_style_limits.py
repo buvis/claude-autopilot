@@ -108,11 +108,15 @@ def _match_depth(path: Path, diff_path: str) -> int | None:
 def _resolve_diff_path(
     path: Path,
     ranges_by_path: dict[str, list[tuple[int, int]]],
+    skipped: list[str] | None = None,
 ) -> str | None:
     """Resolve path to exactly ONE diff path: the candidate agreeing on
     the most trailing segments wins. An equal-depth tie is ambiguous -
-    skip it (print the file and the tied candidates to stderr) rather
-    than silently picking one or pooling them."""
+    skip it (print the file and the tied candidates to stderr, and record
+    it in `skipped`) rather than silently picking one or pooling them.
+
+    No match at all is NOT a skip: it means the file is not in this diff,
+    which is an ordinary answer rather than a gate that failed to look."""
     by_depth: dict[int, list[str]] = {}
     for dp in ranges_by_path:
         depth = _match_depth(path, dp)
@@ -127,6 +131,8 @@ def _resolve_diff_path(
             f"{candidates} - skipping",
             file=sys.stderr,
         )
+        if skipped is not None:
+            skipped.append(str(path))
         return None
     return candidates[0]
 
@@ -136,13 +142,21 @@ def violations(
     paths: list[Path],
     function_limit: int = 50,
     file_limit: int = 800,
+    skipped: list[str] | None = None,
 ) -> list[str]:
-    """Return violation lines for the given diff and file paths."""
+    """Return violation lines for the given diff and file paths.
+
+    `skipped`, when a list is passed, collects every changed file the gate
+    could not inspect - an ambiguous diff-path tie, or a file it could not
+    read. Callers need that to tell "found nothing" apart from "did not
+    look": step 7.0 records exit 0 as `style_gate: clean`, so a gate that
+    silently skipped a changed file would certify a file it never opened.
+    """
     ranges_by_path = touched_ranges(diff_text)
     counts = _line_counts(diff_text)
     results: list[str] = []
     for path in paths:
-        diff_path = _resolve_diff_path(path, ranges_by_path)
+        diff_path = _resolve_diff_path(path, ranges_by_path, skipped)
         if diff_path is None:
             continue
         status, funcs = facts_for_file(path)
@@ -166,6 +180,8 @@ def violations(
                 f"check_style_limits: skipping unreadable file {path}: {exc}",
                 file=sys.stderr,
             )
+            if skipped is not None:
+                skipped.append(str(path))
             continue
         if n > file_limit and n - ins + dels <= file_limit:
             results.append(f"FILE | {path} | {n} lines")
@@ -188,9 +204,22 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
-    found = violations(diff_text, args.files)
+    skipped: list[str] = []
+    found = violations(diff_text, args.files, skipped=skipped)
     for line in found:
         print(line)
+    if skipped:
+        # The gate could not inspect every changed file, so it must not
+        # report a clean phase. Exit 2 is step 7.0's "the gate could not
+        # run" branch: record `style_gate: failed:<stderr>` and dispatch
+        # no fixer. It outranks exit 1 - any violations found are still
+        # printed, but an incomplete gate is never a pass.
+        print(
+            "check_style_limits: gate incomplete, "
+            f"{len(skipped)} changed file(s) not inspected: {skipped}",
+            file=sys.stderr,
+        )
+        return 2
     return 1 if found else 0
 
 
