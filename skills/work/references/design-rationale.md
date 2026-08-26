@@ -64,6 +64,35 @@ the task, so the step-5.5 re-dispatch escalates straight to Claude Sonnet and
 the remaining retry budget runs entirely on Claude. The qwen attempt does not
 consume a step-5.5 retry slot — it consumed the single qwen attempt.
 
+## SKILL.md extraction map (2026-08)
+
+PRD 00119-v2, Phase 0. `SKILL.md` was 703 lines against a 500-line ceiling. The
+overage is situational machinery read at one trigger point, so each block below
+moves **verbatim** into a reference and leaves a read-first pointer at its
+trigger. Line ranges are at HEAD `cae4b36`; the "keeps" are the sentences that
+stay in the always-read body because a rule, a table row, or a test anchor
+depends on them being there.
+
+| # | Block | Lines | Destination | Keep in SKILL.md | Test that reads it |
+|---|---|---|---|---|---|
+| 1 | § 5.6 self-deslop mechanics (dispatch contract, prompt construction, outcome table) | 549-568 | `self-deslop-prompt.md` § Procedure | heading, best-effort rule, skip rule with both commands, description-fallback sentence, outcome-logging sentence | `test_dispatch_prose.py` (new empty-description pin) |
+| 2 | § 3 codex-rung interception fences and `#### Codex implementor mechanics` | 388-407, 444-455 | `codex-implementor.md` | the one-line interception rule and the never-`-y` / kill-before-fallback invariants | none |
+| 3 | § 3 qwen batch-scope check, row-3 consult, batch-scoped preflight | 423-424, 435-442 | `qwen-integration.md` | the routing table rows, the breaker-reset sentence (`:425`) | `test_fablectl.py::test_a_qwen_gate_pass_resets_the_breaker_counter_in_the_always_read_body` reads SKILL.md ALONE - the reset sentence must not move |
+| 4 | § 3 rationale (why fence 4 is required, why row 3 is codex-eligible) | 411, 413 | `design-rationale.md` | the fence list itself | none |
+| 5 | § 5.7 reviewer mechanics (haiku rationale, sonnet-runner dispatch, result handling) | 580, 596-603, 605-606 | `per-task-review.md` (new) | tier-gate table, the `pat.md` render block, the `medium-retry:` sentence naming `FILES_TOUCHED` | `test_dispatch_prose.py::test_pat_dispatch_is_rendered_through_render_prompt_py`, `::test_step_5_7_gives_in_task_medium_findings_one_retry_stamped_medium_retry`; `test_fablectl.py` `check_review_row` (the table) |
+| 6 | § 6.5 task-boundary handoff mechanics | 629, 632-648 | `task-boundary-handoff.md` (new) | heading, the marker trigger rule, the no-pending-tasks skip | none |
+| 7 | § 2.8 test quality gate rubric and retry render | 280-297 | `test-author-prompt.md` § Quality gate | the gate rule, the total-Tess-budget rule | none |
+| 8 | § 1.5 rework-mode mechanics (status, attempt fields, abort semantics) | 196-209 | `rework-mode.md` (new) | the two-mode filter table | none |
+| 9 | § 2.95 red-check detail and outcome table | 336-350 | `red-check.md` (new) | the `n/a:new_module` rule, the skip-when-2.7-skipped rule | none |
+| 10 | § 5.5 retry render block and the `_AUTOPILOT_ESCALATION == "legacy"` branch | 512-521, 527-530 | `gate-failure.md` (already in `combined_doc`: zero anchor work) | heading, scope rule, the never-weaken-tests rule, the default-flow pointer | `test_fablectl.py` `check_budget` / `check_no_auto_escalation` / `check_retry_repair_excludes_fable` already scan `gate-failure.md` |
+| 11 | § 2.7 "Tess receives / does NOT receive" bullets and the post-render notes | 247-252, 267-274 | `test-author-prompt.md` § Context Selection | the `tess-prompt.md` render block, the budget rule | `test_dispatch_prose.py::test_tess_dispatch_is_rendered_through_render_prompt_py` |
+| 12 | § 4.2 infrastructure circuit-breaker steps and § 4.5 | 471-475, 479 | `gate-failure.md` | the two headings, the one-re-dispatch rule, the escalate-on-second rule | none |
+| 13 | § 7 "What to run", improvised-suite rule, failure handling | 658-679 | `final-verification.md` (new) | heading, the run-once mandate, all of § 7.0, the `fully green` stop condition, the report line | `test_dispatch_prose.py::test_step_7_*` (all four read § 7 / § 7.0 - nothing they touch moves) |
+| 14 | § CRITICAL blocked-verification and cargo-backgrounding paragraphs | 46, 48 | `subagent-dispatch.md` | the never-ask rule and its two exceptions | none |
+
+Rows 13-14 extend the PRD's candidate list: rows 1-12 alone land at ~510 lines,
+above the 500-line hard bar.
+
 ## Why per-task verification stays narrow
 
 Per-task full-suite runs compound to 40+ minutes of redundant test time across
