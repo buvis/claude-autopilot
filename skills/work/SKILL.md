@@ -95,8 +95,6 @@ Accepted values: `"haiku"`, `"sonnet"`, `"opus"`. A fourth value, `"fable"`, is 
 
 **Legacy plans** (created before `state.tasks[i].model` existed) have no model field. Omit the `model` parameter — subagents inherit the session model. This preserves the legacy behavior bit-for-bit.
 
-The **Subagent Dispatch Budget** applies regardless of tier. Haiku doesn't earn a smaller cap; opus doesn't earn a larger one.
-
 ## Assumptions footer
 
 Every Tess and Ivan dispatch prompt - initial and retry, regardless of mechanism (Agent, `use-gemini`, `use-qwen`, `use-codex`) - must end with this instruction verbatim:
@@ -109,7 +107,7 @@ Every Tess and Ivan dispatch prompt - initial and retry, regardless of mechanism
 
 Step 5 stages exactly the reported paths - an unreported file stays uncommitted and is surfaced by step 5's foreign-path rule, so an implementor that omits the footer fails loudly, not silently.
 
-Collect the returned lines: step 6 appends non-`none` entries to `dev/local/meta/assumptions.md` under a `## <task-id>: <task subject>` heading (Write/Edit tool, never shell redirects). On the first completed task of a full-plan pass, replace the file instead of appending - the ledger is per-plan. Step 7's phase report includes the ledger so the user and the review phase can examine what the implementors guessed in a 30-second read.
+Collect the returned lines: step 6 appends non-`none` entries to `dev/local/meta/assumptions.md` per `references/attempt-logging.md` § Assumption ledger, and step 7's phase report includes the ledger.
 
 ## Dispatch prologue
 
@@ -139,8 +137,6 @@ See `references/attempt-logging.md` for the full entry schema, field semantics, 
 The **deterministic routing table in step 3** is the single source of truth for picking each task's implementor (Gemini / local qwen / codex / Claude at tier). Do not route from memory or from this section.
 
 **Gemini-first tasks** — the UI definition the routing table references. A task is UI/visual when it involves: color palettes/theming/contrast, layouts (page structure, spacing, visual hierarchy), UI components (buttons, forms, cards), typography, animations/transitions, responsive design, or any user-facing surface (web pages, GUI, dashboards).
-
-For visual tasks, Gemini can also challenge the spec before implementation — see `references/gemini-integration.md` § Design Authority (trust its feedback on visual matters).
 
 Codex (`use-codex`) is an implementor rung — activated by PRD 00077, sitting between qwen and the Claude tiers, gated by the fences and toggle declared in `run-autopilot/references/model-ladder.md` § Codex rung. It also still serves in the review path — see `references/codex-integration.md`.
 
@@ -318,8 +314,6 @@ The memory-pressure gate (row 4) runs only when the table would otherwise reach 
 
 **`fable` overrides this table outright.** A task carrying `state.tasks[i].model: "fable"` — set only by the Fable rescue gate (`run-autopilot/references/recovery.md` § Rework escalation exhausted) — never routes to qwen and never to Gemini: dispatch a Claude Agent at `model: "fable"`, whatever the rows above would pick. `fable` is never a session model and is never selected autonomously, so the human rescue gate is the only way in (`run-autopilot/references/model-ladder.md` § Fable rescue).
 
-qwen never sees `opus`-tier or UI tasks — `state.tasks[i].qwen_eligible` is already `false` for those upstream.
-
 **qwen capability breaker (routing-time consult, row 3).** Guarded by `_AUTOPILOT_ESCALATION != "legacy"` (`model-ladder.md` § Kill-switches) — under `legacy` the breaker is fully off, row 3 never fires, and rows 5-6 behave exactly as today's rows 3-4. The memory-pressure gate (row 4) is a deliberate always-on exception to that kill-switch: it carries no `_AUTOPILOT_ESCALATION` guard (unlike the breaker) and keeps firing under `legacy` — a host-safety mechanism, not a quality mechanism, so the kill-switch that restores old routing semantics must not also switch off OOM protection.
 
 **Read `references/qwen-integration.md` § Batch-scoped preflight before the first qwen dispatch of a batch** — it carries the breaker's batch-scope reset and row-3 consult, and the `state.qwen_preflight` cache procedure (probe once per batch, reuse the verdict, and the two backend-health signals that force a re-probe). One rule lives here too, because a passing run never opens that reference: a qwen gate pass resets `qwen_gate_failures_consecutive` to 0, so the breaker trips only on two CONSECUTIVE qwen gate failures.
@@ -328,9 +322,7 @@ qwen never sees `opus`-tier or UI tasks — `state.tasks[i].qwen_eligible` is al
 
 **An escalated tier belongs to its task and dies with it (PRD 00111).** When a task escalates — in-loop at step 5.5, or by review flag through `/run-autopilot` Phase 6 — the higher tier is written to that task's `model` field in `state.tasks[i]`, and nowhere else. Every other task still enters at the tier `/plan-tasks` classified for it: a task escalated to `opus` is followed by an unrelated `haiku` task dispatching at `haiku`, in the same PRD and the same session. Do not carry a tier sideways ("the last task needed opus, so this PRD runs at opus") — that is the same session-memory mistake the routing rule above forbids, priced one rung higher. Nothing escalation-related survives into the next PRD either: `autopilot reset-prd` drops `tasks` (the per-task tiers), `rework_task_ids`, `cap_rotations` and `stall_reason`, and zeroes `replan_count` (`run-autopilot/cli/records.py` `PER_PRD_RESET_FIELDS`). Session-model decay is the separate, matching rule in `run-autopilot/references/model-ladder.md` § Decay.
 
-**Gemini availability check.** "Gemini if available" means the `use-gemini` helper resolves AND can run a no-op probe. Concretely: `${CLAUDE_PLUGIN_ROOT}/skills/use-gemini/scripts/gemini-run.sh` is executable AND `mise which gemini` (or `command -v gemini`) exits 0. If either fails, fall back to Claude at `state.tasks[i].model` for that UI task. Treat a runtime helper-script failure (non-zero exit, no output) the same way: record the failure and re-dispatch the task to Claude at the task's tier. Cross-reference: `references/gemini-integration.md`.
-
-`use-qwen`, `use-gemini`, and `use-codex` are Bash helper-script dispatches; Claude implementor passes are Agent dispatches at the task's tier. All three must satisfy the **Subagent Dispatch Budget** and the **Subagent Watchdog**.
+"Gemini if available" (row 1) and the helper-script mechanics are in `references/gemini-integration.md` § Availability and `references/subagent-dispatch.md` § Mechanism and tier: a helper that does not resolve, or fails at runtime, falls back to Claude at the task's tier, and every dispatch of either kind satisfies the **Subagent Dispatch Budget** and the **Subagent Watchdog**.
 
 **Codex implementor mechanics.** The HOW of the codex rung — batch health probe, dispatch checklist, TOOL-GATE NOTICE — lives in `references/codex-implementor.md`; **read it in full before the first codex probe or dispatch of a batch**. Two invariants worth repeating at the call site: never `-y` (the `-a` grant covers this rung only), and on any codex timeout `TaskStop` + verify-gone BEFORE dispatching the Claude fallback.
 

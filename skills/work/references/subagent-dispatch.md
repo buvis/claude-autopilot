@@ -116,3 +116,9 @@ Every render call in the work skill (Tess 2.7, Ivan 3 / 5.5 / 7, Pat 5.7) picks 
 The `--set-cmd` quoting rule is separate and still applies: any path interpolated into a `--set-cmd` value crosses into a nested shell (`subprocess.run(..., shell=True)`), so quote it with `printf '%q '` or `shlex.quote()` before composing the flag.
 
 A render fills EVERY placeholder the persona carries or exits 1 naming the first missing one. If the printed size exceeds 50 000, trim per the one-pass rule above, then re-render (still one call). `ivan.md` bakes in the code-quality rules block, the abort-instruction line, the read-only-scope note, the dispatch prologue, and the Assumptions/FILES_TOUCHED footers permanently — nothing further needs adding to the prompt by hand.
+
+## Mechanism and tier (moved from SKILL.md, PRD 00119-v2)
+
+`use-qwen`, `use-gemini`, and `use-codex` are Bash helper-script dispatches; Claude implementor passes are Agent dispatches at the task's tier. All three must satisfy the **Subagent Dispatch Budget** and the **Subagent Watchdog**.
+
+The **Subagent Dispatch Budget** applies regardless of tier. Haiku doesn't earn a smaller cap; opus doesn't earn a larger one.

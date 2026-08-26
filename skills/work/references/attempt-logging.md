@@ -93,3 +93,7 @@ Cross-reference: `run-autopilot/references/state-schema.md` `tasks[].attempts` r
 ## task-done semantics (moved from SKILL.md step 6, PRD 00119-v2)
 
 `task-done` sets `tasks[i].status = "completed"`, appends the record to `tasks[i].attempts`, and **recomputes `tasks_completed` from the task array** — all three inside one locked atomic write. Do NOT set `status`, append the attempt, or set `tasks_completed` separately; the count is derived and is not passed in. The task is resolved by matching `tasks[].id`, so the `tasks[N]` index form is not used here (rework appends `[D{cycle}]` follow-ups, after which array position stops matching id).
+
+## Assumption ledger (moved from SKILL.md § Assumptions footer, PRD 00119-v2)
+
+Collect the returned lines: step 6 appends non-`none` entries to `dev/local/meta/assumptions.md` under a `## <task-id>: <task subject>` heading (Write/Edit tool, never shell redirects). On the first completed task of a full-plan pass, replace the file instead of appending - the ledger is per-plan. Step 7's phase report includes the ledger so the user and the review phase can examine what the implementors guessed in a 30-second read.

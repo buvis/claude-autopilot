@@ -132,3 +132,9 @@ Before implementing, critically review this design spec.
 Suggest improvements to colors, spacing, typography, or layout.
 Challenge anything that feels generic or could be more distinctive.
 ```
+
+## Availability (moved from SKILL.md step 3, PRD 00119-v2)
+
+**Gemini availability check.** "Gemini if available" means the `use-gemini` helper resolves AND can run a no-op probe. Concretely: `${CLAUDE_PLUGIN_ROOT}/skills/use-gemini/scripts/gemini-run.sh` is executable AND `mise which gemini` (or `command -v gemini`) exits 0. If either fails, fall back to Claude at `state.tasks[i].model` for that UI task. Treat a runtime helper-script failure (non-zero exit, no output) the same way: record the failure and re-dispatch the task to Claude at the task's tier.
+
+For visual tasks, Gemini can also challenge the spec before implementation — see § Design Authority above (trust its feedback on visual matters).

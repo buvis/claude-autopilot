@@ -181,3 +181,7 @@ The llama.cpp server is running but serves a different model than `~/.pi/agent/m
 `qwen-run.sh` returned a non-zero exit code.
 
 **Fix**: Do not silently re-dispatch on qwen. The one-shot qwen attempt budget (see `SKILL.md` step 5.5) escalates the next attempt to Claude Sonnet — qwen failure consumes the attempt but does not consume a slot in the max-2 retry budget for the Claude Sonnet re-dispatches.
+
+## Scope (moved from SKILL.md step 3, PRD 00119-v2)
+
+qwen never sees `opus`-tier or UI tasks — `state.tasks[i].qwen_eligible` is already `false` for those upstream.
