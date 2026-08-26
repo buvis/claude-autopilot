@@ -1,6 +1,6 @@
 # Gate-failure flow (step 5.5 default path)
 
-Extracted verbatim from SKILL.md step 5.5 (situational: read it before the first gate failure of a batch; SKILL.md keeps the scope note, the retry snippet, and the `_AUTOPILOT_ESCALATION == "legacy"` branch).
+Extracted verbatim from SKILL.md steps 4.2, 4.5 and 5.5 (situational: read it before the first gate or infrastructure failure of a batch; SKILL.md keeps the scope note, the never-weaken-tests rule, and the one-line rule of each branch below).
 
 ### 5.5. Verify THIS task's tests pass
 
@@ -126,3 +126,42 @@ For codex attribution, `attempts[].model` records the task's own tier (for examp
 **Deterministic precedence — two separately-scoped orderings** (`model-ladder.md` § Ordering; NOT one linear chain):
 - **Routing-time** (step 3, per task): qwen breaker consult → memory-pressure gate → qwen infra preflight → dispatch.
 - **Failure-classification** (here, or on a lost result per step 4.2): an infra failure (preflight fail, watchdog/lost result) falls back at the SAME tier and never enters diagnosis or touches the breaker; a capability failure (a real test-gate failure, this section) enters diagnosis, where repair precedes escalate.
+
+## Retry render (step 5.5)
+
+Moved verbatim out of SKILL.md step 5.5 (PRD 00119-v2). Every re-dispatch in
+this file — feedback retry, repair, escalation — uses this shape, and so do
+step 5.7's confirmed-finding retry and step 7's regression fix.
+
+- **Retry prompts** (feedback retry, repair re-dispatch, or escalation dispatch) re-render `ivan.md` in full. A render fills EVERY placeholder the persona carries or it exits 1 naming the first missing one, so a retry re-passes `ARCHITECTURE_CONTEXT` and `FILE_PATHS` exactly as the step-3 dispatch did — only `FAILING_TESTS` and `RETRY_INSTRUCTION` change:
+  ```bash
+  python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/ivan.md \
+    --out dev/local/tmp/dispatch-ivan-<task-id>-retry-<n>.txt \
+    --set-file FAILING_TESTS=dev/local/tmp/ivan-retry-tests-<task-id>-<n>.md \
+    --set-file ARCHITECTURE_CONTEXT=<the same source step 3 used> \
+    --set-file FILE_PATHS=dev/local/tmp/ivan-<task-id>-files.txt \
+    --set RETRY_INSTRUCTION="Fix only what the failing test output points to. Do not refactor passing code, adjust unrelated files, or change style."
+  ```
+  The code-quality rules block is already permanent in `ivan.md`, so there is nothing to re-include. `FAILING_TESTS` comes from **one** source on a retry: write the original failing tests plus the new failure output to `dev/local/tmp/ivan-retry-tests-<task-id>-<n>.md` once per retry and pass it with `--set-file`. Do not also pass `--set-cmd FAILING_TESTS` — the last flag would silently win, and the failure output is exactly what the retry needs to carry.
+
+## Legacy escalation branch (step 5.5)
+
+Moved verbatim out of SKILL.md step 5.5 (PRD 00119-v2).
+
+**`_AUTOPILOT_ESCALATION == "legacy"`** (byte-identical to pre-00065 — replaces the old same-tier retry-cap text; no diagnosis, repair, escalation, attribution stamping, or qwen capability breaker):
+- If tests fail, dispatch Ivan again with the failure output.
+- If the failing attempt's implementor was qwen (one-shot qwen attempt budget): the re-dispatch targets **Claude Sonnet** — never qwen again (the carve-out in SKILL.md "Per-task model dispatch"). The retry budget below then applies to the Claude Sonnet re-dispatches; the qwen attempt does not consume a slot.
+- Max 2 implementation retries before escalating to the user.
+
+## Infrastructure-failure circuit breaker (step 4.2)
+
+Moved verbatim out of SKILL.md step 4.2 (PRD 00119-v2). SKILL.md keeps the
+one-re-dispatch rule; the steps live here.
+
+1. Check the working tree (`git status --short`). A crashed agent may have left partial, uncommitted, **unverified** changes. Note them in the task output; do not commit them blind and do not assume they compile.
+2. Re-dispatch the **same** task at most **once**. Track infrastructure re-dispatches per task — this cap is separate from the test-failure retry cap (step 5.5) and the review-cycle cap (step 5.7).
+3. On the **second** infrastructure failure for the same task: stop. Append an attempt-log entry (`outcome: "aborted"`, `cause: "subagent_infra_failure"`), set `state.stall_reason` to `{"stalled": "subagent_infra_failure", "task": "<id>"}`. Escalate to the user. Do **not** advance to the next task.
+
+## Debug on error (step 4.5)
+
+If the tool returned an error, invoke the `debug-stuck-agent` skill to diagnose the root cause before reporting to the user. If debugging resolves the issue, continue to step 5. If not, report to user and keep task in_progress.

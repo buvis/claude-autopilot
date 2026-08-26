@@ -373,13 +373,11 @@ qwen never sees `opus`-tier or UI tasks — `state.tasks[i].qwen_eligible` is al
 
 A lost/empty Agent result or a watchdog-killed hang is an infrastructure failure, not a content failure. Do **not** silently re-dispatch in a loop — two back-to-back infrastructure failures on the same task once caused a multi-hour stall (`references/design-rationale.md` § circuit breaker).
 
-1. Check the working tree (`git status --short`). A crashed agent may have left partial, uncommitted, **unverified** changes. Note them in the task output; do not commit them blind and do not assume they compile.
-2. Re-dispatch the **same** task at most **once**. Track infrastructure re-dispatches per task — this cap is separate from the test-failure retry cap (step 5.5) and the review-cycle cap (step 5.7).
-3. On the **second** infrastructure failure for the same task: stop. Append an attempt-log entry (`outcome: "aborted"`, `cause: "subagent_infra_failure"`), set `state.stall_reason` to `{"stalled": "subagent_infra_failure", "task": "<id>"}`. Escalate to the user. Do **not** advance to the next task.
+Re-dispatch the **same** task at most **once** — that cap is separate from the test-failure retry cap (step 5.5) and the review-cycle cap (step 5.7). **Read `references/gate-failure.md` § Infrastructure-failure circuit breaker before re-dispatching**: it carries the working-tree check and the second-failure stop (attempt entry `cause: "subagent_infra_failure"`, `state.stall_reason`, escalate, never advance).
 
 ### 4.5. Debug on error
 
-If the tool returned an error, invoke the `debug-stuck-agent` skill to diagnose the root cause before reporting to the user. If debugging resolves the issue, continue to step 5. If not, report to user and keep task in_progress.
+If the tool returned an error, invoke the `debug-stuck-agent` skill to diagnose the root cause before reporting to the user (`references/gate-failure.md` § Debug on error). If debugging resolves the issue, continue to step 5. If not, report to user and keep task in_progress.
 
 ### 5. Commit changes
 
@@ -412,25 +410,13 @@ Run **only** the specific tests Tess wrote in step 2.7. Do NOT run the full proj
   - Python: `pytest path/to/test_file.py::test_name`
   - JS/TS: `vitest run path/to/test_file` or `jest path/to/test_file`
 - Never dispatch Tess to weaken tests.
-- **Retry prompts** (feedback retry, repair re-dispatch, or escalation dispatch) re-render `ivan.md` in full. A render fills EVERY placeholder the persona carries or it exits 1 naming the first missing one, so a retry re-passes `ARCHITECTURE_CONTEXT` and `FILE_PATHS` exactly as the step-3 dispatch did — only `FAILING_TESTS` and `RETRY_INSTRUCTION` change:
-  ```bash
-  python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/ivan.md \
-    --out dev/local/tmp/dispatch-ivan-<task-id>-retry-<n>.txt \
-    --set-file FAILING_TESTS=dev/local/tmp/ivan-retry-tests-<task-id>-<n>.md \
-    --set-file ARCHITECTURE_CONTEXT=<the same source step 3 used> \
-    --set-file FILE_PATHS=dev/local/tmp/ivan-<task-id>-files.txt \
-    --set RETRY_INSTRUCTION="Fix only what the failing test output points to. Do not refactor passing code, adjust unrelated files, or change style."
-  ```
-  The code-quality rules block is already permanent in `ivan.md`, so there is nothing to re-include. `FAILING_TESTS` comes from **one** source on a retry: write the original failing tests plus the new failure output to `dev/local/tmp/ivan-retry-tests-<task-id>-<n>.md` once per retry and pass it with `--set-file`. Do not also pass `--set-cmd FAILING_TESTS` — the last flag would silently win, and the failure output is exactly what the retry needs to carry.
+- **Retry prompts** (feedback retry, repair re-dispatch, escalation dispatch, step 5.7's confirmed findings, step 7's regression fix) re-render `ivan.md` in full from `references/gate-failure.md` § Retry render — only `FAILING_TESTS` and `RETRY_INSTRUCTION` change, and a missing placeholder exits 1.
 
 **Do not run here:** `cargo test --workspace`, `cargo clippy --workspace`, `./tests/smoke.sh`, `./tests/integration.sh`, `cargo test-full`, or any equivalent full-suite command. These are batched into step 7.
 
 **Gate-failure handling.** Read `_AUTOPILOT_ESCALATION` (env var; `model-ladder.md` § Kill-switches).
 
-**`_AUTOPILOT_ESCALATION == "legacy"`** (byte-identical to pre-00065 — replaces the old same-tier retry-cap text; no diagnosis, repair, escalation, attribution stamping, or qwen capability breaker):
-- If tests fail, dispatch Ivan again with the failure output.
-- If the failing attempt's implementor was qwen (one-shot qwen attempt budget): the re-dispatch targets **Claude Sonnet** — never qwen again (the carve-out in "Per-task model dispatch" above). The retry budget below then applies to the Claude Sonnet re-dispatches; the qwen attempt does not consume a slot.
-- Max 2 implementation retries before escalating to the user.
+**`_AUTOPILOT_ESCALATION == "legacy"`** — no diagnosis, repair, escalation, attribution stamping or qwen capability breaker: re-dispatch Ivan with the failure output, max 2 implementation retries, then escalate to the user. The branch is stated in full in `references/gate-failure.md` § Legacy escalation branch.
 
 **Any other value / absent — diagnose→repair/escalate flow (default):** see `references/gate-failure.md` for the full flow. Read it before the first gate failure of a batch.
 
