@@ -200,13 +200,7 @@ Read `state.rework_task_ids` from `dev/local/autopilot/state.json` (walk up from
 | absent or `[]` | **default (full-plan)** | The pending-and-unblocked subset from step 1's `state.tasks` pending scan, in that scan's order. This is the Phase 3 first-pass behavior. |
 | non-empty array | **rework mode** | The listed task IDs read directly from `state.rework_task_ids`, in array order — **bypass step 1's status filter entirely**. Each id's entry is read directly from `state.tasks[i]` (matched by id) regardless of current status (`pending` after Phase 6's reset, or `completed` if Phase 6's reset hasn't fired yet). Tasks NOT in the list are skipped entirely — no Tess/Ivan/Devon dispatch, no commits. |
 
-**In rework mode, each task's status is set to `in_progress` at start** via `task-start` (overwriting whatever the prior status was — `pending` after Phase 6's reset, or `completed` on a defensive re-entry) and to `completed` at end — same lifecycle as a default-mode pass, so the dashboard reflects rework progress. `task-start` does not recompute `tasks_completed`, so reopening a previously-`completed` task leaves the count transiently stale until that task's next `task-done` recomputes it — accepted, not a bug to fix.
-
-**In rework mode, the Attempt logging entry** (see "Attempt logging" above) sets `review_cycle` to the current `state.cycle` value (not null), `model` to the escalated tier read from `state.tasks[i].model` (set by `/run-autopilot` Phase 6), and `outcome` to `"completed"` or `"aborted"` as normal. It also **copies `state.tasks[i].escalation_reason` and `state.tasks[i].escalated_from` onto the entry when present** — Phase 6 sets them (`escalation_reason: "review_flag"`, `escalated_from: <prev_tier>`) on the review-flag escalation path, and this copy is how `review_flag` actually reaches `attempts[]` (the PRD metric "every escalation records reason in attempts[]" depends on it). Absent (a non-escalated rework re-dispatch) → omit both.
-
-**`/work` does NOT modify `rework_task_ids` itself.** Clearing is `/run-autopilot` Phase 6's responsibility, after this `/work` invocation returns. **If `/work` aborts mid-rework** (context overrun, Subagent Dispatch Budget overrun, unrecoverable error), `rework_task_ids` survives in state — this is correct recovery behavior: the next `/run-autopilot` session resumes with the same rework batch and re-attempts the listed tasks at their already-escalated tier. Phase 6's clear runs only on the successful `/work` return.
-
-Cross-reference: `run-autopilot/references/state-schema.md` `rework_task_ids` row; `run-autopilot/references/phase-review.md` Phase 6 (rework) tier-escalation rule.
+**In rework mode, read `references/rework-mode.md` before the first task** — it carries the `in_progress`/`completed` lifecycle, the `review_cycle` / `escalation_reason` / `escalated_from` attempt fields, and the abort semantics (`rework_task_ids` survives an aborted pass; only Phase 6 clears it).
 
 ### 2. Claim and start task
 
@@ -302,22 +296,7 @@ Hold the returned SHA in-session as `<test_commit_sha>` for this task; step 5.5'
 
 Run the newly committed tests once, before any Ivan dispatch, at the narrowest scope (the same commands step 5.5 uses). Red is the point: a failure proves the tests bind behavior that does not exist yet (rules/testing.md fail-first). Implicitly skipped when step 2.7 was skipped (no new tests).
 
-**New-module pre-check — skip the pytest invocation, don't just expect it to fail.** Before running the pytest command below, identify the target module using the task's own `Contract` section (the exact file path(s) the task implements, per `plan-tasks`' own contract convention) — not every import in the test file, only the one under test. The target module is the test file's import whose resolved filesystem path matches one of those Contract paths; this sidesteps import-parsing ambiguity entirely, since the task plan already names the file being built.
-
-**Only the Contract paths the test file actually imports are candidates.** A Contract routinely names files the new tests never import — an edited caller, a schema doc, a reference page — and a missing one of those does not imply an `ImportError`, so it must not suppress the run. Intersect first: take the Contract paths, keep those the test file imports, and judge existence on that set alone.
-
-If any **imported** Contract-named target path does not yet exist on disk, skip the pytest invocation for this step entirely: write `red_check = "n/a:new_module"` to the attempt entry and proceed straight to step 3 (still "expected red" semantically — a module that doesn't exist cannot pass). A Contract naming multiple imported files, some new and some existing, still takes this branch if ANY of them is missing — partial existence still guarantees an `ImportError` on the missing half, so running pytest gains nothing.
-
-**No Contract section, or no Contract path the tests import** (a legacy plan task, or a task whose Contract names only non-imported files): there is nothing to resolve, so do NOT skip. Run the check exactly as below — an unresolvable target is a reason to gather real evidence, never a reason to record `n/a:new_module` on a module that may well exist.
-
-Otherwise (every imported Contract-named target already exists — this is an edit to an existing module, not a new one), run the check exactly as below.
-
-| Outcome | Action |
-|---------|--------|
-| ≥1 test fails | Expected red. Proceed to step 3. |
-| All pass | Accidentally-green tests bind nothing. Send the run output back to Tess ("these tests pass with no implementation — strengthen them to fail against the current tree"); this consumes the **Total Tess budget** (step 2.8; on exhaustion flag and proceed per that step). Commit the strengthened tests (`test(<scope>): strengthen tests for <feature>`), re-capture `<test_commit_sha>` per step 2.9, and re-run this check. |
-| Tests cannot run standalone (they import the not-yet-built feature, or the runner cannot execute them) | Record `red_check: skipped:<cause>` in the task's attempt entry and the phase report (fail loud; a skipped check must never read as a passed one), then proceed to step 3. |
-
+**Read `references/red-check.md` before the first red-check of a batch** — it resolves the target module from the task's `Contract` section and carries the outcome ladder (expected red -> step 3; accidentally green -> back to Tess; cannot run -> `red_check: skipped:<cause>`, fail loud). One verdict stays here: when an **imported** Contract-named target path does not exist on disk yet, skip the invocation entirely and write `red_check = "n/a:new_module"` to the attempt entry.
 ### 3. Implement against tests (Ivan - implementor)
 
 Ivan's job: make the failing tests pass. Tests ARE the spec.
