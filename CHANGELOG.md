@@ -33,6 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dev/local/autopilot/ledger/attempts.jsonl before the per-PRD reset, so
   attempt history outlives the batch; a failed write aborts the close with
   state untouched.
+- **work**: rework tasks with at most two findings in at most two files (none
+  CRITICAL) are edited by the orchestrator instead of dispatching Ivan,
+  reverting to the normal lane when the diff overruns; step 5 stamps `reflow:`
+  on any staged file whose diff exceeds the hunk threshold so a formatter sweep
+  is visible instead of silently re-reviewed.
 
 ### Fixed
 
