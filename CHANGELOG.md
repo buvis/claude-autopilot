@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **run-autopilot**: `autopilot render report` exits 12 and names every
+  pending deferred item its rendered section does not contain, so a deferral
+  that never reaches the report stops the finalize step instead of passing
+  silently.
 - **run-autopilot**: a PRD may declare `eligibility: <shell command>`; when it
   exits non-zero, errors or times out the drain skips the PRD (it stays in
   `backlog/`, no session, no park) and records the skip in the batch summary.
@@ -32,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **run-autopilot**: a PRD that capped out no longer loses its open findings
+  from the batch report: the Deferred to Batch End table renders the union of
+  `state.deferred_decisions` and the batch deferred JSON, deduplicated, with a
+  Reason cell for every cap-overflow row.
 - **work**: step 5.6 treats an empty-string task `description` as absent and
   falls back to the task name, so a self-deslop dispatch no longer carries an
   empty description body.

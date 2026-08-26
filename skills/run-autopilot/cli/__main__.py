@@ -94,6 +94,8 @@ Exit codes:
     9   deferred-record I/O failed (defer, or stall/park's inner append)
     10  stall_op conflict (stall/park)
     11  init's parent directory does not exist (init)
+    12  a pending deferred-JSON item is missing from the rendered PRD
+        section (render report; the section was still written)
 """
 
 from __future__ import annotations
@@ -671,6 +673,17 @@ def _emit(
     return 0
 
 
+def _deferred_items(path: Path) -> list | None:
+    """The batch deferred JSON's `items`, or None when the file is absent
+    or unreadable: the report never fails on a sink it cannot read."""
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8")).get("items", [])
+    except (OSError, json.JSONDecodeError, AttributeError):
+        return None
+
+
 def _run_render(args: argparse.Namespace) -> int:
     now = args.now or _utc_now()
 
@@ -730,6 +743,10 @@ def _run_render(args: argparse.Namespace) -> int:
         else autopilot_dir / "loop-metrics.jsonl"
     )
     rows = render_metrics.load_rows(metrics_path)
+    deferred_items = _deferred_items(
+        autopilot_dir / "deferred" / f"{batch_id}-deferred.json"
+    )
+    missing: list[dict] = []
     if args.stalled:
         if not args.site or not args.detail:
             print("autopilot: --stalled needs --site and --detail", file=sys.stderr)
@@ -742,37 +759,36 @@ def _run_render(args: argparse.Namespace) -> int:
         )
         dedupe_heading = None
     elif args.summary:
-        deferred_count = None
-        deferred_path = autopilot_dir / "deferred" / f"{batch_id}-deferred.json"
-        if deferred_path.exists():
-            try:
-                deferred_count = len(
-                    json.loads(deferred_path.read_text(encoding="utf-8")).get(
-                        "items",
-                        [],
-                    ),
-                )
-            except (OSError, json.JSONDecodeError, AttributeError):
-                deferred_count = None
+        deferred_count = None if deferred_items is None else len(deferred_items)
         block = render_report.batch_summary(loaded, rows, deferred_count)
         dedupe_heading = None
     else:
-        prd_rows = render_metrics.matching_rows(
-            rows,
-            str(loaded.get("prd", "")),
-            batch_id,
-        )
-        block = render_report.prd_section(loaded, prd_rows, now)
-        dedupe_heading = f"## {loaded.get('prd', '')}"
+        prd = str(loaded.get("prd", ""))
+        prd_rows = render_metrics.matching_rows(rows, prd, batch_id)
+        json_items = [
+            i for i in deferred_items or [] if isinstance(i, dict) and i.get("prd") == prd
+        ]
+        block = render_report.prd_section(loaded, prd_rows, now, json_items)
+        dedupe_heading = f"## {prd}"
+        missing = render_report.missing_from_report(block, json_items, prd)
     out_path = autopilot_dir / "reports" / f"{batch_id}-report.md"
     if not out_path.exists() and not args.stdout:
         started = render_report.batch_started(loaded, rows)
         block = (
             render_report.header(batch_id, started) + "\n" + block.rstrip("\n") + "\n"
         )
-    return _emit(
-        block, out_path, args.stdout, append=True, dedupe_heading=dedupe_heading
-    )
+    rc = _emit(block, out_path, args.stdout, append=True, dedupe_heading=dedupe_heading)
+    if rc != 0 or not missing:
+        return rc
+    # PRD 00146 reconciliation guard: the section is written either way,
+    # but a pending deferral it does not contain must stop the finalize.
+    for item in missing:
+        print(
+            "autopilot: render report: deferred item missing from the rendered "
+            f"report: {item.get('issue') or json.dumps(item)}",
+            file=sys.stderr,
+        )
+    return 12
 
 
 def _add_loop(subparsers) -> None:

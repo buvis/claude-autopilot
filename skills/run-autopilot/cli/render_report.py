@@ -6,10 +6,16 @@ recipe in references/batch-report-format.md. Four blocks, all pure text
 functions the CLI appends to `reports/{batch_id}-report.md`:
 
 - `header(batch_id, started)` - written once at file creation.
-- `prd_section(state, metrics_rows, completed)` - the per-PRD section
-  phase-done Phase 9 step 7 appends: decisions tables, doubt rubric
-  verdicts (source-tagged when dual-reviewer, PRD 00038), loop metrics
-  (PRD 00013/00018), implementor mix (PRD 00019/00065/00075/00077).
+- `prd_section(state, metrics_rows, completed, json_items=None)` - the
+  per-PRD section phase-done Phase 9 step 7 appends: decisions tables,
+  doubt rubric verdicts (source-tagged when dual-reviewer, PRD 00038), loop
+  metrics (PRD 00013/00018), implementor mix (PRD 00019/00065/00075/00077),
+  and the Deferred to Batch End table over the union of
+  `state.deferred_decisions` and the batch deferred JSON's items for this
+  PRD (`json_items`; PRD 00146).
+- `missing_from_report(report_text, json_items, prd)` - the pending,
+  unresolved JSON items the rendered section does not contain; the CLI
+  exits 12 naming them (PRD 00146).
 - `stalled_section(prd, site, detail, stamp)` - the short STALLED form.
 - `batch_summary(state, metrics_rows, deferred_count)` - the batch-end
   block; duration from the batch's metrics rows when any exist, plus the
@@ -167,6 +173,58 @@ def _escalated(deferred: list[dict]) -> list[str]:
     )
 
 
+def _normalize(text) -> str:
+    """Whitespace-collapsed, case-folded text: the dedup and reconciliation key."""
+    return " ".join(str(text).split()).casefold()
+
+
+def _is_open(entry: dict) -> bool:
+    """Pending and not carrying a `resolved` block. Lives here and not in
+    `_is_pending`, whose negation `is_escalated_row` is how statectl counts
+    `escalated_decisions`."""
+    return _is_pending(entry) and not entry.get("resolved")
+
+
+def _merge_deferral_sinks(
+    state_deferrals: list[dict], json_items: list[dict]
+) -> list[dict]:
+    """Union of both deferral sinks for one PRD: open entries deduplicated on
+    normalized issue text, state entries first. A cap-overflow record with
+    neither `disposition` nor `reason` (the pre-00146 record shape) gets a
+    Reason synthesized from whichever of cycle and consensus it carries."""
+    merged: dict[str, dict] = {}
+    for entry in [*state_deferrals, *json_items]:
+        key = _normalize(entry.get("issue", ""))
+        if not _is_open(entry) or key in merged:
+            continue
+        if entry.get("type") == "cap-overflow" and not (
+            entry.get("disposition") or entry.get("reason")
+        ):
+            detail = ", ".join(
+                f"{k} {entry[k]}" for k in ("cycle", "consensus") if entry.get(k) is not None
+            )
+            reason = "rework cap reached with this finding unresolved"
+            entry = {**entry, "reason": f"{reason} ({detail})" if detail else reason}
+        merged[key] = entry
+    return list(merged.values())
+
+
+def missing_from_report(report_text: str, json_items: list[dict], prd: str) -> list[dict]:
+    """The open deferred-JSON items for `prd` whose issue text does not
+    occur in `report_text` (both normalized the way the table renders
+    them). An item without issue text is always missing: it cannot be
+    found, so it fails loud instead of being dropped."""
+    haystack = _normalize(report_text)
+    missing = []
+    for item in json_items:
+        if not isinstance(item, dict) or item.get("prd") != prd or not _is_open(item):
+            continue
+        needle = _normalize(_cell(item.get("issue")))
+        if not needle or needle not in haystack:
+            missing.append(item)
+    return missing
+
+
 def _deferred_to_batch_end(deferred: list[dict]) -> list[str]:
     rows = [
         [d.get("issue"), d.get("severity"), d.get("disposition") or d.get("reason")]
@@ -314,8 +372,16 @@ def _implementor_mix(state: dict) -> list[str]:
     return lines
 
 
-def prd_section(state: dict, metrics_rows: list[dict], completed: str) -> str:
-    """The completed-PRD section appended at Phase 9 step 7."""
+def prd_section(
+    state: dict,
+    metrics_rows: list[dict],
+    completed: str,
+    json_items: list[dict] | None = None,
+) -> str:
+    """The completed-PRD section appended at Phase 9 step 7. `json_items`
+    are the batch deferred JSON's items for this PRD (already filtered by
+    the caller); the Deferred to Batch End table renders their union with
+    `state.deferred_decisions`."""
     prd = str(state.get("prd", ""))
     autonomous = [
         d for d in state.get("autonomous_decisions") or [] if isinstance(d, dict)
@@ -353,7 +419,7 @@ def prd_section(state: dict, metrics_rows: list[dict], completed: str) -> str:
     lines += _rubric_verdicts(state.get("doubts_rubric_verdicts") or [])
     lines += ["### Loop Metrics", "", render_metrics.phase_table(metrics_rows), ""]
     lines += _implementor_mix(state)
-    lines += _deferred_to_batch_end(deferred)
+    lines += _deferred_to_batch_end(_merge_deferral_sinks(deferred, json_items or []))
     return "\n".join(lines)
 
 

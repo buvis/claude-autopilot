@@ -1,0 +1,65 @@
+{
+  "batch_id": "202608180438",
+  "items": [
+    {
+      "type": "cap-overflow",
+      "issue": "check_style_limits: a changed file the gate cannot inspect (unreadable file, or an equal-depth ambiguous diff-path tie) is skipped with only a stderr note, so when nothing else violates main() returns 0 and step 7.0 records style_gate: clean for a gate that never inspected that file. Contradicts the PRD Solution text: a skipped or failed gate never reads as clean. REPRODUCED: a 61-line function reports FUNCTION at exit 1 when readable, exit 0 under chmod 000. Fix: propagate skip status to main() and return 2, plus CLI tests for the ambiguous-only and unreadable-only paths.",
+      "severity": "high",
+      "consensus": "2/4",
+      "file": "skills/work/scripts/check_style_limits.py:124,162",
+      "cycle": 2,
+      "prd": "00140-gate-style-limits-before-review-v1.md",
+      "resolved": {
+        "commit": "c175402",
+        "date": "2026-08-26",
+        "by": "user decision at the cycle-2 walkthrough (cap override for this finding only; the five Mediums stay deferred)",
+        "note": "violations() gained an optional `skipped` list; main() returns 2 when any changed file went uninspected, which is step 7.0's 'gate could not run' branch. Repro re-run after the fix: unreadable file now exits 2, was 0. Suites 513 passed."
+      }
+    },
+    {
+      "type": "cap-overflow",
+      "issue": "work/SKILL.md step 7.0 was never restructured into numbered commands. Cycle-1 finding 4 accepted BOTH halves of a fix (numbered commands AND an explicit style_gate: failed: exception in the stop condition); only the exception clause landed at line 681, and the exit-2 branch was appended as more prose to the same dense paragraph. The contradiction itself is fixed and test-pinned, so this is a documentation-shape gap, not a functional defect.",
+      "severity": "medium",
+      "consensus": "3/4",
+      "file": "skills/work/SKILL.md:656",
+      "cycle": 2,
+      "prd": "00140-gate-style-limits-before-review-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "issue": "The work_start_sha deviation pin is a bare-substring check over the whole step-7 section, so it still passes if the gate base reverts to the PRD original wording while the token survives elsewhere (the recorded-deviation prose itself contains it). The PRD claims reverting turns that test red; as written it may not. Fix: assert the exact Base = state.work_start_sha contract inside section 7.0.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "file": "skills/work/scripts/test_dispatch_prose.py:120",
+      "cycle": 2,
+      "prd": "00140-gate-style-limits-before-review-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "issue": "Dead exception type: the read_text handler in violations() catches SyntaxError, which Path.read_text cannot raise. Parse-time syntax errors are already handled inside facts_for_file, whose tuple this was copied from. Fix: drop SyntaxError from that tuple.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "file": "skills/work/scripts/check_style_limits.py:164",
+      "cycle": 2,
+      "prd": "00140-gate-style-limits-before-review-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "issue": "The bare-repo prose test collects every --git-dir occurrence with a while-loop merely to compute two booleans. Fix: replace lines 203-217 with two direct slice-containment checks, on the text before the first git diff and at/after the second.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "file": "skills/work/scripts/test_dispatch_prose.py:203",
+      "cycle": 2,
+      "prd": "00140-gate-style-limits-before-review-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "issue": "Simplification: give flush() a nonlocal pending, has_addition and let it reset its own state, dropping the repeated pending = None / has_addition = False from its three callers. Caution when picking this up: it touches the same freshly-changed diff walk whose refactor was rejected as cycle-1 finding 8 under Surgical Changes.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "file": "skills/work/scripts/check_style_limits.py:46",
+      "cycle": 2,
+      "prd": "00140-gate-style-limits-before-review-v1.md"
+    }
+  ]
+}
