@@ -385,32 +385,9 @@ Apply the rows in this order — the first match wins (in practice `qwen_eligibl
 | 6 | Backend, `qwen_eligible == true`, row 3 did not fire, row 4 did not fire, **unhealthy** qwen infra | Claude at the task's original tier (`haiku` → Haiku, `sonnet` → Sonnet) | `references/qwen-integration.md` (Preflight) |
 | 7 | Backend, `qwen_eligible == false` (or absent) | Claude at the task's tier (e.g. a `>=4`-file `sonnet` task → Claude Sonnet) | — |
 
-> **Codex rung interception.** After the table above yields its verdict, when ALL
-> of the following hold, dispatch **codex** instead of the Claude implementor the
-> table named:
->
-> 1. the table's verdict is "Claude at the task's tier" or "Claude at the task's
->    ORIGINAL tier" (i.e. rows 3, 4, 6, or 7 fired — never rows 1, 2, or 5), and
-> 2. `codex_eligible(task)` per `model-ladder.md § Codex rung`, and
-> 3. `_WORK_CODEX_RUNG != "off"`, and
-> 4. `_AUTOPILOT_ESCALATION != "legacy"`, and
-> 5. the batch codex health probe verdict is `"healthy"`, and
-> 6. the task's own TERMINAL attempt (the last entry in `task.attempts`, if any)
->    was not itself codex.
->
-> The interception never fires for a `fable` task (that override outranks the
-> whole table), never for a UI task, and never for `opus` tier — fence 2 and the
-> `fable` rule already exclude all three. It also never re-fires on a task whose
-> terminal attempt was codex: per `run-autopilot/references/phase-review.md`
-> ("terminal attempt with `implementor: codex` -> re-dispatch Claude at the
-> task's same tier"), a review-flagged codex rework escalates to Claude at the
-> task's own tier, never back to codex.
+**Codex rung interception.** After the table above yields its verdict, dispatch **codex** instead of the Claude implementor the table named when all six fences hold (verdict is "Claude at the task's tier"/"ORIGINAL tier", `codex_eligible(task)`, `_WORK_CODEX_RUNG != "off"`, `_AUTOPILOT_ESCALATION != "legacy"`, a `"healthy"` batch probe, and a terminal attempt that was not itself codex). **Read `references/codex-implementor.md` § Codex rung interception before the first codex dispatch of a batch** — it states each fence exactly and why fence 4 is not optional.
 
 `scripts/work_routing.py` is a decision model of the table and this interception, tested in isolation by `scripts/test_work_routing.py`; it is kept in sync with this prose by review, not by a test that flips red when the prose changes. The one exception is the `codex_eligible` fence itself: `test_work_routing.py` extracts it live from `model-ladder.md` § Codex rung, so editing a clause's field or value, adding or removing a clause, or changing the `OR` that joins them, all flip a test red (see `test_codex_eligible_agrees_with_every_clause_extracted_from_the_real_ladder` and `test_extractor_raises_when_the_fence_joins_clauses_with_a_non_or_combinator`). A cosmetic reword of the fence's own opening line (e.g. renaming the pseudocode parameter) does not — the extractor's fence-selection match is deliberately loose there. The guard binds the fence to `_codex_eligible`, not the reverse: widening `_codex_eligible` to a value no clause and no candidate in `_CODEX_ELIGIBLE_CANDIDATES` names is not caught, so an edit there still needs review.
-
-**Why condition 4 is required, not optional.** `model-ladder.md` promises that under `_AUTOPILOT_ESCALATION=legacy` the escalation machinery is byte-identical to pre-00065. The legacy branch of step 5.5 has no codex arm, so letting the interception fire under `legacy` would both falsify that promise and send a failing codex attempt into "escalate to the user" — in a headless loop, a stall with no defined `site:`, i.e. a new halt class. Gating the interception is cheaper than adding a codex carve-out to the legacy branch.
-
-**Routing row 3 (qwen breaker tripped) IS codex-eligible — stated intent.** The qwen capability breaker fences *qwen*, not the whole non-Claude family: it latches on two consecutive qwen test-gate failures, which is evidence about the local model, not about codex. A breakered batch is when the rung absorbs the most traffic.
 
 The memory-pressure gate (row 4) runs only when the table would otherwise reach qwen (now row 5) — it never runs for UI, `opus`, `qwen_eligible == false`, or breaker-skipped tasks.
 
@@ -441,18 +418,7 @@ qwen never sees `opus`-tier or UI tasks — `state.tasks[i].qwen_eligible` is al
 5. **Re-probe trigger — scoped to backend-health signals, not task-outcome signals.** A qwen-routed task's step-5.5 gate failing on its own is NOT a re-probe trigger: ordinary task-difficulty failures on a healthy backend are expected and already handled by the one-shot-to-Sonnet escalation (`references/qwen-integration.md` § One-shot attempt budget) — treating every such failure as a health signal would degrade the cache toward "probe before every task." Only two signals invalidate the cache: (a) the Subagent Watchdog judges the qwen dispatch itself hung/lost, or (b) the qwen helper script's own exit reports an infra-shaped failure at dispatch time (`"pi_missing"` / `"endpoint_unreachable"` / `"model_id_missing"` / `"completion_failed"`), surfaced when `qwen-run.sh` (not the preflight probe) fails at the real dispatch despite a cached `"healthy"` verdict. On either trigger, run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py <state.json> del qwen_preflight` immediately — the next qwen-eligible task's batch-scope check then sees "absent" and re-probes via the mismatch-or-absent path above. The field may already be absent (an earlier trigger this batch deleted it and no qwen-eligible task has re-probed since); treat a "key not found" exit from that call as success, not as an error to escalate.
 6. The per-task memory-pressure gate (routing row 4) is untouched — it stays a per-task host-memory check, independent of this cache.
 
-#### Codex implementor mechanics (probe, dispatch, hook gate)
-
-The HOW of the codex rung lives in `references/codex-implementor.md` — the
-batch health probe (tool-exercising, nonce-verified, 300s watchdog), the
-dispatch checklist (no-edit porcelain captures, `-a`-never-`-y` sandbox grant,
-`-d` for dev/local, kill-before-fallback), and the TOOL-GATE NOTICE block every
-codex prompt must end with. **Read that file in full before the first codex
-probe or dispatch of a batch** — the interception conditions above only decide
-WHETHER codex runs; every mechanical rule for probing and dispatching it is in
-the reference and is not restated here. Two invariants worth repeating at the
-call site: never `-y` (the `-a` grant covers this rung only), and on any codex
-timeout `TaskStop` + verify-gone BEFORE dispatching the Claude fallback.
+**Codex implementor mechanics.** The HOW of the codex rung — batch health probe, dispatch checklist, TOOL-GATE NOTICE — lives in `references/codex-implementor.md`; **read it in full before the first codex probe or dispatch of a batch**. Two invariants worth repeating at the call site: never `-y` (the `-a` grant covers this rung only), and on any codex timeout `TaskStop` + verify-gone BEFORE dispatching the Claude fallback.
 
 ### 4. Handle result
 

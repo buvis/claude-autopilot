@@ -6,6 +6,36 @@ decides WHETHER codex dispatches; this file owns HOW — the batch health probe,
 the dispatch checklist, and the hook-gate notice. Read it in full before the
 first codex probe or dispatch of a batch.
 
+## Codex rung interception
+
+Moved verbatim out of SKILL.md step 3 (PRD 00119-v2). SKILL.md keeps the
+one-line rule and the pointer; the six fences live here.
+
+> **Codex rung interception.** After the table above yields its verdict, when ALL
+> of the following hold, dispatch **codex** instead of the Claude implementor the
+> table named:
+>
+> 1. the table's verdict is "Claude at the task's tier" or "Claude at the task's
+>    ORIGINAL tier" (i.e. rows 3, 4, 6, or 7 fired — never rows 1, 2, or 5), and
+> 2. `codex_eligible(task)` per `model-ladder.md § Codex rung`, and
+> 3. `_WORK_CODEX_RUNG != "off"`, and
+> 4. `_AUTOPILOT_ESCALATION != "legacy"`, and
+> 5. the batch codex health probe verdict is `"healthy"`, and
+> 6. the task's own TERMINAL attempt (the last entry in `task.attempts`, if any)
+>    was not itself codex.
+>
+> The interception never fires for a `fable` task (that override outranks the
+> whole table), never for a UI task, and never for `opus` tier — fence 2 and the
+> `fable` rule already exclude all three. It also never re-fires on a task whose
+> terminal attempt was codex: per `run-autopilot/references/phase-review.md`
+> ("terminal attempt with `implementor: codex` -> re-dispatch Claude at the
+> task's same tier"), a review-flagged codex rework escalates to Claude at the
+> task's own tier, never back to codex.
+
+**Why fence 4 is required, not optional.** `model-ladder.md` promises that under `_AUTOPILOT_ESCALATION=legacy` the escalation machinery is byte-identical to pre-00065. The legacy branch of step 5.5 has no codex arm, so letting the interception fire under `legacy` would both falsify that promise and send a failing codex attempt into "escalate to the user" — in a headless loop, a stall with no defined `site:`, i.e. a new halt class. Gating the interception is cheaper than adding a codex carve-out to the legacy branch.
+
+**Routing row 3 (qwen breaker tripped) IS codex-eligible — stated intent.** The qwen capability breaker fences *qwen*, not the whole non-Claude family: it latches on two consecutive qwen test-gate failures, which is evidence about the local model, not about codex. A breakered batch is when the rung absorbs the most traffic.
+
 ## Codex batch health probe
 
 Same placement and the same batch scope as the qwen preflight — one probe
