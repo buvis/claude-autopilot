@@ -44,6 +44,7 @@ This skill runs inside an **automated autopilot loop**. The user is not watching
 2. More than two consecutive failed attempts at the same automated step with no remaining fallback.
 
 **A blocked or backgrounded verification is never a reason to ask.** Record `verification: skipped:<cause>` in the attempt entry and the phase report (fail loud) and proceed; `references/subagent-dispatch.md` § Blocked verification carries the build-lock and Monitor rules.
+
 ## CRITICAL: One Task at a Time
 
 **STOP.** Before dispatching ANY Agent or helper-script call, verify you are sending it EXACTLY ONE task. Batching tasks into one Agent call leaves `state.tasks` (and every dashboard reading state.json) stale for the entire duration and collapses per-task attempt logging.
