@@ -46,8 +46,10 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import sys
 from collections.abc import Callable
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -373,7 +375,56 @@ def _completed_prd_record(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def do_complete_prd(data: Any, prd_filename: str) -> None:
+def append_attempt_rows(state: dict[str, Any], prd: str, ledger_path: Path) -> int:
+    """Append one JSONL row per `tasks[].attempts[]` entry to `ledger_path`.
+
+    Returns the row count. The file (and its directory) is created when
+    absent and never truncated; an existing file lacking a trailing newline
+    gets one before the first new row. Zero attempts touch nothing. Any
+    OSError becomes schema.SchemaError so `main` exits 1 with `rejected:` -
+    and because this runs inside `mutate`'s apply, the raise lands before
+    `state.transaction` writes anything, so state.json stays byte-untouched.
+    Reimplemented here on purpose: `cli/` must not import `hooks/_common.py`.
+    """
+    recorded_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    rows = []
+    for task in state.get("tasks") or []:
+        if not isinstance(task, dict):
+            continue  # same tolerance as _find_task
+        attempts = task.get("attempts") or []
+        if not isinstance(attempts, list):
+            raise schema.SchemaError(f"task {task.get('id')!r} attempts is not an array")
+        rows.extend(
+            {
+                "batch_id": (state.get("batch") or {}).get("id"),
+                "prd": prd,
+                "task_id": task.get("id"),
+                "task_name": task.get("name"),
+                "task_model": task.get("model"),
+                "qwen_eligible": task.get("qwen_eligible"),
+                "recorded_at": recorded_at,
+                "attempt": attempt,
+            }
+            for attempt in attempts
+        )
+    if not rows:
+        return 0
+    try:
+        ledger_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(ledger_path, "a+b") as fh:
+            fh.seek(0, os.SEEK_END)
+            if fh.tell() > 0:
+                fh.seek(-1, os.SEEK_END)
+                if fh.read(1) != b"\n":
+                    fh.write(b"\n")
+            for row in rows:
+                fh.write((json.dumps(row) + "\n").encode("utf-8"))
+    except OSError as err:
+        raise schema.SchemaError(f"ledger write failed: {err}") from err
+    return len(rows)
+
+
+def do_complete_prd(data: Any, prd_filename: str, ledger_path: Path) -> None:
     """Append the closing PRD's record to `batch.completed_prds` and reset
     `batch.parks_consecutive` to 0 - atomically, in the same write.
 
@@ -382,12 +433,17 @@ def do_complete_prd(data: Any, prd_filename: str) -> None:
     divergence means the wrong state file or the wrong PRD name reached this
     call. The record's counts share the renderer's predicates and its absent
     keys default (cycle 1, task counts 0) - see `_completed_prd_record`.
+
+    Every task attempt is appended to `ledger_path` FIRST
+    (`append_attempt_rows`), so a ledger failure aborts the close and the
+    per-PRD reset that follows it never runs without the rows.
     """
     state_prd = data.get("prd")
     if state_prd != prd_filename:
         raise UsageError(
             f"complete-prd {prd_filename!r} does not match state.prd {state_prd!r}",
         )
+    append_attempt_rows(data, prd_filename, ledger_path)
     batch = data.setdefault("batch", {})
     batch.setdefault("completed_prds", []).append(_completed_prd_record(data))
     batch["parks_consecutive"] = 0
@@ -552,9 +608,6 @@ def _build_task_id_apply(verb: str, arg: str, rest: list[str]) -> Callable[[Any]
     if verb == "task-start":
         return lambda data: do_task_start(data, arg)
 
-    if verb == "complete-prd":
-        return lambda data: do_complete_prd(data, arg)
-
     if verb == "append-attempt":
         if not rest:
             raise UsageError("append-attempt requires an attempt-json-file argument")
@@ -589,6 +642,11 @@ def main(argv: list[str] | None = None) -> int:
         if verb == "get":
             _raw, data = read_and_parse(state_path)
             print(json.dumps(get_value(data, parse_path(arg))))
+        elif verb == "complete-prd":
+            # Routed here, not through _build_apply: the ledger path derives
+            # from the state path, which the builders never see.
+            ledger = state_path.parent / "ledger" / "attempts.jsonl"
+            mutate(state_path, lambda data: do_complete_prd(data, arg, ledger))
         else:
             result = mutate(state_path, _build_apply(verb, arg, rest))
             if result is not None:

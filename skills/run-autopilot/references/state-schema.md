@@ -241,6 +241,31 @@ The wrapper↔skill hand-off uses touch-file markers in `dev/local/autopilot/`, 
 
 `stall_op` (PRD 00051 task 10) is not a marker file but a `state.json` field carrying the same kind of session-boundary durable intent this section documents: `{op_id, prd, site, detail}`, written by `do_stall`'s step 2 (before the `wip/`→`hold/` move runs) and deleted only by its step 5 single commit (the same write that performs the per-PRD reset). A `state.json` carrying `stall_op` past a crash means a stall was interrupted mid-flight; the next session's `autopilot park` reconciles it — retrying the same `op_id` to completion — BEFORE any gate file is read (`SKILL.md` § Gate Dispatch).
 
+## Attempt ledger
+
+File: `dev/local/autopilot/ledger/attempts.jsonl` (PRD 00143) - the durable per-repo record of every task attempt, written so that attempt outcomes outlive the per-PRD reset that drops `tasks[]` at PRD close. It sits in the same GC-exempt `ledger/` dir as `loop-metrics.jsonl`'s mirror and `fable-requests.json`, so it survives batch end and the 14d purge, and it is on the core `SKILL.md` § Retention durable list.
+
+**Writer.** `statectl.py <state> complete-prd <prd>` (Phase 9 step 4, `references/phase-done.md`) appends one row per entry of `state.tasks[].attempts[]` inside the same locked transaction as the close, BEFORE `batch.completed_prds` is appended and before the step-10 per-PRD reset. `cli/statectl.py`'s `append_attempt_rows` is the only writer: it creates `ledger/` and the file when absent, opens in append mode, never truncates, and writes a separating newline first when the existing file lacks a trailing one. A write failure (any `OSError`) is a `SchemaError`-class exit 1 (`rejected: ledger write failed: ...`) raised before `state.json` is touched: no `.bak` rotates, no record is appended, and the reset never runs without the rows. Zero attempts write nothing. The converse is not guarded: if the state write is rejected AFTER the rows landed (a schema failure or a disk error on `state.json` itself), the rows stay and a retried close appends them again, so readers dedupe on `(batch_id, prd, task_id, attempt.attempt)`.
+
+One JSON object per line:
+
+```json
+{"batch_id": "202608260001", "prd": "00143-example.md", "task_id": "task-1", "task_name": "First", "task_model": "sonnet", "qwen_eligible": true, "recorded_at": "2026-08-26T10:00:00Z", "attempt": {"attempt": 2, "model": "opus", "outcome": "completed", "escalation_reason": "gate_failure", "escalated_from": "sonnet"}}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `batch_id` | string? | `state.batch.id` at close; `null` when the batch carries no id. |
+| `prd` | string | The closing PRD's filename (`state.prd`, the `00XXX-….md` basename). |
+| `task_id` | string? | `tasks[i].id`. |
+| `task_name` | string? | `tasks[i].name`. |
+| `task_model` | string? | `tasks[i].model` (the plan-time tier); `null` when absent. |
+| `qwen_eligible` | bool? | `tasks[i].qwen_eligible`; `null` when absent. |
+| `recorded_at` | string | ISO 8601 UTC (`%Y-%m-%dT%H:%M:%SZ`) of the write; every row of one close shares it. |
+| `attempt` | object | The `tasks[i].attempts[j]` object verbatim (`tasks[].attempts` above), nothing added or normalized. |
+
+**Readers** (audit-qwen, the 00113 tuner) live outside this plugin and read the ledger instead of live state; an absent file means "no closed PRDs yet" and is never an error.
+
 ## Fable rescue ledger
 
 File: `dev/local/autopilot/ledger/fable-requests.json` (PRD 00076) - the durable, single source of truth for the Fable rescue. The `ledger/` dir is already GC-exempt (`purge-devlocal` keeps `autopilot/ledger/**` while trashing the rest of `autopilot/**` at 14d), so the ledger survives batch end and the 14d purge with **no new retention rule**.

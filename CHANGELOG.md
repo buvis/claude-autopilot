@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the task's own checks as FAILING_TESTS; Ivan may edit test files his
   allowlist names; Tess receives <dir>/tests/HARNESS_CONTRACT.md whenever a
   touched file's directory carries one.
+- **run-autopilot**: complete-prd appends one row per task attempt to
+  dev/local/autopilot/ledger/attempts.jsonl before the per-PRD reset, so
+  attempt history outlives the batch; a failed write aborts the close with
+  state untouched.
 
 ### Fixed
 
