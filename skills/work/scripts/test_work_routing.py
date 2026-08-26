@@ -969,3 +969,104 @@ def test_empty_contract_runs_the_check() -> None:
     )
 
     assert verdict == "run"
+
+
+# --- micro_lane_eligible ------------------------------------------------------
+#
+# PRD 00148: a rework task small enough that the full per-task ceremony costs
+# more than the edit. Every bound is a conjunct, so each case below flips
+# exactly one input against an otherwise-eligible fixture.
+
+
+def test_two_mediums_in_one_file_take_the_micro_lane() -> None:
+    # The eligible shape: findings carry `:line` suffixes as they appear in the
+    # verbatim block, and both point at the same file.
+    verdict = work_routing.micro_lane_eligible(
+        severities=["MEDIUM", "MEDIUM"],
+        files=["skills/work/SKILL.md:120", "skills/work/SKILL.md:305"],
+        in_rework=True,
+    )
+
+    assert verdict is True
+
+
+def test_a_task_outside_rework_never_takes_the_micro_lane() -> None:
+    # Default-mode tasks have no findings block to size, and their tests do not
+    # exist yet — skipping Tess there would skip the spec itself.
+    verdict = work_routing.micro_lane_eligible(
+        severities=["MEDIUM", "MEDIUM"],
+        files=["skills/work/SKILL.md:120", "skills/work/SKILL.md:305"],
+        in_rework=False,
+    )
+
+    assert verdict is False
+
+
+def test_three_findings_fall_back_to_the_normal_lane() -> None:
+    verdict = work_routing.micro_lane_eligible(
+        severities=["MEDIUM", "LOW", "LOW"],
+        files=["skills/work/SKILL.md:120", "skills/work/SKILL.md:305"],
+        in_rework=True,
+    )
+
+    assert verdict is False
+
+
+def test_three_distinct_files_fall_back_to_the_normal_lane() -> None:
+    # Two findings can still span three files when one names a pair.
+    verdict = work_routing.micro_lane_eligible(
+        severities=["MEDIUM", "LOW"],
+        files=["a.py:1", "b.py:2", "c.py:3"],
+        in_rework=True,
+    )
+
+    assert verdict is False
+
+
+def test_a_critical_finding_never_takes_the_micro_lane() -> None:
+    # Size is not the only cost. A CRITICAL earns the full pipeline — Tess's
+    # regression test above all — however few lines it takes to fix.
+    verdict = work_routing.micro_lane_eligible(
+        severities=["CRITICAL", "LOW"],
+        files=["a.py:1"],
+        in_rework=True,
+    )
+
+    assert verdict is False
+
+
+def test_severity_case_does_not_smuggle_a_critical_through() -> None:
+    # Severities are copied out of task-authored prose, so their case is not
+    # ours to assume.
+    verdict = work_routing.micro_lane_eligible(
+        severities=["critical"],
+        files=["a.py:1"],
+        in_rework=True,
+    )
+
+    assert verdict is False
+
+
+def test_an_unparsed_findings_block_is_not_eligible() -> None:
+    # Zero severities means the `### Findings (verbatim)` block did not parse,
+    # not that the task is small: there is nothing to bound and nothing to
+    # edit. Eligible-on-empty would fail open, past the CRITICAL check.
+    verdict = work_routing.micro_lane_eligible(
+        severities=[],
+        files=[],
+        in_rework=True,
+    )
+
+    assert verdict is False
+
+
+def test_the_same_file_at_two_lines_counts_once() -> None:
+    # The `:line` suffix is stripped before the file count, or a two-finding
+    # task in one file reads as a two-file task.
+    verdict = work_routing.micro_lane_eligible(
+        severities=["LOW", "LOW"],
+        files=["a.py:1", "a.py:900", "a.py"],
+        in_rework=True,
+    )
+
+    assert verdict is True

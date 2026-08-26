@@ -88,6 +88,28 @@ def route(task: dict, env: dict, state: dict, probes: dict) -> dict:
     return {"implementor": implementor, "tier": tier, "rule": rule}
 
 
+def micro_lane_eligible(
+    severities: list[str],
+    files: list[str],
+    in_rework: bool,
+) -> bool:
+    """True when a rework task is small enough for the orchestrator to edit.
+
+    `files` entries may carry a `:line` suffix as the verbatim findings block
+    writes them; only the path before it counts. Empty `severities` means the
+    block did not parse — nothing to bound, so not eligible. The 2/2 bound is a
+    proxy for the expected diff size; the post-edit overrun ceiling in
+    `references/rework-mode.md` is the real guard.
+    """
+    return (
+        in_rework
+        and bool(severities)
+        and len(severities) <= 2
+        and len({path.split(":", 1)[0] for path in files}) <= 2
+        and not any(s.strip().upper() == "CRITICAL" for s in severities)
+    )
+
+
 def needs_probe(state: dict, batch_id: str) -> bool:
     """True when no codex probe verdict is cached for exactly this batch."""
     return state.get("codex_probe", {}).get("batch_id") != batch_id
