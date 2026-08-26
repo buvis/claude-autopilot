@@ -36,6 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **work**: qwen dispatch names a helper path that exists. `qwen-integration.md`
+  pointed at `~/.agents/skills/use-qwen/`, where nothing lives - `use-qwen` is a
+  Claude-only skill under `~/.claude/skills/` and braid never composed it into
+  the shared union. Every qwen dispatch therefore missed its helper and fell
+  back to Claude, at token cost, for work meant to run locally and free.
 - **run-autopilot**: a PRD that capped out no longer loses its open findings
   from the batch report: the Deferred to Batch End table renders the union of
   `state.deferred_decisions` and the batch deferred JSON, deduplicated, with a
