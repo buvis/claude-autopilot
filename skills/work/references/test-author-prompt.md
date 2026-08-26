@@ -35,7 +35,7 @@ dispatch of a batch.**
 - Task description and acceptance criteria
 - The **exact file paths** the task touches — spelled **absolute** — and the **exact symbol names** to test, taken from the plan task — not "find the relevant file"
 - Public interfaces/types relevant to the task
-- The project's test-harness contract when one exists (PRD 00141): for each Contract path `<dir>/<file>`, `<dir>/tests/HARNESS_CONTRACT.md` joins the `PUBLIC_INTERFACES` `--set-cmd`, once per distinct file. No such file adds nothing — this is a convention, not a requirement on the project. It exists because a harness can make a test pass for reasons the test author cannot guess from requirements (PRD 00141's case: a `capture_main` helper that installs its own `sys.stdin`, so a "marker checked before stdin" test would have passed against the old code too). The contract states harness rules, never implementation
+- The project's test-harness contract when one exists (PRD 00141): for each Contract path `<dir>/<file>`, `<dir>/tests/HARNESS_CONTRACT.md` joins the `PUBLIC_INTERFACES` `--set-cmd`, once per distinct file; no such file adds nothing. It carries harness rules, never implementation — a harness can make a test pass for reasons requirements cannot reveal (a `capture_main` that installs its own `sys.stdin`, so a "marker checked before stdin" test passes against the old code too)
 - Existing test patterns (one sample test file from the project)
 - Test framework and conventions used
 

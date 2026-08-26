@@ -442,11 +442,9 @@ def test_eve_dispatch_section_names_pack_findings_and_drops_three_input_claim() 
 def test_blake_row_names_the_filesystem_notes_block_and_both_triggers() -> None:
     """Blake sweeps with `rg --files`, which neither descends into a
     dot-directory nor follows a symlink, so on a project like `~/.claude` he
-    reports existing `dev/local` files as missing (PRD 00141). The fix is a
-    `## Filesystem notes` block prepended to his run inputs — paths only, so
-    the blind lens stays blind. Prose contract: SKILL.md step 4 must name the
-    block and BOTH trigger halves, Blake's own table row must point at it,
-    and agent-invocation.md must carry the block text."""
+    reports existing `dev/local` files as missing (PRD 00141). A
+    `## Filesystem notes` block of paths fixes that without un-blinding him;
+    both trigger halves must be stated, or it fires on the wrong projects."""
     text = _skill_text()
 
     assert "## Filesystem notes" in text, (
