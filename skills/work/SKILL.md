@@ -517,8 +517,6 @@ Compute `net_lines = insertions - deletions` (from `--shortstat`) and `file_coun
 | `fable` | review (below) — the rescue rung is reviewed like `opus` |
 | anything else — `opus`, `sonnet`, absent/legacy or unknown (both treated as `sonnet`) | review (below) |
 
-A `haiku`-tier task commits after per-task test verification (step 5.5) with **no** review dispatch and proceeds straight to step 6 — it relies on per-task test verification plus the mandated PRD-level review lenses (consensus, blind, doubt — every review cycle reviews every task's diff regardless of tier). The reviewer is a fixed-model helper-script lane (Sonnet via `use-sonnet`) — reviewer capability is deliberately independent of the task's implementor tier. (Why tier-gated: `references/design-rationale.md` § tier-gated pipeline.)
-
 Dispatch the reviewer after commit and verification — a native lane, no plugin dependency:
 
 1. Get SHAs: `BASE_SHA` = the parent of this task's test commit (`<test_commit_sha>` from step 2.9), `HEAD_SHA` = current HEAD (includes the step-5.6 deslop commit when one landed).
@@ -533,17 +531,8 @@ Dispatch the reviewer after commit and verification — a native lane, no plugin
      --set-file SIMPLIFICATION_MANDATE=${CLAUDE_PLUGIN_ROOT}/skills/work/references/simplification-mandate.md
    ```
    The **Pat persona** (`${CLAUDE_PLUGIN_ROOT}/agents/pat.md`) already carries the read-only statement and the reporting contract — one finding per line as `SEVERITY | file:line | issue | fix` (severities CRITICAL/HIGH/MEDIUM/LOW), or the literal line `NO FINDINGS` — so do not restate them here. Conventions and the placeholder table: `review-work-completion/references/agent-registry.md`. If `pat.md` is missing or its frontmatter does not parse, treat it as a runner failure (step 4's retry-once branch) — never fall back to a hand-written prompt. The stdout integer from the render call **is** the Subagent Dispatch Budget measurement — no separate `wc -c`.
-3. Dispatch via the sonnet runner (helper-script dispatch — the **Subagent Watchdog** applies):
-   ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/skills/use-sonnet/scripts/sonnet-run.sh -f dev/local/tmp/review-task-<id>-prompt.md -o dev/local/tmp/review-task-<id>.md
-   ```
-   No `-a`/`-y` — the reviewer needs no write access, and a read-only dispatch must never run with bypassed permissions.
-4. Read the output file and handle the result:
-   - **`CLOSURE | resolved|unresolved | ...` verdicts** (rework tasks only — the persona emits one per finding when the task description carries a `### Findings (verbatim)` block, per PRD 00095). A `resolved` verdict needs nothing. **Treat every `unresolved` verdict as a HIGH finding** and run it through the same loop as the row below: verify it against the code first, then dispatch Ivan with the confirmed gap. This exists because "the diff looks fine" and "the reported defect is gone" are different questions, and the review that answered only the first let a task ship with `_run_status` still swallowing `FileNotFoundError` while its review read "fixed inline". Step 5.5 already covers findings that produced a test; these verdicts are what closes the ones that did not.
-   - **CRITICAL or HIGH findings** — treat like a failed verification: verify each finding against the code first and discard wrong ones (the reviewer can be wrong), then re-render `ivan.md` using the full retry command shape from step 5.5, writing the confirmed findings to the `FAILING_TESTS` scratch file and passing `--set RETRY_INSTRUCTION="Apply ONLY the specific fixes listed below. Do not refactor surrounding code or address unrelated issues you notice."`. The code-quality rules block is already permanent in `ivan.md` — do not re-include it. Re-commit (step 5), re-verify (step 5.5), re-review. Max 3 review cycles, then proceed with warning.
+3. **Read `references/per-task-review.md` before the first step-5.7 dispatch of a batch** — it carries the `sonnet-run.sh` dispatch command (never `-a`/`-y`), the result-handling ladder (CLOSURE verdicts, CRITICAL/HIGH, the 3-cycle cap, a runner failure recorded as `review: failed:<cause>`), and why the lane is tier-gated. One row stays here, because a passing review still has to stamp it:
    - **MEDIUM inside this task's files** (the finding's file path, before its `:line` suffix, names a file in Ivan's `FILES_TOUCHED:` footer for this task) - ONE retry through the CRITICAL/HIGH row's procedure above, with two differences: the loop ends after a single Pat re-run (no third dispatch, whatever it returns), and step 6 appends `medium-retry:fixed` to the attempt record's `review` string when that re-run no longer lists the finding, `medium-retry:unfixed` otherwise. Why: a MEDIUM Pat already located costs one Ivan dispatch here and a four-reviewer cycle plus a rework task later (PRD 00140).
-   - **MEDIUM outside this task's files, LOW only, or `NO FINDINGS`** - note them in the task output, proceed to step 6.
-   - **Runner unavailable, exit nonzero, or output file missing/empty** — retry ONCE. On the second failure: record `review: failed:<cause>` in the task's attempt entry and the phase report (fail loud), then proceed to step 6 — the reviewer lane never blocks the batch; the PRD-level review lenses catch what it missed.
 
 Skip for documentation-only or configuration-only tasks.
 
