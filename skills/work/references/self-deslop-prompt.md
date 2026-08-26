@@ -18,7 +18,8 @@ Placeholders:
 - `{{task_subject}}` — `tasks[i].name`, read directly from `state.tasks` (no
   native tool field).
 - `{{task_description}}` — `tasks[i].description` (full text), read directly
-  from `state.tasks`; falls back to a name-only body when absent.
+  from `state.tasks`; falls back to a name-only body when absent, and an
+  empty-string `description` counts as absent.
 - `{{task_acceptance_criteria}}` — a text-extraction of the `Acceptance
   criteria:` section from `tasks[i].description` (there is no native
   `acceptance_criteria` field), or the literal string `(none recorded)` when

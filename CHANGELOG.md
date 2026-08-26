@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **work**: step 5.6 treats an empty-string task `description` as absent and
+  falls back to the task name, so a self-deslop dispatch no longer carries an
+  empty description body.
 - **work**: check_build_overhead.py counts completed tasks from statectl
   task-done/task-set-status calls instead of the retired TaskUpdate tool, prints
   an explicit zero-tasks line instead of a 0.00 ratio, and reports Agent

@@ -108,6 +108,39 @@ def test_step_5_7_gives_in_task_medium_findings_one_retry_stamped_medium_retry()
     )
 
 
+def test_step_5_6_treats_an_empty_description_as_absent() -> None:
+    # Carried in from PRD 00120's review, decided 2026-08-23: a task whose
+    # persisted description is an empty string counts as PRESENT under a bare
+    # "when absent" fallback, so /work dispatched step 5.6 with an empty
+    # {{task_description}} body instead of the task name — and the name is the
+    # more useful payload there. No Python consumer implements the fallback
+    # (render_prompt.py has no description handling), so this is a prose
+    # contract and this assertion is the only thing binding it.
+    start = _TEXT.index("### 5.6.")
+    end = _TEXT.index("### 5.7.", start)
+    section = _TEXT[start:end]
+
+    fallback_sentences = [
+        sentence
+        for sentence in section.split(".")
+        if "fall" in sentence and "description" in sentence
+    ]
+
+    assert fallback_sentences, (
+        f"{_SKILL_MD}: expected step 5.6 to state a `description` fallback — "
+        "no sentence in the section mentions falling back. If the wording "
+        "moved, retarget this test to wherever the fallback now lives."
+    )
+
+    assert any("empty" in sentence for sentence in fallback_sentences), (
+        f"{_SKILL_MD}: step 5.6 states a `description` fallback but the "
+        "sentence stating it never mentions the empty string. The contract "
+        "is that an empty-string description counts as absent and falls back "
+        "to the task name; a bare 'when `description` is absent' reads an "
+        "empty string as present and dispatches an empty description body."
+    )
+
+
 def test_step_7_runs_the_style_limit_gate_and_declares_compute_mech_facts() -> None:
     # Step 7 must run check_style_limits.py before the full suite and stamp
     # style_gate: clean | fixed:<sha> | failed:<violations>; the function
