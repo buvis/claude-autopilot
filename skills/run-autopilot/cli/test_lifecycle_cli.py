@@ -84,7 +84,7 @@ class SelectTests(_ProjectTestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(
             json.loads(proc.stdout),
-            {"prd": "00089-earlier-v1.md", "source": "wip"},
+            {"prd": "00089-earlier-v1.md", "source": "wip", "skipped": []},
         )
 
     def test_falls_through_to_backlog_when_wip_is_empty(self) -> None:
@@ -92,7 +92,7 @@ class SelectTests(_ProjectTestCase):
         proc = _run(["select", "--prds", str(self.prds_dir)], cwd=self.root)
         self.assertEqual(
             json.loads(proc.stdout),
-            {"prd": "00093-b-v1.md", "source": "backlog"},
+            {"prd": "00093-b-v1.md", "source": "backlog", "skipped": []},
         )
 
     def test_never_picks_from_hold(self) -> None:
@@ -100,7 +100,10 @@ class SelectTests(_ProjectTestCase):
         # selector that scanned hold would return it.
         self.put_prd("hold", "00001-parked-v1.md")
         proc = _run(["select", "--prds", str(self.prds_dir)], cwd=self.root)
-        self.assertEqual(json.loads(proc.stdout), {"prd": None, "source": "drained"})
+        self.assertEqual(
+            json.loads(proc.stdout),
+            {"prd": None, "source": "drained", "skipped": []},
+        )
 
     def test_drained_is_exit_zero_not_a_failure(self) -> None:
         proc = _run(["select", "--prds", str(self.prds_dir)], cwd=self.root)
@@ -127,6 +130,109 @@ class SelectTests(_ProjectTestCase):
         )
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("--hold", proc.stderr)
+
+
+def _eligibility_prd(command: str) -> str:
+    return f'---\neligibility: "{command}"\n---\n\n# PRD\n'
+
+
+class SelectEligibilityTests(_ProjectTestCase):
+    """The `eligibility:` gate at pick time (PRD 00137): a failing check SKIPS
+    the PRD - it stays in backlog/, is never parked, and the drain moves on."""
+
+    def _select(self) -> dict:
+        proc = _run(["select", "--prds", str(self.prds_dir)], cwd=self.root)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        return json.loads(proc.stdout)
+
+    def test_unmet_lower_numbered_prd_is_skipped_and_the_met_one_is_picked(
+        self,
+    ) -> None:
+        self.put_prd("backlog", "00090-blocked-v1.md", _eligibility_prd("false"))
+        self.put_prd("backlog", "00091-ready-v1.md", _eligibility_prd("true"))
+        out = self._select()
+        self.assertEqual(out["prd"], "00091-ready-v1.md")
+        self.assertEqual(out["source"], "backlog")
+        self.assertEqual([s["prd"] for s in out["skipped"]], ["00090-blocked-v1.md"])
+
+    def test_a_skipped_prd_stays_in_backlog_and_is_never_parked_to_hold(self) -> None:
+        self.put_prd("backlog", "00090-blocked-v1.md", _eligibility_prd("false"))
+        self.put_prd("backlog", "00091-ready-v1.md", _eligibility_prd("true"))
+        self._select()
+        self.assertTrue((self.prds_dir / "backlog" / "00090-blocked-v1.md").exists())
+        self.assertFalse((self.prds_dir / "hold" / "00090-blocked-v1.md").exists())
+
+    def test_skip_record_carries_the_command_and_its_exit_code(self) -> None:
+        self.put_prd("backlog", "00090-blocked-v1.md", _eligibility_prd("exit 3"))
+        record = self._select()["skipped"][0]
+        self.assertEqual(record["prd"], "00090-blocked-v1.md")
+        self.assertEqual(record["command"], "exit 3")
+        self.assertEqual(record["exit_code"], 3)
+        self.assertIn("at", record)
+
+    def test_every_unmet_prd_is_skipped_until_the_backlog_is_drained(self) -> None:
+        self.put_prd("backlog", "00090-a-v1.md", _eligibility_prd("false"))
+        self.put_prd("backlog", "00091-b-v1.md", _eligibility_prd("false"))
+        out = self._select()
+        self.assertEqual(out["source"], "drained")
+        self.assertIsNone(out["prd"])
+        self.assertEqual(
+            [s["prd"] for s in out["skipped"]],
+            ["00090-a-v1.md", "00091-b-v1.md"],
+        )
+
+    def test_a_prd_without_the_key_is_picked_with_no_skips(self) -> None:
+        self.put_prd("backlog", "00090-plain-v1.md")
+        out = self._select()
+        self.assertEqual(out["prd"], "00090-plain-v1.md")
+        self.assertEqual(out["skipped"], [])
+
+    def test_a_wip_prd_with_a_failing_check_is_still_picked(self) -> None:
+        # wip means work is already under way; the gate decides what to START.
+        self.put_prd("wip", "00090-inflight-v1.md", _eligibility_prd("false"))
+        out = self._select()
+        self.assertEqual(
+            out, {"prd": "00090-inflight-v1.md", "source": "wip", "skipped": []}
+        )
+
+    def test_the_check_runs_from_the_project_root(self) -> None:
+        (self.root / "marker.txt").write_text("x", encoding="utf-8")
+        self.put_prd(
+            "backlog", "00090-rooted-v1.md", _eligibility_prd("test -f marker.txt")
+        )
+        out = self._select()
+        self.assertEqual(out["prd"], "00090-rooted-v1.md")
+        self.assertEqual(out["skipped"], [])
+
+    def test_skips_are_appended_to_batch_skips_when_state_exists(self) -> None:
+        self.write_state()
+        self.put_prd("backlog", "00090-blocked-v1.md", _eligibility_prd("false"))
+        self.put_prd("backlog", "00091-ready-v1.md", _eligibility_prd("true"))
+        self._select()
+        skips = self.read_state()["batch"]["skips"]
+        self.assertEqual(len(skips), 1)
+        self.assertEqual(skips[0]["prd"], "00090-blocked-v1.md")
+        self.assertEqual(skips[0]["exit_code"], 1)
+
+    def test_a_second_select_appends_rather_than_replacing_earlier_skips(self) -> None:
+        self.write_state()
+        self.put_prd("backlog", "00090-blocked-v1.md", _eligibility_prd("false"))
+        self.put_prd("backlog", "00091-ready-v1.md", _eligibility_prd("true"))
+        self._select()
+        self._select()
+        self.assertEqual(len(self.read_state()["batch"]["skips"]), 2)
+
+    def test_nothing_is_written_when_state_json_does_not_exist_yet(self) -> None:
+        self.put_prd("backlog", "00090-blocked-v1.md", _eligibility_prd("false"))
+        out = self._select()
+        self.assertEqual(len(out["skipped"]), 1)
+        self.assertFalse(self.state_path.exists())
+
+    def test_a_met_check_writes_no_skips_key_at_all(self) -> None:
+        self.write_state()
+        self.put_prd("backlog", "00090-ready-v1.md", _eligibility_prd("true"))
+        self._select()
+        self.assertNotIn("skips", self.read_state()["batch"])
 
 
 class FrontmatterTests(_ProjectTestCase):

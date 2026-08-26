@@ -131,6 +131,28 @@ def _validate_completed_prds_entries(entries: list) -> None:
                 require(entry[field], type_, f"batch.completed_prds[{index}].{field}")
 
 
+_SKIP_ENTRY_FIELDS: dict[str, type] = {
+    "prd": str,
+    "command": str,
+    "exit_code": int,
+}
+
+
+def _validate_skip_entries(entries: list) -> None:
+    """Validate each `batch.skips[]` entry (PRD 00137).
+
+    Unlike `completed_prds`, there is no legacy shape to tolerate: the field
+    was born a list of dicts, so a non-dict element is rejected outright.
+    `note` and `at` are free text and unchecked - they are for a human reading
+    the report, and no consumer parses them.
+    """
+    for index, entry in enumerate(entries):
+        require(entry, dict, f"batch.skips[{index}]")
+        for field, type_ in _SKIP_ENTRY_FIELDS.items():
+            if field in entry:
+                require(entry[field], type_, f"batch.skips[{index}].{field}")
+
+
 def validate(state: dict) -> None:
     """Raise SchemaError naming the first offending known field, else None."""
     if not isinstance(state, dict):
@@ -175,6 +197,9 @@ def validate(state: dict) -> None:
         if "completed_prds" in batch:
             require(batch["completed_prds"], list, "batch.completed_prds")
             _validate_completed_prds_entries(batch["completed_prds"])
+        if "skips" in batch:
+            require(batch["skips"], list, "batch.skips")
+            _validate_skip_entries(batch["skips"])
 
 
 _MISSING = object()

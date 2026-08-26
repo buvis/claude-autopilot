@@ -12,7 +12,9 @@ functions the CLI appends to `reports/{batch_id}-report.md`:
   (PRD 00013/00018), implementor mix (PRD 00019/00065/00075/00077).
 - `stalled_section(prd, site, detail, stamp)` - the short STALLED form.
 - `batch_summary(state, metrics_rows, deferred_count)` - the batch-end
-  block; duration from the batch's metrics rows when any exist.
+  block; duration from the batch's metrics rows when any exist, plus the
+  skipped count and, when there are any, a `### Skipped` table of the
+  eligibility-gate skips (PRD 00137).
 
 Renders never fail the report: absent fields render blank cells, empty
 arrays omit their section, missing metrics render the manual-run line, and
@@ -326,7 +328,9 @@ def prd_section(state: dict, metrics_rows: list[dict], completed: str) -> str:
         None,
     )
     if record is not None:
-        tasks_line = f"{record.get('tasks_completed', '?')}/{record.get('tasks_total', '?')}"
+        tasks_line = (
+            f"{record.get('tasks_completed', '?')}/{record.get('tasks_total', '?')}"
+        )
     else:
         tasks = state.get("tasks") or []
         if tasks:
@@ -396,10 +400,14 @@ def batch_summary(
     def _sum(key: str) -> int | str:
         return sum(p.get(key, 0) for p in completed) if resolvable else "?"
 
+    skips = batch.get("skips") or []
     lines = [
         "## Batch Summary",
         "",
         f"- PRDs completed: {len(completed)}",
+        # Always rendered, zero included: a drain that skipped everything must
+        # read as "N skipped", never as a silent 0-done batch.
+        f"- PRDs skipped: {len(skips)}",
         f"- Total cycles: {_sum('cycles')}",
         f"- Autonomous decisions: {_sum('autonomous_decisions')}",
         f"- Escalated decisions: {_sum('escalated_decisions')}",
@@ -411,5 +419,11 @@ def batch_summary(
     if batch_rows:
         last_iso = _iso(max(int(r.get("ts_end", 0)) for r in batch_rows))
         lines.append(f"- Duration: {_started_iso(batch_id, batch_rows)} to {last_iso}")
+    if skips:
+        lines += ["", "### Skipped", ""]
+        lines += _table(
+            ["PRD", "Exit code", "Command"],
+            [[s.get("prd"), s.get("exit_code"), s.get("command")] for s in skips],
+        )
     lines.append("")
     return "\n".join(lines)

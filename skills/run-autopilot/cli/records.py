@@ -89,7 +89,9 @@ PER_PRD_RESET_FIELDS = (
 )
 
 # NOT reset here, deliberately:
-# - batch: preserved in full - it tracks the whole batch, not one PRD.
+# - batch: preserved in full - it tracks the whole batch, not one PRD. That
+#   includes batch.skips (PRD 00137): the eligibility gate's skip records
+#   belong to the drain, not to whichever PRD it eventually picked.
 # - catchup_mode, rework_cap, doubt_reviewer, consensus_engine: re-derived
 #   by Phase 0 from the next PRD's frontmatter, not carried forward.
 # - qwen_gate_failures_consecutive, qwen_breaker, codex_probe, qwen_preflight:

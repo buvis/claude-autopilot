@@ -1,6 +1,7 @@
 ## Batch Summary
 
 - PRDs completed: 2
+- PRDs skipped: 0
 - Total cycles: ?
 - Autonomous decisions: ?
 - Escalated decisions: ?

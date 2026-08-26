@@ -26,9 +26,14 @@ Subcommands:
     check-plan --state --ceiling
         policy.plan_over_ceiling(); exit 3 above the loop task ceiling.
     select    --prds
-        selection.select() over the wip/ and backlog/ listings. Prints
-        {"prd": ..., "source": "wip"|"backlog"|"drained"}. Decides only -
-        the verified backlog->wip move stays with the caller.
+        selection.select() over the wip/ and backlog/ listings, gated by
+        each backlog candidate's `eligibility:` frontmatter check
+        (cli/eligibility.py). Prints {"prd": ..., "source":
+        "wip"|"backlog"|"drained", "skipped": [...]}. A candidate whose
+        check does not exit 0 is SKIPPED - it stays in backlog/, gets no
+        session, and is never parked - and its record lands in the printed
+        list and in state.batch.skips[] when a state file exists. Decides
+        only - the verified backlog->wip move stays with the caller.
     frontmatter --state --prd
         frontmatter.parse(), applied to state in ONE transaction and echoed
         as JSON; warnings go to stderr.
@@ -106,6 +111,7 @@ _SKILL_ROOT = _CLI_DIR.parent
 sys.path.insert(0, str(_SKILL_ROOT))
 
 from cli import (
+    eligibility,
     frontmatter,
     gate,
     policy,
@@ -117,6 +123,7 @@ from cli import (
     schema,
     selection,
     state,
+    statectl,
     status,
     transitions,
 )
@@ -379,19 +386,85 @@ def _add_select(subparsers) -> None:
     # parked/deferred exclusion optional.
 
 
+def _prd_text(path: Path) -> str:
+    """A PRD's text, or "" when it cannot be read.
+
+    An unreadable PRD declares no eligibility check, which is exactly the
+    pre-gate behavior: pick it, and let the session that opens it report the
+    real problem instead of the picker guessing at one.
+    """
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
+def _record_skips(state_path: Path, skipped: list[dict]) -> int:
+    """Append `skipped` to `state.batch.skips[]` in one validated write.
+
+    Lives under `batch` so `records.PER_PRD_RESET_FIELDS` cannot wipe it: the
+    skips describe the batch, not the PRD that happened to be picked.
+    """
+
+    def apply(data: dict) -> None:
+        data.setdefault("batch", {}).setdefault("skips", []).extend(skipped)
+
+    try:
+        statectl.mutate(state_path, apply)
+    except (state.StateError, schema.SchemaError, OSError) as err:
+        print(f"autopilot: select: recording skips failed: {err}", file=sys.stderr)
+        return 2
+    return 0
+
+
 def _run_select(args: argparse.Namespace) -> int:
     if args.prds is not None:
         prds_dir = Path(args.prds)
     else:
         prds_dir = _walk_up_or_exit("--prds").parent / "prds"
-    prd, source = selection.select(
-        _listdir(prds_dir / "wip"),
-        _listdir(prds_dir / "backlog"),
-    )
-    print(json.dumps({"prd": prd, "source": source}))
+    # The project root: the directory holding dev/local, which is where an
+    # eligibility check's repo-relative paths resolve from.
+    project_root = prds_dir.resolve().parents[2]
+    in_wip = _listdir(prds_dir / "wip")
+    in_backlog = _listdir(prds_dir / "backlog")
+    skipped: list[dict] = []
+    while True:
+        prd, source = selection.select(in_wip, in_backlog)
+        # wip candidates are never gated: the check decides what to START, and
+        # a PRD already in flight is past that question.
+        if source != "backlog":
+            break
+        command = eligibility.command_for(_prd_text(prds_dir / "backlog" / prd))
+        if command is None:
+            break
+        exit_code, note = eligibility.evaluate(command, project_root)
+        if exit_code == 0:
+            break
+        skipped.append(
+            {
+                "prd": prd,
+                "command": command,
+                "exit_code": exit_code,
+                "note": note,
+                "at": _utc_now(),
+            },
+        )
+        # Drop it from THIS pick's listing only; the file stays in backlog/,
+        # so the next drain re-evaluates it. A skip is not a park.
+        in_backlog = [name for name in in_backlog if name != prd]
+    # Printed before the state write: the pick is the caller's answer, and a
+    # bookkeeping failure must not swallow it.
+    print(json.dumps({"prd": prd, "source": source, "skipped": skipped}))
+    state_path = prds_dir.parent / "autopilot" / "state.json"
+    if skipped and state_path.exists():
+        # No state file yet is the fresh-batch case (this pick runs before
+        # `init`): the printed list is the record, and phase-build step 3
+        # seeds batch.skips from it.
+        return _record_skips(state_path, skipped)
     # Exit 0 even when drained: nothing failed, and the caller branches on
     # "source", which cannot be confused with an error the way an exit code
-    # shared with real failures could.
+    # shared with real failures could. A failed skip write is the one real
+    # failure this verb can have, and it exits 2 like every other state error.
     return 0
 
 
@@ -683,8 +756,12 @@ def _run_render(args: argparse.Namespace) -> int:
     out_path = autopilot_dir / "reports" / f"{batch_id}-report.md"
     if not out_path.exists() and not args.stdout:
         started = render_report.batch_started(loaded, rows)
-        block = render_report.header(batch_id, started) + "\n" + block.rstrip("\n") + "\n"
-    return _emit(block, out_path, args.stdout, append=True, dedupe_heading=dedupe_heading)
+        block = (
+            render_report.header(batch_id, started) + "\n" + block.rstrip("\n") + "\n"
+        )
+    return _emit(
+        block, out_path, args.stdout, append=True, dedupe_heading=dedupe_heading
+    )
 
 
 def _add_loop(subparsers) -> None:
