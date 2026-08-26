@@ -43,7 +43,7 @@ This skill runs inside an **automated autopilot loop**. The user is not watching
 1. A genuinely irreversible action that requires explicit confirmation (e.g. force-pushing a shared branch).
 2. More than two consecutive failed attempts at the same automated step with no remaining fallback.
 
-**A blocked or backgrounded verification is never a reason to ask.** Record `verification: skipped:<cause>` in the attempt entry and the phase report (fail loud) and proceed; `references/subagent-dispatch.md` § Blocked verification carries the build-lock and Monitor rules.
+**A blocked or backgrounded verification is never a reason to ask.** Record `verification: skipped:<cause>` in the attempt entry and the phase report (fail loud) and proceed; **read `references/subagent-dispatch.md` § Blocked verification the first time a verification will not complete** — it carries the build-lock and Monitor rules.
 
 ## CRITICAL: One Task at a Time
 
@@ -77,7 +77,7 @@ See **Subagent Dispatch Budget and Watchdog** below — every Agent dispatch mus
 
 **Budget:** every prompt passed to the Agent tool (Tess, Ivan, or Devon) must be **≤ 50 000 bytes**, with the abort-instruction line prepended. Measure before every dispatch; trim the lowest-priority context once, and if still oversized abort the task with cause `subagent_prompt_overrun`.
 
-**Watchdog:** every Agent dispatch must be wrapped in a watchdog: dispatch with `run_in_background: true`, wait with a `Monitor` timer (15-minute CHECK-IN — on expiry probe for progress and extend, 45-minute hard cap; kill only on two no-progress probes or the cap), and after any `TaskStop` inspect the tree before re-dispatching — a killed agent usually died at its verification tail with complete work on disk, which you verify independently and accept, never redo. Genuinely dead agents route to the **Result lost / hung** row of step 4's table (→ the infrastructure-failure circuit breaker, step 4.2). A foreground `Agent` call that hangs blocks this session indefinitely — never dispatch one unwatched.
+**Watchdog:** every Agent dispatch must be wrapped in a watchdog: dispatch with `run_in_background: true`, wait with a `Monitor` timer (15-minute CHECK-IN — on expiry probe for progress and extend, 45-minute hard cap; kill only on two no-progress probes or the cap), and after any `TaskStop` inspect the tree before re-dispatching — a killed agent usually died at its verification tail with complete work on disk, which you verify independently and accept, never redo. Genuinely dead agents route to the **Result lost / hung** row of `references/gate-failure.md` § Step 4 result table (→ the infrastructure-failure circuit breaker, step 4.2). A foreground `Agent` call that hangs blocks this session indefinitely — never dispatch one unwatched.
 
 See `references/subagent-dispatch.md` for the measurement procedure, the verbatim abort-instruction line, the abort-handoff steps, helper-script (`use-codex`/`use-gemini`/`use-qwen`) handling, and the three distinct deadlines (15 min / 10 min × 2 / 20 min, by mechanism). Read it before your first Agent dispatch in a session. Elsewhere in this file, "must satisfy the **Subagent Dispatch Budget**" and "**Subagent Watchdog**" mean exactly this section — the numbers are not restated at call sites.
 
@@ -107,7 +107,7 @@ Every Tess and Ivan dispatch prompt - initial and retry, regardless of mechanism
 
 Step 5 stages exactly the reported paths - an unreported file stays uncommitted and is surfaced by step 5's foreign-path rule, so an implementor that omits the footer fails loudly, not silently.
 
-Collect the returned lines: step 6 appends non-`none` entries to `dev/local/meta/assumptions.md` per `references/attempt-logging.md` § Assumption ledger, and step 7's phase report includes the ledger.
+Collect the returned lines: step 6 appends non-`none` entries to `dev/local/meta/assumptions.md`, and step 7's phase report includes the ledger. **Read `references/attempt-logging.md` § Assumption ledger before the first append of a plan** — the per-plan replace-vs-append rule lives there.
 
 ## Dispatch prologue
 
@@ -127,7 +127,7 @@ Every Tess and Ivan dispatch prompt - initial and retry, regardless of mechanism
 
 At every task exit — success in step 6, abort in step 4 (timeout / context exceeded / error after debug), or via the Subagent Dispatch Budget overrun path — append one entry to `state.tasks[i].attempts[]`. Each entry carries:
 
-- **`implementor`**, **`preflight_outcome`** and **`qwen_excluded_reason`** — the dispatch-provenance trio, spelled out in `references/attempt-logging.md` § Dispatch-provenance fields: what actually dispatched (never what the table picked), the probe verdict written explicitly on every entry, and the row-4 pressure exclusion.
+- **`implementor`**, **`preflight_outcome`** and **`qwen_excluded_reason`** — the dispatch-provenance trio: what actually dispatched (never what the table picked), the probe verdict written explicitly on every entry, and the row-4 pressure exclusion. **Read `references/attempt-logging.md` § Dispatch-provenance fields before writing the first attempt entry of a task** for each field's exact values.
 - **`pipeline`** — the tier-gated depth this attempt ran, keyed on `state.tasks[i].model`: `haiku` → `"minimal"` (Tess + Ivan), `sonnet` → `"lean"` (+ step-5.7 reviewer), `opus` → `"full"` (+ Devon at step 2.85); absent/legacy is treated as `sonnet` → `"lean"`. `fable` → `"full"` as well — the rescue rung runs the deepest pipeline, like `opus`. Written at every task exit; a Phase-6 escalation to `opus` records `"full"`.
 
 See `references/attempt-logging.md` for the full entry schema, field semantics, and the atomic write procedure.
@@ -262,7 +262,7 @@ git commit -m "test(<scope>): add tests for <feature>"
 
 Tests are committed separately before implementation, making the TDD boundary auditable in git history.
 
-**Capture this task's test-commit SHA** immediately and hold it in-session as `<test_commit_sha>` — `references/gate-failure.md` § Test-commit SHA has the command and the two readers (step 5.5's ESCALATE reset, step 5.7's `BASE_SHA`).
+**Capture this task's test-commit SHA** immediately and hold it in-session as `<test_commit_sha>` — **read `references/gate-failure.md` § Test-commit SHA before moving on** for the command and its two readers (step 5.5's ESCALATE reset, step 5.7's `BASE_SHA`).
 
 ### 2.95. Red-check — watch the tests fail
 
@@ -322,7 +322,7 @@ The memory-pressure gate (row 4) runs only when the table would otherwise reach 
 
 **An escalated tier belongs to its task and dies with it (PRD 00111).** When a task escalates — in-loop at step 5.5, or by review flag through `/run-autopilot` Phase 6 — the higher tier is written to that task's `model` field in `state.tasks[i]`, and nowhere else. Every other task still enters at the tier `/plan-tasks` classified for it: a task escalated to `opus` is followed by an unrelated `haiku` task dispatching at `haiku`, in the same PRD and the same session. Do not carry a tier sideways ("the last task needed opus, so this PRD runs at opus") — that is the same session-memory mistake the routing rule above forbids, priced one rung higher. Nothing escalation-related survives into the next PRD either: `autopilot reset-prd` drops `tasks` (the per-task tiers), `rework_task_ids`, `cap_rotations` and `stall_reason`, and zeroes `replan_count` (`run-autopilot/cli/records.py` `PER_PRD_RESET_FIELDS`). Session-model decay is the separate, matching rule in `run-autopilot/references/model-ladder.md` § Decay.
 
-"Gemini if available" (row 1) and the helper-script mechanics are in `references/gemini-integration.md` § Availability and `references/subagent-dispatch.md` § Mechanism and tier: a helper that does not resolve, or fails at runtime, falls back to Claude at the task's tier, and every dispatch of either kind satisfies the **Subagent Dispatch Budget** and the **Subagent Watchdog**.
+A helper that does not resolve, or fails at runtime, falls back to Claude at the task's tier, and every dispatch of either kind satisfies the **Subagent Dispatch Budget** and the **Subagent Watchdog**. **Read `references/gemini-integration.md` § Availability before the first UI-task dispatch of a batch** (what "Gemini if available" probes, row 1); the helper-vs-Agent mechanics are in `references/subagent-dispatch.md` § Mechanism and tier.
 
 **Codex implementor mechanics.** The HOW of the codex rung — batch health probe, dispatch checklist, TOOL-GATE NOTICE — lives in `references/codex-implementor.md`; **read it in full before the first codex probe or dispatch of a batch**. Two invariants worth repeating at the call site: never `-y` (the `-a` grant covers this rung only), and on any codex timeout `TaskStop` + verify-gone BEFORE dispatching the Claude fallback.
 
@@ -338,7 +338,7 @@ Re-dispatch the **same** task at most **once** — that cap is separate from the
 
 ### 4.5. Debug on error
 
-If the tool returned an error, invoke the `debug-stuck-agent` skill to diagnose the root cause before reporting to the user (`references/gate-failure.md` § Debug on error). If debugging resolves the issue, continue to step 5. If not, report to user and keep task in_progress.
+If the tool returned an error, invoke the `debug-stuck-agent` skill to diagnose the root cause before reporting to the user. If debugging resolves the issue, continue to step 5. If not, report to user and keep task in_progress.
 
 ### 5. Commit changes
 
@@ -366,7 +366,7 @@ Before committing a `feat`/`fix` (or breaking) change, verify CHANGELOG.md is st
 
 Run **only** the specific tests Tess wrote in step 2.7. Do NOT run the full project test suite, smoke tests, integration tests, or lint here — those run once at the end of the phase (step 7).
 
-- Target the narrowest scope that covers the new tests — the per-language commands are in `references/gate-failure.md` § Narrow scope.
+- Target the narrowest scope that covers the new tests — **read `references/gate-failure.md` § Narrow scope before the first gate run of a batch** for the per-language commands.
 - Never dispatch Tess to weaken tests.
 - **Retry prompts** (feedback retry, repair re-dispatch, escalation dispatch, step 5.7's confirmed findings, step 7's regression fix) re-render `ivan.md` in full from `references/gate-failure.md` § Retry render — only `FAILING_TESTS` and `RETRY_INSTRUCTION` change, and a missing placeholder exits 1.
 
@@ -374,7 +374,7 @@ Run **only** the specific tests Tess wrote in step 2.7. Do NOT run the full proj
 
 **Gate-failure handling.** Read `_AUTOPILOT_ESCALATION` (env var; `model-ladder.md` § Kill-switches).
 
-**`_AUTOPILOT_ESCALATION == "legacy"`** — no diagnosis, repair, escalation, attribution stamping or qwen capability breaker: re-dispatch Ivan with the failure output, max 2 implementation retries, then escalate to the user. The branch is stated in full in `references/gate-failure.md` § Legacy escalation branch.
+**`_AUTOPILOT_ESCALATION == "legacy"`** — no diagnosis, repair, escalation, attribution stamping or qwen capability breaker: re-dispatch Ivan with the failure output, max 2 implementation retries, then escalate to the user. **Read `references/gate-failure.md` § Legacy escalation branch before acting on it** — it states the branch in full, including the qwen carve-out.
 
 **Any other value / absent — diagnose→repair/escalate flow (default):** see `references/gate-failure.md` for the full flow. Read it before the first gate failure of a batch.
 
@@ -422,7 +422,7 @@ Dispatch the reviewer after commit and verification — a native lane, no plugin
      --set-cmd DIFF="git diff BASE_SHA..HEAD_SHA" \
      --set-file SIMPLIFICATION_MANDATE=${CLAUDE_PLUGIN_ROOT}/skills/work/references/simplification-mandate.md
    ```
-   The **Pat persona** (`${CLAUDE_PLUGIN_ROOT}/agents/pat.md`) already carries the read-only statement and the reporting contract — one finding per line as `SEVERITY | file:line | issue | fix` (severities CRITICAL/HIGH/MEDIUM/LOW), or the literal line `NO FINDINGS` — so do not restate them here. Conventions and the placeholder table: `review-work-completion/references/agent-registry.md`. If `pat.md` is missing or its frontmatter does not parse, treat it as a runner failure (step 4's retry-once branch) — never fall back to a hand-written prompt. The stdout integer from the render call **is** the Subagent Dispatch Budget measurement — no separate `wc -c`.
+   The **Pat persona** (`${CLAUDE_PLUGIN_ROOT}/agents/pat.md`) already carries the read-only statement and the reporting contract — one finding per line as `SEVERITY | file:line | issue | fix` (severities CRITICAL/HIGH/MEDIUM/LOW), or the literal line `NO FINDINGS` — so do not restate them here. Conventions and the placeholder table: `review-work-completion/references/agent-registry.md`. If `pat.md` is missing or its frontmatter does not parse, treat it as a runner failure (step 4.2's one re-dispatch) — never fall back to a hand-written prompt. The stdout integer from the render call **is** the Subagent Dispatch Budget measurement — no separate `wc -c`.
 3. **Read `references/per-task-review.md` before the first step-5.7 dispatch of a batch** — it carries the `sonnet-run.sh` dispatch command (never `-a`/`-y`), the result-handling ladder (CLOSURE verdicts, CRITICAL/HIGH, the 3-cycle cap, a runner failure recorded as `review: failed:<cause>`), and why the lane is tier-gated. One row stays here, because a passing review still has to stamp it:
    - **MEDIUM inside this task's files** (the finding's file path, before its `:line` suffix, names a file in Ivan's `FILES_TOUCHED:` footer for this task) - ONE retry through the CRITICAL/HIGH row's procedure above, with two differences: the loop ends after a single Pat re-run (no third dispatch, whatever it returns), and step 6 appends `medium-retry:fixed` to the attempt record's `review` string when that re-run no longer lists the finding, `medium-retry:unfixed` otherwise. Why: a MEDIUM Pat already located costs one Ivan dispatch here and a four-reviewer cycle plus a rework task later (PRD 00140).
 
@@ -453,7 +453,7 @@ After all tasks in the phase are marked completed, run the project's full verifi
 
 #### 7.0. Style-limit gate
 
-Before the suite, measure what this phase's diff introduced. Base = `state.work_start_sha` (`statectl get work_start_sha`; captured once per PRD before the first `/work` pass, so it survives task-boundary handoffs and a first task that wrote no tests); every git invocation below runs with the repo's own `--git-dir`/`--work-tree` flags in a bare-repo home. Write the diff with `git diff <base>..HEAD --output=dev/local/tmp/phase-diff.txt` and list the changed Python files with `git diff --name-only --diff-filter=d <base>..HEAD -- '*.py'` (deleted files excluded: the script reads every path it is given). No `.py` file changed: skip the script and record `style_gate: clean`. Otherwise run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_style_limits.py --diff dev/local/tmp/phase-diff.txt <those files as absolute paths>`; exit 0: record `style_gate: clean`. Exit 1: write the violation lines to the `FAILING_TESTS` scratch file and dispatch Ivan once with the full retry command shape from step 5.5 and `--set RETRY_INSTRUCTION="Fix only the listed style-limit violations; do not touch other code"`, commit per step 5, re-run the gate: clean -> `style_gate: fixed:<sha of the fix commit>`; still exit 1 -> `style_gate: failed:<the violation lines, joined by "; ">` and proceed to the suite anyway (fail loud, never silent). Exit 2 (or any other non-0/1 exit): the gate could not run at all, so there are no violation lines to hand a fix agent — record `style_gate: failed:<the script's stderr message>`, do NOT dispatch Ivan, and proceed to the suite anyway (fail loud, never silent, same as the still-failing exit-1 case). Function spans come from `review-work-completion/scripts/compute_mech_facts.py`, reused by import (see `## Dependencies`).
+Before the suite, measure what this phase's diff introduced. Base = `state.work_start_sha` (`statectl get work_start_sha`; captured once per PRD before the first `/work` pass, so it survives task-boundary handoffs and a first task that wrote no tests); every git invocation below runs with the repo's own `--git-dir`/`--work-tree` flags in a bare-repo home. Write the diff with `git diff <base>..HEAD --output=dev/local/tmp/phase-diff.txt` and list the changed Python files with `git diff --name-only --diff-filter=d <base>..HEAD -- '*.py'` (deleted files excluded: the script reads every path it is given). No `.py` file changed: skip the script and record `style_gate: clean`. Otherwise run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_style_limits.py --diff dev/local/tmp/phase-diff.txt <those files as absolute paths>`; exit 0: record `style_gate: clean`. Exit 1: write the violation lines to the `FAILING_TESTS` scratch file and dispatch Ivan once with the full retry command shape in `references/gate-failure.md` § Retry render and `--set RETRY_INSTRUCTION="Fix only the listed style-limit violations; do not touch other code"`, commit per step 5, re-run the gate: clean -> `style_gate: fixed:<sha of the fix commit>`; still exit 1 -> `style_gate: failed:<the violation lines, joined by "; ">` and proceed to the suite anyway (fail loud, never silent). Exit 2 (or any other non-0/1 exit): the gate could not run at all, so there are no violation lines to hand a fix agent — record `style_gate: failed:<the script's stderr message>`, do NOT dispatch Ivan, and proceed to the suite anyway (fail loud, never silent, same as the still-failing exit-1 case). Function spans come from `review-work-completion/scripts/compute_mech_facts.py`, reused by import (see `## Dependencies`).
 
 **What to run** (project-dependent — use the commands documented in `AGENTS.md` / `CLAUDE.md` / project README): **read `references/final-verification.md` before running the suite.** It lists the per-stack commands, the improvised-suite rule for a repo that documents none (state the improvised set in the phase report; record `verification: none (no suite found)` when nothing runs — never report the phase green on an unverified tree), and the failure-handling loop (identify the task, re-open it, one Ivan fix, re-run only the failed commands, max 3 cycles, never relax a failing test). Run each command as a separate Bash call; do not chain with `&&`.
 

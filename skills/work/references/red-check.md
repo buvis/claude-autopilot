@@ -3,7 +3,7 @@
 Moved verbatim out of `SKILL.md` step 2.95 (PRD 00119-v2). SKILL.md keeps the
 run-it-once rule, the `n/a:new_module` verdict and the skip-when-2.7-skipped
 rule; the target resolution and the outcome ladder live here. **Read this file
-before the first red-check of a batch.**
+before the first red-check of a batch.** "The check" below is step 2.95's own run: the newly committed tests once, at the narrowest scope, with the outcomes in § Outcomes.
 
 ## New-module pre-check
 

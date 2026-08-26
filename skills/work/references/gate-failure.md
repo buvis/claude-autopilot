@@ -1,6 +1,6 @@
 # Gate-failure flow (step 5.5 default path)
 
-Extracted verbatim from SKILL.md steps 4.2, 4.5 and 5.5 (situational: read it before the first gate or infrastructure failure of a batch; SKILL.md keeps the scope note, the never-weaken-tests rule, and the one-line rule of each branch below).
+Extracted verbatim from SKILL.md steps 2.9, 4, 4.2 and 5.5 (situational: read it before the first gate or infrastructure failure of a batch; SKILL.md keeps the scope note, the never-weaken-tests rule, and the one-line rule of each branch below).
 
 ### 5.5. Verify THIS task's tests pass
 
@@ -161,10 +161,6 @@ one-re-dispatch rule; the steps live here.
 1. Check the working tree (`git status --short`). A crashed agent may have left partial, uncommitted, **unverified** changes. Note them in the task output; do not commit them blind and do not assume they compile.
 2. Re-dispatch the **same** task at most **once**. Track infrastructure re-dispatches per task — this cap is separate from the test-failure retry cap (step 5.5) and the review-cycle cap (step 5.7).
 3. On the **second** infrastructure failure for the same task: stop. Append an attempt-log entry (`outcome: "aborted"`, `cause: "subagent_infra_failure"`), set `state.stall_reason` to `{"stalled": "subagent_infra_failure", "task": "<id>"}`. Escalate to the user. Do **not** advance to the next task.
-
-## Debug on error (step 4.5)
-
-If the tool returned an error, invoke the `debug-stuck-agent` skill to diagnose the root cause before reporting to the user. If debugging resolves the issue, continue to step 5. If not, report to user and keep task in_progress.
 
 ## Step 4 result table
 

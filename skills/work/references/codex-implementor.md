@@ -11,7 +11,7 @@ first codex probe or dispatch of a batch.
 Moved verbatim out of SKILL.md step 3 (PRD 00119-v2). SKILL.md keeps the
 one-line rule and the pointer; the six fences live here.
 
-> **Codex rung interception.** After the table above yields its verdict, when ALL
+> **Codex rung interception.** After SKILL.md step 3's deterministic routing table yields its verdict, when ALL
 > of the following hold, dispatch **codex** instead of the Claude implementor the
 > table named:
 >

@@ -35,7 +35,7 @@ Moved verbatim out of `SKILL.md` step 3 (PRD 00119-v2). SKILL.md keeps the
 routing table rows and the breaker-reset sentence; the batch-scope procedures
 live here. **Read this section before the first qwen dispatch of a batch.**
 
-**qwen capability breaker (routing-time consult, row 3).**
+**qwen capability breaker (routing-time consult, row 3 of SKILL.md step 3's routing table; the memory-pressure gate is row 4).**
 
 - **Batch-scope check, before any breaker read or write:** compute the effective batch id `(state.batch.id // "no-batch")` and compare to `qwen_breaker.batch_id`. Mismatch or field absent → new batch: reset `qwen_breaker = {tripped:false, after_task:null, failed_tasks:[], batch_id:<effective id>}` and `qwen_gate_failures_consecutive = 0`, then proceed. Match → preserve the breaker state. This is a lazy per-batch reset — no run-autopilot Phase 0/9 edit needed.
 - **Consult:** row 3 fires for a qwen-eligible backend task when `qwen_breaker.tripped == true` and `_AUTOPILOT_ESCALATION != "legacy"`. Per the routing-time order (`model-ladder.md` § Ordering), this consult happens BEFORE the memory-pressure gate and BEFORE the preflight probe, so a tripped breaker skips both. A breaker-skipped attempt's `preflight_outcome` records `null` (the probe never ran).
