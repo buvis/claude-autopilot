@@ -24,7 +24,7 @@ loaded) carries the shared mechanics and the test-pinned invariants.
    - `deferred_decisions` with status `"pending"` or `"deferred"` -> type `"deferred_decision"` (preserve original `type` field if present, e.g. `"doubt-overflow"`)
    - `doubts` with status `"pending"` -> type `"doubt"`
    - `autonomous_decisions` with `research` field -> type `"autonomous_research"` (for user awareness at batch end)
-   Each entry gets tagged with `prd` (filename) and `cycle`. Preserve the full `research` field when present - this is the only copy that survives state reset. Skip this step if nothing to write.
+   Each entry gets tagged with `prd` (filename) and `cycle`. Preserve the full `research` field when present - this is the only copy that survives state reset. Skip this step if nothing to write. This step is the migration path for cap-out records: the loop-mode cap-out branch (`references/phase-review.md` § Cap check) writes `state.deferred_decisions` and nothing else, and this step is where those records reach the batch deferred JSON.
 
 6a. **Render this PRD's audit file:** run `autopilot render audit` — it writes `dev/local/reviews/<prd-base>-audit.md` in one pass from the state decision arrays and is the ONLY writer of `audit.md` (format and label set: `references/audit-log-format.md`; the render preserves an existing file's `Started:` stamp and handles the no-decisions case itself).
 
