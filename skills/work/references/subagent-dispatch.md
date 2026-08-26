@@ -122,3 +122,23 @@ A render fills EVERY placeholder the persona carries or exits 1 naming the first
 `use-qwen`, `use-gemini`, and `use-codex` are Bash helper-script dispatches; Claude implementor passes are Agent dispatches at the task's tier. All three must satisfy the **Subagent Dispatch Budget** and the **Subagent Watchdog**.
 
 The **Subagent Dispatch Budget** applies regardless of tier. Haiku doesn't earn a smaller cap; opus doesn't earn a larger one.
+
+## Reflow tripwire (step 5, PRD 00148)
+
+A formatter sweep once rewrote a whole file (58 hunks: trailing commas, line splits) during an unrelated dispatch. Nobody asked for it, the trigger is still unknown, and step 5 had no way to see it — so an unattended run stages it into the task commit and the next review cycle re-reads 58 formatting hunks as the task's work. The tripwire does not prevent that. It makes it visible, so the record says what happened and the trigger can eventually be found from data.
+
+Run it after building the stage list and before `git add`, over the same paths:
+
+```bash
+python3 <plugin root>/skills/work/scripts/check_reflow.py <path> [<path> ...]
+```
+
+(`<plugin root>` is the value `SKILL.md` resolves for `${CLAUDE_PLUGIN_ROOT}`; a placeholder written in this file would reach the shell empty.) It counts `@@` lines in `git diff -U0 HEAD -- <path>` per path and prints `<path>\t<hunks>` for each one at or above `--threshold` (default 20; a targeted edit is well under 10). Add `--git-dir`/`--work-tree` in a bare-repo home, the same pair step 7.0 already passes.
+
+| Exit | Meaning | Attempt field |
+|---|---|---|
+| 0 | nothing at or above the threshold | `reflow` absent |
+| 1 | at least one path flagged | `reflow: "<path>:<hunks>"`, `;`-joined for several, and the phase report names the files |
+| 2 | git could not answer (stderr says why) | `reflow: "failed:<stderr>"` |
+
+Staging and the commit proceed unchanged in all three branches. Hunk-scoping a sweep out of a commit stays a manual call (`git apply --cached`), and exit 2 is deliberately not fatal: a broken probe must not block a task, but it must never be recorded as a clean one either.

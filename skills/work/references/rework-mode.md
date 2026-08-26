@@ -12,3 +12,23 @@ filter table; the lifecycle, attempt-field and abort semantics live here.
 **`/work` does NOT modify `rework_task_ids` itself.** Clearing is `/run-autopilot` Phase 6's responsibility, after this `/work` invocation returns. **If `/work` aborts mid-rework** (context overrun, Subagent Dispatch Budget overrun, unrecoverable error), `rework_task_ids` survives in state — this is correct recovery behavior: the next `/run-autopilot` session resumes with the same rework batch and re-attempts the listed tasks at their already-escalated tier. Phase 6's clear runs only on the successful `/work` return.
 
 Cross-reference: `run-autopilot/references/state-schema.md` `rework_task_ids` row; `run-autopilot/references/phase-review.md` Phase 6 (rework) tier-escalation rule.
+
+## Micro lane (PRD 00148)
+
+Below a certain size the per-task ceremony costs more than the edit: a two-finding prose trim measured ~15 min and ~100K subagent tokens for a -25 net-line change. This lane spends none of that. It is a rework-only shortcut — a default-mode task has no findings block to size and no tests yet.
+
+**Eligibility.** Read the task's `### Findings (verbatim)` block, collect one severity and one file path per line, and call `micro_lane_eligible(severities, files, in_rework=True)` from `scripts/work_routing.py`: at most two findings, at most two distinct files (the `:line` suffix is stripped), none CRITICAL, block parsed at all. Then run `git status --porcelain` and require every named file to be clean at claim time — the lane's escape hatch is `git checkout --`, which would destroy a live edit of the user's. Either check failing means the normal lane, unchanged.
+
+**What it skips.** Steps 2.7, 2.8, 2.85, 2.9 and 2.95: no Tess, no Devon, no test commit, no red check. The orchestrator makes the change itself with the **Edit tool only** — no subagent, no `sed`, no shell rewrite.
+
+**The overrun ceiling.** The 2/2 bound is a guess about the diff, made before the diff exists. This is the measurement that settles it. Before staging, over the working tree:
+
+```bash
+git diff --shortstat HEAD -- <files>
+```
+
+Compute `net_lines = insertions - deletions` and `file_count` (the step-5.6 formula). `net_lines >= 30` OR `file_count > 2` is an **overrun**: the task was not micro after all. Run `git checkout -- <files>`, stamp `micro_lane: "overrun"` on the attempt, and continue at step 2.7 as a normal task — the full pipeline then runs from a clean tree, having lost only the edit.
+
+**Below the ceiling.** Step 5 stages and commits the edited files as usual, tripwire included. Step 5.5 runs the task's `Verify:` command, or the project's narrowest test command covering the touched modules when the task carries none. Step 5.6 records `self_deslop: "skipped:trivial"` without dispatching. Step 5.7 runs Pat unchanged, with `BASE_SHA` = the parent of the lane commit; its retry rows also edit through the orchestrator rather than re-rendering Ivan.
+
+**The attempt record** carries `implementor: "orchestrator"`, `red_check: "n/a:micro-lane"`, and `review_cycle` as rework mode already sets it above. Two subagent dispatches are skipped and one reviewer is not — a lane that skipped Pat as well would be a lane with no check at all.

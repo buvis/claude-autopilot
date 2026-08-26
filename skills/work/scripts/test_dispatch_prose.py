@@ -444,3 +444,56 @@ def test_step_3_defines_failing_tests_for_test_only_tasks() -> None:
         "lists them in the allowlist on purpose, so the blanket ban has to "
         "yield to the allowlist that already bounds every dispatch."
     )
+
+
+def test_step_3_points_at_the_micro_lane_and_the_lane_carries_its_revert() -> None:
+    # PRD 00148: a two-finding rework task once cost ~100K subagent tokens and
+    # 15 minutes for a 25-line prose trim. The lane skips the dispatch, so its
+    # escape hatch is the only thing standing between "small" and "wrong": the
+    # overrun revert must be written down where the lane is, not inferred.
+    start = _TEXT.index("### 3.")
+    end = _TEXT.index("### 4.", start)
+    step_3 = _TEXT[start:end]
+
+    for needle in ("rework-mode.md", "Micro lane"):
+        assert needle in step_3, (
+            f"{_SKILL_MD}: step 3 never names {needle!r}, so nothing routes a "
+            "small rework task away from the full Ivan dispatch."
+        )
+
+    rework_mode = (_SKILL_MD.parent / "references" / "rework-mode.md").read_text()
+    for needle in ('implementor: "orchestrator"', 'micro_lane: "overrun"', "git checkout -- "):
+        assert needle in rework_mode, (
+            f"references/rework-mode.md never names {needle!r}. The lane's "
+            "record and its revert are what make an un-dispatched edit "
+            "auditable; without them a skipped pipeline reads as a run one."
+        )
+
+
+def test_step_5_runs_the_reflow_tripwire_over_the_stage_list() -> None:
+    # PRD 00148: a formatter reflow (58 hunks) once rode into a task commit
+    # unnoticed and the next cycle re-reviewed it as the task's work. Step 5
+    # is the only place that sees the stage list before `git add`.
+    start = _TEXT.index("### 5. Commit")
+    end = _TEXT.index("### 5.5.", start)
+    step_5 = _TEXT[start:end]
+
+    for needle in ("check_reflow.py", "reflow:"):
+        assert needle in step_5, (
+            f"{_SKILL_MD}: step 5 never names {needle!r}, so a whole-file "
+            "reflow is staged and committed with nothing recording it."
+        )
+
+    dispatch = (_SKILL_MD.parent / "references" / "subagent-dispatch.md").read_text()
+    assert "## Reflow tripwire" in dispatch, (
+        "references/subagent-dispatch.md has no '## Reflow tripwire' section; "
+        "step 5 points at a procedure that is not written anywhere."
+    )
+
+    attempt_logging = (_SKILL_MD.parent / "references" / "attempt-logging.md").read_text()
+    for value in ('"orchestrator"', '"n/a:micro-lane"', "micro_lane", "reflow"):
+        assert value in attempt_logging, (
+            f"references/attempt-logging.md does not enumerate {value!r}; a "
+            "value /work writes but the schema reference does not list reads "
+            "as corrupt to anyone auditing the record."
+        )

@@ -296,6 +296,8 @@ When architecture context spans more than one file, use the same `--set-cmd ARCH
 
 **If the task description is ambiguous** (multiple interpretations, unclear scope, unstated format/fields/location), stop before dispatching Ivan and surface the ambiguity to the user. See Example 1 in `references/code-quality-examples.md`. Do not dispatch with guessed-at requirements.
 
+**A small rework task skips this dispatch.** In rework mode, before rendering anything, check `references/rework-mode.md` § Micro lane: at most two non-CRITICAL findings in at most two files that are clean at claim time, and the orchestrator edits them itself (steps 2.7-2.95 skipped, Pat kept), reverting to the normal lane when the diff overruns.
+
 **Deterministic routing table.** Pick the implementor by reading the claimed task's tier (`state.tasks[i].model`) and qwen-eligibility flag (`state.tasks[i].qwen_eligible`), then cross-referencing against the "Gemini-first tasks" UI definition in **Implementor Selection** above. No re-judging here — `qwen_eligible` is computed upstream by `/plan-tasks` and already encodes backend (not UI) + `haiku`/`sonnet` tier + `<=3`-files + no public-contract edit (exported API signature, schema, wire format, hook registration shape); ineligible tasks carry `state.tasks[i].qwen_excluded_reason` (`ui`/`tier`/`files`/`contract`) for the batch-report telemetry. If the field is absent (legacy plans), treat it as `false`.
 
 Apply the rows in this order — the first match wins (in practice `qwen_eligible == true` already excludes UI and `opus`, so the order resolves any apparent overlap deterministically):
@@ -350,6 +352,7 @@ Stage exactly this task's files, then commit in a separate Bash call. **Never `g
 
 1. Build the stage list: the paths from Ivan's `FILES_TOUCHED:` footer (see **Assumptions footer**), plus any build-generated files this task's changes legitimately produced (lockfiles, snapshots, generated bindings) — identified from `git status --porcelain` output, never guessed.
 2. Fallback when the footer is absent or `none` while the tree is dirty (legacy retry prompts, malformed report): stage the intersection of dirty paths with the exact files the plan task names; treat every other dirty path as foreign.
+3. Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_reflow.py <stage list>` over that list: exit 1 → stamp `reflow: "<path>:<hunks>"` (`;`-joined for several) on the attempt and name the files in the phase report; exit 2 → `reflow: "failed:<stderr>"`; exit 0 → no field. Staging and the commit proceed unchanged in every branch — see `references/subagent-dispatch.md` § Reflow tripwire.
 
 ```bash
 git add <path> [<path> ...]
