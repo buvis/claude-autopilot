@@ -101,6 +101,33 @@ Return one of:
 
 ---
 
+## Procedure
+
+Moved verbatim out of `SKILL.md` step 5.6 (PRD 00119-v2). The skip rule, the
+description-fallback rule and the outcome-logging rule stayed in the body; this
+is everything the caller needs once the skip rule did NOT fire.
+
+**Dispatch contract.** Otherwise, dispatch a **fresh** Agent call (NOT the implementor's session — fresh context breaks the "I built this" attachment; why: `references/design-rationale.md` § fresh dispatch) at `state.tasks[i].model`. Same tier as the implementor keeps cost proportional. The dispatch must satisfy the **Subagent Dispatch Budget** and the **Subagent Watchdog**.
+
+**Prompt construction.** Build the subagent prompt from `references/self-deslop-prompt.md` by substituting:
+
+- `{{task_subject}}` from `tasks[i].name`, `{{task_description}}` from `tasks[i].description` (full text, falling back to the name-only body when `description` is absent or an empty string), and `{{task_acceptance_criteria}}` from a **text-extraction** of the `Acceptance criteria:` section of that same `tasks[i].description` (falling back to the literal string `(none recorded)` when absent) — all read directly from the current task's `state.tasks` entry, already in hand from step 1's pending scan. The criteria are parsed out of the stored body; there is no `acceptance_criteria` field to read.
+- `{{test_files}}` from the tests Tess wrote in step 2.7 (the same set step 5.5 just ran).
+- `{{diff_files}}` from `git diff-tree --no-commit-id --name-only -r HEAD`.
+- `{{slop_catalog}}` from the `## What to remove` section of `${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/prompts/de-sloppify.md` — read the file at dispatch time and inline the section verbatim. This keeps the deslop prompt as the single source of truth for slop patterns; when it grows entries, the next step-5.6 dispatch picks them up without a code change here.
+
+| Subagent outcome | `self_deslop` value | Proceed to 5.7 against |
+|------------------|---------------------|------------------------|
+| Committed `chore: prune slop from ...` | `"committed:{sha}"` (full SHA from the new commit) | the pruned diff (HEAD now includes the cleanup commit) |
+| Returned "no slop found", no commit | `"noop"` | the original implementor diff |
+| Watchdog timeout (`TaskStop` fired) | `"timeout"` | the original implementor diff |
+| Dispatch failed or subagent errored | `"errored:{short_cause}"` (e.g. `errored:dispatch_failed`, `errored:prompt_overrun`) | the original implementor diff |
+| Skip rule fired | `"skipped:trivial"` (no dispatch occurred) | the original implementor diff |
+
+In every non-committed outcome, the implementor's original commit stands and step 5.7 reviews it directly.
+
+---
+
 ## Dispatch contract reminders
 
 The `/work` step 5.6 caller, NOT the subagent, is responsible for:
@@ -109,6 +136,7 @@ The `/work` step 5.6 caller, NOT the subagent, is responsible for:
   non-trivial diffs.
 - The fresh-Agent-dispatch requirement (not the implementor's session).
 - The 15-minute watchdog and `TaskStop` on timeout.
-- Writing the outcome to `state.tasks[i].attempts[-1].self_deslop`.
+- Carrying the outcome into step 6's `task-done` payload as the attempt
+  record's `self_deslop` field (never a separate indexed state write).
 
 See `SKILL.md` step 5.6 for the full contract.

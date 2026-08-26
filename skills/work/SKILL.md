@@ -546,26 +546,11 @@ git diff-tree --no-commit-id --name-only -r HEAD
 
 Compute `net_lines = insertions - deletions` (from `--shortstat`) and `file_count` (lines from `diff-tree`). If `net_lines < 30` OR `file_count < 2`, skip the dispatch — the cleanup overhead exceeds the slop budget for trivially small changes. Record `self_deslop: "skipped:trivial"` on the latest attempt (see "Outcome logging" below) and proceed directly to step 5.7.
 
-**Dispatch contract.** Otherwise, dispatch a **fresh** Agent call (NOT the implementor's session — fresh context breaks the "I built this" attachment; why: `references/design-rationale.md` § fresh dispatch) at `state.tasks[i].model`. Same tier as the implementor keeps cost proportional. The dispatch must satisfy the **Subagent Dispatch Budget** and the **Subagent Watchdog**.
-
-**Prompt construction.** Build the subagent prompt from `references/self-deslop-prompt.md` by substituting:
-
-- `{{task_subject}}` from `tasks[i].name`, `{{task_description}}` from `tasks[i].description` (full text, falling back to the name-only body when `description` is absent), and `{{task_acceptance_criteria}}` from a **text-extraction** of the `Acceptance criteria:` section of that same `tasks[i].description` (falling back to the literal string `(none recorded)` when absent) — all read directly from the current task's `state.tasks` entry, already in hand from step 1's pending scan. The criteria are parsed out of the stored body; there is no `acceptance_criteria` field to read.
-- `{{test_files}}` from the tests Tess wrote in step 2.7 (the same set step 5.5 just ran).
-- `{{diff_files}}` from `git diff-tree --no-commit-id --name-only -r HEAD`.
-- `{{slop_catalog}}` from the `## What to remove` section of `${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/prompts/de-sloppify.md` — read the file at dispatch time and inline the section verbatim. This keeps the deslop prompt as the single source of truth for slop patterns; when it grows entries, the next step-5.6 dispatch picks them up without a code change here.
+**Read `references/self-deslop-prompt.md` § Procedure before the first step-5.6 dispatch of a batch** — it carries the dispatch contract (a **fresh** Agent call at `state.tasks[i].model`, **Subagent Dispatch Budget** + **Subagent Watchdog**), the placeholder substitutions, and the outcome table that maps each subagent result to its `self_deslop` value. `{{task_description}}` comes from `tasks[i].description`, falling back to the name-only body when `description` is absent.
 
 **Outcome logging.** Hold the result in-session and write it as the `self_deslop` field of the attempt record step 6 builds — do NOT write it here as a separate indexed state mutation. On a first attempt `tasks[i].attempts` is still empty at this point (step 6 is what appends the entry), so a `tasks[i].attempts[-1].self_deslop` write fails outright: `statectl` exits 1 with `json-path index out of range: [-1]`, reproduced against a scratch state. Carrying the value into step 6's payload also keeps the whole task transition in the one `task-done` write.
 
-| Subagent outcome | `self_deslop` value | Proceed to 5.7 against |
-|------------------|---------------------|------------------------|
-| Committed `chore: prune slop from ...` | `"committed:{sha}"` (full SHA from the new commit) | the pruned diff (HEAD now includes the cleanup commit) |
-| Returned "no slop found", no commit | `"noop"` | the original implementor diff |
-| Watchdog timeout (`TaskStop` fired) | `"timeout"` | the original implementor diff |
-| Dispatch failed or subagent errored | `"errored:{short_cause}"` (e.g. `errored:dispatch_failed`, `errored:prompt_overrun`) | the original implementor diff |
-| Skip rule fired | `"skipped:trivial"` (no dispatch occurred) | the original implementor diff |
-
-In every non-committed outcome, the implementor's original commit stands and step 5.7 reviews it directly. **Do not retry self-deslop on failure** — best-effort means single attempt only.
+**Do not retry self-deslop on failure** — best-effort means single attempt only.
 
 ### 5.7. Per-task code review
 
