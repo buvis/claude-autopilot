@@ -18,9 +18,23 @@ filename from state and never globs `reports/*.md`.
   file with its header on first write (Phase 9 step 7).
 - `--summary` — appends the batch-end `## Batch Summary` block (PRD counts,
   cycle/decision sums, deferred count, duration from the batch's metrics
-  rows).
+  rows), plus the Skipped surface below.
 - `--stalled --site <site> --detail <detail>` — appends the short STALLED
   form instead of a full section (PRD 00017 loop-mode stall).
+
+## What the batch summary carries about skips
+
+`- PRDs skipped: N` renders directly under `- PRDs completed: N`, **always,
+zero included**. That is the point of the line: a drain whose whole backlog
+failed its eligibility checks must read as "0 done, N skipped", never as the
+silent 0-done batch that has already been mistaken for a dead session once.
+
+When N is non-zero, a `### Skipped` table follows the summary lines — one row
+per skip, `PRD | Exit code | Command`, in the order they were recorded. Exit
+code `-1` means the check never ran at all (timeout, or an unusable cwd);
+`state.batch.skips[]` carries the `note` that says which, and the timestamp.
+Skipped PRDs are still in `backlog/` — nothing was parked, and the next drain
+re-evaluates each one.
 
 ## What a completed-PRD section carries
 
