@@ -54,9 +54,7 @@ def count_completed_tasks(commands: Iterable[str]) -> int:
         except ValueError:
             tokens = command.split()
         for index, token in enumerate(tokens):
-            if token == "task-done" and index + 1 < len(tokens):
-                completed.add(tokens[index + 1])
-            elif (
+            if (token == "task-done" and index + 1 < len(tokens)) or (
                 token == "task-set-status"
                 and index + 2 < len(tokens)
                 and tokens[index + 2] == "completed"
