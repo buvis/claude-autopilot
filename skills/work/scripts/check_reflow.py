@@ -18,11 +18,6 @@ import sys
 DEFAULT_THRESHOLD = 20
 
 
-def count_hunks(diff_text: str) -> int:
-    """Hunk headers in a unified diff. Under -U0 there is one per change."""
-    return sum(1 for line in diff_text.splitlines() if line.startswith("@@"))
-
-
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Flag files whose uncommitted diff has too many hunks.",
@@ -62,7 +57,9 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 2
-        hunks = count_hunks(result.stdout)
+        # Under -U0 git emits one `@@` header per changed run of lines, so
+        # counting them counts the changes.
+        hunks = sum(1 for line in result.stdout.splitlines() if line.startswith("@@"))
         if hunks >= args.threshold:
             flagged.append((path, hunks))
 

@@ -276,6 +276,8 @@ Run the newly committed tests once, before any Ivan dispatch, at the narrowest s
 
 Ivan's job: make the failing tests pass. Tests ARE the spec.
 
+**A small rework task skips this whole step.** In rework mode, before rendering anything, check `references/rework-mode.md` § Micro lane: at most two non-CRITICAL findings in at most two files that are clean at claim time, and the orchestrator edits them itself (steps 2.7-2.95 skipped, Pat kept), reverting to the normal lane when the diff overruns.
+
 **Ivan receives:** failing test file paths and their content, architecture context (AGENTS.md, interfaces, relevant modules), and existing code patterns to follow. **Ivan does NOT receive:** the task's acceptance criteria prose (tests replace this) or permission to modify test files.
 
 **Test-only, docs-only and config-only tasks (Tess skipped at 2.7):** there are no failing tests, so write the task's `Verify:` line and its `Acceptance criteria` bullets to `dev/local/tmp/ivan-<task-id>-checks.txt` and pass that as `--set-file FAILING_TESTS=` instead of the `--set-cmd` below; `FILE_PATHS` is the test, doc or config files the task touches (Ivan may edit test files his allowlist names). Step 2.95 is skipped and the attempt records `red_check` as `n/a:test-only-task`, `n/a:docs-only-task` or `n/a:config-only-task`. Pat's step-5.7 review still runs for test-only tasks; the docs-only and config-only skip there is unchanged.
@@ -295,8 +297,6 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUG
 When architecture context spans more than one file, use the same `--set-cmd ARCHITECTURE_CONTEXT="cat $(printf '%q ' <file_1> <file_2>)"` shape. `RETRY_INSTRUCTION` is the literal empty string on this, the initial dispatch. The stdout integer from this call **is** the Subagent Dispatch Budget measurement — no separate `wc -c`; oversize handling and what `ivan.md` already bakes in are in `references/subagent-dispatch.md`. Dispatch the Agent tool with the file at `dev/local/tmp/dispatch-ivan-<task-id>.txt` as the prompt source, watchdog per the existing Subagent Watchdog section — unchanged.
 
 **If the task description is ambiguous** (multiple interpretations, unclear scope, unstated format/fields/location), stop before dispatching Ivan and surface the ambiguity to the user. See Example 1 in `references/code-quality-examples.md`. Do not dispatch with guessed-at requirements.
-
-**A small rework task skips this dispatch.** In rework mode, before rendering anything, check `references/rework-mode.md` § Micro lane: at most two non-CRITICAL findings in at most two files that are clean at claim time, and the orchestrator edits them itself (steps 2.7-2.95 skipped, Pat kept), reverting to the normal lane when the diff overruns.
 
 **Deterministic routing table.** Pick the implementor by reading the claimed task's tier (`state.tasks[i].model`) and qwen-eligibility flag (`state.tasks[i].qwen_eligible`), then cross-referencing against the "Gemini-first tasks" UI definition in **Implementor Selection** above. No re-judging here — `qwen_eligible` is computed upstream by `/plan-tasks` and already encodes backend (not UI) + `haiku`/`sonnet` tier + `<=3`-files + no public-contract edit (exported API signature, schema, wire format, hook registration shape); ineligible tasks carry `state.tasks[i].qwen_excluded_reason` (`ui`/`tier`/`files`/`contract`) for the batch-report telemetry. If the field is absent (legacy plans), treat it as `false`.
 

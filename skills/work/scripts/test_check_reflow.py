@@ -186,16 +186,13 @@ def test_the_tripwire_never_touches_the_files_it_measures(
 
     check_reflow.main(["sample.txt"])
 
-    assert target.read_bytes() == before
-    assert _git_status(repo) == " M sample.txt\n"
-
-
-def _git_status(repo: Path) -> str:
-    result = subprocess.run(
+    status = subprocess.run(
         ["git", "status", "--porcelain"],
         cwd=repo,
         check=True,
         capture_output=True,
         text=True,
     )
-    return result.stdout
+
+    assert target.read_bytes() == before
+    assert status.stdout == " M sample.txt\n"
