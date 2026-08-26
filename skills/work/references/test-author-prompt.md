@@ -26,6 +26,49 @@ When building Tess's prompt, include:
 | Implementation files | Defeats the entire purpose |
 | "How to build this" guidance | Tess is a test author, not an implementor |
 
+Moved verbatim out of `SKILL.md` step 2.7 (PRD 00119-v2) — the two lists the
+step used to spell out inline. **Read this section before the first Tess
+dispatch of a batch.**
+
+**Tess receives:**
+- Task description and acceptance criteria
+- The **exact file paths** the task touches — spelled **absolute** — and the **exact symbol names** to test, taken from the plan task — not "find the relevant file"
+- Public interfaces/types relevant to the task
+- Existing test patterns (one sample test file from the project)
+- Test framework and conventions used
+
+**Tess does NOT receive:**
+- Implementation strategy or architecture docs (loaded in step 2.5 for the main session and Ivan only)
+- "How to build this" context
+- Access to modify non-test files
+
+The stdout integer from step 2.7's render call **is** the Subagent Dispatch Budget measurement — no separate `wc -c`. `tess-prompt.md` bakes in the read-only-scope instruction, the dispatch prologue, and the Assumptions footer permanently (mirroring `ivan.md`), so nothing further needs adding to the prompt by hand — open-ended discovery is where subagents burn turns and stall, and keeping Tess scoped to the listed files/symbols is the template's job now. Dispatch the Agent tool with the file at `dev/local/tmp/dispatch-tess-<task-id>.txt` as the prompt source. The template also embeds Simplicity/Think-Before-Coding/Surgical rules to prevent Tess from writing speculative tests or silently assuming input shape.
+
+## Quality gate (step 2.8)
+
+Moved verbatim out of `SKILL.md` step 2.8 (PRD 00119-v2). SKILL.md keeps the
+gate rule and the total-Tess budget; the rubric and the retry render live here.
+**Read this section before running the gate on Tess's first test file.**
+
+Before committing Tess's tests, review them in the main session against this checklist:
+
+1. **Behavior names?** Each test name describes a behavior ("rejects empty email"), not an implementation detail ("calls validateEmail")
+2. **Real assertions?** Assertions check outputs/effects, not mock internals
+3. **Edge cases?** Empty, null, boundary, error, and concurrent cases covered where relevant
+4. **No tautologies?** Tests don't just restate what the code obviously does
+
+If any check fails, dispatch Tess again with specific feedback about what's weak. Render the retry the same way as the initial dispatch — never author it by hand:
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/skills/work/references/tess-retry-prompt.md \
+  --out dev/local/tmp/dispatch-tess-<task-id>-retry-<n>.txt \
+  --set-file QUALITY_FEEDBACK=dev/local/tmp/tess-<task-id>-gate-<n>.txt \
+  --set-file TASK_DESCRIPTION=<the same scratch file step 2.7 used> \
+  --set-file TASK_ACCEPTANCE_CRITERIA=dev/local/tmp/tess-<task-id>-acceptance.txt
+```
+
+Write the gate findings (one per line) to the `QUALITY_FEEDBACK` scratch file with the Write tool. Max 2 quality gate retries.
+
 ## Retry Prompt (after quality gate failure)
 
 The retry template lives in `work/references/tess-retry-prompt.md` (single
