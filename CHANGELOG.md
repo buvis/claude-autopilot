@@ -38,6 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reverting to the normal lane when the diff overruns; step 5 stamps `reflow:`
   on any staged file whose diff exceeds the hunk threshold so a formatter sweep
   is visible instead of silently re-reviewed.
+- **review-work-completion**: step 3 skips `engram pack` when
+  `git rev-parse --show-toplevel` fails and records
+  `pack: skipped (no git worktree)` instead of a failure line.
 
 ### Fixed
 

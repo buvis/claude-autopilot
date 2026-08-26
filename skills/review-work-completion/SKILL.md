@@ -166,7 +166,7 @@ Pass the paths from the context file's `### Changed Files` section (in a **bare-
 
 **Append the settled-decisions ledger (PRD 00095).** Read `dev/local/reviews/<prd-stem>-ledger.json` (`<prd-stem>` = the review-target PRD's filename minus `.md`; absent on cycle 1, which is normal). When it exists and parses, hold its entries for step 4 — they become the "Settled decisions — do not re-raise" section of the implementation-aware prompts — and hold the path for step 6's `--ledger` flag. A malformed ledger is logged and skipped, never fatal.
 
-**Generate the cycle's context pack.** After `gather-context.sh` has produced the diff, and before any prompt is assembled, run this from the project root:
+**Generate the cycle's context pack.** After `gather-context.sh` has produced the diff, and before any prompt is assembled, run `git rev-parse --show-toplevel` from the project root with no extra flags — the pack resolves `repo_root` the same way, so a non-zero exit means the pack cannot succeed here. On non-zero: skip the command below entirely, substitute `(no pack available this cycle)` for `{PACK_FILE}` and `{PACK_FINDINGS}`, write `pack: skipped (no git worktree)` in the review file, and move to step 4. On zero exit, run this from the project root:
 
 ```bash
 uv run --project ~/git/src/github.com/buvis/engram engram pack --cycle {id} --prd <absolute path of the review-target PRD resolved at the top of this step> --capsule dev/local/meta/project-capsule.md
@@ -178,7 +178,7 @@ Hold the printed absolute path. Step 4 substitutes it for `{PACK_FILE}`, and sub
 
 **Failure is non-fatal and must never block the cycle.** If the command exits non-zero or writes no pack file, retry at most once and do not fail the review. Substitute the literal text `(no pack available this cycle)` for `{PACK_FILE}` and `{PACK_FINDINGS}` in every prompt that takes them, and note the pack failure in the review file. The pack is additive retrieval context. A review without it is degraded, not invalid. The blind lens (Blake) never receives a pack, by design.
 
-In a **bare-repo home** (the carve-out one paragraph above), expect this step to fail and degrade through that same fallback: `gather-context.sh` never wrote `review-diff-{id}.diff`, and `engram pack` resolves `repo_root` from `git rev-parse --show-toplevel`, which exits non-zero there. Note it and move on rather than retrying.
+In a **bare-repo home** (the carve-out one paragraph above), the pre-check is what fires: `git rev-parse --show-toplevel` exits non-zero, so the pack is never attempted and the review file records `pack: skipped (no git worktree)` — a skip, not a failure, and no retry. `gather-context.sh` never wrote `review-diff-{id}.diff` there either.
 
 ### 4. Prepare agent prompts
 

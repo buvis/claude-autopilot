@@ -477,3 +477,29 @@ def test_blake_row_names_the_filesystem_notes_block_and_both_triggers() -> None:
         "agent-invocation.md's Blake section never names the realpath — the "
         "one fact the block exists to hand him"
     )
+
+
+def test_step_3_checks_for_a_worktree_before_attempting_the_pack() -> None:
+    """In a bare-repo home `engram pack` cannot succeed: it resolves
+    `repo_root` from `git rev-parse --show-toplevel`, which exits non-zero
+    there (PRD 00148). Step 3 already told the orchestrator to expect the
+    failure, so every cycle spent an attempt and wrote a red line for a
+    known-impossible command. The pre-check has to come BEFORE the pack
+    block, or it is just a second way to describe the failure."""
+    text = _skill_text()
+    probe = "git rev-parse --show-toplevel"
+
+    assert probe in text, (
+        f"review-work-completion/SKILL.md never names {probe!r}; without the "
+        "pre-check step 3 keeps running a pack that cannot resolve a repo "
+        "root in a bare-repo home"
+    )
+    assert text.index(probe) < text.index("engram pack"), (
+        f"{probe!r} appears after the first 'engram pack' mention, so the "
+        "worktree check cannot gate the pack it is supposed to skip"
+    )
+    assert "pack: skipped (no git worktree)" in text, (
+        "review-work-completion/SKILL.md does not carry the literal "
+        "'pack: skipped (no git worktree)'; a skipped pack recorded as a "
+        "failure (or not at all) reads as a degraded review nobody chose"
+    )
