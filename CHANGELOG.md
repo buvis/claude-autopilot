@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **work**: check_build_overhead.py counts completed tasks from statectl
+  task-done/task-set-status calls instead of the retired TaskUpdate tool, prints
+  an explicit zero-tasks line instead of a 0.00 ratio, and reports Agent
+  dispatches.
 - **work**: the style-limit gate never reports a clean phase for a file it could
   not inspect. An unreadable changed file, or one skipped for an ambiguous
   diff-path tie, now exits 2 ("the gate could not run") instead of 0, which step
