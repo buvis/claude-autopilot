@@ -1165,8 +1165,8 @@ class Loop:
             file=self.out,
         )
         self._teardown()
-        touched = decision["state_touched"]
-        return 0 if touched and decision["signal"] != "state_write_failed" else 1
+        ok = decision["state_touched"] and decision["signal"] != "state_write_failed"
+        return 0 if ok else 1
 
     def _run_loop(self) -> int:
         while True:

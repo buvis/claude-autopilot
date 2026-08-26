@@ -712,7 +712,9 @@ def test_pause_exit_names_autoclaude_as_the_resume(tmp_path):
     lp = make_loop(tmp_path, [])
     (lp._test["ap_dir"] / "pause-requested").touch()
     assert lp.run() == 0
-    assert "Resume unattended: autoclaude" in lp._test["out"].getvalue()
+    out = lp._test["out"].getvalue()
+    assert "Resume unattended: autoclaude" in out
+    assert "/autopilot:run-autopilot" in out  # the take-over path, namespaced
 
 
 def test_a_resumed_loop_clears_the_pause_stamp(tmp_path):

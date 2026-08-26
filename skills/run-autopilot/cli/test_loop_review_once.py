@@ -159,6 +159,18 @@ def test_review_once_leaves_the_pause_marker_in_place(tmp_path):
     assert len(lp._test["spawn"].launches) == 1
 
 
+def test_review_once_shares_the_loops_interrupt_contract(tmp_path):
+    # The wrapper is extracted, not duplicated - so Ctrl-C during the
+    # one-shot's session must exit 130 exactly as it does in the loop.
+    def interrupted(*args, **kwargs):
+        raise KeyboardInterrupt
+
+    lp = make_loop(tmp_path, [], spawn_fn=interrupted)
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="review", batch={"id": "b"})
+
+    assert lp.run_once() == 130
+
+
 def test_review_once_refuses_when_a_loop_is_live(tmp_path):
     loops = tmp_path / "loops"
     loops.mkdir()

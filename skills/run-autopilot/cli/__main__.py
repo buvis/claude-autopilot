@@ -76,7 +76,9 @@ Subcommands:
         next_phase is anything but `review` or `done` (a build needs the
         loop's acting branches). Flagless for the same reason as `loop`.
         Exits 0 when the session touched state and left no
-        state-write-failed marker, else 1.
+        state-write-failed marker, 1 otherwise (a refused preflight
+        included), 130/143/129 on signals - not the state-CLI codes
+        below.
 
 --state, when omitted, resolves by walking up from cwd via
 _walk_up.find_autopilot_dir() to <dir>/state.json. park's --autopilot-dir,
