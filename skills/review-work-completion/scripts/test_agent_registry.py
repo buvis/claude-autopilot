@@ -437,3 +437,45 @@ def test_eve_dispatch_section_names_pack_findings_and_drops_three_input_claim() 
         "Eve's '## Eve (Fable 5)' section still claims she receives only "
         "three appended inputs; document a fourth carrying {PACK_FINDINGS}"
     )
+
+
+def test_blake_row_names_the_filesystem_notes_block_and_both_triggers() -> None:
+    """Blake sweeps with `rg --files`, which neither descends into a
+    dot-directory nor follows a symlink, so on a project like `~/.claude` he
+    reports existing `dev/local` files as missing (PRD 00141). The fix is a
+    `## Filesystem notes` block prepended to his run inputs — paths only, so
+    the blind lens stays blind. Prose contract: SKILL.md step 4 must name the
+    block and BOTH trigger halves, Blake's own table row must point at it,
+    and agent-invocation.md must carry the block text."""
+    text = _skill_text()
+
+    assert "## Filesystem notes" in text, (
+        "review-work-completion/SKILL.md never names the '## Filesystem notes' "
+        "block; Blake's run inputs would carry no realpath and the blind lens "
+        "keeps filing refuted 'file does not exist' findings"
+    )
+    for trigger in ("test -L dev/local", "starts with `.`"):
+        assert trigger in text, (
+            f"review-work-completion/SKILL.md does not state the trigger "
+            f"{trigger!r}; without both halves the block fires on the wrong "
+            "projects or never fires at all"
+        )
+
+    row = _table_row(text, "Blake")
+    assert "Filesystem notes" in row, (
+        f"Blake's substitution-table row does not mention the Filesystem "
+        f"notes block, so the per-persona table contradicts step 4: {row!r}"
+    )
+
+    invocation = (_SKILL_DIR / "references" / "agent-invocation.md").read_text(
+        encoding="utf-8",
+    )
+    assert "## Blake: Filesystem notes" in invocation, (
+        "agent-invocation.md has no '## Blake: Filesystem notes' section; the "
+        "block text and its trigger must live where every other lane's "
+        "dispatch contract lives"
+    )
+    assert "realpath" in invocation, (
+        "agent-invocation.md's Blake section never names the realpath — the "
+        "one fact the block exists to hand him"
+    )

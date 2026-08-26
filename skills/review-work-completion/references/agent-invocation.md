@@ -57,6 +57,33 @@ Bash tool (run_in_background: true):
 
 `-o` writes Carl's output straight to the file step 6 consolidates. When the background command completes, read `carl-output-{id}.txt`. If `gemini-run.sh` exits non-zero (e.g. monthly quota exceeded), skip Carl and proceed with the other reviewers (graceful degradation).
 
+## Blake: Filesystem notes
+
+Blake locates the code himself, and he sweeps with `rg --files`, which does not
+descend into dot-directories and does not follow symlinks. On a project like
+`~/.claude` — a dot-directory whose `dev/local` is a symlink — that makes real
+files invisible to him, and he reports them as missing (PRD 00141: a 31 KB log
+filed as "does not exist on disk", refuted at the cost of a verification
+round).
+
+**Trigger.** One deterministic check, run from the project root: `test -L
+dev/local` succeeds, **OR** the project root's basename starts with `.`. When
+either holds, prepend this block to Blake's run inputs; when neither does, add
+nothing.
+
+```
+## Filesystem notes
+Project root: <absolute path>
+`dev/local` realpath: <absolute realpath>
+`rg --files` does not descend into dot-directories or follow this symlink; list or Read the realpath directly.
+```
+
+Substitute the two paths and nothing else. This is the whole addition: no
+diff, no changed-file list, no review history — those are what make a blind
+lens blind, and a project root plus a realpath tells him where to look, not
+what was written there. `agents/blake.md` is untouched by this; the block is a
+run input, so the persona stays identical across every project.
+
 ## Eve (Fable 5)
 
 Eve runs Claude Fable 5 as a **native Task subagent** (like Alice - NOT a background-Bash CLI like Bob/Carl). There is no `fable-run.sh` wrapper and none is needed: the Task/Agent tool's `model` parameter accepts `"fable"` directly (the same tier alias as `"sonnet"`/`"opus"`/`"haiku"`; Fable 5 is model id `claude-fable-5`), so Eve dispatches in-process with native Read/Bash access (`rg` for search; Grep/Glob absent in this build) - no CLI shell-out, no `-o` output file, no background-Bash hang risk. Eve is a skeptical, high-scrutiny reviewer suited to final doubt review.

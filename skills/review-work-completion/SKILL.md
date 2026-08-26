@@ -210,6 +210,15 @@ the heading `## Settled decisions — do not re-raise`:
 fed the review's own history is no longer blind. His re-raises are absorbed
 mechanically instead, by step 6's `--ledger-dismiss BLAKE`.
 
+**Filesystem notes — Blake only (PRD 00141).** Run one check from the project
+root: `test -L dev/local` succeeds, OR the root's basename starts with `.`.
+When either holds, prepend a `## Filesystem notes` block to Blake's run inputs
+carrying the project root, the `dev/local` realpath, and the sentence telling
+him `rg --files` reaches neither. Paths only — no diff, no file list, no
+review history, so the blind lens stays blind. **Read
+`references/agent-invocation.md` § Blake: Filesystem notes for the verbatim
+block** before assembling his prompt.
+
 Per persona:
 
 | Persona | Source | Substitutions |
@@ -217,7 +226,7 @@ Per persona:
 | Alice | `agents/alice.md` | `{CONTEXT_FILE}`, `{DIFF_FILE}`, `{PACK_FILE}`, `{REVIEW_CHECKLIST}`, `{RUBRIC}`, `{OUTPUT_FORMAT}` |
 | Bob | `agents/bob.md` (carries the sandbox appendix) **plus** the "Two lenses" and "Rubric verdicts" sections of `agents/eve.md` appended | same as Alice (including `{PACK_FILE}`), plus `{PACK_FINDINGS}` |
 | Carl | `agents/carl.md` (carries the frontend & design appendix) | same as Alice |
-| Blake | `agents/blake.md` | `{PRD}` and `{RUBRIC}` (from `review-blindly/references/rubric.md`) **only** — no context file, no diff file, no incremental addendum; blind every cycle |
+| Blake | `agents/blake.md` | `{PRD}` and `{RUBRIC}` (from `review-blindly/references/rubric.md`) **only** — no context file, no diff file, no incremental addendum; blind every cycle. Run inputs gain the `## Filesystem notes` block when this project's trigger holds (above) |
 | Eve | `agents/eve.md` | `{PACK_FINDINGS}`; the PRD, diff range, changed-file list and the pack's Findings-precedent section are appended as her four run inputs (see `references/agent-invocation.md`) |
 
 **Create each prompt independently.** Do NOT create one prompt and copy/sed it into another - this triggers bash permission warnings (quote characters in comments desync quote tracking).

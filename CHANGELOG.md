@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **work**: the always-read SKILL.md body now sits under the 500-line ceiling
   (situational mechanics moved to references/ with read-at-trigger pointers) and
   a contract test fails when it grows past it.
+- **review-work-completion**: when the project's dev/local is a symlink or the
+  root is a dot-directory, Blake's run inputs carry a Filesystem notes block
+  with the realpath, so the blind lens stops reporting existing files as
+  missing.
 
 ### Fixed
 
