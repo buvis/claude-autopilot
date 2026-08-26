@@ -233,17 +233,19 @@ class SelectEligibilityTests(_ProjectTestCase):
         # land in the middle of it. This is what capture_output actually buys.
         # The markers are ARITHMETIC, not literals: the skip record echoes the
         # command text back on stdout, so a literal marker would be found there
-        # whether or not the child's own output leaked.
+        # whether or not the child's own output leaked. They are seven digits
+        # long so the record's `at` timestamp (at most four digits in a row)
+        # can never spell one: `42` once matched the seconds of `19:39:42Z`.
         self.put_prd(
             "backlog",
             "00090-noisy-v1.md",
-            _eligibility_prd("echo $((21+21)); echo $((15+5)) >&2; exit 1"),
+            _eligibility_prd("echo $((1234*1000)); echo $((5678*1000)) >&2; exit 1"),
         )
         self.put_prd("backlog", "00091-ready-v1.md", _eligibility_prd("true"))
         proc = _run(["select", "--prds", str(self.prds_dir)], cwd=self.root)
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertNotIn("42", proc.stdout)
-        self.assertNotIn("20", proc.stderr)
+        self.assertNotIn("1234000", proc.stdout)
+        self.assertNotIn("5678000", proc.stderr)
         self.assertEqual(json.loads(proc.stdout)["prd"], "00091-ready-v1.md")
 
     def test_a_failed_skip_write_exits_2_and_names_the_failure(self) -> None:
