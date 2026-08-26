@@ -227,6 +227,8 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUG
   --require-file <each absolute path to an existing file the task touches, one flag per path> \
   --require-parent <each absolute path to a file the task creates, one flag per path>
 ```
+`PUBLIC_INTERFACES` also carries the project's test-harness contract where one exists: for each Contract path `<dir>/<file>`, add `<dir>/tests/HARNESS_CONTRACT.md` to the `cat` list when that file is on disk (once per distinct file, still no module under test). None present adds nothing.
+
 **Read `references/test-author-prompt.md` § Context Selection before the first Tess dispatch of a batch** — it lists exactly what Tess receives and what she must not, and what `tess-prompt.md` already bakes in (read-only scope, dispatch prologue, Assumptions footer), so nothing is added to the prompt by hand. Dispatch the Agent tool with the file at `dev/local/tmp/dispatch-tess-<task-id>.txt` as the prompt source; the render call's stdout integer **is** the Subagent Dispatch Budget measurement.
 
 Tess prompts must satisfy the **Subagent Dispatch Budget**.
@@ -275,6 +277,8 @@ Run the newly committed tests once, before any Ivan dispatch, at the narrowest s
 Ivan's job: make the failing tests pass. Tests ARE the spec.
 
 **Ivan receives:** failing test file paths and their content, architecture context (AGENTS.md, interfaces, relevant modules), and existing code patterns to follow. **Ivan does NOT receive:** the task's acceptance criteria prose (tests replace this) or permission to modify test files.
+
+**Test-only, docs-only and config-only tasks (Tess skipped at 2.7):** there are no failing tests, so write the task's `Verify:` line and its `Acceptance criteria` bullets to `dev/local/tmp/ivan-<task-id>-checks.txt` and pass that as `--set-file FAILING_TESTS=` instead of the `--set-cmd` below; `FILE_PATHS` is the test, doc or config files the task touches (Ivan may edit test files his allowlist names). Step 2.95 is skipped and the attempt records `red_check` as `n/a:test-only-task`, `n/a:docs-only-task` or `n/a:config-only-task`. Pat's step-5.7 review still runs for test-only tasks; the docs-only and config-only skip there is unchanged.
 
 Render: one Bash call. **Task-authored prose never crosses the shell** — write it to a scratch file with the Write tool and pass `--set-file`; see § Passing values to render_prompt.py. Every interpolated path is `shlex.quote()`-d (or bash's `printf '%q '`) before it lands inside a `--set-cmd` value:
 ```bash

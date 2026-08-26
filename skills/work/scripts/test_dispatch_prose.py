@@ -365,3 +365,82 @@ def test_step_7_0_branches_on_a_gate_that_could_not_run() -> None:
         '"; "\'); exit 2 leaves <reason> undefined, so an agent executing '
         "this literally has to guess what to record."
     )
+
+
+def test_step_2_7_includes_a_harness_contract_when_one_exists() -> None:
+    # PRD 00141: Tess is briefed from requirements only, so a project whose
+    # test harness has non-obvious rules (a helper that installs its own
+    # sys.stdin, say) gets tests that would pass against the old code too.
+    # The convention hands her that contract without handing her the module:
+    # for a Contract path `<dir>/<file>`, `<dir>/tests/HARNESS_CONTRACT.md`
+    # joins PUBLIC_INTERFACES when it exists. Prose contract in two places —
+    # the step that renders the dispatch, and the reference that lists what
+    # Tess receives.
+    needle = "tests/HARNESS_CONTRACT.md"
+    start = _TEXT.index("### 2.7.")
+    end = _TEXT.index("### 2.8.", start)
+    step_2_7 = _TEXT[start:end]
+
+    assert needle in step_2_7, (
+        f"{_SKILL_MD}: step 2.7 never names {needle!r}, so nothing tells the "
+        "orchestrator to add a project's harness contract to "
+        "PUBLIC_INTERFACES and each dispatch improvises."
+    )
+    assert "PUBLIC_INTERFACES" in step_2_7, (
+        f"{_SKILL_MD}: step 2.7 must say the harness contract joins "
+        "PUBLIC_INTERFACES — that is the one render flag Tess reads it from."
+    )
+
+    reference = (_SKILL_MD.parent / "references" / "test-author-prompt.md").read_text()
+    assert needle in reference, (
+        f"references/test-author-prompt.md never names {needle!r}. It is the "
+        "file step 2.7 tells the orchestrator to read before the first Tess "
+        "dispatch of a batch, so the rule has to be stated there too."
+    )
+
+
+def test_step_3_defines_failing_tests_for_test_only_tasks() -> None:
+    # PRD 00141: step 2.7 already skips Tess for test-only, docs-only and
+    # config-only tasks, but step 3 never said what fills FAILING_TESTS when
+    # there are no failing tests — so each orchestrator improvised, and two
+    # PRD 00122 rework tasks got hand-built implementors instead of Ivan.
+    # Three pins: the checks file step 3 renders from, the three red_check
+    # values (in SKILL.md AND in the reference that enumerates them), and
+    # Ivan's persona yielding his blanket test-file ban to the allowlist.
+    start = _TEXT.index("### 3.")
+    end = _TEXT.index("### 4.", start)
+    step_3 = _TEXT[start:end]
+
+    assert "ivan-<task-id>-checks.txt" in step_3, (
+        f"{_SKILL_MD}: step 3 never names 'ivan-<task-id>-checks.txt', the "
+        "scratch file a test-only task's Verify line and acceptance criteria "
+        "are written to and passed as FAILING_TESTS."
+    )
+
+    red_check_values = (
+        "n/a:test-only-task",
+        "n/a:docs-only-task",
+        "n/a:config-only-task",
+    )
+    for value in red_check_values:
+        assert value in step_3, (
+            f"{_SKILL_MD}: step 3 does not name the red_check value "
+            f"{value!r}; step 2.95 is skipped on this lane and an unnamed "
+            "value gets recorded as a passed check."
+        )
+
+    attempt_logging = (_SKILL_MD.parent / "references" / "attempt-logging.md").read_text()
+    for value in red_check_values:
+        assert value in attempt_logging, (
+            f"references/attempt-logging.md does not enumerate {value!r} in "
+            "the red_check field; a value /work writes but the schema "
+            "reference does not list reads as corrupt to anyone auditing "
+            "the record."
+        )
+
+    ivan = (_SKILL_MD.parents[2] / "agents" / "ivan.md").read_text()
+    assert "unless your allowlist below names them" in ivan, (
+        "agents/ivan.md still bans test files outright. A test-only task "
+        "lists them in the allowlist on purpose, so the blanket ban has to "
+        "yield to the allowlist that already bounds every dispatch."
+    )

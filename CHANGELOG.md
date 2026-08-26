@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   root is a dot-directory, Blake's run inputs carry a Filesystem notes block
   with the realpath, so the blind lens stops reporting existing files as
   missing.
+- **work**: test-only, docs-only and config-only tasks now dispatch Ivan with
+  the task's own checks as FAILING_TESTS; Ivan may edit test files his
+  allowlist names; Tess receives <dir>/tests/HARNESS_CONTRACT.md whenever a
+  touched file's directory carries one.
 
 ### Fixed
 
