@@ -44,6 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **run-autopilot**: loop sessions launch `/autopilot:run-autopilot`, the
+  plugin-namespaced skill, instead of the bare `/run-autopilot` that stopped
+  resolving at the plugin extraction; the operator runbook lines say the same.
 - **work**: qwen dispatch reaches its helper again. `qwen-integration.md` named
   `~/.agents/skills/use-qwen/`, but `use-qwen` was a Claude-only skill under
   `~/.claude/skills/` that braid never composed into the shared union, so the

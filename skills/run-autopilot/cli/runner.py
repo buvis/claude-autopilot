@@ -4,7 +4,7 @@ Ports the wrapper's headless launch pipeline (PRD 00014 semantics):
 
     WARDEN_UNATTENDED=1 CLAUDE_UNATTENDED=1 CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 \
       claude -p --permission-mode auto --model M --effort E \
-      [--fallback-model F] --output-format stream-json --verbose "/run-autopilot" \
+      [--fallback-model F] --output-format stream-json --verbose "/autopilot:run-autopilot" \
       </dev/null 2>&1 | tee last-session.log | _autopilot_present
 
 One session = one -p turn = one process that exits at turn end; the
@@ -48,7 +48,7 @@ LAUNCH_ENV = {
     "CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS": "0",
 }
 
-DEFAULT_PROMPT = "/run-autopilot"
+DEFAULT_PROMPT = "/autopilot:run-autopilot"
 DEFAULT_GRACE_SECS = 60
 
 

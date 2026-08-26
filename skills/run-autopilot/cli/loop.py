@@ -929,14 +929,16 @@ class Loop:
             file=self.err,
         )
         print(
-            "  1. claude            # interactive session in this repo", file=self.err
-        )
-        print(
-            "  2. /run-autopilot    # resumes from state.json; blockers become questions",
+            "  1. claude                    # interactive session in this repo",
             file=self.err,
         )
         print(
-            "  3. autoclaude        # after the decision, to continue unattended",
+            "  2. /autopilot:run-autopilot  "
+            "# resumes from state.json; blockers become questions",
+            file=self.err,
+        )
+        print(
+            "  3. autoclaude                # after the decision, to continue unattended",
             file=self.err,
         )
         self._notify(
@@ -1101,7 +1103,8 @@ class Loop:
                     "\n\033[1;33m⏸ autoclaude: paused by operator ON "
                     "PURPOSE.\033[0m State intact.\n"
                     "Resume unattended: autoclaude\n"
-                    "To take over first: claude → /run-autopilot, then autoclaude",
+                    "To take over first: claude → "
+                    "/autopilot:run-autopilot, then autoclaude",
                     file=self.out,
                 )
                 self._notify(

@@ -150,7 +150,7 @@ Print a banner at each phase transition:
 
 ## Session Loop
 
-Unattended mode runs each session headless: the `autoclaude` wrapper (in `~/.config/bash/plugins/development.plugin.bash`) hands off to `autopilot loop` — the CLI loop driver, `cli/loop.py` (PRD 00106) — which launches `claude -p "/run-autopilot"`; the session runs exactly one turn, and the process exits at turn end. There is no signal file and no Stop-hook choreography — **`state.json` is the entire hand-off contract** (`references/design-rationale.md` § Headless sessions).
+Unattended mode runs each session headless: the `autoclaude` wrapper (in `~/.config/bash/plugins/development.plugin.bash`) hands off to `autopilot loop` — the CLI loop driver, `cli/loop.py` (PRD 00106) — which launches `claude -p "/autopilot:run-autopilot"`; the session runs exactly one turn, and the process exits at turn end. There is no signal file and no Stop-hook choreography — **`state.json` is the entire hand-off contract** (`references/design-rationale.md` § Headless sessions).
 
 **Hand-off = write state, print banner, end the turn.** After the process exits, the loop driver reads `state.json` and branches:
 
@@ -219,7 +219,7 @@ autoclaude                 # bash: subcommands + tracon front-end, then
   -> autopilot loop        # cli/loop.py, the driver:
        while True:
            pause marker?  -> consume it, notify, stop
-           spawn the routed `claude -p "/run-autopilot"` (raw events kept in last-session.log)
+           spawn the routed `claude -p "/autopilot:run-autopilot"` (raw events kept in last-session.log)
            read state.json, branch per the decision table above (0-5)
 ```
 

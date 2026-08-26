@@ -439,7 +439,7 @@ def test_paused_state_prints_detail_runbook_and_notifies(tmp_path):
     assert lp.run() == 1
     err = lp._test["err"].getvalue()
     assert "design gate needs the operator" in err
-    assert "/run-autopilot" in err
+    assert "/autopilot:run-autopilot" in err
     assert _notified(lp, "Paused: design gate needs the operator")
 
 

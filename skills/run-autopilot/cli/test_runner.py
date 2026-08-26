@@ -59,7 +59,7 @@ def test_build_argv_matches_the_wrapper_launch_line():
         "--output-format",
         "stream-json",
         "--verbose",
-        "/run-autopilot",
+        "/autopilot:run-autopilot",
     ]
 
 
