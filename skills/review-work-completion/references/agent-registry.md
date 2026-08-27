@@ -72,6 +72,8 @@ skill owns path resolution, the persona does not. Placeholders in use:
 | `{FINDING_TITLE}`, `{FINDING_SEVERITY}`, `{FINDING_FILE}`, `{FINDING_EVIDENCE}`, `{FINDING_PROOF}` | Fields of the finding Victor must refute. |
 | `{TASK_SUBJECT}`, `{TASK_DESCRIPTION}`, `{TASK_ACCEPTANCE_CRITERIA}` | The task under per-task review. |
 | `{SIMPLIFICATION_MANDATE}` | `work/references/simplification-mandate.md`, verbatim. |
+| `{VERIFICATION_RESULT}` | The recorded step-5.5 verification: the exact command(s), each exit code, and the runner's own summary line — or the attempt's `verification: skipped:<cause>` value when it could not run (Pat). |
+| `{CONTRACT_CORRECTION}` | Empty string on the initial per-task review dispatch; the fixed contract-correction text from `work/references/per-task-review.md` on the one retry after `parse_review.py` exits 1 (Pat). |
 | `{FAILING_TESTS}` | Failing test file paths and their content (Ivan). |
 | `{ARCHITECTURE_CONTEXT}` | AGENTS.md/interface/relevant-module context Ivan needs to implement against (Ivan). |
 | `{FILE_PATHS}` | The exact file paths Ivan may read and modify for this task (Ivan). |

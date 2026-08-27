@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `self_deslop: "skipped:test-only"` and `review: "skipped:test-only"`. A rework
   task keeps its reviewer, and any production path in the diff runs the full
   pipeline unchanged.
+- **work**: the per-task reviewer now judges the prompt and nothing else. It is
+  dispatched with no tools and reads the step-5.5 test result from the prompt
+  instead of re-running the suite, and its severities carry a fixed meaning:
+  MEDIUM is a correctness or security defect the diff's own tests miss, while
+  style, naming, duplication, structure, maintainability and every
+  behavior-preserving simplification are LOW. A LOW is carried to the PRD-level
+  review rather than costing an implementor retry.
 - **work**: a per-task review reply that breaks the reporting contract now costs
   one correction retry instead of passing as an empty review. A second bad reply
   records `review: "failed:invalid_output"` and the task proceeds; the PRD-level

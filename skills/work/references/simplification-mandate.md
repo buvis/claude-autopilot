@@ -15,9 +15,9 @@ self-contained.
 > remove dead code. Follow CLAUDE.md / AGENTS.md conventions and the
 > surrounding code's style.
 >
-> Classify a concrete behavior-preserving simplification as **Important**, not
-> Minor — Minor findings are not fixed in this loop. Give file:line, the
-> current shape, and the simpler replacement.
+> Report each concrete behavior-preserving simplification as a LOW finding,
+> with file:line, the current shape, and the simpler replacement. LOW findings
+> are carried to the PRD-level review, never retried here.
 >
 > Do not over-simplify: never propose a change that trades clarity for
 > brevity, drops error handling, collapses a deliberate boundary, or removes a
