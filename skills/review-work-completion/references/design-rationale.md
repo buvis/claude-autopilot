@@ -63,8 +63,8 @@ unique to it created no tasks, only its concurrence counted. PRD 00094 removed
 it. Advisory weight plus Classification's auto-fix rules (Medium at 1/3, Low at
 any consensus) meant it could not change a single routing decision, while its
 foreground preflight cost up to ~2 min per cycle and its endpoint was
-misconfigured besides. The local model keeps its `/work` implementor rung; the
-sonnet helper script remains for manual `/use-sonnet`. No autopilot review
+misconfigured besides. The local model keeps its `/autopilot:work` implementor rung; the
+sonnet helper script remains for manual `/autopilot:use-sonnet`. No autopilot review
 surface dispatches either.
 
 ## Dynamic Agent Count

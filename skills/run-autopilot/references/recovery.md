@@ -89,13 +89,13 @@ breaker could never reach 2.
 
 Reached from **Phase 0** when `state.cap_rotations` gained an entry but no `stall_reason` is set. A Work turn during `build` exceeded the context cap; `autopilot_context_cap_hook.py` appended `{task_id, cycle}` to `state.cap_rotations`, reset the in-flight task's status to `pending`, and set `next_phase: "build"` — a ROTATION, not a replan. The session then ends its turn and the loop wrapper relaunches on the non-empty `next_phase`. There is nothing to do here: the rotation is lossless and needs no handler.
 
-The fresh session resumes `build` by artifact: capsule fresh → skip catchup; `state.tasks` non-empty → skip planning; `/work` continues at the first non-completed task. Because the in-flight task was reset to `pending`, it is that first non-completed task: its uncommitted partial attempt is discarded and re-attempted. Only the in-flight task's status changes (`in_progress → pending`); other `state.tasks` and `phases_completed` are untouched; `replan_count` is unchanged; no `replan-context.md` is written.
+The fresh session resumes `build` by artifact: capsule fresh → skip catchup; `state.tasks` non-empty → skip planning; `/autopilot:work` continues at the first non-completed task. Because the in-flight task was reset to `pending`, it is that first non-completed task: its uncommitted partial attempt is discarded and re-attempted. Only the in-flight task's status changes (`in_progress → pending`); other `state.tasks` and `phases_completed` are untouched; `replan_count` is unchanged; no `replan-context.md` is written.
 
 **Livelock guard (in the cap hook).** If the last `cap_rotations` entry already names the in-flight task, a second consecutive fire on the same task means the task is genuinely oversized. The hook does NOT append another rotation; instead it records `stall_reason.stalled == "oversized_task"` and instructs the oversized-task stall — handled by the "plan-tasks stall: oversized task" procedure below (move the PRD to `dev/local/prds/hold/`, advance to the next PRD). One oversized task costs at most two rotations before a loud stall.
 
 ## Work-phase abort: replan procedure
 
-Reached from **Phase 0** when `state.stall_reason.stalled` is `"subagent_prompt_overrun"` (`/work`'s Subagent Dispatch Budget aborted a task whose assembled prompt exceeded 50K after one trim pass). This is the ONE surviving replan path — the context-cap response is rotation (see "Cap rotation" above), not replan. The previous session's work aborted from a hook. **The PRD is not broken — one of its tasks produced an oversized subagent prompt.** Instead of stalling the PRD, replan it with smaller tasks and resume.
+Reached from **Phase 0** when `state.stall_reason.stalled` is `"subagent_prompt_overrun"` (`/autopilot:work`'s Subagent Dispatch Budget aborted a task whose assembled prompt exceeded 50K after one trim pass). This is the ONE surviving replan path — the context-cap response is rotation (see "Cap rotation" above), not replan. The previous session's work aborted from a hook. **The PRD is not broken — one of its tasks produced an oversized subagent prompt.** Instead of stalling the PRD, replan it with smaller tasks and resume.
 
 1. The aborted PRD filename is `state.prd`. Identify the aborted task from `state.task_aborts[-1]` (most recent abort): `task_id`, `cause`.
 2. Read `state.replan_count` (default 0 if absent). Increment in memory.
@@ -106,7 +106,7 @@ Reached from **Phase 0** when `state.stall_reason.stalled` is `"subagent_prompt_
    ── aborted task: {task_id}, cause: {cause} ─────────────────────────
    ── task may need manual scope reduction in the PRD ─────────────────
    ```
-   Set `state.phase = "paused"` and `state.next_phase = "paused"`, and write `state.pause_reason = {"site": "replan_exhausted", "detail": "{replan_count} replans, task {task_id} still execution-overflowing"}`. Do NOT move the PRD anywhere. Do NOT clear state. STOP and wait for the user. The user will edit the PRD, delete tasks manually, or run `/run-autopilot status` to inspect. (Setting `phase`/`next_phase`/`pause_reason` here is what makes the Stop hook halt at this PAUSE — without them, `stall_reason.stalled == "subagent_prompt_overrun"` is still set, and Phase 0 would otherwise emit `task_aborted` and re-enter the replan loop.)
+   Set `state.phase = "paused"` and `state.next_phase = "paused"`, and write `state.pause_reason = {"site": "replan_exhausted", "detail": "{replan_count} replans, task {task_id} still execution-overflowing"}`. Do NOT move the PRD anywhere. Do NOT clear state. STOP and wait for the user. The user will edit the PRD, delete tasks manually, or run `/autopilot:run-autopilot status` to inspect. (Setting `phase`/`next_phase`/`pause_reason` here is what makes the Stop hook halt at this PAUSE — without them, `stall_reason.stalled == "subagent_prompt_overrun"` is still set, and Phase 0 would otherwise emit `task_aborted` and re-enter the replan loop.)
 4. Otherwise, prepare the replan:
    a. Build the completed-work summary AND capture the aborted-task title first (before any deletion). The data available is the `state.tasks[]` snapshot (`{id, name, status, model?, attempts?}` per state-schema row 127) and `state.task_aborts[-1]` (`{task_id, cause}`); `attempts[]` does not carry commit refs (see state-schema row 129 enum). So: for the **completed-work summary**, filter `state.tasks` to `status == "completed"` and capture each entry's `name`; if the user wants commit refs in the replan context, they come from `git log` on the active branch, not from `attempts[]`. For the **aborted task**, look up `state.task_aborts[-1].task_id` in `state.tasks[]` and capture its `name`. Description is intentionally not part of the snapshot; the task name + the PRD itself give plan-tasks enough context to scope the replan. Both captures must happen before step 4b clears `state.tasks`.
    b. Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json tasks-clear` (clears `state.tasks`, `tasks_total`, and `tasks_completed` in one write). The completed work is captured in step 4a's summary and the committed code itself; keeping completed entries in `state.tasks` alongside new plan-tasks output would collide on the fresh `task-add` ids (which start at 1) and corrupt the dashboard.
@@ -149,7 +149,7 @@ Reached from **Phase 0** when `state.stall_reason.stalled` is `"subagent_prompt_
    ── cleared {n} tasks ({m} completed kept in replan-context.md) ─────
    ── handing off to fresh session for planning ───────────────────────
    ```
-6. Hand off: end the turn. In loop mode the wrapper reads the non-empty `next_phase: "build"` and relaunches; otherwise the user re-invokes `/run-autopilot`. The next session re-enters `build`; with `state.tasks` cleared, Phase 2's tasks-exist skip does not fire, so it plans, detects `replan-context.md`, and passes it to `/plan-tasks`.
+6. Hand off: end the turn. In loop mode the wrapper reads the non-empty `next_phase: "build"` and relaunches; otherwise the user re-invokes `/autopilot:run-autopilot`. The next session re-enters `build`; with `state.tasks` cleared, Phase 2's tasks-exist skip does not fire, so it plans, detects `replan-context.md`, and passes it to `/autopilot:plan-tasks`.
 
 If `stall_reason.stalled` is anything else (or absent), return to Phase 0's Normal PRD selection.
 
@@ -159,10 +159,10 @@ If `stall_reason.stalled` is anything else (or absent), return to Phase 0's Norm
 
 ## plan-tasks stall: oversized task
 
-Reached from **Phase 2** when `/plan-tasks` exits non-zero and writes `state.stall_reason` because a task cannot be split below the per-task budget (150K standard, or the dynamic budget from `replan-context.md` in replan mode — see `plan-tasks/SKILL.md` "Stall behavior" and "Detect replan mode").
+Reached from **Phase 2** when `/autopilot:plan-tasks` exits non-zero and writes `state.stall_reason` because a task cannot be split below the per-task budget (150K standard, or the dynamic budget from `replan-context.md` in replan mode — see `plan-tasks/SKILL.md` "Stall behavior" and "Detect replan mode").
 
 1. Read `dev/local/autopilot/state.json`. If `stall_reason.stalled == "oversized_task"`, do NOT proceed to Phase 3.
-2. **Delete any tasks `/plan-tasks` already created.** `/plan-tasks` calls `task-add` before the per-task budget check, so tasks may exist in `state.tasks` by the time the stall fires. Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json tasks-clear`. Same pattern as Phase 9 step 5 — prevents Phase 2's `state.tasks`-skip logic from skipping planning on the next PRD.
+2. **Delete any tasks `/autopilot:plan-tasks` already created.** `/autopilot:plan-tasks` calls `task-add` before the per-task budget check, so tasks may exist in `state.tasks` by the time the stall fires. Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json tasks-clear`. Same pattern as Phase 9 step 5 — prevents Phase 2's `state.tasks`-skip logic from skipping planning on the next PRD.
 3. Run `autopilot stall --prd <filename> --site oversized_task --detail <one-line detail>` (one call — it stamps the intent, moves+verifies, appends the deferred record, and applies the per-PRD reset in its single commit). Delete `dev/local/autopilot/replan-context.md` if it exists — otherwise the next PRD's planning would falsely enter replan mode (the CLI does not own that file).
 
    | Exit code | Meaning | Action |
@@ -262,7 +262,7 @@ Reached from **Phase 0** when `state.phase == "paused"` AND `state.cap_pause_rea
    c. If the user selected a raised cap, write the new integer to `state.rework_cap`. Otherwise leave `state.rework_cap` unchanged.
    d. **Do NOT move the PRD.** It is in `dev/local/prds/wip/` and stays there.
    e. **Do NOT replan tasks.** The existing `state.tasks` is preserved; the resume picks up at the next review cycle.
-   f. **Hand off to a fresh session for Phase 4.** End the turn — the same end-turn hand-off as Phase 3. In loop mode the wrapper relaunches on the non-empty `next_phase: "review"`; interactively the user re-invokes `/run-autopilot` manually.
+   f. **Hand off to a fresh session for Phase 4.** End the turn — the same end-turn hand-off as Phase 3. In loop mode the wrapper relaunches on the non-empty `next_phase: "review"`; interactively the user re-invokes `/autopilot:run-autopilot` manually.
    g. Print:
       ```
       ── AUTOPILOT ── PRD: {prd-name} ── RESUMING from cap pause ──────
@@ -276,11 +276,11 @@ Reached from **Phase 0** when `state.phase == "paused"` AND `state.cap_pause_rea
       ```
       ── AUTOPILOT ── PRD: {prd-name} ── ABANDONED at cap pause ──────
       ── PRD left in dev/local/prds/wip/ for manual handling ─────────
-      ── re-invoke /run-autopilot to revisit, or move/delete the PRD manually
+      ── re-invoke /autopilot:run-autopilot to revisit, or move/delete the PRD manually
       ```
    c. No state advance happens — the wrapper stops on the paused state, so there is no automatic re-entry.
    d. STOP.
-   e. **Re-entry behavior.** Because the abandon branch leaves `cap_pause_reason` set, a future manual `/run-autopilot` invocation will re-trigger this handler with the same findings — it does NOT loop autonomously (no signal is written, so the shell wrapper exited; only an explicit user re-invocation re-enters). To exit the cap-pause loop permanently the user must EITHER pick "resume" (clears `cap_pause_reason` per step 3) OR manually edit `state.json` / move the PRD out of `dev/local/prds/wip/`.
+   e. **Re-entry behavior.** Because the abandon branch leaves `cap_pause_reason` set, a future manual `/autopilot:run-autopilot` invocation will re-trigger this handler with the same findings — it does NOT loop autonomously (no signal is written, so the shell wrapper exited; only an explicit user re-invocation re-enters). To exit the cap-pause loop permanently the user must EITHER pick "resume" (clears `cap_pause_reason` per step 3) OR manually edit `state.json` / move the PRD out of `dev/local/prds/wip/`.
 
 5. The cap-paused PRD is NEVER re-selected as new work by Phase 0's Normal PRD selection — the handler check fires BEFORE Normal PRD selection (see `references/phase-build.md` Phase 0 "Handle Work-phase abort" sub-section) and short-circuits the flow.
 

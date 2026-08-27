@@ -9,7 +9,7 @@ argument-hint: "<prd-path>"
 Turn a PRD (the WHAT) into a reviewed implementation design doc (the HOW): module
 placement, exact interfaces, data flow, reuse of existing code, and alternatives
 weighed - then critique the draft with an autonomous adversarial reviewer before
-handing it to `/plan-tasks`.
+handing it to `/autopilot:plan-tasks`.
 
 This skill runs **unattended** inside the autopilot build gate. It never asks the
 user anything. It is **state-agnostic**: it prints the design doc path on success
@@ -86,7 +86,7 @@ sections, these headings, in this order**:
    files, with paths.
 3. `## Interfaces & contracts` - the exact signatures, types, enum values, field
    names, file/hook kinds, and thresholds. Write these **verbatim-ready**:
-   `/plan-tasks` copies them byte-for-byte into task `Contract` sections, so name
+   `/autopilot:plan-tasks` copies them byte-for-byte into task `Contract` sections, so name
    every symbol exactly.
 4. `## Data flow` - how data moves through the changed components.
 5. `## Reuse inventory` - from step 2.
@@ -229,5 +229,5 @@ per-severity finding counts.
 - The skill writes only the design doc (and creates `dev/local/designs/`). It
   never edits the PRD, the task list, or autopilot state.
 - Downstream blind review and doubt review stay PRD-only by design; this design
-  doc feeds `/plan-tasks` and the work-completion review, not the spec-only
+  doc feeds `/autopilot:plan-tasks` and the work-completion review, not the spec-only
   surfaces.

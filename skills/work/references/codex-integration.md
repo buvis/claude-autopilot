@@ -4,9 +4,9 @@ As of PRD 00077, Codex is both an implementor rung and a reviewer in this skill.
 
 ## Where Codex is invoked today
 
-Codex IS currently invoked as a reviewer from `/run-autopilot`'s review phase — specifically by `skills/review-work-completion`, which dispatches the "Bob" reviewer (doubt lens) as a background Bash call to `${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex-run.sh` (see `skills/review-work-completion/references/agent-invocation.md`). That is the indirect path; the step-3 implementor rung below is the direct one. The batched de-slop pass Codex used to execute was removed in the 2026-06-09 lifecycle refactor; the per-task de-slop at step 5.6 is a Claude dispatch, not Codex.
+Codex IS currently invoked as a reviewer from `/autopilot:run-autopilot`'s review phase — specifically by `skills/review-work-completion`, which dispatches the "Bob" reviewer (doubt lens) as a background Bash call to `${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex-run.sh` (see `skills/review-work-completion/references/agent-invocation.md`). That is the indirect path; the step-3 implementor rung below is the direct one. The batched de-slop pass Codex used to execute was removed in the 2026-06-09 lifecycle refactor; the per-task de-slop at step 5.6 is a Claude dispatch, not Codex.
 
-`/work` now dispatches Codex directly as an implementor (step 3 routing). The per-task code review at step 5.7 remains a Claude/Sonnet lane, not Codex.
+`/autopilot:work` now dispatches Codex directly as an implementor (step 3 routing). The per-task code review at step 5.7 remains a Claude/Sonnet lane, not Codex.
 
 ## Invocation
 

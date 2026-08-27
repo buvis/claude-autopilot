@@ -49,7 +49,7 @@ Before anything else, read `dev/local/autopilot/state.json` and check `stall_rea
 - `stall_reason.stalled` is `"subagent_prompt_overrun"` — the previous session's work aborted from a hook. The PRD is not broken; one task was scoped too big. **Follow `references/recovery.md` → "Work-phase abort: replan procedure"**, then STOP (the next session re-enters `build` at planning). This is the one surviving replan path.
 - `stall_reason.stalled` is `"escalation_exhausted"` — Phase 6 owns this inline; seeing it at Phase 0 means a crash landed mid-stall-move. **Follow `references/recovery.md` → "Crash recovery: escalation_exhausted seen at Phase 0"**, then fall through to Normal PRD selection.
 - `state.phase == "paused"` AND `state.cap_pause_reason` is set (the previous session's review-gate cap-pause behavior fired). The capped PRD is still in `dev/local/prds/wip/`; do NOT treat it as fresh PRD selection. **Follow `references/recovery.md` → "Cap-Pause Resume Handler"** — it presents the recorded unresolved findings and cycle count via the `AskUserQuestion` tool and branches on resume/abandon.
-- `state.cap_rotations` has a new entry but none of the above holds — the previous session hit the Work-turn context cap and the cap hook rotated to a fresh session. The cap hook recorded the rotation (appended `cap_rotations`, reset the in-flight task to `pending`, set `next_phase: "build"`); that session then ended its turn and the loop wrapper relaunched on the non-empty `next_phase`. NOT a replan. A `cap_rotations` entry is **informational only** and needs no special handling here: fall through to Normal PRD selection, which resumes `build` by artifact (capsule fresh → skip catchup; tasks exist → skip planning; `/work` continues at the first non-completed task — the rotated task, now reset to `pending`).
+- `state.cap_rotations` has a new entry but none of the above holds — the previous session hit the Work-turn context cap and the cap hook rotated to a fresh session. The cap hook recorded the rotation (appended `cap_rotations`, reset the in-flight task to `pending`, set `next_phase: "build"`); that session then ended its turn and the loop wrapper relaunched on the non-empty `next_phase`. NOT a replan. A `cap_rotations` entry is **informational only** and needs no special handling here: fall through to Normal PRD selection, which resumes `build` by artifact (capsule fresh → skip catchup; tasks exist → skip planning; `/autopilot:work` continues at the first non-completed task — the rotated task, now reset to `pending`).
 - None of the above (neither a recognised `stall_reason` value nor the cap-pause condition `phase == "paused"` + `cap_pause_reason`) — continue with Normal PRD selection below.
 
 Before acting on whichever branch matched, run `autopilot resume-target` (one Bash call) and compare its line to the handler you picked. It is the executable form of this same contract (`cli/resume.py`), so a disagreement means the prose and the encoding have drifted — follow the encoding and say so. It also runs the schema-version preflight, refusing with exit 6 on a future-schema `state.json` rather than resuming it blindly. Exit 2 means there is no state file yet, which is a normal fresh start, not an error.
@@ -108,7 +108,7 @@ warns exactly once. It never crashes Phase 0 on a frontmatter problem.
 
 Frontmatter is the source of truth; once Phase 0 has applied it, do not
 re-parse it after Phase 0. (Exception by design: `default_model` belongs to
-`/plan-tasks` and is re-read from the PRD at Phase 6 rework dispatch — Phase 0
+`/autopilot:plan-tasks` and is re-read from the PRD at Phase 6 rework dispatch — Phase 0
 never touches it, and `frontmatter.py` deliberately does not recognize it.)
 
 `eligibility:` is likewise not recognized here, and deliberately so: it is not
@@ -129,7 +129,7 @@ Semantics the table cannot carry:
 
 **Skip if:** the batch cache is fresh (the batch-cache freshness check below holds — the capsule is already current), OR `state.catchup_mode == "skip"`. The skip is by ARTIFACT (capsule freshness), not `phases_completed` membership.
 
-When skipped via `catchup_mode == "skip"`: do not invoke `/catchup`. Set `state.catchup_mode = "skipped"` (so subsequent re-entries also skip), keep `phase: "build"` and `next_phase: "build"`, and proceed to Phase 1.5 (Design).
+When skipped via `catchup_mode == "skip"`: do not invoke `/git-ferry:catchup`. Set `state.catchup_mode = "skipped"` (so subsequent re-entries also skip), keep `phase: "build"` and `next_phase: "build"`, and proceed to Phase 1.5 (Design).
 
 Otherwise, decide between **full catchup** and **delta refresh** using the batch cache.
 
@@ -143,9 +143,9 @@ The capsule (`dev/local/meta/project-capsule.md`) is the persisted output of cat
 2. `state.batch.catchup_completed_at` is present AND less than 4 hours old.
 3. `state.batch.catchup_head_sha` matches the current `git rev-parse HEAD` on the active branch.
 
-If any condition fails → **full catchup**: invoke `/catchup`. After completion, write `state.batch.catchup_completed_at = <now>` and `state.batch.catchup_head_sha = <current HEAD>`. These fields persist across PRDs in the batch (Phase 9 step 10 preserves them).
+If any condition fails → **full catchup**: invoke `/git-ferry:catchup`. After completion, write `state.batch.catchup_completed_at = <now>` and `state.batch.catchup_head_sha = <current HEAD>`. These fields persist across PRDs in the batch (Phase 9 step 10 preserves them).
 
-If all conditions hold → **delta refresh** (no `/catchup` invocation):
+If all conditions hold → **delta refresh** (no `/git-ferry:catchup` invocation):
 
 - Re-read all PRDs in `dev/local/prds/wip/` (the active set has changed since last catchup; new PRDs may have entered, old ones moved to `done/`).
 - Update the Active Work section of `dev/local/meta/project-capsule.md` with the current PRD list (use the same format Phase 9 step 8 uses). Leave Key Invariants, Architecture Decisions, Component Boundaries, GitHub State, Project Health, and Project Memories untouched — those reflect batch-stable knowledge.
@@ -159,13 +159,13 @@ Between catchup (Phase 1) and planning (Phase 2), in the SAME build session. Des
 
 Let `<prd-stem>` = `state.prd` with its trailing `.md` removed. The design doc artifact path is `dev/local/designs/<prd-stem>-design.md`.
 
-**Skip if `state.design_mode == "skip"`:** do not invoke `/design-solution`. Set `state.design_mode = "skipped"`, leave `state.design_doc` unset, and proceed to Phase 2. (This skip also bypasses the empty-review-log gate — no doc exists by design.)
+**Skip if `state.design_mode == "skip"`:** do not invoke `/autopilot:design-solution`. Set `state.design_mode = "skipped"`, leave `state.design_doc` unset, and proceed to Phase 2. (This skip also bypasses the empty-review-log gate — no doc exists by design.)
 
-**Skip if the artifact already exists:** when `dev/local/designs/<prd-stem>-design.md` is already on disk (a manual `/design-solution` run earlier, or a work-abort replan re-entering the build gate). Log a one-line reuse note (`── AUTOPILOT ── design: reusing existing <prd-stem>-design.md ──`), set `state.design_doc` to that path, then **run the empty-review-log gate** (core `SKILL.md` § "Design-gate invariant") **on the artifact-reuse path** — an existing doc from a manual or aborted run is exactly where a skipped review hides — and proceed to Phase 2 only if the gate passes; do NOT re-invoke the skill. This artifact-based skip is what lets work-abort replans reuse the design with no extra logic.
+**Skip if the artifact already exists:** when `dev/local/designs/<prd-stem>-design.md` is already on disk (a manual `/autopilot:design-solution` run earlier, or a work-abort replan re-entering the build gate). Log a one-line reuse note (`── AUTOPILOT ── design: reusing existing <prd-stem>-design.md ──`), set `state.design_doc` to that path, then **run the empty-review-log gate** (core `SKILL.md` § "Design-gate invariant") **on the artifact-reuse path** — an existing doc from a manual or aborted run is exactly where a skipped review hides — and proceed to Phase 2 only if the gate passes; do NOT re-invoke the skill. This artifact-based skip is what lets work-abort replans reuse the design with no extra logic.
 
 **Otherwise, run design:**
 
-1. Invoke `/design-solution` with the wip PRD path (`dev/local/prds/wip/<state.prd>`).
+1. Invoke `/autopilot:design-solution` with the wip PRD path (`dev/local/prds/wip/<state.prd>`).
 2. **On success (exit 0):** set `state.design_doc` to the artifact path it printed (`dev/local/designs/<prd-stem>-design.md`). Log the design decision (chosen approach + any unresolved non-blockers from the doc's `## Review log`) to `state.autonomous_decisions` under the existing audit label `autonomous` — do NOT add a `design` audit label (the audit-log label set is closed). Then **run the empty-review-log gate** (core `SKILL.md` § "Design-gate invariant") **on the success path** before proceeding to Phase 2.
 3. **On failure (non-zero exit — unresolved cardinal sins/blockers after 3 reviewer dispatches):** treat as a sub-skill failure. PAUSE per the Error Handling table's "Sub-skill invocation fails outright" row — set `state.phase = "paused"` and `state.next_phase = "paused"`, write `state.pause_reason = {"site": "sub_skill_fail", "detail": "design-solution failed with open findings"}`, report the open findings, and do NOT proceed to planning.
 
@@ -182,41 +182,41 @@ After design completes (run, skipped, or reused), stay on `phase: "build"` and `
 
 ### Replan mode
 
-Before invoking `/plan-tasks`, check for `dev/local/autopilot/replan-context.md`. If present, this is a replan triggered by a Phase 0 abort handler. Pass the file to `/plan-tasks` (see `plan-tasks/SKILL.md` "Replan mode") so it scopes to remaining work and uses the tighter ≤75K per-task budget. `/plan-tasks` deletes the file after successful planning.
+Before invoking `/autopilot:plan-tasks`, check for `dev/local/autopilot/replan-context.md`. If present, this is a replan triggered by a Phase 0 abort handler. Pass the file to `/autopilot:plan-tasks` (see `plan-tasks/SKILL.md` "Replan mode") so it scopes to remaining work and uses the tighter ≤75K per-task budget. `/autopilot:plan-tasks` deletes the file after successful planning.
 
-If `replan-context.md` is absent, run `/plan-tasks` normally — first-pass planning for a fresh PRD.
+If `replan-context.md` is absent, run `/autopilot:plan-tasks` normally — first-pass planning for a fresh PRD.
 
-Invoke `/plan-tasks` with the selected PRD.
+Invoke `/autopilot:plan-tasks` with the selected PRD.
 
-**PAUSE site - requirements clarification.** When `/plan-tasks` pauses autopilot with a requirements-ambiguity or clarification question:
+**PAUSE site - requirements clarification.** When `/autopilot:plan-tasks` pauses autopilot with a requirements-ambiguity or clarification question:
 
 - **Interactive:** present it to the user and wait for the answer. Once answered, record the clarification and its resolution in `state.autonomous_decisions` (label `autonomous`) so the Phase 9 audit render captures it. Do not write `audit.md` here.
-- **Loop mode (`$_AUTOPILOT_LOOP` set, PRD 00017):** never end the batch on an ambiguity. Resolve it by the **simplest safe assumption** (the user's own global rule), record it in `state.autonomous_decisions` as `{"type": "assumed-ambiguity", "question": ..., "assumption": ...}`, AND run `autopilot defer --prd <filename> --batch <batch_id> --json '{"type": "assumed-ambiguity", "question": ..., "assumption": ...}'` so batch-end review shows it under "assumptions made". Exception: when the PRD frontmatter set `pause_on_ambiguity: true` (parsed at Phase 0 step 4), do not guess — stall the PRD instead (`references/recovery.md` → "Loop-mode stall procedure", `site: "clarification"`) and continue the batch. A premise failure is never resolved by assumption either — it always stalls (see `/work`'s premise gate when present). Do not confuse the two gates: a task-level `Premise:` line is verified by `/work` before dispatching an implementor and its failure **stalls** the PRD; a PRD-level `eligibility:` line is verified by `select` at pick time (Phase 0 step 2) and its failure **skips** the PRD, leaving it in `backlog/` untouched.
+- **Loop mode (`$_AUTOPILOT_LOOP` set, PRD 00017):** never end the batch on an ambiguity. Resolve it by the **simplest safe assumption** (the user's own global rule), record it in `state.autonomous_decisions` as `{"type": "assumed-ambiguity", "question": ..., "assumption": ...}`, AND run `autopilot defer --prd <filename> --batch <batch_id> --json '{"type": "assumed-ambiguity", "question": ..., "assumption": ...}'` so batch-end review shows it under "assumptions made". Exception: when the PRD frontmatter set `pause_on_ambiguity: true` (parsed at Phase 0 step 4), do not guess — stall the PRD instead (`references/recovery.md` → "Loop-mode stall procedure", `site: "clarification"`) and continue the batch. A premise failure is never resolved by assumption either — it always stalls (see `/autopilot:work`'s premise gate when present). Do not confuse the two gates: a task-level `Premise:` line is verified by `/autopilot:work` before dispatching an implementor and its failure **stalls** the PRD; a PRD-level `eligibility:` line is verified by `select` at pick time (Phase 0 step 2) and its failure **skips** the PRD, leaving it in `backlog/` untouched.
 
 ### Handle plan-tasks stall (oversized task)
 
-`/plan-tasks` exits non-zero with `state.stall_reason.stalled == "oversized_task"` when a task cannot be split below the per-task budget. When this happens, do NOT proceed to Phase 3 — **follow `references/recovery.md` → "plan-tasks stall: oversized task"** (deletes orphan tasks, moves the PRD to `dev/local/prds/hold/`, advances to the next PRD).
+`/autopilot:plan-tasks` exits non-zero with `state.stall_reason.stalled == "oversized_task"` when a task cannot be split below the per-task budget. When this happens, do NOT proceed to Phase 3 — **follow `references/recovery.md` → "plan-tasks stall: oversized task"** (deletes orphan tasks, moves the PRD to `dev/local/prds/hold/`, advances to the next PRD).
 
-**Other outcomes from `/plan-tasks`:**
+**Other outcomes from `/autopilot:plan-tasks`:**
 
 - **Exits zero**: no stall. Continue normally to the post-completion state update below.
 - **Exits non-zero without `stall_reason`** (or with a `stall_reason.stalled` value other than `"oversized_task"`): treat as a sub-skill failure. PAUSE and report the error per the "Sub-skill invocation fails" entry in the Error Handling table — also write `state.pause_reason = {"site": "plan_tasks_fail", "detail": "<one-line error>"}` alongside `phase="paused"`. Do NOT proceed to Phase 3 or move the PRD.
 
-After completion, `state.tasks` is already current — every `task-add` call `/plan-tasks` made wrote it directly. Stay on `phase: "build"` and `next_phase: "build"`. Do NOT add anything to `phases_completed`. Flow continues DIRECTLY into Phase 3 (work) in this same session — there is no planning→work handoff.
+After completion, `state.tasks` is already current — every `task-add` call `/autopilot:plan-tasks` made wrote it directly. Stay on `phase: "build"` and `next_phase: "build"`. Do NOT add anything to `phases_completed`. Flow continues DIRECTLY into Phase 3 (work) in this same session — there is no planning→work handoff.
 
 ## Phase 3: Work
 
 **Skip if:** All tasks completed, none pending (read directly from `state.tasks`). This skip is by ARTIFACT (all tasks done), not `phases_completed` membership. When all tasks are done, the build is complete → hand off to the review session (see below).
 
-`state.tasks` is already current — every producer (`task-add`/`task-start`/`task-done`/`task-set-meta`) writes it directly via `statectl`, so there is nothing to query or snapshot before invoking `/work`.
+`state.tasks` is already current — every producer (`task-add`/`task-start`/`task-done`/`task-set-meta`) writes it directly via `statectl`, so there is nothing to query or snapshot before invoking `/autopilot:work`.
 
-**Capture `work_start_sha`** per the invariant in core `SKILL.md` § "Phase 3 invariants": once per PRD, before `/work` runs, only when unset — never re-captured on a cap-rotation or resume re-entry.
+**Capture `work_start_sha`** per the invariant in core `SKILL.md` § "Phase 3 invariants": once per PRD, before `/autopilot:work` runs, only when unset — never re-captured on a cap-rotation or resume re-entry.
 
 **Capture `repo_root` in the same step.** Run `git rev-parse --show-toplevel` in the work repo and write the absolute path to `state.repo_root`. Usually this equals the project root, but when the work repo is nested under a non-git project root (e.g. `${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot` under `~/.claude`), the review session needs it to run `git` (diff gathering, `head_sha` capture) in the right repo. **Bare-repo-backed project root** (the project root has no `.git` of its own because it is tracked by a bare repo with a separate work-tree, e.g. `~/.claude` under the `~/.buvis` bare repo with work-tree `$HOME`): a plain `git rev-parse --show-toplevel` from the project root FAILS, so do NOT default `repo_root` to the project dir (that silently mis-records it every PRD). Record the bare repo's work-tree root instead — `git --git-dir=<bare-git-dir> --work-tree=<work-tree> rev-parse --show-toplevel` (for `~/.buvis`-backed `$HOME` this resolves to `/Users/<you>`).
 
-Invoke `/work` skill. It runs until all tasks complete.
+Invoke `/autopilot:work` skill. It runs until all tasks complete.
 
-While `/work` runs (Phases 3 and 6), it uses these superpowers when available (all conditional — autopilot works without them, quality improves with them):
+While `/autopilot:work` runs (Phases 3 and 6), it uses these superpowers when available (all conditional — autopilot works without them, quality improves with them):
 
 | Superpower | Step | Purpose |
 |-----------|------|---------|
@@ -238,4 +238,4 @@ After the build completes (all tasks done), do NOT continue into the review phas
 ── AUTOPILOT ── handing off to fresh session for reviews ───────────
 ```
 
-**STOP.** Do NOT invoke `/review-work-completion` (or any review lens) in this session (the handoff procedure's step 3 discipline applies).
+**STOP.** Do NOT invoke `/autopilot:review-work-completion` (or any review lens) in this session (the handoff procedure's step 3 discipline applies).

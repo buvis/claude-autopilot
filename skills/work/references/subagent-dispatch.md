@@ -1,6 +1,6 @@
 # Subagent Dispatch
 
-How to safely make an Agent call from `/work`. Two rules apply to **every**
+How to safely make an Agent call from `/autopilot:work`. Two rules apply to **every**
 Agent dispatch (Tess, Ivan, Devon, or the code reviewer): the Dispatch Budget and
 the Watchdog. Read this file before your first Agent dispatch in a session.
 Bare step numbers below (`step 4`, `step 4.2`, `step 2`, `step 6`) refer to
@@ -20,7 +20,7 @@ PostToolUse hooks do not fire inside subagents (see `SKILL.md` "CRITICAL: One Ta
    - Trim by removing the lowest-priority context first (large example files, full architecture docs). Re-measure.
    - If still oversized after one trim pass, abort the task. Wire the abort
      through the same handoff the runtime context-cap hook uses, so
-     `/run-autopilot` Phase 0 of the next session replans the PRD in place
+     `/autopilot:run-autopilot` Phase 0 of the next session replans the PRD in place
      (PRD stays in `wip/`; see Phase 0 step 1's replan procedure — parallel
      to `context_overrun`):
      1. Append to `state.task_aborts[]`:
@@ -35,12 +35,12 @@ PostToolUse hooks do not fire inside subagents (see `SKILL.md` "CRITICAL: One Ta
         the relaunch is a replan (planning) session and `autoclaude` picks
         the launch model from `next_phase`; leaving it at `"work"` would
         launch the replan on the work-tier model.
-     3. **Only if `$_AUTOPILOT_LOOP` is set** (per `/run-autopilot` "Loop
+     3. **Only if `$_AUTOPILOT_LOOP` is set** (per `/autopilot:run-autopilot` "Loop
         Detection" — manual sessions have no shell wrapper to restart on
         SIGINT), write `task_aborted` to the autopilot signal file. Use
         walk-up discipline to find the autopilot dir from cwd, then write
         to `<autopilot_dir>/signal`. Skip the signal write when
-        `$_AUTOPILOT_LOOP` is unset; the next manual `/run-autopilot`
+        `$_AUTOPILOT_LOOP` is unset; the next manual `/autopilot:run-autopilot`
         invocation will resume via `state.stall_reason`.
      4. Append an attempt-log entry per `references/attempt-logging.md`:
         `outcome: "aborted"`, `cause: "subagent_prompt_overrun"`,
@@ -53,7 +53,7 @@ PostToolUse hooks do not fire inside subagents (see `SKILL.md` "CRITICAL: One Ta
    ```
    `agents/ivan.md` and `references/tess-prompt.md` both carry it verbatim, and a render therefore cannot omit it. Trimming at step 3 removes context, never this line. If you add a new persona to the dispatch set, put the line in the persona file rather than re-introducing a prepend step here — a prepend that some call sites remember and others forget is exactly how Tess lost this guard once.
 
-**Rationale:** soft enforcement — the subagent honors the instruction — but `/plan-tasks`'s 150K per-task budget bounds how much context `/work` can plausibly hand off anyway. Combined, the 50K dispatch cap, the 100K subagent-internal cap, and the 150K per-task cap keep subagent contexts well under any work-tier model's window (200K for the base tiers; the `claude-fable-5[1m]` default carries 1M).
+**Rationale:** soft enforcement — the subagent honors the instruction — but `/autopilot:plan-tasks`'s 150K per-task budget bounds how much context `/autopilot:work` can plausibly hand off anyway. Combined, the 50K dispatch cap, the 100K subagent-internal cap, and the 150K per-task cap keep subagent contexts well under any work-tier model's window (200K for the base tiers; the `claude-fable-5[1m]` default carries 1M).
 
 ## Subagent Watchdog
 

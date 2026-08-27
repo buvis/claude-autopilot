@@ -44,7 +44,7 @@ gate fail #2 at current rung → DIAGNOSE:
 REPAIR (spec_gap, repair not yet used this task, current rung is
   haiku, sonnet, or opus, never fable): fill the identified gaps (missing Contract, missing
   Acceptance criteria, dangling file references) from the PRD + design doc, rewrite the task
-  description via `task-set-body <task-id> <body-file>` — the canonical store /work reads
+  description via `task-set-body <task-id> <body-file>` — the canonical store /autopilot:work reads
   directly from `state.tasks[i].description` — and re-dispatch Ivan at the SAME tier ONCE.
   Stamp `repair_used:true` on that rung's attempt entry. A gate failure after the repair takes
   the solid_spec path below — repair is exhausted for this task.
@@ -73,7 +73,7 @@ ESCALATE (solid_spec, OR spec_gap with repair unavailable/already used, OR any q
   2. Stamp the LOWER rung's entry: `outcome:"escalated"`, `diagnosis:<verdict>` (+
      `qwen_gate_failed:true` if that rung's implementor was qwen, + `repair_used:true` if a repair
      ran at that rung). **If the task's `state.tasks[i]` entry carries a review-flag escalation
-     (`escalation_reason:"review_flag"` + `escalated_from`, set by /run-autopilot Phase 6 when this
+     (`escalation_reason:"review_flag"` + `escalated_from`, set by /autopilot:run-autopilot Phase 6 when this
      rung IS the review-flagged rework rung), copy both onto THIS lower-rung entry now** — Phase 6
      escalated INTO this rung, so the `review_flag` reason belongs here; capturing it before step 3
      clears it is what keeps the review-flag source recorded when a review-flagged task ALSO escalates

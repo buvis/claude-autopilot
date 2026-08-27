@@ -10,7 +10,7 @@ When `$_AUTOPILOT_LOOP` is set (the unattended `autoclaude` loop), NEVER block t
 2. **Stall the PRD, continue the batch** — for cap-out CRITICALs, exhausted retries (sub-skill/reviewer re-invoked once and still failing, replan cap exhausted), and forbidden-assumption ambiguities: follow `recovery.md` → "Loop-mode stall procedure" (move to `hold/`; `autopilot stall` records `{"type": "stall", "site", "detail", "prd"}` in the deferred JSON, advance to the next PRD).
 3. **PAUSE — only two sanctioned sites**: a security-critical finding (exposed secret / vulnerability being shipped) and detected data-loss risk (plus mv-retry exhaustion, which is infrastructure refusing to operate). Set `state.phase = "paused"` + `state.pause_reason`, print the PAUSE banner, and end the turn; the wrapper notifies and halts. PAUSE is a state mutation + end-of-turn, never a mid-session prompt.
 
-`AskUserQuestion` is allowed ONLY in handlers the user reaches by re-running `/run-autopilot` after a halt (e.g. the Cap-Pause Resume Handler, an opt-in `design_gate: user`) — i.e. when a human is demonstrably present. It is never allowed on the unattended path.
+`AskUserQuestion` is allowed ONLY in handlers the user reaches by re-running `/autopilot:run-autopilot` after a halt (e.g. the Cap-Pause Resume Handler, an opt-in `design_gate: user`) — i.e. when a human is demonstrably present. It is never allowed on the unattended path.
 
 **Two cases that previously asked and must not:**
 

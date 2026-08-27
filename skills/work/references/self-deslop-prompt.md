@@ -1,10 +1,10 @@
 # Self-Deslop Prompt Template
 
-This is the prompt template dispatched by `/work` step 5.6 — the per-task
+This is the prompt template dispatched by `/autopilot:work` step 5.6 — the per-task
 self-deslop pass that runs between test-pass verification (step 5.5) and the
 per-task code review (step 5.7).
 
-`/work` step 5.6 substitutes the placeholders below before dispatching the
+`/autopilot:work` step 5.6 substitutes the placeholders below before dispatching the
 subagent. **`{{slop_catalog}}` is filled in at dispatch time** by reading the
 current `${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/prompts/de-sloppify.md`, extracting the
 `## What to remove` section verbatim, and inlining it here. The subagent
@@ -131,7 +131,7 @@ In every non-committed outcome, the implementor's original commit stands and ste
 
 ## Dispatch contract reminders
 
-The `/work` step 5.6 caller, NOT the subagent, is responsible for:
+The `/autopilot:work` step 5.6 caller, NOT the subagent, is responsible for:
 
 - The 30-net-lines / 2-files skip rule. The subagent only sees prompts for
   non-trivial diffs.

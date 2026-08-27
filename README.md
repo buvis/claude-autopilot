@@ -88,7 +88,7 @@ and naming the resolved root. Scripts locate their own siblings from `$0` or
 
 - **The `autoclaude` wrapper.** The shell front-end that relaunches headless
   sessions across a batch lives in the author's dotfiles. A plugin cannot install
-  shell functions. Drive `/run-autopilot` from your own automation instead.
+  shell functions. Drive `/autopilot:run-autopilot` from your own automation instead.
 - **Run state.** Everything under `dev/local/**` — `state.json`, reports,
   transcripts — belongs to the repo being worked on, not to this pack.
 - **`notify.py`.** Desktop notification glue, host-specific, stays personal.

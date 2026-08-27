@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **docs**: references, skill bodies and the tracon dashboard now name the
+  namespaced skills (`/autopilot:run-autopilot`, `/autopilot:work`, …), so an
+  operator or session that types what a runbook shows gets a command that
+  resolves.
+
 ## [0.2.0] - 2026-08-27
 
 ### Added

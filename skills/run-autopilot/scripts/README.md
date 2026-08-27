@@ -69,7 +69,7 @@ Loop (act on the attached or highlighted loop):
 - `◐ quiet` - session running but output stalled
 - `⏳ limit-wait` - usage limit hit; wrapper sleeps until the reset
 - `⏸ paused` - deliberate stop. After `p` (or `touch pause-requested`),
-  `autoclaude` resumes it; after a blocker, `claude` -> `/run-autopilot`
+  `autoclaude` resumes it; after a blocker, `claude` -> `/autopilot:run-autopilot`
   answers it first
 - `⚠ orphaned` - work queued, no autoclaude alive; run `autoclaude`
 - `⚠ attention` - needs_attention set (usually a cap-pause)

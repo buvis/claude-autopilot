@@ -62,7 +62,7 @@ Check these exist:
 
 (Alice is a native Claude subagent - no CLI prerequisite.)
 
-**Ambiguous-target guard (standalone runs).** This skill reviews **one** PRD's work per run. When NO autopilot state names the PRD — `dev/local/autopilot/state.json` is absent or carries no `prd` field (a manual/standalone `/review-work-completion`) — AND `dev/local/prds/wip/` holds **2+** PRDs, the target is ambiguous. Do NOT merge them into one review:
+**Ambiguous-target guard (standalone runs).** This skill reviews **one** PRD's work per run. When NO autopilot state names the PRD — `dev/local/autopilot/state.json` is absent or carries no `prd` field (a manual/standalone `/autopilot:review-work-completion`) — AND `dev/local/prds/wip/` holds **2+** PRDs, the target is ambiguous. Do NOT merge them into one review:
 
 - **Interactive:** name every wip PRD and ask which to review via `AskUserQuestion`; scope the run to the chosen one (its path is the "review-target PRD" step 3 reads).
 - **Unattended (`CLAUDE_UNATTENDED` set, or otherwise no human to ask):** STOP and report the ambiguity, naming all wip PRDs — never guess which one (`rules/communication.md` unattended rule).
@@ -89,7 +89,7 @@ An invalid value falls back to `legacy` with one logged warning line (same rule 
 
 **Codex doubt-roster guard.** After resolving `doubt_reviewer`, when `dev/local/autopilot/state.json` exists and `any(state.tasks[]?.attempts[]?.implementor == "codex")` is true, force the resolved value to `fable` — the doubt leg must not be codex alone. This adds **Eve** as the fifth lens alongside Bob; Bob/codex still runs, so the guard adds a voice rather than removing one. This override is in-memory only: do NOT write `state.doubt_reviewer` or invoke `statectl` for it. The stored field keeps whatever Phase 0 parsed, and Phase 0 remains its single writer. Count the codex-implemented tasks for step 6's review-file record.
 
-`/work` writes `attempts[].implementor` into the same `state.json` via `statectl`, whether invoked directly or under autopilot, so the guard fires on this path too whenever the file exists. The real gap: `state.json` exists only from `/run-autopilot`'s Phase 0 (which creates it) until batch end (which deletes or archives it), so a PRD that never ran under autopilot, or whose batch has already closed, leaves the guard with no attempts record to consult.
+`/autopilot:work` writes `attempts[].implementor` into the same `state.json` via `statectl`, whether invoked directly or under autopilot, so the guard fires on this path too whenever the file exists. The real gap: `state.json` exists only from `/autopilot:run-autopilot`'s Phase 0 (which creates it) until batch end (which deletes or archives it), so a PRD that never ran under autopilot, or whose batch has already closed, leaves the guard with no attempts record to consult.
 
 **If CLI/script check fails, STOP and report:**
 
@@ -353,7 +353,7 @@ Build one JSON object per follow-up and write it to `<task-json-file>` with the 
 
 See `references/output-formats.md` for task description format.
 
-**If issues found, and `dev/local/autopilot/state.json` is absent (standalone run):** Do not create one — a standalone review must never fabricate autopilot state that no `/run-autopilot` build phase wrote. Skip `task-add` entirely; report the findings in the review file's consolidated table (step 6/8) and directly to the user, and say plainly that they were reported rather than written as tasks.
+**If issues found, and `dev/local/autopilot/state.json` is absent (standalone run):** Do not create one — a standalone review must never fabricate autopilot state that no `/autopilot:run-autopilot` build phase wrote. Skip `task-add` entirely; report the findings in the review file's consolidated table (step 6/8) and directly to the user, and say plainly that they were reported rather than written as tasks.
 
 ### 8. Save review file
 

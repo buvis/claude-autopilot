@@ -38,7 +38,7 @@ If no PRDs found, inform user and stop.
 
 ### 2.5. Detect replan mode
 
-Before reading the PRD, check for `dev/local/autopilot/replan-context.md`. If present, this invocation is a **replan** triggered by `/run-autopilot` Phase 0's abort handler — the prior Work session aborted on a too-big task and autopilot wants the remaining scope re-split into smaller chunks.
+Before reading the PRD, check for `dev/local/autopilot/replan-context.md`. If present, this invocation is a **replan** triggered by `/autopilot:run-autopilot` Phase 0's abort handler — the prior Work session aborted on a too-big task and autopilot wants the remaining scope re-split into smaller chunks.
 
 When `replan-context.md` exists:
 
@@ -109,7 +109,7 @@ Verify: {how to confirm it's done}
 ```
 
 **The `Contract` and `Acceptance criteria` sections are mandatory and must be
-copied verbatim from the PRD — never paraphrased, never summarized.** `/work`
+copied verbatim from the PRD — never paraphrased, never summarized.** `/autopilot:work`
 hands each task to a test author (Tess) who writes tests *from the task
 description alone*, having never seen the PRD. If the task says "write the
 atlas JSON" instead of naming the exact keys (`head_sha`, `surveyed_at`,
@@ -145,13 +145,13 @@ conflict, the design doc wins** (it refines the PRD): use the design doc's
 contract and log the conflict in the step-6 planning summary. This rule works
 unchanged in replan mode.
 
-**If a `task-add` call fails mid-plan** (a statectl error — NOT the oversize stall handled in step 4.6): stop creating tasks and **roll back cleanly**. Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json tasks-clear`, which empties the whole task array in one write (same cleanup as the oversize stall below) so no orphan tasks survive to make the next PRD's Phase 2 skip planning. Then record the cause via statectl — `set stall_reason '{"stalled": "taskcreate_failed", "detail": "<the statectl error>"}'` — and report the failure. `/run-autopilot` Phase 2 reads a non-`oversized_task` stall as a plan-tasks failure (PAUSE interactive; loop mode re-invokes once, then stalls the PRD `sub_skill_fail`); the rollback guarantees the retry starts from a clean tracker. Do NOT move the PRD to `hold/` — a transient `task-add` failure is not an un-splittable PRD.
+**If a `task-add` call fails mid-plan** (a statectl error — NOT the oversize stall handled in step 4.6): stop creating tasks and **roll back cleanly**. Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json tasks-clear`, which empties the whole task array in one write (same cleanup as the oversize stall below) so no orphan tasks survive to make the next PRD's Phase 2 skip planning. Then record the cause via statectl — `set stall_reason '{"stalled": "taskcreate_failed", "detail": "<the statectl error>"}'` — and report the failure. `/autopilot:run-autopilot` Phase 2 reads a non-`oversized_task` stall as a plan-tasks failure (PAUSE interactive; loop mode re-invokes once, then stalls the PRD `sub_skill_fail`); the rollback guarantees the retry starts from a clean tracker. Do NOT move the PRD to `hold/` — a transient `task-add` failure is not an un-splittable PRD.
 
 **On successful completion of all `task-add` calls, clear a stale failure marker:** `statectl get stall_reason` → if it reads `"taskcreate_failed"` (a prior attempt failed and this retry succeeded), `statectl del stall_reason`. Otherwise leave it untouched — an `oversized_task` marker is owned by step 4.6, and a fresh plan usually has no marker (do NOT blind-`del`; statectl errors on an absent key).
 
 ### 4.5. Estimate per-task context budget
 
-For each task, compute an estimate so `/work` stays under the work-tier model's standard context ceiling (200K on the current tiers).
+For each task, compute an estimate so `/autopilot:work` stays under the work-tier model's standard context ceiling (200K on the current tiers).
 
 **Formula:**
 
@@ -191,7 +191,7 @@ Below the 150K threshold → task ships as-is.
 
 ### 4.6. Split tasks (context + eligibility)
 
-Step 4.6 has **two independent split triggers**. The existing context-budget trigger is unchanged; the eligibility trigger is new (PRD 00032, widened by PRD 00019) and pushes separable backend work toward the `<=3`-file shape that `/work` can route to qwen.
+Step 4.6 has **two independent split triggers**. The existing context-budget trigger is unchanged; the eligibility trigger is new (PRD 00032, widened by PRD 00019) and pushes separable backend work toward the `<=3`-file shape that `/autopilot:work` can route to qwen.
 
 - **Context-budget trigger** (always active): when `estimated_tokens > THRESHOLD` (150K normally; replan-context.md budget in replan mode), the task is too big for a single context window.
 - **Eligibility trigger** (infra-gated, see the qwen infra preflight subsection below): a **backend** task (UI/backend definition: see step 4.7 — UI matches the "Gemini-first tasks" list in `${CLAUDE_PLUGIN_ROOT}/skills/work/SKILL.md`, everything else is backend) touching `>=4` files is split toward `<=3`-file pieces so each subtask can route to qwen. The split is valid only when **cleanly separable** — judged from the PRD's Functional Decomposition and Dependency Graph, with each resulting piece required to independently compile and carry its own passing tests (no piece depends on a symbol another piece introduces). **A trait definition cannot be split from its implementations.**
@@ -221,7 +221,7 @@ The existing context-budget split mechanics, the one-split-attempt rule, and the
 
 **Stall behavior:**
 
-When unable to split below the threshold (150K standard, 75K in replan mode), **merge** a `stall_reason` key into the existing `dev/local/autopilot/state.json` via statectl — the sole writer for state.json (never hand-edit with Read/Write/Edit; see `/run-autopilot`):
+When unable to split below the threshold (150K standard, 75K in replan mode), **merge** a `stall_reason` key into the existing `dev/local/autopilot/state.json` via statectl — the sole writer for state.json (never hand-edit with Read/Write/Edit; see `/autopilot:run-autopilot`):
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json set stall_reason '{"stalled": "oversized_task", "task": "<task-id>", "estimated_tokens": <int>}'
@@ -229,21 +229,21 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local
 
 statectl merges the key and preserves the existing `phase`, `phases_completed`, `tasks`, `batch`, etc.
 
-**Then delete every task you already created** for this PRD with a single call: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json tasks-clear`. `/plan-tasks` calls `task-add` before the per-task budget check, so by the time the stall fires there are orphan tasks in the tracker. Cleaning up here makes the stall self-contained: any caller (not just `/run-autopilot`) gets the same post-stall state. `/run-autopilot` Phase 2 also performs this cleanup as a backstop.
+**Then delete every task you already created** for this PRD with a single call: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json tasks-clear`. `/autopilot:plan-tasks` calls `task-add` before the per-task budget check, so by the time the stall fires there are orphan tasks in the tracker. Cleaning up here makes the stall self-contained: any caller (not just `/autopilot:run-autopilot`) gets the same post-stall state. `/autopilot:run-autopilot` Phase 2 also performs this cleanup as a backstop.
 
-After both writes succeed, end the session's work with the stall recorded (the `stall_reason` key in state.json IS the observable stall signal — a model-followed skill has no exit code); `/run-autopilot` Phase 2 reads it, detects the stall, moves the PRD from `dev/local/prds/wip/` to `dev/local/prds/hold/` (creating the directory if missing), clears the stall key from state, and proceeds to the next backlog item without user prompt. See `/run-autopilot` Phase 2 for the consumer-side contract.
+After both writes succeed, end the session's work with the stall recorded (the `stall_reason` key in state.json IS the observable stall signal — a model-followed skill has no exit code); `/autopilot:run-autopilot` Phase 2 reads it, detects the stall, moves the PRD from `dev/local/prds/wip/` to `dev/local/prds/hold/` (creating the directory if missing), clears the stall key from state, and proceeds to the next backlog item without user prompt. See `/autopilot:run-autopilot` Phase 2 for the consumer-side contract.
 
 ### Estimator caveats
 
 The bytes/4 heuristic is accurate within ±20% for source code, less accurate for prose-heavy markdown. When the largest input is markdown (PRD prose, docs), round up. When estimates land within 10% of the threshold (150K standard / 75K replan), prefer splitting — the runtime context cap hook (Phase 2 of PRD 00024) will abort tasks that overrun anyway, and a planned split is cheaper than a runtime abort.
 
-**Overhead re-derivation:** The constant is measured by reading `input_tokens + cache_read_input_tokens + cache_creation_input_tokens` from the first `message.usage` line in a fresh Work-phase transcript on the current work-tier model (zero task context loaded — just the system prompt, tool defs, and active skills). Re-derive when upgrading the model or adding/removing skills: start an empty `/work` session, read the first usage line from `~/.claude/projects/<hash>/<session>.jsonl`, sum the three token fields. Update the constant and the worked example if the new value differs by more than 5K. Provenance of the current 55K (2026-07-11): five fresh headless opus-4.8 work-phase transcripts measured 74,560-74,809 (~74.7K), minus PRD 00043's measured always-loaded reduction (run-autopilot SKILL.md 33.0K → 7.3K core, +5.4K gate file read back in ≈ −20K net) ≈ 55K, rounded. Those transcripts predate the 00043 restructure; re-measure directly at the next batch and correct if the fresh number moves more than 5K.
+**Overhead re-derivation:** The constant is measured by reading `input_tokens + cache_read_input_tokens + cache_creation_input_tokens` from the first `message.usage` line in a fresh Work-phase transcript on the current work-tier model (zero task context loaded — just the system prompt, tool defs, and active skills). Re-derive when upgrading the model or adding/removing skills: start an empty `/autopilot:work` session, read the first usage line from `~/.claude/projects/<hash>/<session>.jsonl`, sum the three token fields. Update the constant and the worked example if the new value differs by more than 5K. Provenance of the current 55K (2026-07-11): five fresh headless opus-4.8 work-phase transcripts measured 74,560-74,809 (~74.7K), minus PRD 00043's measured always-loaded reduction (run-autopilot SKILL.md 33.0K → 7.3K core, +5.4K gate file read back in ≈ −20K net) ≈ 55K, rounded. Those transcripts predate the 00043 restructure; re-measure directly at the next batch and correct if the fresh number moves more than 5K.
 
 **Pending re-derivation (PRD 00084 R3, LIVE):** the 55K/150K constants are measured on `opus-4.8`, but PRD 00076 ended Opus as the default autopilot **build**-phase model: build sessions now launch Sonnet-first and promote to `claude-opus-5` only when the build-model routing (`build_model` in run-autopilot's `cli/routing.py`, since PRD 00106) finds difficulty evidence for the PRD. `_AUTOPILOT_MODEL_BUILD` is an operator env override / kill-switch, not a hardcoded constant. That makes this trigger live: re-derive per the mandate above on real Sonnet build transcripts once a few Sonnet build batches exist, not from a single ad-hoc session or a non-build transcript.
 
 ### 4.7. Assign per-task model tier
 
-For each task, classify a model tier and persist it as a top-level `model: "haiku"|"sonnet"|"opus"` key so `/work` can dispatch each subagent at the right tier (PRD 00025).
+For each task, classify a model tier and persist it as a top-level `model: "haiku"|"sonnet"|"opus"` key so `/autopilot:work` can dispatch each subagent at the right tier (PRD 00025).
 
 **Inputs:** task title + description (string), `files_touched` count, estimated lines-changed (rough — pull from the task plan or estimate from the file slice), the `estimated_tokens` computed in step 4.5, and the active PRD body (for novelty signals).
 
@@ -280,9 +280,9 @@ See `references/design-rationale.md` for the counterexamples and why a future wi
 
 **PRD frontmatter override**
 
-PRD frontmatter accepts an optional `default_model: haiku|sonnet|opus` field that acts as a **floor** on the classifier output — never a demotion. Parse it from the YAML block at the top of the PRD using the same approach `/run-autopilot` Phase 0 uses for `catchup:` (look for `---` delimiters, parse the YAML, accept `haiku`/`sonnet`/`opus`). Behavior:
+PRD frontmatter accepts an optional `default_model: haiku|sonnet|opus` field that acts as a **floor** on the classifier output — never a demotion. Parse it from the YAML block at the top of the PRD using the same approach `/autopilot:run-autopilot` Phase 0 uses for `catchup:` (look for `---` delimiters, parse the YAML, accept `haiku`/`sonnet`/`opus`). Behavior:
 
-- **Absent frontmatter or unset `default_model:`** → no override (silent; the classifier output from Rules 1–3 passes through unchanged). This is what keeps Rule 2's `haiku` reachable without requiring every PRD to opt in explicitly — and matches `/run-autopilot` Phase 6's `[D]` follow-up behavior.
+- **Absent frontmatter or unset `default_model:`** → no override (silent; the classifier output from Rules 1–3 passes through unchanged). This is what keeps Rule 2's `haiku` reachable without requiring every PRD to opt in explicitly — and matches `/autopilot:run-autopilot` Phase 6's `[D]` follow-up behavior.
 - **Malformed frontmatter or invalid `default_model:` value** → no override AND log a one-line warning. The classifier output passes through. `fable` is deliberately not in the accepted set: it is human-gated — use the rescue flow (PRD 00076, `run-autopilot/references/model-ladder.md` § Fable rescue), never a frontmatter floor. Warn with that reason rather than a bare "invalid value" so the omission reads as policy.
 - **Valid value (`haiku`/`sonnet`/`opus`)** → apply the floor below.
 
@@ -301,7 +301,7 @@ This guarantees:
 
 **`qwen_eligible` computation**
 
-After Rules 1-3 produce a tier and the PRD frontmatter override (above) settles `final_tier`, compute the `qwen_eligible` boolean that `/work` (PRD 00031) reads to decide qwen routing. The formula (widened by PRD 00019) is:
+After Rules 1-3 produce a tier and the PRD frontmatter override (above) settles `final_tier`, compute the `qwen_eligible` boolean that `/autopilot:work` (PRD 00031) reads to decide qwen routing. The formula (widened by PRD 00019) is:
 
 ```
 qwen_eligible = task is backend (not UI) AND model in {haiku, sonnet} AND files_touched <= 3 AND task edits no public contract
@@ -333,9 +333,9 @@ The flag is computed **from** the classifier output; it does **not** alter the c
 {"estimated_tokens": 90000, "est_context_peak": 110000, "model": "sonnet", "qwen_eligible": false, "qwen_excluded_reason": "files"}
 ```
 
-`qwen_eligible` is persisted on **every** task `plan-tasks` creates. `/work` reads the field directly and does no re-judging — it routes per `qwen_eligible` + its own qwen infra preflight (see `${CLAUDE_PLUGIN_ROOT}/skills/work/SKILL.md`).
+`qwen_eligible` is persisted on **every** task `plan-tasks` creates. `/autopilot:work` reads the field directly and does no re-judging — it routes per `qwen_eligible` + its own qwen infra preflight (see `${CLAUDE_PLUGIN_ROOT}/skills/work/SKILL.md`).
 
-On legacy plans created before PRD 00025, `state.tasks[i].model` is simply absent — `/work` falls back to omitting the Agent `model` parameter so subagents inherit the session model (backwards-compatible). Likewise, on legacy plans created before PRD 00032, `state.tasks[i].qwen_eligible` is absent and `/work` treats it as `false` (routes to Claude at the task's tier); plans created before PRD 00019 lack `qwen_excluded_reason`, which readers treat as `unknown` — never an error.
+On legacy plans created before PRD 00025, `state.tasks[i].model` is simply absent — `/autopilot:work` falls back to omitting the Agent `model` parameter so subagents inherit the session model (backwards-compatible). Likewise, on legacy plans created before PRD 00032, `state.tasks[i].qwen_eligible` is absent and `/autopilot:work` treats it as `false` (routes to Claude at the task's tier); plans created before PRD 00019 lack `qwen_excluded_reason`, which readers treat as `unknown` — never an error.
 
 ### 5. Set dependencies
 

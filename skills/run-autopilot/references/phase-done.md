@@ -2,7 +2,7 @@
 
 Routed here when `state.phase` is `"done"`. Finalizes the current PRD
 (Phase 9), then hands off to the next PRD or ends the batch. The Batch-End
-Review presentation at the bottom is also the target of the `/run-autopilot
+Review presentation at the bottom is also the target of the `/autopilot:run-autopilot
 review-batch` entry point, which replays it interactively against a closed
 batch's deferred JSON — no state changes in that mode. Core `SKILL.md` (always
 loaded) carries the shared mechanics and the test-pinned invariants.
@@ -66,9 +66,9 @@ Summary:
      ```
      ── AUTOPILOT ── {prd-name} done ── next PRD in new session ────────
      ```
-     Then **STOP** (end the turn — in loop mode the wrapper reads the non-empty `next_phase: "build"` and launches a fresh session for the next PRD; outside the loop the user re-invokes `/run-autopilot` manually).
+     Then **STOP** (end the turn — in loop mode the wrapper reads the non-empty `next_phase: "build"` and launches a fresh session for the next PRD; outside the loop the user re-invokes `/autopilot:run-autopilot` manually).
    - **No** → append the report's Batch Summary block (`autopilot render report --summary`), print the batch summary below, then branch on loop mode:
-     - **Loop mode (`$_AUTOPILOT_LOOP` set) — non-interactive batch end.** The deferred JSON (step 6) and the batch report (step 7) are already written. Run `autopilot phase-done --outcome drained`, which writes `phase: "done"` and the EMPTY `next_phase` (nothing more to run — the wrapper reads an empty value as drained; the literal string `"done"` is a phase with work queued after it and would spin the loop until the safety kill). Then notify the user with the batch counts (PRD 00017: `python3 ~/.claude/hooks/notify.py --send "autopilot 📋 {repo}" "Batch done: {n} done, {m} stalled, {k} deferred. Run /run-autopilot review-batch."` — count stalls from the deferred JSON's `type: "stall"` entries; when both m and k are zero, shorten to "Batch done: {n} PRDs."), print the summary, and END THE TURN. The wrapper reads the empty `next_phase`, archives `state.json` to `reports/{batch_id}-state-final.json`, and stops the loop. Do NOT run the chunked Batch-End Review here — no human is present; it runs later via `/run-autopilot review-batch`.
+     - **Loop mode (`$_AUTOPILOT_LOOP` set) — non-interactive batch end.** The deferred JSON (step 6) and the batch report (step 7) are already written. Run `autopilot phase-done --outcome drained`, which writes `phase: "done"` and the EMPTY `next_phase` (nothing more to run — the wrapper reads an empty value as drained; the literal string `"done"` is a phase with work queued after it and would spin the loop until the safety kill). Then notify the user with the batch counts (PRD 00017: `python3 ~/.claude/hooks/notify.py --send "autopilot 📋 {repo}" "Batch done: {n} done, {m} stalled, {k} deferred. Run /autopilot:run-autopilot review-batch."` — count stalls from the deferred JSON's `type: "stall"` entries; when both m and k are zero, shorten to "Batch done: {n} PRDs."), print the summary, and END THE TURN. The wrapper reads the empty `next_phase`, archives `state.json` to `reports/{batch_id}-state-final.json`, and stops the loop. Do NOT run the chunked Batch-End Review here — no human is present; it runs later via `/autopilot:run-autopilot review-batch`.
      - **Outside the loop — interactive batch end.** Run the Batch-End Review presentation below, then run `autopilot phase-done --outcome drained` (same transition, same empty `next_phase`) and STOP. `state.json` stays on disk; the next invocation's batch-identity rollover (Phase 0 step 3) mints a fresh batch.
      ```
      ── AUTOPILOT ── COMPLETE ───────────────────────────────────────────
@@ -81,7 +81,7 @@ Summary:
 
 ### Batch-End Review
 
-Collect ALL pending items from across the batch and present them to the user. Interactively, this is mandatory if any items exist — never exit with items unpresented. In loop mode the batch ends non-interactively (see the branch above) and this presentation runs later via `/run-autopilot review-batch`.
+Collect ALL pending items from across the batch and present them to the user. Interactively, this is mandatory if any items exist — never exit with items unpresented. In loop mode the batch ends non-interactively (see the branch above) and this presentation runs later via `/autopilot:run-autopilot review-batch`.
 
 **Source:** `dev/local/autopilot/deferred/{batch_id}-deferred.json` (single source of truth - all items were written here at Phase 9 step 6 of each PRD). Contains four item types:
 - `deferred_decision` - issues that failed research or were deferred for other reasons

@@ -33,7 +33,7 @@ would wipe the in-progress batch's `completed_prds` and mint a spurious id.
 The review loop ran cycles 1-3 but only bumped `state.cycle` in memory, so the
 persisted value stayed 1. That blinded BOTH the cap gate (`cycle >= cap` never
 fired — no cap-pause after cap cycles) and the wrapper-era thrash guard (the
-progress key froze). Hence the rule in `phase-review.md` § After `/work`
+progress key froze). Hence the rule in `phase-review.md` § After `/autopilot:work`
 returns: the increment is a durable write to `state.json`, not optional.
 
 ## Per-cycle review handoff (00067) — extra boots are cheap
@@ -87,7 +87,7 @@ Autopilot now leaves history alone; the user squashes manually before pushing.
 
 ## Batch catchup cache (Phase 1)
 
-Between PRDs in the same batch on the same branch, a full `/catchup` re-gather
+Between PRDs in the same batch on the same branch, a full `/git-ferry:catchup` re-gather
 (diff, blast radius, reverse deps, GitHub state) costs ~60-95s and ~50K tokens
 per PRD with no information gain — the capsule is already accurate. Hence the
 4-hour/same-HEAD delta-refresh cache.
@@ -126,7 +126,7 @@ not loop orchestration.
 
 ## Note on review layering
 
-Per-task review (`/work` step 5.7) and the review gate's lens battery
+Per-task review (`/autopilot:work` step 5.7) and the review gate's lens battery
 (consensus, blind, doubt — every review cycle) are complementary, not
 redundant. Per-task catches issues early before they compound. The consensus
 lens catches cross-task coherence and integration issues. The blind lens
@@ -134,7 +134,7 @@ catches spec drift and gaps that implementation-aware reviewers miss by giving
 a fresh agent only the spec. The doubt lens hunts residual findings and slop a
 confident reviewer waves past. All are needed.
 
-Per-task review is **tier-gated** (PRD 00044): `/work` step 5.7 dispatches the
+Per-task review is **tier-gated** (PRD 00044): `/autopilot:work` step 5.7 dispatches the
 per-task code reviewer only for `sonnet`- and `opus`-tier tasks; `haiku`-tier
 tasks skip it (as does the opus-only Devon adversarial dispatch at step 2.85).
 This does not leave haiku-tier work unreviewed — the mandated PRD-level lens

@@ -1,7 +1,7 @@
 # Code Quality Examples
 
 Before/after examples of the anti-patterns the four rules in
-`code-quality-principles.md` prevent. Referenced from `/work` steps 2.5 and 3.
+`code-quality-principles.md` prevent. Referenced from `/autopilot:work` steps 2.5 and 3.
 
 ## 1. Hidden assumptions worth surfacing
 

@@ -26,7 +26,7 @@ restricted to whole-word matching, matches "Wire the new webhook HMAC
 signature check into the payment-provider callback handler" (2 files, ~35
 lines); `permission` matches "Add role-based permission checks to the billing
 API" (2 files, ~45 lines). Each would route security-critical or
-data-recovery work to `haiku` — which is the thinnest pipeline in `/work`:
+data-recovery work to `haiku` — which is the thinnest pipeline in `/autopilot:work`:
 `haiku` skips the step-5.7 per-task code review, and Devon's adversarial
 test-validation is opus-only, so such a task ships on Tess's tests alone.
 `complete` and `pin` fail differently: `complete the <X>` is generic English

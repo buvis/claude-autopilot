@@ -53,7 +53,7 @@ PRD-level review lenses (consensus, blind, doubt — every review cycle), which
 review every task's diff regardless of tier. Escalation restores depth
 automatically: when the review gate escalates a task to `opus`, the rework
 attempt regains Devon with no extra mechanism. Tier source: `state.tasks[i].model`
-set by `/plan-tasks` (PRD 00025), escalated by the review gate's Phase 6.
+set by `/autopilot:plan-tasks` (PRD 00025), escalated by the review gate's Phase 6.
 
 ## Why qwen gets exactly one shot per task (PRD 00031)
 

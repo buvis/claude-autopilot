@@ -55,7 +55,7 @@ _SIGNAL_LABELS = {"done": "drained", "died": "died", "paused": "paused"}
 # either way, so the same next step holds.
 _NEXT_STEPS = {
     "drained": "backlog empty — nothing queued.",
-    "paused": "needs a decision: `claude` → /run-autopilot answers the blocker, then `autoclaude`.",
+    "paused": "needs a decision: `claude` → /autopilot:run-autopilot answers the blocker, then `autoclaude`.",
     "died": "check dev/local/autopilot/last-session.log, then rerun `autoclaude`.",
     "stopped": "state intact — rerun `autoclaude` to continue the batch.",
 }
@@ -359,7 +359,7 @@ Status legend
   ◐ quiet        session running but output has stalled
   ⏳ limit-wait  usage limit hit; the wrapper sleeps until the reset
   ⏸ paused       after p: autoclaude resumes it. After a blocker: claude →
-                 /run-autopilot → autoclaude
+                 /autopilot:run-autopilot → autoclaude
   ⚠ orphaned    work queued but no autoclaude alive — run autoclaude
   ⚠ attention   needs_attention set (usually a cap-pause)
   ■ died         session died; check dev/local/autopilot/last-session.log

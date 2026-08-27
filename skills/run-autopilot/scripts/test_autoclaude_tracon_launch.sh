@@ -828,13 +828,13 @@ cat > "$WRAPPERLOG_F" <<'EOF'
 
 autoclaude: paused by operator. State intact.
 Resume unattended: autoclaude
-To take over first: claude → /run-autopilot, then autoclaude
+To take over first: claude → /autopilot:run-autopilot, then autoclaude
 
 autoclaude: session paused — needs human input.
 To resume (re-running autoclaude now would just pause again):
-  1. claude            # interactive session in this repo
-  2. /run-autopilot    # resumes from state.json; blockers become questions
-  3. autoclaude        # after the decision, to continue unattended
+  1. claude                    # interactive session in this repo
+  2. /autopilot:run-autopilot  # resumes from state.json; blockers become questions
+  3. autoclaude                # after the decision, to continue unattended
 EOF
 
 # ── Scenario 34: non-zero child_rc surfaces the resume-runbook text on
@@ -1013,9 +1013,9 @@ _loop_stub_s39() {
   {
     printf '⏸ autoclaude: session paused ON PURPOSE — needs human input\n'
     printf 'To resume (re-running autoclaude now would just pause again):\n'
-    printf '  1. claude            # interactive session in this repo\n'
-    printf '  2. /run-autopilot    # resumes from state.json; blockers become questions\n'
-    printf '  3. autoclaude        # after the decision, to continue unattended\n'
+    printf '  1. claude                    # interactive session in this repo\n'
+    printf '  2. /autopilot:run-autopilot  # resumes from state.json; blockers become questions\n'
+    printf '  3. autoclaude                # after the decision, to continue unattended\n'
   } >&2
   return 1
 }

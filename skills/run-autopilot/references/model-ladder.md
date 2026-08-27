@@ -1,6 +1,6 @@
 # Model-Escalation Ladder
 
-This file declares the escalation ladder for `/work`: every rung, budget, and
+This file declares the escalation ladder for `/autopilot:work`: every rung, budget, and
 switch that governs which backend runs a task and when it escalates.
 Consumers (`plan-tasks`, `work`, `phase-review`) cite this file instead of
 restating it. Every number appears exactly once, here.
@@ -119,7 +119,7 @@ and what each `fablectl` exit means — lives in `references/recovery.md`
   Absent `qwen_eligible` (legacy plans) -> `false`. Any
   `qwen_excluded_reason` of `ui`, `tier`, or `contract` -> `false`. UI stays
   gemini; `opus` tier stays Claude; declared contract edits stay Claude. This
-  last guarantee holds only because `/plan-tasks` records `contract` ahead of
+  last guarantee holds only because `/autopilot:plan-tasks` records `contract` ahead of
   `files` in its `qwen_excluded_reason` precedence (see
   `plan-tasks/SKILL.md` § the qwen-eligibility precedence), so a task that
   both spans many files and edits a contract is recorded `contract`, not
@@ -143,7 +143,7 @@ and what each `fablectl` exit means — lives in `references/recovery.md`
      burns dispatches and is stamped permanently as a codex *capability*
      failure. The detector's probe is indeterminate on a non-zero exit: a
      failed probe is NOT "no change" and must NOT latch `codex_no_edit`. The
-     detector command is documented in `/work` step 5.5, not here — and that
+     detector command is documented in `/autopilot:work` step 5.5, not here — and that
      section pins its evaluation point at the DISPATCH BOUNDARY (step 4,
      before step 5's `git add`), never at the step-5.5 gate itself, where the
      porcelain is already clean for a successful run and a no-edit run alike.
@@ -170,7 +170,7 @@ and what each `fablectl` exit means — lives in `references/recovery.md`
 
 ## Memory gate
 
-`/work` step 3 routing row 4 (`work/SKILL.md`) reroutes a qwen-eligible task
+`/autopilot:work` step 3 routing row 4 (`work/SKILL.md`) reroutes a qwen-eligible task
 to Claude at its original tier when the host is short on RAM, via:
 
     python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_memory_pressure.py --max-level <threshold>
@@ -234,18 +234,18 @@ chain. They are scoped to different moments.
 
 ## Kill-switches
 
-- `_AUTOPILOT_ESCALATION=legacy`: read by `/work` step 5.5. When set to
+- `_AUTOPILOT_ESCALATION=legacy`: read by `/autopilot:work` step 5.5. When set to
   `legacy`, skips diagnosis, repair, escalation, attribution stamping, AND the
   qwen capability breaker; the escalation machinery becomes byte-identical to
   pre-00065 (today's same-tier "max 2 implementation retries" cap). The
   memory-pressure gate (routing row 4) is not disabled by this knob and keeps
   firing under `legacy` (see § Memory gate). The codex rung interception
-  (`/work` step 3, § Codex rung) never fires under `legacy`: routing is the
+  (`/autopilot:work` step 3, § Codex rung) never fires under `legacy`: routing is the
   pre-00077 qwen/Claude-only path. The qwen one-shot carve-out (qwen
   fail -> Claude Sonnet) still applies. Any other value or absent -> the new
   flow.
-- `_PLAN_TASKS_FLOOR=legacy` (alias: `sonnet`): read by `/plan-tasks`,
-  plan-time only — no `/work` dispatch-time effect. Currently a documented
+- `_PLAN_TASKS_FLOOR=legacy` (alias: `sonnet`): read by `/autopilot:plan-tasks`,
+  plan-time only — no `/autopilot:work` dispatch-time effect. Currently a documented
   no-op: the classifier rule-widening this knob was built to revert was
   withdrawn after review, so the `legacy` row and the current row of the
   step 4.7 tier classifier are identical — setting it changes nothing today.
@@ -256,7 +256,7 @@ chain. They are scoped to different moments.
 - The Fable rescue has **no env knob**. It is gated by human approval
   (`autoclaude approve-fable <prd>`), one request per PRD ever, and `fable` is
   never a session model (§ Fable rescue).
-- `_WORK_CODEX_RUNG=off`: read by `/work` step 3. Disables the codex rung
+- `_WORK_CODEX_RUNG=off`: read by `/autopilot:work` step 3. Disables the codex rung
   interception entirely; routing is byte-identical to pre-00077. Any other
   value or absent -> rung active.
 - No decay knob exists. PRD 00111 reserved one and then did not need it:
@@ -282,7 +282,7 @@ happens, they do not add a second mechanism.
 |--------|-------|-------------|
 | 1. frontmatter `default_model: opus` | sticky | Never automatically. Declared author intent; only editing the PRD removes it. |
 | 2. `replan_count > 0` | live | Phase 9 step 10 resets it to 0 at PRD completion. Within a PRD it is monotonic, so the promotion holds for that PRD's remaining sessions. |
-| 3a. `stall_reason != null` | live | `/run-autopilot` clears the field once it handles the stall. This is the one signal that already decayed before this PRD. |
+| 3a. `stall_reason != null` | live | `/autopilot:run-autopilot` clears the field once it handles the stall. This is the one signal that already decayed before this PRD. |
 | 3b. durable stall in the deferred logs | live | The stall ages out of the 2-newest-file window as later batches write their own logs. |
 | 4. `cap_rotations` non-empty | live | Phase 9 step 10 clears it at PRD completion. Monotonic within a PRD, like signal 2. |
 | 5. fable rescue ledger key | sticky | Never. A human approved an expensive rescue for that PRD; un-promoting it would spend the approval and then withhold the model it bought. |
@@ -301,7 +301,7 @@ equals the resolved target, so the PRD that just finished cannot promote the
 next one on its leftover scratch. Nothing escalation-related survives a
 PRD-to-PRD reset.
 
-**Task tiers decay separately** and are contained by construction: `/work`
+**Task tiers decay separately** and are contained by construction: `/autopilot:work`
 re-evaluates its routing table for every claimed task from that task's own
 `model`, with no session-level memory, so a task escalated to opus
 never changes the tier any other task dispatches at (`work` SKILL.md
