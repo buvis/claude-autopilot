@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `self_deslop: "skipped:test-only"` and `review: "skipped:test-only"`. A rework
   task keeps its reviewer, and any production path in the diff runs the full
   pipeline unchanged.
+- **work**: a per-task review reply that breaks the reporting contract now costs
+  one correction retry instead of passing as an empty review. A second bad reply
+  records `review: "failed:invalid_output"` and the task proceeds; the PRD-level
+  review is what catches whatever the reviewer missed.
 
 ### Fixed
 
