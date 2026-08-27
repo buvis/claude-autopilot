@@ -169,10 +169,10 @@ Pass the paths from the context file's `### Changed Files` section (in a **bare-
 **Generate the cycle's context pack.** After `gather-context.sh` has produced the diff, and before any prompt is assembled, run `git rev-parse --show-toplevel` from the project root with no extra flags — the pack resolves `repo_root` the same way, so a non-zero exit means the pack cannot succeed here. On non-zero: skip the command below entirely, substitute `(no pack available this cycle)` for `{PACK_FILE}` and `{PACK_FINDINGS}`, write `pack: skipped (no git worktree)` in the review file, and move to step 4. On zero exit, run this from the project root:
 
 ```bash
-uv run --project ~/git/src/github.com/buvis/engram engram pack --cycle {id} --prd <absolute path of the review-target PRD resolved at the top of this step> --capsule dev/local/meta/project-capsule.md
+engram pack --cycle {id} --prd <absolute path of the review-target PRD resolved at the top of this step> --capsule dev/local/meta/project-capsule.md
 ```
 
-`engram` is not on PATH in this environment, so the `uv run --project ...` form is required. A bare `engram pack` will fail. The command prints the pack's absolute path, its estimated token total, and the pre-pack reindex stats. `{id}` is the same cycle id used for the other `dev/local/tmp/review-*-{id}.*` staging files, so the pack lands at `dev/local/tmp/engram-pack-{id}.md`.
+`engram` is an optional external tool, so check how it is installed before running this. On PATH, the command above works as written; otherwise run it out of your own checkout, `uv run --project <your engram checkout> engram pack ...`, and expect a bare `engram pack` to fail. The command prints the pack's absolute path, its estimated token total, and the pre-pack reindex stats. `{id}` is the same cycle id used for the other `dev/local/tmp/review-*-{id}.*` staging files, so the pack lands at `dev/local/tmp/engram-pack-{id}.md`.
 
 Hold the printed absolute path. Step 4 substitutes it for `{PACK_FILE}`, and substitutes the file's "Findings precedent" section for `{PACK_FINDINGS}`. Pass the pack path to prompts as an absolute path, like the other staged inputs. Subagents misresolve relative `dev/local/` paths as `~/dev/local/`.
 

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **docs**: the review pack step no longer tells you to run `engram` out of one
+  machine's checkout path. It shows the plain `engram pack` command and says
+  `engram` is optional, with the `uv run --project <your engram checkout>` form
+  for when it is not on PATH.
+
 ## [0.2.2] - 2026-08-27
 
 ### Changed
