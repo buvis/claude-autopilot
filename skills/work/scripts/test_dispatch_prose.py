@@ -497,3 +497,113 @@ def test_step_5_runs_the_reflow_tripwire_over_the_stage_list() -> None:
             "value /work writes but the schema reference does not list reads "
             "as corrupt to anyone auditing the record."
         )
+
+
+# --- PRD 00159: the test-only gate, the tool-less Pat, the output contract ----
+
+
+def test_step_2_captures_a_task_base_sha_for_every_task() -> None:
+    # Steps 5.6, 5.7 and BASE_SHA all diff against this one base. Before PRD
+    # 00159 they used the parent of the test commit, which does not exist for a
+    # test-only, docs-only, config-only or micro-lane task — so BASE_SHA was
+    # simply undefined there and the review diffed from nowhere.
+    start = _TEXT.index("### 2. Claim")
+    end = _TEXT.index("### 2.5.", start)
+    step_2 = _TEXT[start:end]
+
+    assert "task_base_sha" in step_2, (
+        f"{_SKILL_MD}: step 2 never captures `<task_base_sha>`, so steps 5.6 "
+        "and 5.7 have no base to diff against on a task that commits no tests."
+    )
+
+    gate_failure = (_SKILL_MD.parent / "references" / "gate-failure.md").read_text()
+    assert "task_base_sha" in gate_failure, (
+        "references/gate-failure.md § Test-commit SHA still derives step 5.7's "
+        "BASE_SHA from the test commit; it must name `<task_base_sha>`."
+    )
+
+
+def test_step_5_6_skips_the_deslop_pass_on_a_test_only_diff() -> None:
+    start = _TEXT.index("### 5.6.")
+    end = _TEXT.index("### 5.7.", start)
+    step_5_6 = _TEXT[start:end]
+
+    for needle in ("test_only_diff", "skipped:test-only"):
+        assert needle in step_5_6, (
+            f"{_SKILL_MD}: step 5.6 never names {needle!r}, so a test-only "
+            "diff pays a de-slop dispatch that is forbidden to touch tests."
+        )
+
+
+def test_step_5_7_skips_the_review_and_renders_the_two_new_placeholders() -> None:
+    # The skip and the placeholders travel together: skipping the review is what
+    # makes the lane cheap, and the placeholders are what make the review that
+    # DOES run judge the prompt alone instead of reading around the repo.
+    start = _TEXT.index("### 5.7.")
+    end = _TEXT.index("### 6.", start)
+    step_5_7 = _TEXT[start:end]
+
+    for needle in (
+        "test_only_gate",
+        "skipped:test-only",
+        "VERIFICATION_RESULT",
+        "CONTRACT_CORRECTION",
+    ):
+        assert needle in step_5_7, (
+            f"{_SKILL_MD}: step 5.7 never names {needle!r}. Without it the "
+            "reviewer either runs where PRD 00159 says it should not, or runs "
+            "without the evidence its tool-less dispatch depends on."
+        )
+
+
+def test_per_task_review_carries_the_tool_less_dispatch_and_the_output_gate() -> None:
+    review = (_SKILL_MD.parent / "references" / "per-task-review.md").read_text()
+
+    for needle in ('-t ""', "parse_review.py", "failed:invalid_output"):
+        assert needle in review, (
+            f"references/per-task-review.md never names {needle!r}. The "
+            "dispatch would grant tools the persona says it does not use, or a "
+            "malformed reply would pass as an empty review."
+        )
+
+
+def test_attempt_logging_enumerates_both_new_review_values() -> None:
+    attempt_logging = (_SKILL_MD.parent / "references" / "attempt-logging.md").read_text()
+
+    for value in ("skipped:test-only", "failed:invalid_output"):
+        assert value in attempt_logging, (
+            f"references/attempt-logging.md does not enumerate {value!r}; /work "
+            "writes it, so a reader auditing the record cannot tell a skipped "
+            "review from a broken one."
+        )
+
+
+def test_pat_persona_carries_both_new_placeholders() -> None:
+    pat = _SKILL_MD.parent.parent.parent / "agents" / "pat.md"
+    body = pat.read_text()
+
+    for placeholder in ("{VERIFICATION_RESULT}", "{CONTRACT_CORRECTION}"):
+        assert placeholder in body, (
+            f"agents/pat.md is missing {placeholder}. Step 5.7 passes it to "
+            "render_prompt.py, and a set placeholder with nowhere to land is "
+            "silently dropped rather than reaching the reviewer."
+        )
+
+
+def test_the_simplification_mandate_maps_simplifications_to_low() -> None:
+    # The whole point of PRD 00159's severity split: a behavior-preserving
+    # simplification must not cost an Ivan dispatch and a Pat re-run. While the
+    # mandate still said "Important, not Minor", every naming nit did.
+    mandate = (
+        _SKILL_MD.parent / "references" / "simplification-mandate.md"
+    ).read_text()
+
+    assert "Important, not Minor" not in mandate, (
+        "references/simplification-mandate.md still classifies simplifications "
+        "as Important, which routes them into the MEDIUM-in-task retry PRD "
+        "00159 removed them from."
+    )
+    assert "LOW" in mandate, (
+        "references/simplification-mandate.md no longer maps simplifications "
+        "to a severity at all; LOW is the value the retry rule keys on."
+    )
