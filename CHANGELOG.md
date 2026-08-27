@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **work**: a task whose committed diff touches only test and fixture paths now
+  skips both the self-deslop pass and the per-task review, stamping the attempt
+  `self_deslop: "skipped:test-only"` and `review: "skipped:test-only"`. A rework
+  task keeps its reviewer, and any production path in the diff runs the full
+  pipeline unchanged.
+
 ### Fixed
 
 - **docs**: the review pack step no longer tells you to run `engram` out of one

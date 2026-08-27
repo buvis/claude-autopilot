@@ -8,6 +8,8 @@ so the SKILL.md prose cannot drift from the rules silently.
 
 from __future__ import annotations
 
+from fnmatch import fnmatchcase
+
 # The rows whose verdict is "Claude at the task's (original) tier" — the only
 # rows the codex rung may intercept.
 _INTERCEPTION_ROWS = frozenset({"row3", "row4", "row6", "row7"})
@@ -62,6 +64,40 @@ _CODEX_ATTEMPT_OUTCOMES = {
         "escalated_from": "codex",
     },
 }
+
+
+# Test-path recognition: a closed list, matched exactly and case-sensitively.
+# Anything unmatched is production, so a misjudged path costs the full pipeline
+# rather than a skipped review.
+_TEST_DIR_SEGMENTS = frozenset(
+    {
+        "test",
+        "tests",
+        "__tests__",
+        "spec",
+        "specs",
+        "fixtures",
+        "__fixtures__",
+        "__snapshots__",
+        "testdata",
+    },
+)
+
+_JS_TEST_EXTENSIONS = ("js", "jsx", "ts", "tsx", "mjs", "cjs")
+
+_TEST_BASENAME_GLOBS = (
+    "conftest.py",
+    "test_*.py",
+    "*_test.py",
+    "*_test.go",
+    "*_spec.rb",
+    "*Test.java",
+    "*Tests.java",
+    "test_*.sh",
+    "*_test.sh",
+    *(f"*.test.{ext}" for ext in _JS_TEST_EXTENSIONS),
+    *(f"*.spec.{ext}" for ext in _JS_TEST_EXTENSIONS),
+)
 
 
 def _tier(task: dict) -> str:
@@ -147,6 +183,39 @@ def codex_attempt_outcome(signals: dict) -> dict:
     else:
         outcome = "escalate"
     return _CODEX_ATTEMPT_OUTCOMES[outcome].copy()
+
+
+def is_test_path(path: str) -> bool:
+    """True when a repo-relative path is test or fixture code.
+
+    Directory segments and basenames match exactly and case-sensitively, so
+    `testing/x.py` and `contest/x.py` are production, and a Rust file carrying
+    an inline `#[cfg(test)]` module is production too — the path is all this
+    predicate sees.
+    """
+    segments = path.split("/")
+    if any(segment in _TEST_DIR_SEGMENTS for segment in segments[:-1]):
+        return True
+    return any(fnmatchcase(segments[-1], glob) for glob in _TEST_BASENAME_GLOBS)
+
+
+def test_only_diff(paths: list[str]) -> bool:
+    """True when every changed path is test code. An empty diff is never test-only."""
+    return bool(paths) and all(is_test_path(path) for path in paths)
+
+
+def test_only_gate(paths: list[str], in_rework: bool) -> dict[str, str]:
+    """The skip stamps a test-only task's attempt record carries.
+
+    A rework task keeps its reviewer: the CLOSURE verdicts are what stop a
+    second review cycle, the same reason the micro lane keeps him.
+    """
+    if not test_only_diff(paths):
+        return {}
+    stamps = {"self_deslop": "skipped:test-only"}
+    if not in_rework:
+        stamps["review"] = "skipped:test-only"
+    return stamps
 
 
 def _table_row(task: dict, env: dict, state: dict, probes: dict) -> str:

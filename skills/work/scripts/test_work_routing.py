@@ -1070,3 +1070,81 @@ def test_the_same_file_at_two_lines_counts_once() -> None:
     )
 
     assert verdict is True
+
+
+# --- is_test_path / test_only_diff / test_only_gate ---------------------------
+#
+# PRD 00159: the predicate that decides whether the self-deslop and per-task
+# review lanes run at all. It is deliberately closed and exact — every
+# production case below is a near-miss of a test pattern, because a false
+# positive skips a real review while a false negative only costs the pipeline
+# that runs today.
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "tests/foo.py",
+        "skills/work/scripts/fixtures/x.txt",
+        "test_x.py",
+        "x_test.go",
+        "x.test.ts",
+        "x.spec.js",
+        "conftest.py",
+    ],
+)
+def test_directory_segments_and_basename_patterns_are_test_paths(path: str) -> None:
+    assert work_routing.is_test_path(path) is True
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "src/lib.rs",
+        "testing/x.py",
+        "contest/x.py",
+        "README.md",
+        "hooks/x.py",
+    ],
+)
+def test_near_miss_paths_stay_production(path: str) -> None:
+    # `testing` and `contest` merely contain `test`; segments match exactly.
+    # `src/lib.rs` may hold an inline `#[cfg(test)]` module the path cannot see.
+    assert work_routing.is_test_path(path) is False
+
+
+def test_a_diff_with_one_production_path_is_not_test_only() -> None:
+    verdict = work_routing.test_only_diff(
+        ["tests/foo.py", "skills/work/scripts/parse_review.py"],
+    )
+
+    assert verdict is False
+
+
+def test_an_empty_diff_is_not_test_only() -> None:
+    # Nothing changed is not evidence that only tests changed.
+    assert work_routing.test_only_diff([]) is False
+
+
+def test_a_test_only_task_skips_both_lanes_outside_rework() -> None:
+    stamps = work_routing.test_only_gate(["tests/foo.py"], in_rework=False)
+
+    assert stamps == {
+        "self_deslop": "skipped:test-only",
+        "review": "skipped:test-only",
+    }
+
+
+def test_a_rework_task_keeps_its_reviewer() -> None:
+    # Pat's CLOSURE verdicts are what end a review cycle; skipping him in rework
+    # would leave the cycle with nothing to close on.
+    stamps = work_routing.test_only_gate(["tests/foo.py"], in_rework=True)
+
+    assert stamps == {"self_deslop": "skipped:test-only"}
+
+
+@pytest.mark.parametrize("in_rework", [True, False])
+def test_a_production_path_stamps_nothing(in_rework: bool) -> None:
+    stamps = work_routing.test_only_gate(["hooks/x.py"], in_rework=in_rework)
+
+    assert stamps == {}
