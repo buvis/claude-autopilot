@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-08-27
+
+### Changed
+
+- **hooks**: writing one of the named keepers (`project-capsule.md`,
+  `decisions.md`, `troubleshooting.md`, `assumptions.md`, `agoge-profile.md`,
+  `ecc-cursor`, `upstream-cursor`) directly at a `dev/local` root is now
+  blocked and routed to `dev/local/meta/<name>`. The root is directories-only;
+  the compat-symlink allowance it replaced existed only until agoge, git-ferry
+  and aegis shipped meta-first paths, which they now have. A non-keeper stray
+  at root is unaffected and is still routed to `dev/local/tmp/<name>`.
+
 ## [0.2.1] - 2026-08-27
 
 ### Fixed
