@@ -227,6 +227,42 @@ else
          "got exit code $RC"
 fi
 
+# ══ T10: -t "" pins the child to no tools ════════════════════════════════════
+run_sonnet t10 -t "" -f "$PROMPT_FILE_T"
+
+# 14. -t "": argv carries the pair --tools "". An empty value is the whole point
+#     of the flag (a reviewer that judges the prompt and nothing else), so it
+#     must survive as a token rather than collapse into nothing.
+if argv_has_pair "$CLAUDE_ARGV_FILE" "--tools" ""; then
+    PASS '-t "": argv carries the pair --tools ""'
+else
+    FAIL '-t "": argv carries the pair --tools ""' \
+         "argv: $(tr '\n' ' ' < "$CLAUDE_ARGV_FILE" 2>/dev/null || echo '<no claude invocation>')"
+fi
+
+# ══ T11: -t LIST passes the list through ══════════════════════════════════════
+run_sonnet t11 -t Read -f "$PROMPT_FILE_T"
+
+# 15. -t Read: argv carries the pair --tools Read.
+if argv_has_pair "$CLAUDE_ARGV_FILE" "--tools" "Read"; then
+    PASS "-t Read: argv carries --tools Read"
+else
+    FAIL "-t Read: argv carries --tools Read" \
+         "argv: $(tr '\n' ' ' < "$CLAUDE_ARGV_FILE" 2>/dev/null || echo '<no claude invocation>')"
+fi
+
+# ══ T12: -t with no value -> stderr + non-zero + no dispatch ══════════════════
+run_sonnet t12 -t
+
+# 16. Bare -t: non-zero exit, error on stderr, and claude is never invoked.
+#     Guessing a value here would silently grant tools the caller meant to deny.
+if [ "$RC" -ne 0 ] && grep -q "requires a value" "$STDERR_F" 2>/dev/null && [ ! -f "$CLAUDE_ARGV_FILE" ]; then
+    PASS "bare -t exits non-zero on stderr with no claude invocation"
+else
+    FAIL "bare -t exits non-zero on stderr with no claude invocation" \
+         "rc=$RC; stderr: $(cat "$STDERR_F"); argv: $(tr '\n' ' ' < "$CLAUDE_ARGV_FILE" 2>/dev/null || echo '<none>')"
+fi
+
 # ══ summary ═══════════════════════════════════════════════════════════════════
 echo ""
 echo "SUMMARY: $PASS_COUNT passed, $FAIL_COUNT failed"

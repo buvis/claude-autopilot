@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one correction retry instead of passing as an empty review. A second bad reply
   records `review: "failed:invalid_output"` and the task proceeds; the PRD-level
   review is what catches whatever the reviewer missed.
+- **use-sonnet**: `-t, --tools LIST` passes `--tools LIST` to `claude` in prompt
+  mode. `-t ""` grants no tools at all, which is how a reviewer gets pinned to
+  the prompt it was given. Without the flag the argv is unchanged, and a bare
+  `-t` is a usage error rather than a silent grant.
 
 ### Fixed
 

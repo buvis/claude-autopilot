@@ -41,6 +41,7 @@ MODEL="$DEFAULT_MODEL"
 MODE="prompt"  # prompt, interactive, resume, continue
 PERM=""        # -a = acceptEdits (edits auto-approved, Bash still gated); -y = full bypass
 ADD_DIRS=()
+TOOLS=()       # -t "" pins a reviewer to the prompt: no tools, no reading around
 PROMPT=""
 PROMPT_FILE=""
 OUTPUT_FILE=""
@@ -59,6 +60,7 @@ usage() {
     echo "  -d, --dir DIR          Allow access to directory (can repeat)"
     echo "  -f, --file FILE        Read prompt from file"
     echo "  -o, --output FILE      Write output to file (via tee)"
+    echo "  -t, --tools LIST       Pass --tools LIST to claude (prompt mode); -t \"\" grants none"
     echo "  -r, --resume [ID]      Resume session (optionally specify ID)"
     echo "  -c, --continue         Resume most recent session"
     echo "  -h, --help             Show this help"
@@ -105,6 +107,17 @@ while [[ $# -gt 0 ]]; do
             ;;
         -o|--output)
             OUTPUT_FILE="$2"
+            shift 2
+            ;;
+        -t|--tools)
+            # An empty LIST is meaningful (grant nothing), so the value cannot be
+            # inferred from emptiness - a missing one is a usage error.
+            if [ $# -lt 2 ]; then
+                echo "ERROR: -t/--tools requires a value (use -t \"\" for no tools)" >&2
+                usage >&2
+                exit 1
+            fi
+            TOOLS=("--tools" "$2")
             shift 2
             ;;
         -r|--resume)
@@ -177,6 +190,6 @@ case $MODE in
         # background run can never hang on a child reading the inherited
         # stdin (PRD 00040 hang class). Interactive/resume/continue modes
         # keep stdin - they need the TTY.
-        run_cmd claude --print --model "$MODEL" $PERM "${ADD_DIRS[@]}" "$PROMPT" < /dev/null
+        run_cmd claude --print --model "$MODEL" $PERM "${ADD_DIRS[@]}" "${TOOLS[@]}" "$PROMPT" < /dev/null
         ;;
 esac
