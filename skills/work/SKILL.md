@@ -188,6 +188,7 @@ For the first available task:
    ```bash
    python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py <state.json> task-start <task-id>
    ```
+   Then run `git rev-parse HEAD` and hold it in-session as `<task_base_sha>` — steps 5.6, 5.7 and `BASE_SHA` all diff against it. Unlike `<test_commit_sha>` it is defined for every task, including test-only, docs-only, config-only and micro-lane tasks that commit no tests.
 2. **Reset the per-task context-cap marker** so the autopilot PostToolUse hook fires once for THIS task, not once per Work phase. The hook also self-clears when the in-progress task id in `state.json` differs from the id stored in the marker file, but the explicit clear here is a belt-and-braces backstop in case state.json's task-id snapshot lags the actual task switch. Run the shared walk-up helper in `--clear-cap` mode — it resolves symlinks, walks up to the autopilot dir, and removes `<autopilot_dir>/.cap-fired` internally:
    ```bash
    python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/_walk_up.py --clear-cap
@@ -389,7 +390,7 @@ Run **only** the specific tests Tess wrote in step 2.7. Do NOT run the full proj
 
 After step 5.5's tests pass and BEFORE the per-task code review at step 5.7, dispatch a fresh subagent to prune slop from the implementor's diff. The per-task review then runs against the leaner diff, which means review-rework cycles add defensive fixes on top of a smaller base. Best-effort: this step never blocks the task and never triggers retries.
 
-**Skip rule.** Measure the implementor's most recent commit:
+**Skip rules, in order.** First, list `git diff --name-only <task_base_sha>..HEAD` and apply `test_only_diff` from `${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/work_routing.py`: true means skip the dispatch, record `self_deslop: "skipped:test-only"`, and proceed to step 5.7 (`references/self-deslop-prompt.md` § Test-only diffs). Otherwise measure the implementor's most recent commit:
 
 ```bash
 git diff --shortstat HEAD~1..HEAD
@@ -416,9 +417,9 @@ Compute `net_lines = insertions - deletions` (from `--shortstat`) and `file_coun
 | `fable` | review (below) — the rescue rung is reviewed like `opus` |
 | anything else — `opus`, `sonnet`, absent/legacy or unknown (both treated as `sonnet`) | review (below) |
 
-Dispatch the reviewer after commit and verification — a native lane, no plugin dependency:
+**Test-only skip (outside rework mode).** Apply `test_only_gate` from `${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/work_routing.py` to `git diff --name-only <task_base_sha>..HEAD`: a `review` key in the result means skip this step and record `review: "skipped:test-only"` — every tier takes it, `fable` included, and a rework task keeps its reviewer. Otherwise dispatch the reviewer after commit and verification — a native lane, no plugin dependency:
 
-1. Get SHAs: `BASE_SHA` = the parent of this task's test commit (`<test_commit_sha>` from step 2.9), `HEAD_SHA` = current HEAD (includes the step-5.6 deslop commit when one landed).
+1. Get SHAs: `BASE_SHA` = `<task_base_sha>` (step 2), `HEAD_SHA` = current HEAD (includes the step-5.6 deslop commit when one landed).
 2. Render the review prompt with one Bash call, every interpolated path `shlex.quote()`-d (or bash's `printf '%q '`) before it lands inside a `--set-cmd` value:
    ```bash
    python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/pat.md \
@@ -427,10 +428,12 @@ Dispatch the reviewer after commit and verification — a native lane, no plugin
      --set-file TASK_DESCRIPTION=dev/local/tmp/review-task-<id>-description.txt \
      --set-file TASK_ACCEPTANCE_CRITERIA=dev/local/tmp/review-task-<id>-acceptance.txt \
      --set-cmd DIFF="git diff BASE_SHA..HEAD_SHA" \
-     --set-file SIMPLIFICATION_MANDATE=${CLAUDE_PLUGIN_ROOT}/skills/work/references/simplification-mandate.md
+     --set-file SIMPLIFICATION_MANDATE=${CLAUDE_PLUGIN_ROOT}/skills/work/references/simplification-mandate.md \
+     --set-file VERIFICATION_RESULT=dev/local/tmp/review-task-<id>-verification.txt \
+     --set CONTRACT_CORRECTION=""
    ```
    The **Pat persona** (`${CLAUDE_PLUGIN_ROOT}/agents/pat.md`) already carries the read-only statement and the reporting contract — one finding per line as `SEVERITY | file:line | issue | fix` (severities CRITICAL/HIGH/MEDIUM/LOW), or the literal line `NO FINDINGS` — so do not restate them here. Conventions and the placeholder table: `review-work-completion/references/agent-registry.md`. If `pat.md` is missing or its frontmatter does not parse, treat it as a runner failure (step 4.2's one re-dispatch) — never fall back to a hand-written prompt. The stdout integer from the render call **is** the Subagent Dispatch Budget measurement — no separate `wc -c`.
-3. **Read `references/per-task-review.md` before the first step-5.7 dispatch of a batch** — it carries the `sonnet-run.sh` dispatch command (never `-a`/`-y`), the result-handling ladder (CLOSURE verdicts, CRITICAL/HIGH, the 3-cycle cap, a runner failure recorded as `review: failed:<cause>`), and why the lane is tier-gated. One row stays here, because a passing review still has to stamp it:
+3. **Read `references/per-task-review.md` before the first step-5.7 dispatch of a batch** — it carries the verification file this render reads, the tool-less `sonnet-run.sh` dispatch command (never `-a`/`-y`), the `parse_review.py` output-contract gate and its one correction retry, the result-handling ladder (CLOSURE verdicts, CRITICAL/HIGH, the 3-cycle cap, a runner failure recorded as `review: failed:<cause>`), and why the lane is tier-gated. One row stays here, because a passing review still has to stamp it:
    - **MEDIUM inside this task's files** (the finding's file path, before its `:line` suffix, names a file in Ivan's `FILES_TOUCHED:` footer for this task) - ONE retry through the CRITICAL/HIGH row's procedure above, with two differences: the loop ends after a single Pat re-run (no third dispatch, whatever it returns), and step 6 appends `medium-retry:fixed` to the attempt record's `review` string when that re-run no longer lists the finding, `medium-retry:unfixed` otherwise. Why: a MEDIUM Pat already located costs one Ivan dispatch here and a four-reviewer cycle plus a rework task later (PRD 00140).
 
 Skip for documentation-only or configuration-only tasks.

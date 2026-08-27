@@ -102,6 +102,20 @@ Return one of:
 
 ---
 
+## Test-only diffs
+
+SKILL.md step 5.6 applies `test_only_diff` (from
+`skills/work/scripts/work_routing.py`) to
+`git diff --name-only <task_base_sha>..HEAD` **before** the 30-line/2-file rule.
+When every changed path is test or fixture code, there is no dispatch: record
+`self_deslop: "skipped:test-only"` and proceed to step 5.7. The stamp is
+distinct from `"skipped:trivial"` so the two skips stay tellable apart in the
+attempt data.
+
+This skip applies in rework mode too, unlike step 5.7's — de-slopping a test
+diff has nothing to close on, and the prompt below forbids touching tests
+anyway. One production path anywhere in the diff runs the procedure below.
+
 ## Procedure
 
 Moved verbatim out of `SKILL.md` step 5.6 (PRD 00119-v2). The skip rule, the

@@ -188,8 +188,14 @@ Moved verbatim out of SKILL.md step 5.5 (PRD 00119-v2). Target the narrowest sco
 ## Test-commit SHA (step 2.9)
 
 Moved verbatim out of SKILL.md step 2.9 (PRD 00119-v2). The ESCALATE reset in
-the flow above resets to exactly this commit, and step 5.7's `BASE_SHA` is its
-parent.
+the flow above resets to exactly this commit.
+
+Step 5.7's `BASE_SHA` is **not** derived from it: `BASE_SHA` is `<task_base_sha>`,
+captured by step 2 right after `task-start`. The two coincide whenever step 2.9
+committed tests, but `<task_base_sha>` is also defined for the tasks that commit
+none — test-only, docs-only, config-only and micro-lane — where the old
+parent-of-the-test-commit rule had nothing to point at. The ESCALATE reset is
+`<test_commit_sha>`'s one remaining reader.
 
 **Capture this task's test-commit SHA** immediately — step 5.5's ESCALATE reset resets to exactly this commit (never a prior task's):
 ```bash
