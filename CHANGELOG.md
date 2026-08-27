@@ -105,6 +105,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   repository". Step 7.0 also gained the missing branch for the gate's new exit
   code 2, which records the failure without dispatching a fix agent that would
   have nothing to fix.
+- The pack no longer ships Serena project metadata. `work/`, `review-blindly/`
+  and `review-work-completion/` each carried a `.serena/` directory (505 lines
+  of another tool's per-machine config) into the installed plugin.
 
 ## [0.1.2] - 2026-08-25
 
