@@ -61,7 +61,9 @@ usage() {
     echo "  -f, --file FILE        Read prompt from file"
     echo "  -o, --output FILE      Write output to file (via tee)"
     echo "  -t, --tools LIST       Pass --tools=LIST to claude (prompt mode); -t \"\" grants none"
-    echo "  -r, --resume [ID]      Resume session (optionally specify ID)"
+    echo "  -S, --session-id UUID  Fix the id of a new --print run, so -R can resume it later"
+    echo "  -R, --resume-print ID  Resume session ID in --print mode with the -f prompt"
+    echo "  -r, --resume [ID]      Resume session interactively (optionally specify ID)"
     echo "  -c, --continue         Resume most recent session"
     echo "  -h, --help             Show this help"
     echo ""
@@ -125,6 +127,48 @@ while [[ $# -gt 0 ]]; do
             TOOLS=("--tools=$2")
             shift 2
             ;;
+        -S|--session-id)
+            if [ $# -lt 2 ]; then
+                echo "ERROR: -S/--session-id requires a value" >&2
+                usage >&2
+                exit 1
+            fi
+            # claude owns UUID validation; re-checking the shape here would
+            # only drift from whatever it accepts.
+            SESSION_ARGS+=("--session-id" "$2")
+            shift 2
+            ;;
+        -R|--resume-print)
+            if [ $# -lt 2 ]; then
+                echo "ERROR: -R/--resume-print requires a value" >&2
+                usage >&2
+                exit 1
+            fi
+            RESUME_PRINT_ID="$2"
+            SESSION_ARGS+=("--resume" "$2")
+            shift 2
+            ;;
+        -S|--session-id)
+            if [ $# -lt 2 ]; then
+                echo "ERROR: -S/--session-id requires a value" >&2
+                usage >&2
+                exit 1
+            fi
+            # claude owns UUID validation; re-checking the shape here would only
+            # drift from whatever it accepts.
+            SESSION_ARGS+=("--session-id" "$2")
+            shift 2
+            ;;
+        -R|--resume-print)
+            if [ $# -lt 2 ]; then
+                echo "ERROR: -R/--resume-print requires a value" >&2
+                usage >&2
+                exit 1
+            fi
+            RESUME_PRINT_ID="$2"
+            SESSION_ARGS+=("--resume" "$2")
+            shift 2
+            ;;
         -r|--resume)
             MODE="resume"
             if [[ -n "${2:-}" && ! "$2" =~ ^- ]]; then
@@ -147,6 +191,15 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# -R resumes inside --print; -r/-c/-i deliberately drop --print and want a TTY.
+# One run cannot be both, and silently picking a winner would drop a flag the
+# caller passed on purpose.
+if [ -n "$RESUME_PRINT_ID" ] && [ "$MODE" != "prompt" ]; then
+    echo "ERROR: -R/--resume-print cannot be combined with -r, -c or -i" >&2
+    usage >&2
+    exit 1
+fi
 
 # Read prompt from file if specified
 if [ -n "$PROMPT_FILE" ]; then
@@ -195,6 +248,6 @@ case $MODE in
         # background run can never hang on a child reading the inherited
         # stdin (PRD 00040 hang class). Interactive/resume/continue modes
         # keep stdin - they need the TTY.
-        run_cmd claude --print --model "$MODEL" $PERM "${ADD_DIRS[@]}" "${TOOLS[@]}" "$PROMPT" < /dev/null
+        run_cmd claude --print --model "$MODEL" $PERM "${SESSION_ARGS[@]}" "${ADD_DIRS[@]}" "${TOOLS[@]}" "$PROMPT" < /dev/null
         ;;
 esac

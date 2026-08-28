@@ -31,6 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is variadic, so passing it as a separate argument swallows the prompt and the
   run dies with "Input must be provided". Without the flag the argv is
   unchanged, and a bare `-t` is a usage error rather than a silent grant.
+- **use-sonnet**: `-S, --session-id UUID` fixes the id of a headless run and
+  `-R, --resume-print ID` resumes that conversation, both in `--print` mode, so
+  a second dispatch can carry only what changed instead of the whole diff again.
+  The interactive `-r` is untouched and cannot be combined with `-R`; without
+  either new flag the argv is unchanged, and a bare `-S` or `-R` is a usage
+  error rather than a silently fresh session.
 
 ### Fixed
 

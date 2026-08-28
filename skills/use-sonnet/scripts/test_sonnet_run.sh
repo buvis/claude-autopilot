@@ -276,6 +276,71 @@ else
          "rc=$RC; stderr: $(cat "$STDERR_F"); argv: $(tr '\n' ' ' < "$CLAUDE_ARGV_FILE" 2>/dev/null || echo '<none>')"
 fi
 
+# ══ T13: -S UUID fixes the session id on the headless dispatch ════════════════
+T13_UUID="11111111-2222-3333-4444-555555555555"
+run_sonnet t13 -S "$T13_UUID" -f "$PROMPT_FILE_T"
+
+# 17. -S: argv carries the pair --session-id <uuid> on the --print path, with the
+#     prompt still its own token (the -t regression class).
+if argv_has_pair "$CLAUDE_ARGV_FILE" "--session-id" "$T13_UUID" \
+   && grep -qxF -- "--print" "$CLAUDE_ARGV_FILE" \
+   && grep -qxF -- "$SONNET_PROMPT" "$CLAUDE_ARGV_FILE"; then
+    PASS "-S UUID: argv carries --print, --session-id UUID and the prompt"
+else
+    FAIL "-S UUID: argv carries --print, --session-id UUID and the prompt" \
+         "argv: $(tr '\n' ' ' < "$CLAUDE_ARGV_FILE" 2>/dev/null || echo '<no claude invocation>')"
+fi
+
+# ══ T14: -R ID resumes that session in print mode ═════════════════════════════
+run_sonnet t14 -R "$T13_UUID" -f "$PROMPT_FILE_T"
+
+# 18. -R: argv carries --print and the pair --resume <id>, prompt intact. The
+#     existing -r path deliberately drops --print, so a resume that lost it
+#     would hang an unattended re-review on a TTY that is not there.
+if argv_has_pair "$CLAUDE_ARGV_FILE" "--resume" "$T13_UUID" \
+   && grep -qxF -- "--print" "$CLAUDE_ARGV_FILE" \
+   && grep -qxF -- "$SONNET_PROMPT" "$CLAUDE_ARGV_FILE"; then
+    PASS "-R ID: argv carries --print, --resume ID and the prompt"
+else
+    FAIL "-R ID: argv carries --print, --resume ID and the prompt" \
+         "argv: $(tr '\n' ' ' < "$CLAUDE_ARGV_FILE" 2>/dev/null || echo '<no claude invocation>')"
+fi
+
+# ══ T15: bare -S -> stderr + non-zero + no dispatch ═══════════════════════════
+run_sonnet t15 -S
+
+# 19. Bare -S: guessing an id would silently start a session no -R can resume.
+if [ "$RC" -ne 0 ] && grep -q "requires a value" "$STDERR_F" 2>/dev/null && [ ! -f "$CLAUDE_ARGV_FILE" ]; then
+    PASS "bare -S exits non-zero on stderr with no claude invocation"
+else
+    FAIL "bare -S exits non-zero on stderr with no claude invocation" \
+         "rc=$RC; stderr: $(cat "$STDERR_F"); argv: $(tr '\n' ' ' < "$CLAUDE_ARGV_FILE" 2>/dev/null || echo '<none>')"
+fi
+
+# ══ T16: bare -R -> stderr + non-zero + no dispatch ═══════════════════════════
+run_sonnet t16 -R
+
+# 20. Bare -R: same reason — a resume with no id is a full-price fresh run
+#     wearing a resume's clothes.
+if [ "$RC" -ne 0 ] && grep -q "requires a value" "$STDERR_F" 2>/dev/null && [ ! -f "$CLAUDE_ARGV_FILE" ]; then
+    PASS "bare -R exits non-zero on stderr with no claude invocation"
+else
+    FAIL "bare -R exits non-zero on stderr with no claude invocation" \
+         "rc=$RC; stderr: $(cat "$STDERR_F"); argv: $(tr '\n' ' ' < "$CLAUDE_ARGV_FILE" 2>/dev/null || echo '<none>')"
+fi
+
+# ══ T17: -R with -r is a usage error ══════════════════════════════════════════
+run_sonnet t17 -R "$T13_UUID" -r -f "$PROMPT_FILE_T"
+
+# 21. -R + -r: the two resumes are different modes (--print vs TTY). Picking one
+#     silently would drop a flag the caller passed on purpose.
+if [ "$RC" -ne 0 ] && [ ! -f "$CLAUDE_ARGV_FILE" ]; then
+    PASS "-R with -r exits non-zero with no claude invocation"
+else
+    FAIL "-R with -r exits non-zero with no claude invocation" \
+         "rc=$RC; stderr: $(cat "$STDERR_F"); argv: $(tr '\n' ' ' < "$CLAUDE_ARGV_FILE" 2>/dev/null || echo '<none>')"
+fi
+
 # ══ summary ═══════════════════════════════════════════════════════════════════
 echo ""
 echo "SUMMARY: $PASS_COUNT passed, $FAIL_COUNT failed"
