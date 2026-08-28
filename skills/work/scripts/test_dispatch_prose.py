@@ -600,6 +600,64 @@ def test_pat_persona_carries_both_new_placeholders() -> None:
         )
 
 
+# --- PRD 00165: the resumable reviewer session and its delta re-run ----------
+
+
+def test_step_5_7_mints_a_reviewer_session_id_and_moves_the_review_base() -> None:
+    # Without both handles a re-run has nothing to resume and nothing to diff
+    # from, so it silently degrades to re-sending the whole task diff — the
+    # 369 KB double dispatch PRD 00165 exists to stop.
+    start = _TEXT.index("### 5.7.")
+    end = _TEXT.index("### 6.", start)
+    step_5_7 = _TEXT[start:end]
+
+    for needle in ("pat_session_id", "last_reviewed_sha"):
+        assert needle in step_5_7, (
+            f"{_SKILL_MD}: step 5.7 never names {needle!r}. The per-task review "
+            "then has no id to resume and no moving base, and every re-review "
+            "re-reads the diff the reviewer already read."
+        )
+
+
+def test_per_task_review_carries_the_delta_rerun_and_its_fallback() -> None:
+    review = (_SKILL_MD.parent / "references" / "per-task-review.md").read_text()
+
+    for needle in ('-S "', '-R "', "pat-rerun-prompt.md", "resume_failed"):
+        assert needle in review, (
+            f"references/per-task-review.md never names {needle!r}. Either the "
+            "first dispatch stopped fixing a session id, the re-run stopped "
+            "resuming it, or a failed resume lost its fallback — and a review "
+            "that silently did not happen is the one failure this lane must "
+            "never have."
+        )
+
+
+def test_the_rerun_template_keeps_all_three_placeholders() -> None:
+    # render_prompt.py exits 1 on an UNFILLED placeholder, but a placeholder
+    # DELETED from the template is a --set that lands nowhere: the render
+    # succeeds and the reviewer silently never sees the delta.
+    template = (_SKILL_MD.parent / "references" / "pat-rerun-prompt.md").read_text()
+
+    for placeholder in ("{PRIOR_FINDINGS}", "{DELTA_DIFF}", "{UNCHANGED_NOTE}"):
+        assert placeholder in template, (
+            f"references/pat-rerun-prompt.md is missing {placeholder}. The "
+            "re-run render sets it, and a set value with nowhere to land is "
+            "dropped without an error."
+        )
+
+
+def test_attempt_logging_enumerates_the_resume_failure_note() -> None:
+    attempt_logging = (
+        _SKILL_MD.parent / "references" / "attempt-logging.md"
+    ).read_text()
+
+    assert "resume_failed" in attempt_logging, (
+        "references/attempt-logging.md does not enumerate 'resume_failed'; "
+        "/work writes it, so a reader auditing the record cannot tell a delta "
+        "re-review from one that fell back to the full diff."
+    )
+
+
 def test_the_simplification_mandate_maps_simplifications_to_low() -> None:
     # The whole point of PRD 00159's severity split: a behavior-preserving
     # simplification must not cost an Ivan dispatch and a Pat re-run. While the
