@@ -21,6 +21,7 @@ is missing or empty (a runner failure, not a contract failure).
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -29,24 +30,33 @@ _CLOSURE_VERDICTS = ("resolved", "unresolved")
 _NO_FINDINGS = "NO FINDINGS"
 _SEPARATOR = " | "
 
+# Markdown a reviewer wraps its findings in. Stripped for RECOGNITION only —
+# the fields are still split off the raw line, where a leading bullet sits
+# outside the first ` | ` field and changes nothing.
+_LIST_MARKER = re.compile(r"^(?:[-*+>]\s+|\d+[.)]\s+)+")
+
 
 class InvalidReview(ValueError):
     """A reply that breaks the reporting contract. `line` is empty when none does."""
 
     def __init__(self, reason: str, line: str = "") -> None:
         super().__init__(f"{reason}: {line}" if line else reason)
-        self.reason = reason
-        self.line = line
 
 
 def _claimed_keyword(line: str) -> str | None:
     """The contract keyword a line claims, whatever it then does with it.
 
-    Trailing punctuation is stripped so `MEDIUM: file.py:12 - issue` is caught as
-    a botched finding rather than waved through as prose, while `Low-hanging
-    fruit` stays prose — the strip only reaches the end of the first word.
+    Two ways a line claims one and is not recognised naively. It arrives dressed
+    as markdown (`- MEDIUM | ...`, `**MEDIUM** | ...`, `1. MEDIUM | ...`) — a
+    well-formed finding that would otherwise be read as prose and dropped. Or it
+    arrives malformed (`MEDIUM: file.py:12 - issue`) — a finding to a human and
+    nothing to a parser. Both must be caught; `Low-hanging fruit` must not, so
+    the strips only reach the ends of the first word.
     """
-    first_word = line.split(maxsplit=1)[0].rstrip(":;,.-|").upper()
+    words = _LIST_MARKER.sub("", line).split(maxsplit=1)
+    if not words:
+        return None
+    first_word = words[0].strip("*_").rstrip(":;,.-|").upper()
     if first_word in _SEVERITIES or first_word == "CLOSURE":
         return first_word
     return None

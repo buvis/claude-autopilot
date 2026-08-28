@@ -102,6 +102,61 @@ def test_prose_around_the_contract_lines_is_ignored() -> None:
     assert result["findings"][0]["severity"] == "LOW"
 
 
+@pytest.mark.parametrize(
+    "decorated",
+    [
+        "- MEDIUM | a.py:3 | swallowed OSError | re-raise",
+        "* MEDIUM | a.py:3 | swallowed OSError | re-raise",
+        "1. MEDIUM | a.py:3 | swallowed OSError | re-raise",
+        "> MEDIUM | a.py:3 | swallowed OSError | re-raise",
+        "**MEDIUM** | a.py:3 | swallowed OSError | re-raise",
+    ],
+)
+def test_a_finding_dressed_as_markdown_is_still_a_finding(decorated: str) -> None:
+    # Reviewers write markdown. Before this was handled a bulleted finding read
+    # as prose and vanished — and it vanished SILENTLY, because the plain
+    # finding beside it still made the reply valid. That is the exact silent
+    # drop this parser exists to prevent, arriving through the front door.
+    result = parse_review.parse(
+        f"{decorated}\nLOW | b.py:9 | duplicated helper | inline it\n",
+    )
+
+    severities = [finding["severity"] for finding in result["findings"]]
+    assert severities == ["MEDIUM", "LOW"]
+    assert result["findings"][0]["file"] == "a.py:3"
+
+
+def test_a_closure_dressed_as_markdown_is_still_a_closure() -> None:
+    result = parse_review.parse(
+        "- CLOSURE | resolved | duplicated helper | inlined at a.py:12\n",
+    )
+
+    assert result["closures"] == [
+        {
+            "verdict": "resolved",
+            "finding": "duplicated helper",
+            "evidence": "inlined at a.py:12",
+        },
+    ]
+
+
+def test_closure_is_recognised_whatever_its_case() -> None:
+    # The contract spells it CLOSURE. Matching case-sensitively would send
+    # `closure | resolved | ...` down the prose path and drop a verdict the
+    # rework cycle needs to close on — the same silent drop as above.
+    result = parse_review.parse(
+        "closure | Resolved | duplicated helper | inlined at a.py:12\n",
+    )
+
+    assert result["closures"] == [
+        {
+            "verdict": "resolved",
+            "finding": "duplicated helper",
+            "evidence": "inlined at a.py:12",
+        },
+    ]
+
+
 def test_a_severity_line_missing_its_fields_is_rejected_by_name(
     tmp_path: Path,
 ) -> None:

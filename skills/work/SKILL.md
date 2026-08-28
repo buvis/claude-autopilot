@@ -265,7 +265,7 @@ git commit -m "test(<scope>): add tests for <feature>"
 
 Tests are committed separately before implementation, making the TDD boundary auditable in git history.
 
-**Capture this task's test-commit SHA** immediately and hold it in-session as `<test_commit_sha>` — **read `references/gate-failure.md` § Test-commit SHA before moving on** for the command and its two readers (step 5.5's ESCALATE reset, step 5.7's `BASE_SHA`).
+**Capture this task's test-commit SHA** immediately and hold it in-session as `<test_commit_sha>` — **read `references/gate-failure.md` § Test-commit SHA before moving on** for the command and its one reader, step 5.5's ESCALATE reset. Step 5.7's `BASE_SHA` is `<task_base_sha>` from step 2, not this.
 
 ### 2.95. Red-check — watch the tests fail
 
@@ -281,7 +281,7 @@ Ivan's job: make the failing tests pass. Tests ARE the spec.
 
 **Ivan receives:** failing test file paths and their content, architecture context (AGENTS.md, interfaces, relevant modules), and existing code patterns to follow. **Ivan does NOT receive:** the task's acceptance criteria prose (tests replace this) or permission to modify test files.
 
-**Test-only, docs-only and config-only tasks (Tess skipped at 2.7):** there are no failing tests, so write the task's `Verify:` line and its `Acceptance criteria` bullets to `dev/local/tmp/ivan-<task-id>-checks.txt` and pass that as `--set-file FAILING_TESTS=` instead of the `--set-cmd` below; `FILE_PATHS` is the test, doc or config files the task touches (Ivan may edit test files his allowlist names). Step 2.95 is skipped and the attempt records `red_check` as `n/a:test-only-task`, `n/a:docs-only-task` or `n/a:config-only-task`. Pat's step-5.7 review still runs for test-only tasks; the docs-only and config-only skip there is unchanged.
+**Test-only, docs-only and config-only tasks (Tess skipped at 2.7):** there are no failing tests, so write the task's `Verify:` line and its `Acceptance criteria` bullets to `dev/local/tmp/ivan-<task-id>-checks.txt` and pass that as `--set-file FAILING_TESTS=` instead of the `--set-cmd` below; `FILE_PATHS` is the test, doc or config files the task touches (Ivan may edit test files his allowlist names). Step 2.95 is skipped and the attempt records `red_check` as `n/a:test-only-task`, `n/a:docs-only-task` or `n/a:config-only-task`. Pat's step-5.7 review runs for a test-only task only in rework mode — outside it, step 5.7's own test-only gate skips him and stamps `review: "skipped:test-only"`; the docs-only and config-only skip there is unchanged.
 
 Render: one Bash call. **Task-authored prose never crosses the shell** — write it to a scratch file with the Write tool and pass `--set-file`; see § Passing values to render_prompt.py. Every interpolated path is `shlex.quote()`-d (or bash's `printf '%q '`) before it lands inside a `--set-cmd` value:
 ```bash
@@ -417,9 +417,9 @@ Compute `net_lines = insertions - deletions` (from `--shortstat`) and `file_coun
 | `fable` | review (below) — the rescue rung is reviewed like `opus` |
 | anything else — `opus`, `sonnet`, absent/legacy or unknown (both treated as `sonnet`) | review (below) |
 
-**Test-only skip (outside rework mode).** Apply `test_only_gate` from `${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/work_routing.py` to `git diff --name-only <task_base_sha>..HEAD`: a `review` key in the result means skip this step and record `review: "skipped:test-only"` — every tier takes it, `fable` included, and a rework task keeps its reviewer. Otherwise dispatch the reviewer after commit and verification — a native lane, no plugin dependency:
+**Test-only skip (outside rework mode).** Apply `test_only_gate` from `${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/work_routing.py` to `git diff --name-only <task_base_sha>..HEAD`: a `review` key in the result means skip this step and record `review: "skipped:test-only"` — every tier that reaches this gate takes it, `fable` included; a `haiku` task already exited at the table above and records nothing, and a rework task keeps its reviewer. Otherwise dispatch the reviewer after commit and verification — a native lane, no plugin dependency:
 
-1. Get SHAs: `BASE_SHA` = `<task_base_sha>` (step 2), `HEAD_SHA` = current HEAD (includes the step-5.6 deslop commit when one landed).
+1. Get SHAs: `BASE_SHA` = `<task_base_sha>` (step 2), `HEAD_SHA` = current HEAD (includes the step-5.6 deslop commit when one landed). Then write `dev/local/tmp/review-task-<id>-verification.txt` (`references/per-task-review.md` § Recorded verification) — item 2's render reads it with `--set-file` and exits non-zero when it is absent.
 2. Render the review prompt with one Bash call, every interpolated path `shlex.quote()`-d (or bash's `printf '%q '`) before it lands inside a `--set-cmd` value:
    ```bash
    python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/pat.md \

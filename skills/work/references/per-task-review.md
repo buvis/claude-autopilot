@@ -58,11 +58,19 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/parse_review.py dev/local/tmp/
 
 - **Exit 0** — the JSON on stdout (`no_findings`, `findings`, `closures`) is what
   the ladder below reads. Do not re-parse the raw text by hand.
-- **Exit 1** — the reply broke the reporting contract. Re-render `pat.md` with
-  every flag identical except `--set CONTRACT_CORRECTION=` set to exactly this
-  text, then dispatch **once** more:
+- **Exit 1** — the reply broke the reporting contract. Write this text verbatim
+  to `dev/local/tmp/review-task-<id>-correction.txt` with the **Write tool**,
+  re-render `pat.md` with every flag identical except
+  `--set-file CONTRACT_CORRECTION=dev/local/tmp/review-task-<id>-correction.txt`,
+  then dispatch **once** more:
 
   > Your previous reply did not follow the reporting contract. Reply again with only lines of the form `SEVERITY | file:line | issue | fix` (CRITICAL/HIGH/MEDIUM/LOW), CLOSURE lines where the description carries a findings block, or the single line `NO FINDINGS`. No other text.
+
+  **Never `--set` this one.** The text carries backticks; inside a double-quoted
+  Bash word they are command substitution, so the correction would reach the
+  reviewer with the line shapes it is teaching replaced by empty strings — on
+  the single dispatch whose whole job is teaching the line shape. Same rule as
+  the task-authored prose flags, and for the same reason.
 
   A second exit 1 records `review: "failed:invalid_output"` on the attempt
   record and in the phase report (fail loud), then proceeds to step 6. The
