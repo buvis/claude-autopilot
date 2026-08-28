@@ -545,7 +545,9 @@ def test_violations_records_an_unreadable_path_in_the_skipped_list(
     tmp_path: Path,
 ) -> None:
     """`skipped` is what lets main() tell 'found nothing' from 'did not
-    look'; a path that simply is not in the diff is NOT a skip."""
+    look'. Since PRD 00162 a path the diff does not name is a skip too:
+    the caller derived it from that diff, so the gate cannot claim the
+    file is simply unchanged."""
     py_file, diff_text = _write_over_limit_diff(tmp_path)
     absent = _write(tmp_path, "not_in_diff.py", "def tiny():\n    return 1\n")
     skipped: list[str] = []
@@ -554,7 +556,7 @@ def test_violations_records_an_unreadable_path_in_the_skipped_list(
         csl.violations(diff_text, [py_file, absent], skipped=skipped)
     finally:
         py_file.chmod(0o644)
-    assert skipped == [str(py_file)]
+    assert skipped == [str(py_file), str(absent)]
 
 
 def test_main_exits_two_and_names_the_path_when_the_diff_file_is_missing(
@@ -600,3 +602,24 @@ def test_cli_subprocess_exits_zero_and_prints_nothing_for_a_clean_diff(
     result = _run("--diff", str(diff_file), str(py_file))
     assert result.returncode == 0
     assert result.stdout == ""
+
+
+# --- uninspected candidates and untracked full-add blocks (PRD 00162) ---------
+
+
+def test_main_exits_two_when_a_candidate_is_absent_from_the_diff(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    """PRD 00162: every caller derives its candidate list from the diff, so
+    a candidate with no `+++ b/` match is a caller/gate disagreement, not an
+    ordinary answer. Passing it over silently is how eight oversized
+    functions in uncommitted modules earned a `style_gate: clean`."""
+    py_file, diff_text = _write_clean_diff(tmp_path)
+    absent = _write(tmp_path, "untracked.py", _long_function("over_limit", 60))
+    diff_file = _write(tmp_path, "changes.diff", diff_text)
+    exit_code = csl.main(["--diff", str(diff_file), str(py_file), str(absent)])
+    captured = capsys.readouterr()
+    assert exit_code == 2, "a candidate the gate never located must not exit 0"
+    assert str(absent) in captured.err
+    assert "gate incomplete" in captured.err

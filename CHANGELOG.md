@@ -49,6 +49,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **work**: the style-limit gate no longer reports clean over a Python file it
+  could not find in the diff. Such a file is recorded as not inspected, so the
+  gate exits 2 and step 7.0 records `style_gate: failed:<stderr>` instead of
+  certifying a file it never opened.
 - **docs**: the review pack step no longer tells you to run `engram` out of one
   machine's checkout path. It shows the plain `engram pack` command and says
   `engram` is optional, with the `uv run --project <your engram checkout>` form
