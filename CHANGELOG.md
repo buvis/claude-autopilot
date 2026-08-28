@@ -54,7 +54,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   untracked `.py` file to the phase diff, so a new module's oversized functions
   are flagged before the review sees them, and a candidate the gate cannot find
   in the diff is recorded as not inspected (exit 2, `style_gate:
-  failed:<stderr>`) instead of certifying a file it never opened.
+  failed:<stderr>`) instead of certifying a file it never opened. A block that
+  changes no content - a pure rename, a mode-only change, an empty new file -
+  reads as inspected and clean rather than forcing that exit 2.
 - **docs**: the review pack step no longer tells you to run `engram` out of one
   machine's checkout path. It shows the plain `engram pack` command and says
   `engram` is optional, with the `uv run --project <your engram checkout>` form
