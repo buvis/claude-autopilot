@@ -42,6 +42,8 @@ MODE="prompt"  # prompt, interactive, resume, continue
 PERM=""        # -a = acceptEdits (edits auto-approved, Bash still gated); -y = full bypass
 ADD_DIRS=()
 TOOLS=()       # -t "" pins a reviewer to the prompt: no tools, no reading around
+SESSION_ARGS=()      # -S fixes a new session's id, -R resumes one; --print only
+RESUME_PRINT_ID=""
 PROMPT=""
 PROMPT_FILE=""
 OUTPUT_FILE=""
@@ -135,27 +137,6 @@ while [[ $# -gt 0 ]]; do
             fi
             # claude owns UUID validation; re-checking the shape here would
             # only drift from whatever it accepts.
-            SESSION_ARGS+=("--session-id" "$2")
-            shift 2
-            ;;
-        -R|--resume-print)
-            if [ $# -lt 2 ]; then
-                echo "ERROR: -R/--resume-print requires a value" >&2
-                usage >&2
-                exit 1
-            fi
-            RESUME_PRINT_ID="$2"
-            SESSION_ARGS+=("--resume" "$2")
-            shift 2
-            ;;
-        -S|--session-id)
-            if [ $# -lt 2 ]; then
-                echo "ERROR: -S/--session-id requires a value" >&2
-                usage >&2
-                exit 1
-            fi
-            # claude owns UUID validation; re-checking the shape here would only
-            # drift from whatever it accepts.
             SESSION_ARGS+=("--session-id" "$2")
             shift 2
             ;;

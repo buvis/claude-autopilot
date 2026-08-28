@@ -58,6 +58,12 @@ instead of starting over. Pat already read `<task_base_sha>..<last_reviewed_sha>
 re-sending it is what made a second dispatch cost a whole task diff — a measured
 369 KB prompt, sent twice, to check a one-file fix.
 
+**Check the delta is non-empty first.** An empty `git diff <last_reviewed_sha>..HEAD`
+means the fix never committed, and `render_prompt.py` exits 4 on a `--set-cmd`
+that produces no output. Do not dispatch: there is nothing new to judge, the
+previous cycle's findings stand, and the loop continues through the CRITICAL/HIGH
+row below whose 3-cycle cap is what ends it.
+
 For cycle `<n>` (2 or 3):
 
 1. Write the findings you sent the fixer, verbatim, one per line, to
@@ -88,16 +94,26 @@ the reporting contract is unchanged, so nothing downstream cares that the prompt
 was a delta. A correction retry (exit 1) re-renders `pat.md`, not this template —
 a reply that broke the line shape is not a resume problem.
 
+**No `<pat_session_id>` means no delta lane at all.** When step 5.7 could not
+generate an id, or § Resume failure dropped it, every cycle takes the full-diff
+dispatch of § Dispatch with neither `-S` nor `-R` — exactly today's behavior.
+Never dispatch `-R ""`.
+
 ## Resume failure
 
 A `-R` dispatch that exits non-zero or leaves the output file empty (a session
 that no longer resolves exits 1 with `No conversation found with session ID:`)
 re-dispatches **once** with today's full-diff prompt: re-render `pat.md` exactly
 as SKILL.md step 5.7 item 2 does, with `--set-cmd DIFF="git diff <task_base_sha>..HEAD"`,
-and run the § Dispatch command above with neither `-S` nor `-R`. Append
-`resume_failed` to the attempt record's `review` string and name the fallback in
-the phase report — a cheap review that silently did not happen is worse than an
-expensive one that did.
+and run the § Dispatch command above with neither `-S` nor `-R`. Record
+`resume_failed` on the attempt record's `review` field (`references/attempt-logging.md`
+§ `review` for the shape) and name the fallback in the phase report — a cheap
+review that silently did not happen is worse than an expensive one that did.
+
+Then **drop `<pat_session_id>`** and advance `<last_reviewed_sha>` to the HEAD
+that fallback read. The session is gone; leaving the id in place would aim every
+remaining cycle at a `-R` that is already known to fail, spending a doomed
+dispatch each time.
 
 That is the same single retry the runner-failure row below grants, not an extra
 one: a second failure takes that row's `review: failed:<cause>` path.
@@ -117,7 +133,11 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/parse_review.py dev/local/tmp/
   to `dev/local/tmp/review-task-<id>-correction.txt` with the **Write tool**,
   re-render `pat.md` with every flag identical except
   `--set-file CONTRACT_CORRECTION=dev/local/tmp/review-task-<id>-correction.txt`,
-  then dispatch **once** more:
+  then dispatch **once** more — with `-R "<pat_session_id>"`, never `-S`. The
+  session already exists by then, and re-passing `-S` with the same id exits 1
+  on `Error: Session ID <id> is already in use.` (verified live 2026-08-28),
+  which would spend the whole correction retry on a runner failure. No id in
+  hand → neither flag. A `-R` that fails here takes § Resume failure:
 
   > Your previous reply did not follow the reporting contract. Reply again with only lines of the form `SEVERITY | file:line | issue | fix` (CRITICAL/HIGH/MEDIUM/LOW), CLOSURE lines where the description carries a findings block, or the single line `NO FINDINGS`. No other text.
 

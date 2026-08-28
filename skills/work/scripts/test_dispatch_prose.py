@@ -632,6 +632,59 @@ def test_per_task_review_carries_the_delta_rerun_and_its_fallback() -> None:
         )
 
 
+def test_the_delta_rerun_advances_its_base_and_never_resumes_a_dead_session() -> None:
+    # Token presence alone would pass while the lane still re-sent the whole
+    # diff every cycle: the base has to MOVE, and the two paths with no live
+    # session (never minted, or dropped after a fallback) have to route to the
+    # full-diff dispatch instead of aiming `-R ""` at nothing.
+    review = (_SKILL_MD.parent / "references" / "per-task-review.md").read_text()
+
+    start = review.index("## Delta re-runs")
+    delta = review[start : review.index("## Result handling", start)]
+
+    assert "Advance `<last_reviewed_sha>`" in delta, (
+        "references/per-task-review.md § Delta re-runs never says to advance "
+        "`<last_reviewed_sha>`. Without that step every cycle re-sends the "
+        "range the reviewer already read, which is the whole cost PRD 00165 "
+        "set out to remove."
+    )
+    assert '-R ""' in delta, (
+        "references/per-task-review.md § Delta re-runs never rules out "
+        'dispatching `-R ""`. A task whose id could not be generated, or whose '
+        "session was dropped by a failed resume, then resumes nothing on every "
+        "remaining cycle."
+    )
+
+    fallback = review[review.index("## Resume failure") :]
+    assert "drop `<pat_session_id>`" in fallback, (
+        "references/per-task-review.md § Resume failure never drops "
+        "`<pat_session_id>` after the fallback. The session is known dead at "
+        "that point, so every later cycle aims a `-R` at it and burns another "
+        "doomed dispatch."
+    )
+
+
+def test_the_correction_retry_never_reuses_the_session_id_it_already_created() -> None:
+    # Verified live 2026-08-28: a second --session-id carrying the same uuid
+    # exits 1 on "Session ID <id> is already in use." The correction retry gets
+    # exactly one dispatch, so spending it on that error costs the whole review.
+    review = (_SKILL_MD.parent / "references" / "per-task-review.md").read_text()
+
+    exit_1_clause = review.split("**Exit 1**", 1)[1].split("**Exit 2**", 1)[0]
+
+    assert "already in use" in exit_1_clause, (
+        "references/per-task-review.md's exit-1 branch does not say why the "
+        "correction retry must not re-pass `-S`. Its dispatch flags went "
+        "unstated once § Dispatch grew a `-S`, and the naive reading reuses an "
+        "id claude rejects."
+    )
+    assert "never `-S`" in exit_1_clause, (
+        "references/per-task-review.md's exit-1 branch does not forbid `-S` on "
+        "the correction retry — the one dispatch it gets would die on a "
+        "duplicate session id instead of re-asking for the line shape."
+    )
+
+
 def test_the_rerun_template_keeps_all_three_placeholders() -> None:
     # render_prompt.py exits 1 on an UNFILLED placeholder, but a placeholder
     # DELETED from the template is a --set that lands nowhere: the render
@@ -644,6 +697,29 @@ def test_the_rerun_template_keeps_all_three_placeholders() -> None:
             "re-run render sets it, and a set value with nowhere to land is "
             "dropped without an error."
         )
+
+
+def test_the_rerun_template_will_not_let_an_unresolved_finding_vanish() -> None:
+    # The template tells the reviewer not to re-report the earlier range. Left
+    # there, an unfixed HIGH plus a clean-looking delta yields a parseable
+    # NO FINDINGS, the ladder proceeds to step 6, and the defect ships — a
+    # coverage regression against the full-diff re-review this replaces. So an
+    # unresolved finding must come back as a contract line, and NO FINDINGS must
+    # require BOTH a clean delta and no unresolved finding.
+    template = (_SKILL_MD.parent / "references" / "pat-rerun-prompt.md").read_text()
+
+    assert "unresolved as a contract line" in template, (
+        "references/pat-rerun-prompt.md never tells the reviewer to re-emit an "
+        "unresolved prior finding as a contract line. Silence then reads as "
+        "fixed: parse_review.py sees no finding, the ladder proceeds, and the "
+        "defect ships."
+    )
+    assert "only when the delta is clean AND" in template, (
+        "references/pat-rerun-prompt.md does not reserve NO FINDINGS for a "
+        "clean delta AND every prior finding resolved. A reviewer reading "
+        "'NO FINDINGS when the delta has none' emits it with a prior HIGH "
+        "still open."
+    )
 
 
 def test_attempt_logging_enumerates_the_resume_failure_note() -> None:
