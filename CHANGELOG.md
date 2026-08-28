@@ -38,6 +38,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   either new flag the argv is unchanged, and a bare `-S` or `-R` is a usage
   error rather than a silently fresh session.
 
+### Changed
+
+- **work**: a per-task review re-run now carries only the delta. The first
+  dispatch of a task fixes a reviewer session id; every later cycle resumes that
+  conversation with the prior findings and `git diff <last reviewed>..HEAD`
+  instead of the whole task diff again. A resume that fails falls back to one
+  full-diff dispatch and says so in the report (`review: resume_failed`), so the
+  review is never skipped.
+
 ### Fixed
 
 - **docs**: the review pack step no longer tells you to run `engram` out of one
