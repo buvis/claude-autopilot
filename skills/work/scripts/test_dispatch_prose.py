@@ -367,6 +367,31 @@ def test_step_7_0_branches_on_a_gate_that_could_not_run() -> None:
     )
 
 
+def test_step_7_0_covers_python_files_no_commit_holds_yet() -> None:
+    # PRD 00162: the committed-range enumeration cannot see a module that
+    # exists on disk but in no commit, so the gate certified files it never
+    # opened. Step 7.0 must list untracked Python files and append a
+    # whole-file add block for each, and it must say that `--no-index`
+    # exiting 1 is the normal case — a reader who treats that as a command
+    # failure abandons the append and the hole reopens.
+    start = _TEXT.index("#### 7.0.")
+    end = _TEXT.index("**What to run**", start)
+    step_7_0 = _TEXT[start:end]
+
+    for needle in ("ls-files --others", "--no-index"):
+        assert needle in step_7_0, (
+            f"{_SKILL_MD}: step 7.0 never names {needle!r}, so an uncommitted "
+            "Python file is absent from the phase diff and the gate reports "
+            "clean over a file it never opened."
+        )
+    assert "exit ≥2" in step_7_0, (
+        f"{_SKILL_MD}: step 7.0 never says that only exit ≥2 is a real "
+        "`--no-index` failure. It exits 1 on every file it appends, so "
+        "without that line a literal reader reads the normal case as a "
+        "broken command."
+    )
+
+
 def test_step_2_7_includes_a_harness_contract_when_one_exists() -> None:
     # PRD 00141: Tess is briefed from requirements only, so a project whose
     # test harness has non-obvious rules (a helper that installs its own
