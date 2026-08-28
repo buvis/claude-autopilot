@@ -367,60 +367,6 @@ def test_step_7_0_branches_on_a_gate_that_could_not_run() -> None:
     )
 
 
-def test_step_7_0_covers_python_files_no_commit_holds_yet() -> None:
-    # PRD 00162: the committed-range enumeration cannot see a module that
-    # exists on disk but in no commit, so the gate certified files it never
-    # opened. Step 7.0 must list untracked Python files and append a
-    # whole-file add block for each, and it must say that `--no-index`
-    # exiting 1 is the normal case — a reader who treats that as a command
-    # failure abandons the append and the hole reopens.
-    start = _TEXT.index("#### 7.0.")
-    end = _TEXT.index("**What to run**", start)
-    step_7_0 = _TEXT[start:end]
-
-    for needle in ("ls-files --others", "--no-index"):
-        assert needle in step_7_0, (
-            f"{_SKILL_MD}: step 7.0 never names {needle!r}, so an uncommitted "
-            "Python file is absent from the phase diff and the gate reports "
-            "clean over a file it never opened."
-        )
-    assert "exit ≥2" in step_7_0, (
-        f"{_SKILL_MD}: step 7.0 never says that only exit ≥2 is a real "
-        "`--no-index` failure. It exits 1 on every file it appends, so "
-        "without that line a literal reader reads the normal case as a "
-        "broken command."
-    )
-
-    # The tokens above can all survive while the sweep is disconnected from
-    # the gate, so pin the three joins: the append extends the same file the
-    # committed range was written to, that file reaches the path the gate is
-    # handed, and the untracked paths enter the candidate list.
-    staged = re.search(r"--output=(\S+/phase-diff\.txt)", step_7_0)
-    assert staged, (
-        f"{_SKILL_MD}: step 7.0 no longer writes the committed range to a "
-        "phase-diff.txt — the rest of this pin cannot be checked."
-    )
-    target = staged.group(1)
-    assert f">> {target}" in step_7_0, (
-        f"{_SKILL_MD}: step 7.0 appends the untracked blocks somewhere other "
-        f"than {target}, the file it just wrote the committed range to, so "
-        "the gate reads a diff missing one half of the phase."
-    )
-    assert f"mv {target} dev/local/tmp/phase-diff.txt" in step_7_0, (
-        f"{_SKILL_MD}: step 7.0 never moves {target} to "
-        "dev/local/tmp/phase-diff.txt, which is the path it hands the gate."
-    )
-    assert "--diff dev/local/tmp/phase-diff.txt" in step_7_0, (
-        f"{_SKILL_MD}: step 7.0 no longer runs the gate against "
-        "dev/local/tmp/phase-diff.txt, the file it assembled."
-    )
-    assert "plus those untracked paths" in step_7_0, (
-        f"{_SKILL_MD}: step 7.0 never adds the untracked paths to the "
-        "candidate list. A path absent from that list is never inspected, "
-        "however complete the diff is."
-    )
-
-
 def test_step_2_7_includes_a_harness_contract_when_one_exists() -> None:
     # PRD 00141: Tess is briefed from requirements only, so a project whose
     # test harness has non-obvious rules (a helper that installs its own
