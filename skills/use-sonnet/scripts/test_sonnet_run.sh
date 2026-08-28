@@ -230,24 +230,37 @@ fi
 # ══ T10: -t "" pins the child to no tools ════════════════════════════════════
 run_sonnet t10 -t "" -f "$PROMPT_FILE_T"
 
-# 14. -t "": argv carries the pair --tools "". An empty value is the whole point
-#     of the flag (a reviewer that judges the prompt and nothing else), so it
-#     must survive as a token rather than collapse into nothing.
-if argv_has_pair "$CLAUDE_ARGV_FILE" "--tools" ""; then
-    PASS '-t "": argv carries the pair --tools ""'
+# 14. -t "": argv carries the SINGLE token --tools=. claude's --tools is
+#     variadic (`--tools <tools...>`), so a two-token `--tools` `""` keeps
+#     consuming argv and eats the prompt — a live run dies with "Input must be
+#     provided ... when using --print". The joined form is the only one that
+#     works, and an empty value must still reach the child: it is what grants
+#     no tools at all.
+if grep -qxF -- "--tools=" "$CLAUDE_ARGV_FILE"; then
+    PASS '-t "": argv carries the single token --tools='
 else
-    FAIL '-t "": argv carries the pair --tools ""' \
+    FAIL '-t "": argv carries the single token --tools=' \
+         "argv: $(tr '\n' ' ' < "$CLAUDE_ARGV_FILE" 2>/dev/null || echo '<no claude invocation>')"
+fi
+
+# 14b. The prompt must still reach claude as its own token. This is the exact
+#      regression the two-token form caused, and the one a pair assertion
+#      cannot see: the flag was there, the prompt was gone.
+if grep -qxF -- "$SONNET_PROMPT" "$CLAUDE_ARGV_FILE"; then
+    PASS '-t "": the prompt still reaches claude as its own argv token'
+else
+    FAIL '-t "": the prompt still reaches claude as its own argv token' \
          "argv: $(tr '\n' ' ' < "$CLAUDE_ARGV_FILE" 2>/dev/null || echo '<no claude invocation>')"
 fi
 
 # ══ T11: -t LIST passes the list through ══════════════════════════════════════
 run_sonnet t11 -t Read -f "$PROMPT_FILE_T"
 
-# 15. -t Read: argv carries the pair --tools Read.
-if argv_has_pair "$CLAUDE_ARGV_FILE" "--tools" "Read"; then
-    PASS "-t Read: argv carries --tools Read"
+# 15. -t Read: argv carries the single token --tools=Read, prompt intact.
+if grep -qxF -- "--tools=Read" "$CLAUDE_ARGV_FILE" && grep -qxF -- "$SONNET_PROMPT" "$CLAUDE_ARGV_FILE"; then
+    PASS "-t Read: argv carries --tools=Read with the prompt intact"
 else
-    FAIL "-t Read: argv carries --tools Read" \
+    FAIL "-t Read: argv carries --tools=Read with the prompt intact" \
          "argv: $(tr '\n' ' ' < "$CLAUDE_ARGV_FILE" 2>/dev/null || echo '<no claude invocation>')"
 fi
 

@@ -60,7 +60,7 @@ usage() {
     echo "  -d, --dir DIR          Allow access to directory (can repeat)"
     echo "  -f, --file FILE        Read prompt from file"
     echo "  -o, --output FILE      Write output to file (via tee)"
-    echo "  -t, --tools LIST       Pass --tools LIST to claude (prompt mode); -t \"\" grants none"
+    echo "  -t, --tools LIST       Pass --tools=LIST to claude (prompt mode); -t \"\" grants none"
     echo "  -r, --resume [ID]      Resume session (optionally specify ID)"
     echo "  -c, --continue         Resume most recent session"
     echo "  -h, --help             Show this help"
@@ -117,7 +117,12 @@ while [[ $# -gt 0 ]]; do
                 usage >&2
                 exit 1
             fi
-            TOOLS=("--tools" "$2")
+            # `--tools=LIST` as ONE token, never the two-token `--tools LIST`:
+            # claude's flag is variadic (`--tools <tools...>`), so the separate
+            # form keeps eating argv and swallows the prompt. Verified live —
+            # the two-token form dies with "Input must be provided either
+            # through stdin or as a prompt argument when using --print".
+            TOOLS=("--tools=$2")
             shift 2
             ;;
         -r|--resume)
