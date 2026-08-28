@@ -115,17 +115,18 @@ def _resolve_diff_path(
     skip it (print the file and the tied candidates to stderr, and record
     it in `skipped`) rather than silently picking one or pooling them.
 
-    No match at all is a skip too, recorded by the caller (PRD 00162):
-    every caller in this pack derives its candidate list from the same
-    diff it passes here, so a path the diff does not name is a
-    caller/gate disagreement and must fail loud rather than read as a
-    file this diff did not change."""
+    No match at all is a skip too (PRD 00162): every caller in this pack
+    derives its candidate list from the same diff it passes here, so a
+    path the diff does not name is a caller/gate disagreement and must
+    fail loud rather than read as a file this diff left alone."""
     by_depth: dict[int, list[str]] = {}
     for dp in ranges_by_path:
         depth = _match_depth(path, dp)
         if depth is not None:
             by_depth.setdefault(depth, []).append(dp)
     if not by_depth:
+        if skipped is not None:
+            skipped.append(str(path))
         return None
     candidates = by_depth[max(by_depth)]
     if len(candidates) > 1:
@@ -150,8 +151,8 @@ def violations(
     """Return violation lines for the given diff and file paths.
 
     `skipped`, when a list is passed, collects every changed file the gate
-    could not inspect - an ambiguous diff-path tie, a path the diff does
-    not name at all, or a file it could not read. Callers need that to
+    could not inspect - a path the diff does not name, an ambiguous
+    diff-path tie, or a file it could not read. Callers need that to
     tell "found nothing" apart from "did not
     look": step 7.0 records exit 0 as `style_gate: clean`, so a gate that
     silently skipped a changed file would certify a file it never opened.
@@ -162,10 +163,6 @@ def violations(
     for path in paths:
         diff_path = _resolve_diff_path(path, ranges_by_path, skipped)
         if diff_path is None:
-            # The gate never inspected this file. An ambiguous tie is
-            # already in `skipped`; do not count the same path twice.
-            if skipped is not None and str(path) not in skipped:
-                skipped.append(str(path))
             continue
         status, funcs = facts_for_file(path)
         if status == "skipped (non-python)":
