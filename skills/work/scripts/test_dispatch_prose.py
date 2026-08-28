@@ -64,7 +64,7 @@ def test_every_reference_the_body_points_at_exists() -> None:
                 / "references"
                 / match.group(2)
             ).exists()
-        }
+        },
     )
 
     assert not missing, (
@@ -429,7 +429,9 @@ def test_step_3_defines_failing_tests_for_test_only_tasks() -> None:
             "value gets recorded as a passed check."
         )
 
-    attempt_logging = (_SKILL_MD.parent / "references" / "attempt-logging.md").read_text()
+    attempt_logging = (
+        _SKILL_MD.parent / "references" / "attempt-logging.md"
+    ).read_text()
     for value in red_check_values:
         assert value in attempt_logging, (
             f"references/attempt-logging.md does not enumerate {value!r} in "
@@ -462,7 +464,11 @@ def test_step_3_points_at_the_micro_lane_and_the_lane_carries_its_revert() -> No
         )
 
     rework_mode = (_SKILL_MD.parent / "references" / "rework-mode.md").read_text()
-    for needle in ('implementor: "orchestrator"', 'micro_lane: "overrun"', "git checkout -- "):
+    for needle in (
+        'implementor: "orchestrator"',
+        'micro_lane: "overrun"',
+        "git checkout -- ",
+    ):
         assert needle in rework_mode, (
             f"references/rework-mode.md never names {needle!r}. The lane's "
             "record and its revert are what make an un-dispatched edit "
@@ -490,7 +496,9 @@ def test_step_5_runs_the_reflow_tripwire_over_the_stage_list() -> None:
         "step 5 points at a procedure that is not written anywhere."
     )
 
-    attempt_logging = (_SKILL_MD.parent / "references" / "attempt-logging.md").read_text()
+    attempt_logging = (
+        _SKILL_MD.parent / "references" / "attempt-logging.md"
+    ).read_text()
     for value in ('"orchestrator"', '"n/a:micro-lane"', "micro_lane", "reflow"):
         assert value in attempt_logging, (
             f"references/attempt-logging.md does not enumerate {value!r}; a "
@@ -568,7 +576,9 @@ def test_per_task_review_carries_the_tool_less_dispatch_and_the_output_gate() ->
 
 
 def test_attempt_logging_enumerates_both_new_review_values() -> None:
-    attempt_logging = (_SKILL_MD.parent / "references" / "attempt-logging.md").read_text()
+    attempt_logging = (
+        _SKILL_MD.parent / "references" / "attempt-logging.md"
+    ).read_text()
 
     for value in ("skipped:test-only", "failed:invalid_output"):
         assert value in attempt_logging, (
