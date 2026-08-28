@@ -648,8 +648,10 @@ def test_the_delta_rerun_advances_its_base_and_never_resumes_a_dead_session() ->
         "range the reviewer already read, which is the whole cost PRD 00165 "
         "set out to remove."
     )
-    assert '-R ""' in delta, (
-        "references/per-task-review.md § Delta re-runs never rules out "
+    # The PROHIBITION, not the token: a bare `'-R ""' in delta` would pass just
+    # as happily on prose that told the executor to dispatch it.
+    assert 'Never dispatch `-R ""`' in delta, (
+        "references/per-task-review.md § Delta re-runs never forbids "
         'dispatching `-R ""`. A task whose id could not be generated, or whose '
         "session was dropped by a failed resume, then resumes nothing on every "
         "remaining cycle."
@@ -661,6 +663,19 @@ def test_the_delta_rerun_advances_its_base_and_never_resumes_a_dead_session() ->
         "`<pat_session_id>` after the fallback. The session is known dead at "
         "that point, so every later cycle aims a `-R` at it and burns another "
         "doomed dispatch."
+    )
+    # The fallback is ONE dispatch out of an existing budget. Unbounded, a
+    # flapping resume turns each cycle into two full-diff reviews — more
+    # expensive than the lane this PRD replaced.
+    assert "re-dispatches **once**" in fallback, (
+        "references/per-task-review.md § Resume failure does not bound the "
+        "fallback to a single dispatch."
+    )
+    assert "not an extra" in fallback, (
+        "references/per-task-review.md § Resume failure no longer says the "
+        "fallback spends the runner-failure row's existing retry rather than "
+        "adding one. Without that, a resume that keeps failing gets a fresh "
+        "budget every cycle."
     )
 
 
