@@ -31,6 +31,18 @@ _spec.loader.exec_module(_compute_mech_facts)
 facts_for_file = _compute_mech_facts.facts_for_file
 
 _HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))?\s+@@")
+# The destination path of a block header. A block that changes no content -
+# a 100%-similarity rename, a mode-only chmod, an empty new file - carries
+# this header and no `+++ b/` line at all, so the header is the only place
+# its path appears. Registering it with no ranges keeps it resolvable: the
+# gate reports "inspected, nothing to flag" instead of "not inspected".
+_DIFF_HEADER_RE = re.compile(r"^diff --git a/.+? b/(.+)$")
+
+
+def _norm(diff_path: str) -> str:
+    """Collapse `./` and doubled separators, so two spellings of one file
+    are one key rather than an equal-depth ambiguous pair."""
+    return str(Path(diff_path))
 
 
 def touched_ranges(diff_text: str) -> dict[str, list[tuple[int, int]]]:
@@ -53,7 +65,7 @@ def touched_ranges(diff_text: str) -> dict[str, list[tuple[int, int]]]:
     for line in diff_text.splitlines():
         if line.startswith("+++ b/"):
             flush()
-            current_path = line[6:]
+            current_path = _norm(line[6:])
             result.setdefault(current_path, [])
             pending = None
             has_addition = False
@@ -76,6 +88,10 @@ def touched_ranges(diff_text: str) -> dict[str, list[tuple[int, int]]]:
             pending is not None and line.startswith("+") and not line.startswith("+++")
         ):
             has_addition = True
+        elif line.startswith("diff --git "):
+            header = _DIFF_HEADER_RE.match(line)
+            if header:
+                result.setdefault(_norm(header.group(1)), [])
     flush()
     return result
 
@@ -87,7 +103,7 @@ def _line_counts(diff_text: str) -> dict[str, tuple[int, int]]:
     cur = ""
     for line in diff_text.splitlines():
         if line.startswith("+++ b/"):
-            cur = line[6:]
+            cur = _norm(line[6:])
             counts.setdefault(cur, (0, 0))
         elif line.startswith("+++"):
             cur = ""

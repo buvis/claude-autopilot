@@ -696,3 +696,38 @@ def test_pure_deletion_hunk_on_a_present_file_still_exits_zero(
     assert exit_code == 0
     assert captured.out == ""
     assert captured.err == ""
+
+
+def _hunkless_block(body: str) -> str:
+    """A block that changes no content carries a `diff --git` header and no
+    `+++ b/` line at all. Shapes confirmed against git, 2026-08-28."""
+    return "diff --git a/mod.py b/mod.py\n" + body
+
+
+HUNKLESS_BLOCKS = {
+    "empty new file": _hunkless_block("new file mode 100644\nindex 0000000..e69de29\n"),
+    "mode-only change": _hunkless_block("old mode 100644\nnew mode 100755\n"),
+    "pure rename": (
+        "diff --git a/old.py b/mod.py\n"
+        "similarity index 100%\n"
+        "rename from old.py\n"
+        "rename to mod.py\n"
+    ),
+}
+
+
+def test_a_content_free_block_is_inspected_not_skipped(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    """A rename, a chmod and an empty new file change no line, so the gate
+    has nothing to flag and must exit 0. Recording them as uninspected
+    would put `style_gate: failed` on a healthy phase - adding an empty
+    `__init__.py` is enough to trigger it."""
+    py_file = _write(tmp_path, "mod.py", "def small():\n    return 1\n")
+    for name, block in HUNKLESS_BLOCKS.items():
+        diff_file = _write(tmp_path, f"{name}.diff", block)
+        exit_code = csl.main(["--diff", str(diff_file), str(py_file)])
+        captured = capsys.readouterr()
+        assert exit_code == 0, f"{name} exited {exit_code}: {captured.err}"
+        assert captured.err == "", f"{name}: {captured.err}"

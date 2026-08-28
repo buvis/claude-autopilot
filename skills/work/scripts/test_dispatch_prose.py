@@ -391,6 +391,35 @@ def test_step_7_0_covers_python_files_no_commit_holds_yet() -> None:
         "broken command."
     )
 
+    # The tokens above can all survive while the sweep is disconnected from
+    # the gate, so pin the three joins: the append extends the same file the
+    # committed range was written to, that file reaches the path the gate is
+    # handed, and the untracked paths enter the candidate list.
+    staged = re.search(r"--output=(\S+/phase-diff\.txt)", step_7_0)
+    assert staged, (
+        f"{_SKILL_MD}: step 7.0 no longer writes the committed range to a "
+        "phase-diff.txt — the rest of this pin cannot be checked."
+    )
+    target = staged.group(1)
+    assert f">> {target}" in step_7_0, (
+        f"{_SKILL_MD}: step 7.0 appends the untracked blocks somewhere other "
+        f"than {target}, the file it just wrote the committed range to, so "
+        "the gate reads a diff missing one half of the phase."
+    )
+    assert f"mv {target} dev/local/tmp/phase-diff.txt" in step_7_0, (
+        f"{_SKILL_MD}: step 7.0 never moves {target} to "
+        "dev/local/tmp/phase-diff.txt, which is the path it hands the gate."
+    )
+    assert "--diff dev/local/tmp/phase-diff.txt" in step_7_0, (
+        f"{_SKILL_MD}: step 7.0 no longer runs the gate against "
+        "dev/local/tmp/phase-diff.txt, the file it assembled."
+    )
+    assert "plus those untracked paths" in step_7_0, (
+        f"{_SKILL_MD}: step 7.0 never adds the untracked paths to the "
+        "candidate list. A path absent from that list is never inspected, "
+        "however complete the diff is."
+    )
+
 
 def test_step_2_7_includes_a_harness_contract_when_one_exists() -> None:
     # PRD 00141: Tess is briefed from requirements only, so a project whose
