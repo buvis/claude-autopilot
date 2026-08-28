@@ -716,6 +716,26 @@ HUNKLESS_BLOCKS = {
 }
 
 
+def test_two_spellings_of_one_path_are_one_key(tmp_path: Path) -> None:
+    """The `diff --git` header and the `+++ b/` line can spell the same file
+    differently. Left unnormalised they are two keys of equal match depth,
+    which reads as an ambiguous tie and skips a file the diff plainly
+    names."""
+    py_file = _write(tmp_path, "b.py", _long_function("over_limit", 51))
+    diff_text = (
+        "diff --git a/b.py b/b.py\n"
+        "--- a/b.py\n"
+        "+++ b/./b.py\n"
+        "@@ -1,2 +1,51 @@\n"
+        "+def over_limit():\n"
+        "+    x = 1\n"
+    )
+    assert list(csl.touched_ranges(diff_text)) == ["b.py"]
+    skipped: list[str] = []
+    csl.violations(diff_text, [py_file], skipped=skipped)
+    assert skipped == []
+
+
 def test_a_content_free_block_is_inspected_not_skipped(
     tmp_path: Path,
     capsys,
