@@ -623,3 +623,76 @@ def test_main_exits_two_when_a_candidate_is_absent_from_the_diff(
     assert exit_code == 2, "a candidate the gate never located must not exit 0"
     assert str(absent) in captured.err
     assert "gate incomplete" in captured.err
+
+
+def _no_index_full_add(path: Path, text: str) -> str:
+    """The block `git diff --no-index -- /dev/null <path>` emits for an
+    untracked file: one `+++ b/` header (git drops the leading slash of an
+    absolute path) and a single whole-file hunk. Verified against git in
+    this repo's environment, 2026-08-28."""
+    lines = text.splitlines()
+    rel = str(path).lstrip("/")
+    return (
+        f"diff --git a/{rel} b/{rel}\n"
+        "new file mode 100644\n"
+        "--- /dev/null\n"
+        f"+++ b/{rel}\n"
+        f"@@ -0,0 +1,{len(lines)} @@\n"
+    ) + "".join(f"+{line}\n" for line in lines)
+
+
+def test_untracked_full_add_block_reports_the_file_crossing(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    """A whole-file add makes the file-limit arithmetic `n - ins + dels`
+    reduce to 0, so any untracked file over 800 lines is the diff's own
+    doing and is reported."""
+    text = "x = 1\n" * 900
+    py_file = _write(tmp_path, "big.py", text)
+    diff_file = _write(tmp_path, "changes.diff", _no_index_full_add(py_file, text))
+    exit_code = csl.main(["--diff", str(diff_file), str(py_file)])
+    assert exit_code == 1
+    assert capsys.readouterr().out == f"FILE | {py_file} | 900 lines\n"
+
+
+def test_untracked_full_add_block_reports_an_over_limit_function(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    """Every function in a whole-file add intersects the single hunk, so
+    the 60-line function in a new module can no longer hide from the
+    gate."""
+    text = _long_function("over_limit", 60)
+    py_file = _write(tmp_path, "test_big.py", text)
+    diff_file = _write(tmp_path, "changes.diff", _no_index_full_add(py_file, text))
+    exit_code = csl.main(["--diff", str(diff_file), str(py_file)])
+    assert exit_code == 1
+    assert capsys.readouterr().out == (
+        f"FUNCTION | {py_file}:1 | over_limit | 60 lines\n"
+    )
+
+
+def test_pure_deletion_hunk_on_a_present_file_still_exits_zero(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    """The new skip must not turn ordinary deletions into a gate failure:
+    the file is named by the diff, so it was inspected and found clean."""
+    func_text = _long_function("over_limit", 60)
+    py_file = _write(tmp_path, "mod.py", func_text)
+    diff_text = (
+        "diff --git a/mod.py b/mod.py\n"
+        "--- a/mod.py\n"
+        "+++ b/mod.py\n"
+        "@@ -70,3 +69,0 @@\n"
+        "-def gone():\n"
+        "-    return 1\n"
+        "-\n"
+    )
+    diff_file = _write(tmp_path, "changes.diff", diff_text)
+    exit_code = csl.main(["--diff", str(diff_file), str(py_file)])
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.out == ""
+    assert captured.err == ""
