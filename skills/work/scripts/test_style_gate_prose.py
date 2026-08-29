@@ -1,14 +1,15 @@
-"""Prose pins for the style gate's untracked-file sweep (PRD 00162).
+"""Prose pins for the per-task style-limit gate (PRDs 00162, 00163).
 
 Same pattern as test_dispatch_prose.py — read the file once, assert on
 short, reword-resistant substrings, each with a failure message naming
-what drifted. Separate file because test_dispatch_prose.py is at the
-800-line limit, and this PRD's own gate flags the crossing.
+what drifted. Separate file because test_dispatch_prose.py is near its
+800-line limit, and the gate's own arithmetic flags the crossing.
 
 Nothing executes the gate but a reader, so the prose is the whole
 mechanism: an untracked module absent from the task diff is a file the
 gate certifies without opening. PRD 00163 moved that prose out of
-SKILL.md step 7.0 into references/style-gate.md; the pins moved with it.
+SKILL.md step 7.0 into references/style-gate.md and made the gate run per
+task; the pins moved with it.
 """
 
 from __future__ import annotations
@@ -16,8 +17,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-_STYLE_GATE_MD = Path(__file__).resolve().parent.parent / "references" / "style-gate.md"
+_WORK = Path(__file__).resolve().parent.parent
+_STYLE_GATE_MD = _WORK / "references" / "style-gate.md"
 _TEXT = _STYLE_GATE_MD.read_text()
+_SKILL_MD = _WORK / "SKILL.md"
+_GATE_FAILURE_MD = _WORK / "references" / "gate-failure.md"
 
 
 def test_style_gate_names_the_untracked_sweep() -> None:
@@ -70,4 +74,46 @@ def test_style_gate_wires_the_untracked_sweep_into_itself() -> None:
         f"{_STYLE_GATE_MD}: the gate never adds the untracked paths to the "
         "candidate list. A path absent from that list is never inspected, "
         "however complete the diff is."
+    )
+
+
+def test_skill_md_calls_the_gate_at_the_task_boundary() -> None:
+    # PRD 00163: the gate runs per task, so SKILL.md must call it at step
+    # 5.65 and must no longer carry step 7.0. Both halves matter — a 5.65
+    # that lands while 7.0 survives doubles the fix dispatches this move
+    # exists to cut, and the haiku row has to name its stamp or a skipped
+    # gate reads as a passed one.
+    skill = _SKILL_MD.read_text()
+
+    assert "5.65" in skill, (
+        f"{_SKILL_MD}: no step 5.65. The style gate has no call site, so it "
+        "runs for no task at all."
+    )
+    assert "7.0" not in skill, (
+        f"{_SKILL_MD}: step 7.0 is back. The phase-end gate re-measures every "
+        "task's diff at once, which is the dispatch PRD 00163 removed."
+    )
+    assert "skipped:tier" in skill, (
+        f"{_SKILL_MD}: step 5.65 never names the `skipped:tier` stamp, so a "
+        "haiku task that skipped the gate records nothing and reads as one "
+        "that passed it."
+    )
+
+
+def test_the_style_fix_dispatch_has_its_own_allowlist() -> None:
+    # The fix for an oversize file is a split, and a split needs a sibling
+    # module that is by construction absent from the task's Contract paths.
+    # gate-failure.md must render that one dispatch from the style-files
+    # list; without it Ivan can only report a blocker.
+    render = _GATE_FAILURE_MD.read_text()
+
+    assert "style-files" in render, (
+        f"{_GATE_FAILURE_MD}: the style-fix render no longer names the "
+        "style-files list, so it falls back to the task's Contract paths and "
+        "a split has nowhere to put the module it creates."
+    )
+    assert "new modules may be created here" in render, (
+        f"{_GATE_FAILURE_MD}: the style-fix RETRY_INSTRUCTION no longer grants "
+        "creation permission. `agents/ivan.md` tells a fixer to stop and "
+        "report a blocker for anything not listed, so the split never happens."
     )
