@@ -28,7 +28,7 @@ _GATE_FAILURE_MD = _WORK / "references" / "gate-failure.md"
 def test_style_gate_names_the_untracked_sweep() -> None:
     # The committed-range enumeration cannot see a module that exists on
     # disk but in no commit, so the gate certified files it never opened.
-    # Step 7.0 must list untracked Python files and append a whole-file add
+    # The gate must list untracked Python files and append a whole-file add
     # block for each, and it must say that `--no-index` exiting 1 is the
     # normal case — a reader who treats that as a command failure abandons
     # the append and the hole reopens.
@@ -215,9 +215,9 @@ def test_step_7_stop_condition_permits_a_recorded_style_gate_failure() -> None:
         assert "suite" in paragraph, (
             f"{_SKILL_MD}: expected the paragraph stating step 7's 'fully "
             "green' stop condition to scope it to the test suite — "
-            "'suite' not found in that paragraph. Today it reads 'once "
-            "step 7 is fully green', unqualified, which also covers step "
-            "7.0's style gate."
+            "'suite' not found in that paragraph. Unqualified, 'once step 7 "
+            "is fully green' also covers a task's recorded style-gate "
+            "failure."
         )
         assert "style_gate: failed" in paragraph, (
             f"{_SKILL_MD}: expected the paragraph stating step 7's 'fully "

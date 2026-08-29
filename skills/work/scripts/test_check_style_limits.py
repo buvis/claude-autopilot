@@ -491,8 +491,8 @@ def test_main_exits_two_when_a_changed_file_could_not_be_read(
 ) -> None:
     """The gate must never certify a file it could not open. Reproduced at
     PRD 00140 review cycle 2: the same file and diff exit 1 when readable
-    and exited 0 when unreadable, and step 7.0 records exit 0 as
-    `style_gate: clean` - so the phase report certified a file the gate
+    and exited 0 when unreadable, and the gate records exit 0 as
+    `style_gate: clean` - so the report certified a file the gate
     never inspected. An uninspected file is exit 2, not a pass."""
     py_file, diff_text = _write_over_limit_diff(tmp_path)
     diff_file = _write(tmp_path, "changes.diff", diff_text)
@@ -514,7 +514,7 @@ def test_main_exits_two_when_a_changed_file_is_an_ambiguous_diff_path_tie(
 ) -> None:
     """The other fail-open route into the same exit: an equal-depth tie is
     skipped, so that file went uninspected too. The tie needs a RELATIVE
-    single-segment argument (as in the sibling ambiguity test) - step 7.0
+    single-segment argument (as in the sibling ambiguity test) - step 5.65
     passes absolute paths, which is why this path is far harder to reach
     in real use than the unreadable-file one above."""
     monkeypatch.chdir(tmp_path)
