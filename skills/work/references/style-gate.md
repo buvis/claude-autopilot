@@ -7,7 +7,9 @@ reads an already-conforming diff.
 
 Base = `<task_base_sha>`, the HEAD SKILL.md step 2 captures right after
 `task-start`. Every git invocation below runs with the repo's own
-`--git-dir`/`--work-tree` flags in a bare-repo home. Commands are written on one
+`--git-dir`/`--work-tree` flags in a bare-repo home, and every interpolated path is
+`shlex.quote()`-d before it lands in a command - `git ls-files` reports whatever
+names exist on disk, spaces and `$(...)` included. Commands are written on one
 line each; do not re-wrap them.
 
 ## Diff construction
@@ -33,7 +35,9 @@ proceeds to step 5.7, where the phase used to proceed to its suite.
 - **Exit 0**: record `style_gate: clean`.
 - **Exit 1**: write the violation lines to the `FAILING_TESTS` scratch file
   (`dev/local/tmp/ivan-style-violations-<task-id>.md`) and run the fix dispatch
-  below once, commit per step 5, re-run the gate: clean ->
+  below once, commit per step 5, then re-run from § Diff construction - the fix
+  commit moved HEAD, so rebuild both the diff and the candidate list or a sibling
+  module the fixer just created is never measured. Clean ->
   `style_gate: fixed:<sha of the fix commit>`; still exit 1 ->
   `style_gate: failed:<the violation lines, joined by "; ">` and proceed to step
   5.7 anyway (fail loud, never silent).
@@ -64,7 +68,7 @@ Render and dispatch with `references/gate-failure.md` § Style-fix render, whose
 `RETRY_INSTRUCTION` is verbatim:
 
 ```
-Fix only the listed style-limit violations. You may create new modules in the directories marked above and update imports in the listed files to use them. Do not change behavior, do not touch other code, and do not modify tests.
+Fix only the listed style-limit violations. You may create new modules in the directories marked above and update imports in the listed files to use them. Do not change behavior, do not touch other code, and do not modify tests except to split a test file a violation line names.
 ```
 
 `agents/ivan.md` stays untouched: `{RETRY_INSTRUCTION}` is already free text, and

@@ -2,7 +2,9 @@
 
 Moved verbatim out of `SKILL.md` step 7 (PRD 00119-v2; situational: read once
 per work phase, after the last task completes). SKILL.md keeps the run-it-once
-mandate, all of step 7.0, the stop condition and the phase-report line.
+mandate, the stop condition and the phase-report line. The style-limit gate
+that used to sit here as step 7.0 now runs per task at step 5.65
+(`references/style-gate.md`).
 
 ## What to run
 

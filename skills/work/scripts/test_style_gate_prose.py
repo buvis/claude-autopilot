@@ -21,6 +21,7 @@ _WORK = Path(__file__).resolve().parent.parent
 _STYLE_GATE_MD = _WORK / "references" / "style-gate.md"
 _TEXT = _STYLE_GATE_MD.read_text()
 _SKILL_MD = _WORK / "SKILL.md"
+_SKILL_TEXT = _SKILL_MD.read_text()
 _GATE_FAILURE_MD = _WORK / "references" / "gate-failure.md"
 
 
@@ -93,6 +94,11 @@ def test_skill_md_calls_the_gate_at_the_task_boundary() -> None:
         f"{_SKILL_MD}: step 7.0 is back. The phase-end gate re-measures every "
         "task's diff at once, which is the dispatch PRD 00163 removed."
     )
+    assert "line per task" in skill, (
+        f"{_SKILL_MD}: step 7's report line no longer promises one style_gate "
+        "value per task. With the phase-end gate gone, a single value is a "
+        "value for nothing - the verdicts are per task now."
+    )
     assert "skipped:tier" in skill, (
         f"{_SKILL_MD}: step 5.65 never names the `skipped:tier` stamp, so a "
         "haiku task that skipped the gate records nothing and reads as one "
@@ -113,7 +119,186 @@ def test_the_style_fix_dispatch_has_its_own_allowlist() -> None:
         "a split has nowhere to put the module it creates."
     )
     assert "new modules may be created here" in render, (
+        f"{_GATE_FAILURE_MD}: the style-files list no longer marks its "
+        "directory lines, so nothing in the prompt distinguishes a directory "
+        "the fixer may add to from a file it may only edit."
+    )
+    assert "You may create new modules" in render, (
         f"{_GATE_FAILURE_MD}: the style-fix RETRY_INSTRUCTION no longer grants "
         "creation permission. `agents/ivan.md` tells a fixer to stop and "
-        "report a blocker for anything not listed, so the split never happens."
+        "report a blocker for anything not listed, so the split never happens. "
+        "The marked directory list alone does not grant it - the two strings "
+        "are separate, and pinning only the list lets the grant be deleted."
+    )
+
+
+def test_every_step_5_6_exit_reaches_the_gate() -> None:
+    # Step 5.65 sits between 5.6 and 5.7, so a 5.6 branch that jumps
+    # straight to 5.7 skips the gate entirely. Both of 5.6's skip rules
+    # (test-only, trivial) fire on ordinary tasks, so the branch that
+    # routes past the gate is the common path, not the rare one, and the
+    # task then completes with no style_gate verdict at all.
+    skill = _SKILL_MD.read_text()
+    step_5_6 = skill[skill.index("### 5.6.") : skill.index("### 5.65.")]
+
+    for jump in ("proceed to step 5.7", "proceed directly to step 5.7"):
+        assert jump not in step_5_6, (
+            f"{_SKILL_MD}: step 5.6 routes a branch straight to step 5.7 "
+            f"({jump!r}), skipping the style gate at 5.65. A task taking "
+            "that branch records no style_gate value and its oversize file "
+            "reaches the reviewer unmeasured."
+        )
+    assert "step 5.65" in step_5_6, (
+        f"{_SKILL_MD}: step 5.6 never names step 5.65 as what follows it, so "
+        "a reader walking the steps in order has nothing pointing at the gate."
+    )
+
+
+def test_the_style_gate_runs_the_script_and_declares_compute_mech_facts() -> None:
+    # The gate must run check_style_limits.py and stamp
+    # style_gate: clean | fixed:<sha> | failed:<violations>; the function
+    # walk must be declared as a cross-skill dependency on
+    # compute_mech_facts.py, never a second ast walker. Since PRD 00163 the
+    # procedure lives in references/style-gate.md and its base is the task's
+    # own <task_base_sha>, not the phase's work_start_sha.
+    for needle in (
+        "check_style_limits.py",
+        "style_gate: clean",
+        "fixed:",
+        "failed:",
+        "task_base_sha",
+    ):
+        assert needle in _TEXT, (
+            f"{_STYLE_GATE_MD}: expected the style gate to contain {needle!r} "
+            "— not found."
+        )
+
+    dep_start = _SKILL_TEXT.index("## Dependencies")
+    dep_end = _SKILL_TEXT.index("\n## ", dep_start)
+    dependencies = _TEXT[dep_start:dep_end]
+
+    assert "compute_mech_facts.py" in dependencies, (
+        f"{_SKILL_MD}: expected '## Dependencies' to name compute_mech_facts.py "
+        "— not found."
+    )
+
+
+def test_step_7_stop_condition_permits_a_recorded_style_gate_failure() -> None:
+    # Step 5.65 sanctions a recorded `style_gate: failed:<violations>` and
+    # explicitly proceeds anyway (fail loud, never silent). Step 7's
+    # stop-condition sentence sets the phase's "fully green" bar unqualified
+    # today — a task that recorded a style-gate failure leaves the phase not
+    # fully green, and that sentence then forbids ending the phase,
+    # contradicting the sanctioned exit.
+    # The paragraph that states "fully green" must itself scope that bar
+    # to the test suite and name the style-gate-failure exception, so a
+    # future reword of the sentence can't silently drop the exception and
+    # leave the contradiction behind. Checked per-paragraph (never
+    # .index()) so a full rewrite of the sentence fails this assertion
+    # cleanly instead of raising.
+    start = _SKILL_TEXT.index("### 7.")
+    end = _SKILL_TEXT.index("## Reference Files", start)
+    step_7 = _SKILL_TEXT[start:end]
+
+    stop_condition_paragraphs = [
+        paragraph for paragraph in step_7.split("\n\n") if "fully green" in paragraph
+    ]
+
+    assert stop_condition_paragraphs, (
+        f"{_SKILL_MD}: expected a paragraph in step 7 to state its stop "
+        "condition using 'fully green' — none found. If this wording was "
+        "deliberately replaced, this test needs updating to locate the "
+        "new stop-condition wording."
+    )
+
+    for paragraph in stop_condition_paragraphs:
+        assert "suite" in paragraph, (
+            f"{_SKILL_MD}: expected the paragraph stating step 7's 'fully "
+            "green' stop condition to scope it to the test suite — "
+            "'suite' not found in that paragraph. Today it reads 'once "
+            "step 7 is fully green', unqualified, which also covers step "
+            "7.0's style gate."
+        )
+        assert "style_gate: failed" in paragraph, (
+            f"{_SKILL_MD}: expected the paragraph stating step 7's 'fully "
+            "green' stop condition to name a recorded 'style_gate: "
+            "failed:' outcome as a sanctioned way to complete the phase "
+            "— not found in that paragraph. Without it, the stop "
+            "condition still contradicts step 5.65's 'proceed to step 5.7 "
+            "anyway' instruction on a style-gate failure."
+        )
+
+
+def test_style_gate_bare_repo_git_flags_govern_both_diff_invocations() -> None:
+    # The gate runs two `git diff` invocations: one writing the task diff
+    # (--output=) and one listing changed Python files (--name-only
+    # --diff-filter=d). The `--git-dir`/`--work-tree` bare-repo-home
+    # parenthetical trailed only the first once, so a literal reader could
+    # run the second invocation without the flags and hit
+    # `fatal: not a git repository` in a bare-repo home.
+    first_idx = _TEXT.index("git diff <base>..HEAD --output=")
+    second_idx = _TEXT.index("git diff --name-only --diff-filter=d")
+
+    flag_occurrences = []
+    search_from = 0
+    while True:
+        pos = _TEXT.find("--git-dir", search_from)
+        if pos == -1:
+            break
+        flag_occurrences.append(pos)
+        search_from = pos + 1
+
+    assert flag_occurrences, (
+        f"{_STYLE_GATE_MD}: expected the gate to mention '--git-dir' at all "
+        "— not found."
+    )
+
+    scopes_whole_block = any(pos < first_idx for pos in flag_occurrences)
+    attached_to_second_too = any(pos >= second_idx for pos in flag_occurrences)
+
+    assert scopes_whole_block or attached_to_second_too, (
+        f"{_STYLE_GATE_MD}: expected the '--git-dir'/'--work-tree' bare-repo "
+        "flags to be named before the first `git diff` invocation "
+        "(scoping the whole block) or to appear again at/after the second "
+        "invocation ('git diff --name-only --diff-filter=d') — every "
+        "occurrence found trails only the first invocation, exactly like "
+        "today's single parenthetical, and a literal reader could run the "
+        "second `git diff` without the flags."
+    )
+
+
+def test_style_gate_branches_on_a_gate_that_could_not_run() -> None:
+    # The exit-2 branch ("the gate could not run at all") must handle
+    # exit 2 specifically, record a `style_gate: failed:` outcome, and must
+    # NOT dispatch Ivan — there are no violation lines to hand him, and
+    # dispatching on an empty findings list is the failure this branch exists
+    # to prevent. The clause must also name what `<reason>` is substituted
+    # from: the exit-1 clause spells out its substitution ("the violation
+    # lines, joined by '; '"), but exit 2 leaves <reason> undefined today.
+    # The script writes its failure message to stderr, so a correct fix
+    # names stderr as the source.
+    assert "Exit 2" in _TEXT, (
+        f"{_STYLE_GATE_MD}: expected the gate to branch on 'Exit 2' (the gate "
+        "could not run at all) — not found."
+    )
+
+    exit_2_clause = _TEXT.split("Exit 2", 1)[1]
+
+    assert "style_gate: failed:" in exit_2_clause, (
+        f"{_STYLE_GATE_MD}: expected the exit-2 branch to record a "
+        "'style_gate: failed:' outcome — not found."
+    )
+    assert "do NOT dispatch Ivan" in exit_2_clause, (
+        f"{_STYLE_GATE_MD}: expected the exit-2 branch to say it "
+        "does NOT dispatch Ivan — not found. There are no violation lines "
+        "to hand a fix agent on this branch, so dispatching one is the "
+        "failure exit 2 was introduced to prevent."
+    )
+    assert "stderr" in exit_2_clause, (
+        f"{_STYLE_GATE_MD}: expected the exit-2 branch to name "
+        "'stderr' as the source of the '<reason>' substituted into "
+        "'style_gate: failed:<reason>' — not found. The exit-1 clause "
+        "spells out its substitution ('the violation lines, joined by "
+        '"; "\'); exit 2 leaves <reason> undefined, so an agent executing '
+        "this literally has to guess what to record."
     )

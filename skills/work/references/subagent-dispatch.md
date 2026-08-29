@@ -133,7 +133,7 @@ Run it after building the stage list and before `git add`, over the same paths:
 python3 <plugin root>/skills/work/scripts/check_reflow.py <path> [<path> ...]
 ```
 
-(`<plugin root>` is the value `SKILL.md` resolves for `${CLAUDE_PLUGIN_ROOT}`; a placeholder written in this file would reach the shell empty.) It counts `@@` lines in `git diff -U0 HEAD -- <path>` per path and prints `<path>\t<hunks>` for each one at or above `--threshold` (default 20; a targeted edit is well under 10). Add `--git-dir`/`--work-tree` in a bare-repo home, the same pair step 7.0 already passes.
+(`<plugin root>` is the value `SKILL.md` resolves for `${CLAUDE_PLUGIN_ROOT}`; a placeholder written in this file would reach the shell empty.) It counts `@@` lines in `git diff -U0 HEAD -- <path>` per path and prints `<path>\t<hunks>` for each one at or above `--threshold` (default 20; a targeted edit is well under 10). Add `--git-dir`/`--work-tree` in a bare-repo home, the same pair step 5.65's gate already passes.
 
 | Exit | Meaning | Attempt field |
 |---|---|---|

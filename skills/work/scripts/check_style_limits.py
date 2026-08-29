@@ -170,7 +170,7 @@ def violations(
     could not inspect - a path the diff does not name, an ambiguous
     diff-path tie, or a file it could not read. Callers need that to
     tell "found nothing" apart from "did not
-    look": step 7.0 records exit 0 as `style_gate: clean`, so a gate that
+    look": the gate records exit 0 as `style_gate: clean`, so one that
     silently skipped a changed file would certify a file it never opened.
     """
     ranges_by_path = touched_ranges(diff_text)
@@ -231,7 +231,7 @@ def main(argv: list[str] | None = None) -> int:
         print(line)
     if skipped:
         # The gate could not inspect every changed file, so it must not
-        # report a clean phase. Exit 2 is step 7.0's "the gate could not
+        # report a clean task. Exit 2 is the gate's "could not
         # run" branch: record `style_gate: failed:<stderr>` and dispatch
         # no fixer. It outranks exit 1 - any violations found are still
         # printed, but an incomplete gate is never a pass.

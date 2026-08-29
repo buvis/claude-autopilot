@@ -160,7 +160,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUG
   --set-file FAILING_TESTS=dev/local/tmp/ivan-style-violations-<task-id>.md \
   --set-file ARCHITECTURE_CONTEXT=<the same source step 3 used> \
   --set-file FILE_PATHS=dev/local/tmp/ivan-<task-id>-style-files.txt \
-  --set RETRY_INSTRUCTION="Fix only the listed style-limit violations. You may create new modules in the directories marked above and update imports in the listed files to use them. Do not change behavior, do not touch other code, and do not modify tests."
+  --set RETRY_INSTRUCTION="Fix only the listed style-limit violations. You may create new modules in the directories marked above and update imports in the listed files to use them. Do not change behavior, do not touch other code, and do not modify tests except to split a test file a violation line names."
 ```
 
 `FAILING_TESTS` carries the gate's violation lines, nothing else — the render

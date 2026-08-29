@@ -63,8 +63,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **work**: the style-limit gate no longer reports clean over uncommitted or
-  unmatched Python files. It appends a whole-file add block for every
-  untracked `.py` file to the diff it measures, so a new module's oversized functions
+  unmatched Python files. It appends a whole-file add block for every untracked
+  `.py` file to the diff it measures, so a new module's oversized functions
   are flagged before the review sees them, and a candidate the gate cannot find
   in the diff is recorded as not inspected (exit 2, `style_gate:
   failed:<stderr>`) instead of certifying a file it never opened. A block that

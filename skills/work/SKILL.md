@@ -390,7 +390,7 @@ Run **only** the specific tests Tess wrote in step 2.7. Do NOT run the full proj
 
 After step 5.5's tests pass and BEFORE the per-task code review at step 5.7, dispatch a fresh subagent to prune slop from the implementor's diff. The per-task review then runs against the leaner diff, which means review-rework cycles add defensive fixes on top of a smaller base. Best-effort: this step never blocks the task and never triggers retries.
 
-**Skip rules, in order.** First, list `git diff --name-only <task_base_sha>..HEAD` and apply `test_only_diff` from `${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/work_routing.py`: true means skip the dispatch, record `self_deslop: "skipped:test-only"`, and proceed to step 5.7 (`references/self-deslop-prompt.md` § Test-only diffs). Otherwise measure the implementor's most recent commit:
+**Skip rules, in order.** First, list `git diff --name-only <task_base_sha>..HEAD` and apply `test_only_diff` from `${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/work_routing.py`: true means skip the dispatch, record `self_deslop: "skipped:test-only"`, and proceed to step 5.65 (`references/self-deslop-prompt.md` § Test-only diffs). Otherwise measure the implementor's most recent commit:
 
 ```bash
 git diff --shortstat HEAD~1..HEAD
@@ -399,7 +399,7 @@ git diff --shortstat HEAD~1..HEAD
 git diff-tree --no-commit-id --name-only -r HEAD
 ```
 
-Compute `net_lines = insertions - deletions` (from `--shortstat`) and `file_count` (lines from `diff-tree`). If `net_lines < 30` OR `file_count < 2`, skip the dispatch — the cleanup overhead exceeds the slop budget for trivially small changes. Record `self_deslop: "skipped:trivial"` on the latest attempt (see "Outcome logging" below) and proceed directly to step 5.7.
+Compute `net_lines = insertions - deletions` (from `--shortstat`) and `file_count` (lines from `diff-tree`). If `net_lines < 30` OR `file_count < 2`, skip the dispatch — the cleanup overhead exceeds the slop budget for trivially small changes. Record `self_deslop: "skipped:trivial"` on the latest attempt (see "Outcome logging" below) and proceed directly to step 5.65.
 
 **Read `references/self-deslop-prompt.md` § Procedure before the first step-5.6 dispatch of a batch** — it carries the dispatch contract (a **fresh** Agent call at `state.tasks[i].model`, **Subagent Dispatch Budget** + **Subagent Watchdog**), the placeholder substitutions, and the outcome table that maps each subagent result to its `self_deslop` value. `{{task_description}}` comes from `tasks[i].description`, falling back to the name-only body when `description` is absent — and an empty-string `description` counts as absent and falls back to the task name, because an empty body is the less useful payload of the two.
 
@@ -423,7 +423,7 @@ Compute `net_lines = insertions - deletions` (from `--shortstat`) and `file_coun
 
 **Test-only skip (outside rework mode).** Apply `test_only_gate` from `${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/work_routing.py` to `git diff --name-only <task_base_sha>..HEAD`: a `review` key in the result means skip this step and record `review: "skipped:test-only"` — every tier that reaches this gate takes it, `fable` included; a `haiku` task already exited at the table above and records nothing, and a rework task keeps its reviewer. Otherwise dispatch the reviewer after commit and verification — a native lane, no plugin dependency:
 
-1. Get SHAs: `BASE_SHA` = `<task_base_sha>` (step 2), `HEAD_SHA` = current HEAD (includes the step-5.6 deslop commit when one landed). Hold `<last_reviewed_sha>` = `HEAD_SHA`, and generate `<pat_session_id>` once per task with `uuidgen` (or `python3 -c "import uuid,sys;sys.stdout.write(str(uuid.uuid4()))"`; no id means no `-S` and today's full-diff lane) — both are in-session only, and their readers are § Dispatch's `-S` on this first dispatch and § Delta re-runs on every later one. Then write `dev/local/tmp/review-task-<id>-verification.txt` (`references/per-task-review.md` § Recorded verification) — item 2's render reads it with `--set-file` and exits non-zero when it is absent.
+1. Get SHAs: `BASE_SHA` = `<task_base_sha>` (step 2), `HEAD_SHA` = current HEAD (includes the step-5.6 deslop commit and the step-5.65 style-fix commit when either landed). Hold `<last_reviewed_sha>` = `HEAD_SHA`, and generate `<pat_session_id>` once per task with `uuidgen` (or `python3 -c "import uuid,sys;sys.stdout.write(str(uuid.uuid4()))"`; no id means no `-S` and today's full-diff lane) — both are in-session only, and their readers are § Dispatch's `-S` on this first dispatch and § Delta re-runs on every later one. Then write `dev/local/tmp/review-task-<id>-verification.txt` (`references/per-task-review.md` § Recorded verification) — item 2's render reads it with `--set-file` and exits non-zero when it is absent.
 2. Render the review prompt with one Bash call, every interpolated path `shlex.quote()`-d (or bash's `printf '%q '`) before it lands inside a `--set-cmd` value:
    ```bash
    python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/pat.md \
