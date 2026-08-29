@@ -409,7 +409,7 @@ Compute `net_lines = insertions - deletions` (from `--shortstat`) and `file_coun
 
 ### 5.65. Per-task style limits
 
-**Tier gate — haiku skips.** `state.tasks[i].model == "haiku"`: skip this step and record `style_gate: skipped:tier`. Every other tier runs the gate, `fable` included. **Read `references/style-gate.md` before the first step-5.65 run of a batch** — it carries the diff construction (base `<task_base_sha>` from step 2: the committed range plus a `--no-index` block per untracked `.py` file), the invocation, the outcome ladder (exit 0 clean; exit 1 one fix dispatch, commit, re-run, then `fixed:<sha>` or `failed:<violations>`; exit 2 `failed:<stderr>` with no dispatch) and the sibling-directory allowlist that lets a split create the modules it needs. A task whose diff holds no `.py` file — docs-only, config-only — records `style_gate: clean` without running the script. Hold the value in-session and write it as the `style_gate` field of the attempt record step 6 builds, the same rule `self_deslop` follows; never a separate indexed state mutation.
+**Tier gate — haiku skips.** `state.tasks[i].model == "haiku"`: skip this step and record `style_gate: skipped:tier`. Every other tier runs the gate, `fable` included. **Read `references/style-gate.md` before the first step-5.65 run of a batch** — it carries the diff construction (base `<task_base_sha>` from step 2: the committed range plus a `--no-index` block per untracked `.py` file), the invocation, the outcome ladder (exit 0 clean; exit 1 one fix dispatch, commit, re-run, then `fixed:<sha>` or `failed:<violations>`; exit 2 `failed:<stderr>` with no dispatch) and the sibling-directory allowlist that lets a split create the modules it needs. A task whose diff holds no `.py` file — docs-only, config-only — records `style_gate: clean` without running the script. Hold the value in-session and write it as the `style_gate` field of the attempt record step 6 builds, the same rule `self_deslop` follows; never a separate indexed state mutation. **Then, in the same step**, run `${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_split_hygiene.py` over the test-path subset of that same candidate list — `references/style-gate.md` § Split hygiene carries the invocation, the outcome ladder and the verbatim deletion-only `RETRY_INSTRUCTION`; an empty subset records `split_hygiene: skipped:no-tests` without running the script. Stamp `split_hygiene` onto the same attempt record by the same rule.
 
 ### 5.7. Per-task code review
 
@@ -469,7 +469,7 @@ After all tasks in the phase are marked completed, run the project's full verifi
 
 Only stop the work phase once step 7's test suite is fully green — a recorded `style_gate: failed:<violations>` from a task's step 5.65 is a sanctioned way for the phase to complete, not a reason to keep looping or stall; the suite itself still has to pass.
 
-When reporting the phase result, include one `<task-id>: style_gate: <value>` line per task from step 5.65 and the contents of `dev/local/meta/assumptions.md` (if present) - the assumption ledger is input to the review phase and the user's 30-second examine pass.
+When reporting the phase result, include one `<task-id>: style_gate: <value>, split_hygiene: <value>` line per task from step 5.65 and the contents of `dev/local/meta/assumptions.md` (if present) - the assumption ledger is input to the review phase and the user's 30-second examine pass.
 
 ## Reference Files
 
@@ -489,7 +489,7 @@ When reporting the phase result, include one `<task-id>: style_gate: <value>` li
 - `references/gate-failure.md` - Step 5.5 diagnose→repair/escalate flow, the retry render, step 4's result table and the 4.2 breaker (read before the first gate or infrastructure failure of a batch)
 - `references/rework-mode.md` - Step 1.5 rework lifecycle, attempt fields and abort semantics (read when `rework_task_ids` is non-empty)
 - `references/red-check.md` - Step 2.95 target resolution and outcome ladder (read before the first red-check of a batch)
-- `references/style-gate.md` - Step 5.65 diff construction, outcome ladder and style-fix dispatch (read before the first style gate of a batch)
+- `references/style-gate.md` - Step 5.65 diff construction, outcome ladder and style-fix dispatch, plus the split-hygiene check that follows it (read before the first style gate of a batch)
 - `references/per-task-review.md` - Step 5.7 reviewer dispatch and result handling (read before the first per-task review of a batch)
 - `references/task-boundary-handoff.md` - Step 6.5 handoff procedure (read when `.handoff-requested` is present)
 - `references/final-verification.md` - Step 7 suite commands, improvised-suite rule and regression loop (read before the phase's one full-suite run)

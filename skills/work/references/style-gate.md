@@ -73,3 +73,56 @@ Fix only the listed style-limit violations. You may create new modules in the di
 
 `agents/ivan.md` stays untouched: `{RETRY_INSTRUCTION}` is already free text, and
 a persona edit would reach every dispatch instead of this one.
+
+## Split hygiene
+
+Runs immediately after the style-limit ladder above, on the same candidate list
+narrowed to test paths — `is_test_path` from
+`${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/work_routing.py` decides, so the
+subset is the one steps 5.6 and 5.7 already agree on. Empty subset: record
+`split_hygiene: skipped:no-tests` and run nothing.
+
+This is the mechanical half of a question the self-deslop pass is forbidden to
+answer (PRD 00166). It reports bindings only — a module-level name nothing in
+the file reads, a local reassigned before its previous value is read — never an
+assertion, test function, fixture or parametrization, so the fix that follows is
+deletion-only.
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_split_hygiene.py <every test candidate as an absolute path>
+```
+
+No `--diff` here, unlike the style gate: a binding a split left dead is dead
+whether or not a hunk touched its line, and the checker has no diff to consult.
+
+## Split-hygiene outcome ladder
+
+- **Exit 0**: record `split_hygiene: clean`.
+- **Exit 1**: write the reported lines to the `FAILING_TESTS` scratch file
+  `dev/local/tmp/ivan-split-hygiene-<task-id>.md` and run the fix dispatch below
+  once, commit per step 5, then re-run from § Split hygiene — the fix commit
+  moved HEAD, so rebuild the candidate list. Clean →
+  `split_hygiene: fixed:<sha of the fix commit>`; still exit 1 →
+  `split_hygiene: failed:<the reported lines, joined by "; ">` and proceed to
+  step 5.7 anyway (fail loud, never silent).
+- **Exit 2** (or any other non-0/1 exit): the check could not run, so there are
+  no lines to hand a fix agent — record
+  `split_hygiene: failed:<the script's stderr message>`, do NOT dispatch Ivan,
+  and proceed to step 5.7 anyway.
+
+A `failed:` value never blocks the task and never changes its `outcome`, exactly
+as `style_gate` does not.
+
+## Split-hygiene fix dispatch
+
+Exit 1 only. Render and dispatch with `references/gate-failure.md` § Style-fix
+render, passing the task's own `dev/local/tmp/ivan-<task-id>-files.txt`
+unchanged — **no widened allowlist**. A test file this check can flag is one the
+task touched, so it is already inside the task's Contract paths, and the fix
+creates no new module.
+
+`RETRY_INSTRUCTION` is verbatim:
+
+```
+Delete only the listed unused or shadowed bindings. Do not change any assertion, test function, fixture or parametrization. Do not add code.
+```
