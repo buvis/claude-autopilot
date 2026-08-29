@@ -144,6 +144,29 @@ step 5.7's confirmed-finding retry and step 7's regression fix.
   ```
   The code-quality rules block is already permanent in `ivan.md`, so there is nothing to re-include. `FAILING_TESTS` comes from **one** source on a retry: write the original failing tests plus the new failure output to `dev/local/tmp/ivan-retry-tests-<task-id>-<n>.md` once per retry and pass it with `--set-file`. Do not also pass `--set-cmd FAILING_TESTS` — the last flag would silently win, and the failure output is exactly what the retry needs to carry.
 
+## Style-fix render (step 5.65)
+
+The one dispatch that does not use `ivan-<task-id>-files.txt`. Identical to
+§ Retry render except for the two lines below: `FILE_PATHS` comes from the
+style-files list (`references/style-gate.md` § Fix dispatch builds it — the
+violating files plus their parent directories, each directory line suffixed
+` (new modules may be created here)`), and `RETRY_INSTRUCTION` grants the
+creation permission a split needs. No other dispatch reads that list, and
+`agents/ivan.md` is untouched.
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/ivan.md \
+  --out dev/local/tmp/dispatch-ivan-<task-id>-style.txt \
+  --set-file FAILING_TESTS=dev/local/tmp/ivan-style-violations-<task-id>.md \
+  --set-file ARCHITECTURE_CONTEXT=<the same source step 3 used> \
+  --set-file FILE_PATHS=dev/local/tmp/ivan-<task-id>-style-files.txt \
+  --set RETRY_INSTRUCTION="Fix only the listed style-limit violations. You may create new modules in the directories marked above and update imports in the listed files to use them. Do not change behavior, do not touch other code, and do not modify tests."
+```
+
+`FAILING_TESTS` carries the gate's violation lines, nothing else — the render
+fills every placeholder the persona has or exits 1 naming the first one missing,
+and there is no failing test on this path.
+
 ## Legacy escalation branch (step 5.5)
 
 Moved verbatim out of SKILL.md step 5.5 (PRD 00119-v2).

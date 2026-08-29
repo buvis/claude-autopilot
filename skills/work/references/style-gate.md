@@ -31,8 +31,9 @@ Carried over from step 7.0 unchanged except for what follows a failure: the task
 proceeds to step 5.7, where the phase used to proceed to its suite.
 
 - **Exit 0**: record `style_gate: clean`.
-- **Exit 1**: write the violation lines to the `FAILING_TESTS` scratch file and
-  run the fix dispatch below once, commit per step 5, re-run the gate: clean ->
+- **Exit 1**: write the violation lines to the `FAILING_TESTS` scratch file
+  (`dev/local/tmp/ivan-style-violations-<task-id>.md`) and run the fix dispatch
+  below once, commit per step 5, re-run the gate: clean ->
   `style_gate: fixed:<sha of the fix commit>`; still exit 1 ->
   `style_gate: failed:<the violation lines, joined by "; ">` and proceed to step
   5.7 anyway (fail loud, never silent).

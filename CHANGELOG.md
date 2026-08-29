@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **work**: a style-limit fix may now create the sibling modules a split needs.
+  That one dispatch is handed the violating files plus their parent directories
+  and told it may add modules there; every other implementor dispatch keeps the
+  task's Contract paths unchanged. Before, a fixer asked to split an 800-line
+  file could only report a blocker, because the file it had to create was in no
+  allowlist.
 - **work**: a task whose committed diff touches only test and fixture paths now
   skips both the self-deslop pass and the per-task review, stamping the attempt
   `self_deslop: "skipped:test-only"` and `review: "skipped:test-only"`. A rework
