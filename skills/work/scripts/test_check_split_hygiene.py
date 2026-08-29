@@ -1,0 +1,153 @@
+"""Behavioural contract for check_split_hygiene.py (PRD 00166).
+
+The checker answers one mechanical question about a test file - "is this
+binding read anywhere in this file" - so the de-slop pass never has to judge
+it. Every case below pins a rule about BINDINGS. None of them is about an
+assertion, a test function, a fixture or a parametrization, and that is the
+point: the checker must never give a fix agent a reason to touch one.
+"""
+
+from __future__ import annotations
+
+import ast
+import importlib.util
+import subprocess
+import sys
+from pathlib import Path
+
+_MODULE_PATH = Path(__file__).with_name("check_split_hygiene.py")
+_SPEC = importlib.util.spec_from_file_location("check_split_hygiene", _MODULE_PATH)
+assert _SPEC is not None and _SPEC.loader is not None
+csh = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(csh)
+
+
+def _write(tmp_path: Path, name: str, text: str) -> Path:
+    path = tmp_path / name
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def _unused(tmp_path: Path, text: str, name: str = "test_mod.py") -> list[str]:
+    path = _write(tmp_path, name, text)
+    return csh.unused_bindings(ast.parse(text), path)
+
+
+def _shadowed(tmp_path: Path, text: str) -> list[str]:
+    path = _write(tmp_path, "test_mod.py", text)
+    return csh.shadowed_assignments(ast.parse(text), path)
+
+
+def _run(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(_MODULE_PATH), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+# --- Unused module-level binding rule ---------------------------------------
+
+
+def test_reports_module_constant_no_test_reads(tmp_path: Path) -> None:
+    lines = _unused(tmp_path, "EXPECTED = 3\n\n\ndef test_thing():\n    assert 1\n")
+    assert len(lines) == 1
+    assert lines[0].startswith("UNUSED | ")
+    assert ":1 | EXPECTED | " in lines[0]
+
+
+def test_accepts_module_constant_read_in_an_assertion(tmp_path: Path) -> None:
+    text = "EXPECTED = 3\n\n\ndef test_thing():\n    assert EXPECTED == 3\n"
+    assert _unused(tmp_path, text) == []
+
+
+def test_never_reports_an_underscore_prefixed_binding(tmp_path: Path) -> None:
+    assert _unused(tmp_path, "_HELPER = 3\n\n\ndef test_thing():\n    assert 1\n") == []
+
+
+def test_never_reports_a_name_used_only_in_a_parametrize_string(
+    tmp_path: Path,
+) -> None:
+    text = (
+        "import pytest\n"
+        "\n"
+        "WIDGET = 3\n"
+        "\n"
+        '@pytest.mark.parametrize("case", ["WIDGET"])\n'
+        "def test_thing(case):\n"
+        "    assert case\n"
+    )
+    assert _unused(tmp_path, text) == []
+
+
+def test_never_reports_a_conftest_binding(tmp_path: Path) -> None:
+    assert _unused(tmp_path, "EXPECTED = 3\n", name="conftest.py") == []
+
+
+def test_reports_an_import_that_is_bound_and_never_used(tmp_path: Path) -> None:
+    lines = _unused(tmp_path, "import fnmatch\n\n\ndef test_thing():\n    assert 1\n")
+    assert len(lines) == 1
+    assert ":1 | fnmatch | " in lines[0]
+
+
+# --- Shadowed assignment rule -----------------------------------------------
+
+
+def test_reports_a_reassignment_with_no_read_between_naming_the_first_line(
+    tmp_path: Path,
+) -> None:
+    text = "def test_thing():\n    x = 1\n    x = 2\n    assert x\n"
+    lines = _shadowed(tmp_path, text)
+    assert len(lines) == 1
+    assert lines[0].startswith("SHADOWED | ")
+    assert ":2 | x | reassigned before the previous value is read" in lines[0]
+
+
+def test_accepts_a_reassignment_whose_previous_value_was_read(tmp_path: Path) -> None:
+    text = "def test_thing():\n    x = 1\n    assert x\n    x = 2\n    assert x\n"
+    assert _shadowed(tmp_path, text) == []
+
+
+def test_counts_augmented_assignment_as_a_read(tmp_path: Path) -> None:
+    text = "def test_thing():\n    x = 1\n    x += 1\n    x = 2\n    assert x\n"
+    assert _shadowed(tmp_path, text) == []
+
+
+def test_never_reports_a_loop_target_rebinding(tmp_path: Path) -> None:
+    text = (
+        "def test_thing():\n"
+        "    x = 1\n"
+        "    for x in (2, 3):\n"
+        "        pass\n"
+        "    x = 4\n"
+        "    assert x\n"
+    )
+    assert _shadowed(tmp_path, text) == []
+
+
+def test_skips_a_function_that_declares_a_global(tmp_path: Path) -> None:
+    text = "def test_thing():\n    global x\n    x = 1\n    x = 2\n"
+    assert _shadowed(tmp_path, text) == []
+
+
+# --- Exit contract ----------------------------------------------------------
+
+
+def test_unparseable_file_exits_2_and_names_the_file_on_stderr(
+    tmp_path: Path,
+) -> None:
+    broken = _write(tmp_path, "test_broken.py", "def test_thing(:\n")
+    result = _run(str(broken))
+    assert result.returncode == 2
+    assert str(broken) in result.stderr
+    assert "not inspected" in result.stderr
+
+
+def test_clean_file_exits_0_and_a_violating_file_exits_1(tmp_path: Path) -> None:
+    clean = _write(tmp_path, "test_clean.py", "def test_thing():\n    assert 1\n")
+    assert _run(str(clean)).returncode == 0
+    dirty = _write(tmp_path, "test_dirty.py", "EXPECTED = 3\n")
+    dirty_result = _run(str(dirty))
+    assert dirty_result.returncode == 1
+    assert "UNUSED | " in dirty_result.stdout
