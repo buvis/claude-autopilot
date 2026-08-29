@@ -140,14 +140,24 @@ def test_every_step_5_6_exit_reaches_the_gate() -> None:
     # task then completes with no style_gate verdict at all.
     skill = _SKILL_MD.read_text()
     step_5_6 = skill[skill.index("### 5.6.") : skill.index("### 5.65.")]
+    # The reference is read-first for step 5.6, so its routing is as binding
+    # as the body's: a caller who follows it skips the gate just the same.
+    deslop_md = _WORK / "references" / "self-deslop-prompt.md"
+    sources = ((_SKILL_MD, step_5_6), (deslop_md, deslop_md.read_text()))
 
-    for jump in ("proceed to step 5.7", "proceed directly to step 5.7"):
-        assert jump not in step_5_6, (
-            f"{_SKILL_MD}: step 5.6 routes a branch straight to step 5.7 "
-            f"({jump!r}), skipping the style gate at 5.65. A task taking "
-            "that branch records no style_gate value and its oversize file "
-            "reaches the reviewer unmeasured."
-        )
+    jumps = (
+        "proceed to step 5.7",
+        "proceed directly to step 5.7",
+        "Proceed to 5.7",
+    )
+    for source, text in sources:
+        for jump in jumps:
+            assert jump not in text, (
+                f"{source}: step 5.6 routes a branch straight to step 5.7 "
+                f"({jump!r}), skipping the style gate at 5.65. A task taking "
+                "that branch records no style_gate value and its oversize file "
+                "reaches the reviewer unmeasured."
+            )
     assert "step 5.65" in step_5_6, (
         f"{_SKILL_MD}: step 5.6 never names step 5.65 as what follows it, so "
         "a reader walking the steps in order has nothing pointing at the gate."
@@ -175,7 +185,7 @@ def test_the_style_gate_runs_the_script_and_declares_compute_mech_facts() -> Non
 
     dep_start = _SKILL_TEXT.index("## Dependencies")
     dep_end = _SKILL_TEXT.index("\n## ", dep_start)
-    dependencies = _TEXT[dep_start:dep_end]
+    dependencies = _SKILL_TEXT[dep_start:dep_end]
 
     assert "compute_mech_facts.py" in dependencies, (
         f"{_SKILL_MD}: expected '## Dependencies' to name compute_mech_facts.py "

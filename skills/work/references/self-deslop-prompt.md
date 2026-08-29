@@ -108,7 +108,7 @@ SKILL.md step 5.6 applies `test_only_diff` (from
 `skills/work/scripts/work_routing.py`) to
 `git diff --name-only <task_base_sha>..HEAD` **before** the 30-line/2-file rule.
 When every changed path is test or fixture code, there is no dispatch: record
-`self_deslop: "skipped:test-only"` and proceed to step 5.7. The stamp is
+`self_deslop: "skipped:test-only"` and proceed to step 5.65. The stamp is
 distinct from `"skipped:trivial"` so the two skips stay tellable apart in the
 attempt data.
 
@@ -131,7 +131,7 @@ is everything the caller needs once the skip rule did NOT fire.
 - `{{diff_files}}` from `git diff-tree --no-commit-id --name-only -r HEAD`.
 - `{{slop_catalog}}` from the `## What to remove` section of `${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/prompts/de-sloppify.md` — read the file at dispatch time and inline the section verbatim. This keeps the deslop prompt as the single source of truth for slop patterns; when it grows entries, the next step-5.6 dispatch picks them up without a code change here.
 
-| Subagent outcome | `self_deslop` value | Proceed to 5.7 against |
+| Subagent outcome | `self_deslop` value | Steps 5.65 and 5.7 then see |
 |------------------|---------------------|------------------------|
 | Committed `chore: prune slop from ...` | `"committed:{sha}"` (full SHA from the new commit) | the pruned diff (HEAD now includes the cleanup commit) |
 | Returned "no slop found", no commit | `"noop"` | the original implementor diff |
@@ -139,7 +139,7 @@ is everything the caller needs once the skip rule did NOT fire.
 | Dispatch failed or subagent errored | `"errored:{short_cause}"` (e.g. `errored:dispatch_failed`, `errored:prompt_overrun`) | the original implementor diff |
 | Skip rule fired | `"skipped:trivial"` (no dispatch occurred) | the original implementor diff |
 
-In every non-committed outcome, the implementor's original commit stands and step 5.7 reviews it directly.
+In every non-committed outcome, the implementor's original commit stands and is what step 5.65 measures and step 5.7 reviews.
 
 ---
 
