@@ -19,6 +19,11 @@ from pathlib import Path
 _SKILL_MD = Path(__file__).resolve().parent.parent / "SKILL.md"
 _TEXT = _SKILL_MD.read_text()
 
+# The style-limit gate's mechanics live here since PRD 00163 moved them off
+# step 7.0; SKILL.md step 5.65 keeps only the tier gate and the pointer.
+_STYLE_GATE_MD = Path(__file__).resolve().parent.parent / "references" / "style-gate.md"
+_STYLE_GATE = _STYLE_GATE_MD.read_text()
+
 
 _MAX_SKILL_MD_LINES = 500
 
@@ -207,26 +212,23 @@ def test_step_5_6_treats_an_empty_description_as_absent() -> None:
     )
 
 
-def test_step_7_runs_the_style_limit_gate_and_declares_compute_mech_facts() -> None:
-    # Step 7 must run check_style_limits.py before the full suite and stamp
+def test_the_style_gate_runs_the_script_and_declares_compute_mech_facts() -> None:
+    # The gate must run check_style_limits.py and stamp
     # style_gate: clean | fixed:<sha> | failed:<violations>; the function
     # walk must be declared as a cross-skill dependency on
-    # compute_mech_facts.py, never a second ast walker.
-    start = _TEXT.index("### 7.")
-    end = _TEXT.index("## Reference Files", start)
-    step_7 = _TEXT[start:end]
-
+    # compute_mech_facts.py, never a second ast walker. Since PRD 00163 the
+    # procedure lives in references/style-gate.md and its base is the task's
+    # own <task_base_sha>, not the phase's work_start_sha.
     for needle in (
         "check_style_limits.py",
         "style_gate: clean",
         "fixed:",
         "failed:",
-        # work_start_sha: pins the reworked diff base (PRD 00140 recorded
-        # deviation), not a gate-behavior check
-        "work_start_sha",
+        "task_base_sha",
     ):
-        assert needle in step_7, (
-            f"{_SKILL_MD}: expected step 7 to contain {needle!r} — not found."
+        assert needle in _STYLE_GATE, (
+            f"{_STYLE_GATE_MD}: expected the style gate to contain {needle!r} "
+            "— not found."
         )
 
     dep_start = _TEXT.index("## Dependencies")
@@ -240,12 +242,12 @@ def test_step_7_runs_the_style_limit_gate_and_declares_compute_mech_facts() -> N
 
 
 def test_step_7_stop_condition_permits_a_recorded_style_gate_failure() -> None:
-    # Step 7.0 sanctions a recorded `style_gate: failed:<violations>` and
-    # explicitly proceeds to the suite anyway (fail loud, never silent).
-    # Step 7's stop-condition sentence sets the phase's "fully green" bar
-    # unqualified today — step 7.0 is a sub-step of step 7, so a recorded
-    # style-gate failure leaves step 7 not fully green, and that sentence
-    # then forbids ending the phase, contradicting the sanctioned exit.
+    # Step 5.65 sanctions a recorded `style_gate: failed:<violations>` and
+    # explicitly proceeds anyway (fail loud, never silent). Step 7's
+    # stop-condition sentence sets the phase's "fully green" bar unqualified
+    # today — a task that recorded a style-gate failure leaves the phase not
+    # fully green, and that sentence then forbids ending the phase,
+    # contradicting the sanctioned exit.
     # The paragraph that states "fully green" must itself scope that bar
     # to the test suite and name the style-gate-failure exception, so a
     # future reword of the sentence can't silently drop the exception and
@@ -280,43 +282,40 @@ def test_step_7_stop_condition_permits_a_recorded_style_gate_failure() -> None:
             "green' stop condition to name a recorded 'style_gate: "
             "failed:' outcome as a sanctioned way to complete the phase "
             "— not found in that paragraph. Without it, the stop "
-            "condition still contradicts step 7.0's 'proceed to the "
-            "suite anyway' instruction on a style-gate failure."
+            "condition still contradicts step 5.65's 'proceed to step 5.7 "
+            "anyway' instruction on a style-gate failure."
         )
 
 
-def test_step_7_0_bare_repo_git_flags_govern_both_diff_invocations() -> None:
-    # Step 7.0 runs two `git diff` invocations: one writing the phase diff
+def test_style_gate_bare_repo_git_flags_govern_both_diff_invocations() -> None:
+    # The gate runs two `git diff` invocations: one writing the task diff
     # (--output=) and one listing changed Python files (--name-only
     # --diff-filter=d). The `--git-dir`/`--work-tree` bare-repo-home
-    # parenthetical trails only the first today, so a literal reader could
+    # parenthetical trailed only the first once, so a literal reader could
     # run the second invocation without the flags and hit
     # `fatal: not a git repository` in a bare-repo home.
-    start = _TEXT.index("#### 7.0.")
-    end = _TEXT.index("**What to run**", start)
-    step_7_0 = _TEXT[start:end]
-
-    first_idx = step_7_0.index("git diff <base>..HEAD --output=")
-    second_idx = step_7_0.index("git diff --name-only --diff-filter=d")
+    first_idx = _STYLE_GATE.index("git diff <base>..HEAD --output=")
+    second_idx = _STYLE_GATE.index("git diff --name-only --diff-filter=d")
 
     flag_occurrences = []
     search_from = 0
     while True:
-        pos = step_7_0.find("--git-dir", search_from)
+        pos = _STYLE_GATE.find("--git-dir", search_from)
         if pos == -1:
             break
         flag_occurrences.append(pos)
         search_from = pos + 1
 
     assert flag_occurrences, (
-        f"{_SKILL_MD}: expected step 7.0 to mention '--git-dir' at all — not found."
+        f"{_STYLE_GATE_MD}: expected the gate to mention '--git-dir' at all "
+        "— not found."
     )
 
     scopes_whole_block = any(pos < first_idx for pos in flag_occurrences)
     attached_to_second_too = any(pos >= second_idx for pos in flag_occurrences)
 
     assert scopes_whole_block or attached_to_second_too, (
-        f"{_SKILL_MD}: expected the '--git-dir'/'--work-tree' bare-repo "
+        f"{_STYLE_GATE_MD}: expected the '--git-dir'/'--work-tree' bare-repo "
         "flags to be named before the first `git diff` invocation "
         "(scoping the whole block) or to appear again at/after the second "
         "invocation ('git diff --name-only --diff-filter=d') — every "
@@ -326,8 +325,8 @@ def test_step_7_0_bare_repo_git_flags_govern_both_diff_invocations() -> None:
     )
 
 
-def test_step_7_0_branches_on_a_gate_that_could_not_run() -> None:
-    # Step 7.0's exit-2 branch ("the gate could not run at all") must handle
+def test_style_gate_branches_on_a_gate_that_could_not_run() -> None:
+    # The exit-2 branch ("the gate could not run at all") must handle
     # exit 2 specifically, record a `style_gate: failed:` outcome, and must
     # NOT dispatch Ivan — there are no violation lines to hand him, and
     # dispatching on an empty findings list is the failure this branch exists
@@ -336,29 +335,25 @@ def test_step_7_0_branches_on_a_gate_that_could_not_run() -> None:
     # lines, joined by '; '"), but exit 2 leaves <reason> undefined today.
     # The script writes its failure message to stderr, so a correct fix
     # names stderr as the source.
-    start = _TEXT.index("#### 7.0.")
-    end = _TEXT.index("**What to run**", start)
-    step_7_0 = _TEXT[start:end]
-
-    assert "Exit 2" in step_7_0, (
-        f"{_SKILL_MD}: expected step 7.0 to branch on 'Exit 2' (the gate "
+    assert "Exit 2" in _STYLE_GATE, (
+        f"{_STYLE_GATE_MD}: expected the gate to branch on 'Exit 2' (the gate "
         "could not run at all) — not found."
     )
 
-    exit_2_clause = step_7_0.split("Exit 2", 1)[1]
+    exit_2_clause = _STYLE_GATE.split("Exit 2", 1)[1]
 
     assert "style_gate: failed:" in exit_2_clause, (
-        f"{_SKILL_MD}: expected the exit-2 branch of step 7.0 to record a "
+        f"{_STYLE_GATE_MD}: expected the exit-2 branch to record a "
         "'style_gate: failed:' outcome — not found."
     )
     assert "do NOT dispatch Ivan" in exit_2_clause, (
-        f"{_SKILL_MD}: expected the exit-2 branch of step 7.0 to say it "
+        f"{_STYLE_GATE_MD}: expected the exit-2 branch to say it "
         "does NOT dispatch Ivan — not found. There are no violation lines "
         "to hand a fix agent on this branch, so dispatching one is the "
         "failure exit 2 was introduced to prevent."
     )
     assert "stderr" in exit_2_clause, (
-        f"{_SKILL_MD}: expected the exit-2 branch of step 7.0 to name "
+        f"{_STYLE_GATE_MD}: expected the exit-2 branch to name "
         "'stderr' as the source of the '<reason>' substituted into "
         "'style_gate: failed:<reason>' — not found. The exit-1 clause "
         "spells out its substitution ('the violation lines, joined by "

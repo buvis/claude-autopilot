@@ -29,7 +29,7 @@ Implement pending tasks one-by-one, committing after each completion.
   - `${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/prompts/de-sloppify.md` - its
     `## What to remove` section is inlined into the step-5.6 deslop dispatch
   - `${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/compute_mech_facts.py` - imported
-    by path from `scripts/check_style_limits.py` (step 7.0 style-limit gate) for the per-function line spans
+    by path from `scripts/check_style_limits.py` (step 5.65 style-limit gate) for the per-function line spans
 - CLIs: `git`, `python3`
 - Optional (explicit fallback exists): `use-gemini` skill (UI tasks), `use-qwen`
   skill, `use-codex` skill (an unhealthy or absent codex falls back to Claude at
@@ -407,6 +407,10 @@ Compute `net_lines = insertions - deletions` (from `--shortstat`) and `file_coun
 
 **Do not retry self-deslop on failure** — best-effort means single attempt only.
 
+### 5.65. Per-task style limits
+
+**Tier gate — haiku skips.** `state.tasks[i].model == "haiku"`: skip this step and record `style_gate: skipped:tier`. Every other tier runs the gate, `fable` included. **Read `references/style-gate.md` before the first step-5.65 run of a batch** — it carries the diff construction (base `<task_base_sha>` from step 2: the committed range plus a `--no-index` block per untracked `.py` file), the invocation, the outcome ladder (exit 0 clean; exit 1 one fix dispatch, commit, re-run, then `fixed:<sha>` or `failed:<violations>`; exit 2 `failed:<stderr>` with no dispatch) and the sibling-directory allowlist that lets a split create the modules it needs. A task whose diff holds no `.py` file — docs-only, config-only — records `style_gate: clean` without running the script. Hold the value in-session and write it as the `style_gate` field of the attempt record step 6 builds, the same rule `self_deslop` follows; never a separate indexed state mutation.
+
 ### 5.7. Per-task code review
 
 **Tier gate — per-task review is skipped only on haiku.** Read the task's `model` field (`state.tasks[i].model`):
@@ -461,15 +465,11 @@ After step 6, decide whether to finish the remaining tasks in this session or ha
 
 After all tasks in the phase are marked completed, run the project's full verification suite **once**. This is the single point where the full suite runs — per-task verification (step 5.5) only ran the new tests in isolation, so this step is mandatory and must not be skipped.
 
-#### 7.0. Style-limit gate
-
-Before the suite, measure what this phase's diff introduced. Base = `state.work_start_sha` (`statectl get work_start_sha`; captured once per PRD before the first `/autopilot:work` pass, so it survives task-boundary handoffs and a first task that wrote no tests); every git invocation below runs with the repo's own `--git-dir`/`--work-tree` flags in a bare-repo home. Write the diff with `git diff <base>..HEAD --output=${TMPDIR:-/tmp}/phase-diff.txt`, then cover the Python files no commit holds yet: for every path `git ls-files --others --exclude-standard -- '*.py'` prints, append its whole-file add block with `git diff --no-index -- /dev/null <path> >> ${TMPDIR:-/tmp}/phase-diff.txt` (`--no-index` exits 1 whenever it finds differences, which is the normal case here — only exit ≥2 is a real failure), and `mv ${TMPDIR:-/tmp}/phase-diff.txt dev/local/tmp/phase-diff.txt` once the appends are done: stage it outside `dev/local/` because a shell append into that tree is blocked, and with no untracked `.py` file the moved diff is byte-identical to the committed range. The candidate list is the changed Python files from `git diff --name-only --diff-filter=d <base>..HEAD -- '*.py'` (deleted files excluded: the script reads every path it is given) plus those untracked paths. The combined list is empty: skip the script and record `style_gate: clean`. Otherwise run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_style_limits.py --diff dev/local/tmp/phase-diff.txt <every candidate as an absolute path>`; exit 0: record `style_gate: clean`. Exit 1: write the violation lines to the `FAILING_TESTS` scratch file and dispatch Ivan once with the full retry command shape in `references/gate-failure.md` § Retry render and `--set RETRY_INSTRUCTION="Fix only the listed style-limit violations; do not touch other code"`, commit per step 5, re-run the gate: clean -> `style_gate: fixed:<sha of the fix commit>`; still exit 1 -> `style_gate: failed:<the violation lines, joined by "; ">` and proceed to the suite anyway (fail loud, never silent). Exit 2 (or any other non-0/1 exit): the gate could not run at all, so there are no violation lines to hand a fix agent — record `style_gate: failed:<the script's stderr message>`, do NOT dispatch Ivan, and proceed to the suite anyway (fail loud, never silent, same as the still-failing exit-1 case). Function spans come from `review-work-completion/scripts/compute_mech_facts.py`, reused by import (see `## Dependencies`).
-
 **What to run** (project-dependent — use the commands documented in `AGENTS.md` / `CLAUDE.md` / project README): **read `references/final-verification.md` before running the suite.** It lists the per-stack commands, the improvised-suite rule for a repo that documents none (state the improvised set in the phase report; record `verification: none (no suite found)` when nothing runs — never report the phase green on an unverified tree), and the failure-handling loop (identify the task, re-open it, one Ivan fix, re-run only the failed commands, max 3 cycles, never relax a failing test). Run each command as a separate Bash call; do not chain with `&&`.
 
-Only stop the work phase once step 7's test suite is fully green — a recorded `style_gate: failed:<violations>` from step 7.0 is a sanctioned way for the phase to complete, not a reason to keep looping or stall; the suite itself still has to pass.
+Only stop the work phase once step 7's test suite is fully green — a recorded `style_gate: failed:<violations>` from a task's step 5.65 is a sanctioned way for the phase to complete, not a reason to keep looping or stall; the suite itself still has to pass.
 
-When reporting the phase result, include the `style_gate: <value>` line from step 7.0 and the contents of `dev/local/meta/assumptions.md` (if present) - the assumption ledger is input to the review phase and the user's 30-second examine pass.
+When reporting the phase result, include one `<task-id>: style_gate: <value>` line per task from step 5.65 and the contents of `dev/local/meta/assumptions.md` (if present) - the assumption ledger is input to the review phase and the user's 30-second examine pass.
 
 ## Reference Files
 
@@ -489,6 +489,7 @@ When reporting the phase result, include the `style_gate: <value>` line from ste
 - `references/gate-failure.md` - Step 5.5 diagnose→repair/escalate flow, the retry render, step 4's result table and the 4.2 breaker (read before the first gate or infrastructure failure of a batch)
 - `references/rework-mode.md` - Step 1.5 rework lifecycle, attempt fields and abort semantics (read when `rework_task_ids` is non-empty)
 - `references/red-check.md` - Step 2.95 target resolution and outcome ladder (read before the first red-check of a batch)
+- `references/style-gate.md` - Step 5.65 diff construction, outcome ladder and style-fix dispatch (read before the first style gate of a batch)
 - `references/per-task-review.md` - Step 5.7 reviewer dispatch and result handling (read before the first per-task review of a batch)
 - `references/task-boundary-handoff.md` - Step 6.5 handoff procedure (read when `.handoff-requested` is present)
 - `references/final-verification.md` - Step 7 suite commands, improvised-suite rule and regression loop (read before the phase's one full-suite run)
