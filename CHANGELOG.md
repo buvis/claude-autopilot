@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **work**: a mechanical split-hygiene check on test files a task touched. It
+  parses with `ast` and reports bindings only - a module-level name nothing in
+  the file reads, and a local reassigned before its previous value is read -
+  never an assertion, test function, fixture or parametrization. The de-slop
+  pass still may not modify tests; this answers the mechanical half of that
+  question instead of asking an agent to judge it.
 - **work**: a style-limit fix may now create the sibling modules a split needs.
   That one dispatch is handed the violating files plus their parent directories
   and told it may add modules there; every other implementor dispatch keeps the
