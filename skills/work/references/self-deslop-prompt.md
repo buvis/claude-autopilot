@@ -59,7 +59,7 @@ Procedure:
 
 1. Read the diff for each file in scope (`git diff HEAD~1..HEAD <file>` or
    equivalent in your environment).
-2. For each line, block, helper, comment, docstring, or test added in the
+2. For each line, block, helper, comment or docstring added in the
    diff, ask:
      "Does this trace to a failing test, an acceptance criterion, or
      existing-behavior preservation?"
@@ -78,7 +78,10 @@ Procedure:
 Rules:
 
 - **Do not modify tests.** If a test reads as weak, that is the per-task
-  reviewer's call (step 5.7), not yours. Leave it.
+  reviewer's call (step 5.7), not yours. Leave it. Dead bindings a split left
+  behind in a test file are not yours either: `check_split_hygiene.py` answers
+  that mechanically at the task boundary (step 5.65), with `ast` rather than
+  judgment, so you never have to guess which test binding is safe to drop.
 - **Do not change behavior.** Tests prove behavior; if you cannot satisfy
   the tests, the deletion is wrong. Restore.
 - **Do not refactor.** This pass deletes; it does not move code around,
