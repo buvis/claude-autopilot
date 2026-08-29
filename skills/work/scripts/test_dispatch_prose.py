@@ -606,3 +606,89 @@ def test_the_simplification_mandate_maps_simplifications_to_low() -> None:
         "references/simplification-mandate.md no longer maps simplifications "
         "to a severity at all; LOW is the value the retry rule keys on."
     )
+
+
+def test_step_5_65_runs_split_hygiene_over_the_test_subset() -> None:
+    # PRD 00166. The check is worthless if the body never names it: a reader
+    # following step 5.65 has to reach the script and the empty-subset value
+    # from SKILL.md alone, because that is the only file /work loads in full.
+    step = _TEXT.split("### 5.65.")[1].split("### 5.7.")[0]
+
+    assert "check_split_hygiene.py" in step, (
+        "SKILL.md step 5.65 never names check_split_hygiene.py, so the "
+        "split-hygiene check is documented in a reference nothing points at."
+    )
+    assert "skipped:no-tests" in step, (
+        "SKILL.md step 5.65 does not say what a task touching no test file "
+        "records, so a reader has to guess between skipping and stamping."
+    )
+
+
+def test_split_hygiene_fix_is_deletion_only_and_keeps_the_task_allowlist() -> None:
+    # The whole safety argument rests on these two: the fixer may only delete
+    # the named bindings, and it gets the task's own file list rather than the
+    # style gate's widened one. Either drifting turns a hygiene sweep into an
+    # agent editing tests by judgment - exactly what the de-slop ban prevents.
+    gate = (_SKILL_MD.parent / "references" / "style-gate.md").read_text()
+
+    assert (
+        "Delete only the listed unused or shadowed bindings. Do not change any "
+        "assertion, test function, fixture or parametrization. Do not add code."
+    ) in gate, (
+        "references/style-gate.md no longer carries the split-hygiene "
+        "RETRY_INSTRUCTION verbatim; a paraphrase is what lets a fixer decide "
+        "an assertion is dead weight."
+    )
+    assert "no widened allowlist here" in gate, (
+        "references/style-gate.md dropped the rule that the split-hygiene fix "
+        "keeps the task's own file list; routing it through the style-fix "
+        "allowlist would let a deletion-only pass create modules."
+    )
+
+
+def test_both_records_enumerate_every_split_hygiene_value() -> None:
+    attempt_logging = (
+        _SKILL_MD.parent / "references" / "attempt-logging.md"
+    ).read_text()
+    schema = (
+        _SKILL_MD.parent.parent
+        / "run-autopilot"
+        / "references"
+        / "state-schema.md"
+    ).read_text()
+
+    for value in ("clean", "fixed:<sha>", "failed:<detail>", "skipped:no-tests"):
+        assert value in attempt_logging, (
+            f"references/attempt-logging.md does not enumerate {value!r}; /work "
+            "writes it on the attempt, so a reader auditing the record cannot "
+            "tell a clean check from one that never ran."
+        )
+    assert "split_hygiene" in schema, (
+        "run-autopilot/references/state-schema.md omits split_hygiene from the "
+        "tasks[].attempts signature, so the field /work writes is undeclared."
+    )
+    assert "skipped:no-tests" in schema, (
+        "run-autopilot/references/state-schema.md declares split_hygiene "
+        "without its no-tests value, the one a docs-only task records."
+    )
+
+
+def test_the_deslop_prompt_no_longer_asks_for_a_removal_it_forbids() -> None:
+    # PRD 00166's other half: step 2 used to ask the agent to evaluate every
+    # test added in the diff, and the rules then forbade acting on the answer.
+    prompt = (
+        _SKILL_MD.parent / "references" / "self-deslop-prompt.md"
+    ).read_text()
+
+    assert "docstring, or test" not in prompt, (
+        "references/self-deslop-prompt.md step 2 still lists tests as removal "
+        "candidates while its own rules forbid modifying them."
+    )
+    assert "Do not modify tests" in prompt, (
+        "references/self-deslop-prompt.md dropped the ban on modifying tests; "
+        "PRD 00166 keeps that ban and only removes the contradiction."
+    )
+    assert "check_split_hygiene" in prompt, (
+        "references/self-deslop-prompt.md bans touching tests without naming "
+        "what does handle test hygiene, so the finding travels to Pat instead."
+    )

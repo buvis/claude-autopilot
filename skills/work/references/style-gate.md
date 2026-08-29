@@ -115,11 +115,14 @@ as `style_gate` does not.
 
 ## Split-hygiene fix dispatch
 
-Exit 1 only. Render and dispatch with `references/gate-failure.md` § Style-fix
-render, passing the task's own `dev/local/tmp/ivan-<task-id>-files.txt`
-unchanged — **no widened allowlist**. A test file this check can flag is one the
-task touched, so it is already inside the task's Contract paths, and the fix
-creates no new module.
+Exit 1 only. Render and dispatch with `references/gate-failure.md` § **Retry**
+render — not § Style-fix render, which widens the allowlist. Two lines differ
+from that shape: `FAILING_TESTS` is the split-hygiene scratch file, and
+`RETRY_INSTRUCTION` is the deletion-only string below. `FILE_PATHS` stays the
+task's own `dev/local/tmp/ivan-<task-id>-files.txt`, unchanged:
+**no widened allowlist here**. A test file this check can flag is one the task already
+touched, so it is inside the task's Contract paths, and a deletion creates no
+new module.
 
 `RETRY_INSTRUCTION` is verbatim:
 
