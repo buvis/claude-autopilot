@@ -84,7 +84,7 @@ def test_skill_md_calls_the_gate_at_the_task_boundary() -> None:
     # that lands while 7.0 survives doubles the fix dispatches this move
     # exists to cut, and the haiku row has to name its stamp or a skipped
     # gate reads as a passed one.
-    skill = _SKILL_MD.read_text()
+    skill = _SKILL_TEXT
 
     assert "5.65" in skill, (
         f"{_SKILL_MD}: no step 5.65. The style gate has no call site, so it "
@@ -123,6 +123,23 @@ def test_the_style_fix_dispatch_has_its_own_allowlist() -> None:
         "directory lines, so nothing in the prompt distinguishes a directory "
         "the fixer may add to from a file it may only edit."
     )
+    instruction = (
+        "Fix only the listed style-limit violations. You may create new "
+        "modules in the directories marked above and update imports in the "
+        "listed files to use them. Do not change behavior, do not touch "
+        "other code, and do not modify tests except to split a test file a "
+        "violation line names."
+    )
+    for source, text in ((_GATE_FAILURE_MD, render), (_STYLE_GATE_MD, _TEXT)):
+        assert instruction in text, (
+            f"{source}: the style-fix RETRY_INSTRUCTION drifted from the "
+            "verbatim string. It is duplicated in two files, so nothing but "
+            "this pin keeps them equal - and its tail is what lets the fixer "
+            "split an oversize TEST file, the likeliest violation in a "
+            "prose-heavy repo. Drop that clause and the fixer is handed a "
+            "violation it is forbidden to touch."
+        )
+
     assert "You may create new modules" in render, (
         f"{_GATE_FAILURE_MD}: the style-fix RETRY_INSTRUCTION no longer grants "
         "creation permission. `agents/ivan.md` tells a fixer to stop and "
@@ -138,8 +155,9 @@ def test_every_step_5_6_exit_reaches_the_gate() -> None:
     # (test-only, trivial) fire on ordinary tasks, so the branch that
     # routes past the gate is the common path, not the rare one, and the
     # task then completes with no style_gate verdict at all.
-    skill = _SKILL_MD.read_text()
-    step_5_6 = skill[skill.index("### 5.6.") : skill.index("### 5.65.")]
+    step_5_6 = _SKILL_TEXT[
+        _SKILL_TEXT.index("### 5.6.") : _SKILL_TEXT.index("### 5.65.")
+    ]
     # The reference is read-first for step 5.6, so its routing is as binding
     # as the body's: a caller who follows it skips the gate just the same.
     deslop_md = _WORK / "references" / "self-deslop-prompt.md"

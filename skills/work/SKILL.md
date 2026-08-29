@@ -188,7 +188,7 @@ For the first available task:
    ```bash
    python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py <state.json> task-start <task-id>
    ```
-   Then run `git rev-parse HEAD` and hold it in-session as `<task_base_sha>` — steps 5.6, 5.7 and `BASE_SHA` all diff against it. Unlike `<test_commit_sha>` it is defined for every task, including test-only, docs-only, config-only and micro-lane tasks that commit no tests.
+   Then run `git rev-parse HEAD` and hold it in-session as `<task_base_sha>` — steps 5.6, 5.65, 5.7 and `BASE_SHA` all diff against it. Unlike `<test_commit_sha>` it is defined for every task, including test-only, docs-only, config-only and micro-lane tasks that commit no tests.
 2. **Reset the per-task context-cap marker** so the autopilot PostToolUse hook fires once for THIS task, not once per Work phase. The hook also self-clears when the in-progress task id in `state.json` differs from the id stored in the marker file, but the explicit clear here is a belt-and-braces backstop in case state.json's task-id snapshot lags the actual task switch. Run the shared walk-up helper in `--clear-cap` mode — it resolves symlinks, walks up to the autopilot dir, and removes `<autopilot_dir>/.cap-fired` internally:
    ```bash
    python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/_walk_up.py --clear-cap
