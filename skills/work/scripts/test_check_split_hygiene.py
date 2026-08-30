@@ -85,6 +85,21 @@ def test_never_reports_a_conftest_binding(tmp_path: Path) -> None:
     assert _unused(tmp_path, "EXPECTED = 3\n", name="conftest.py") == []
 
 
+def test_never_reports_a_future_import(tmp_path: Path) -> None:
+    # `from __future__ import annotations` binds a name nothing ever loads, so
+    # the plain unused-binding rule flags it in every file in this repo - and
+    # the fix that follows is deletion-only. Removing it silently un-lazies
+    # every annotation in the module. A compiler directive is not a binding.
+    text = (
+        "from __future__ import annotations\n"
+        "\n"
+        "\n"
+        "def test_thing() -> None:\n"
+        "    assert 1\n"
+    )
+    assert _unused(tmp_path, text) == []
+
+
 def test_reports_an_import_that_is_bound_and_never_used(tmp_path: Path) -> None:
     lines = _unused(tmp_path, "import fnmatch\n\n\ndef test_thing():\n    assert 1\n")
     assert len(lines) == 1

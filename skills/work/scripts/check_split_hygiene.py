@@ -62,6 +62,12 @@ def _module_bindings(tree: ast.Module) -> list[tuple[str, int]]:
             )
         elif isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
             out.append((stmt.target.id, stmt.target.lineno))
+        elif isinstance(stmt, ast.ImportFrom) and stmt.module == "__future__":
+            # A compiler directive, not a binding. `annotations` is never
+            # loaded by anything, so the plain rule flags it in every file
+            # that has one - and the deletion-only fix that follows would
+            # silently un-lazy every annotation in the module.
+            continue
         elif isinstance(stmt, (ast.Import, ast.ImportFrom)):
             out.extend(
                 (alias.asname or alias.name.split(".")[0], stmt.lineno)
