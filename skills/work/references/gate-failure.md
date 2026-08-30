@@ -208,6 +208,8 @@ Moved verbatim out of SKILL.md step 5.5 (PRD 00119-v2). Target the narrowest sco
 - Python: `pytest path/to/test_file.py::test_name`
 - JS/TS: `vitest run path/to/test_file` or `jest path/to/test_file`
 
+Every one of these is a **lint and narrow tests** command: pass `timeout: 300000` on the Bash call (`references/subagent-dispatch.md` § Foreground command budgets), and run it alone — never combined with an inspection in the same call. A command that hits the budget re-runs once at 600000 ms; a second timeout stamps `verification: "timeout:<command>"` on the attempt, names the command and its budget in the phase report, and the task proceeds rather than looping on it.
+
 ## Test-commit SHA (step 2.9)
 
 Moved verbatim out of SKILL.md step 2.9 (PRD 00119-v2). The ESCALATE reset in
