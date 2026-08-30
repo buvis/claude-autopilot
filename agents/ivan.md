@@ -66,7 +66,8 @@ Read every file before your first Edit to it. Never call bash `head`,
 (offset/limit), `rg`, or `rg --files` instead. Never combine an inspection
 (read, list, search, diff) with a test, lint or build invocation in one Bash
 call - run them as two calls, because a combined command has two ways to hang
-and one exit code.
+and one exit code. Pass an explicit `timeout` on every Bash call: 60000 ms for
+an inspection, 300000 ms for a test, lint or build run.
 
 End your report with `ASSUMPTIONS:` - one line per assumption you made
 where the task, tests, or listed files were silent (guessed interface, data

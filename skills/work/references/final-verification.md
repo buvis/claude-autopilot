@@ -28,19 +28,25 @@ verification): the combined command has two ways to hang and one exit code.
 
 ## Timed-out commands
 
-A command that hits its budget neither passed nor failed — it returned no
-verdict, so record it as one that did not run.
+A command that hits its budget was attempted and returned no verdict. It is
+neither passed nor skipped — `skipped:` is reserved for a check that was never
+attempted at all.
 
 1. Re-run it once at the next larger budget when its class has one: a lint,
    smoke or definition-of-done command re-runs at 600000 ms. A foreground full
-   suite is already at the tool maximum and gets no re-run.
-2. On a second timeout, stop re-running. Stamp
-   `verification: "timeout:<command>"` on the task's attempt entry
-   (`references/attempt-logging.md` § Best-effort gate stamps) and name the
-   command and its budget in the phase report.
-3. The phase proceeds from there — the stamp is a fail-loud marker, not a block.
-   Never report a timed-out command as a green one, and never silently retry it
-   a third time.
+   suite is already at the tool maximum, so it has no larger budget and gets no
+   re-run — its **first** timeout is terminal and is recorded at once.
+2. Record it in the phase report: name the command and the budget it blew,
+   beside the `verification: none (no suite found)` line this step already uses
+   for an unverified tree. The phase report is a step-7 timeout's **whole**
+   record — every task's attempt entry was appended at its own exit (step 6's
+   `task-done`), before this step runs, so there is no live entry to stamp. A
+   command that timed out while a task was still in flight (step 5.5, step
+   2.95's red-check) stamps `verification: "timeout:<command>"` on that task's
+   attempt instead (`references/attempt-logging.md` § Best-effort gate stamps).
+3. The phase proceeds from there — the record is a fail-loud marker, not a
+   block. Never report a timed-out command as a green one, and never silently
+   retry it a third time.
 
 ## Handling failures at this step
 

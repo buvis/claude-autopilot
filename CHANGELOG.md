@@ -12,8 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **work**: explicit timeout budgets for foreground verification commands and a
   rule against combining inspection with verification. Inspection calls get
   60000 ms, lint and narrow tests 300000 ms, a foreground full suite 600000 ms;
-  a fired budget buys one re-run at the next larger one, then records
-  `verification: "timeout:<command>"` and names the command in the phase report.
+  a fired budget buys one re-run at the next larger one (the full suite has
+  none, so its first timeout is terminal), then names the command and its budget
+  in the phase report. A command that timed out while a task was in flight also
+  stamps `verification: "timeout:<command>"` on that task's attempt.
   Backgrounded full suites keep their 20-minute `Monitor` wait.
 - **work**: a mechanical split-hygiene check on test files a task touched. It
   parses with `ast` and reports bindings only - a module-level name nothing in
