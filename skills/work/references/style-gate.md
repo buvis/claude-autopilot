@@ -116,13 +116,20 @@ as `style_gate` does not.
 ## Split-hygiene fix dispatch
 
 Exit 1 only. Render and dispatch with `references/gate-failure.md` § **Retry**
-render — not § Style-fix render, which widens the allowlist. Two lines differ
-from that shape: `FAILING_TESTS` is the split-hygiene scratch file, and
-`RETRY_INSTRUCTION` is the deletion-only string below. `FILE_PATHS` stays the
-task's own `dev/local/tmp/ivan-<task-id>-files.txt`, unchanged:
-**no widened allowlist here**. A test file this check can flag is one the task already
-touched, so it is inside the task's Contract paths, and a deletion creates no
-new module.
+render — not § Style-fix render, which widens the allowlist to whole
+directories. Two lines differ from that shape: `FAILING_TESTS` is the
+split-hygiene scratch file, and `RETRY_INSTRUCTION` is the deletion-only string
+below.
+
+`FILE_PATHS` is `dev/local/tmp/ivan-<task-id>-hygiene-files.txt`: one absolute
+path per violating file, read off the reported lines (each names exactly one),
+and **no directory lines at all** — a deletion never creates a module, so
+**no widened allowlist here**. Build that list rather than reusing the task's
+`ivan-<task-id>-files.txt`: when the style gate has just split an oversize test
+file, the new sibling module is by construction absent from the task's Contract
+paths, and `agents/ivan.md` makes a fixer stop on any file its list does not
+name. Deriving the list from the violations is what keeps the dispatch both
+reachable and never wider than the files it must edit.
 
 `RETRY_INSTRUCTION` is verbatim:
 

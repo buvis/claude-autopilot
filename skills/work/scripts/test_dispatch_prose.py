@@ -641,8 +641,14 @@ def test_split_hygiene_fix_is_deletion_only_and_keeps_the_task_allowlist() -> No
     )
     assert "no widened allowlist here" in gate, (
         "references/style-gate.md dropped the rule that the split-hygiene fix "
-        "keeps the task's own file list; routing it through the style-fix "
-        "allowlist would let a deletion-only pass create modules."
+        "gets no directory lines; routing it through the style-fix allowlist "
+        "would let a deletion-only pass create modules."
+    )
+    assert "ivan-<task-id>-hygiene-files.txt" in gate, (
+        "references/style-gate.md no longer builds the hygiene file list from "
+        "the violation lines. Reusing the task's own ivan-<task-id>-files.txt "
+        "dead-ends the fixer on a sibling test module the style gate just "
+        "created, which is absent from the task's Contract paths."
     )
 
 
@@ -657,12 +663,18 @@ def test_both_records_enumerate_every_split_hygiene_value() -> None:
         / "state-schema.md"
     ).read_text()
 
-    for value in ("clean", "fixed:<sha>", "failed:<detail>", "skipped:no-tests"):
-        assert value in attempt_logging, (
-            f"references/attempt-logging.md does not enumerate {value!r}; /work "
-            "writes it on the attempt, so a reader auditing the record cannot "
-            "tell a clean check from one that never ran."
-        )
+    # Assert the whole signature line, not the values one at a time: three of
+    # the four already appear in attempt-logging.md via the style_gate row, so
+    # a per-value substring check stays green even if split_hygiene's own
+    # enumeration is deleted outright.
+    assert (
+        '"split_hygiene": "clean" | "fixed:<sha>" | "failed:<detail>" '
+        '| "skipped:no-tests" | null'
+    ) in attempt_logging, (
+        "references/attempt-logging.md no longer carries the split_hygiene "
+        "signature line; /work writes that field on the attempt, so a reader "
+        "auditing the record cannot tell a clean check from one that never ran."
+    )
     assert "split_hygiene" in schema, (
         "run-autopilot/references/state-schema.md omits split_hygiene from the "
         "tasks[].attempts signature, so the field /work writes is undeclared."

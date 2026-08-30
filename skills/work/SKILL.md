@@ -469,7 +469,7 @@ After all tasks in the phase are marked completed, run the project's full verifi
 
 Only stop the work phase once step 7's test suite is fully green — a recorded `style_gate: failed:<violations>` from a task's step 5.65 is a sanctioned way for the phase to complete, not a reason to keep looping or stall; the suite itself still has to pass.
 
-When reporting the phase result, include one `<task-id>: style_gate: <value>, split_hygiene: <value>` line per task from step 5.65 and the contents of `dev/local/meta/assumptions.md` (if present) - the assumption ledger is input to the review phase and the user's 30-second examine pass.
+When reporting the phase result, include one `<task-id>: style_gate: <value>, split_hygiene: <value>` line per task from step 5.65 (omit `split_hygiene` on a `haiku` task — the tier gate skipped the step, so there is no value) and the contents of `dev/local/meta/assumptions.md` (if present) - the assumption ledger is input to the review phase and the user's 30-second examine pass.
 
 ## Reference Files
 
