@@ -148,6 +148,29 @@ def test_reports_an_import_that_is_bound_and_never_used(tmp_path: Path) -> None:
     assert ":1 | fnmatch | " in lines[0]
 
 
+def test_never_reports_a_name_listed_in_dunder_all(tmp_path: Path) -> None:
+    text = 'WIDGET = 3\n__all__ = ["WIDGET"]\n\n\ndef test_thing():\n    assert 1\n'
+    assert _unused(tmp_path, text) == []
+
+
+def test_never_reports_a_fixture_used_only_as_a_test_argument(tmp_path: Path) -> None:
+    # The PRD's own edge case: arg identifiers are collected as loads, so a
+    # fixture reached only through a test-function parameter is a read.
+    text = (
+        "import pytest\n"
+        "\n"
+        "\n"
+        "@pytest.fixture\n"
+        "def widget():\n"
+        "    return 3\n"
+        "\n"
+        "\n"
+        "def test_thing(widget):\n"
+        "    assert widget\n"
+    )
+    assert _unused(tmp_path, text) == []
+
+
 # --- Shadowed assignment rule -----------------------------------------------
 
 
@@ -201,6 +224,69 @@ def test_never_reports_an_except_as_target(tmp_path: Path) -> None:
     assert _shadowed(tmp_path, text) == []
 
 
+def test_never_reports_a_with_target_rebinding(tmp_path: Path) -> None:
+    text = (
+        "def test_thing():\n"
+        "    handle = None\n"
+        "    with open('f') as handle:\n"
+        "        pass\n"
+        "    handle = other()\n"
+        "    assert handle\n"
+    )
+    assert _shadowed(tmp_path, text) == []
+
+
+def test_never_reports_a_comprehension_target_rebinding(tmp_path: Path) -> None:
+    text = (
+        "def test_thing():\n"
+        "    item = None\n"
+        "    rows = [item for item in (1, 2)]\n"
+        "    item = last(rows)\n"
+        "    assert item\n"
+    )
+    assert _shadowed(tmp_path, text) == []
+
+
+def test_never_reports_a_match_capture_rebinding(tmp_path: Path) -> None:
+    # `case ... as got` binds through MatchAs.name, a plain str like
+    # ExceptHandler.name. Pinned so narrowing the sweep to node types keeps
+    # every capture construct the PRD names excluded.
+    text = (
+        "def test_thing(value):\n"
+        "    got = None\n"
+        "    match value:\n"
+        "        case [got, *rest]:\n"
+        "            pass\n"
+        "    got = final()\n"
+        "    assert got\n"
+    )
+    assert _shadowed(tmp_path, text) == []
+
+
+def test_reports_a_shadow_a_nested_def_would_otherwise_hide(tmp_path: Path) -> None:
+    # A nested `def` rebinds outright - it is not one of the PRD's capture
+    # constructs. Clearing on it (which an attribute-name sweep over `.name`
+    # did) silently swallowed a genuine dead value, exactly the leftover this
+    # whole check exists to find.
+    text = (
+        "def test_thing():\n"
+        "    handler = 1\n"
+        "    def handler():\n"
+        "        return 2\n"
+        "    handler = 3\n"
+        "    assert handler == 3\n"
+    )
+    lines = _shadowed(tmp_path, text)
+    assert len(lines) == 1
+    assert ":2 | handler | reassigned before the previous value is read" in lines[0]
+
+
+def test_skips_a_function_that_calls_locals(tmp_path: Path) -> None:
+    # The other arm of _escapes: a name lookup rather than a statement node.
+    text = "def test_thing():\n    x = 1\n    print(locals())\n    x = 2\n"
+    assert _shadowed(tmp_path, text) == []
+
+
 def test_skips_a_function_that_declares_a_global(tmp_path: Path) -> None:
     text = "def test_thing():\n    global x\n    x = 1\n    x = 2\n"
     assert _shadowed(tmp_path, text) == []
@@ -217,6 +303,19 @@ def test_unparseable_file_exits_2_and_names_the_file_on_stderr(
     assert result.returncode == 2
     assert str(broken) in result.stderr
     assert "not inspected" in result.stderr
+
+
+def test_one_uninspectable_path_forces_exit_2_beside_clean_files(
+    tmp_path: Path,
+) -> None:
+    # Exit 2 outranks both 0 and 1: a batch that could not inspect every file
+    # must never read as a clean check, or the gate certifies a file it never
+    # opened.
+    clean = _write(tmp_path, "test_clean.py", "def test_thing():\n    assert 1\n")
+    notes = _write(tmp_path, "notes.md", "not python\n")
+    result = _run(str(clean), str(notes))
+    assert result.returncode == 2
+    assert str(notes) in result.stderr
 
 
 def test_clean_file_exits_0_and_a_violating_file_exits_1(tmp_path: Path) -> None:

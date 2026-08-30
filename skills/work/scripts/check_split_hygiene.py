@@ -29,9 +29,14 @@ _ESCAPE_CALLS = frozenset({"exec", "eval", "locals"})
 # load - the same reason `conftest.py` is excluded wholesale. A missing load
 # proves nothing here, and deleting one silently changes which tests run.
 _PYTEST_MAGIC_NAMES = frozenset({"pytestmark", "pytest_plugins"})
-# Nodes that bind a name as a plain `str` attribute rather than a Name node:
-# `except ... as e`, `import x as y`, `case [x, *rest]`, a nested `def`.
-_STR_BINDING_ATTRS = ("name", "asname", "rest")
+# The capture constructs whose bound name ast.walk never yields as a Name
+# node - it lives in a plain `str` attribute. Exactly the `except ... as` and
+# `match ... case` targets the PRD lists as never reported.
+#
+# Matched by NODE TYPE, never by attribute name: `.name` is also what
+# FunctionDef, ClassDef and alias carry, and clearing on those swallowed a
+# real shadow (`x = 1; def x(): ...; x = 2` went unreported).
+_CAPTURE_NODES = (ast.ExceptHandler, ast.MatchAs, ast.MatchStar, ast.MatchMapping)
 
 
 def _loaded_names(tree: ast.AST) -> set[str]:
@@ -162,13 +167,13 @@ def _clear(pending: dict[str, int], node: ast.AST) -> None:
         if isinstance(sub, ast.arg):
             pending.pop(sub.arg, None)
             continue
-        # `except ValueError as e`, `import x as y`, `case [a, *rest]` and a
-        # nested `def` all bind a name ast.walk never yields as a Name node -
-        # it lives in a plain `str` attribute. Clearing by attribute is what
-        # keeps those rebindings out of the SHADOWED rule, exactly as the
-        # `for`/`with` targets above are kept out.
-        for attr in _STR_BINDING_ATTRS:
-            bound = getattr(sub, attr, None)
+        # `except ValueError as e` and `case [a, *rest]` bind a name ast.walk
+        # never yields as a Name node. Clearing those keeps them out of the
+        # SHADOWED rule, exactly as the `for`/`with` targets above are kept
+        # out. A nested `def`/`class`/import is NOT one of these: it rebinds
+        # outright, so a dead value before it stays reportable.
+        if isinstance(sub, _CAPTURE_NODES):
+            bound = getattr(sub, "name", None) or getattr(sub, "rest", None)
             if isinstance(bound, str):
                 pending.pop(bound, None)
 
