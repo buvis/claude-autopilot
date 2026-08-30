@@ -81,13 +81,37 @@ A background dispatch does **not** relax the one-task-at-a-time rule: dispatch o
 
 **qwen helper-script deadline.** qwen dispatches use the **10 min × 2 `TaskOutput`** wait pattern above — the same as `use-codex` and `use-gemini` — NOT the 15-min `Monitor` watchdog (which applies to Agent dispatches like Tess / Ivan / Devon / reviewer). The `pi` invocation that `qwen-run.sh` wraps is a Bash helper-script dispatch, so the helper-script deadline applies. Local-inference latency on a 30B-parameter qwen model can routinely exceed several minutes; the 10-min × 2 budget accommodates that without conflating it with the Agent watchdog.
 
-**Three deadlines exist, by mechanism — keep them distinct:**
+**Five deadlines exist, by mechanism — keep them distinct:**
 
 - **15 min check-in, progress-probed extensions, 45 min hard cap** — `Monitor` watchdog on Tess/Ivan/Devon/reviewer dispatches (this section). Honest single-task dispatch runtimes measured 2026-07-31 ranged 2-30 min (median ~12; multi-surface tasks 19-30), so a fixed 15-min kill destroys nearly-finished work.
 - **10 min × 2** — `TaskOutput` waits on `use-codex`/`use-gemini` helper-script Bash dispatches (paragraph above).
 - **20 min** — `Monitor` waits on backgrounded `cargo` full-suite runs (see `SKILL.md` "CRITICAL: Never Ask the User to Run Commands").
+- **60000 ms** — the Bash `timeout` on a foreground inspection call (§ Foreground command budgets below).
+- **300000 ms** — the Bash `timeout` on a foreground lint or narrow-test call; **600000 ms** on a foreground full suite (§ Foreground command budgets below).
 
-They differ because the work differs — a full Rust test suite legitimately runs longer than a single-task subagent. Do not unify them into one number.
+They differ because the work differs — a full Rust test suite legitimately runs longer than a single-task subagent, and a `git status` longer than neither. Do not unify them into one number.
+
+## Foreground command budgets
+
+The Watchdog above bounds Agent dispatches and helper scripts. It does not bound plain Bash, and nothing else does either: a foreground `ruff`, `pytest`, `git` or inspection call has no deadline, no no-output probe and no kill path. Measured 2026-08-27: a command that combined an inspection read with a Ruff invocation stalled for 17 min 48 s, wrote nothing, and needed a manual interrupt — in a loop whose whole premise is that nobody is watching.
+
+So every foreground Bash call this pack makes passes an explicit `timeout` (milliseconds; the tool's default is 120000 and its maximum 600000):
+
+| Class | Commands | `timeout` |
+|---|---|---|
+| Inspection | `git diff`, `git status`, `rg`, `ls`, a render call | 60000 |
+| Lint and narrow tests | `ruff check`, `eslint`, step 5.5's narrow test command, a queued verification check | 300000 |
+| Full suite | step 7's documented or improvised suite, run in the foreground | 600000 |
+
+A command whose class is not documented takes the **inspection** budget. A backgrounded full suite is unchanged — it keeps the 20 min `Monitor` wait in the list above. This section shrinks no deadline that already exists.
+
+**When a budget fires.** Re-run the command once at the next larger budget when its class has one (inspection → 300000, lint and narrow tests → 600000; a foreground full suite is already at the tool maximum and gets no re-run). A second timeout is recorded and never retried again: stamp `verification: "timeout:<command>"` on the attempt for a step-5.5 or step-7 command (`references/attempt-logging.md` § Best-effort gate stamps) and name the command and its budget in the phase report, whatever the class. Then proceed — the stamp is a fail-loud marker, not a block, and a timed-out command is never reported as a passed one.
+
+## Never combine inspection with verification
+
+A single Bash call runs **either** an inspection (read, list, search, diff) **or** a verification (test, lint, build) — never both, and never two verifications chained. Split them into two calls, each carrying its own budget from the table above.
+
+Rationale: a combined command has two ways to hang and one exit code, so neither the exit status nor the output can be attributed to either half. The pack's existing "do not chain with `&&`" instructions (`references/final-verification.md` § What to run, `SKILL.md` step 5's commit pair) are scoped to those two places, so a combined inspect-and-verify command was unremarkable everywhere else — which is how the 17-minute stall above got built.
 
 ## Blocked verification and backgrounded commands
 
