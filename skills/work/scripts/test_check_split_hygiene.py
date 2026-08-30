@@ -29,13 +29,13 @@ def _write(tmp_path: Path, name: str, text: str) -> Path:
 
 
 def _unused(tmp_path: Path, text: str, name: str = "test_mod.py") -> list[str]:
-    path = _write(tmp_path, name, text)
-    return csh.unused_bindings(ast.parse(text), path)
+    # Both rules take a parsed tree; the path is only a label and the
+    # conftest.py check. Nothing reads the file, so nothing writes one.
+    return csh.unused_bindings(ast.parse(text), tmp_path / name)
 
 
 def _shadowed(tmp_path: Path, text: str) -> list[str]:
-    path = _write(tmp_path, "test_mod.py", text)
-    return csh.shadowed_assignments(ast.parse(text), path)
+    return csh.shadowed_assignments(ast.parse(text), tmp_path / "test_mod.py")
 
 
 def _run(*args: str) -> subprocess.CompletedProcess[str]:
@@ -100,6 +100,48 @@ def test_never_reports_a_future_import(tmp_path: Path) -> None:
     assert _unused(tmp_path, text) == []
 
 
+def test_never_reports_a_pytest_magic_module_name(tmp_path: Path) -> None:
+    # pytest reads `pytestmark` and `pytest_plugins` by introspection, not by
+    # a same-file load - the same reason conftest.py is excluded. Deleting a
+    # non-strict xfail mark yields a silent XPASS: no failure, no gate, a
+    # weakened test. Exactly the harm this whole check exists to prevent.
+    text = (
+        "import pytest\n"
+        "\n"
+        "pytestmark = pytest.mark.xfail\n"
+        "pytest_plugins = ['tests.fixtures']\n"
+        "\n"
+        "\n"
+        "def test_thing():\n"
+        "    assert 1\n"
+    )
+    assert _unused(tmp_path, text) == []
+
+
+def test_never_reports_a_star_import(tmp_path: Path) -> None:
+    # `from helpers import *` binds no name of its own; ast spells the alias
+    # `*`, so the plain rule reported a binding literally named `*` whose
+    # deletion takes every name the star supplied.
+    text = "from fnmatch import *\n\n\ndef test_thing():\n    assert 1\n"
+    assert _unused(tmp_path, text) == []
+
+
+def test_never_reports_an_importorskip_guard(tmp_path: Path) -> None:
+    # The binding is unread on purpose; the CALL is the guard. Delete it and
+    # the module runs wherever the dependency is installed, so the suite
+    # backstop stays green while the skip is gone.
+    text = (
+        "import pytest\n"
+        "\n"
+        'np = pytest.importorskip("numpy")\n'
+        "\n"
+        "\n"
+        "def test_thing():\n"
+        "    assert 1\n"
+    )
+    assert _unused(tmp_path, text) == []
+
+
 def test_reports_an_import_that_is_bound_and_never_used(tmp_path: Path) -> None:
     lines = _unused(tmp_path, "import fnmatch\n\n\ndef test_thing():\n    assert 1\n")
     assert len(lines) == 1
@@ -137,6 +179,24 @@ def test_never_reports_a_loop_target_rebinding(tmp_path: Path) -> None:
         "        pass\n"
         "    x = 4\n"
         "    assert x\n"
+    )
+    assert _shadowed(tmp_path, text) == []
+
+
+def test_never_reports_an_except_as_target(tmp_path: Path) -> None:
+    # `except ValueError as caught` binds via ExceptHandler.name, a plain
+    # str - ast.walk never yields it as a Name node, so the generic clear
+    # missed it and the earlier default was reported as dead. The PRD lists
+    # `except ... as` beside `for` and `with` as never reported.
+    text = (
+        "def test_thing():\n"
+        "    caught = None\n"
+        "    try:\n"
+        "        risky()\n"
+        "    except ValueError as caught:\n"
+        "        pass\n"
+        "    caught = other()\n"
+        "    assert caught\n"
     )
     assert _shadowed(tmp_path, text) == []
 

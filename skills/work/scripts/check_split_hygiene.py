@@ -25,6 +25,13 @@ from pathlib import Path
 
 _IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _ESCAPE_CALLS = frozenset({"exec", "eval", "locals"})
+# Module-level names pytest resolves by introspection, never by a same-file
+# load - the same reason `conftest.py` is excluded wholesale. A missing load
+# proves nothing here, and deleting one silently changes which tests run.
+_PYTEST_MAGIC_NAMES = frozenset({"pytestmark", "pytest_plugins"})
+# Nodes that bind a name as a plain `str` attribute rather than a Name node:
+# `except ... as e`, `import x as y`, `case [x, *rest]`, a nested `def`.
+_STR_BINDING_ATTRS = ("name", "asname", "rest")
 
 
 def _loaded_names(tree: ast.AST) -> set[str]:
@@ -50,12 +57,27 @@ def _loaded_names(tree: ast.AST) -> set[str]:
     return names
 
 
+def _is_import_guard(stmt: ast.stmt) -> bool:
+    """True for `np = pytest.importorskip("numpy")`. The binding is often
+    unread, but the call IS the skip guard: delete it and the module runs
+    wherever the dependency happens to be installed, so the suite backstop
+    stays green while the guard is gone."""
+    for node in ast.walk(stmt):
+        if isinstance(node, ast.Attribute) and node.attr == "importorskip":
+            return True
+        if isinstance(node, ast.Name) and node.id == "importorskip":
+            return True
+    return False
+
+
 def _module_bindings(tree: ast.Module) -> list[tuple[str, int]]:
     """Plain-Name assignment targets and imported names bound at module
     level, in source order. A name bound inside a function or class body is
     not module level and never appears here."""
     out: list[tuple[str, int]] = []
     for stmt in tree.body:
+        if isinstance(stmt, (ast.Assign, ast.AnnAssign)) and _is_import_guard(stmt):
+            continue
         if isinstance(stmt, ast.Assign):
             out.extend(
                 (t.id, t.lineno) for t in stmt.targets if isinstance(t, ast.Name)
@@ -69,9 +91,13 @@ def _module_bindings(tree: ast.Module) -> list[tuple[str, int]]:
             # silently un-lazy every annotation in the module.
             continue
         elif isinstance(stmt, (ast.Import, ast.ImportFrom)):
+            # `from x import *` binds no name of its own - ast spells the
+            # alias `*`, and deleting the statement takes every name the
+            # star supplied with it.
             out.extend(
                 (alias.asname or alias.name.split(".")[0], stmt.lineno)
                 for alias in stmt.names
+                if alias.name != "*"
             )
     return out
 
@@ -89,7 +115,9 @@ def unused_bindings(tree: ast.Module, path: Path) -> list[str]:
         f"UNUSED | {path}:{lineno} | {name} | "
         "module-level binding never read in this file"
         for name, lineno in _module_bindings(tree)
-        if not name.startswith("_") and name not in loads
+        if not name.startswith("_")
+        and name not in loads
+        and name not in _PYTEST_MAGIC_NAMES
     ]
 
 
@@ -130,8 +158,19 @@ def _clear(pending: dict[str, int], node: ast.AST) -> None:
     for sub in ast.walk(node):
         if isinstance(sub, ast.Name):
             pending.pop(sub.id, None)
-        elif isinstance(sub, ast.arg):
+            continue
+        if isinstance(sub, ast.arg):
             pending.pop(sub.arg, None)
+            continue
+        # `except ValueError as e`, `import x as y`, `case [a, *rest]` and a
+        # nested `def` all bind a name ast.walk never yields as a Name node -
+        # it lives in a plain `str` attribute. Clearing by attribute is what
+        # keeps those rebindings out of the SHADOWED rule, exactly as the
+        # `for`/`with` targets above are kept out.
+        for attr in _STR_BINDING_ATTRS:
+            bound = getattr(sub, attr, None)
+            if isinstance(bound, str):
+                pending.pop(bound, None)
 
 
 def _scan_body(body: list[ast.stmt], path: Path, out: list[str]) -> None:
