@@ -79,8 +79,20 @@ a persona edit would reach every dispatch instead of this one.
 Runs immediately after the style-limit ladder above, on the same candidate list
 narrowed to test paths — `is_test_path` from
 `${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/work_routing.py` decides, so the
-subset is the one steps 5.6 and 5.7 already agree on. Empty subset: record
-`split_hygiene: skipped:no-tests` and run nothing.
+subset is the one steps 5.6 and 5.7 already agree on. Build it concretely:
+
+```bash
+python3 -c "import sys;sys.path.insert(0,sys.argv[1]);import work_routing;print('\n'.join(p for p in sys.argv[2:] if work_routing.is_test_path(p)))" ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts <every candidate as a REPO-RELATIVE path>
+```
+
+Repo-relative on the way in: `is_test_path` matches directory segments and
+basenames, so an absolute path drags in `/Users/...` segments it never meant to
+see. Absolute on the way out — the checker takes absolute paths, and the fix
+dispatch reads its file list off the reported lines. `conftest.py` is in
+`is_test_path`'s basename globs, so it lands in the subset; the UNUSED rule then
+excludes it wholesale while the SHADOWED rule still applies to it.
+
+Empty subset: record `split_hygiene: skipped:no-tests` and run nothing.
 
 This is the mechanical half of a question the self-deslop pass is forbidden to
 answer (PRD 00166). It reports bindings only — a module-level name nothing in
@@ -117,9 +129,10 @@ as `style_gate` does not.
 
 Exit 1 only. Render and dispatch with `references/gate-failure.md` § **Retry**
 render — not § Style-fix render, which widens the allowlist to whole
-directories. Two lines differ from that shape: `FAILING_TESTS` is the
-split-hygiene scratch file, and `RETRY_INSTRUCTION` is the deletion-only string
-below.
+directories. **Three** lines differ from that shape, not two: `FAILING_TESTS`
+is the split-hygiene scratch file, `FILE_PATHS` is the hygiene list defined in
+the next paragraph (NOT § Retry render's default `ivan-<task-id>-files.txt`),
+and `RETRY_INSTRUCTION` is the deletion-only string below.
 
 `FILE_PATHS` is `dev/local/tmp/ivan-<task-id>-hygiene-files.txt`: one absolute
 path per violating file, read off the reported lines (each names exactly one),

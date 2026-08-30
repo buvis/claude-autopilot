@@ -624,12 +624,20 @@ def test_step_5_65_runs_split_hygiene_over_the_test_subset() -> None:
     )
 
 
-def test_split_hygiene_fix_is_deletion_only_and_keeps_the_task_allowlist() -> None:
+def test_split_hygiene_fix_is_deletion_only_and_derives_its_own_file_list() -> None:
     # The whole safety argument rests on these two: the fixer may only delete
-    # the named bindings, and it gets the task's own file list rather than the
-    # style gate's widened one. Either drifting turns a hygiene sweep into an
-    # agent editing tests by judgment - exactly what the de-slop ban prevents.
+    # the named bindings, and its file list is built from the violation lines
+    # with no directory lines - not the task's own list (which cannot reach a
+    # sibling module the style gate just created) and not the style gate's
+    # widened one (which would let a deletion-only pass create modules).
     gate = (_SKILL_MD.parent / "references" / "style-gate.md").read_text()
+
+    assert "**Three** lines differ from that shape, not two" in gate, (
+        "references/style-gate.md no longer states that THREE lines differ "
+        "from the Retry render. A reader trusting a 'two lines differ' "
+        "headline keeps FILE_PATHS at the ivan-<task-id>-files.txt default "
+        "and resurrects the unreachable-fixer bug."
+    )
 
     assert (
         "Delete only the listed unused or shadowed bindings. Do not change any "
@@ -657,10 +665,7 @@ def test_both_records_enumerate_every_split_hygiene_value() -> None:
         _SKILL_MD.parent / "references" / "attempt-logging.md"
     ).read_text()
     schema = (
-        _SKILL_MD.parent.parent
-        / "run-autopilot"
-        / "references"
-        / "state-schema.md"
+        _SKILL_MD.parent.parent / "run-autopilot" / "references" / "state-schema.md"
     ).read_text()
 
     # Assert the whole signature line, not the values one at a time: three of
@@ -688,9 +693,7 @@ def test_both_records_enumerate_every_split_hygiene_value() -> None:
 def test_the_deslop_prompt_no_longer_asks_for_a_removal_it_forbids() -> None:
     # PRD 00166's other half: step 2 used to ask the agent to evaluate every
     # test added in the diff, and the rules then forbade acting on the answer.
-    prompt = (
-        _SKILL_MD.parent / "references" / "self-deslop-prompt.md"
-    ).read_text()
+    prompt = (_SKILL_MD.parent / "references" / "self-deslop-prompt.md").read_text()
 
     assert "docstring, or test" not in prompt, (
         "references/self-deslop-prompt.md step 2 still lists tests as removal "
