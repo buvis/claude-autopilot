@@ -40,10 +40,10 @@ attempted at all.
    beside the `verification: none (no suite found)` line this step already uses
    for an unverified tree. The phase report is a step-7 timeout's **whole**
    record — every task's attempt entry was appended at its own exit (step 6's
-   `task-done`), before this step runs, so there is no live entry to stamp. A
-   command that timed out while a task was still in flight (step 5.5, step
-   2.95's red-check) stamps `verification: "timeout:<command>"` on that task's
-   attempt instead (`references/attempt-logging.md` § Best-effort gate stamps).
+   `task-done`), before this step runs, so there is no live entry to stamp.
+   Step 5.5's narrow tests, which run while their task is still in flight,
+   stamp `verification: "timeout:<command>"` on that task's attempt instead
+   (`references/attempt-logging.md` § Best-effort gate stamps).
 3. The phase proceeds from there — the record is a fail-loud marker, not a
    block. Never report a timed-out command as a green one, and never silently
    retry it a third time.

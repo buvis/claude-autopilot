@@ -3,9 +3,9 @@
 
 Same pattern as test_dispatch_prose.py - read the file once, assert on short,
 reword-resistant substrings, each with a failure message naming what drifted.
-Separate file because test_dispatch_prose.py is at its 800-line limit, and the
-pack's own step-5.65 style gate flags the crossing (it did, on this PRD's first
-draft: `FILE | test_dispatch_prose.py | 801 lines`).
+Separate file because merging these pins into test_dispatch_prose.py pushed it
+to 801 lines and the pack's own step-5.65 style gate flagged the crossing
+(`FILE | test_dispatch_prose.py | 801 lines`, on this PRD's first draft).
 
 Nothing executes a budget but a reader: the Bash `timeout` parameter is a
 harness feature, so the prose is the whole mechanism. A deleted rule leaves
@@ -15,6 +15,7 @@ which is the failure PRD 00167 exists to stop.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 _SCRIPTS = Path(__file__).resolve().parent
@@ -43,6 +44,9 @@ def test_the_budgets_and_the_separation_rule_live_in_one_file() -> None:
 def test_every_budget_class_keeps_its_number() -> None:
     # All three, not just one: a pin on a single value stays green while the
     # other two classes lose their deadlines and go back to unbounded.
+    # Digit-bounded, because a plain substring check cannot fail here: "60000"
+    # sits inside "600000", so the inspection pin would pass on a file that had
+    # lost the inspection budget entirely and kept only the full-suite one.
     dispatch = (_REFS / "subagent-dispatch.md").read_text()
 
     for budget, klass in (
@@ -50,7 +54,7 @@ def test_every_budget_class_keeps_its_number() -> None:
         ("300000", "lint and narrow tests"),
         ("600000", "foreground full suite"),
     ):
-        assert budget in dispatch, (
+        assert re.search(rf"(?<!\d){budget}(?!\d)", dispatch), (
             f"references/subagent-dispatch.md no longer states the {klass} "
             f"budget ({budget} ms). Without a number the rule is a sentiment "
             "and every call site improvises its own deadline."
@@ -99,6 +103,14 @@ def test_a_step_7_timeout_is_recorded_where_it_can_actually_be_written() -> None
     assert "never here" in attempt_logging, (
         "references/attempt-logging.md's `verification` row no longer excludes "
         "step-7 timeouts, so the field claims a value nothing can write."
+    )
+    # The red-check's neighbour case: step 2.95 takes the lint budget but keeps
+    # its OWN field. Routing its timeout to `verification` would leave
+    # `red_check` absent, which attempt-logging.md reads as "ran, saw red".
+    assert 'red_check: "skipped:<cause>"' in attempt_logging, (
+        "references/attempt-logging.md's `verification` row no longer sends a "
+        "step-2.95 red-check timeout to `red_check`. Two fields would then "
+        "claim one event, and an absent `red_check` reads as a check that ran."
     )
 
 

@@ -94,7 +94,7 @@ They differ because the work differs — a full Rust test suite legitimately run
 
 ## Foreground command budgets
 
-The Watchdog above bounds Agent dispatches and helper scripts. It does not bound plain Bash, and nothing else does either: a foreground `ruff`, `pytest`, `git` or inspection call has no deadline, no no-output probe and no kill path. Measured 2026-08-27: a command that combined an inspection read with a Ruff invocation stalled for 17 min 48 s, wrote nothing, and needed a manual interrupt — in a loop whose whole premise is that nobody is watching.
+The Watchdog above bounds Agent dispatches and helper scripts. It does not bound plain Bash: a foreground `ruff`, `pytest`, `git` or inspection call carries no deadline of this pack's choosing, no no-output probe and no kill path — it inherits the Bash tool's own default (120000 ms) whatever it is doing. That default is not a reliable stop: measured 2026-08-27, a command that combined an inspection read with a Ruff invocation stalled for 17 min 48 s, wrote nothing, and needed a manual interrupt — in a loop whose whole premise is that nobody is watching. The only bound worth relying on is the one the call passes explicitly.
 
 So every foreground Bash call this pack makes passes an explicit `timeout` (milliseconds; the tool's default is 120000 and its maximum 600000):
 
@@ -108,7 +108,7 @@ A command whose class is not documented takes the **inspection** budget. A backg
 
 **When a budget fires.** Re-run the command once at the next larger budget when its class has one (inspection → 300000, lint and narrow tests → 600000). The full suite is already at the tool maximum, so it has no larger budget: its **first** timeout is terminal and is recorded at once, with no re-run.
 
-Record every timeout, whatever the class: name the command and the budget it blew in the phase report. A command that ran while a task was still in flight (step 5.5's narrow tests, step 2.95's red-check) also stamps `verification: "timeout:<command>"` on that task's attempt (`references/attempt-logging.md` § Best-effort gate stamps). Step 7 runs after every attempt entry has been written, so a step-7 timeout has no entry to stamp and the phase report is its whole record — `references/final-verification.md` § Timed-out commands. Then proceed: the record is a fail-loud marker, not a block, and a timed-out command is never reported as a passed one.
+Record every timeout, whatever the class: name the command and the budget it blew in the phase report. Step 5.5's narrow tests also stamp `verification: "timeout:<command>"` on the task's attempt (`references/attempt-logging.md` § Best-effort gate stamps). Two neighbours record elsewhere, in the field that already owns their outcome: a step-2.95 red-check that times out is a runner that could not execute the tests, so it takes `red_check: "skipped:<cause>"` from that step's own ladder (`references/red-check.md`), never `verification`. And step 7 runs after every attempt entry has been written, so a step-7 timeout has no entry to stamp at all and the phase report is its whole record (`references/final-verification.md` § Timed-out commands). Then proceed: the record is a fail-loud marker, not a block, and a timed-out command is never reported as a passed one.
 
 ## Never combine inspection with verification
 
