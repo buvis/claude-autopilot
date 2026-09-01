@@ -26,8 +26,26 @@ _OUTPUT_FORMATS = (
     _SKILLS / "review-work-completion" / "references" / "output-formats.md"
 )
 
+_WORK_SKILL = _WORK / "SKILL.md"
+
 _QUEUE_PATH = "{prd-stem}-checks-{cycle}.json"
 _RECORD_PATH = "last-verification.json"
+
+
+def test_step_7_names_both_sections_it_has_to_run() -> None:
+    # SKILL.md is what a work phase reads first; the reference file is read
+    # because SKILL.md sends it there. Lose these two names and both procedures
+    # sit in a file nobody is told to act on, with every other test still green.
+    skill = _WORK_SKILL.read_text()
+
+    assert _RECORD_PATH in skill, (
+        "work/SKILL.md step 7 no longer names last-verification.json, so "
+        "nothing tells the phase to write the record the review reads."
+    )
+    assert "verify_check" in skill, (
+        "work/SKILL.md step 7 no longer names the verify_check report line, so "
+        "the queued checks have no stated call site."
+    )
 
 
 def test_the_queue_file_contract_names_its_path_and_its_shape() -> None:

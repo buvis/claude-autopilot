@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   <n>` line per check. A non-zero exit is evidence, not a phase failure - it
   reaches the next review cycle as an open finding. With no queue file present,
   which is every first-pass build, nothing runs and nothing is reported.
+- **work**: the final verification step records what it ran to
+  `dev/local/autopilot/last-verification.json` - the HEAD sha, each command and
+  its exit code, and the pass/fail/skip counts. A suite whose output carries no
+  parseable counts records `null` for all three, and a phase that ran no suite
+  writes an empty command list; either way the reader runs the suite itself
+  rather than reporting counts nobody measured.
 - **work**: explicit timeout budgets for foreground verification commands and a
   rule against combining inspection with verification. Inspection calls get
   60000 ms, lint and narrow tests 300000 ms, a foreground full suite 600000 ms;
