@@ -72,7 +72,7 @@ Persist each task with statectl — the sole writer for state.json (never hand-e
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json task-add <task-json-file>
 ```
 
-Build one JSON object per task and write it to `<task-json-file>` with the Write tool — a task body carries backticks, quotes and newlines, which break as an inline shell argument. Required key: `"name"` (the task title). The body composed per the "Task description format" below goes in `"description"`; every other field this skill assigns (`blocked_by` in step 5, `estimated_tokens` and `est_context_peak` in step 4.5, `model`, `qwen_eligible` and `qwen_excluded_reason` in step 4.7) is a top-level key on the same object — flattened, never nested under a `metadata` key. `task-add` assigns the id and prints it to stdout; capture it (`id=$(python3 …/statectl.py dev/local/autopilot/state.json task-add /tmp/task-3.json)`) so later tasks in this same pass can name it in their own `blocked_by` array. Create the tasks in the PRD's dependency/phase order (earlier phases first, so every blocker exists before the tasks it blocks), which is what makes those captured ids available when step 5 builds each `blocked_by` array.
+Build one JSON object per task and write it to `<task-json-file>` with the Write tool — a task body carries backticks, quotes and newlines, which break as an inline shell argument. Required key: `"name"` (the task title). The body composed per the "Task description format" below goes in `"description"`; every other field this skill assigns (`blocked_by` in step 5, `estimated_tokens` and `est_context_peak` in step 4.5, `model`, `tier_reason`, `qwen_eligible` and `qwen_excluded_reason` in step 4.7) is a top-level key on the same object — flattened, never nested under a `metadata` key. `task-add` assigns the id and prints it to stdout; capture it (`id=$(python3 …/statectl.py dev/local/autopilot/state.json task-add /tmp/task-3.json)`) so later tasks in this same pass can name it in their own `blocked_by` array. Create the tasks in the PRD's dependency/phase order (earlier phases first, so every blocker exists before the tasks it blocks), which is what makes those captured ids available when step 5 builds each `blocked_by` array.
 
 To fix a task after creation (not the normal create path): `task-set-body <task-id> <body-file>` replaces `description` verbatim from a raw text file, and `task-set-meta <task-id> <meta-json-file>` merges JSON keys onto the task entry (a `null` value deletes that key).
 
@@ -207,11 +207,9 @@ Before applying the eligibility split trigger, `plan-tasks` runs the qwen infra 
 
 The **context-budget trigger is not gated** by the preflight and remains active regardless of qwen's status. The **step-4.7 `qwen_eligible` computation is not gated** either — it is always computed and persisted on every task (staying inert until `work` reads it).
 
-**Opus-signal exemption (skips the eligibility trigger only):**
+**Risk exemption (skips the eligibility trigger only):**
 
-A task whose text carries an opus signal is **not split for eligibility**. The opus-signal set is **not redefined here** — step 4.6 reuses the exact signal list **defined by step 4.7 Rule 1**, as a single source of truth: if Rule 1's signal list changes, step 4.6 inherits the change automatically because it references rather than copies it.
-
-This check is a **plain text scan** of the task title + description against Rule 1's signal phrases (lowercased, per Rule 1's case-insensitivity note); it does **not** require running the full step-4.7 classifier. A match short-circuits the eligibility trigger and the task keeps its original shape. The context-budget trigger is unaffected — an opus-signal task that also exceeds the context budget is still split for that reason.
+A task carrying either risk fact (`contract_edit` or `algorithmic_risk`) is **not split for eligibility**, because a task carrying one classifies `opus`, and an `opus` task is never qwen-eligible. Judge both facts under step 4.7's evidence rules before splitting, and reuse the same values there. The exemption short-circuits the eligibility trigger and the task keeps its original shape. The context-budget trigger is unaffected: a risky task that also exceeds the context budget is still split for that reason.
 
 The existing context-budget split mechanics, the one-split-attempt rule, and the stall behavior below are **unchanged** by the eligibility trigger — both triggers share them:
 
@@ -243,50 +241,59 @@ The bytes/4 heuristic is accurate within ±20% for source code, less accurate fo
 
 ### 4.7. Assign per-task model tier
 
-For each task, classify a model tier and persist it as a top-level `model: "haiku"|"sonnet"|"opus"` key so `/autopilot:work` can dispatch each subagent at the right tier (PRD 00025).
+For each task, `classify_tier.py` decides the model tier. Persist what it prints as top-level `model: "haiku"|"sonnet"|"opus"` and `tier_reason` keys, so `/autopilot:work` dispatches each subagent at the right tier (PRD 00025) and every reader of the plan can see why that tier was chosen (PRD 00160).
 
-**Inputs:** task title + description (string), `files_touched` count, estimated lines-changed (rough — pull from the task plan or estimate from the file slice), the `estimated_tokens` computed in step 4.5, and the active PRD body (for novelty signals).
+**Inputs, per task:** that task's file slice, its title plus description, its estimated lines-changed (rough: pull from the task plan or estimate from the file slice), and the two facts below. Neither the PRD body nor `estimated_tokens` is an input any more, because size and vocabulary stopped deciding tiers with PRD 00160.
 
-**Rules** (evaluated top-down, first match wins):
+**Two per-task facts.** Judge these booleans once per task, from that task's own `Contract`, `Location`, `Details` and file slice, before the step-4.6 split, then reuse the same values here. Both default to false; assert one only on the evidence named:
 
-| Rule | Tier | Trigger |
-|------|------|---------|
-| 1 | `opus` | PRD or task text contains any of: `design`, `architect`, `introduce`, `novel algorithm`, `concurrency`, `migrate`, `refactor across` — OR `files_touched > 8` — OR `estimated_tokens > 120000` |
-| 2 | `haiku` | `files_touched ≤ 2` AND est. lines-changed `≤ 50` AND task text matches a mechanical-pattern signal (`add log`, `rename`, `add test for`, `port`, `mirror`, `inline`, `extract constant`, `update import`, `bump version`) AND no Rule 1 keywords present |
-| 3 | default | `sonnet`, unless PRD frontmatter `default_model:` is set (see override below) |
+- `contract_edit` is true only when the task itself changes an exported API signature, a persisted schema, a wire format or a hook registration shape (the same definition the `qwen_excluded_reason: contract` clause below uses). Calling or documenting a contract does not count.
+- `algorithmic_risk` is true only when the task's own `Details` name a new algorithm it implements (not one it calls), shared mutable state across threads, processes or async tasks, or a transform of persisted data (a migration). Words in the PRD body, the PRD title or the task name alone never qualify, and neither do `design`, `architect`, `introduce`, `refactor across`, file count or `estimated_tokens`.
 
-**Rule 2 signal list widening was attempted and withdrawn (PRD 00075).**
+**Run the classifier, once per task.** Write the task's file slice to `dev/local/tmp/plan-<n>-files.txt` (one repo-relative path per line) and its title plus description to `dev/local/tmp/plan-<n>-text.txt`, with `<n>` the task's position in this pass, then run:
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/plan-tasks/scripts/classify_tier.py --files-file dev/local/tmp/plan-<n>-files.txt --text-file dev/local/tmp/plan-<n>-text.txt --lines <lines-changed> [--contract-edit] [--algorithmic-risk] [--default-model <floor>]
+```
+
+Pass `--contract-edit` only when that task's `contract_edit` is true, `--algorithmic-risk` only when its `algorithmic_risk` is true, and `--default-model <floor>` only when the PRD frontmatter sets one (see the override below). Task-authored prose crosses as files, never as shell words.
+
+The command prints one JSON line, `{"model": "<tier>", "tier_reason": "<reason>"}`. Take `model` and `tier_reason` from that line exactly as printed and persist both on this task's payload (see **Persist** below).
+
+**Legal `tier_reason` values.** The classifier emits exactly one of `test_port`, `packaging`, `contract`, `algorithmic_risk`, `mechanical`, `default` or `floor`; any other value in a plan is corrupt state, not a new reason.
+
+**What the classifier does with those inputs**, in precedence order: a file slice that is all test paths gives `sonnet` / `test_port`, and a slice that is all test or packaging paths gives `sonnet` / `packaging`. Those two come first, so an externally consumed manifest is still packaging work, and a test file whose text mentions concurrency is still a test port. Then `contract_edit` gives `opus` / `contract`, and `algorithmic_risk` gives `opus` / `algorithmic_risk`. Then the mechanical row gives `haiku` / `mechanical`, and everything left gives `sonnet` / `default`. Last, the `default_model` floor raises the tier when the floor is higher, reporting `floor` when it does.
+
+**The mechanical signal list was widened once and the widening was withdrawn (PRD 00075).**
 See `references/design-rationale.md` for the counterexamples and why a future widening must move a different axis than the verb.
 
-**Row selection (`_PLAN_TASKS_FLOOR`).** An optional `_PLAN_TASKS_FLOOR` value selects which Rule 2 row the classifier applies for this run. It does not compose into the `final_tier = max(...)` formula in "PRD frontmatter override" below — that formula and section are unchanged. `_PLAN_TASKS_FLOOR` is an environment variable, read at step 4.7 entry: run `python3 -c 'import os;print(os.environ.get("_PLAN_TASKS_FLOOR",""))'`. Apply the row-selection table below to whatever value comes back, including the empty string (it takes the current row).
+**Row selection (`_PLAN_TASKS_FLOOR`).** An optional `_PLAN_TASKS_FLOOR` value names which mechanical row this run treats as current. It is a prose-only knob: `classify_tier.py` does not read it, and it does not compose into the `final_tier = max(...)` formula in "PRD frontmatter override" below, which is unchanged either way. `_PLAN_TASKS_FLOOR` is an environment variable, read at step 4.7 entry: run `python3 -c 'import os;print(os.environ.get("_PLAN_TASKS_FLOOR",""))'`. Apply the row-selection table below to whatever value comes back, including the empty string (it takes the current row).
 
-| `_PLAN_TASKS_FLOOR` | Rule 2 row applied |
+| `_PLAN_TASKS_FLOOR` | Mechanical row applied |
 |---|---|
-| `legacy` | The pre-00075 row verbatim: `files_touched ≤ 2` AND est. lines-changed `≤ 50` AND task text matches one of exactly these nine signals — `add log`, `rename`, `add test for`, `port`, `mirror`, `inline`, `extract constant`, `update import`, `bump version` — AND no Rule 1 keywords present |
+| `legacy` | The pre-00075 row verbatim: `files_touched ≤ 2` AND est. lines-changed `≤ 50` AND task text matches one of exactly these nine signals: `add log`, `rename`, `add test for`, `port`, `mirror`, `inline`, `extract constant`, `update import`, `bump version` |
 | `sonnet` | Alias for `legacy` |
-| absent, empty, or any other value | The current Rule 2 row above. An invalid non-empty value logs one warning line before falling back to it |
+| absent, empty, or any other value | The current mechanical row. An invalid non-empty value logs one warning line before falling back to it |
 
-**The knob is currently a no-op, deliberately.** Because the widening was withdrawn (above), the `legacy` row and the current Rule 2 row are identical, so every `_PLAN_TASKS_FLOOR` value selects the same behavior. It ships anyway as the kill-switch the next widening attempt will need: the moment a defensible widened row lands in Rule 2, `_PLAN_TASKS_FLOOR=legacy` reverts to the nine signals above without editing rules. Do not delete it as dead config, and do not assume it is exercised — it has no behavioral test until a widening exists to revert.
+Both rows once ended in an "and no escalation trigger present" clause. It is dropped as redundant: the two facts are settled ahead of the mechanical row, so a task carrying either is already `opus` and never reaches that row.
 
-**Keyword matching is case-insensitive** for both Rule 1's novelty signals and Rule 2's mechanical-pattern signals — match `Rename module X` the same as `rename module x`, `DESIGN cache layer` the same as `design cache layer`. The signal phrases are stored lowercase; lowercase the task/PRD text before scanning.
-
-**Comparand choice for Rule 1's 120K clause**: the threshold compares `estimated_tokens` (raw input budget from step 4.5), not `est_context_peak` (which adds the 20K headroom). Rationale: the 20K headroom is the cap-hook's safety margin, not user-visible work — escalating to opus only when the raw work itself is large keeps the rule's intent ("the task itself is big") aligned with the field that measures it. The effective `est_context_peak` at this threshold lands at ~140K, which is the "close to the 150K cap" the PRD describes.
+**The knob is currently a no-op, deliberately.** Because the widening was withdrawn (above), the `legacy` row and the current mechanical row are identical, so every `_PLAN_TASKS_FLOOR` value names the same row. It ships anyway as the kill-switch the next widening attempt will need: the moment a defensible widened row lands, `_PLAN_TASKS_FLOOR=legacy` reverts to the nine signals above without editing rules. Do not delete it as dead config, and do not assume it is exercised: it has no behavioral test until a widening exists to revert.
 
 **Examples**:
 
-- "rename `foo` to `bar` in `module/x.rs`" (1 file, ~10 lines) → matches Rule 2 → `haiku`.
-- "design new caching layer with concurrency guarantees" (touches `cache`, `keys`, `invalidation`, `metrics` — 4 files, ~300 lines) → matches Rule 1 via the `design` and `concurrency` keywords (any one keyword fires the rule; the `files_touched > 8` clause does not need to be met) → `opus`.
-- "add POST /users endpoint with email validation" (3 files, 80 lines) → no Rule 1 or 2 match → `sonnet`.
+- "rename `foo` to `bar` in `module/x.rs`" (1 file, ~10 lines, both facts false) → `haiku` / `mechanical`.
+- "add a `--json` flag to the export CLI and change the shape of the emitted record" (2 files, ~90 lines): the task itself changes a wire format, so `contract_edit` is true → `opus` / `contract`.
+- "add POST /users endpoint with email validation" (3 files, ~80 lines, both facts false): too many files and lines for the mechanical row, and nothing earlier fires → `sonnet` / `default`.
 
 **PRD frontmatter override**
 
 PRD frontmatter accepts an optional `default_model: haiku|sonnet|opus` field that acts as a **floor** on the classifier output — never a demotion. Parse it from the YAML block at the top of the PRD using the same approach `/autopilot:run-autopilot` Phase 0 uses for `catchup:` (look for `---` delimiters, parse the YAML, accept `haiku`/`sonnet`/`opus`). Behavior:
 
-- **Absent frontmatter or unset `default_model:`** → no override (silent; the classifier output from Rules 1–3 passes through unchanged). This is what keeps Rule 2's `haiku` reachable without requiring every PRD to opt in explicitly — and matches `/autopilot:run-autopilot` Phase 6's `[D]` follow-up behavior.
+- **Absent frontmatter or unset `default_model:`** → no override (silent; omit `--default-model` and the classifier's tier passes through unchanged). This is what keeps `haiku` reachable without requiring every PRD to opt in explicitly — and matches `/autopilot:run-autopilot` Phase 6's `[D]` follow-up behavior.
 - **Malformed frontmatter or invalid `default_model:` value** → no override AND log a one-line warning. The classifier output passes through. `fable` is deliberately not in the accepted set: it is human-gated — use the rescue flow (PRD 00076, `run-autopilot/references/model-ladder.md` § Fable rescue), never a frontmatter floor. Warn with that reason rather than a bare "invalid value" so the omission reads as policy.
-- **Valid value (`haiku`/`sonnet`/`opus`)** → apply the floor below.
+- **Valid value (`haiku`/`sonnet`/`opus`)** → pass it as `--default-model` and the floor below applies.
 
-Apply the override AFTER Rules 1-3 produce a classifier tier, by taking the maximum across the precedence `haiku < sonnet < opus` (only when `default_model` is a valid value):
+`classify_tier.py` applies the floor itself, after its own rules have produced a tier, by taking the maximum across the precedence `haiku < sonnet < opus` (only when `default_model` is a valid value):
 
 ```
 final_tier = max(classifier_tier, default_model)
@@ -294,21 +301,21 @@ final_tier = max(classifier_tier, default_model)
 
 This guarantees:
 
-- `default_model: opus` raises every task to `opus` — Rule 2's `haiku` is clamped up to `opus`; Rule 3's `sonnet` becomes `opus`; Rule 1's `opus` stands. Matches PRD 00025's Critical Scenarios "PRD frontmatter override" test.
-- `default_model: sonnet` clamps Rule 2's `haiku` up to `sonnet`; Rule 3 yields `sonnet`; Rule 1's `opus` stands.
+- `default_model: opus` raises every task to `opus`: a `haiku` or `sonnet` classification is clamped up, an `opus` classification stands. Matches PRD 00025's Critical Scenarios "PRD frontmatter override" test.
+- `default_model: sonnet` clamps `haiku` up to `sonnet` and leaves `sonnet` and `opus` alone.
 - `default_model: haiku` is a no-op (`haiku` is already the floor of the precedence; classifier output stands as-is).
-- Rule 1's `opus` escalations are never demoted by any `default_model` value.
+- An `opus` classification is never demoted by any `default_model` value.
 
 **`qwen_eligible` computation**
 
-After Rules 1-3 produce a tier and the PRD frontmatter override (above) settles `final_tier`, compute the `qwen_eligible` boolean that `/autopilot:work` (PRD 00031) reads to decide qwen routing. The formula (widened by PRD 00019) is:
+After the classifier has settled `final_tier` (the floor above included), compute the `qwen_eligible` boolean that `/autopilot:work` (PRD 00031) reads to decide qwen routing. The formula (widened by PRD 00019) is:
 
 ```
 qwen_eligible = task is backend (not UI) AND model in {haiku, sonnet} AND files_touched <= 3 AND task edits no public contract
 ```
 
-- `model` is the tier produced by Rules 1-3 + override (the same value persisted as the top-level `model` key).
-- `files_touched` is the per-task file count already used in step 4.5 / Rule 1 / Rule 2.
+- `model` is the tier the classifier printed (the same value persisted as the top-level `model` key).
+- `files_touched` is the per-task file count already used in step 4.5 and handed to the classifier as the file slice.
 - **UI** = the task matches the **"Gemini-first tasks"** list in `${CLAUDE_PLUGIN_ROOT}/skills/work/SKILL.md`. Anything not matching that list is **backend**. Reuse `work`'s list as the single source of truth so producer and consumer agree by construction — do not restate the list here; if it changes in `work`, this rule inherits the change.
 - **Public contract** = the task's planned edits touch an exported API signature, a schema, a wire format, or a hook registration shape (judge from the task's file slice, its `Contract`, and the PRD's Functional Decomposition). Purely internal changes — private helpers, implementation bodies, tests, docs — edit no public contract.
 
@@ -321,21 +328,23 @@ Each of the following yields `qwen_eligible = false` independently, with the nam
 
 **`qwen_excluded_reason`**: on **every** ineligible task, also persist `qwen_excluded_reason` — one of `ui` / `tier` / `files` / `contract`. When several conditions fail, record the FIRST failing one in the order above (`ui` → `tier` → `contract` → `files`). `contract` is recorded ahead of `files` because the codex rung's fence (`run-autopilot/references/model-ladder.md` § Codex rung) admits `files` but must exclude `contract`, so a task that both spans many files and edits a public contract has to record `contract`, keeping it off codex. Eligible tasks omit the key. This makes under-routing auditable per batch: the Phase 9 Implementor Mix render counts exclusions by reason (PRD 00019).
 
-The flag is computed **from** the classifier output; it does **not** alter the classifier. Rules 1-3 above are unchanged.
+**`qwen_excluded_reason: contract` is unreachable on new plans.** A task that edits a public contract carries `contract_edit`, the classifier turns that into `opus`, and `tier` is recorded ahead of `contract`, so such a task records `tier` instead. The code stays documented because readers still meet it on plans made before PRD 00160, and the Phase 9 mix render should read a zero `contract` count as expected rather than as an under-count. The codex fence is unaffected: opus is never intercepted.
 
-**Persist** the tier, the `qwen_eligible` flag, and (on ineligible tasks) the `qwen_excluded_reason` alongside the existing token estimate as top-level keys in the task's `task-add` JSON payload, e.g.:
+The flag is computed **from** the classifier output; it does **not** alter the tier.
+
+**Persist** `model`, `tier_reason`, the `qwen_eligible` flag, and (on ineligible tasks) the `qwen_excluded_reason` alongside the existing token estimate as top-level keys in the task's `task-add` JSON payload, e.g.:
 
 ```json
-{"estimated_tokens": 72000, "est_context_peak": 92000, "model": "sonnet", "qwen_eligible": true}
+{"estimated_tokens": 72000, "est_context_peak": 92000, "model": "sonnet", "tier_reason": "default", "qwen_eligible": true}
 ```
 
 ```json
-{"estimated_tokens": 90000, "est_context_peak": 110000, "model": "sonnet", "qwen_eligible": false, "qwen_excluded_reason": "files"}
+{"estimated_tokens": 90000, "est_context_peak": 110000, "model": "sonnet", "tier_reason": "default", "qwen_eligible": false, "qwen_excluded_reason": "files"}
 ```
 
 `qwen_eligible` is persisted on **every** task `plan-tasks` creates. `/autopilot:work` reads the field directly and does no re-judging — it routes per `qwen_eligible` + its own qwen infra preflight (see `${CLAUDE_PLUGIN_ROOT}/skills/work/SKILL.md`).
 
-On legacy plans created before PRD 00025, `state.tasks[i].model` is simply absent — `/autopilot:work` falls back to omitting the Agent `model` parameter so subagents inherit the session model (backwards-compatible). Likewise, on legacy plans created before PRD 00032, `state.tasks[i].qwen_eligible` is absent and `/autopilot:work` treats it as `false` (routes to Claude at the task's tier); plans created before PRD 00019 lack `qwen_excluded_reason`, which readers treat as `unknown` — never an error.
+On legacy plans created before PRD 00025, `state.tasks[i].model` is simply absent — `/autopilot:work` falls back to omitting the Agent `model` parameter so subagents inherit the session model (backwards-compatible). Likewise, on legacy plans created before PRD 00032, `state.tasks[i].qwen_eligible` is absent and `/autopilot:work` treats it as `false` (routes to Claude at the task's tier); plans created before PRD 00019 lack `qwen_excluded_reason`, which readers treat as `unknown` — never an error. Plans created before PRD 00160 lack `tier_reason`; readers render the tier as unexplained rather than failing.
 
 ### 5. Set dependencies
 

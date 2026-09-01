@@ -37,3 +37,33 @@ future widening must move a different axis than the verb** (edit shape or
 target artifact, e.g. "adds one entry to a config file"), and must be tested
 against adversarial counterexamples before shipping, not only against the
 instances it was derived from.
+
+## Rule 1 keyword triggers retired (PRD 00160)
+
+The opus row fired on a keyword scan (`design`, `architect`, `introduce`,
+`novel algorithm`, `concurrency`, `migrate`, `refactor across`) plus two size
+clauses, one on `files_touched` and one on `estimated_tokens`. All of it is
+gone. `classify_tier.py` decides the tier now, from the task's own file slice
+and the two facts step 4.7 makes the planner assert with evidence.
+
+Three things were wrong with it. **The scan read the whole PRD body, so one
+word anywhere in a PRD promoted every task in that PRD.** A PRD whose
+background says "this replaces the design we introduced in 00042" routed its
+README edit to opus. **The words are ordinary English.** "Introduce a flag",
+"migrate the import", `concurrency` sitting in a quoted docstring: none of
+them describes work a cheaper tier would get wrong, and a planner cannot tell
+the difference by matching the string. **File count and token count measure
+size, not risk.** A wide, boring rename is wide and boring; opus buys judgment
+about contracts, algorithms and shared state, and neither clause asks about
+any of those.
+
+The bill was real. One 12-task run classified test ports and packaging edits
+as opus and paid the full pipeline on each: the opus rate, Devon's adversarial
+test validation, the per-task review. None of those tasks needed any of it.
+
+So do not put the triggers back. A keyword rule escalates on the PRD author's
+vocabulary, and a size rule escalates on the diff's shape; neither asks the
+one question that justifies the tier, which is what the task itself changes.
+A future escalation rule has to be a per-task fact about the edit, the way
+`contract_edit` and `algorithmic_risk` are, and it has to be tested against
+tasks that use the word without doing the work.
