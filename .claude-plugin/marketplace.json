@@ -8,7 +8,7 @@
     {
       "name": "autopilot",
       "description": "Plans a PRD into tasks, implements them one at a time, then runs consensus, blind and doubt reviewers every cycle until the work converges",
-      "version": "0.2.2",
+      "version": "0.3.0",
       "author": {
         "name": "buvis"
       },
