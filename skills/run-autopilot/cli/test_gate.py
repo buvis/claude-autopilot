@@ -100,6 +100,33 @@ class GateSubcommandTests(unittest.TestCase):
         proc = _run([str(CLI_MAIN)], ["gate", "--review-file", str(path)])
         self.assertEqual(proc.returncode, 0, proc.stderr)
 
+    def test_tests_line_admits_the_provenance_suffix(self) -> None:
+        # PRD 00164: step 6 names which path produced the counts, as a suffix
+        # on the Tests: line. The gate is what that suffix has to survive - a
+        # reused count that fails the gate would push the review straight back
+        # to re-running the suite it just avoided.
+        text = GOOD_FILE.replace(
+            "Tests: 12 passed, 0 failed",
+            "Tests: 12 passed, 0 failed, 0 skipped "
+            "(reused from last-verification.json at 292418f)",
+        )
+        path = self._write("prd-review-1.md", text)
+        proc = _run([str(CLI_MAIN)], ["gate", "--review-file", str(path)])
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_docs_only_sentinel_takes_no_suffix(self) -> None:
+        # The other half of the same rule, and the reason step 6 states it: the
+        # counts branch of TESTS_RE ends in `.*`, the docs-only branch does not.
+        # Suffixing the sentinel silently fails the gate.
+        text = DOCS_ONLY_FILE.replace(
+            "Tests: none (docs-only)",
+            "Tests: none (docs-only) (suite run this cycle)",
+        )
+        path = self._write("prd-review-1.md", text)
+        proc = _run([str(CLI_MAIN)], ["gate", "--review-file", str(path)])
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("tests line", proc.stderr.lower())
+
     def test_shape_gap_blocks_with_reason(self) -> None:
         path = self._write("prd-review-1.md", "## Alice\n\nhm\n")
         proc = _run(

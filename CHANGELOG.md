@@ -74,6 +74,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **review-work-completion**: a doubt-lens finding that names an exact check to
+  run is now queued for the work phase instead of becoming a rework task. The
+  queue is a per-cycle JSON file beside the review files; a VERIFY item that
+  names no exact command is not queued and is classified exactly as before.
+- **review-work-completion**: the review's `Tests:` line is composed from the
+  work phase's recorded verification run when that record's sha matches the
+  reviewed HEAD and its counts parsed, instead of running the same suite a
+  second time. The line says which path produced it - reused record or a suite
+  run this cycle - so a reused count can never read as a fresh one. Any
+  mismatch, missing record or unparsed count runs the suite in the foreground
+  as before.
 - **work**: the style-limit gate now runs at the end of each task against that
   task's own diff (step 5.65), instead of once per phase over everything every
   task committed. A file is split while the context that produced it is still in

@@ -22,9 +22,9 @@ _SCRIPTS = Path(__file__).resolve().parent
 _WORK = _SCRIPTS.parent
 _SKILLS = _WORK.parent
 _FINAL_VERIFICATION = _WORK / "references" / "final-verification.md"
-_OUTPUT_FORMATS = (
-    _SKILLS / "review-work-completion" / "references" / "output-formats.md"
-)
+_REVIEW = _SKILLS / "review-work-completion"
+_OUTPUT_FORMATS = _REVIEW / "references" / "output-formats.md"
+_REVIEW_SKILL = _REVIEW / "SKILL.md"
 
 _WORK_SKILL = _WORK / "SKILL.md"
 
@@ -134,6 +134,55 @@ def test_a_failed_queued_check_is_evidence_not_a_phase_failure() -> None:
         "references/final-verification.md lost the timed-out queued check's "
         "report value. A check that blew its budget must never be reported "
         "with a passing exit code."
+    )
+
+
+def test_the_review_writes_the_queue_it_alone_can_fill() -> None:
+    # The work phase reads the queue but cannot write it: only the review sees
+    # the doubt lenses' VERIFY buckets. Drop this and the reader runs forever
+    # against a file nothing produces.
+    review = _REVIEW_SKILL.read_text()
+
+    assert "verification-check queue" in review, (
+        "review-work-completion/SKILL.md step 6 no longer writes the "
+        "verification-check queue, so no VERIFY finding ever reaches the work "
+        "phase that runs it."
+    )
+    assert "-checks-<state.cycle>.json" in review, (
+        "review-work-completion/SKILL.md no longer names the queue path it "
+        "writes. The path is the whole contract with work step 7."
+    )
+    assert "VERIFY" in review, (
+        "review-work-completion/SKILL.md no longer names the VERIFY bucket as "
+        "the queue's input, leaving the writer without a source."
+    )
+
+
+def test_the_tests_line_reuse_is_gated_on_the_sha_and_says_which_path_ran() -> None:
+    # Both halves matter. Without the sha gate the review reports counts from a
+    # different tree; without the provenance suffix a reused count is
+    # indistinguishable from a fresh run, which is the failure that makes the
+    # whole reuse untrustworthy.
+    review = _REVIEW_SKILL.read_text()
+
+    assert "run no suite" in review, (
+        "review-work-completion/SKILL.md lost the instruction to skip the suite "
+        "on a matching record - the duplicate run PRD 00164 removed is back."
+    )
+    assert "`sha` equals this cycle's reviewed HEAD" in review, (
+        "review-work-completion/SKILL.md no longer gates the reuse on an exact "
+        "sha match, so a record from an earlier HEAD could report green over "
+        "changed code."
+    )
+    assert "reused from last-verification.json" in review, (
+        "review-work-completion/SKILL.md lost the provenance suffix naming the "
+        "reused record. A reused count must never read as a fresh run."
+    )
+    assert "takes **no** suffix" in review, (
+        "review-work-completion/SKILL.md no longer excludes the docs-only form "
+        "from the provenance suffix. `cli/gate.py` TESTS_RE admits a suffix "
+        "after the counts but none after 'none (docs-only)', so suffixing that "
+        "form fails check_review_file.py."
     )
 
 
