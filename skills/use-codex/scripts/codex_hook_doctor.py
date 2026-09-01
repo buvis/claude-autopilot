@@ -143,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
             aegis_root=aegis_root,
             autopilot_root=autopilot_root,
         )
-    except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
+    except (OSError, json.JSONDecodeError, KeyError, TypeError, IndexError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 

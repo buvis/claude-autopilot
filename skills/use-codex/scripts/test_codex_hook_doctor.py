@@ -608,6 +608,35 @@ def test_default_aegis_root_reads_the_real_installed_plugins_json_shape(
     assert result == real_aegis_root
 
 
+def test_cli_exits_2_when_aegis_plugin_entry_list_is_empty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # An "aegis@buvis-plugins" entry that resolves to an empty list (e.g. an
+    # uninstalled-but-present entry) must not crash the doctor with an
+    # unhandled IndexError — it must exit 2 like any other resolution
+    # failure.
+    fake_home = tmp_path / "fake_home"
+    plugins_dir = fake_home / ".claude" / "plugins"
+    plugins_dir.mkdir(parents=True)
+    (plugins_dir / "installed_plugins.json").write_text(
+        json.dumps({"version": 2, "plugins": {"aegis@buvis-plugins": []}}),
+        encoding="utf-8",
+    )
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    (hooks_dir / "good.py").write_text("X = 1\n", encoding="utf-8")
+    config_path = tmp_path / "hooks.json"
+    _write_config(config_path, {"SessionStart": ["python3 hooks/good.py"]})
+    _, autopilot_root = _fake_roots(tmp_path)
+    monkeypatch.setenv("HOME", str(fake_home))
+
+    result = _run_cli(
+        ["--config", str(config_path), "--autopilot-root", str(autopilot_root)],
+    )
+
+    assert result.returncode == 2
+
+
 def test_cli_autopilot_root_flag_is_no_longer_required(tmp_path: Path) -> None:
     # `--autopilot-root` may be omitted; argparse must not treat it as a
     # hard requirement. Uses only an unknown (non-KNOWN_HOOKS) target, so
