@@ -177,6 +177,44 @@ def test_packaging_manifests_outrank_a_contract_edit(files: list[str]) -> None:
 
 
 @pytest.mark.parametrize(
+    "files",
+    [
+        ["plugin.json", ".claude-plugin/marketplace.json"],
+        ["pyproject.toml"],
+        ["crates/core/Cargo.toml"],
+        ["go.mod", "go.sum"],
+    ],
+)
+def test_packaging_manifests_outrank_algorithmic_risk(files: list[str]) -> None:
+    # Mirror of test_packaging_manifests_outrank_a_contract_edit: the packaging
+    # arm has to beat the other risk flag too. If algorithmic_risk were checked
+    # first, every row returns opus/algorithmic_risk instead.
+    assert not any(work_routing.is_test_path(path) for path in files)
+
+    result = _classify(files, "bump the pinned manifests", 12, algorithmic_risk=True)
+
+    assert result == {"model": "sonnet", "tier_reason": "packaging"}
+
+
+def test_a_slice_mixing_a_real_test_path_with_a_real_packaging_manifest_is_packaging() -> (
+    None
+):
+    # Rule 2 is "every path is a test path OR a packaging path". Every existing
+    # packaging fixture is packaging-only, so the OR across differing path
+    # types is unpinned until a slice actually holds one of each kind, checked
+    # against the real predicates rather than assumed.
+    files = ["tests/test_x.py", "pyproject.toml"]
+    assert work_routing.is_test_path(files[0]) is True
+    assert not work_routing.is_test_path(files[1])
+    assert classify_tier.is_packaging_path(files[1]) is True
+    assert not classify_tier.is_packaging_path(files[0])
+
+    result = _classify(files, "bump the pinned manifests", 12)
+
+    assert result == {"model": "sonnet", "tier_reason": "packaging"}
+
+
+@pytest.mark.parametrize(
     "path",
     [
         "plugin.json",
@@ -285,11 +323,54 @@ def test_a_contract_edit_outranks_algorithmic_risk_when_both_are_flagged() -> No
     assert result == {"model": "opus", "tier_reason": "contract"}
 
 
-def test_a_small_mechanical_edit_is_haiku() -> None:
-    assert _classify(["src/app.py"], "rename foo to bar", 10) == {
-        "model": "haiku",
-        "tier_reason": "mechanical",
-    }
+@pytest.mark.parametrize(
+    "phrase",
+    ["add log", "rename", "port", "mirror", "bump version"],
+)
+def test_a_contract_edit_outranks_the_mechanical_rule_even_when_every_mechanical_precondition_holds(
+    phrase: str,
+) -> None:
+    # Every existing risk-flag fixture uses text that is not a mechanical
+    # phrase, so rule 5 could be checked ahead of rule 3 and the suite would
+    # still pass. Here all three mechanical preconditions hold at once (a real
+    # phrase, one file, a small diff) on an ordinary production path, so this
+    # only passes sonnet/opus at all if contract_edit is checked first.
+    files = ["src/app.py"]
+    assert not work_routing.is_test_path(files[0])
+    assert not classify_tier.is_packaging_path(files[0])
+
+    result = _classify(
+        files,
+        f"{phrase} across the retry handler",
+        10,
+        contract_edit=True,
+    )
+
+    assert result == {"model": "opus", "tier_reason": "contract"}
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    ["add log", "rename", "port", "mirror", "bump version"],
+)
+def test_algorithmic_risk_outranks_the_mechanical_rule_even_when_every_mechanical_precondition_holds(
+    phrase: str,
+) -> None:
+    # Mirror of the contract_edit case above with the other risk flag: same
+    # mechanical-shaped input, so a mechanical-rule-first ordering would answer
+    # haiku/mechanical here too.
+    files = ["src/app.py"]
+    assert not work_routing.is_test_path(files[0])
+    assert not classify_tier.is_packaging_path(files[0])
+
+    result = _classify(
+        files,
+        f"{phrase} across the retry handler",
+        10,
+        algorithmic_risk=True,
+    )
+
+    assert result == {"model": "opus", "tier_reason": "algorithmic_risk"}
 
 
 @pytest.mark.parametrize("phrase", _MECHANICAL_PHRASES)
@@ -529,12 +610,16 @@ def test_a_default_model_of_opus_leaves_an_opus_classification_alone() -> None:
     assert result == {"model": "opus", "tier_reason": "contract"}
 
 
-def test_an_unknown_default_model_is_ignored_and_warned_about(
+def test_classify_never_writes_to_stderr_even_for_an_unknown_default_model(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    # "fable" is a real tier elsewhere but not in this ordering. Coercing it
-    # silently would misprice every task in the batch, so the value is dropped
-    # and the drop is announced on stderr.
+    # classify() is a pure core, not the CLI: a caller that imports this
+    # module as a library (a batch driver, another skill) has to be able to
+    # classify a task without the module writing to the process's stderr
+    # behind its back. The CLI test right below pins the same "fable" input
+    # at the process boundary; this one pins that the core itself never
+    # touches stderr, so the only way both stay true is for the warning to
+    # live in main(), not in classify().
     result = _classify(
         ["cache/store.py", "cache/keys.py", "cli/main.py"],
         "design and migrate the cache layer",
@@ -542,12 +627,35 @@ def test_an_unknown_default_model_is_ignored_and_warned_about(
         default_model="fable",
     )
 
-    captured = capsys.readouterr()
     assert result == {"model": "sonnet", "tier_reason": "default"}
-    # The wording is free, but the dropped value has to be in it: a warning
-    # that never names what it rejected leaves the operator hunting the batch
-    # for a typo the classifier already found.
-    assert "fable" in captured.err
+    assert capsys.readouterr().err == ""
+
+
+def test_the_cli_warns_once_about_an_unknown_default_model_and_still_exits_zero(
+    tmp_path: Path,
+) -> None:
+    # "fable" is a real tier elsewhere but not in this ordering. The warning
+    # moved out of the pure core and into the CLI entry point, so the
+    # observable behaviour has to be pinned at the process boundary: exactly
+    # one line naming the dropped value on stderr, exit 0, and the unchanged
+    # tier still on stdout.
+    result = _run_cli(
+        tmp_path,
+        ["cache/store.py", "cache/keys.py", "cli/main.py"],
+        "design and migrate the cache layer",
+        120,
+        "--default-model",
+        "fable",
+    )
+
+    assert result.returncode == 0
+    assert json.loads(result.stdout) == {"model": "sonnet", "tier_reason": "default"}
+    stderr_lines = result.stderr.splitlines()
+    # The wording is free, but there must be exactly one line and the dropped
+    # value has to be in it: a warning that never names what it rejected
+    # leaves the operator hunting the batch for a typo the CLI already found.
+    assert len(stderr_lines) == 1
+    assert "fable" in stderr_lines[0]
 
 
 @pytest.mark.parametrize(
@@ -614,6 +722,17 @@ def test_the_cli_prints_the_classification_as_json_and_exits_zero(
 
     assert result.returncode == 0
     assert json.loads(result.stdout) == expected
+
+
+def test_the_cli_rejects_a_negative_lines_value(tmp_path: Path) -> None:
+    # A negative line count trivially satisfies "<= 50" and would misroute an
+    # arbitrarily large change into the cheap tier, so the CLI has to refuse
+    # it rather than classify it.
+    result = _run_cli(tmp_path, ["src/app.py"], "rename foo to bar", -1)
+
+    assert result.returncode == 1
+    assert result.stderr.strip() != ""
+    assert result.stdout == ""
 
 
 @pytest.mark.parametrize("missing", ["--files-file", "--text-file"])
