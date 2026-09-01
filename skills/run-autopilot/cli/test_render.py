@@ -166,6 +166,13 @@ class ReportEdgeTests(unittest.TestCase):
         self.assertIn("codex probe: healthy (backend: codex)\n", text)
         self.assertNotIn("; hooks:", text)
 
+    def test_hook_doctor_ok_renders_todays_exact_line(self) -> None:
+        state = _state()
+        state["codex_probe"]["hook_doctor"] = "ok"
+        text = render_report.prd_section(state, [], NOW)
+        self.assertIn("codex probe: healthy (backend: codex)\n", text)
+        self.assertNotIn("; hooks:", text)
+
     def test_tripped_breaker_names_the_failures_and_reroutes(self) -> None:
         state = _state()
         state["qwen_breaker"] = {

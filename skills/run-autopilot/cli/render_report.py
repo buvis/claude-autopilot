@@ -361,7 +361,7 @@ def _probe_line(state: dict) -> str:
             f"codex probe: {probe.get('verdict')} (backend: {probe.get('backend')})"
         )
     hook_doctor = probe.get("hook_doctor")
-    if hook_doctor:
+    if hook_doctor and hook_doctor != "ok":
         probe_line += f"; hooks: {hook_doctor}"
     return probe_line
 
