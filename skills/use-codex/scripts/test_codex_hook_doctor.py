@@ -28,6 +28,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 _MODULE_PATH = Path(__file__).with_name("codex_hook_doctor.py")
 _SPEC = importlib.util.spec_from_file_location("codex_hook_doctor", _MODULE_PATH)
 assert _SPEC is not None and _SPEC.loader is not None
@@ -434,3 +436,231 @@ def test_cli_a_stale_only_target_exits_3(tmp_path: Path) -> None:
         line.startswith(f"stale\t{hooks_dir / 'validate_commit_msg.py'}\t")
         for line in lines[:-1]
     )
+
+
+def test_cli_a_no_canonical_only_target_exits_3(tmp_path: Path) -> None:
+    # no_canonical is grouped with stale for the exit-code decision, not
+    # with missing/empty/syntax_error: a known target whose canonical
+    # source cannot be located, with nothing else missing/empty/broken,
+    # must still exit 3 rather than the old (buggy) 1.
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    (hooks_dir / "validate_commit_msg.py").write_text(
+        "local version\n", encoding="utf-8"
+    )
+    config_path = tmp_path / "hooks.json"
+    _write_config(config_path, {"PreToolUse": ["python3 hooks/validate_commit_msg.py"]})
+    aegis_root, autopilot_root = _fake_roots(tmp_path)
+
+    result = _run_cli(
+        [
+            "--config",
+            str(config_path),
+            "--aegis-root",
+            str(aegis_root),
+            "--autopilot-root",
+            str(autopilot_root),
+        ],
+    )
+
+    assert result.returncode == 3
+    lines = [line for line in result.stdout.splitlines() if line]
+    assert lines[-1] == "summary\t0 ok, 1 stale, 0 broken"
+    assert any(
+        line.startswith(f"no_canonical\t{hooks_dir / 'validate_commit_msg.py'}\t")
+        for line in lines[:-1]
+    )
+
+
+# ---------------------------------------------------------------------------
+# CLI — defaulted --config/--aegis-root/--autopilot-root flags
+# ---------------------------------------------------------------------------
+
+
+def test_cli_config_flag_defaults_to_codex_home_env_hooks_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # `--config` may be omitted: it must then default to
+    # `$CODEX_HOME/hooks.json` when CODEX_HOME is set. HOME is left alone —
+    # only CODEX_HOME should matter here.
+    codex_home = tmp_path / "codex_home"
+    hooks_dir = codex_home / "hooks"
+    hooks_dir.mkdir(parents=True)
+    (hooks_dir / "good.py").write_text("X = 1\n", encoding="utf-8")
+    config_path = codex_home / "hooks.json"
+    _write_config(config_path, {"SessionStart": ["python3 hooks/good.py"]})
+    aegis_root, autopilot_root = _fake_roots(tmp_path)
+    monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+    result = _run_cli(
+        ["--aegis-root", str(aegis_root), "--autopilot-root", str(autopilot_root)],
+    )
+
+    assert result.returncode == 0
+    lines = [line for line in result.stdout.splitlines() if line]
+    assert lines[-1] == "summary\t1 ok, 0 stale, 0 broken"
+
+
+def test_cli_config_flag_defaults_to_home_dot_codex_hooks_json_without_codex_home(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Without CODEX_HOME set, the default config must fall back to
+    # `~/.codex/hooks.json`.
+    fake_home = tmp_path / "fake_home"
+    dot_codex = fake_home / ".codex"
+    hooks_dir = dot_codex / "hooks"
+    hooks_dir.mkdir(parents=True)
+    (hooks_dir / "good.py").write_text("X = 1\n", encoding="utf-8")
+    config_path = dot_codex / "hooks.json"
+    _write_config(config_path, {"SessionStart": ["python3 hooks/good.py"]})
+    aegis_root, autopilot_root = _fake_roots(tmp_path)
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    monkeypatch.setenv("HOME", str(fake_home))
+
+    result = _run_cli(
+        ["--aegis-root", str(aegis_root), "--autopilot-root", str(autopilot_root)],
+    )
+
+    assert result.returncode == 0
+    lines = [line for line in result.stdout.splitlines() if line]
+    assert lines[-1] == "summary\t1 ok, 0 stale, 0 broken"
+
+
+def test_cli_aegis_root_flag_defaults_to_first_matching_installed_plugin_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # `--aegis-root` may be omitted: it must then default to the
+    # installPath of the first "aegis@buvis-plugins" entry in
+    # ~/.claude/plugins/installed_plugins.json.
+    fake_home = tmp_path / "fake_home"
+    plugins_dir = fake_home / ".claude" / "plugins"
+    plugins_dir.mkdir(parents=True)
+    real_aegis_root = tmp_path / "real_aegis_install"
+    (real_aegis_root / "hooks").mkdir(parents=True)
+    (real_aegis_root / "hooks" / "validate_commit_msg.py").write_text(
+        "X = 1\n", encoding="utf-8"
+    )
+    (plugins_dir / "installed_plugins.json").write_text(
+        json.dumps(
+            [
+                {"name": "other@buvis-plugins", "installPath": str(tmp_path / "other")},
+                {"name": "aegis@buvis-plugins", "installPath": str(real_aegis_root)},
+            ]
+        ),
+        encoding="utf-8",
+    )
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    (hooks_dir / "validate_commit_msg.py").write_text("X = 1\n", encoding="utf-8")
+    config_path = tmp_path / "hooks.json"
+    _write_config(config_path, {"PreToolUse": ["python3 hooks/validate_commit_msg.py"]})
+    _, autopilot_root = _fake_roots(tmp_path)
+    monkeypatch.setenv("HOME", str(fake_home))
+
+    result = _run_cli(
+        ["--config", str(config_path), "--autopilot-root", str(autopilot_root)],
+    )
+
+    assert result.returncode == 0
+    lines = [line for line in result.stdout.splitlines() if line]
+    assert lines[-1] == "summary\t1 ok, 0 stale, 0 broken"
+
+
+def test_cli_autopilot_root_flag_is_no_longer_required(tmp_path: Path) -> None:
+    # `--autopilot-root` may be omitted; argparse must not treat it as a
+    # hard requirement. Uses only an unknown (non-KNOWN_HOOKS) target, so
+    # the resolved default value never needs to be dereferenced.
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    (hooks_dir / "good.py").write_text("X = 1\n", encoding="utf-8")
+    config_path = tmp_path / "hooks.json"
+    _write_config(config_path, {"SessionStart": ["python3 hooks/good.py"]})
+    aegis_root, _ = _fake_roots(tmp_path)
+
+    result = _run_cli(["--config", str(config_path), "--aegis-root", str(aegis_root)])
+
+    assert result.returncode == 0
+    lines = [line for line in result.stdout.splitlines() if line]
+    assert lines[-1] == "summary\t1 ok, 0 stale, 0 broken"
+
+
+# ---------------------------------------------------------------------------
+# check() — the five newly-added KNOWN_HOOKS entries
+# ---------------------------------------------------------------------------
+
+
+def test_check_resolves_new_aegis_rooted_known_hooks_against_aegis_root(
+    tmp_path: Path,
+) -> None:
+    # protect_config.py, block_devlocal_redirects.py,
+    # block-suppression-markers.py, and gateguard-fact-force.py are all
+    # KNOWN_HOOKS entries that resolve against aegis_root — a
+    # byte-identical canonical source under aegis_root/hooks/ must verdict
+    # "ok" for each. The last two also prove the basename-with-hyphens ->
+    # canonical-file-with-underscores mapping.
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    aegis_root, autopilot_root = _fake_roots(tmp_path)
+    aegis_hooks_dir = aegis_root / "hooks"
+    aegis_hooks_dir.mkdir()
+
+    canonical_names = {
+        "protect_config.py": "protect_config.py",
+        "block_devlocal_redirects.py": "block_devlocal_redirects.py",
+        "block-suppression-markers.py": "block_suppression_markers.py",
+        "gateguard-fact-force.py": "gateguard_fact_force.py",
+    }
+    commands = []
+    for target_name, canonical_name in canonical_names.items():
+        content = f"# {target_name}\n"
+        (hooks_dir / target_name).write_text(content, encoding="utf-8")
+        (aegis_hooks_dir / canonical_name).write_text(content, encoding="utf-8")
+        commands.append(f"python3 hooks/{target_name}")
+
+    config_path = tmp_path / "hooks.json"
+    _write_config(config_path, {"PreToolUse": commands})
+
+    result = codex_hook_doctor.check(
+        config=config_path,
+        aegis_root=aegis_root,
+        autopilot_root=autopilot_root,
+    )
+
+    seen = {(verdict, target) for verdict, target, _detail in result}
+    assert seen == {("ok", str(hooks_dir / name)) for name in canonical_names}
+
+
+def test_check_resolves_enforce_prd_location_against_autopilot_root_not_aegis_root(
+    tmp_path: Path,
+) -> None:
+    # enforce_prd_location.py is the one KNOWN_HOOKS entry that resolves
+    # against autopilot_root rather than aegis_root — a byte-identical
+    # canonical source under autopilot_root/hooks/ must verdict "ok" even
+    # when aegis_root has a *different* file of the same name, proving the
+    # aegis copy is never consulted for this entry.
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    (hooks_dir / "enforce_prd_location.py").write_text("X = 1\n", encoding="utf-8")
+    config_path = tmp_path / "hooks.json"
+    _write_config(
+        config_path, {"PreToolUse": ["python3 hooks/enforce_prd_location.py"]}
+    )
+    aegis_root, autopilot_root = _fake_roots(tmp_path)
+    (aegis_root / "hooks").mkdir()
+    (aegis_root / "hooks" / "enforce_prd_location.py").write_text(
+        "different bytes that would verdict stale if consulted\n", encoding="utf-8"
+    )
+    (autopilot_root / "hooks").mkdir()
+    (autopilot_root / "hooks" / "enforce_prd_location.py").write_text(
+        "X = 1\n", encoding="utf-8"
+    )
+
+    result = codex_hook_doctor.check(
+        config=config_path,
+        aegis_root=aegis_root,
+        autopilot_root=autopilot_root,
+    )
+
+    verdict, target, _detail = result[0]
+    assert verdict == "ok"
+    assert target == str(hooks_dir / "enforce_prd_location.py")

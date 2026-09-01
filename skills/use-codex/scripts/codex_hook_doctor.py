@@ -9,14 +9,22 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import py_compile
 import shlex
 import sys
 from pathlib import Path
 
-KNOWN_HOOKS: dict[str, str] = {
-    "validate_commit_msg.py": "hooks/validate_commit_msg.py",
-    "_common.py": "hooks/_common.py",
+# basename -> (root the canonical source resolves against, relative path
+# under that root)
+KNOWN_HOOKS: dict[str, tuple[str, str]] = {
+    "validate_commit_msg.py": ("aegis", "hooks/validate_commit_msg.py"),
+    "_common.py": ("aegis", "hooks/_common.py"),
+    "protect_config.py": ("aegis", "hooks/protect_config.py"),
+    "block_devlocal_redirects.py": ("aegis", "hooks/block_devlocal_redirects.py"),
+    "block-suppression-markers.py": ("aegis", "hooks/block_suppression_markers.py"),
+    "gateguard-fact-force.py": ("aegis", "hooks/gateguard_fact_force.py"),
+    "enforce_prd_location.py": ("autopilot", "hooks/enforce_prd_location.py"),
 }
 
 
@@ -32,20 +40,23 @@ def _iter_commands(hooks: dict) -> list[str]:
 
 def _resolve_target(command: str, config_dir: Path) -> Path:
     tokens = shlex.split(command)
-    path_token = next(token for token in tokens if token.endswith(".py"))
-    path = Path(path_token)
+    path = Path(tokens[-1])
     return path if path.is_absolute() else config_dir / path
 
 
-def _verdict_for(target: Path, aegis_root: Path) -> tuple[str, str]:
+def _verdict_for(
+    target: Path, aegis_root: Path, autopilot_root: Path
+) -> tuple[str, str]:
     if not target.exists():
         return "missing", ""
     if target.stat().st_size == 0:
         return "empty", ""
 
-    canonical_rel = KNOWN_HOOKS.get(target.name)
-    if canonical_rel is not None:
-        canonical = aegis_root / canonical_rel
+    known = KNOWN_HOOKS.get(target.name)
+    if known is not None:
+        root_name, canonical_rel = known
+        root = aegis_root if root_name == "aegis" else autopilot_root
+        canonical = root / canonical_rel
         if not canonical.exists():
             return "no_canonical", ""
         if canonical.read_bytes() != target.read_bytes():
@@ -63,6 +74,8 @@ def check(
     *, config: Path, aegis_root: Path, autopilot_root: Path
 ) -> list[tuple[str, str, str]]:
     hooks = json.loads(config.read_text(encoding="utf-8"))["hooks"]
+    if not isinstance(hooks, dict):
+        raise TypeError("hooks must be an object")
     config_dir = config.parent
 
     targets: list[Path] = []
@@ -82,33 +95,66 @@ def check(
 
     results: list[tuple[str, str, str]] = []
     for target in targets:
-        verdict, detail = _verdict_for(target, aegis_root)
+        verdict, detail = _verdict_for(target, aegis_root, autopilot_root)
         results.append((verdict, str(target), detail))
     return results
+
+
+def _default_config() -> Path:
+    codex_home = os.environ.get("CODEX_HOME")
+    if codex_home:
+        return Path(codex_home) / "hooks.json"
+    return Path.home() / ".codex" / "hooks.json"
+
+
+def _default_aegis_root() -> Path:
+    manifest = Path.home() / ".claude" / "plugins" / "installed_plugins.json"
+    plugins = json.loads(manifest.read_text(encoding="utf-8"))
+    for plugin in plugins:
+        if plugin.get("name") == "aegis@buvis-plugins":
+            return Path(plugin["installPath"])
+    raise KeyError("aegis@buvis-plugins not found in installed_plugins.json")
+
+
+def _default_autopilot_root() -> Path:
+    return Path(__file__).resolve().parents[3]
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="subcommand", required=True)
     check_parser = subparsers.add_parser("check")
-    check_parser.add_argument("--config", type=Path, required=True)
-    check_parser.add_argument("--aegis-root", type=Path, required=True)
-    check_parser.add_argument("--autopilot-root", type=Path, required=True)
+    check_parser.add_argument("--config", type=Path)
+    check_parser.add_argument("--aegis-root", type=Path)
+    check_parser.add_argument("--autopilot-root", type=Path)
     args = parser.parse_args(argv)
 
     try:
-        results = check(
-            config=args.config,
-            aegis_root=args.aegis_root,
-            autopilot_root=args.autopilot_root,
+        config = args.config if args.config is not None else _default_config()
+        if not config.exists():
+            raise OSError(f"config not found: {config}")
+        aegis_root = (
+            args.aegis_root if args.aegis_root is not None else _default_aegis_root()
         )
-    except (OSError, json.JSONDecodeError, KeyError) as exc:
+        autopilot_root = (
+            args.autopilot_root
+            if args.autopilot_root is not None
+            else _default_autopilot_root()
+        )
+        results = check(
+            config=config,
+            aegis_root=aegis_root,
+            autopilot_root=autopilot_root,
+        )
+    except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
     ok = sum(1 for verdict, _, _ in results if verdict == "ok")
-    stale = sum(1 for verdict, _, _ in results if verdict == "stale")
-    broken = len(results) - ok - stale
+    stale = sum(1 for verdict, _, _ in results if verdict in ("stale", "no_canonical"))
+    broken = sum(
+        1 for verdict, _, _ in results if verdict in ("missing", "empty", "syntax_error")
+    )
 
     for verdict, target, detail in results:
         print(f"{verdict}\t{target}\t{detail}")
