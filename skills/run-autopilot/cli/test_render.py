@@ -148,6 +148,24 @@ class ReportEdgeTests(unittest.TestCase):
         state["codex_probe"]["batch_id"] = "202601010000"
         self.assertIn("codex probe: not run", render_report.prd_section(state, [], NOW))
 
+    def test_hook_doctor_note_appends_to_the_probe_line(self) -> None:
+        state = _state()
+        state["codex_probe"]["hook_doctor"] = "stale: _common.py"
+        text = render_report.prd_section(state, [], NOW)
+        self.assertIn(
+            "codex probe: healthy (backend: codex); hooks: stale: _common.py",
+            text,
+        )
+
+    def test_probe_line_without_hook_doctor_key_renders_todays_exact_line(
+        self,
+    ) -> None:
+        state = _state()
+        self.assertNotIn("hook_doctor", state["codex_probe"])
+        text = render_report.prd_section(state, [], NOW)
+        self.assertIn("codex probe: healthy (backend: codex)\n", text)
+        self.assertNotIn("; hooks:", text)
+
     def test_tripped_breaker_names_the_failures_and_reroutes(self) -> None:
         state = _state()
         state["qwen_breaker"] = {
