@@ -371,7 +371,7 @@ def test_only_an_integer_zero_counts_as_a_passing_check() -> None:
         "review-work-completion/SKILL.md's carry-forward enumerates failure "
         "values again. A `refused` or unrun entry then silently disappears."
     )
-    assert 'any exit that is not the integer `0`' in phase_review, (
+    assert "any exit that is not the integer `0`" in phase_review, (
         "phase-review.md's verify-escape catches only a non-zero exit, so a "
         "timed-out or refused check finalizes unrecorded."
     )
@@ -410,7 +410,9 @@ def test_a_docs_only_diff_is_decided_before_the_record_is_read() -> None:
         "before the record read, so a docs-only review reports suite counts."
     )
     docs_only = review.index("Check docs-only first")
-    record_read = review.index("read `dev/local/autopilot/last-verification.json` first")
+    record_read = review.index(
+        "read `dev/local/autopilot/last-verification.json` first"
+    )
     assert docs_only < record_read, (
         "review-work-completion/SKILL.md reads the verification record before "
         "deciding docs-only, so a prose-only review silently replaces "
