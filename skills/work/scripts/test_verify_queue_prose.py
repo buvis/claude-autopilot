@@ -62,7 +62,9 @@ def test_the_queue_file_contract_names_its_path_and_its_shape() -> None:
         "The cycle suffix is load-bearing: one file per cycle is what stops a "
         "stale check from re-running against a later HEAD."
     )
-    for field in ('"finding"', '"command"', '"source"', '"result"'):
+    # "file" included: it is what the issue-text-plus-file matcher compares, so
+    # dropping it from the contract silently breaks both readers' matching.
+    for field in ('"finding"', '"file"', '"command"', '"source"', '"result"'):
         assert field in formats, (
             f"output-formats.md dropped the {field} key from the queue entry "
             "shape. Every field has one consumer: finding matches the Phase 5 "
@@ -206,7 +208,13 @@ def test_a_queued_finding_creates_no_task_and_is_recorded_anyway() -> None:
         "phase-review.md no longer states that a routed finding creates no "
         "task - the duplicate suite run comes straight back."
     )
-    assert "`autonomous_decisions`" in phase_review, (
+    # Row-unique: a bare `autonomous_decisions` also appears in three other
+    # paragraphs of this file, so pinning the term alone stays green even if the
+    # whole recording clause - the sole mitigation for an unrun check - is cut.
+    assert (
+        "Record it in `autonomous_decisions` as `routed to verification`"
+        in phase_review
+    ), (
         "phase-review.md no longer records the routing in autonomous_decisions, "
         "so a queued check that never runs leaves no trace in the batch report."
     )
@@ -288,15 +296,24 @@ def test_routing_matches_on_judgment_not_verbatim_text() -> None:
     # Pin the row-unique sentence, NOT "judgment call on issue text plus file":
     # the pre-existing Cap-check paragraph carries that exact phrase, so a pin
     # on it stays green with the routing row's matching rule deleted.
-    assert "Match on the entry's `finding` and `command` together" in phase_review, (
+    assert "Match on the entry's `finding` and `file`" in phase_review, (
         "phase-review.md's routing row no longer matches findings the way the "
         "Cap check matches settled deferrals. Verbatim identity misses every "
         "paraphrased consensus finding."
     )
-    assert "the same way Phase 5 does" in _REVIEW_SKILL.read_text(), (
+    review = _REVIEW_SKILL.read_text()
+    assert "the same way Phase 5 does" in review, (
         "review-work-completion/SKILL.md step 7 no longer states how to match a "
         "row to a queue entry. Phase 5's matching rule runs after task "
         "creation, so a semantic rule there does not help the skip here."
+    )
+    # Both readers must name the SAME key pair. Divergent matchers let step 7
+    # skip a row Phase 5 then fails to match, sending it back through
+    # classification into the duplicate rework task this mechanism removes.
+    assert "against the entry's `finding` and `file`" in review, (
+        "review-work-completion/SKILL.md step 7 matches on a different key pair "
+        "than phase-review.md's routing row. One reader skipping what the other "
+        "re-tasks is worse than neither doing it."
     )
 
 
@@ -384,25 +401,72 @@ def test_the_verify_escape_record_carries_issue_text() -> None:
 def test_a_docs_only_diff_is_decided_before_the_record_is_read() -> None:
     # In this pack the work phase always runs and records a suite, so a
     # prose-only PRD has a matching record. Read the record first and the
-    # docs-only sentinel is silently replaced by counts.
+    # docs-only sentinel is silently replaced by counts. Compare positions, not
+    # mere presence: the phrase can survive while the record read moves above it.
     review = _REVIEW_SKILL.read_text()
 
     assert "Check docs-only first" in review, (
         "review-work-completion/SKILL.md no longer orders the docs-only test "
         "before the record read, so a docs-only review reports suite counts."
     )
+    docs_only = review.index("Check docs-only first")
+    record_read = review.index("read `dev/local/autopilot/last-verification.json` first")
+    assert docs_only < record_read, (
+        "review-work-completion/SKILL.md reads the verification record before "
+        "deciding docs-only, so a prose-only review silently replaces "
+        "`Tests: none (docs-only)` with the work phase's suite counts."
+    )
 
 
-def test_queued_checks_are_re_run_after_a_fix_cycle() -> None:
+def test_queued_checks_run_once_at_the_settled_head() -> None:
     # Same staleness class the record's null-counts rule closes, and the queue
-    # carries no sha, so nothing downstream can detect a stale result.
+    # carries no sha, so nothing downstream can detect a stale result. Running
+    # before the failure loop and again after would also execute every check
+    # twice, against a contract that says each command runs once.
     verification = _FINAL_VERIFICATION.read_text()
 
-    assert "After a fix cycle, run the queued checks again" in verification, (
-        "references/final-verification.md no longer re-runs queued checks after "
-        "a regression fix, so their results belong to a pre-fix HEAD with "
-        "nothing to reveal it."
+    assert "Run these once, at the settled HEAD" in verification, (
+        "references/final-verification.md no longer defers the queued checks "
+        "until the regression loop resolves, so their results belong to a "
+        "pre-fix HEAD with nothing to reveal it - or each check runs twice."
     )
+
+
+def test_the_rules_that_only_prose_carries_are_each_pinned() -> None:
+    # Every clause here is a rule with no runtime behind it, added in a rework
+    # and caught by a reviewer. An unpinned sentence is how the last two of them
+    # drifted; this is the backstop for that class.
+    verification = _FINAL_VERIFICATION.read_text()
+    formats = _OUTPUT_FORMATS.read_text()
+    phase_review = _PHASE_REVIEW.read_text()
+
+    for text, needle, what in (
+        (formats, "no embedded newline", "the writer's newline-is-chaining rule"),
+        (
+            verification,
+            "no embedded newline",
+            "the runner's newline-is-chaining rule",
+        ),
+        (
+            formats,
+            "not queued: command shape",
+            "the writer-side refusal note that keeps a refusal visible",
+        ),
+        (
+            formats,
+            "the **runner's** value",
+            "the line separating a runner-declined entry from one never queued",
+        ),
+        (
+            phase_review,
+            "converges with no work pass leaves its checks unrun",
+            "the stated limitation for a cycle that runs no work phase",
+        ),
+    ):
+        assert needle in text, (
+            f"{what} is gone. It is prose-only, so nothing else fails when it "
+            "drops out - which is exactly how the earlier drift happened."
+        )
 
 
 def test_a_queued_command_is_treated_as_untrusted_input() -> None:

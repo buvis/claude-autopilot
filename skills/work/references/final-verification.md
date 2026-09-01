@@ -85,12 +85,12 @@ that re-runs this same suite.
    verify_check: <command> -> exit <n>
    ```
 
-**After a fix cycle, run the queued checks again.** These run after the suite
-commands but before § Handling failures resolves a regression, so a result
-recorded on the first pass belongs to a pre-fix HEAD — the same staleness the
-record's null-counts rule closes for the counts. Re-run each queued check at the
-final HEAD and overwrite its `result` before reporting; the queue carries no sha
-of its own, so nothing downstream could detect a stale one.
+**Run these once, at the settled HEAD.** § Handling failures below may re-open a
+task and land a fix, which moves HEAD. Run the queued checks *after* that loop
+resolves, not before it — a result recorded on a pre-fix HEAD is stale, and the
+queue carries no sha of its own, so nothing downstream could detect it. Waiting
+also keeps the contract's "runs each `command` once" true: running now and
+re-running after a fix would execute every queued check twice.
 
 **A non-zero exit is evidence, not a phase failure.** It re-opens no task, does
 not enter the regression loop below, and does not stop the phase — the next

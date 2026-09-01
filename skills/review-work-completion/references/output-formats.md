@@ -211,10 +211,19 @@ A JSON array:
   queued and then declined at step 7, not this case. The runner applies the same
   rule, because the writer and the runner both enforcing it is the point
   (`work/references/final-verification.md` § Queued verification checks).
-- `source` names the lens that raised it: `"bob"`, `"eve"`, or — when a fallback
-  lane produced the doubt output — the principal it stood in for (Bob's Claude
-  fallback is `"bob"`, Eve's Claude substitute is `"eve"`), matching the
-  `{agent}-output-{id}.txt` convention step 6 already uses.
+- `source` names the lens that raised it: `"eve"` today, or the principal a
+  fallback lane stood in for (Eve's Claude substitute is `"eve"`), matching the
+  `{agent}-output-{id}.txt` convention step 6 already uses. `"bob"` is reserved:
+  `agents/bob.md` emits `[BOB]` issue lines and `R{n}` verdicts and defines no
+  VERIFY bucket, so nothing sources from him unless that persona gains one.
+- **A queued item need not appear in the consolidated table.** The doubt buckets
+  are not issue lines, and `consolidate_findings.py` parses only the
+  `[{AGENT}] {emoji} ... | File: ...` shape, so a bucket item reaches the queue
+  without reaching the table. That is not a fault: the queue is what makes its
+  check run, and an item with no table row has no task to create, so step 7's
+  skip and Phase 5's routing row are simply no-ops for it. They act on the rows
+  that do exist — which is also where the Medium/Low severity bound is decided,
+  since a queue entry carries no severity of its own.
 - `result` is absent until the work phase runs the check, and is the only field
   the work phase writes. Its `exit` is the command's integer exit code, or the
   string `"timeout"` for a check that blew its budget, or `"refused"` for one
