@@ -157,15 +157,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Classify a task's model tier.")
     parser.add_argument("--files-file")
     parser.add_argument("--text-file")
-    parser.add_argument("--lines", type=int, default=0)
+    parser.add_argument("--lines", type=int, default=None)
     parser.add_argument("--contract-edit", action="store_true")
     parser.add_argument("--algorithmic-risk", action="store_true")
     parser.add_argument("--default-model")
     args = parser.parse_args(argv)
 
-    if not args.files_file or not args.text_file:
+    if not args.files_file or not args.text_file or args.lines is None:
         print(
-            "classify_tier: --files-file and --text-file are both required",
+            "classify_tier: --files-file, --text-file and --lines are all required",
             file=sys.stderr,
         )
         return 1

@@ -649,6 +649,36 @@ def test_the_cli_exits_one_when_an_input_file_cannot_be_read(
     assert "Traceback" not in result.stderr
 
 
+def test_the_cli_exits_one_when_the_lines_argument_is_absent(
+    tmp_path: Path,
+) -> None:
+    # --lines is a required input, not an optional one defaulting to zero: a
+    # silent zero satisfies the mechanical bound, so a caller who forgot the
+    # flag would get the cheap tier on an arbitrarily large change.
+    files_file = tmp_path / "files.txt"
+    files_file.write_text("src/app.py\n", encoding="utf-8")
+    text_file = tmp_path / "text.txt"
+    text_file.write_text("rename foo to bar\n", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(_MODULE_PATH),
+            "--files-file",
+            str(files_file),
+            "--text-file",
+            str(text_file),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert result.stderr.strip() != ""
+    assert "Traceback" not in result.stderr
+
+
 def test_the_cli_exits_one_when_the_files_file_argument_is_absent(
     tmp_path: Path,
 ) -> None:
