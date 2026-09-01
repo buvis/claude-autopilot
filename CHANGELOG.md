@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **work**: the final verification step now runs the checks the review queued
+  for it. A doubt-lens finding that "needs a specific named check to resolve"
+  used to become a rework task whose work pass ran the whole suite again to
+  answer it; the check now runs beside the suite that was about to be
+  duplicated, and the phase report carries one `verify_check: <command> -> exit
+  <n>` line per check. A non-zero exit is evidence, not a phase failure - it
+  reaches the next review cycle as an open finding. With no queue file present,
+  which is every first-pass build, nothing runs and nothing is reported.
 - **work**: explicit timeout budgets for foreground verification commands and a
   rule against combining inspection with verification. Inspection calls get
   60000 ms, lint and narrow tests 300000 ms, a foreground full suite 600000 ms;

@@ -81,6 +81,44 @@ def test_an_absent_queue_file_is_never_an_error() -> None:
     )
 
 
+def test_the_queued_checks_run_inside_the_one_mandatory_pass() -> None:
+    # The whole saving is that these run where a suite already runs. Move them
+    # anywhere else and the duplicate execution PRD 00164 removed comes back.
+    verification = _FINAL_VERIFICATION.read_text()
+
+    assert "## Queued verification checks" in verification, (
+        "references/final-verification.md has no '## Queued verification "
+        "checks' section, so nothing reads the queue and every VERIFY finding "
+        "goes back to being its own rework task."
+    )
+    assert "verify_check: <command> -> exit <n>" in verification, (
+        "references/final-verification.md lost the verify_check report line "
+        "shape. The line IS the preserved evidence - a check that ran and was "
+        "never reported is indistinguishable from one that never ran."
+    )
+    assert "Absent queue file" in verification, (
+        "references/final-verification.md lost the absent-file no-op, which is "
+        "what keeps a first-pass build phase unchanged."
+    )
+
+
+def test_a_failed_queued_check_is_evidence_not_a_phase_failure() -> None:
+    # A queued check answers a doubt; it is not a gate. If a red one could fail
+    # the phase, the review would be handing the build phase a veto it never
+    # had, and step 7's regression loop would start chasing findings.
+    verification = _FINAL_VERIFICATION.read_text()
+
+    assert "non-zero exit is evidence, not a phase failure" in verification, (
+        "references/final-verification.md no longer says a queued check's "
+        "non-zero exit is evidence rather than a phase failure."
+    )
+    assert "exit timeout" in verification, (
+        "references/final-verification.md lost the timed-out queued check's "
+        "report value. A check that blew its budget must never be reported "
+        "with a passing exit code."
+    )
+
+
 def test_the_verification_record_names_its_writer_and_its_reader() -> None:
     verification = _FINAL_VERIFICATION.read_text()
 

@@ -48,6 +48,35 @@ attempted at all.
    block. Never report a timed-out command as a green one, and never silently
    retry it a third time.
 
+## Queued verification checks
+
+After the suite commands above, read this cycle's verification-check queue —
+`dev/local/reviews/{prd-stem}-checks-{cycle}.json`, shape and rules in
+`review-work-completion/references/output-formats.md` § Verification-check
+queue. It holds the named checks the last review cycle asked for, so that a
+"run this check" finding costs one command here instead of a whole rework task
+that re-runs this same suite.
+
+1. **Absent queue file → nothing runs and nothing is reported.** A first-pass
+   build phase has no review behind it, so this is the ordinary case, not a gap.
+2. Run each entry's `command` as its own Bash call, under the same rules as the
+   suite commands above: no `&&` chaining, no inspection in the same call, and
+   an explicit `timeout` from `references/subagent-dispatch.md` § Foreground
+   command budgets.
+3. Append the outcome to that entry as `"result": {"exit": <n>}` and write the
+   file back with the **Write tool** (read, append, write back).
+4. Report one line per entry in the phase report:
+
+   ```
+   verify_check: <command> -> exit <n>
+   ```
+
+**A non-zero exit is evidence, not a phase failure.** It re-opens no task, does
+not enter the regression loop below, and does not stop the phase — the next
+review cycle picks it up as an open finding through the normal path. A queued
+check that hits its budget is handled by § Timed-out commands above and reported
+as `verify_check: <command> -> exit timeout`, never as a passing check.
+
 ## Recorded verification result
 
 At the end of this step, write `dev/local/autopilot/last-verification.json` with
