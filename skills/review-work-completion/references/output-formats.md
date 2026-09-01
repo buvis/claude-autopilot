@@ -10,6 +10,7 @@
 - [Task Description Format](#task-description-format)
 - [Review Summary Format](#review-summary-format)
 - [Zero Issues Handling](#zero-issues-handling)
+- [Verification-check queue](#verification-check-queue)
 - [Review File Format](#review-file-format)
 
 ## Agent Output Format (Single Source of Truth)
@@ -159,6 +160,49 @@ When consolidation yields no issues:
 - In review summary, note: "✅ All agents passed - no issues found"
 - Still save the review file (documents the clean review)
 - Report success to user with agent consensus on passing
+
+## Verification-check queue
+
+Location: `dev/local/reviews/{prd-stem}-checks-{cycle}.json` — `{prd-stem}` is
+`state.prd` minus `.md`, `{cycle}` is `state.cycle`. One file per cycle, beside
+the review files and the settled-decisions ledger, so it dies with the PRD like
+the other review satellites.
+
+It is how a **VERIFY** finding — one that "needs a specific named check to
+resolve" (`agents/eve.md`) — reaches a runner without becoming an
+implementation task whose only content is "run this check". Step 6 writes it
+from the doubt lenses' VERIFY buckets; `work` step 7 reads it, runs each
+`command` once, and writes each entry's `result` back.
+
+A JSON array:
+
+```json
+[
+  {
+    "cycle": 3,
+    "finding": "<the finding text, verbatim>",
+    "command": "<the exact check to run>",
+    "source": "bob",
+    "result": {"exit": 0}
+  }
+]
+```
+
+- `finding` is the reviewer's own words, not a summary — Phase 5's VERIFY row
+  (`run-autopilot/references/phase-review.md`) matches findings against this
+  field to decide which ones create no task.
+- `command` is one runnable command line. **A VERIFY finding whose text yields
+  no exact command is NOT queued** — it stays a normal finding and follows
+  today's classification. Rubric rule D3 already requires a VERIFY item to name
+  its exact check, so a vague one is a rubric failure, not a queue entry.
+- `source` is `"bob"` or `"eve"` — the doubt lens that raised it.
+- `result` is absent until the work phase runs the check, and is the only field
+  the work phase writes.
+
+**Reader tolerance:** an absent queue file means no checks. It is never an
+error — a first-pass build phase has no review behind it and reads nothing. A
+file that is present but unparseable is reported as unreadable and treated as
+empty; these checks are evidence, never a gate.
 
 ## Review File Format
 
