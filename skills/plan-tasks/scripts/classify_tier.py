@@ -125,18 +125,14 @@ def _tier_from_shape(
         return "opus", "contract"
     if algorithmic_risk:
         return "opus", "algorithmic_risk"
+    lowered = text.lower()
     if (
-        _is_mechanical(text)
+        any(phrase in lowered for phrase in _MECHANICAL_PHRASES)
         and len(files) <= _MECHANICAL_MAX_FILES
         and lines_changed <= _MECHANICAL_MAX_LINES
     ):
         return "haiku", "mechanical"
     return "sonnet", "default"
-
-
-def _is_mechanical(text: str) -> bool:
-    lowered = text.lower()
-    return any(phrase in lowered for phrase in _MECHANICAL_PHRASES)
 
 
 def _apply_floor(model: str, reason: str, default_model: str | None) -> tuple[str, str]:
