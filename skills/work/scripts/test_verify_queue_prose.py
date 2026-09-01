@@ -285,10 +285,18 @@ def test_routing_matches_on_judgment_not_verbatim_text() -> None:
     # duplicate task returns exactly where consensus is highest.
     phase_review = _PHASE_REVIEW.read_text()
 
-    assert "judgment call on issue text plus file" in phase_review, (
+    # Pin the row-unique sentence, NOT "judgment call on issue text plus file":
+    # the pre-existing Cap-check paragraph carries that exact phrase, so a pin
+    # on it stays green with the routing row's matching rule deleted.
+    assert "Match on the entry's `finding` and `command` together" in phase_review, (
         "phase-review.md's routing row no longer matches findings the way the "
         "Cap check matches settled deferrals. Verbatim identity misses every "
         "paraphrased consensus finding."
+    )
+    assert "the same way Phase 5 does" in _REVIEW_SKILL.read_text(), (
+        "review-work-completion/SKILL.md step 7 no longer states how to match a "
+        "row to a queue entry. Phase 5's matching rule runs after task "
+        "creation, so a semantic rule there does not help the skip here."
     )
 
 
@@ -303,7 +311,7 @@ def test_a_failed_check_has_a_reader_in_the_next_cycle() -> None:
         "queue, so a red check is written to a file nothing reads and the next "
         "cycle converges over it."
     )
-    assert "`result.exit` is non-zero" in review, (
+    assert "`result.exit`" in review, (
         "review-work-completion/SKILL.md no longer names the field that decides "
         "which prior-cycle entries become findings."
     )
@@ -311,6 +319,89 @@ def test_a_failed_check_has_a_reader_in_the_next_cycle() -> None:
         "phase-review.md lost the sweep-path sink. The tail sweep runs step 7 "
         "after convergence and Phase 5 never reopens, so a red check there has "
         "no next cycle and must be deferred to batch end."
+    )
+
+
+def test_the_carry_forward_runs_before_the_verdict_is_counted() -> None:
+    # Ordering is the whole correctness of the carry-forward. Composed first,
+    # the Verdict line says "converged" over a table that then grows a
+    # carried-forward red check - the exact outcome the mechanism prevents.
+    review = _REVIEW_SKILL.read_text()
+
+    carry = review.index("**Carry the previous cycle's failed checks forward.**")
+    verdict = review.index("**Compose the `Verdict:` line.**")
+    assert carry < verdict, (
+        "review-work-completion/SKILL.md composes the Verdict line before the "
+        "carry-forward adds its findings, so the count excludes them and a "
+        "cycle whose only findings are carried forward reads as converged."
+    )
+    assert "including any findings the carry-forward above just added" in review, (
+        "review-work-completion/SKILL.md no longer says the consolidated count "
+        "includes the carried-forward findings, so the ordering above is a "
+        "coincidence rather than a stated rule."
+    )
+
+
+def test_only_an_integer_zero_counts_as_a_passing_check() -> None:
+    # Enumerating failure values is how "refused" got dropped from both readers:
+    # a refused check is one step 7 already skipped the task for, so losing it
+    # loses the finding entirely. Test for the pass value instead.
+    review = _REVIEW_SKILL.read_text()
+    phase_review = _PHASE_REVIEW.read_text()
+    formats = _OUTPUT_FORMATS.read_text()
+
+    assert "anything but the integer `0`" in review, (
+        "review-work-completion/SKILL.md's carry-forward enumerates failure "
+        "values again. A `refused` or unrun entry then silently disappears."
+    )
+    assert 'any exit that is not the integer `0`' in phase_review, (
+        "phase-review.md's verify-escape catches only a non-zero exit, so a "
+        "timed-out or refused check finalizes unrecorded."
+    )
+    assert "Only the integer `0` is a pass" in formats, (
+        "output-formats.md no longer states the pass value, leaving each reader "
+        "to enumerate the failure values and miss one."
+    )
+
+
+def test_the_verify_escape_record_carries_issue_text() -> None:
+    # cli/render_report.py missing_from_report: "An item without issue text is
+    # always missing" - it fails loud rather than being dropped. So an
+    # issue-less verify-escape halts the finalize the record exists to permit.
+    phase_review = _PHASE_REVIEW.read_text()
+
+    assert '"issue": "queued check failed:' in phase_review, (
+        "phase-review.md's verify-escape record lost its issue field. Phase 9's "
+        "reconciliation treats an issue-less open item as always missing and "
+        "stops the finalize."
+    )
+    assert "The `issue` field is not optional" in phase_review, (
+        "phase-review.md no longer says why the issue field is mandatory, so "
+        "the next edit drops it again."
+    )
+
+
+def test_a_docs_only_diff_is_decided_before_the_record_is_read() -> None:
+    # In this pack the work phase always runs and records a suite, so a
+    # prose-only PRD has a matching record. Read the record first and the
+    # docs-only sentinel is silently replaced by counts.
+    review = _REVIEW_SKILL.read_text()
+
+    assert "Check docs-only first" in review, (
+        "review-work-completion/SKILL.md no longer orders the docs-only test "
+        "before the record read, so a docs-only review reports suite counts."
+    )
+
+
+def test_queued_checks_are_re_run_after_a_fix_cycle() -> None:
+    # Same staleness class the record's null-counts rule closes, and the queue
+    # carries no sha, so nothing downstream can detect a stale result.
+    verification = _FINAL_VERIFICATION.read_text()
+
+    assert "After a fix cycle, run the queued checks again" in verification, (
+        "references/final-verification.md no longer re-runs queued checks after "
+        "a regression fix, so their results belong to a pre-fix HEAD with "
+        "nothing to reveal it."
     )
 
 

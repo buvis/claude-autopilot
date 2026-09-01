@@ -181,6 +181,7 @@ A JSON array:
   {
     "cycle": 3,
     "finding": "<the finding text, verbatim>",
+    "file": "<the finding's file path, or null>",
     "command": "<the exact check to run>",
     "source": "bob",
     "result": {"exit": 0}
@@ -188,20 +189,27 @@ A JSON array:
 ]
 ```
 
-- `finding` is the reviewer's own words, not a summary — Phase 5's VERIFY row
-  (`run-autopilot/references/phase-review.md`) matches findings against this
-  field to decide which ones create no task.
+- `finding` is the reviewer's own words, not a summary, and `file` is that
+  finding's path (`null` when it names none). Both readers — step 7's task skip
+  and Phase 5's VERIFY row — match findings on **issue text plus file**, so the
+  entry has to carry the file the matcher compares.
 - `command` is one runnable command line. **A VERIFY finding whose text yields
   no exact command is NOT queued** — it stays a normal finding and follows
   today's classification. Rubric rule D3 already requires a VERIFY item to name
   its exact check, so a vague one is a rubric failure, not a queue entry.
 - **A queued command must be a project verification command** — a test, lint,
   build, type-check or project-defined check, the same shapes step 7 already
-  runs. One command: no `&&`/`;`/`|` chaining, no redirection, no substitution,
-  no `rm`/`curl`/`git push` or any other state change. The writer composes these
-  from reviewer text, and reviewer text is derived from the diff and the PRD, so
-  **anything else is not queued** — it stays a normal finding and is reported as
-  refused. The runner enforces the same rule and skips what it would not run
+  runs. One command: no `&&`/`;`/`|` chaining, **no embedded newline**, no
+  redirection, no substitution, no `rm`/`curl`/`git push` or any other state
+  change. (A newline is chaining: one string with a line break runs as two
+  commands in a single Bash call.) The writer composes these from reviewer text,
+  and reviewer text is derived from the diff and the PRD, so **anything else is
+  not queued** — no entry is written for it, so it has no `result`; it stays an
+  ordinary finding and is classified as today. Say so in the review file beside
+  that finding ("not queued: command shape"), so a refusal is visible rather
+  than silent. `"refused"` is the **runner's** value for an entry that was
+  queued and then declined at step 7, not this case. The runner applies the same
+  rule, because the writer and the runner both enforcing it is the point
   (`work/references/final-verification.md` § Queued verification checks).
 - `source` names the lens that raised it: `"bob"`, `"eve"`, or — when a fallback
   lane produced the doubt output — the principal it stood in for (Bob's Claude
@@ -209,8 +217,10 @@ A JSON array:
   `{agent}-output-{id}.txt` convention step 6 already uses.
 - `result` is absent until the work phase runs the check, and is the only field
   the work phase writes. Its `exit` is the command's integer exit code, or the
-  string `"timeout"` for a check that blew its budget — never a number for a
-  command that returned no verdict.
+  string `"timeout"` for a check that blew its budget, or `"refused"` for one
+  the runner declined on the shape rule above — never a number for a command
+  that returned no verdict. **Only the integer `0` is a pass**; every reader
+  tests for that rather than enumerating the failure values.
 
 **Reader tolerance:** an absent queue file means no checks. It is never an
 error — a first-pass build phase has no review behind it and reads nothing. A
