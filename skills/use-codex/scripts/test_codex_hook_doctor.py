@@ -542,10 +542,17 @@ def test_cli_aegis_root_flag_defaults_to_first_matching_installed_plugin_path(
     )
     (plugins_dir / "installed_plugins.json").write_text(
         json.dumps(
-            [
-                {"name": "other@buvis-plugins", "installPath": str(tmp_path / "other")},
-                {"name": "aegis@buvis-plugins", "installPath": str(real_aegis_root)},
-            ]
+            {
+                "version": 2,
+                "plugins": {
+                    "other@buvis-plugins": [
+                        {"installPath": str(tmp_path / "other")}
+                    ],
+                    "aegis@buvis-plugins": [
+                        {"installPath": str(real_aegis_root)}
+                    ],
+                },
+            }
         ),
         encoding="utf-8",
     )
@@ -564,6 +571,41 @@ def test_cli_aegis_root_flag_defaults_to_first_matching_installed_plugin_path(
     assert result.returncode == 0
     lines = [line for line in result.stdout.splitlines() if line]
     assert lines[-1] == "summary\t1 ok, 0 stale, 0 broken"
+
+
+def test_default_aegis_root_reads_the_real_installed_plugins_json_shape(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The real installed_plugins.json is a dict keyed by "plugins", whose
+    # value is itself a dict keyed by plugin name, mapping to a *list* of
+    # install entries — not a flat list of {"name", "installPath"} objects.
+    # _default_aegis_root() must resolve against that real shape.
+    fake_home = tmp_path / "fake_home"
+    plugins_dir = fake_home / ".claude" / "plugins"
+    plugins_dir.mkdir(parents=True)
+    real_aegis_root = tmp_path / "real_aegis_install"
+    (plugins_dir / "installed_plugins.json").write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "plugins": {
+                    "aegis@buvis-plugins": [
+                        {
+                            "scope": "user",
+                            "installPath": str(real_aegis_root),
+                            "version": "0.3.2",
+                        }
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("HOME", str(fake_home))
+
+    result = codex_hook_doctor._default_aegis_root()
+
+    assert result == real_aegis_root
 
 
 def test_cli_autopilot_root_flag_is_no_longer_required(tmp_path: Path) -> None:

@@ -109,11 +109,8 @@ def _default_config() -> Path:
 
 def _default_aegis_root() -> Path:
     manifest = Path.home() / ".claude" / "plugins" / "installed_plugins.json"
-    plugins = json.loads(manifest.read_text(encoding="utf-8"))
-    for plugin in plugins:
-        if plugin.get("name") == "aegis@buvis-plugins":
-            return Path(plugin["installPath"])
-    raise KeyError("aegis@buvis-plugins not found in installed_plugins.json")
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    return Path(data["plugins"]["aegis@buvis-plugins"][0]["installPath"])
 
 
 def _default_autopilot_root() -> Path:
