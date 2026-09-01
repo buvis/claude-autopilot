@@ -209,7 +209,7 @@ The **context-budget trigger is not gated** by the preflight and remains active 
 
 **Risk exemption (skips the eligibility trigger only):**
 
-A task carrying either risk fact (`contract_edit` or `algorithmic_risk`) is **not split for eligibility**, because a task carrying one classifies `opus`, and an `opus` task is never qwen-eligible. Judge both facts under step 4.7's evidence rules before splitting, and reuse the same values there. The exemption short-circuits the eligibility trigger and the task keeps its original shape. The context-budget trigger is unaffected: a risky task that also exceeds the context budget is still split for that reason.
+A task carrying either risk fact (`contract_edit` or `algorithmic_risk`) is **not split for eligibility**. A risk fact normally lands the task on `opus`, which is never qwen-eligible, so the split would buy nothing. The exemption holds either way, and does not depend on that tier landing: a test-only or packaging-only slice pins `sonnet` before either fact is read. Judge both facts under step 4.7's evidence rules before splitting, and reuse the same values there. The exemption short-circuits the eligibility trigger and the task keeps its original shape. The context-budget trigger is unaffected: a risky task that also exceeds the context budget is still split for that reason.
 
 The existing context-budget split mechanics, the one-split-attempt rule, and the stall behavior below are **unchanged** by the eligibility trigger — both triggers share them:
 
@@ -247,7 +247,7 @@ For each task, `classify_tier.py` decides the model tier. Persist what it prints
 
 **Two per-task facts.** Judge these booleans once per task, from that task's own `Contract`, `Location`, `Details` and file slice, before the step-4.6 split, then reuse the same values here. Both default to false; assert one only on the evidence named:
 
-- `contract_edit` is true only when the task itself changes an exported API signature, a persisted schema, a wire format or a hook registration shape (the same definition the `qwen_excluded_reason: contract` clause below uses). Calling or documenting a contract does not count.
+- `contract_edit` is true only when the task itself changes an exported API signature, a persisted schema, a wire format or a hook registration shape. Calling or documenting a contract does not count.
 - `algorithmic_risk` is true only when the task's own `Details` name a new algorithm it implements (not one it calls), shared mutable state across threads, processes or async tasks, or a transform of persisted data (a migration). Words in the PRD body, the PRD title or the task name alone never qualify, and neither do `design`, `architect`, `introduce`, `refactor across`, file count or `estimated_tokens`.
 
 **Run the classifier, once per task.** Write the task's file slice to `dev/local/tmp/plan-<n>-files.txt` (one repo-relative path per line) and its title plus description to `dev/local/tmp/plan-<n>-text.txt`, with `<n>` the task's position in this pass, then run:
@@ -315,18 +315,18 @@ qwen_eligible = task is backend (not UI) AND model in {haiku, sonnet} AND files_
 - `model` is the tier the classifier printed (the same value persisted as the top-level `model` key).
 - `files_touched` is the per-task file count already used in step 4.5 and handed to the classifier as the file slice.
 - **UI** = the task matches the **"Gemini-first tasks"** list in `${CLAUDE_PLUGIN_ROOT}/skills/work/SKILL.md`. Anything not matching that list is **backend**. Reuse `work`'s list as the single source of truth so producer and consumer agree by construction — do not restate the list here; if it changes in `work`, this rule inherits the change.
-- **Public contract** = the task's planned edits touch an exported API signature, a schema, a wire format, or a hook registration shape (judge from the task's file slice, its `Contract`, and the PRD's Functional Decomposition). Purely internal changes — private helpers, implementation bodies, tests, docs — edit no public contract.
+- **Public contract** = the `contract_edit` fact judged above under its evidence rule. Reuse that value as the single source of truth so the tier and this flag cannot disagree; do not restate the definition here and do not widen its evidence. `contract_edit` false means the task edits no public contract.
 
 Each of the following yields `qwen_eligible = false` independently, with the named `qwen_excluded_reason` code:
 
 - The task matches the UI list (Gemini's domain, not qwen's) → `ui`.
 - `model == "opus"` (opus tier is never qwen-eligible) → `tier`.
-- The task edits a public contract (exported API signature, schema, wire format, hook registration shape) → `contract`.
+- The task edits a public contract, meaning `contract_edit` is true → `contract`.
 - `files_touched >= 4` (qwen under-covers wide multi-file tasks) → `files`.
 
 **`qwen_excluded_reason`**: on **every** ineligible task, also persist `qwen_excluded_reason` — one of `ui` / `tier` / `files` / `contract`. When several conditions fail, record the FIRST failing one in the order above (`ui` → `tier` → `contract` → `files`). `contract` is recorded ahead of `files` because the codex rung's fence (`run-autopilot/references/model-ladder.md` § Codex rung) admits `files` but must exclude `contract`, so a task that both spans many files and edits a public contract has to record `contract`, keeping it off codex. Eligible tasks omit the key. This makes under-routing auditable per batch: the Phase 9 Implementor Mix render counts exclusions by reason (PRD 00019).
 
-**`qwen_excluded_reason: contract` is unreachable on new plans.** A task that edits a public contract carries `contract_edit`, the classifier turns that into `opus`, and `tier` is recorded ahead of `contract`, so such a task records `tier` instead. The code stays documented because readers still meet it on plans made before PRD 00160, and the Phase 9 mix render should read a zero `contract` count as expected rather than as an under-count. The codex fence is unaffected: opus is never intercepted.
+**`qwen_excluded_reason: contract` is unreachable on new plans, except on test-only and packaging-only slices.** A task that edits a public contract carries `contract_edit`, the classifier turns that into `opus`, and `tier` is recorded ahead of `contract`, so such a task records `tier` instead. The exception is precedence: when a task's whole file slice is test paths, or test and packaging paths, that row fires first and pins the tier to `sonnet` before `contract_edit` is read, so `contract` is recorded after all. The code stays documented because readers still meet it on plans made before PRD 00160, and the Phase 9 mix render should read a zero or near-zero `contract` count as expected rather than as an under-count. The codex fence is unaffected: opus is never intercepted.
 
 The flag is computed **from** the classifier output; it does **not** alter the tier.
 
