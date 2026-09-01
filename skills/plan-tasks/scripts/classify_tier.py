@@ -140,13 +140,7 @@ def _is_mechanical(text: str) -> bool:
 
 
 def _apply_floor(model: str, reason: str, default_model: str | None) -> tuple[str, str]:
-    if default_model is None:
-        return model, reason
-    if default_model not in _MODEL_ORDER:
-        print(
-            f"classify_tier: ignoring unknown default model {default_model!r}",
-            file=sys.stderr,
-        )
+    if default_model is None or default_model not in _MODEL_ORDER:
         return model, reason
     if _MODEL_ORDER[default_model] > _MODEL_ORDER[model]:
         return default_model, "floor"
@@ -169,6 +163,14 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 1
+    if args.lines < 0:
+        print("classify_tier: --lines must not be negative", file=sys.stderr)
+        return 1
+    if args.default_model is not None and args.default_model not in _MODEL_ORDER:
+        print(
+            f"classify_tier: ignoring unknown default model {args.default_model!r}",
+            file=sys.stderr,
+        )
     try:
         raw_files = Path(args.files_file).read_text(encoding="utf-8")
         text = Path(args.text_file).read_text(encoding="utf-8")

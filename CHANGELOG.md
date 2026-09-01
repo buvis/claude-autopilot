@@ -12,7 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **plan-tasks**: opus is assigned per task on a public-contract edit or
   concrete algorithmic risk, PRD-wide keywords, file count and token count no
   longer promote, test ports and packaging pin to Sonnet, and every task
-  records `tier_reason`.
+  records `tier_reason`. The classifier CLI rejects a negative `--lines`
+  rather than letting it satisfy the cheap tier's size bound, and the
+  unknown-`default_model` warning is emitted by the CLI so the classifier
+  core stays free of side effects.
 
 ## [0.3.0] - 2026-09-01
 
