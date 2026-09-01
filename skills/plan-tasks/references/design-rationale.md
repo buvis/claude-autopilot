@@ -47,15 +47,13 @@ gone. `classify_tier.py` decides the tier now, from the task's own file slice
 and the two facts step 4.7 makes the planner assert with evidence.
 
 Three things were wrong with it. **The scan read the whole PRD body, so one
-word anywhere in a PRD promoted every task in that PRD.** A PRD whose
-background says "this replaces the design we introduced in 00042" routed its
-README edit to opus. **The words are ordinary English.** "Introduce a flag",
-"migrate the import", `concurrency` sitting in a quoted docstring: none of
-them describes work a cheaper tier would get wrong, and a planner cannot tell
-the difference by matching the string. **File count and token count measure
-size, not risk.** A wide, boring rename is wide and boring; opus buys judgment
-about contracts, algorithms and shared state, and neither clause asks about
-any of those.
+word anywhere in a PRD promoted every task in that PRD.** **The words are
+ordinary English.** "Introduce a flag", "migrate the import", `concurrency`
+sitting in a quoted docstring: none of them describes work a cheaper tier
+would get wrong, and a planner cannot tell the difference by matching the
+string. **File count and token count measure size, not risk.** A wide, boring
+rename is wide and boring; opus buys judgment about contracts, algorithms and
+shared state, and neither clause asks about any of those.
 
 The bill was real. One 12-task run classified test ports and packaging edits
 as opus and paid the full pipeline on each: the opus rate, Devon's adversarial

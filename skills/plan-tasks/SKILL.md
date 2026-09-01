@@ -262,7 +262,7 @@ The command prints one JSON line, `{"model": "<tier>", "tier_reason": "<reason>"
 
 **Legal `tier_reason` values.** The classifier emits exactly one of `test_port`, `packaging`, `contract`, `algorithmic_risk`, `mechanical`, `default` or `floor`; any other value in a plan is corrupt state, not a new reason.
 
-**What the classifier does with those inputs**, in precedence order: a file slice that is all test paths gives `sonnet` / `test_port`, and a slice that is all test or packaging paths gives `sonnet` / `packaging`. Those two come first, so an externally consumed manifest is still packaging work, and a test file whose text mentions concurrency is still a test port. Then `contract_edit` gives `opus` / `contract`, and `algorithmic_risk` gives `opus` / `algorithmic_risk`. Then the mechanical row gives `haiku` / `mechanical`, and everything left gives `sonnet` / `default`. Last, the `default_model` floor raises the tier when the floor is higher, reporting `floor` when it does.
+**What the classifier does with those inputs**, in precedence order: a file slice that is all test paths gives `sonnet` / `test_port`, and a slice that is all test or packaging paths gives `sonnet` / `packaging`. Then `contract_edit` gives `opus` / `contract`, and `algorithmic_risk` gives `opus` / `algorithmic_risk`. Then the mechanical row gives `haiku` / `mechanical`, and everything left gives `sonnet` / `default`. Last, the `default_model` floor raises the tier when the floor is higher, reporting `floor` when it does.
 
 **The mechanical signal list was widened once and the widening was withdrawn (PRD 00075).**
 See `references/design-rationale.md` for the counterexamples and why a future widening must move a different axis than the verb.
@@ -274,8 +274,6 @@ See `references/design-rationale.md` for the counterexamples and why a future wi
 | `legacy` | The pre-00075 row verbatim: `files_touched ≤ 2` AND est. lines-changed `≤ 50` AND task text matches one of exactly these nine signals: `add log`, `rename`, `add test for`, `port`, `mirror`, `inline`, `extract constant`, `update import`, `bump version` |
 | `sonnet` | Alias for `legacy` |
 | absent, empty, or any other value | The current mechanical row. An invalid non-empty value logs one warning line before falling back to it |
-
-Both rows once ended in an "and no escalation trigger present" clause. It is dropped as redundant: the two facts are settled ahead of the mechanical row, so a task carrying either is already `opus` and never reaches that row.
 
 **The knob is currently a no-op, deliberately.** Because the widening was withdrawn (above), the `legacy` row and the current mechanical row are identical, so every `_PLAN_TASKS_FLOOR` value names the same row. It ships anyway as the kill-switch the next widening attempt will need: the moment a defensible widened row lands, `_PLAN_TASKS_FLOOR=legacy` reverts to the nine signals above without editing rules. Do not delete it as dead config, and do not assume it is exercised: it has no behavioral test until a widening exists to revert.
 
