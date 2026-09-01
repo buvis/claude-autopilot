@@ -414,7 +414,20 @@ def test_step_4_7_keeps_its_keepers_when_the_rules_table_retires() -> None:
         )
 
 
-def test_step_4_6_exempts_risky_tasks_instead_of_opus_signals() -> None:
+# The sentence stating the exemption's effect, matched once: the three
+# direction pins below all judge that same clause. A missing sentence is
+# pinned by `test_step_4_6_states_the_exemption_effect_in_live_prose`; the
+# direction pins then read an empty clause, and say nothing about a sentence
+# that is not there.
+_EXEMPTION = re.search(
+    r"[^.]{0,300}not split for eligibility[^.]{0,300}",
+    _STEP_4_6_PROSE,
+    re.IGNORECASE,
+)
+_EXEMPTION_CLAUSE = _EXEMPTION.group(0) if _EXEMPTION else ""
+
+
+def test_step_4_6_drops_the_retired_opus_signal_pointer() -> None:
     # Step 4.6's eligibility split is skipped on risk now. The old exemption
     # pointed at Rule 1's signal list; with that list retired, a surviving
     # pointer aims at nothing and the exemption silently never fires.
@@ -429,6 +442,9 @@ def test_step_4_6_exempts_risky_tasks_instead_of_opus_signals() -> None:
         "step 4.7. There is no such list after PRD 00160 - the exemption "
         "reads the two per-task facts instead."
     )
+
+
+def test_step_4_6_names_both_risk_facts_as_exempting() -> None:
     for fact in ("contract_edit", "algorithmic_risk"):
         assert fact in _STEP_4_6, (
             f"{_SKILL_MD}: step 4.6 never names `{fact}` as a fact that "
@@ -436,51 +452,61 @@ def test_step_4_6_exempts_risky_tasks_instead_of_opus_signals() -> None:
             "gets split into qwen-sized pieces, which is exactly the work "
             "the exemption exists to keep whole."
         )
-    exemption = re.search(
-        r"[^.]{0,300}not split for eligibility[^.]{0,300}",
-        _STEP_4_6_PROSE,
-        re.IGNORECASE,
-    )
-    assert exemption, (
+
+
+def test_step_4_6_states_the_exemption_effect_in_live_prose() -> None:
+    assert _EXEMPTION, (
         f"{_SKILL_MD}: step 4.6 no longer states the exemption's effect "
         "('not split for eligibility') in live prose, so nothing says what "
         "carrying a risk fact actually does to the task."
     )
-    # The exemption is a RELATION, and the wrong direction reads almost the
-    # same: "a task carrying neither fact is not split" exempts everything,
-    # since the facts are absent by default. Pin the direction: the sentence
-    # that states the effect has to hang it on a fact being present.
-    clause = exemption.group(0)
+
+
+# The exemption is a RELATION, and the wrong direction reads almost the same:
+# "a task carrying neither fact is not split" exempts everything, since the
+# facts are absent by default. The three pins below hold the direction: the
+# sentence stating the effect has to hang it on a fact being present.
+def test_step_4_6_names_the_fact_that_triggers_the_exemption() -> None:
     assert re.search(
         r"contract_edit|algorithmic_risk|\bfact|\brisk",
-        clause,
+        _EXEMPTION_CLAUSE,
         re.IGNORECASE,
     ), (
-        f"{_SKILL_MD}: step 4.6's exemption sentence ({clause.strip()[:90]!r}) "
+        f"{_SKILL_MD}: step 4.6's exemption sentence "
+        f"({_EXEMPTION_CLAUSE.strip()[:90]!r}) "
         "never says which fact triggers it. Named a paragraph away, the "
         "effect reads as unconditional and every task skips the split."
     )
+
+
+def test_step_4_6_keys_the_exemption_on_the_fact_being_present() -> None:
     assert re.search(
         r"\b(?:either|both|carries|carrying|carry|with|true|any of|one of)\b",
-        clause,
+        _EXEMPTION_CLAUSE,
         re.IGNORECASE,
     ), (
         f"{_SKILL_MD}: step 4.6's exemption sentence "
-        f"({clause.strip()[:90]!r}) never states that the fact is PRESENT. "
-        "The exemption fires on a risk fact being true; without that, the "
-        "condition is anyone's guess."
+        f"({_EXEMPTION_CLAUSE.strip()[:90]!r}) never states that the fact is "
+        "PRESENT. The exemption fires on a risk fact being true; without "
+        "that, the condition is anyone's guess."
     )
+
+
+def test_step_4_6_rejects_an_exemption_stated_in_the_negative() -> None:
     assert not re.search(
         r"\b(?:neither|nor|without|absent|lacks|false|unless)\b",
-        clause,
+        _EXEMPTION_CLAUSE,
         re.IGNORECASE,
     ), (
         f"{_SKILL_MD}: step 4.6's exemption sentence "
-        f"({clause.strip()[:90]!r}) is stated in the negative, which inverts "
-        "it: tasks carry neither fact by default, so an exemption keyed on "
-        "their ABSENCE skips the eligibility split for every task and qwen "
-        "gets nothing."
+        f"({_EXEMPTION_CLAUSE.strip()[:90]!r}) is stated in the negative, "
+        "which inverts it: tasks carry neither fact by default, so an "
+        "exemption keyed on their ABSENCE skips the eligibility split for "
+        "every task and qwen gets nothing."
     )
+
+
+def test_step_4_6_keeps_the_context_budget_trigger() -> None:
     assert "estimated_tokens > THRESHOLD" in _STEP_4_6, (
         f"{_SKILL_MD}: step 4.6's context-budget trigger lost its "
         "`estimated_tokens > THRESHOLD` condition. PRD 00160 changes the "
