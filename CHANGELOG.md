@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **plan-tasks**: opus is assigned per task on a public-contract edit or
+  concrete algorithmic risk, PRD-wide keywords, file count and token count no
+  longer promote, test ports and packaging pin to Sonnet, and every task
+  records `tier_reason`.
+
 ## [0.3.0] - 2026-09-01
 
 ### Added
