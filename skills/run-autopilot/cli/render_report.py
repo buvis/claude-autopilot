@@ -346,16 +346,18 @@ def _implementor_mix(state: dict) -> list[str]:
     probe = state.get("codex_probe") or {}
     batch_id = (state.get("batch") or {}).get("id")
     if not probe or probe.get("batch_id") != batch_id:
-        lines.append("codex probe: not run")
+        probe_line = "codex probe: not run"
     elif probe.get("verdict") == "unhealthy":
-        lines.append(
+        probe_line = (
             f"codex probe: unhealthy (backend: {probe.get('backend')}; "
-            f"detail: {probe.get('detail')})",
+            f"detail: {probe.get('detail')})"
         )
     else:
-        lines.append(
-            f"codex probe: {probe.get('verdict')} (backend: {probe.get('backend')})",
-        )
+        probe_line = f"codex probe: {probe.get('verdict')} (backend: {probe.get('backend')})"
+    hook_doctor = probe.get("hook_doctor")
+    if hook_doctor:
+        probe_line += f"; hooks: {hook_doctor}"
+    lines.append(probe_line)
 
     breaker = state.get("qwen_breaker") or {}
     if not breaker.get("tripped"):
