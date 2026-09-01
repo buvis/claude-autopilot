@@ -12,6 +12,7 @@ import argparse
 import importlib.util
 import json
 import sys
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 
@@ -51,11 +52,12 @@ _PACKAGING_BASENAMES = frozenset(
         "mise.toml",
         ".mise.toml",
         ".tool-versions",
-        "requirements.txt",
-        "requirements-dev.txt",
-        "requirements-test.txt",
     },
 )
+
+# Requirements files vary by suffix (`-dev`, `-test`, `-prod`, …), so the
+# basename is matched against a glob rather than a closed list.
+_PACKAGING_BASENAME_GLOB = "requirements*.txt"
 
 # Phrases that buy the cheap tier. Closed list, matched as substrings of the
 # lowercased text: adding one is a routing decision, not a wording tweak.
@@ -82,7 +84,10 @@ def is_packaging_path(path: str) -> bool:
     segments = path.split("/")
     if ".claude-plugin" in segments:
         return True
-    return segments[-1] in _PACKAGING_BASENAMES
+    return segments[-1] in _PACKAGING_BASENAMES or fnmatchcase(
+        segments[-1],
+        _PACKAGING_BASENAME_GLOB,
+    )
 
 
 def classify(
@@ -114,7 +119,7 @@ def _tier_from_shape(
 ) -> tuple[str, str]:
     if files and all(is_test_path(path) for path in files):
         return "sonnet", "test_port"
-    if files and all(is_packaging_path(path) for path in files):
+    if files and all(is_test_path(path) or is_packaging_path(path) for path in files):
         return "sonnet", "packaging"
     if contract_edit:
         return "opus", "contract"
