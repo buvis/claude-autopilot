@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **use-codex**: `codex_hook_doctor.py check` validates every target registered
+  in `~/.codex/hooks.json` against the canonical plugin sources that own it,
+  reporting `ok`/`stale`/`no_canonical`/`missing`/`empty`/`syntax_error` per
+  target with a summary line and an exit code a batch probe can branch on.
+
 ### Changed
 
 - **plan-tasks**: opus is assigned per task on a public-contract edit or
