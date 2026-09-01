@@ -195,9 +195,22 @@ A JSON array:
   no exact command is NOT queued** — it stays a normal finding and follows
   today's classification. Rubric rule D3 already requires a VERIFY item to name
   its exact check, so a vague one is a rubric failure, not a queue entry.
-- `source` is `"bob"` or `"eve"` — the doubt lens that raised it.
+- **A queued command must be a project verification command** — a test, lint,
+  build, type-check or project-defined check, the same shapes step 7 already
+  runs. One command: no `&&`/`;`/`|` chaining, no redirection, no substitution,
+  no `rm`/`curl`/`git push` or any other state change. The writer composes these
+  from reviewer text, and reviewer text is derived from the diff and the PRD, so
+  **anything else is not queued** — it stays a normal finding and is reported as
+  refused. The runner enforces the same rule and skips what it would not run
+  (`work/references/final-verification.md` § Queued verification checks).
+- `source` names the lens that raised it: `"bob"`, `"eve"`, or — when a fallback
+  lane produced the doubt output — the principal it stood in for (Bob's Claude
+  fallback is `"bob"`, Eve's Claude substitute is `"eve"`), matching the
+  `{agent}-output-{id}.txt` convention step 6 already uses.
 - `result` is absent until the work phase runs the check, and is the only field
-  the work phase writes.
+  the work phase writes. Its `exit` is the command's integer exit code, or the
+  string `"timeout"` for a check that blew its budget — never a number for a
+  command that returned no verdict.
 
 **Reader tolerance:** an absent queue file means no checks. It is never an
 error — a first-pass build phase has no review behind it and reads nothing. A

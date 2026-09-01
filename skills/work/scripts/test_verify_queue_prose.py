@@ -202,7 +202,7 @@ def test_a_queued_finding_creates_no_task_and_is_recorded_anyway() -> None:
         "phase-review.md no longer names the queue file the VERIFY row matches "
         "findings against."
     )
-    assert "no `task-add` call" in phase_review, (
+    assert "creates no task" in phase_review, (
         "phase-review.md no longer states that a routed finding creates no "
         "task - the duplicate suite run comes straight back."
     )
@@ -240,6 +240,135 @@ def test_the_tail_sweep_does_not_re_task_a_routed_finding() -> None:
         "phase-review.md Tail sweep § Select no longer excludes findings routed "
         "to verification, so the sweep re-creates the task the VERIFY row "
         "declined to create."
+    )
+
+
+def test_zero_tasks_is_delivered_where_tasks_are_actually_created() -> None:
+    # Phase 5's routing row runs AFTER review step 7 has already called
+    # task-add, so the row alone cannot deliver the PRD's "zero tasks". The
+    # exclusion has to live in step 7 as well, or an all-VERIFY cycle still
+    # creates the rework task whose work pass re-runs the whole suite.
+    review = _REVIEW_SKILL.read_text()
+
+    assert "Skip every finding this cycle queued for verification" in review, (
+        "review-work-completion/SKILL.md step 7 no longer skips queued findings, "
+        "so it creates the task Phase 5 then declines to create - and step 7 "
+        "runs first, so the task wins."
+    )
+    assert "CRITICAL or HIGH is not skipped" in review, (
+        "review-work-completion/SKILL.md step 7 no longer exempts CRITICAL and "
+        "HIGH from the skip. They are never routed, so they must keep getting "
+        "their task."
+    )
+
+
+def test_a_critical_or_high_is_never_routed() -> None:
+    # Without this bound the row collides with the invariant above it ("every
+    # CRITICAL lands in deferred_decisions the cycle it is raised") and with the
+    # convergence test, and a CRITICAL could finalize with its check unrun.
+    phase_review = _PHASE_REVIEW.read_text()
+
+    assert "A CRITICAL or HIGH is never routed" in phase_review, (
+        "phase-review.md lost the severity bound on the routing row. A routed "
+        "CRITICAL bypasses deferred_decisions and can converge unresolved."
+    )
+    assert "Medium and Low only" in phase_review, (
+        "phase-review.md's routing row no longer states which severities it "
+        "covers, which is what makes 'never blocks convergence' true rather "
+        "than a contradiction."
+    )
+
+
+def test_routing_matches_on_judgment_not_verbatim_text() -> None:
+    # consolidate_findings.py folds paraphrases onto the first-seen wording, so
+    # a verbatim match fails precisely on the multi-reviewer findings - the
+    # duplicate task returns exactly where consensus is highest.
+    phase_review = _PHASE_REVIEW.read_text()
+
+    assert "judgment call on issue text plus file" in phase_review, (
+        "phase-review.md's routing row no longer matches findings the way the "
+        "Cap check matches settled deferrals. Verbatim identity misses every "
+        "paraphrased consensus finding."
+    )
+
+
+def test_a_failed_check_has_a_reader_in_the_next_cycle() -> None:
+    # "Comes back through the normal path" was a phrase with no mechanism: the
+    # result field was written and never read anywhere.
+    review = _REVIEW_SKILL.read_text()
+    phase_review = _PHASE_REVIEW.read_text()
+
+    assert "Carry the previous cycle's failed checks forward" in review, (
+        "review-work-completion/SKILL.md no longer reads the previous cycle's "
+        "queue, so a red check is written to a file nothing reads and the next "
+        "cycle converges over it."
+    )
+    assert "`result.exit` is non-zero" in review, (
+        "review-work-completion/SKILL.md no longer names the field that decides "
+        "which prior-cycle entries become findings."
+    )
+    assert "verify-escape" in phase_review, (
+        "phase-review.md lost the sweep-path sink. The tail sweep runs step 7 "
+        "after convergence and Phase 5 never reopens, so a red check there has "
+        "no next cycle and must be deferred to batch end."
+    )
+
+
+def test_a_queued_command_is_treated_as_untrusted_input() -> None:
+    # The command text is composed by a reviewer from the diff and the PRD, and
+    # step 7 would otherwise run it verbatim. Both ends state the constraint:
+    # the writer refuses to queue it, the runner refuses to run it.
+    verification = _FINAL_VERIFICATION.read_text()
+    formats = _OUTPUT_FORMATS.read_text()
+
+    assert "untrusted input" in verification, (
+        "references/final-verification.md no longer treats a queued command as "
+        "untrusted, leaving a path from reviewed repository content to a "
+        "verbatim Bash execution."
+    )
+    # Both ends state the rule, each with its own wording: the runner gates
+    # before executing, the writer refuses to queue. One end alone is not
+    # enforcement - the queue would still carry what the runner declines, or the
+    # runner would still execute what the writer let through.
+    assert "Check the command before running it" in verification, (
+        "references/final-verification.md lost the runner-side command gate, so "
+        "step 7 executes whatever the queue holds."
+    )
+    assert "must be a project verification command" in formats, (
+        "output-formats.md lost the writer-side command-shape rule, so anything "
+        "a reviewer writes can reach the queue."
+    )
+    assert "exit refused" in verification, (
+        "references/final-verification.md no longer reports a refused command. "
+        "A check that was declined must be visible, not silently dropped."
+    )
+
+
+def test_a_command_with_no_verdict_never_records_a_number() -> None:
+    # The report line says `exit timeout` but the JSON shape said {"exit": <n>},
+    # so the writer had to invent a value - and any number reads as a verdict.
+    verification = _FINAL_VERIFICATION.read_text()
+    formats = _OUTPUT_FORMATS.read_text()
+
+    assert '`"timeout"`' in formats, (
+        "output-formats.md no longer states what result.exit holds for a "
+        "timed-out check, so a budget-blown command gets an invented number."
+    )
+    assert '`"exit": "timeout"`, never a number' in verification, (
+        "references/final-verification.md no longer forbids recording a numeric "
+        "exit for a command that returned no verdict."
+    )
+
+
+def test_counts_after_a_fix_cycle_are_null_unless_the_suite_re_ran() -> None:
+    # The regression loop re-runs only the failing commands, so the full-suite
+    # counts belong to a pre-fix HEAD. Recording them against the final sha is
+    # exactly the stale reuse the sha gate exists to prevent.
+    verification = _FINAL_VERIFICATION.read_text()
+
+    assert "unless the whole suite re-ran clean at the final HEAD" in verification, (
+        "references/final-verification.md lost the post-fix-cycle rule. The "
+        "review would reuse pre-fix counts against the fixed tree."
     )
 
 

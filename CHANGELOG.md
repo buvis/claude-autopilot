@@ -15,8 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   answer it; the check now runs beside the suite that was about to be
   duplicated, and the phase report carries one `verify_check: <command> -> exit
   <n>` line per check. A non-zero exit is evidence, not a phase failure - it
-  reaches the next review cycle as an open finding. With no queue file present,
-  which is every first-pass build, nothing runs and nothing is reported.
+  reaches the next review cycle as an open finding. A queued command is checked
+  before it runs (a single test, lint, build or project check; no chaining,
+  redirection or state change) and one that fails the check is refused and
+  reported rather than executed - the command text is composed by a reviewer
+  from the diff and the PRD, so it is untrusted input. With no queue file
+  present, which is every first-pass build, nothing runs and nothing is
+  reported.
 - **work**: the final verification step records what it ran to
   `dev/local/autopilot/last-verification.json` - the HEAD sha, each command and
   its exit code, and the pass/fail/skip counts. A suite whose output carries no
@@ -74,10 +79,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **review-work-completion**: a doubt-lens finding that names an exact check to
-  run is now queued for the work phase instead of becoming a rework task. The
-  queue is a per-cycle JSON file beside the review files; a VERIFY item that
-  names no exact command is not queued and is classified exactly as before.
+- **review-work-completion**: a Medium or Low doubt-lens finding that names an
+  exact check to run is now queued for the work phase instead of becoming a
+  rework task, and follow-up task creation skips it. The queue is a per-cycle
+  JSON file beside the review files. A CRITICAL or HIGH is never routed - it
+  keeps its task and still blocks convergence - and a VERIFY item that names no
+  exact command is not queued and is classified exactly as before. A queued
+  check that comes back non-zero is read from the previous cycle's queue and
+  becomes an ordinary finding, so a red check cannot be converged over.
 - **review-work-completion**: the review's `Tests:` line is composed from the
   work phase's recorded verification run when that record's sha matches the
   reviewed HEAD and its counts parsed, instead of running the same suite a
