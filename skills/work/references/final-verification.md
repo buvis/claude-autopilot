@@ -48,6 +48,34 @@ attempted at all.
    block. Never report a timed-out command as a green one, and never silently
    retry it a third time.
 
+## Recorded verification result
+
+At the end of this step, write `dev/local/autopilot/last-verification.json` with
+the **Write tool**, replacing any prior content:
+
+```json
+{
+  "sha": "<git rev-parse HEAD at the time of the run>",
+  "cycle": <state.cycle, or null when no review cycle is in flight>,
+  "commands": [{"command": "<as run>", "exit": <code>}],
+  "passed": <int>, "failed": <int>, "skipped": <int>
+}
+```
+
+**Single writer:** this step. **Single reader:** `review-work-completion` step 6,
+which composes the review file's `Tests:` line from the record when its `sha`
+equals the reviewed HEAD and the three counts are non-null. That record is what
+replaces the review's own second run of the same suite.
+
+- The counts come from the runner's own summary line. A suite whose output
+  carries **no parseable counts records `null` for all three** — the reader then
+  runs the suite itself rather than guessing.
+- A phase that ran no suite writes the file with an empty `commands` array. The
+  reader treats that exactly like an absent file.
+- Write it whatever the outcome — a failed command, a timed-out one, an
+  improvised suite. The record says what ran; the exit codes carry the verdict.
+  Never omit the file to hide a red run.
+
 ## Handling failures at this step
 
 1. Identify which task(s) introduced the regression. The failing test output usually points at a specific module; cross-reference against the task commits.
