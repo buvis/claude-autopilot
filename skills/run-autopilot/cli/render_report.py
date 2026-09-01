@@ -186,7 +186,8 @@ def _is_open(entry: dict) -> bool:
 
 
 def _merge_deferral_sinks(
-    state_deferrals: list[dict], json_items: list[dict]
+    state_deferrals: list[dict],
+    json_items: list[dict],
 ) -> list[dict]:
     """Union of both deferral sinks for one PRD: open entries deduplicated on
     normalized issue text, state entries first. A cap-overflow record with
@@ -201,7 +202,9 @@ def _merge_deferral_sinks(
             entry.get("disposition") or entry.get("reason")
         ):
             detail = ", ".join(
-                f"{k} {entry[k]}" for k in ("cycle", "consensus") if entry.get(k) is not None
+                f"{k} {entry[k]}"
+                for k in ("cycle", "consensus")
+                if entry.get(k) is not None
             )
             reason = "rework cap reached with this finding unresolved"
             entry = {**entry, "reason": f"{reason} ({detail})" if detail else reason}
@@ -209,7 +212,9 @@ def _merge_deferral_sinks(
     return list(merged.values())
 
 
-def missing_from_report(report_text: str, json_items: list[dict], prd: str) -> list[dict]:
+def missing_from_report(
+    report_text: str, json_items: list[dict], prd: str
+) -> list[dict]:
     """The open deferred-JSON items for `prd` whose issue text does not
     occur in `report_text` (both normalized the way the table renders
     them). An item without issue text is always missing: it cannot be
@@ -276,13 +281,7 @@ def _rubric_verdicts(verdicts: list[dict]) -> list[str]:
     return ["### Doubt Rubric Verdicts", ""] + _table(["Rule", "Verdict"], rows) + [""]
 
 
-def _implementor_mix(state: dict) -> list[str]:
-    tasks = state.get("tasks") or []
-    lines = ["### Implementor Mix", ""]
-    if not tasks:
-        return lines + ["no implementor data", ""]
-
-    attempts = [a for t in tasks for a in (t.get("attempts") or [])]
+def _implementor_table(attempts: list[dict]) -> list[str]:
     counts: dict[str, int] = {}
     for attempt in attempts:
         counts[attempt.get("implementor") or "unknown"] = (
@@ -291,25 +290,29 @@ def _implementor_mix(state: dict) -> list[str]:
     order = ["claude", "qwen", "gemini", "codex", "unknown"]
     rows = [[name, counts[name]] for name in order if counts.get(name)]
     rows += [[name, n] for name, n in counts.items() if name not in order]
-    lines += _table(["Implementor", "Attempts"], rows) + [""]
+    return _table(["Implementor", "Attempts"], rows) + [""]
 
+
+def _preflight_outcomes_line(attempts: list[dict]) -> str | None:
     preflight: dict[str, int] = {}
     for attempt in attempts:
         outcome = attempt.get("preflight_outcome")
         if outcome is not None:
             preflight[outcome] = preflight.get(outcome, 0) + 1
-    if preflight:
-        ordered = [o for o in _PREFLIGHT_ORDER if o in preflight] + sorted(
-            o for o in preflight if o not in _PREFLIGHT_ORDER
-        )
-        lines.append(
-            "Qwen preflight outcomes: "
-            + ", ".join(f"{o} {preflight[o]}" for o in ordered),
-        )
+    if not preflight:
+        return None
+    ordered = [o for o in _PREFLIGHT_ORDER if o in preflight] + sorted(
+        o for o in preflight if o not in _PREFLIGHT_ORDER
+    )
+    return "Qwen preflight outcomes: " + ", ".join(
+        f"{o} {preflight[o]}" for o in ordered
+    )
 
-    # Exclusion line: two populations sharing one line (batch-report format
-    # § Exclusion line) — plan-time buckets over ineligible tasks, then
-    # dispatch-time memory reroutes deduplicated by task.
+
+def _exclusion_line(tasks: list[dict]) -> str | None:
+    """Exclusion line: two populations sharing one line (batch-report format
+    § Exclusion line) — plan-time buckets over ineligible tasks, then
+    dispatch-time memory reroutes deduplicated by task."""
     plan: dict[str, int] = {}
     for task in tasks:
         if not task.get("qwen_eligible"):
@@ -327,22 +330,23 @@ def _implementor_mix(state: dict) -> list[str]:
         )
         if hit:
             dispatch[bucket] = hit
-    if plan or dispatch:
-        ordered = [b for b in _PLAN_EXCLUSION_ORDER if b in plan] + sorted(
-            b for b in plan if b not in _PLAN_EXCLUSION_ORDER
-        )
-        plan_part = (
-            ", ".join(f"{b} {plan[b]}" for b in ordered) + " (plan-time)"
-            if plan
-            else "none (plan-time)"
-        )
-        dispatch_part = (
-            ", ".join(f"{b} {n}" for b, n in dispatch.items()) if dispatch else "none"
-        )
-        lines.append(
-            f"Excluded from qwen: {plan_part}; dispatch-time reroutes: {dispatch_part}",
-        )
+    if not (plan or dispatch):
+        return None
+    ordered = [b for b in _PLAN_EXCLUSION_ORDER if b in plan] + sorted(
+        b for b in plan if b not in _PLAN_EXCLUSION_ORDER
+    )
+    plan_part = (
+        ", ".join(f"{b} {plan[b]}" for b in ordered) + " (plan-time)"
+        if plan
+        else "none (plan-time)"
+    )
+    dispatch_part = (
+        ", ".join(f"{b} {n}" for b, n in dispatch.items()) if dispatch else "none"
+    )
+    return f"Excluded from qwen: {plan_part}; dispatch-time reroutes: {dispatch_part}"
 
+
+def _probe_line(state: dict) -> str:
     probe = state.get("codex_probe") or {}
     batch_id = (state.get("batch") or {}).get("id")
     if not probe or probe.get("batch_id") != batch_id:
@@ -353,23 +357,47 @@ def _implementor_mix(state: dict) -> list[str]:
             f"detail: {probe.get('detail')})"
         )
     else:
-        probe_line = f"codex probe: {probe.get('verdict')} (backend: {probe.get('backend')})"
+        probe_line = (
+            f"codex probe: {probe.get('verdict')} (backend: {probe.get('backend')})"
+        )
     hook_doctor = probe.get("hook_doctor")
     if hook_doctor:
         probe_line += f"; hooks: {hook_doctor}"
-    lines.append(probe_line)
+    return probe_line
 
+
+def _breaker_line(state: dict, attempts: list[dict]) -> str:
     breaker = state.get("qwen_breaker") or {}
     if not breaker.get("tripped"):
-        lines.append("capability breaker: not tripped")
-    else:
-        failed = breaker.get("failed_tasks") or ["?", "?"]
-        rerouted = sum(1 for a in attempts if a.get("breaker_skipped"))
-        lines.append(
-            f"capability breaker: tripped after {breaker.get('after_task')} "
-            f"(2 consecutive gate failures: {failed[0]}, {failed[1]}); "
-            f"{rerouted} tasks rerouted",
-        )
+        return "capability breaker: not tripped"
+    failed = breaker.get("failed_tasks") or ["?", "?"]
+    rerouted = sum(1 for a in attempts if a.get("breaker_skipped"))
+    return (
+        f"capability breaker: tripped after {breaker.get('after_task')} "
+        f"(2 consecutive gate failures: {failed[0]}, {failed[1]}); "
+        f"{rerouted} tasks rerouted"
+    )
+
+
+def _implementor_mix(state: dict) -> list[str]:
+    tasks = state.get("tasks") or []
+    lines = ["### Implementor Mix", ""]
+    if not tasks:
+        return lines + ["no implementor data", ""]
+
+    attempts = [a for t in tasks for a in (t.get("attempts") or [])]
+    lines += _implementor_table(attempts)
+
+    preflight_line = _preflight_outcomes_line(attempts)
+    if preflight_line:
+        lines.append(preflight_line)
+
+    exclusion_line = _exclusion_line(tasks)
+    if exclusion_line:
+        lines.append(exclusion_line)
+
+    lines.append(_probe_line(state))
+    lines.append(_breaker_line(state, attempts))
     lines.append("")
     return lines
 
