@@ -22,6 +22,7 @@ _SCRIPTS = Path(__file__).resolve().parent
 _WORK = _SCRIPTS.parent
 _SKILLS = _WORK.parent
 _FINAL_VERIFICATION = _WORK / "references" / "final-verification.md"
+_PHASE_REVIEW = _SKILLS / "run-autopilot" / "references" / "phase-review.md"
 _REVIEW = _SKILLS / "review-work-completion"
 _OUTPUT_FORMATS = _REVIEW / "references" / "output-formats.md"
 _REVIEW_SKILL = _REVIEW / "SKILL.md"
@@ -183,6 +184,62 @@ def test_the_tests_line_reuse_is_gated_on_the_sha_and_says_which_path_ran() -> N
         "from the provenance suffix. `cli/gate.py` TESTS_RE admits a suffix "
         "after the counts but none after 'none (docs-only)', so suffixing that "
         "form fails check_review_file.py."
+    )
+
+
+def test_a_queued_finding_creates_no_task_and_is_recorded_anyway() -> None:
+    # Both halves are the point. No task is the saving; the autonomous_decisions
+    # record is what keeps a check that never ran - a cycle that queues and then
+    # converges - visible in the batch report instead of silently dropped.
+    phase_review = _PHASE_REVIEW.read_text()
+
+    assert "routed to verification" in phase_review, (
+        "phase-review.md Phase 5 has no 'routed to verification' row, so a "
+        "queued VERIFY finding falls back to becoming an implementation task "
+        "whose work pass re-runs the same suite."
+    )
+    assert "checks-{cycle}.json" in phase_review, (
+        "phase-review.md no longer names the queue file the VERIFY row matches "
+        "findings against."
+    )
+    assert "no `task-add` call" in phase_review, (
+        "phase-review.md no longer states that a routed finding creates no "
+        "task - the duplicate suite run comes straight back."
+    )
+    assert "`autonomous_decisions`" in phase_review, (
+        "phase-review.md no longer records the routing in autonomous_decisions, "
+        "so a queued check that never runs leaves no trace in the batch report."
+    )
+
+
+def test_routing_changes_neither_convergence_nor_any_lens() -> None:
+    # This PRD removes a duplicate execution, not a review. Without these two
+    # sentences the row reads as licence to converge over open VERIFY items or
+    # to drop a lens, which is the thinning the plan forbids.
+    phase_review = _PHASE_REVIEW.read_text()
+
+    assert "neither blocks convergence nor suppresses one" in phase_review, (
+        "phase-review.md lost the rule that a queued check does not affect the "
+        "convergence test in either direction."
+    )
+    assert "none is removed, skipped or narrowed" in phase_review, (
+        "phase-review.md lost the statement that every lens still runs. The "
+        "routing row must never read as permission to thin the panel."
+    )
+
+
+def test_the_tail_sweep_does_not_re_task_a_routed_finding() -> None:
+    # The sweep is the other path to a task. Excluded in the row but not in the
+    # sweep, a routed Medium/Low would be swept into the very [D{cycle}] task
+    # the routing exists to avoid.
+    phase_review = _PHASE_REVIEW.read_text()
+
+    assert "findings routed to verification (their check runs in step 7" in (
+        phase_review
+    ), (
+        "phase-review.md Tail sweep § Select no longer excludes findings routed "
+        "to verification, so the sweep re-creates the task the VERIFY row "
+        "declined to create."
     )
 
 
