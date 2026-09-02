@@ -16,65 +16,59 @@ from test_codex_hook_doctor import _fake_roots, _run_cli, _write_config
 from test_codex_hook_doctor_repair import _run_repair_cli
 
 
+# name -> (canonical root key, canonical basename, stale body, canonical body).
+# Six known hooks resolve against the aegis root, one against the autopilot
+# root, and three of them are spelled differently on disk than in the config.
+_SEVEN_HOOKS = {
+    "validate_commit_msg.py": ("aegis", "validate_commit_msg.py", "validate"),
+    "_common.py": ("aegis", "_common.py", "common"),
+    "protect_config.py": ("aegis", "protect_config.py", "protect"),
+    "block_devlocal_redirects.py": (
+        "aegis",
+        "block_devlocal_redirects.py",
+        "block_devlocal",
+    ),
+    "block-suppression-markers.py": (
+        "aegis",
+        "block_suppression_markers.py",
+        "block_suppression",
+    ),
+    "gateguard-fact-force.py": ("aegis", "gateguard_fact_force.py", "gateguard"),
+    "enforce_prd_location.py": ("autopilot", "enforce_prd_location.py", "enforce"),
+}
+
+
 def _build_full_cycle_fixture(
     tmp_path: Path,
 ) -> tuple[Path, list[str], dict[str, str], dict[str, Path]]:
     hooks_dir = tmp_path / "hooks"
     hooks_dir.mkdir()
-    stale = {
-        "validate_commit_msg.py": "local_validate = 1\n",
-        "_common.py": "local_common = 1\n",
-        "protect_config.py": "local_protect = 1\n",
-        "block_devlocal_redirects.py": "local_block_devlocal = 1\n",
-        "block-suppression-markers.py": "local_block_suppression = 1\n",
-        "gateguard-fact-force.py": "local_gateguard = 1\n",
-        "enforce_prd_location.py": "local_enforce = 1\n",
-    }
-    for name, content in stale.items():
-        (hooks_dir / name).write_text(content, encoding="utf-8")
+    aegis_root, autopilot_root = _fake_roots(tmp_path)
+    roots = {"aegis": aegis_root / "hooks", "autopilot": autopilot_root / "hooks"}
+    for root in roots.values():
+        root.mkdir()
+
+    stale: dict[str, str] = {}
+    canonical_paths: dict[str, Path] = {}
+    for name, (root_key, canonical_name, stem) in _SEVEN_HOOKS.items():
+        stale[name] = f"local_{stem} = 1\n"
+        (hooks_dir / name).write_text(stale[name], encoding="utf-8")
+        canonical_paths[name] = roots[root_key] / canonical_name
+        canonical_paths[name].write_text(
+            f"canonical_{stem} = 2\n", encoding="utf-8"
+        )
 
     config_path = tmp_path / "hooks.json"
     _write_config(
         config_path,
         {
             "PreToolUse": [
-                "python3 hooks/validate_commit_msg.py",
-                "python3 hooks/protect_config.py",
-                "python3 hooks/block_devlocal_redirects.py",
-                "python3 hooks/block-suppression-markers.py",
-                "python3 hooks/gateguard-fact-force.py",
-                "python3 hooks/enforce_prd_location.py",
+                f"python3 hooks/{name}"
+                for name in _SEVEN_HOOKS
+                if name != "_common.py"
             ]
         },
     )
-
-    aegis_root, autopilot_root = _fake_roots(tmp_path)
-    aegis_hooks_dir = aegis_root / "hooks"
-    aegis_hooks_dir.mkdir()
-    autopilot_hooks_dir = autopilot_root / "hooks"
-    autopilot_hooks_dir.mkdir()
-
-    canonical_paths = {
-        "validate_commit_msg.py": aegis_hooks_dir / "validate_commit_msg.py",
-        "_common.py": aegis_hooks_dir / "_common.py",
-        "protect_config.py": aegis_hooks_dir / "protect_config.py",
-        "block_devlocal_redirects.py": aegis_hooks_dir / "block_devlocal_redirects.py",
-        "block-suppression-markers.py": aegis_hooks_dir
-        / "block_suppression_markers.py",
-        "gateguard-fact-force.py": aegis_hooks_dir / "gateguard_fact_force.py",
-        "enforce_prd_location.py": autopilot_hooks_dir / "enforce_prd_location.py",
-    }
-    canonical_content = {
-        "validate_commit_msg.py": "canonical_validate = 2\n",
-        "_common.py": "canonical_common = 2\n",
-        "protect_config.py": "canonical_protect = 2\n",
-        "block_devlocal_redirects.py": "canonical_block_devlocal = 2\n",
-        "block-suppression-markers.py": "canonical_block_suppression = 2\n",
-        "gateguard-fact-force.py": "canonical_gateguard = 2\n",
-        "enforce_prd_location.py": "canonical_enforce = 2\n",
-    }
-    for name, canonical_path in canonical_paths.items():
-        canonical_path.write_text(canonical_content[name], encoding="utf-8")
 
     cli_args = [
         "--config",
@@ -84,7 +78,6 @@ def _build_full_cycle_fixture(
         "--autopilot-root",
         str(autopilot_root),
     ]
-
     return hooks_dir, cli_args, stale, canonical_paths
 
 
