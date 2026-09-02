@@ -123,3 +123,12 @@ exactly the kind of high-impact unattended action the fence exists to block.
 Run `repair` by hand when `check` (or the codex batch health probe,
 `work/references/codex-implementor.md` § Codex batch health probe) reports
 something broken or stale.
+
+The doctor's tests are split across four files, all under
+`${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/`, to stay within the project's
+file-length limit: `test_codex_hook_doctor.py` (the `check` verb's return-value
+contract and CLI defaults), `test_codex_hook_doctor_extra.py` (`check` edge
+cases and the doc-sync prose pins), `test_codex_hook_doctor_repair.py` (the
+`repair` verb), and `test_codex_hook_doctor_repair_cycle.py` (the full
+check -> repair -> check operator cycle). Running only the first file exercises
+no repair-mode behaviour, so verify against the whole `scripts/` directory.
