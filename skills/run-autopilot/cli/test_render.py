@@ -146,7 +146,19 @@ class ReportEdgeTests(unittest.TestCase):
     def test_probe_from_another_batch_renders_not_run(self) -> None:
         state = _state()
         state["codex_probe"]["batch_id"] = "202601010000"
-        self.assertIn("codex probe: not run", render_report.prd_section(state, [], NOW))
+        text = render_report.prd_section(state, [], NOW)
+        lines = [ln for ln in text.splitlines() if ln.startswith("codex probe:")]
+        self.assertEqual(lines, ["codex probe: not run"])
+
+    def test_hook_doctor_from_another_batch_does_not_leak_into_probe_line(
+        self,
+    ) -> None:
+        state = _state()
+        state["codex_probe"]["batch_id"] = "202601010000"
+        state["codex_probe"]["hook_doctor"] = "stale: _common.py"
+        text = render_report.prd_section(state, [], NOW)
+        lines = [ln for ln in text.splitlines() if ln.startswith("codex probe:")]
+        self.assertEqual(lines, ["codex probe: not run"])
 
     def test_hook_doctor_note_appends_to_the_probe_line(self) -> None:
         state = _state()
