@@ -71,14 +71,17 @@ doctor's own summary line>"`, and `backend` as resolved by `command -v
 codex` — then skip the live probe below entirely (no codex dispatch this
 batch, infra semantics, no escalation stamp).
 
-Exit 2 (the config is unreadable, is not JSON, or has no `hooks` object): on
-this path the doctor has no targets, so it emits neither a per-target TSV
-line nor a summary line — only a single `error: <reason>` line to stderr.
-Write `codex_probe.verdict: "unhealthy"`, `detail: "hook_doctor: <the
-doctor's stderr error line>"`, `hook_doctor: "config unreadable: <config
-path>"`, and `backend` as resolved by `command -v codex` — then skip the
-live probe below entirely (no codex dispatch this batch, infra semantics, no
-escalation stamp).
+Exit 2 (the doctor itself could not run): on this path the doctor emits no
+per-target TSV line and no summary line — only a single `error: <reason>`
+line to stderr. Write `codex_probe.verdict: "unhealthy"`,
+`detail: "hook_doctor: <the doctor's stderr error line>"`,
+`hook_doctor: "doctor error: <config path>"`, and `backend` as resolved by
+`command -v codex` — then skip the live probe below entirely (no codex
+dispatch this batch, infra semantics, no escalation stamp). The causes: the
+config is missing, unreadable, not JSON, or has no `hooks` object; an event
+entry is malformed; a command does not tokenize; the plugin manifest has no
+`aegis@buvis-plugins` entry; a target I/O call failed. The stderr line names
+which.
 
 Exit 0 or 3: run the live probe unchanged below, and add
 `hook_doctor: "ok"` (exit 0) or `hook_doctor: "stale: <basenames>"` (exit 3,

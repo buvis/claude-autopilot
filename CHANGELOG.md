@@ -10,9 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **use-codex**: the hook doctor repairs a known hook that fails to compile,
-  accepts hooks with a non-UTF-8 coding cookie, and reports an unreadable
+  accepts hooks with a non-UTF-8 coding cookie, reports an unreadable
   canonical `_common.py` as unrepairable instead of aborting the whole
-  `repair` run.
+  `repair` run, and the batch probe records `doctor error:` on exit 2 (the
+  old `config unreadable:` named only one of its causes).
 
 ## [0.4.0] - 2026-09-02
 
