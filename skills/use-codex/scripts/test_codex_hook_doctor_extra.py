@@ -408,3 +408,30 @@ def test_use_codex_skill_doc_names_repair() -> None:
     )
 
     assert "repair" in doc
+
+
+def test_codex_implementor_doc_names_exit_2_detail_distinctly_from_exit_1() -> None:
+    # Exit 2 (config unreadable/not JSON/no hooks object) leaves the doctor
+    # with no targets, so it emits neither a per-target TSV line nor a
+    # summary line on that path -- only a single stderr `error: <reason>`
+    # line. The doc must map exit 2 to fields the doctor can actually
+    # produce there, distinct from the exit-1 TSV-line mapping.
+    doc = (
+        _REPO_ROOT / "skills" / "work" / "references" / "codex-implementor.md"
+    ).read_text(encoding="utf-8")
+
+    exit_1_pos = doc.find("Exit 1")
+    exit_2_pos = doc.find("Exit 2")
+    assert exit_1_pos != -1
+    assert exit_2_pos != -1
+    assert exit_1_pos < exit_2_pos
+
+    exit_1_section = doc[exit_1_pos:exit_2_pos]
+    exit_2_section = doc[exit_2_pos : exit_2_pos + 600]
+
+    assert "first broken TSV line" in exit_1_section
+    assert "doctor's own summary" in exit_1_section
+
+    assert "stderr error line" in exit_2_section
+    assert 'hook_doctor: "config unreadable:' in exit_2_section
+    assert "first broken TSV line" not in exit_2_section

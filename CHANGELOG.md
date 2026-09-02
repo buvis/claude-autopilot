@@ -71,6 +71,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   probe left over from an earlier batch. A mismatched-batch probe renders
   exactly `codex probe: not run`, so a stale note cannot be read as describing
   the current batch.
+- **work**: the doctor-first probe's exit-1 and exit-2 mappings are now stated
+  separately. Exit 2 means the config itself is unusable, so the doctor emits no
+  TSV or summary line and the probe records the stderr error line with
+  `hook_doctor: "config unreadable: <path>"`. The previous merged wording asked
+  for a "first broken TSV line" that cannot exist on that path.
 
 ## [0.3.0] - 2026-09-01
 

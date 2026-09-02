@@ -65,11 +65,22 @@ no dispatch:
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex_hook_doctor.py check
 ```
 
-Exit 1 or 2: write `codex_probe.verdict: "unhealthy"`, `detail: "hook_doctor:
-<the first broken TSV line>"`, `hook_doctor: "<the doctor's own summary
-line>"`, and `backend` as resolved by `command -v codex` — then skip the live
-probe below entirely (no codex dispatch this batch, infra semantics, no
-escalation stamp). Exit 0 or 3: run the live probe unchanged below, and add
+Exit 1 (a broken target exists): write `codex_probe.verdict: "unhealthy"`,
+`detail: "hook_doctor: <the first broken TSV line>"`, `hook_doctor: "<the
+doctor's own summary line>"`, and `backend` as resolved by `command -v
+codex` — then skip the live probe below entirely (no codex dispatch this
+batch, infra semantics, no escalation stamp).
+
+Exit 2 (the config is unreadable, is not JSON, or has no `hooks` object): on
+this path the doctor has no targets, so it emits neither a per-target TSV
+line nor a summary line — only a single `error: <reason>` line to stderr.
+Write `codex_probe.verdict: "unhealthy"`, `detail: "hook_doctor: <the
+doctor's stderr error line>"`, `hook_doctor: "config unreadable: <config
+path>"`, and `backend` as resolved by `command -v codex` — then skip the
+live probe below entirely (no codex dispatch this batch, infra semantics, no
+escalation stamp).
+
+Exit 0 or 3: run the live probe unchanged below, and add
 `hook_doctor: "ok"` (exit 0) or `hook_doctor: "stale: <basenames>"` (exit 3,
 the stale/no_canonical targets' basenames) to the slice — a stale hook copy
 does not gate the rung by itself; the live probe below still decides
