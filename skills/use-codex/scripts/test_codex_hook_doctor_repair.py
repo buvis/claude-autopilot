@@ -600,6 +600,49 @@ def test_repair_reports_unrepairable_for_a_missing_canonical_source_and_continue
     assert "Traceback" not in result.stderr
 
 
+def test_repair_reports_unrepairable_for_a_known_target_verdicted_no_canonical_and_cli_exits_3(
+    tmp_path: Path,
+) -> None:
+    # validate_commit_msg.py is present in hooks/ with valid, non-empty
+    # content -- not missing, not empty, not syntax-broken -- but its
+    # canonical source is deliberately never created under aegis_root, so
+    # check() would call this target "no_canonical". repair must not stay
+    # silent about it: it must report "unrepairable" with a detail naming
+    # why (the canonical source could not be found), leave the target's
+    # bytes exactly as they were, and the CLI must exit 3, since a
+    # no_canonical-only fixture has nothing broken but something
+    # stale-or-no-canonical.
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    target = hooks_dir / "validate_commit_msg.py"
+    target.write_text("local = 1\n", encoding="utf-8")
+    config_path = tmp_path / "hooks.json"
+    _write_config(config_path, {"PreToolUse": ["python3 hooks/validate_commit_msg.py"]})
+    aegis_root, autopilot_root = _fake_roots(tmp_path)
+    (aegis_root / "hooks").mkdir()
+    target_before = target.read_bytes()
+
+    result = _run_repair_cli(
+        [
+            "--config",
+            str(config_path),
+            "--aegis-root",
+            str(aegis_root),
+            "--autopilot-root",
+            str(autopilot_root),
+        ],
+    )
+
+    lines = [line for line in result.stdout.splitlines() if line]
+    matching = next(
+        line for line in lines if line.startswith(f"unrepairable\t{target}\t")
+    )
+    detail = matching.split("\t", 2)[2]
+    assert "canonical" in detail.lower()
+    assert target.read_bytes() == target_before == b"local = 1\n"
+    assert result.returncode == 3
+
+
 def test_repair_tolerates_a_non_utf8_sibling_py_file_while_scanning_common_py_imports(
     tmp_path: Path,
 ) -> None:
