@@ -451,3 +451,98 @@ def test_cli_repair_dry_run_exits_matching_check_and_leaves_fixture_unchanged(
     assert result.returncode == 1
     assert config_path.read_bytes() == before_config
     assert not (hooks_dir / "validate_commit_msg.py").exists()
+
+
+# ---------------------------------------------------------------------------
+# repair() — degrades gracefully instead of crashing
+# ---------------------------------------------------------------------------
+
+
+def test_repair_reports_unrepairable_for_a_missing_canonical_source_and_continues_repairing_other_targets(
+    tmp_path: Path,
+) -> None:
+    # validate_commit_msg.py is a KNOWN hook that is "missing" on disk, and
+    # its canonical source is itself absent — there is nothing to rewrite it
+    # from, so the target must be reported unrepairable rather than crashing
+    # the whole run. protect_config.py, a second KNOWN hook in the same run,
+    # is "stale" with its canonical source present and must still be
+    # repaired.
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    (hooks_dir / "protect_config.py").write_text("local = 1\n", encoding="utf-8")
+    config_path = tmp_path / "hooks.json"
+    _write_config(
+        config_path,
+        {
+            "PreToolUse": [
+                "python3 hooks/validate_commit_msg.py",
+                "python3 hooks/protect_config.py",
+            ]
+        },
+    )
+    aegis_root, autopilot_root = _fake_roots(tmp_path)
+    (aegis_root / "hooks").mkdir()
+    canonical_protect = aegis_root / "hooks" / "protect_config.py"
+    canonical_protect.write_text("canonical = 2\n", encoding="utf-8")
+
+    result = _run_repair_cli(
+        [
+            "--config",
+            str(config_path),
+            "--aegis-root",
+            str(aegis_root),
+            "--autopilot-root",
+            str(autopilot_root),
+        ],
+    )
+
+    missing_target = str(hooks_dir / "validate_commit_msg.py")
+    repaired_target = str(hooks_dir / "protect_config.py")
+    lines = [line for line in result.stdout.splitlines() if line]
+    assert any(line.startswith(f"unrepairable\t{missing_target}\t") for line in lines)
+    assert any(line.startswith(f"repaired\t{repaired_target}\t") for line in lines)
+    assert (
+        hooks_dir / "protect_config.py"
+    ).read_bytes() == canonical_protect.read_bytes()
+    assert result.returncode == 1
+    assert "Traceback" not in result.stderr
+
+
+def test_repair_tolerates_a_non_utf8_sibling_py_file_while_scanning_common_py_imports(
+    tmp_path: Path,
+) -> None:
+    # bad_sibling.py sits in the hooks directory next to a _common.py that
+    # needs repair (its bytes are stale relative to canonical). Before
+    # rewriting _common.py, repair scans every sibling *.py for
+    # "from _common import" names — bad_sibling's bytes are not valid
+    # UTF-8, so that scan must not blow up the whole run with an uncaught
+    # UnicodeDecodeError.
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    (hooks_dir / "_common.py").write_text("OLD = 1\n", encoding="utf-8")
+    (hooks_dir / "user_hook.py").write_text("X = 1\n", encoding="utf-8")
+    (hooks_dir / "bad_sibling.py").write_bytes(b"\xff\xfe\x00bad\n")
+    config_path = tmp_path / "hooks.json"
+    _write_config(config_path, {"SessionStart": ["python3 hooks/user_hook.py"]})
+    aegis_root, autopilot_root = _fake_roots(tmp_path)
+    (aegis_root / "hooks").mkdir()
+    (aegis_root / "hooks" / "_common.py").write_text(
+        "canonical = 2\n", encoding="utf-8"
+    )
+
+    result = _run_repair_cli(
+        [
+            "--config",
+            str(config_path),
+            "--aegis-root",
+            str(aegis_root),
+            "--autopilot-root",
+            str(autopilot_root),
+        ],
+    )
+
+    lines = [line for line in result.stdout.splitlines() if line]
+    assert any(line.startswith("summary\t") for line in lines)
+    assert "Traceback" not in result.stderr
+    assert result.returncode in (0, 1, 3)
+    assert (hooks_dir / "bad_sibling.py").read_bytes() == b"\xff\xfe\x00bad\n"
