@@ -15,7 +15,6 @@ from pathlib import Path
 
 from test_codex_hook_doctor import (
     _fake_roots,
-    _run_cli,
     _write_config,
     codex_hook_doctor,
 )

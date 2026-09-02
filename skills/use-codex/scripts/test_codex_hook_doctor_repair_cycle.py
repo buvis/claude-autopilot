@@ -18,7 +18,7 @@ from test_codex_hook_doctor_repair import _run_repair_cli
 
 # name -> (canonical root key, canonical basename, stale body, canonical body).
 # Six known hooks resolve against the aegis root, one against the autopilot
-# root, and three of them are spelled differently on disk than in the config.
+# root, and two of them are spelled differently locally than canonically.
 _SEVEN_HOOKS = {
     "validate_commit_msg.py": ("aegis", "validate_commit_msg.py", "validate"),
     "_common.py": ("aegis", "_common.py", "common"),

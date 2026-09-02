@@ -480,9 +480,6 @@ def test_use_codex_skill_doc_documents_the_implicit_target_policy() -> None:
     # target (see test_check_includes_an_unregistered_non_common_file_as_
     # an_implicit_target above). Pins that the "## Hook doctor" section
     # documents that policy explicitly.
-    #
-    # EXPECTED TO FAIL today: the doc line has not been added yet. That is
-    # a separate follow-up step, not a bug in this test.
     doc = (_REPO_ROOT / "skills" / "use-codex" / "SKILL.md").read_text(
         encoding="utf-8",
     )
