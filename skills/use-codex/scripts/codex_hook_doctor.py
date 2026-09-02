@@ -63,7 +63,7 @@ def _verdict_for(
     try:
         compile(target.read_text(encoding="utf-8"), str(target), "exec")
     except SyntaxError as exc:
-        return "syntax_error", " ".join(str(exc).split())
+        return "syntax_error", str(exc)
 
     known = KNOWN_HOOKS.get(target.name)
     if known is not None:
