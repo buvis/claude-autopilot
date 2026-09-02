@@ -83,8 +83,10 @@ def _verdict_for(
 
 
 def _load_hooks(config: Path) -> dict:
-    data = json.loads(config.read_text(encoding="utf-8"))
-    return data["hooks"]
+    hooks = json.loads(config.read_text(encoding="utf-8"))["hooks"]
+    if not isinstance(hooks, dict):
+        raise TypeError("hooks must be an object")
+    return hooks
 
 
 def check(
@@ -94,8 +96,6 @@ def check(
     autopilot_root: Path,
 ) -> list[tuple[str, str, str]]:
     hooks = _load_hooks(config)
-    if not isinstance(hooks, dict):
-        raise TypeError("hooks must be an object")
     config_dir = config.parent
 
     targets: list[Path] = []

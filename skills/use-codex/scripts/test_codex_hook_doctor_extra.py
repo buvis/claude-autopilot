@@ -11,8 +11,10 @@ conventions these tests also rely on.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 
+import pytest
 from test_codex_hook_doctor import (
     _fake_roots,
     _run_cli,
@@ -443,6 +445,13 @@ def test_repair_rewrites_a_known_hook_that_fails_to_compile_from_canonical(
 
     assert ("repaired", str(target), str(canonical)) in result
     assert target.read_bytes() == canonical.read_bytes()
+    # The rung comes back on: the post-repair check verdicts the target ok.
+    post_repair = codex_hook_doctor.check(
+        config=config_path,
+        aegis_root=aegis_root,
+        autopilot_root=autopilot_root,
+    )
+    assert post_repair == [("ok", str(target), "")]
 
 
 def test_repair_reports_a_known_hook_that_fails_to_compile_unrepairable_without_canonical(
@@ -488,16 +497,29 @@ def test_repair_dry_run_reports_would_repair_for_a_known_hook_that_fails_to_comp
     assert target.read_bytes() == before
 
 
-def test_repair_reports_common_py_unrepairable_when_canonical_is_not_utf8_and_still_repairs_siblings(
+@pytest.mark.parametrize(
+    "make_canonical",
+    [
+        lambda path: path.write_bytes('X = "\xe9"\n'.encode("latin-1")),
+        lambda path: path.mkdir(),
+    ],
+    ids=["latin-1 bytes", "directory"],
+)
+def test_repair_reports_common_py_unrepairable_when_canonical_is_unreadable_and_still_repairs_siblings(
+    make_canonical: Callable[[Path], object],
     tmp_path: Path,
 ) -> None:
     # The canonical _common.py is read as UTF-8 before the rewrite so its
     # top-level defs can be checked against sibling imports. Non-UTF-8 bytes
-    # there used to raise straight through repair(): exit 2, no TSV row for
-    # any target. The sibling scan a few lines up already tolerates that;
-    # the canonical read must too, degrading to one unrepairable row.
+    # (UnicodeDecodeError) or a directory (OSError) there used to raise
+    # straight through repair(): exit 2, no TSV row for any target. The
+    # sibling scan a few lines up already tolerates both; the canonical read
+    # must too, degrading to one unrepairable row.
     # hooks/_common.py is empty (a broken verdict), so the post-repair exit
-    # is 1: it stays empty while validate_commit_msg.py gets repaired.
+    # is 1: it stays empty while validate_commit_msg.py gets repaired. Empty
+    # also keeps check() away from the canonical: for a known target that
+    # compiles, _verdict_for reads the canonical unguarded, and a directory
+    # there still exits 2 (outside PRD 00169).
     hooks_dir = tmp_path / "hooks"
     hooks_dir.mkdir()
     common = hooks_dir / "_common.py"
@@ -507,7 +529,7 @@ def test_repair_reports_common_py_unrepairable_when_canonical_is_not_utf8_and_st
     _write_config(config_path, {"PreToolUse": ["python3 hooks/validate_commit_msg.py"]})
     aegis_root, autopilot_root = _fake_roots(tmp_path)
     (aegis_root / "hooks").mkdir()
-    (aegis_root / "hooks" / "_common.py").write_bytes('X = "\xe9"\n'.encode("latin-1"))
+    make_canonical(aegis_root / "hooks" / "_common.py")
     canonical_sibling = aegis_root / "hooks" / "validate_commit_msg.py"
     canonical_sibling.write_text("canonical = 2\n", encoding="utf-8")
 

@@ -103,8 +103,9 @@ so files under `hooks/tests/` are never picked up.
 # Read-only: verdict every target, print one TSV line per target plus a summary
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex_hook_doctor.py check
 
-# Restore missing/empty/stale known hooks from their canonical source and
-# remove orphaned zero-byte placeholders; --dry-run reports without writing
+# Restore missing/empty/stale/syntax-broken known hooks from their canonical
+# source and remove orphaned zero-byte placeholders; --dry-run reports
+# without writing
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex_hook_doctor.py repair [--dry-run]
 ```
 
