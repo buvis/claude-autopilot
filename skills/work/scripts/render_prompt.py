@@ -9,11 +9,16 @@ Exit codes: 0 success, 1 unfilled placeholder, 2 persona file unreadable,
 failed/timed out/produced no output, 5 --out parent directory missing,
 6 a --set/--set-file/--set-cmd argument is missing its '=' separator,
 7 a --require-file/--require-parent path is relative or does not resolve.
+
+Two optional flags, --dispatch-kind and --dispatch-task, open a dispatch
+timing row (PRD 00168, record_dispatch.py) and print its id on a second
+stdout line; with either flag absent nothing changes.
 """
 
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import re
 import subprocess
 import sys
@@ -47,6 +52,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--set-cmd", action=_RecordAssignment, const="set_cmd")
     parser.add_argument("--require-file", action="append", default=[])
     parser.add_argument("--require-parent", action="append", default=[])
+    parser.add_argument("--dispatch-kind")
+    parser.add_argument("--dispatch-task")
     return parser.parse_args(argv)
 
 
@@ -143,7 +150,9 @@ def _check_required_paths(require_file: list[str], require_parent: list[str]) ->
             return 7
     for raw in require_file:
         if not Path(raw).is_file():
-            print(f"render_prompt: required file does not exist: {raw}", file=sys.stderr)
+            print(
+                f"render_prompt: required file does not exist: {raw}", file=sys.stderr
+            )
             return 7
     for raw in require_parent:
         if not Path(raw).parent.is_dir():
@@ -153,6 +162,27 @@ def _check_required_paths(require_file: list[str], require_parent: list[str]) ->
             )
             return 7
     return 0
+
+
+def _open_dispatch_row(kind: str, task: str, prompt_bytes: int) -> str:
+    """Append the dispatch's start row (PRD 00168) and return its id.
+
+    Imported here, not at module top, so a render without the flags loads
+    nothing it did not load before.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "record_dispatch",
+        Path(__file__).with_name("record_dispatch.py"),
+    )
+    assert spec is not None and spec.loader is not None
+    record_dispatch = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(record_dispatch)
+    return record_dispatch.start_row(
+        record_dispatch.find_autopilot_dir(Path.cwd()),
+        kind,
+        task,
+        prompt_bytes,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -200,7 +230,10 @@ def main(argv: list[str] | None = None) -> int:
         return 5
 
     out_path.write_text(body, encoding="utf-8")
-    print(len(body.encode("utf-8")))
+    prompt_bytes = len(body.encode("utf-8"))
+    print(prompt_bytes)
+    if args.dispatch_kind is not None and args.dispatch_task is not None:
+        print(_open_dispatch_row(args.dispatch_kind, args.dispatch_task, prompt_bytes))
     return 0
 
 

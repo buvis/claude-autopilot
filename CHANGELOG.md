@@ -25,10 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ledger/` copy the way `loop-metrics.jsonl` is. `record_dispatch.py` writes
   it: `start` opens a row (queued time, prompt bytes, an id), `end` closes it
   with the elapsed seconds and an outcome (`ok`, `timeout`, `killed`, `error`,
-  `lost`), and `handoff` stamps one edge of a session handoff. Every write is
-  best-effort: an unresolvable autopilot dir, an unwritable file or an id with
-  no start row exits 0, so telemetry never blocks a dispatch or a phase
-  transition.
+  `lost`), and `handoff` stamps one edge of a session handoff. A render opens
+  the start row for free: `render_prompt.py --dispatch-kind <persona>
+  --dispatch-task <id>` appends it with the byte count the render already
+  prints and echoes the id on a second stdout line; without both flags the
+  render is byte-identical to before. Every write is best-effort: an
+  unresolvable autopilot dir, an unwritable file or an id with no start row
+  exits 0, so telemetry never blocks a dispatch or a phase transition.
 
 ### Changed
 
