@@ -373,6 +373,37 @@ def test_cli_hooks_event_entry_as_a_bare_string_exits_2_without_a_traceback(
 
 
 # ---------------------------------------------------------------------------
+# check() — implicit target policy (every *.py directly in hooks/)
+# ---------------------------------------------------------------------------
+
+
+def test_check_includes_an_unregistered_non_common_file_as_an_implicit_target(
+    tmp_path: Path,
+) -> None:
+    # check's target set is not limited to basenames a command names, and
+    # not limited to _common.py: every *.py sitting directly in the hooks
+    # directory is a target. A stray, unregistered, non-_common.py file
+    # must still show up in check's results with some verdict, not be
+    # silently skipped because nothing names it.
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    (hooks_dir / "good.py").write_text("X = 1\n", encoding="utf-8")
+    stray = hooks_dir / "unregistered_stray.py"
+    stray.write_text("Y = 1\n", encoding="utf-8")
+    config_path = tmp_path / "hooks.json"
+    _write_config(config_path, {"SessionStart": ["python3 hooks/good.py"]})
+    aegis_root, autopilot_root = _fake_roots(tmp_path)
+
+    result = codex_hook_doctor.check(
+        config=config_path,
+        aegis_root=aegis_root,
+        autopilot_root=autopilot_root,
+    )
+
+    assert any(target == str(stray) for _verdict, target, _detail in result)
+
+
+# ---------------------------------------------------------------------------
 # Prose pins — the doctor-first batch probe docs stay in sync with the tool
 # ---------------------------------------------------------------------------
 
@@ -395,19 +426,74 @@ def test_codex_implementor_doc_names_doctor_before_first_codex_run_dispatch() ->
 
 
 def test_state_schema_doc_names_hook_doctor() -> None:
+    # Strengthened: bind to the codex_probe row that actually documents the
+    # hook_doctor sub-field and its detail shape (the "ok" / "stale:
+    # <basenames>" verdicts and the exit-1/exit-2 detail strings), not
+    # merely to the bare word "hook_doctor" appearing anywhere in the file.
     doc = (
         _REPO_ROOT / "skills" / "run-autopilot" / "references" / "state-schema.md"
     ).read_text(encoding="utf-8")
 
-    assert "hook_doctor" in doc
+    codex_probe_row = next(
+        (line for line in doc.splitlines() if line.startswith("| `codex_probe` |")),
+        None,
+    )
+
+    assert codex_probe_row is not None
+    assert '"hook_doctor?": "ok"' in codex_probe_row
+    assert '"stale: <basenames>"' in codex_probe_row
+    assert "hook_doctor: <the first broken TSV line>" in codex_probe_row
+    assert "config unreadable: <config path>" in codex_probe_row
 
 
 def test_use_codex_skill_doc_names_repair() -> None:
+    # Strengthened: bind to the operator-only repair rule and the
+    # documented 0/1/2/3 exit codes inside the "## Hook doctor" section,
+    # not merely to the bare word "repair" appearing anywhere in the file
+    # (the section also names the repair subcommand's own CLI flags).
     doc = (_REPO_ROOT / "skills" / "use-codex" / "SKILL.md").read_text(
         encoding="utf-8",
     )
 
-    assert "repair" in doc
+    section_start = doc.find("## Hook doctor")
+    assert section_start != -1
+    next_heading = doc.find("\n## ", section_start + 1)
+    section = doc[section_start : next_heading if next_heading != -1 else len(doc)]
+
+    assert "`repair` is operator-only" in section
+    assert "never run it from a batch" in section
+    assert "`0` — every target verdicts `ok`." in section
+    assert (
+        "`1` — one or more targets verdict `missing`/`empty`/`syntax_error`"
+        in section
+    )
+    assert "`2` — the doctor itself could not run" in section
+    assert (
+        "`3` — nothing broken, but one or more targets verdict `stale`/`no_canonical`"
+        in section
+    )
+
+
+def test_use_codex_skill_doc_documents_the_implicit_target_policy() -> None:
+    # check's target set is not limited to command-named basenames or to
+    # _common.py -- every *.py sitting directly in the hooks directory is a
+    # target (see test_check_includes_an_unregistered_non_common_file_as_
+    # an_implicit_target above). Pins that the "## Hook doctor" section
+    # documents that policy explicitly.
+    #
+    # EXPECTED TO FAIL today: the doc line has not been added yet. That is
+    # a separate follow-up step, not a bug in this test.
+    doc = (_REPO_ROOT / "skills" / "use-codex" / "SKILL.md").read_text(
+        encoding="utf-8",
+    )
+
+    section_start = doc.find("## Hook doctor")
+    assert section_start != -1
+    next_heading = doc.find("\n## ", section_start + 1)
+    section = doc[section_start : next_heading if next_heading != -1 else len(doc)]
+
+    assert "*.py" in section
+    assert "directly in the hooks directory" in section
 
 
 def test_codex_implementor_doc_names_exit_2_detail_distinctly_from_exit_1() -> None:
