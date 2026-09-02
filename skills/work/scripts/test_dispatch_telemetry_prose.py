@@ -328,15 +328,17 @@ def test_a_re_dispatch_keeps_its_id_and_closes_it_again() -> None:
         "already closed when the re-dispatch happens; a literal reader writes a "
         "third end row."
     )
-    for text, name in (
-        (breaker, "gate-failure.md § 4.2"),
-        (dispatch, "subagent-dispatch.md"),
-    ):
-        assert "continuation brief" in text and "Retry render" in text, (
-            f"references/{name} no longer says a continuation brief is rendered "
-            "through § Retry render, whose flags open its own row; a re-send rule "
-            "alone puts the brief on a closed id, and a `start` call would open two."
-        )
+    assert "continuation brief" in breaker and "Retry render" in breaker, (
+        "references/gate-failure.md § 4.2 no longer says an Ivan continuation brief "
+        "is rendered through § Retry render, whose flags open its own row; a re-send "
+        "rule alone puts the brief on a closed id, and a `start` call would open two."
+    )
+    # "Retry render" occurs elsewhere in this file, so the needle is the clause
+    # only the continuation rule carries (mutation-checked in cycle 5).
+    assert "continuation brief" in dispatch and "no `start` call is made" in dispatch, (
+        "references/subagent-dispatch.md no longer says an Ivan continuation brief "
+        "opens its row through its render's flags with no `start` call."
+    )
     codex = (_REFS / "codex-implementor.md").read_text()
     checklist = codex[codex.index("## Codex dispatch") :]
     assert _END_CALL in checklist, (

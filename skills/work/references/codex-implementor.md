@@ -180,7 +180,9 @@ the departures there, not here:
 - `-f <prompt file>` and `-o <output file>`, absolute paths. The prompt file
   is step 3's render, `dev/local/tmp/dispatch-ivan-<task-id>.txt` (opened with
   the two telemetry flags), with § Hook interaction's TOOL-GATE NOTICE appended
-  by the Edit tool, so the dispatch's row and id are the render's;
+  in-session — Read the rendered file, then append with the Edit tool; a shell
+  redirect into `dev/local/` is blocked — so the dispatch's row and id are the
+  render's;
 - `TaskOutput(task_id, block=true, timeout=600000)` as the watchdog;
 - **No-edit probe: after-capture.** Immediately after `TaskOutput` returns,
   before step 4 hands off, capture porcelain again with the same command and
