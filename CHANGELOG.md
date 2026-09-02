@@ -51,6 +51,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **use-codex**: a `hooks.json` whose command cannot be tokenized, or whose
   event entry is not a mapping, exits 2 with the doctor's own `error:` line
   instead of an unhandled traceback.
+- **use-codex**: `codex_hook_doctor.py repair` no longer aborts the whole run
+  when a known target's canonical source is itself absent. That one target is
+  reported `unrepairable` and the remaining targets are still repaired, with
+  the exit code staying the recomputed check code instead of collapsing to 2.
+- **use-codex**: a hook file whose bytes are not valid UTF-8 no longer aborts
+  `check` or `repair`. It verdicts `syntax_error` like any other file that
+  cannot be compiled, and the sibling scan behind `_common.py` repair skips it
+  and carries on rather than failing the run.
 
 ## [0.3.0] - 2026-09-01
 

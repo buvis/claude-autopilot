@@ -62,7 +62,7 @@ def _verdict_for(
     # contractually read-only, and a batch runs it against the real ~/.codex.
     try:
         compile(target.read_text(encoding="utf-8"), str(target), "exec")
-    except SyntaxError as exc:
+    except (SyntaxError, UnicodeDecodeError) as exc:
         return "syntax_error", str(exc)
 
     known = KNOWN_HOOKS.get(target.name)
@@ -124,6 +124,11 @@ def _missing_common_import_names(hooks_dir: Path, canonical: Path) -> list[str]:
                 f"{py_file.name}: SyntaxError (cannot verify _common imports)"
             )
             continue
+        except (UnicodeDecodeError, OSError):
+            unparseable.append(
+                f"{py_file.name}: unreadable (cannot verify _common imports)"
+            )
+            continue
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and node.module == "_common":
                 imported.update(alias.name for alias in node.names)
@@ -171,6 +176,8 @@ def _repair_known(
     root_name, canonical_rel = known
     root = aegis_root if root_name == "aegis" else autopilot_root
     canonical = root / canonical_rel
+    if not canonical.exists():
+        return ("unrepairable", target_str, f"no canonical source ({canonical})")
 
     if target.name == "_common.py":
         missing = _missing_common_import_names(hooks_dir, canonical)
