@@ -725,6 +725,47 @@ def test_a_resumed_loop_clears_the_pause_stamp(tmp_path):
     assert not (ap / "paused-by-operator").exists()
 
 
+def test_stand_down_marker_pauses_without_retry_or_park(tmp_path):
+    # PRD 00172: a session that finds a peer owning its PRD writes the
+    # pause marker with a reason and touches nothing else. That is a
+    # stand-down, not a death - no retry burned, no park marker, the
+    # operator-pause exit with the reason quoted.
+    def stand_down(ap_dir: Path) -> None:
+        (ap_dir / "pause-requested").write_text(
+            json.dumps({"reason": "peer agent-skills-7b owns task 5"}),
+        )
+
+    lp = make_loop(tmp_path, [stand_down])
+    ap = lp._test["ap_dir"]
+    write_state(ap, prd="00010-x-v1.md", next_phase="build", batch={"id": "b"})
+    assert lp.run() == 0
+    assert len(lp._test["spawn"].launches) == 1
+    assert not (ap / "park-requested").exists()
+    assert not (ap / "pause-requested").exists()
+    assert (ap / "paused-by-operator").is_file()
+    assert lp._died_retries == 0
+    out = lp._test["out"].getvalue()
+    assert "stood down" in out
+    assert "peer agent-skills-7b owns task 5" in out
+    assert "Resume unattended: autoclaude" in out
+    assert _notified(lp, "peer agent-skills-7b owns task 5")
+
+
+def test_empty_stand_down_marker_reads_as_operator_pause(tmp_path):
+    # An operator `touch` mid-session is a stand-down with no reason: the
+    # same exit, never the died ladder.
+    def touch_marker(ap_dir: Path) -> None:
+        (ap_dir / "pause-requested").touch()
+
+    lp = make_loop(tmp_path, [touch_marker])
+    ap = lp._test["ap_dir"]
+    write_state(ap, prd="00010-x-v1.md", next_phase="build", batch={"id": "b"})
+    assert lp.run() == 0
+    assert len(lp._test["spawn"].launches) == 1
+    assert not (ap / "park-requested").exists()
+    assert "session stood down: no reason given" in lp._test["out"].getvalue()
+
+
 def test_plugin_drift_halts_before_any_spawn(tmp_path):
     plugins = tmp_path / "installed_plugins.json"
     plugins.write_text(

@@ -10,10 +10,35 @@ spawning without wedging).
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 MARKER = "pause-requested"
 STAMP = "paused-by-operator"
+
+
+def stand_down_reason(autopilot_dir: Path, since: float) -> str | None:
+    """The reason in a marker written at or after `since` (the session's
+    start); None when no such marker exists. A marker the session itself
+    wrote is a stand-down (PRD 00172): it found another session owning
+    its PRD and touched nothing else. Empty or non-JSON content is a
+    stand-down with no reason - an operator `touch` mid-session lands
+    here too."""
+    path = autopilot_dir / MARKER
+    try:
+        if int(path.stat().st_mtime) < int(since):
+            return None
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return "no reason given"
+    reason = data.get("reason") if isinstance(data, dict) else None
+    if isinstance(reason, str) and reason.strip():
+        return reason.strip()
+    return "no reason given"
 
 
 def consume_pause(autopilot_dir: Path) -> bool:

@@ -9,7 +9,9 @@ state.json after exit, never from the session's words.
 Signals, in decision order (one per session):
     state_write_failed  the 00051 marker survives past state.json and
                         wins over an otherwise-continue state
-    paused              a human is needed (pause_reason / review cap)
+    paused              a human is needed (pause_reason / review cap), or
+                        the session stood down for a peer that owns its
+                        PRD (pause marker written mid-session, PRD 00172)
     continue            next phase queued (also: replan, limit wait,
                         network restored, died-retry)
     done                backlog drained (next_phase empty)
@@ -744,14 +746,21 @@ class Loop:
                 decision["signal"] = "continue"
 
         if decision["signal"] == "":
-            self._decide_no_progress(decision, ap_dir, state_path)
+            self._decide_no_progress(decision, ap_dir, state_path, ts_start)
         return decision
 
     def _decide_no_progress(
-        self, decision: dict, ap_dir: Path, state_path: Path
+        self, decision: dict, ap_dir: Path, state_path: Path, ts_start: float
     ) -> None:
-        """Branch 5: limit-hit is scheduling, network outage is
-        infrastructure, anything else died."""
+        """Branch 5: a stand-down is a pause, limit-hit is scheduling,
+        network outage is infrastructure, anything else died."""
+        reason = pause.stand_down_reason(ap_dir, ts_start)
+        if reason is not None:
+            decision["signal"] = "paused"
+            decision["detail"] = f"session stood down: {reason}"
+            decision["stood_down"] = reason
+            return
+
         reset = self._detect_limit(ap_dir / "last-session.log")
         if isinstance(reset, int):
             wait = usage_limit.wait_decision(
@@ -910,6 +919,26 @@ class Loop:
             pass
 
     # ── act branches ──
+
+    def _stop_on_marker(self, ap_dir: Path, headline: str, note: str) -> int:
+        """The marker-pause exit, shared by the operator pause and a
+        session stand-down (PRD 00172). NOT the _act_paused runbook: that
+        exit leaves a paused state that re-pauses the loop, so its
+        interactive step is mandatory. Here the marker is consumed and
+        nothing blocks, so autoclaude alone resumes - name that first,
+        and keep the take-over path for the operator who wants in."""
+        pause.stamp_paused(ap_dir)
+        print(
+            f"\n\033[1;33m⏸ autoclaude: {headline}.\033[0m State intact.\n"
+            "Resume unattended: autoclaude\n"
+            "To take over first: claude → "
+            "/autopilot:run-autopilot, then autoclaude",
+            file=self.out,
+        )
+        self._notify(f"autopilot ⏸ {self._repo_name()}", note)
+        self._teardown()
+        return 0
+
     def _act_paused(self, decision: dict, state_path: Path) -> int:
         print(
             f"\n\033[1;33m⏸ autoclaude: session paused ON PURPOSE — {decision['detail']}\033[0m",
@@ -1183,26 +1212,11 @@ class Loop:
                 return code
 
             if pause.consume_pause(ap_dir):
-                pause.stamp_paused(ap_dir)
-                # NOT the _act_paused runbook: that exit leaves a paused
-                # state that re-pauses the loop, so its interactive step is
-                # mandatory. Here the marker is consumed and nothing blocks,
-                # so autoclaude alone resumes - name that first, and keep the
-                # take-over path for the operator who paused to intervene.
-                print(
-                    "\n\033[1;33m⏸ autoclaude: paused by operator ON "
-                    "PURPOSE.\033[0m State intact.\n"
-                    "Resume unattended: autoclaude\n"
-                    "To take over first: claude → "
-                    "/autopilot:run-autopilot, then autoclaude",
-                    file=self.out,
-                )
-                self._notify(
-                    f"autopilot ⏸ {self._repo_name()}",
+                return self._stop_on_marker(
+                    ap_dir,
+                    "paused by operator ON PURPOSE",
                     "Paused by operator at a session boundary. State intact.",
                 )
-                self._teardown()
-                return 0
 
             pause.clear_paused(ap_dir)  # past the pause branch: this loop runs
 
@@ -1284,6 +1298,13 @@ class Loop:
                     )
                 continue
             if branch == "paused":
+                if decision.get("stood_down"):
+                    pause.consume_pause(ap_dir)
+                    return self._stop_on_marker(
+                        ap_dir,
+                        decision["detail"],
+                        f"Session stood down: {decision['stood_down']}. State intact.",
+                    )
                 code = self._act_paused(decision, ap_dir / "state.json")
                 self._teardown()
                 return code
