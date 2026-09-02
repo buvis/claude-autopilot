@@ -44,14 +44,14 @@ def test_repair_rewrites_a_stale_known_target_to_canonical_bytes_and_reports_rep
     hooks_dir = tmp_path / "hooks"
     hooks_dir.mkdir()
     (hooks_dir / "validate_commit_msg.py").write_text(
-        "local version\n", encoding="utf-8"
+        "local = 1\n", encoding="utf-8"
     )
     config_path = tmp_path / "hooks.json"
     _write_config(config_path, {"PreToolUse": ["python3 hooks/validate_commit_msg.py"]})
     aegis_root, autopilot_root = _fake_roots(tmp_path)
     (aegis_root / "hooks").mkdir()
     canonical = aegis_root / "hooks" / "validate_commit_msg.py"
-    canonical.write_text("canonical version\n", encoding="utf-8")
+    canonical.write_text("canonical = 2\n", encoding="utf-8")
 
     result = codex_hook_doctor.repair(
         config=config_path,
@@ -78,7 +78,7 @@ def test_repair_rewrites_an_empty_known_target_to_canonical_bytes_and_reports_re
     aegis_root, autopilot_root = _fake_roots(tmp_path)
     (aegis_root / "hooks").mkdir()
     canonical = aegis_root / "hooks" / "validate_commit_msg.py"
-    canonical.write_text("canonical version\n", encoding="utf-8")
+    canonical.write_text("canonical = 2\n", encoding="utf-8")
 
     result = codex_hook_doctor.repair(
         config=config_path,
@@ -128,7 +128,7 @@ def test_repair_skips_a_symlinked_known_target_and_leaves_its_link_target_untouc
     hooks_dir = tmp_path / "hooks"
     hooks_dir.mkdir()
     real_file = tmp_path / "real_validate_commit_msg.py"
-    real_file.write_text("local version\n", encoding="utf-8")
+    real_file.write_text("local = 1\n", encoding="utf-8")
     symlink_path = hooks_dir / "validate_commit_msg.py"
     symlink_path.symlink_to(real_file)
     config_path = tmp_path / "hooks.json"
@@ -136,7 +136,7 @@ def test_repair_skips_a_symlinked_known_target_and_leaves_its_link_target_untouc
     aegis_root, autopilot_root = _fake_roots(tmp_path)
     (aegis_root / "hooks").mkdir()
     (aegis_root / "hooks" / "validate_commit_msg.py").write_text(
-        "canonical version\n", encoding="utf-8"
+        "canonical = 2\n", encoding="utf-8"
     )
 
     result = codex_hook_doctor.repair(
@@ -146,7 +146,7 @@ def test_repair_skips_a_symlinked_known_target_and_leaves_its_link_target_untouc
     )
 
     assert ("skipped", str(symlink_path), "symlink") in result
-    assert real_file.read_bytes() == b"local version\n"
+    assert real_file.read_bytes() == b"local = 1\n"
     assert symlink_path.is_symlink()
 
 
@@ -223,7 +223,7 @@ def test_repair_leaves_hooks_json_byte_identical_after_a_run(tmp_path: Path) -> 
     hooks_dir = tmp_path / "hooks"
     hooks_dir.mkdir()
     (hooks_dir / "validate_commit_msg.py").write_text(
-        "local version\n", encoding="utf-8"
+        "local = 1\n", encoding="utf-8"
     )
     (hooks_dir / "stray.py").write_text("", encoding="utf-8")
     config_path = tmp_path / "hooks.json"
@@ -231,7 +231,7 @@ def test_repair_leaves_hooks_json_byte_identical_after_a_run(tmp_path: Path) -> 
     aegis_root, autopilot_root = _fake_roots(tmp_path)
     (aegis_root / "hooks").mkdir()
     (aegis_root / "hooks" / "validate_commit_msg.py").write_text(
-        "canonical version\n", encoding="utf-8"
+        "canonical = 2\n", encoding="utf-8"
     )
     before = config_path.read_bytes()
 
@@ -257,7 +257,7 @@ def test_repair_never_touches_files_inside_hooks_tests_subdirectory(
     tests_subdir = hooks_dir / "tests"
     tests_subdir.mkdir()
     (tests_subdir / "validate_commit_msg.py").write_text(
-        "local version\n", encoding="utf-8"
+        "local = 1\n", encoding="utf-8"
     )
     config_path = tmp_path / "hooks.json"
     _write_config(
@@ -267,7 +267,7 @@ def test_repair_never_touches_files_inside_hooks_tests_subdirectory(
     aegis_root, autopilot_root = _fake_roots(tmp_path)
     (aegis_root / "hooks").mkdir()
     (aegis_root / "hooks" / "validate_commit_msg.py").write_text(
-        "canonical version\n", encoding="utf-8"
+        "canonical = 2\n", encoding="utf-8"
     )
 
     codex_hook_doctor.repair(
@@ -277,7 +277,7 @@ def test_repair_never_touches_files_inside_hooks_tests_subdirectory(
     )
 
     assert (tests_subdir / "validate_commit_msg.py").exists()
-    assert (tests_subdir / "validate_commit_msg.py").read_bytes() == b"local version\n"
+    assert (tests_subdir / "validate_commit_msg.py").read_bytes() == b"local = 1\n"
 
 
 def test_repair_dry_run_emits_would_verbs_and_changes_no_file_on_disk(
@@ -288,7 +288,7 @@ def test_repair_dry_run_emits_would_verbs_and_changes_no_file_on_disk(
     hooks_dir = tmp_path / "hooks"
     hooks_dir.mkdir()
     target = hooks_dir / "validate_commit_msg.py"
-    target.write_text("local version\n", encoding="utf-8")
+    target.write_text("local = 1\n", encoding="utf-8")
     stray = hooks_dir / "stray.py"
     stray.write_text("", encoding="utf-8")
     config_path = tmp_path / "hooks.json"
@@ -296,7 +296,7 @@ def test_repair_dry_run_emits_would_verbs_and_changes_no_file_on_disk(
     aegis_root, autopilot_root = _fake_roots(tmp_path)
     (aegis_root / "hooks").mkdir()
     canonical = aegis_root / "hooks" / "validate_commit_msg.py"
-    canonical.write_text("canonical version\n", encoding="utf-8")
+    canonical.write_text("canonical = 2\n", encoding="utf-8")
     target_before = target.read_bytes()
 
     result = codex_hook_doctor.repair(
@@ -310,7 +310,7 @@ def test_repair_dry_run_emits_would_verbs_and_changes_no_file_on_disk(
     assert any(
         verdict == "would-remove" and path == str(stray) for verdict, path, _ in result
     )
-    assert target.read_bytes() == target_before == b"local version\n"
+    assert target.read_bytes() == target_before == b"local = 1\n"
     assert stray.exists()
     assert stray.read_bytes() == b""
 
@@ -364,7 +364,7 @@ def test_repair_cli_recomputes_exit_code_after_fixing_all_broken_targets(
     hooks_dir = tmp_path / "hooks"
     hooks_dir.mkdir()
     (hooks_dir / "validate_commit_msg.py").write_text(
-        "local version\n", encoding="utf-8"
+        "local = 1\n", encoding="utf-8"
     )
     config_path = tmp_path / "hooks.json"
     _write_config(
@@ -420,7 +420,7 @@ def test_cli_repair_dry_run_exits_matching_check_and_leaves_fixture_unchanged(
     aegis_root, autopilot_root = _fake_roots(tmp_path)
     (aegis_root / "hooks").mkdir()
     (aegis_root / "hooks" / "validate_commit_msg.py").write_text(
-        "canonical version\n", encoding="utf-8"
+        "canonical = 2\n", encoding="utf-8"
     )
     before_config = config_path.read_bytes()
 

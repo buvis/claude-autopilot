@@ -36,6 +36,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   escalation stamp; a stale-only result (exit 3) still runs the live probe
   and records `hook_doctor: "stale: <basenames>"` alongside it.
 
+### Fixed
+
+- **use-codex**: `codex_hook_doctor.py check` no longer writes bytecode beside
+  the hooks it inspects, so the verb is read-only as documented and a batch
+  cannot mutate `~/.codex` just by probing it.
+- **use-codex**: a registered hook that has drifted from its canonical source
+  *and* stopped compiling now reports `syntax_error` (exit 1, codex gated off)
+  instead of `stale` (exit 3, codex left on). A hook that cannot compile fails
+  on every tool call, so the harmful state must win the verdict.
+- **use-codex**: a `syntax_error` detail is collapsed to a single line, so each
+  record stays one TSV line and the batch probe's "first broken line" parsing
+  cannot read a truncated record.
+- **use-codex**: a `hooks.json` whose command cannot be tokenized, or whose
+  event entry is not a mapping, exits 2 with the doctor's own `error:` line
+  instead of an unhandled traceback.
+
 ## [0.3.0] - 2026-09-01
 
 ### Added

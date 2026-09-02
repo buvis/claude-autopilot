@@ -255,14 +255,16 @@ def test_check_returns_stale_for_a_known_hook_whose_bytes_differ_from_canonical(
     hooks_dir = tmp_path / "hooks"
     hooks_dir.mkdir()
     (hooks_dir / "validate_commit_msg.py").write_text(
-        "local version\n", encoding="utf-8"
+        "local = 1\n",
+        encoding="utf-8",
     )
     config_path = tmp_path / "hooks.json"
     _write_config(config_path, {"PreToolUse": ["python3 hooks/validate_commit_msg.py"]})
     aegis_root, autopilot_root = _fake_roots(tmp_path)
     (aegis_root / "hooks").mkdir()
     (aegis_root / "hooks" / "validate_commit_msg.py").write_text(
-        "canonical version\n", encoding="utf-8"
+        "canonical = 2\n",
+        encoding="utf-8",
     )
 
     result = codex_hook_doctor.check(
@@ -285,7 +287,8 @@ def test_check_returns_no_canonical_for_a_known_hook_missing_its_canonical_sourc
     hooks_dir = tmp_path / "hooks"
     hooks_dir.mkdir()
     (hooks_dir / "validate_commit_msg.py").write_text(
-        "local version\n", encoding="utf-8"
+        "local = 1\n",
+        encoding="utf-8",
     )
     config_path = tmp_path / "hooks.json"
     _write_config(config_path, {"PreToolUse": ["python3 hooks/validate_commit_msg.py"]})
@@ -417,14 +420,16 @@ def test_cli_a_stale_only_target_exits_3(tmp_path: Path) -> None:
     hooks_dir = tmp_path / "hooks"
     hooks_dir.mkdir()
     (hooks_dir / "validate_commit_msg.py").write_text(
-        "local version\n", encoding="utf-8"
+        "local = 1\n",
+        encoding="utf-8",
     )
     config_path = tmp_path / "hooks.json"
     _write_config(config_path, {"PreToolUse": ["python3 hooks/validate_commit_msg.py"]})
     aegis_root, autopilot_root = _fake_roots(tmp_path)
     (aegis_root / "hooks").mkdir()
     (aegis_root / "hooks" / "validate_commit_msg.py").write_text(
-        "canonical version\n", encoding="utf-8"
+        "canonical = 2\n",
+        encoding="utf-8",
     )
 
     result = _run_cli(
@@ -455,7 +460,8 @@ def test_cli_a_no_canonical_only_target_exits_3(tmp_path: Path) -> None:
     hooks_dir = tmp_path / "hooks"
     hooks_dir.mkdir()
     (hooks_dir / "validate_commit_msg.py").write_text(
-        "local version\n", encoding="utf-8"
+        "local = 1\n",
+        encoding="utf-8",
     )
     config_path = tmp_path / "hooks.json"
     _write_config(config_path, {"PreToolUse": ["python3 hooks/validate_commit_msg.py"]})
@@ -487,7 +493,8 @@ def test_cli_a_no_canonical_only_target_exits_3(tmp_path: Path) -> None:
 
 
 def test_cli_config_flag_defaults_to_codex_home_env_hooks_json(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # `--config` may be omitted: it must then default to
     # `$CODEX_HOME/hooks.json` when CODEX_HOME is set. HOME is left alone —
@@ -511,7 +518,8 @@ def test_cli_config_flag_defaults_to_codex_home_env_hooks_json(
 
 
 def test_cli_config_flag_defaults_to_home_dot_codex_hooks_json_without_codex_home(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Without CODEX_HOME set, the default config must fall back to
     # `~/.codex/hooks.json`.
@@ -536,7 +544,8 @@ def test_cli_config_flag_defaults_to_home_dot_codex_hooks_json_without_codex_hom
 
 
 def test_cli_aegis_root_flag_defaults_to_first_matching_installed_plugin_path(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # `--aegis-root` may be omitted: it must then default to the
     # installPath of the first "aegis@buvis-plugins" entry in
@@ -547,7 +556,8 @@ def test_cli_aegis_root_flag_defaults_to_first_matching_installed_plugin_path(
     real_aegis_root = tmp_path / "real_aegis_install"
     (real_aegis_root / "hooks").mkdir(parents=True)
     (real_aegis_root / "hooks" / "validate_commit_msg.py").write_text(
-        "X = 1\n", encoding="utf-8"
+        "X = 1\n",
+        encoding="utf-8",
     )
     (plugins_dir / "installed_plugins.json").write_text(
         json.dumps(
@@ -555,13 +565,13 @@ def test_cli_aegis_root_flag_defaults_to_first_matching_installed_plugin_path(
                 "version": 2,
                 "plugins": {
                     "other@buvis-plugins": [
-                        {"installPath": str(tmp_path / "other")}
+                        {"installPath": str(tmp_path / "other")},
                     ],
                     "aegis@buvis-plugins": [
-                        {"installPath": str(real_aegis_root)}
+                        {"installPath": str(real_aegis_root)},
                     ],
                 },
-            }
+            },
         ),
         encoding="utf-8",
     )
@@ -583,7 +593,8 @@ def test_cli_aegis_root_flag_defaults_to_first_matching_installed_plugin_path(
 
 
 def test_default_aegis_root_reads_the_real_installed_plugins_json_shape(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # The real installed_plugins.json is a dict keyed by "plugins", whose
     # value is itself a dict keyed by plugin name, mapping to a *list* of
@@ -603,10 +614,10 @@ def test_default_aegis_root_reads_the_real_installed_plugins_json_shape(
                             "scope": "user",
                             "installPath": str(real_aegis_root),
                             "version": "0.3.2",
-                        }
-                    ]
+                        },
+                    ],
                 },
-            }
+            },
         ),
         encoding="utf-8",
     )
@@ -618,7 +629,8 @@ def test_default_aegis_root_reads_the_real_installed_plugins_json_shape(
 
 
 def test_cli_exits_2_when_aegis_plugin_entry_list_is_empty(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # An "aegis@buvis-plugins" entry that resolves to an empty list (e.g. an
     # uninstalled-but-present entry) must not crash the doctor with an
@@ -723,16 +735,19 @@ def test_check_resolves_enforce_prd_location_against_autopilot_root_not_aegis_ro
     (hooks_dir / "enforce_prd_location.py").write_text("X = 1\n", encoding="utf-8")
     config_path = tmp_path / "hooks.json"
     _write_config(
-        config_path, {"PreToolUse": ["python3 hooks/enforce_prd_location.py"]}
+        config_path,
+        {"PreToolUse": ["python3 hooks/enforce_prd_location.py"]},
     )
     aegis_root, autopilot_root = _fake_roots(tmp_path)
     (aegis_root / "hooks").mkdir()
     (aegis_root / "hooks" / "enforce_prd_location.py").write_text(
-        "different bytes that would verdict stale if consulted\n", encoding="utf-8"
+        "different bytes that would verdict stale if consulted\n",
+        encoding="utf-8",
     )
     (autopilot_root / "hooks").mkdir()
     (autopilot_root / "hooks" / "enforce_prd_location.py").write_text(
-        "X = 1\n", encoding="utf-8"
+        "X = 1\n",
+        encoding="utf-8",
     )
 
     result = codex_hook_doctor.check(
@@ -775,6 +790,40 @@ def test_check_leaves_the_config_directory_byte_identical(tmp_path: Path) -> Non
     assert after == before
 
 
+def test_check_returns_syntax_error_for_a_drifted_hook_broken_only_at_grammar_level(
+    tmp_path: Path,
+) -> None:
+    # The bracket-level check is not enough. This source tokenizes cleanly
+    # (every bracket is balanced) and is still not valid Python, so a check
+    # that only looks for unclosed brackets reports "stale" and exits 3,
+    # leaving codex enabled against a hook that fails on every tool call.
+    # Only a full parse catches it.
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    (hooks_dir / "validate_commit_msg.py").write_text(
+        "def f(a b):\n    return a\n",
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "hooks.json"
+    _write_config(config_path, {"PreToolUse": ["python3 hooks/validate_commit_msg.py"]})
+    aegis_root, autopilot_root = _fake_roots(tmp_path)
+    (aegis_root / "hooks").mkdir()
+    (aegis_root / "hooks" / "validate_commit_msg.py").write_text(
+        "canonical = 2\n",
+        encoding="utf-8",
+    )
+
+    result = codex_hook_doctor.check(
+        config=config_path,
+        aegis_root=aegis_root,
+        autopilot_root=autopilot_root,
+    )
+
+    verdict, _target, detail = result[0]
+    assert verdict == "syntax_error"
+    assert "\n" not in detail
+
+
 def test_check_returns_syntax_error_not_stale_when_a_known_hook_is_both_drifted_and_broken(
     tmp_path: Path,
 ) -> None:
@@ -787,14 +836,16 @@ def test_check_returns_syntax_error_not_stale_when_a_known_hook_is_both_drifted_
     hooks_dir = tmp_path / "hooks"
     hooks_dir.mkdir()
     (hooks_dir / "validate_commit_msg.py").write_text(
-        "def f(:\n    pass\n", encoding="utf-8"
+        "def f(:\n    pass\n",
+        encoding="utf-8",
     )
     config_path = tmp_path / "hooks.json"
     _write_config(config_path, {"PreToolUse": ["python3 hooks/validate_commit_msg.py"]})
     aegis_root, autopilot_root = _fake_roots(tmp_path)
     (aegis_root / "hooks").mkdir()
     (aegis_root / "hooks" / "validate_commit_msg.py").write_text(
-        "canonical version\n", encoding="utf-8"
+        "canonical = 2\n",
+        encoding="utf-8",
     )
 
     result = codex_hook_doctor.check(
@@ -847,14 +898,16 @@ def test_cli_a_syntax_error_on_a_known_drifted_hook_exits_1_not_3(
     hooks_dir = tmp_path / "hooks"
     hooks_dir.mkdir()
     (hooks_dir / "validate_commit_msg.py").write_text(
-        "def f(:\n    pass\n", encoding="utf-8"
+        "def f(:\n    pass\n",
+        encoding="utf-8",
     )
     config_path = tmp_path / "hooks.json"
     _write_config(config_path, {"PreToolUse": ["python3 hooks/validate_commit_msg.py"]})
     aegis_root, autopilot_root = _fake_roots(tmp_path)
     (aegis_root / "hooks").mkdir()
     (aegis_root / "hooks" / "validate_commit_msg.py").write_text(
-        "canonical version\n", encoding="utf-8"
+        "canonical = 2\n",
+        encoding="utf-8",
     )
 
     result = _run_cli(
@@ -954,7 +1007,8 @@ def test_cli_hooks_event_entry_as_a_bare_string_exits_2_without_a_traceback(
     # unparseable JSON or a missing "hooks" key.
     config_path = tmp_path / "hooks.json"
     config_path.write_text(
-        json.dumps({"hooks": {"SessionStart": ["not-a-mapping"]}}), encoding="utf-8"
+        json.dumps({"hooks": {"SessionStart": ["not-a-mapping"]}}),
+        encoding="utf-8",
     )
     aegis_root, autopilot_root = _fake_roots(tmp_path)
 
@@ -998,11 +1052,7 @@ def test_codex_implementor_doc_names_doctor_before_first_codex_run_dispatch() ->
 
 def test_state_schema_doc_names_hook_doctor() -> None:
     doc = (
-        _REPO_ROOT
-        / "skills"
-        / "run-autopilot"
-        / "references"
-        / "state-schema.md"
+        _REPO_ROOT / "skills" / "run-autopilot" / "references" / "state-schema.md"
     ).read_text(encoding="utf-8")
 
     assert "hook_doctor" in doc
@@ -1010,7 +1060,7 @@ def test_state_schema_doc_names_hook_doctor() -> None:
 
 def test_use_codex_skill_doc_names_repair() -> None:
     doc = (_REPO_ROOT / "skills" / "use-codex" / "SKILL.md").read_text(
-        encoding="utf-8"
+        encoding="utf-8",
     )
 
     assert "repair" in doc

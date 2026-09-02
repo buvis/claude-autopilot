@@ -11,7 +11,6 @@ import argparse
 import ast
 import json
 import os
-import py_compile
 import shlex
 import sys
 from pathlib import Path
@@ -55,6 +54,17 @@ def _verdict_for(
     if target.stat().st_size == 0:
         return "empty", ""
 
+    # Syntax outranks staleness: a hook that cannot compile fails on every
+    # tool call, and `stale` exits 3 (rung stays on) while `syntax_error`
+    # exits 1 (rung gates off). Checking drift first would report the
+    # harmless verdict for the harmful state. `compile()` is used rather
+    # than py_compile so the check writes no bytecode -- `check` is
+    # contractually read-only, and a batch runs it against the real ~/.codex.
+    try:
+        compile(target.read_text(encoding="utf-8"), str(target), "exec")
+    except SyntaxError as exc:
+        return "syntax_error", " ".join(str(exc).split())
+
     known = KNOWN_HOOKS.get(target.name)
     if known is not None:
         root_name, canonical_rel = known
@@ -64,11 +74,6 @@ def _verdict_for(
             return "no_canonical", ""
         if canonical.read_bytes() != target.read_bytes():
             return "stale", ""
-
-    try:
-        py_compile.compile(str(target), doraise=True)
-    except py_compile.PyCompileError as exc:
-        return "syntax_error", str(exc)
 
     return "ok", ""
 
@@ -374,7 +379,15 @@ def main(argv: list[str] | None = None) -> int:
     try:
         config, aegis_root, autopilot_root = _resolve_roots(args)
         results, verdicts = _run_subcommand(args, config, aegis_root, autopilot_root)
-    except (OSError, json.JSONDecodeError, KeyError, TypeError, IndexError) as exc:
+    except (
+        OSError,
+        json.JSONDecodeError,
+        KeyError,
+        TypeError,
+        IndexError,
+        ValueError,
+        AttributeError,
+    ) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
