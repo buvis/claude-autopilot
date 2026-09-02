@@ -1,6 +1,6 @@
 {
   "name": "autopilot",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "PRD-driven autonomous build and multi-lens review pipeline. Plans a PRD into tasks, implements them one at a time, then runs consensus, blind and doubt reviewers every cycle until the work converges.",
   "author": {
     "name": "buvis"
