@@ -21,7 +21,8 @@ draft" to ignore, no script named only to forbid running it. Retired triggers
 are pinned by meaning as well as by spelling: a size promotion respelled as
 "more than eight files" is the same retired rule.
 
-This file pins PROSE only. `test_classify_tier.py` covers the classifier.
+This file pins PROSE only. The `test_classify_tier_*.py` modules cover the
+classifier.
 """
 
 from __future__ import annotations

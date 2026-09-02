@@ -69,14 +69,20 @@ def test_a_contract_edit_outranks_algorithmic_risk_when_both_are_flagged() -> No
     "phrase",
     ["add log", "rename", "port", "mirror", "bump version"],
 )
-def test_a_contract_edit_outranks_the_mechanical_rule_even_when_every_mechanical_precondition_holds(
+@pytest.mark.parametrize(
+    ("risk_flag", "reason"),
+    [("contract_edit", "contract"), ("algorithmic_risk", "algorithmic_risk")],
+)
+def test_a_risk_flag_outranks_the_mechanical_rule_even_when_every_mechanical_precondition_holds(
     phrase: str,
+    risk_flag: str,
+    reason: str,
 ) -> None:
     # Every existing risk-flag fixture uses text that is not a mechanical
     # phrase, so rule 5 could be checked ahead of rule 3 and the suite would
     # still pass. Here all three mechanical preconditions hold at once (a real
     # phrase, one file, a small diff) on an ordinary production path, so this
-    # only passes sonnet/opus at all if contract_edit is checked first.
+    # only passes sonnet/opus at all if the risk flag is checked first.
     files = ["src/app.py"]
     assert not work_routing.is_test_path(files[0])
     assert not classify_tier.is_packaging_path(files[0])
@@ -85,31 +91,7 @@ def test_a_contract_edit_outranks_the_mechanical_rule_even_when_every_mechanical
         files,
         f"{phrase} across the retry handler",
         10,
-        contract_edit=True,
+        **{risk_flag: True},
     )
 
-    assert result == {"model": "opus", "tier_reason": "contract"}
-
-
-@pytest.mark.parametrize(
-    "phrase",
-    ["add log", "rename", "port", "mirror", "bump version"],
-)
-def test_algorithmic_risk_outranks_the_mechanical_rule_even_when_every_mechanical_precondition_holds(
-    phrase: str,
-) -> None:
-    # Mirror of the contract_edit case above with the other risk flag: same
-    # mechanical-shaped input, so a mechanical-rule-first ordering would answer
-    # haiku/mechanical here too.
-    files = ["src/app.py"]
-    assert not work_routing.is_test_path(files[0])
-    assert not classify_tier.is_packaging_path(files[0])
-
-    result = _classify(
-        files,
-        f"{phrase} across the retry handler",
-        10,
-        algorithmic_risk=True,
-    )
-
-    assert result == {"model": "opus", "tier_reason": "algorithmic_risk"}
+    assert result == {"model": "opus", "tier_reason": reason}
