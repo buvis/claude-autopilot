@@ -316,6 +316,94 @@ def test_repair_dry_run_emits_would_verbs_and_changes_no_file_on_disk(
 
 
 # ---------------------------------------------------------------------------
+# repair() — placeholder cleanup: registration accuracy
+# ---------------------------------------------------------------------------
+
+
+def test_repair_keeps_a_registered_zero_byte_file_reached_through_an_indirect_command_path(
+    tmp_path: Path,
+) -> None:
+    # The command spells custom.py's path with a redundant "hooks/../hooks/"
+    # segment that resolves lexically to the same file a plain
+    # "hooks/custom.py" would name. The registered-path set (built from
+    # resolved command targets) and the cleanup glob (which lists the hooks
+    # directory directly) must agree on the normalized form, or custom.py
+    # looks registered to check() but unregistered to the cleanup scan.
+    # custom.py is registered, so it must be reported "empty" by check() and
+    # must never be "removed" by repair() — it must still be on disk after
+    # the run. This also pins that the registration set the cleanup scan
+    # consults reflects hooks.json as it actually stands, not some
+    # under-normalized view of it.
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    custom = hooks_dir / "custom.py"
+    custom.write_text("", encoding="utf-8")
+    config_path = tmp_path / "hooks.json"
+    _write_config(
+        config_path, {"SessionStart": ["python3 hooks/../hooks/custom.py"]}
+    )
+    aegis_root, autopilot_root = _fake_roots(tmp_path)
+
+    check_result = codex_hook_doctor.check(
+        config=config_path,
+        aegis_root=aegis_root,
+        autopilot_root=autopilot_root,
+    )
+    assert any(
+        verdict == "empty" and path == str(custom)
+        for verdict, path, _ in check_result
+    )
+
+    result = codex_hook_doctor.repair(
+        config=config_path,
+        aegis_root=aegis_root,
+        autopilot_root=autopilot_root,
+    )
+
+    assert not any(
+        verdict == "removed" and path == str(custom) for verdict, path, _ in result
+    )
+    assert custom.exists()
+    assert custom.read_bytes() == b""
+
+
+def test_repair_removes_an_unregistered_zero_byte_file_even_though_its_basename_is_a_known_hook(
+    tmp_path: Path,
+) -> None:
+    # protect_config.py is a KNOWN_HOOKS basename with a canonical source
+    # available in this fixture, but no command in hooks.json registers it —
+    # it is an unregistered zero-byte placeholder. Recognizing the basename
+    # must not exempt it from cleanup: it must be "removed", never
+    # "repaired" from canonical, and gone from disk afterward.
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    (hooks_dir / "good.py").write_text("X = 1\n", encoding="utf-8")
+    stray = hooks_dir / "protect_config.py"
+    stray.write_text("", encoding="utf-8")
+    config_path = tmp_path / "hooks.json"
+    _write_config(config_path, {"SessionStart": ["python3 hooks/good.py"]})
+    aegis_root, autopilot_root = _fake_roots(tmp_path)
+    (aegis_root / "hooks").mkdir()
+    (aegis_root / "hooks" / "protect_config.py").write_text(
+        "canonical = 2\n", encoding="utf-8"
+    )
+
+    result = codex_hook_doctor.repair(
+        config=config_path,
+        aegis_root=aegis_root,
+        autopilot_root=autopilot_root,
+    )
+
+    assert any(
+        verdict == "removed" and path == str(stray) for verdict, path, _ in result
+    )
+    assert not any(
+        verdict == "repaired" and path == str(stray) for verdict, path, _ in result
+    )
+    assert not stray.exists()
+
+
+# ---------------------------------------------------------------------------
 # CLI repair — dry-run and exit-code recomputation
 # ---------------------------------------------------------------------------
 
