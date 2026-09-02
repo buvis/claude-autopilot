@@ -168,7 +168,7 @@ def _repair_known(
     autopilot_root: Path,
     dry_run: bool,
 ) -> tuple[str, str, str] | None:
-    if verdict not in ("missing", "empty", "stale"):
+    if verdict not in ("missing", "empty", "stale", "no_canonical"):
         return None
 
     target = Path(target_str)

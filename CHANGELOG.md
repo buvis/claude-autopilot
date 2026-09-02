@@ -71,6 +71,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   probe left over from an earlier batch. A mismatched-batch probe renders
   exactly `codex probe: not run`, so a stale note cannot be read as describing
   the current batch.
+- **use-codex**: `codex_hook_doctor.py repair` now reports a known target whose
+  canonical source cannot be found as `unrepairable` instead of omitting it
+  from the output entirely, so a repair run accounts for every target it
+  considered.
 - **work**: the doctor-first probe's exit-1 and exit-2 mappings are now stated
   separately. Exit 2 means the config itself is unusable, so the doctor emits no
   TSV or summary line and the probe records the stderr error line with
