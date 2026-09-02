@@ -93,7 +93,11 @@ Run `${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex-run.sh --help` for all
 
 `${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex_hook_doctor.py` verdicts
 every hook target registered in a codex `hooks.json` against the canonical
-plugin source that owns it.
+plugin source that owns it. It also treats every `*.py` file sitting
+directly in the hooks directory as an implicit target, registered in
+`hooks.json` or not, so unregistered zero-byte strays are surfaced too, not
+just registered hooks that went missing or stale. The scan does not recurse,
+so files under `hooks/tests/` are never picked up.
 
 ```bash
 # Read-only: verdict every target, print one TSV line per target plus a summary
