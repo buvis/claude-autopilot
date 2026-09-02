@@ -8,6 +8,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import os
 import py_compile
@@ -45,7 +46,9 @@ def _resolve_target(command: str, config_dir: Path) -> Path:
 
 
 def _verdict_for(
-    target: Path, aegis_root: Path, autopilot_root: Path
+    target: Path,
+    aegis_root: Path,
+    autopilot_root: Path,
 ) -> tuple[str, str]:
     if not target.exists():
         return "missing", ""
@@ -71,7 +74,10 @@ def _verdict_for(
 
 
 def check(
-    *, config: Path, aegis_root: Path, autopilot_root: Path
+    *,
+    config: Path,
+    aegis_root: Path,
+    autopilot_root: Path,
 ) -> list[tuple[str, str, str]]:
     hooks = json.loads(config.read_text(encoding="utf-8"))["hooks"]
     if not isinstance(hooks, dict):
@@ -100,6 +106,104 @@ def check(
     return results
 
 
+def _missing_common_import_names(hooks_dir: Path, canonical: Path) -> list[str]:
+    imported: set[str] = set()
+    for py_file in sorted(hooks_dir.glob("*.py")):
+        if py_file.name == "_common.py":
+            continue
+        tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module == "_common":
+                imported.update(alias.name for alias in node.names)
+
+    defined = {
+        node.name
+        for node in ast.parse(canonical.read_text(encoding="utf-8")).body
+        if isinstance(node, ast.FunctionDef)
+    }
+    return sorted(imported - defined)
+
+
+def repair(
+    *,
+    config: Path,
+    aegis_root: Path,
+    autopilot_root: Path,
+    dry_run: bool = False,
+) -> list[tuple[str, str, str]]:
+    results = check(config=config, aegis_root=aegis_root, autopilot_root=autopilot_root)
+    config_dir = config.parent
+    hooks_dir = config_dir / "hooks"
+    tests_dir = hooks_dir / "tests"
+
+    hooks = json.loads(config.read_text(encoding="utf-8"))["hooks"]
+    registered = {_resolve_target(c, config_dir) for c in _iter_commands(hooks)}
+
+    out: list[tuple[str, str, str]] = []
+    for verdict, target_str, detail in results:
+        target = Path(target_str)
+        try:
+            target.relative_to(tests_dir)
+            continue
+        except ValueError:
+            pass
+
+        known = KNOWN_HOOKS.get(target.name)
+        if verdict == "empty" and target not in registered and known is None:
+            continue  # zero-byte + unregistered -> handled by the placeholder scan below
+
+        if known is None:
+            if verdict in ("missing", "empty", "syntax_error"):
+                why = detail or f"no canonical source for unknown hook ({verdict})"
+                out.append(("unrepairable", target_str, why))
+            continue
+
+        if verdict not in ("missing", "empty", "stale"):
+            continue
+
+        if target.is_symlink():
+            out.append(("skipped", target_str, "symlink"))
+            continue
+
+        root_name, canonical_rel = known
+        root = aegis_root if root_name == "aegis" else autopilot_root
+        canonical = root / canonical_rel
+
+        if target.name == "_common.py":
+            missing = _missing_common_import_names(hooks_dir, canonical)
+            if missing:
+                why = (
+                    "sibling imports names not defined in canonical _common.py: "
+                    + ", ".join(missing)
+                )
+                out.append(("unrepairable", target_str, why))
+                continue
+
+        if dry_run:
+            out.append(("would-repair", target_str, str(canonical)))
+            continue
+
+        tmp_path = target.with_name(target.name + ".tmp")
+        tmp_path.write_bytes(canonical.read_bytes())
+        os.replace(tmp_path, target)
+        out.append(("repaired", target_str, str(canonical)))
+
+    if hooks_dir.is_dir():
+        for path in sorted(hooks_dir.glob("*.py")):
+            if (
+                path.stat().st_size == 0
+                and path not in registered
+                and path.name not in KNOWN_HOOKS
+            ):
+                if dry_run:
+                    out.append(("would-remove", str(path), ""))
+                else:
+                    path.unlink()
+                    out.append(("removed", str(path), ""))
+
+    return out
+
+
 def _default_config() -> Path:
     codex_home = os.environ.get("CODEX_HOME")
     if codex_home:
@@ -124,6 +228,11 @@ def main(argv: list[str] | None = None) -> int:
     check_parser.add_argument("--config", type=Path)
     check_parser.add_argument("--aegis-root", type=Path)
     check_parser.add_argument("--autopilot-root", type=Path)
+    repair_parser = subparsers.add_parser("repair")
+    repair_parser.add_argument("--config", type=Path)
+    repair_parser.add_argument("--aegis-root", type=Path)
+    repair_parser.add_argument("--autopilot-root", type=Path)
+    repair_parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
 
     try:
@@ -138,19 +247,37 @@ def main(argv: list[str] | None = None) -> int:
             if args.autopilot_root is not None
             else _default_autopilot_root()
         )
-        results = check(
-            config=config,
-            aegis_root=aegis_root,
-            autopilot_root=autopilot_root,
-        )
+        if args.subcommand == "repair":
+            results = repair(
+                config=config,
+                aegis_root=aegis_root,
+                autopilot_root=autopilot_root,
+                dry_run=args.dry_run,
+            )
+            # Exit code reflects the post-repair state (identical to the
+            # pre-repair state when --dry-run is set).
+            verdicts = check(
+                config=config,
+                aegis_root=aegis_root,
+                autopilot_root=autopilot_root,
+            )
+        else:
+            results = check(
+                config=config,
+                aegis_root=aegis_root,
+                autopilot_root=autopilot_root,
+            )
+            verdicts = results
     except (OSError, json.JSONDecodeError, KeyError, TypeError, IndexError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    ok = sum(1 for verdict, _, _ in results if verdict == "ok")
-    stale = sum(1 for verdict, _, _ in results if verdict in ("stale", "no_canonical"))
+    ok = sum(1 for verdict, _, _ in verdicts if verdict == "ok")
+    stale = sum(1 for verdict, _, _ in verdicts if verdict in ("stale", "no_canonical"))
     broken = sum(
-        1 for verdict, _, _ in results if verdict in ("missing", "empty", "syntax_error")
+        1
+        for verdict, _, _ in verdicts
+        if verdict in ("missing", "empty", "syntax_error")
     )
 
     for verdict, target, detail in results:
