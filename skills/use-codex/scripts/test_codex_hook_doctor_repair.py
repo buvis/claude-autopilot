@@ -634,3 +634,38 @@ def test_repair_tolerates_a_non_utf8_sibling_py_file_while_scanning_common_py_im
     assert "Traceback" not in result.stderr
     assert result.returncode in (0, 1, 3)
     assert (hooks_dir / "bad_sibling.py").read_bytes() == b"\xff\xfe\x00bad\n"
+
+
+def test_repair_still_rewrites_an_empty_common_py_from_canonical(
+    tmp_path: Path,
+) -> None:
+    # _common.py is never named by any command, so it is always "unregistered".
+    # That must not make it fall through the empty+unregistered early return
+    # into the placeholder scan, because the scan deliberately exempts it --
+    # it would then be neither repaired nor removed, leaving the module every
+    # other hook imports as a permanent zero-byte file.
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    (hooks_dir / "_common.py").write_text("", encoding="utf-8")
+    (hooks_dir / "user_hook.py").write_text(
+        "from _common import helper_fn\n", encoding="utf-8"
+    )
+    config_path = tmp_path / "hooks.json"
+    _write_config(config_path, {"SessionStart": ["python3 hooks/user_hook.py"]})
+    aegis_root, autopilot_root = _fake_roots(tmp_path)
+    (aegis_root / "hooks").mkdir()
+    canonical = aegis_root / "hooks" / "_common.py"
+    canonical.write_text("def helper_fn():\n    pass\n", encoding="utf-8")
+
+    result = codex_hook_doctor.repair(
+        config=config_path,
+        aegis_root=aegis_root,
+        autopilot_root=autopilot_root,
+    )
+
+    common = hooks_dir / "_common.py"
+    assert any(
+        verdict == "repaired" and path == str(common) for verdict, path, _ in result
+    )
+    assert common.read_bytes() == canonical.read_bytes()
+    assert common.exists()

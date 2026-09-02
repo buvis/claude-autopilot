@@ -219,7 +219,14 @@ def _repair_target(
         pass
 
     known = KNOWN_HOOKS.get(target.name)
-    if verdict == "empty" and target not in registered:
+    # _common.py is never named by a command, so it is always "unregistered".
+    # Excluding it here keeps its repair path; the placeholder scan exempts it
+    # too, so without this it would be neither repaired nor removed.
+    if (
+        verdict == "empty"
+        and target not in registered
+        and target.name != "_common.py"
+    ):
         return None  # zero-byte + unregistered -> handled by the placeholder scan below
 
     if known is None:
