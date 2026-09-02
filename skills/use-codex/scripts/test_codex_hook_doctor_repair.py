@@ -609,9 +609,8 @@ def test_repair_reports_unrepairable_for_a_known_target_verdicted_no_canonical_a
     # check() would call this target "no_canonical". repair must not stay
     # silent about it: it must report "unrepairable" with a detail naming
     # why (the canonical source could not be found), leave the target's
-    # bytes exactly as they were, and the CLI must exit 3, since a
-    # no_canonical-only fixture has nothing broken but something
-    # stale-or-no-canonical.
+    # bytes exactly as they were, and the CLI must exit 3, since the
+    # fixture has one unrepairable target and nothing else to fix.
     hooks_dir = tmp_path / "hooks"
     hooks_dir.mkdir()
     target = hooks_dir / "validate_commit_msg.py"
@@ -641,6 +640,7 @@ def test_repair_reports_unrepairable_for_a_known_target_verdicted_no_canonical_a
     assert "canonical" in detail.lower()
     assert target.read_bytes() == target_before == b"local = 1\n"
     assert result.returncode == 3
+    assert "Traceback" not in result.stderr
 
 
 def test_repair_tolerates_a_non_utf8_sibling_py_file_while_scanning_common_py_imports(
