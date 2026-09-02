@@ -177,7 +177,10 @@ the departures there, not here:
   `git --git-dir=<bare-git-dir> --work-tree=<work-tree> status --porcelain -- <file slice>`;
 - background Bash, never Agent-wrapped (era invariant: a subagent that shells
   out to a CLI hangs);
-- `-f <prompt file>` and `-o <output file>`, absolute paths;
+- `-f <prompt file>` and `-o <output file>`, absolute paths. The prompt file
+  is step 3's render, `dev/local/tmp/dispatch-ivan-<task-id>.txt` (opened with
+  the two telemetry flags), with § Hook interaction's TOOL-GATE NOTICE appended
+  by the Edit tool, so the dispatch's row and id are the render's;
 - `TaskOutput(task_id, block=true, timeout=600000)` as the watchdog;
 - **No-edit probe: after-capture.** Immediately after `TaskOutput` returns,
   before step 4 hands off, capture porcelain again with the same command and
@@ -191,10 +194,9 @@ the departures there, not here:
   `record_dispatch.py end <id> --outcome ok`, `error` on a non-zero exit,
   `lost` when the `-o` file is missing or empty, `timeout` after the second
   deadline (`references/subagent-dispatch.md` § Dispatch telemetry). The
-  `-f` file is step 3's flagged render with the TOOL-GATE NOTICE appended, so
-  the row and its id are the render's; the Claude fallback that re-sends that
-  file keeps the id and closes it again when it returns, and a rewritten
-  continuation brief opens its own row with `start --prompt-file`;
+  Claude fallback that re-sends that file keeps the id and closes it again
+  when it returns; a continuation brief re-rendered through gate-failure.md
+  § Retry render opens its own row through the render's flags;
 - completion judged by the `-o` file plus the step-5.5 test gate — **never by
   exit code alone**;
 - **edit-enabled sandbox: `-a` (`--sandbox workspace-write`), never `-y`.**

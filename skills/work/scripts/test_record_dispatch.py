@@ -54,7 +54,13 @@ def test_end_after_a_start_row_computes_elapsed_from_queued_at(
     autopilot = _project(tmp_path)
     record_dispatch.append_row(
         autopilot,
-        {"id": "deadbeef", "kind": "ivan", "task": "3", "queued_at": 1000, "prompt_bytes": 42},
+        {
+            "id": "deadbeef",
+            "kind": "ivan",
+            "task": "3",
+            "queued_at": 1000,
+            "prompt_bytes": 42,
+        },
     )
     monkeypatch.chdir(tmp_path / "proj" / "src")
     _pin_clock(monkeypatch, 1042.9)
@@ -69,6 +75,41 @@ def test_end_after_a_start_row_computes_elapsed_from_queued_at(
         "outcome": "ok",
         "detail": None,
     }
+
+
+def test_a_second_end_on_the_same_id_is_its_own_row_measured_from_the_one_start(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A verbatim re-dispatch keeps its id: the first attempt's end row stays,
+    # the re-dispatch's return adds another, and both measure from the one
+    # start row, so the last end row spans every attempt as documented.
+    autopilot = _project(tmp_path)
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "id": "deadbeef",
+            "kind": "ivan",
+            "task": "3",
+            "queued_at": 1000,
+            "prompt_bytes": 42,
+        },
+    )
+    monkeypatch.chdir(tmp_path / "proj")
+    _pin_clock(monkeypatch, 1010)
+    assert record_dispatch.main(["end", "deadbeef", "--outcome", "lost"]) == 0
+    _pin_clock(monkeypatch, 1030)
+
+    exit_code = record_dispatch.main(["end", "deadbeef", "--outcome", "ok"])
+
+    assert exit_code == 0
+    ends = [
+        row for row in _rows(autopilot / "dispatch-metrics.jsonl") if "ended_at" in row
+    ]
+    assert [(row["outcome"], row["elapsed_s"]) for row in ends] == [
+        ("lost", 10),
+        ("ok", 30),
+    ]
 
 
 def test_end_with_no_start_row_records_a_null_elapsed_and_exits_zero(
@@ -106,10 +147,14 @@ def test_both_the_working_file_and_the_ledger_mirror_receive_the_row(
     autopilot = _project(tmp_path)
     (autopilot / "ledger").mkdir()
 
-    record_dispatch.append_row(autopilot, {"id": "0badf00d", "kind": "pat", "task": "1"})
+    record_dispatch.append_row(
+        autopilot, {"id": "0badf00d", "kind": "pat", "task": "1"}
+    )
 
     working = (autopilot / "dispatch-metrics.jsonl").read_text(encoding="utf-8")
-    mirror = (autopilot / "ledger" / "dispatch-metrics.jsonl").read_text(encoding="utf-8")
+    mirror = (autopilot / "ledger" / "dispatch-metrics.jsonl").read_text(
+        encoding="utf-8"
+    )
     assert working == mirror == '{"id":"0badf00d","kind":"pat","task":"1"}\n'
 
 
@@ -123,7 +168,9 @@ def test_a_missing_ledger_directory_is_created_before_the_mirror_append(
 
     record_dispatch.append_row(autopilot, {"id": "feedface"})
 
-    assert _rows(autopilot / "ledger" / "dispatch-metrics.jsonl") == [{"id": "feedface"}]
+    assert _rows(autopilot / "ledger" / "dispatch-metrics.jsonl") == [
+        {"id": "feedface"}
+    ]
 
 
 def test_handoff_writes_its_site_edge_stamp_phase_and_prd(
@@ -171,7 +218,7 @@ def test_start_with_a_prompt_file_measures_it_and_prints_the_count_then_the_id(
     # prints, so opening the row costs them nothing extra.
     autopilot = _project(tmp_path)
     prompt = tmp_path / "proj" / "prompt.txt"
-    prompt.write_bytes("café\n".encode("utf-8"))
+    prompt.write_bytes("café\n".encode())
     monkeypatch.chdir(tmp_path / "proj")
     _pin_clock(monkeypatch, 5000)
 
@@ -184,7 +231,13 @@ def test_start_with_a_prompt_file_measures_it_and_prints_the_count_then_the_id(
     assert count == "6"  # bytes, not characters
     assert _HEX_ID.match(printed)
     assert _rows(autopilot / "dispatch-metrics.jsonl") == [
-        {"id": printed, "kind": "deslop", "task": "4", "queued_at": 5000, "prompt_bytes": 6},
+        {
+            "id": printed,
+            "kind": "deslop",
+            "task": "4",
+            "queued_at": 5000,
+            "prompt_bytes": 6,
+        },
     ]
 
 
@@ -203,7 +256,15 @@ def test_start_on_an_unreadable_prompt_file_exits_2_and_opens_no_row(
     monkeypatch.chdir(tmp_path / "proj")
 
     exit_code = record_dispatch.main(
-        ["start", "--kind", "devon", "--task", "1", "--prompt-file", str(tmp_path / prompt)],
+        [
+            "start",
+            "--kind",
+            "devon",
+            "--task",
+            "1",
+            "--prompt-file",
+            str(tmp_path / prompt),
+        ],
     )
 
     assert exit_code == 2
@@ -235,7 +296,11 @@ def test_end_names_a_skipped_unparseable_line_even_when_the_start_row_is_found(
     err = capsys.readouterr().err
     assert "skipped 1 unparseable line" in err
     assert "no start row" not in err
-    last = (autopilot / "dispatch-metrics.jsonl").read_text(encoding="utf-8").splitlines()[-1]
+    last = (
+        (autopilot / "dispatch-metrics.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()[-1]
+    )
     assert json.loads(last)["elapsed_s"] == 5000
 
 
@@ -243,7 +308,17 @@ def test_end_names_a_skipped_unparseable_line_even_when_the_start_row_is_found(
     "argv",
     [
         ["end", "deadbeef", "--outcome", "ok"],
-        ["handoff", "--site", "build", "--edge", "resume", "--phase", "build", "--prd", "x.md"],
+        [
+            "handoff",
+            "--site",
+            "build",
+            "--edge",
+            "resume",
+            "--phase",
+            "build",
+            "--prd",
+            "x.md",
+        ],
         ["start", "--kind", "tess", "--task", "1", "--prompt-file", "prompt.txt"],
     ],
 )

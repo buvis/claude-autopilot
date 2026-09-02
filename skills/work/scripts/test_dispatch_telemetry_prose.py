@@ -105,7 +105,7 @@ def test_step_6_5_writes_the_leave_row_before_the_stop() -> None:
     )
 
 
-def test_every_render_block_in_the_skill_carries_both_flags() -> None:
+def test_every_render_block_in_the_skill_passes_its_own_persona_as_kind() -> None:
     # A scan, not an enumeration: a render block added to any reference opens
     # no row unless it carries the flags, and a count pinned per file cannot
     # see a block in a file it does not name. The floor keeps the scan honest
@@ -115,7 +115,9 @@ def test_every_render_block_in_the_skill_carries_both_flags() -> None:
         for chunk in path.read_text().split(_RENDER)[1:]:
             block = chunk.split("```", 1)[0]
             persona = re.match(r"/(?:agents|skills/work/references)/([a-z]+)", chunk)
-            assert persona, f"{path}: a render block names no persona file after the marker."
+            assert persona, (
+                f"{path}: a render block names no persona file after the marker."
+            )
             blocks += 1
             assert f"--dispatch-kind {persona.group(1)} --dispatch-task" in block, (
                 f"{path}: the {persona.group(1)} render block does not pass "
@@ -166,7 +168,9 @@ def test_the_reference_defines_the_rows_the_outcomes_and_the_never_blocks_rule()
     )
 
     watchdog = _section(
-        dispatch, "## Subagent Watchdog", "## Foreground command budgets"
+        dispatch,
+        "## Subagent Watchdog",
+        "## Foreground command budgets",
     )
     assert watchdog.count("Dispatch telemetry") >= 2, (
         "references/subagent-dispatch.md § Subagent Watchdog no longer points "
@@ -269,7 +273,9 @@ def test_the_watchdog_kill_closes_the_row_exactly_once() -> None:
     # One dispatch, one end row: the kill branch closes on what TaskStop
     # reports, never `timeout` and then `ok` for the same id.
     dispatch = (_REFS / "subagent-dispatch.md").read_text()
-    watchdog = _section(dispatch, "## Subagent Watchdog", "## Foreground command budgets")
+    watchdog = _section(
+        dispatch, "## Subagent Watchdog", "## Foreground command budgets"
+    )
     assert "exactly once" in watchdog, (
         "references/subagent-dispatch.md § Subagent Watchdog no longer says the "
         "killed dispatch's row closes exactly once, on what `TaskStop` reports."
@@ -304,7 +310,9 @@ def test_a_re_dispatch_keeps_its_id_and_closes_it_again() -> None:
     # The reused prompt was measured once, so a re-dispatch pays no `start`;
     # its second end row on the same id is what keeps the attempt on record.
     gate = (_REFS / "gate-failure.md").read_text()
-    breaker = _section(gate, "## Infrastructure-failure circuit breaker", "## Step 4 result table")
+    breaker = _section(
+        gate, "## Infrastructure-failure circuit breaker", "## Step 4 result table"
+    )
     assert "keeps the first dispatch's telemetry id" in breaker, (
         "references/gate-failure.md § Infrastructure-failure circuit breaker no "
         "longer says the re-dispatch keeps its id, so it either opens a second "
@@ -315,19 +323,39 @@ def test_a_re_dispatch_keeps_its_id_and_closes_it_again() -> None:
         "references/subagent-dispatch.md § Dispatch telemetry dropped the "
         "re-dispatch rule, so a reader has no answer for the second attempt."
     )
+    assert "do not close it again" in dispatch, (
+        "references/subagent-dispatch.md no longer says the first attempt's row is "
+        "already closed when the re-dispatch happens; a literal reader writes a "
+        "third end row."
+    )
+    for text, name in (
+        (breaker, "gate-failure.md § 4.2"),
+        (dispatch, "subagent-dispatch.md"),
+    ):
+        assert "continuation brief" in text and "Retry render" in text, (
+            f"references/{name} no longer says a continuation brief is rendered "
+            "through § Retry render, whose flags open its own row; a re-send rule "
+            "alone puts the brief on a closed id, and a `start` call would open two."
+        )
     codex = (_REFS / "codex-implementor.md").read_text()
     checklist = codex[codex.index("## Codex dispatch") :]
     assert _END_CALL in checklist, (
         "references/codex-implementor.md § Codex dispatch has no `end` bullet, so "
         "a reader following the checklist closes no row."
     )
+    for needle in ("dispatch-ivan-<task-id>.txt", "TOOL-GATE NOTICE appended"):
+        assert needle in checklist, (
+            f"references/codex-implementor.md § Codex dispatch never says {needle!r}: "
+            "nothing then ties the codex `-f` file to the flagged render, and a "
+            "hand-written prompt has no row for `end` to close."
+        )
 
 
 def test_the_review_session_stamps_its_resume_edge_before_the_cycle_skip() -> None:
     review = (_RUN_REFS / "phase-review.md").read_text()
     phase_4 = _section(review, "## Phase 4", "## Phase 5")
     assert phase_4.index("--site review --edge resume") < phase_4.index(
-        "**Skip this cycle's review if:**"
+        "**Skip this cycle's review if:**",
     ), (
         "run-autopilot/references/phase-review.md writes the review resume row "
         "after the cycle skip, so a crash-resume with the review file on disk "
