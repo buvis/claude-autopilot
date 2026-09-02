@@ -91,28 +91,29 @@ def _queued_at(autopilot_dir: Path, dispatch_id: str) -> int | None:
     except OSError as err:
         print(f"record_dispatch: start row lookup failed: {err}", file=sys.stderr)
         return None
-    rows: list[object] = []
+    found = None
     skipped = 0
     for line in lines:
         try:
-            rows.append(json.loads(line))
+            row = json.loads(line)
         except ValueError:
             skipped += 1
+            continue
+        if found is None and isinstance(row, dict) and row.get("id") == dispatch_id:
+            queued_at = row.get("queued_at")
+            if isinstance(queued_at, int):
+                found = queued_at
     if skipped:
         print(
             f"record_dispatch: skipped {skipped} unparseable line(s) in {FILENAME}",
             file=sys.stderr,
         )
-    for row in rows:
-        if isinstance(row, dict) and row.get("id") == dispatch_id:
-            queued_at = row.get("queued_at")
-            if isinstance(queued_at, int):
-                return queued_at
-    print(
-        f"record_dispatch: no start row for {dispatch_id}, elapsed_s is null",
-        file=sys.stderr,
-    )
-    return None
+    if found is None:
+        print(
+            f"record_dispatch: no start row for {dispatch_id}, elapsed_s is null",
+            file=sys.stderr,
+        )
+    return found
 
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:

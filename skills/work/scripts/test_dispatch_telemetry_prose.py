@@ -12,6 +12,7 @@ stops filling — which is the failure the ledger exists to end.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 _SCRIPTS = Path(__file__).resolve().parent
@@ -113,10 +114,13 @@ def test_every_render_block_in_the_skill_carries_both_flags() -> None:
     for path in (_SKILL_MD, *sorted(_REFS.glob("*.md"))):
         for chunk in path.read_text().split(_RENDER)[1:]:
             block = chunk.split("```", 1)[0]
+            persona = re.match(r"/(?:agents|skills/work/references)/([a-z]+)", chunk)
+            assert persona, f"{path}: a render block names no persona file after the marker."
             blocks += 1
-            assert "--dispatch-kind" in block and "--dispatch-task" in block, (
-                f"{path}: a render_prompt.py block carries no `--dispatch-kind` / "
-                "`--dispatch-task`, so that dispatch opens no start row."
+            assert f"--dispatch-kind {persona.group(1)} --dispatch-task" in block, (
+                f"{path}: the {persona.group(1)} render block does not pass "
+                f"`--dispatch-kind {persona.group(1)} --dispatch-task`; a ledger "
+                "whose kinds are wrong is worse than none."
             )
     assert blocks >= 7, (
         f"found {blocks} render blocks across SKILL.md and references/, fewer "
@@ -307,7 +311,7 @@ def test_a_re_dispatch_keeps_its_id_and_closes_it_again() -> None:
         "row (an extra call) or closes nothing."
     )
     dispatch = (_REFS / "subagent-dispatch.md").read_text()
-    assert "A re-dispatch keeps its id" in dispatch, (
+    assert "verbatim re-dispatch keeps its id" in dispatch, (
         "references/subagent-dispatch.md § Dispatch telemetry dropped the "
         "re-dispatch rule, so a reader has no answer for the second attempt."
     )

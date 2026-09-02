@@ -190,8 +190,11 @@ the departures there, not here:
 - close the dispatch row when `TaskOutput` returns —
   `record_dispatch.py end <id> --outcome ok`, `error` on a non-zero exit,
   `lost` when the `-o` file is missing or empty, `timeout` after the second
-  deadline (`references/subagent-dispatch.md` § Dispatch telemetry); the Claude fallback that follows a kill keeps the same
-  id and closes it again when it returns;
+  deadline (`references/subagent-dispatch.md` § Dispatch telemetry). The
+  `-f` file is step 3's flagged render with the TOOL-GATE NOTICE appended, so
+  the row and its id are the render's; the Claude fallback that re-sends that
+  file keeps the id and closes it again when it returns, and a rewritten
+  continuation brief opens its own row with `start --prompt-file`;
 - completion judged by the `-o` file plus the step-5.5 test gate — **never by
   exit code alone**;
 - **edit-enabled sandbox: `-a` (`--sandbox workspace-write`), never `-y`.**
