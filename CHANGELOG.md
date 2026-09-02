@@ -59,6 +59,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `check` or `repair`. It verdicts `syntax_error` like any other file that
   cannot be compiled, and the sibling scan behind `_common.py` repair skips it
   and carries on rather than failing the run.
+- **use-codex**: `codex_hook_doctor.py repair` no longer deletes a registered
+  hook whose command spells its path indirectly (`hooks/../hooks/custom.py`).
+  Target paths are now normalized lexically, so the registered set and the
+  placeholder scan agree on the same file.
+- **use-codex**: an unregistered zero-byte file whose basename matches a known
+  hook is now removed as the placeholder it is, instead of being rewritten from
+  the canonical source. The cleanup exemption covers registered targets plus
+  `_common.py`, not every known basename.
 
 ## [0.3.0] - 2026-09-01
 

@@ -41,7 +41,9 @@ def _iter_commands(hooks: dict) -> list[str]:
 def _resolve_target(command: str, config_dir: Path) -> Path:
     tokens = shlex.split(command)
     path = Path(tokens[-1])
-    return path if path.is_absolute() else config_dir / path
+    if not path.is_absolute():
+        path = config_dir / path
+    return Path(os.path.normpath(path))
 
 
 def _verdict_for(
@@ -217,7 +219,7 @@ def _repair_target(
         pass
 
     known = KNOWN_HOOKS.get(target.name)
-    if verdict == "empty" and target not in registered and known is None:
+    if verdict == "empty" and target not in registered:
         return None  # zero-byte + unregistered -> handled by the placeholder scan below
 
     if known is None:
@@ -244,7 +246,7 @@ def _remove_orphaned_empty(
         if (
             path.stat().st_size == 0
             and path not in registered
-            and path.name not in KNOWN_HOOKS
+            and path.name != "_common.py"
         ):
             if dry_run:
                 out.append(("would-remove", str(path), ""))
@@ -285,7 +287,11 @@ def repair(
         if result is not None:
             out.append(result)
 
-    out.extend(_remove_orphaned_empty(hooks_dir, registered, dry_run))
+    cleanup_hooks = json.loads(config.read_text(encoding="utf-8"))["hooks"]
+    cleanup_registered = {
+        _resolve_target(c, config_dir) for c in _iter_commands(cleanup_hooks)
+    }
+    out.extend(_remove_orphaned_empty(hooks_dir, cleanup_registered, dry_run))
     return out
 
 
