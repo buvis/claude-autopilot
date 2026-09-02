@@ -108,20 +108,33 @@ def check(
 
 def _missing_common_import_names(hooks_dir: Path, canonical: Path) -> list[str]:
     imported: set[str] = set()
+    unparseable: list[str] = []
     for py_file in sorted(hooks_dir.glob("*.py")):
         if py_file.name == "_common.py":
             continue
-        tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        try:
+            tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        except SyntaxError:
+            unparseable.append(
+                f"{py_file.name}: SyntaxError (cannot verify _common imports)"
+            )
+            continue
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and node.module == "_common":
                 imported.update(alias.name for alias in node.names)
 
+    try:
+        canonical_tree = ast.parse(canonical.read_text(encoding="utf-8"))
+    except SyntaxError:
+        unparseable.append(
+            f"{canonical.name}: SyntaxError (cannot verify _common imports)"
+        )
+        return sorted(imported) + unparseable
+
     defined = {
-        node.name
-        for node in ast.parse(canonical.read_text(encoding="utf-8")).body
-        if isinstance(node, ast.FunctionDef)
+        node.name for node in canonical_tree.body if isinstance(node, ast.FunctionDef)
     }
-    return sorted(imported - defined)
+    return sorted(imported - defined) + unparseable
 
 
 def _repair_unknown(
