@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **use-codex**: the hook doctor repairs a known hook that fails to compile,
+  accepts hooks with a non-UTF-8 coding cookie, and reports an unreadable
+  canonical `_common.py` as unrepairable instead of aborting the whole
+  `repair` run.
+
 ## [0.4.0] - 2026-09-02
 
 ### Added

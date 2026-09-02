@@ -167,6 +167,74 @@ def test_check_returns_syntax_error_with_the_compile_message_in_detail(
     assert detail != ""
 
 
+def test_check_returns_ok_for_a_latin1_hook_that_declares_its_coding_cookie(
+    tmp_path: Path,
+) -> None:
+    # PEP 263: a coding cookie makes non-UTF-8 source valid Python, and
+    # compile() honours it only when handed the raw bytes. Decoding as UTF-8
+    # first raised UnicodeDecodeError and verdicted a healthy hook
+    # "syntax_error" (exit 1, rung gated off).
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    (hooks_dir / "latin.py").write_bytes(
+        '# -*- coding: latin-1 -*-\nX = "\xe9"\n'.encode("latin-1")
+    )
+    config_path = tmp_path / "hooks.json"
+    _write_config(config_path, {"SessionStart": ["python3 hooks/latin.py"]})
+    aegis_root, autopilot_root = _fake_roots(tmp_path)
+
+    result = codex_hook_doctor.check(
+        config=config_path,
+        aegis_root=aegis_root,
+        autopilot_root=autopilot_root,
+    )
+
+    assert result[0][:2] == ("ok", str(hooks_dir / "latin.py"))
+
+
+def test_check_returns_syntax_error_for_latin1_bytes_without_a_coding_cookie(
+    tmp_path: Path,
+) -> None:
+    # The same bytes minus the cookie are not valid Python: compile()
+    # assumes UTF-8 and rejects them, so the verdict stays "syntax_error".
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    (hooks_dir / "latin.py").write_bytes('X = "\xe9"\n'.encode("latin-1"))
+    config_path = tmp_path / "hooks.json"
+    _write_config(config_path, {"SessionStart": ["python3 hooks/latin.py"]})
+    aegis_root, autopilot_root = _fake_roots(tmp_path)
+
+    result = codex_hook_doctor.check(
+        config=config_path,
+        aegis_root=aegis_root,
+        autopilot_root=autopilot_root,
+    )
+
+    assert result[0][:2] == ("syntax_error", str(hooks_dir / "latin.py"))
+
+
+def test_check_returns_syntax_error_for_a_hook_containing_a_null_byte(
+    tmp_path: Path,
+) -> None:
+    # compile() rejects a null byte with ValueError on 3.10/3.11 and
+    # SyntaxError on 3.12+; the verdict is "syntax_error" on every version,
+    # never an uncaught exception.
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    (hooks_dir / "nul.py").write_bytes(b"X = 1\x00\n")
+    config_path = tmp_path / "hooks.json"
+    _write_config(config_path, {"SessionStart": ["python3 hooks/nul.py"]})
+    aegis_root, autopilot_root = _fake_roots(tmp_path)
+
+    result = codex_hook_doctor.check(
+        config=config_path,
+        aegis_root=aegis_root,
+        autopilot_root=autopilot_root,
+    )
+
+    assert result[0][:2] == ("syntax_error", str(hooks_dir / "nul.py"))
+
+
 def test_check_resolves_a_quoted_absolute_path_with_spaces(tmp_path: Path) -> None:
     # `python3 '/path with spaces/hook.py'` must resolve to the path inside
     # the quotes, not the closing quote or the raw quoted token.

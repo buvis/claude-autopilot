@@ -59,12 +59,14 @@ def _verdict_for(
     # Syntax outranks staleness: a hook that cannot compile fails on every
     # tool call, and `stale` exits 3 (rung stays on) while `syntax_error`
     # exits 1 (rung gates off). Checking drift first would report the
-    # harmless verdict for the harmful state. `compile()` is used rather
-    # than py_compile so the check writes no bytecode -- `check` is
-    # contractually read-only, and a batch runs it against the real ~/.codex.
+    # harmless verdict for the harmful state. `compile()` writes no bytecode
+    # (`check` is contractually read-only, and a batch runs it against the
+    # real ~/.codex) and, handed the raw bytes, honours a PEP 263 coding
+    # cookie the way the interpreter would. ValueError covers a null byte on
+    # 3.10/3.11 (SyntaxError from 3.12) and is UnicodeDecodeError's base.
     try:
-        compile(target.read_text(encoding="utf-8"), str(target), "exec")
-    except (SyntaxError, UnicodeDecodeError) as exc:
+        compile(target.read_bytes(), str(target), "exec")
+    except (SyntaxError, ValueError) as exc:
         return "syntax_error", str(exc)
 
     known = KNOWN_HOOKS.get(target.name)
@@ -142,6 +144,11 @@ def _missing_common_import_names(hooks_dir: Path, canonical: Path) -> list[str]:
             f"{canonical.name}: SyntaxError (cannot verify _common imports)"
         )
         return sorted(imported) + unparseable
+    except (UnicodeDecodeError, OSError):
+        unparseable.append(
+            f"{canonical.name}: unreadable (cannot verify _common imports)"
+        )
+        return sorted(imported) + unparseable
 
     defined = {
         node.name for node in canonical_tree.body if isinstance(node, ast.FunctionDef)
@@ -168,7 +175,7 @@ def _repair_known(
     autopilot_root: Path,
     dry_run: bool,
 ) -> tuple[str, str, str] | None:
-    if verdict not in ("missing", "empty", "stale", "no_canonical"):
+    if verdict not in ("missing", "empty", "stale", "no_canonical", "syntax_error"):
         return None
 
     target = Path(target_str)

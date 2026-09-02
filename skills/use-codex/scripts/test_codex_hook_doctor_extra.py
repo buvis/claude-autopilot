@@ -1,4 +1,5 @@
-"""Tests for codex_hook_doctor.py — check() edge cases and doc-sync pins.
+"""Tests for codex_hook_doctor.py — check() edge cases, the repair() verdicts
+PRD 00169 widened, and doc-sync pins.
 
 Split out of test_codex_hook_doctor.py to keep both files under the
 project's file-length limit. Shares `_fake_roots`, `_write_config`,
@@ -19,6 +20,7 @@ from test_codex_hook_doctor import (
     _write_config,
     codex_hook_doctor,
 )
+from test_codex_hook_doctor_repair import _run_repair_cli
 
 # ---------------------------------------------------------------------------
 # check() — the five newly-added KNOWN_HOOKS entries
@@ -401,6 +403,139 @@ def test_check_includes_an_unregistered_non_common_file_as_an_implicit_target(
     )
 
     assert any(target == str(stray) for _verdict, target, _detail in result)
+
+
+# ---------------------------------------------------------------------------
+# repair() — a known hook that fails to compile, and an unreadable canonical
+# ---------------------------------------------------------------------------
+
+
+def _syntax_broken_known_hook(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
+    """hooks/validate_commit_msg.py that cannot compile, registered by one
+    command. Returns (config, target, aegis_root, autopilot_root); the
+    caller decides whether a canonical source exists."""
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    target = hooks_dir / "validate_commit_msg.py"
+    target.write_text("def f(:\n    pass\n", encoding="utf-8")
+    config_path = tmp_path / "hooks.json"
+    _write_config(config_path, {"PreToolUse": ["python3 hooks/validate_commit_msg.py"]})
+    aegis_root, autopilot_root = _fake_roots(tmp_path)
+    (aegis_root / "hooks").mkdir()
+    return config_path, target, aegis_root, autopilot_root
+
+
+def test_repair_rewrites_a_known_hook_that_fails_to_compile_from_canonical(
+    tmp_path: Path,
+) -> None:
+    # check() verdicts a non-compiling known hook "syntax_error" and exits 1
+    # (rung gated off). repair used to emit no row for that verdict, so the
+    # one state check was tightened to catch stayed unrepaired. A known hook
+    # that cannot compile has no working state worth preserving.
+    config_path, target, aegis_root, autopilot_root = _syntax_broken_known_hook(
+        tmp_path
+    )
+    canonical = aegis_root / "hooks" / "validate_commit_msg.py"
+    canonical.write_text("canonical = 2\n", encoding="utf-8")
+
+    result = codex_hook_doctor.repair(
+        config=config_path,
+        aegis_root=aegis_root,
+        autopilot_root=autopilot_root,
+    )
+
+    assert ("repaired", str(target), str(canonical)) in result
+    assert target.read_bytes() == canonical.read_bytes()
+
+
+def test_repair_reports_a_known_hook_that_fails_to_compile_unrepairable_without_canonical(
+    tmp_path: Path,
+) -> None:
+    # Same broken hook, no canonical source under aegis_root: repair must
+    # still emit a row naming why, and leave the bytes alone.
+    config_path, target, aegis_root, autopilot_root = _syntax_broken_known_hook(
+        tmp_path
+    )
+    before = target.read_bytes()
+
+    result = codex_hook_doctor.repair(
+        config=config_path,
+        aegis_root=aegis_root,
+        autopilot_root=autopilot_root,
+    )
+
+    verdict, _target, why = next(r for r in result if r[1] == str(target))
+    assert verdict == "unrepairable"
+    assert "no canonical source" in why
+    assert target.read_bytes() == before
+
+
+def test_repair_dry_run_reports_would_repair_for_a_known_hook_that_fails_to_compile(
+    tmp_path: Path,
+) -> None:
+    config_path, target, aegis_root, autopilot_root = _syntax_broken_known_hook(
+        tmp_path
+    )
+    canonical = aegis_root / "hooks" / "validate_commit_msg.py"
+    canonical.write_text("canonical = 2\n", encoding="utf-8")
+    before = target.read_bytes()
+
+    result = codex_hook_doctor.repair(
+        config=config_path,
+        aegis_root=aegis_root,
+        autopilot_root=autopilot_root,
+        dry_run=True,
+    )
+
+    assert ("would-repair", str(target), str(canonical)) in result
+    assert target.read_bytes() == before
+
+
+def test_repair_reports_common_py_unrepairable_when_canonical_is_not_utf8_and_still_repairs_siblings(
+    tmp_path: Path,
+) -> None:
+    # The canonical _common.py is read as UTF-8 before the rewrite so its
+    # top-level defs can be checked against sibling imports. Non-UTF-8 bytes
+    # there used to raise straight through repair(): exit 2, no TSV row for
+    # any target. The sibling scan a few lines up already tolerates that;
+    # the canonical read must too, degrading to one unrepairable row.
+    # hooks/_common.py is empty (a broken verdict), so the post-repair exit
+    # is 1: it stays empty while validate_commit_msg.py gets repaired.
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    common = hooks_dir / "_common.py"
+    common.write_bytes(b"")
+    (hooks_dir / "validate_commit_msg.py").write_text("local = 1\n", encoding="utf-8")
+    config_path = tmp_path / "hooks.json"
+    _write_config(config_path, {"PreToolUse": ["python3 hooks/validate_commit_msg.py"]})
+    aegis_root, autopilot_root = _fake_roots(tmp_path)
+    (aegis_root / "hooks").mkdir()
+    (aegis_root / "hooks" / "_common.py").write_bytes('X = "\xe9"\n'.encode("latin-1"))
+    canonical_sibling = aegis_root / "hooks" / "validate_commit_msg.py"
+    canonical_sibling.write_text("canonical = 2\n", encoding="utf-8")
+
+    result = _run_repair_cli(
+        [
+            "--config",
+            str(config_path),
+            "--aegis-root",
+            str(aegis_root),
+            "--autopilot-root",
+            str(autopilot_root),
+        ],
+    )
+
+    lines = [line for line in result.stdout.splitlines() if line]
+    common_row = next(line for line in lines if line.startswith(f"unrepairable\t{common}\t"))
+    assert "_common.py: unreadable (cannot verify _common imports)" in common_row
+    assert any(
+        line.startswith(f"repaired\t{hooks_dir / 'validate_commit_msg.py'}\t")
+        for line in lines
+    )
+    assert (hooks_dir / "validate_commit_msg.py").read_bytes() == canonical_sibling.read_bytes()
+    assert common.read_bytes() == b""
+    assert result.returncode == 1
+    assert "Traceback" not in result.stderr
 
 
 # ---------------------------------------------------------------------------
