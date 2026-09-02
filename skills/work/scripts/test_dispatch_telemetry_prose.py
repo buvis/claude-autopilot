@@ -1,11 +1,8 @@
 """Prose pins for the dispatch timing ledger (PRD 00168).
 
-Same pattern as test_dispatch_prose.py and test_command_budget_prose.py: read
-each file once, assert on short, reword-resistant substrings, each with a
-failure message naming what drifted. A separate file because
-test_dispatch_prose.py sits at 710 lines and the pack's own step-5.65 style
-gate flags an 800-line crossing (test_command_budget_prose.py split for the
-same reason).
+Same pattern as test_dispatch_prose.py, split from it to stay under the
+800-line file limit: read each file once, assert on short, reword-resistant
+substrings, each with a failure message naming what drifted.
 
 Nothing executes a call site but a reader: the render flags, the `end` call
 and the handoff rows are Bash lines the orchestrator copies from these files,
@@ -262,4 +259,81 @@ def test_the_changelog_names_the_ledger_under_unreleased() -> None:
         "CHANGELOG.md has no [Unreleased] entry naming "
         "dev/local/autopilot/dispatch-metrics.jsonl; the ledger is user-visible "
         "and the changelog rule is blocking."
+    )
+
+
+# --- cycle-1 review: the holes the panel found in the wiring -----------------
+
+
+def test_the_watchdog_kill_closes_the_row_exactly_once() -> None:
+    # As first written the kill branch said "close timeout" and then "the row
+    # closes ok", which an executor can follow as two end rows for one id.
+    dispatch = (_REFS / "subagent-dispatch.md").read_text()
+    watchdog = _section(dispatch, "## Subagent Watchdog", "## Foreground command budgets")
+    assert "exactly once" in watchdog, (
+        "references/subagent-dispatch.md § Subagent Watchdog no longer says the "
+        "killed dispatch's row closes exactly once, on what `TaskStop` reports."
+    )
+
+
+def test_a_codex_deadline_kill_maps_to_one_outcome() -> None:
+    # codex-implementor.md kills on the second TaskOutput deadline; listing
+    # that kill under `killed` while the deadline sits under `timeout` maps
+    # one event two ways.
+    section = (_REFS / "subagent-dispatch.md").read_text()
+    section = section[section.index("## Dispatch telemetry") :]
+    assert "before any deadline fired" in section, (
+        "references/subagent-dispatch.md § Dispatch telemetry's `killed` row no "
+        "longer excludes deadline kills, so a codex kill-before-fallback is "
+        "both `timeout` and `killed`."
+    )
+
+
+def test_the_hand_built_lanes_measure_and_open_in_one_call() -> None:
+    # `--prompt-file` is what keeps the PRD's one-extra-call metric true for
+    # Devon and the deslop pass: the measurement call opens the row.
+    text = _SKILL_MD.read_text()
+    for start, end in (("### 2.85.", "### 2.9."), ("### 5.6.", "### 5.65.")):
+        assert "--prompt-file" in _section(text, start, end), (
+            f"{_SKILL_MD}: step {start} opens its row with a byte count it has "
+            "to measure separately, which is the second extra call the PRD's "
+            "cost metric forbids."
+        )
+
+
+def test_a_re_dispatch_opens_its_own_row() -> None:
+    gate = (_REFS / "gate-failure.md").read_text()
+    breaker = _section(gate, "## Infrastructure-failure circuit breaker", "## Step 4 result table")
+    assert "start --kind <the same kind>" in breaker, (
+        "references/gate-failure.md § Infrastructure-failure circuit breaker "
+        "re-dispatches on the first dispatch's closed id, or on no id at all."
+    )
+    codex = (_REFS / "codex-implementor.md").read_text()
+    checklist = codex[codex.index("## Codex dispatch") :]
+    assert _END_CALL in checklist, (
+        "references/codex-implementor.md § Codex dispatch has no `end` bullet, so "
+        "a reader following the checklist closes no row."
+    )
+
+
+def test_the_review_session_stamps_its_resume_edge_before_the_cycle_skip() -> None:
+    review = (_RUN_REFS / "phase-review.md").read_text()
+    phase_4 = _section(review, "## Phase 4", "## Phase 5")
+    assert phase_4.index("--site review --edge resume") < phase_4.index(
+        "**Skip this cycle's review if:**"
+    ), (
+        "run-autopilot/references/phase-review.md writes the review resume row "
+        "after the cycle skip, so a crash-resume with the review file on disk "
+        "skips the edge."
+    )
+
+
+def test_the_canonical_handoff_procedure_writes_the_leave_row() -> None:
+    # Gate files invoke the procedure by site name; a new site row in its table
+    # gets its row from the procedure, not from a per-site sentence.
+    skill = _RUN_SKILL_MD.read_text()
+    procedure = _section(skill, "### Session handoff procedure", "\n###")
+    assert f"{_HANDOFF_CALL} --site <build|review|done> --edge leave" in procedure, (
+        "run-autopilot/SKILL.md § Session handoff procedure does not write the "
+        "`leave` row, so a site added to its table hands off unrecorded."
     )

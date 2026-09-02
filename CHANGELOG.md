@@ -21,23 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   section appends `; hooks: <hook_doctor>` whenever the doctor-first batch
   probe recorded a stale hook copy or its own failure summary.
 - **work**: a per-dispatch timing ledger at
-  `dev/local/autopilot/dispatch-metrics.jsonl`, mirrored into the GC-exempt
-  `ledger/` copy the way `loop-metrics.jsonl` is. `record_dispatch.py` writes
-  it: `start` opens a row (queued time, prompt bytes, an id), `end` closes it
-  with the elapsed seconds and an outcome (`ok`, `timeout`, `killed`, `error`,
-  `lost`), and `handoff` stamps one edge of a session handoff. A render opens
-  the start row for free: `render_prompt.py --dispatch-kind <persona>
-  --dispatch-task <id>` appends it with the byte count the render already
-  prints and echoes the id on a second stdout line; without both flags the
-  render is byte-identical to before. Every Tess, Ivan and Pat render in
-  `/autopilot:work` passes them, Devon and the self-deslop pass open theirs
-  with `record_dispatch.py start`, and one `end` call after each dispatch
-  returns closes the row. Every session handoff writes a `leave` row before
-  it stops and a `resume` row when the next session picks up, so a multi-hour
-  gap between two commits can be split into dispatch runtime and handoff
-  latency from the ledger alone. Every write is best-effort: an
-  unresolvable autopilot dir, an unwritable file or an id with no start row
-  exits 0, so telemetry never blocks a dispatch or a phase transition.
+  `dev/local/autopilot/dispatch-metrics.jsonl` (a start and an end row per
+  dispatch, one row per session-handoff edge), mirrored into the GC-exempt
+  `ledger/` copy the way `loop-metrics.jsonl` is, so a gap between two commits
+  can be split into dispatch runtime and handoff latency from the ledger alone.
+  Every write is best-effort and never blocks a dispatch or a phase transition.
 
 ### Changed
 

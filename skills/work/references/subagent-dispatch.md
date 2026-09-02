@@ -68,7 +68,7 @@ Every Agent dispatch in this skill (Tess, Ivan, Devon, or the code reviewer) mus
    - `ls -la` on the dispatch's `<task-id>.output` file: is its mtime/size still advancing? (Never Read that file — it is the full subagent transcript and will overflow context.)
    Branch on the evidence:
    - **Progress on either probe** → the agent is working, not hung. Re-arm the timer (10-15 min) and keep waiting. Hard cap: **45 minutes wall-clock per dispatch**, after which treat it as hung regardless of probes.
-   - **No progress on BOTH probes across two consecutive checks** (or the 45-min cap) → `TaskStop` the agent and close its dispatch row with `--outcome timeout` (§ Dispatch telemetry). If `TaskStop` reports the task **already completed**, the "hang" was a late completion notification — treat it as a normal completion, not a failure (the row closes `ok`). Otherwise handle it as the **Result lost / hung** row of `SKILL.md`'s Handle result table (step 4) → the infrastructure-failure circuit breaker (step 4.2). Do **not** treat a hung agent as a content **Timeout**: it produced no usable work, so splitting the task (the Timeout remedy) would split nothing.
+   - **No progress on BOTH probes across two consecutive checks** (or the 45-min cap) → `TaskStop` the agent, then close its dispatch row exactly once, on what `TaskStop` reports (§ Dispatch telemetry): if it reports the task **already completed**, the "hang" was a late completion notification — treat it as a normal completion, not a failure, and close the row `ok`; otherwise close it `--outcome timeout` and handle it as the **Result lost / hung** row of `SKILL.md`'s Handle result table (step 4) → the infrastructure-failure circuit breaker (step 4.2). Do **not** treat a hung agent as a content **Timeout**: it produced no usable work, so splitting the task (the Timeout remedy) would split nothing.
 4. **After ANY kill, inspect before re-dispatching.** Run `git status` over the authorized surfaces:
    - **Work looks complete** → the kill landed at the agent's verification/reporting tail (the common case — measured 2026-07-31: 5 kills in one session, 0 true hangs; 3 had complete work on disk). Verify the work INDEPENDENTLY (run the task's own verify commands yourself); green → accept it as a normal completion. The report footers are lost with the agent, so reconstruct `FILES_TOUCHED:` from the tree and record the missing `ASSUMPTIONS:` footer in the assumptions ledger.
    - **Work is partial** → the step-4.2 re-dispatch must be a CONTINUATION brief that names the completed surfaces (verified by you) so the fresh agent does not redo or clobber them.
@@ -174,7 +174,7 @@ Staging and the commit proceed unchanged in all three branches. Hunk-scoping a s
 
 Nothing above says when anything happened: the attempt record carries no timestamp, and `loop-metrics.jsonl` is one row per session. Measured 2026-08-27, a PRD's review and rework commits spanned 15.3 hours with a 6-hour and a 3.6-hour gap, and no artifact could say whether that was model work, a quota wait, a hung tool or a session handoff. So every dispatch in this skill writes two rows and every session handoff writes one at each end, to `dev/local/autopilot/dispatch-metrics.jsonl`, mirrored line for line into `dev/local/autopilot/ledger/dispatch-metrics.jsonl` — the working copy is trashed at 14 days by `purge-devlocal`, the `ledger/` mirror is GC-exempt, exactly as `loop-metrics.jsonl` is handled. `scripts/record_dispatch.py` is the writer; `render_prompt.py` imports it for the start row.
 
-**A telemetry failure is never a dispatch failure.** An unresolvable autopilot dir, an unwritable file or an id with no start row all exit 0 (a failed write says so on stderr, once), and no gate, result table or phase transition reads these rows. Never retry a telemetry call, never stamp anything on the attempt record for it, and never let it change a dispatch's outcome.
+**A telemetry failure is never a dispatch failure.** An unresolvable autopilot dir, an unwritable file or an id with no start row all exit 0 (a failed write says so on stderr, once; a mirror append that fails after the working-copy append succeeded leaves that row in the working copy only, and the stderr line is its whole record), and no gate, result table or phase transition reads these rows. Never retry a telemetry call, never stamp anything on the attempt record for it, and never let it change a dispatch's outcome.
 
 ### Row catalogue
 
@@ -184,7 +184,7 @@ Nothing above says when anything happened: the attempt record carries no timesta
 | end | `record_dispatch.py end` | `{"id": ..., "ended_at": <epoch s>, "elapsed_s": <int \| null>, "outcome": ..., "detail": <string \| null>}` — `elapsed_s` is `ended_at` minus the start row's `queued_at`, `null` when no start row exists |
 | handoff | `record_dispatch.py handoff` | `{"kind": "handoff", "site": "build"\|"review"\|"done", "edge": "leave"\|"resume", "at": <epoch s>, "phase": <state.phase>, "prd": <state.prd>}` |
 
-Two rows per dispatch rather than one mutated row keeps every write a pure append of one line, which is what makes the file safe under the parallel rework tasks this skill already runs. Read a dispatch's runtime by joining its two rows on `id`; read a handoff's latency as the gap between a `leave` row and the next `resume` row for the same `prd`.
+Two rows per dispatch rather than one mutated row keeps every write a pure append of one line, which is what makes the file safe under the parallel rework tasks this skill already runs. Read a dispatch's runtime by joining its two rows on `id`; read a handoff's latency as the gap between a `leave` row and the next `resume` row in file order. They pair by time, not by `prd`: the file is append-only and one loop runs per repo, and across a PRD → PRD handoff the `leave` row still names the finished PRD (`more_prds` preserves `state.prd`) while the `resume` row names the next one.
 
 ### The start row: two flags on every render
 
@@ -196,11 +196,13 @@ Every `render_prompt.py` call in this skill — Tess (step 2.7, and her retry in
 
 `--dispatch-kind` names the persona rendered; a retry, repair or escalation keeps the same kind and is told apart by its own id and `queued_at`. With both flags present the render appends the start row and prints the id on its own line **after** the byte count, so the first stdout line is still the Subagent Dispatch Budget measurement, unchanged. Hold the id in-session for the end call. Absent either flag the render is byte-identical to before and writes nothing; every call site in this skill passes both.
 
-A dispatch that has no render — Devon (step 2.85) and the self-deslop pass (step 5.6) fill their templates by hand — opens its row with one call instead, which prints the id the same way:
+A dispatch that has no render — Devon (step 2.85) and the self-deslop pass (step 5.6) fill their templates by hand and write them under `dev/local/tmp/` — opens its row with the call that measures the prompt for the Subagent Dispatch Budget, so it costs nothing extra: `start --prompt-file` prints the file's byte count and then the id, the same two lines a flagged render prints, and it **is** the measurement for a hand-built prompt (no separate `wc -c`). An unreadable prompt file exits 2 with no row, the one non-zero telemetry exit: a prompt that cannot be read cannot be dispatched either.
 
 ```bash
-python3 <plugin root>/skills/work/scripts/record_dispatch.py start --kind <devon|deslop> --task <task-id> --prompt-bytes <the prompt's byte count>
+python3 <plugin root>/skills/work/scripts/record_dispatch.py start --kind <devon|deslop> --task <task-id> --prompt-file <the written prompt>
 ```
+
+**Every dispatch is one row, a re-dispatch included.** Step 4.2's one infrastructure re-dispatch and the codex → Claude fallback (`references/codex-implementor.md` § Codex dispatch) reuse an already-rendered prompt file, so no render opens a row for them: open one with `start --kind <the same kind> --task <task-id> --prompt-file <that prompt file>` before the re-dispatch and close it on its own id. Never close a second dispatch on the first one's already-closed id, and never skip its end row.
 
 (`<plugin root>` is the value `SKILL.md` resolves for `${CLAUDE_PLUGIN_ROOT}`, as in § Reflow tripwire.)
 
@@ -217,8 +219,8 @@ python3 <plugin root>/skills/work/scripts/record_dispatch.py end <id> --outcome 
 | Dispatch result | `--outcome` |
 |---|---|
 | Success — a usable result came back, whatever step 5.5 later makes of it | `ok` |
-| The Timeout row; the Watchdog's no-progress or 45-minute kill; a helper script's second `TaskOutput` timeout | `timeout` |
-| Any other `TaskStop` — the codex kill-before-fallback, an operator interrupt | `killed` |
+| The Timeout row; the Watchdog's no-progress or 45-minute kill; a helper script's second `TaskOutput` timeout (the codex kill-before-fallback included: the deadline is what ended it) | `timeout` |
+| A `TaskStop` before any deadline fired — an operator interrupt, a stop the orchestrator chose | `killed` |
 | The Error and Context-exceeded rows; a helper script exiting non-zero | `error` |
 | The Result lost / hung row — an empty result, a missing or empty `-o` file | `lost` |
 
@@ -226,4 +228,4 @@ python3 <plugin root>/skills/work/scripts/record_dispatch.py end <id> --outcome 
 
 ### Handoff rows
 
-`record_dispatch.py handoff --site <build|review|done> --edge <leave|resume> --phase <state.phase> --prd <state.prd>` is written at both ends of every session handoff: a `leave` row right before the STOP that ends the handing-off session — `/autopilot:work` step 6.5's task-boundary handoff, and each `autopilot phase-done` site in `run-autopilot/references/phase-build.md`, `phase-review.md` and `phase-done.md` — and a `resume` row at the start of the session that picks the work up, in the same three files. `site` is the gate that writes the row; `phase` is `state.phase` at the moment of writing, so a `leave` row written after `phase-done` already names the phase the next session runs. Best-effort like every other row: it never blocks a phase transition.
+`record_dispatch.py handoff --site <build|review|done> --edge <leave|resume> --phase <state.phase> --prd <state.prd>` is written at both ends of every session handoff: a `leave` row right before the STOP that ends the handing-off session — `/autopilot:work` step 6.5's task-boundary handoff, and each `autopilot phase-done` site in `run-autopilot/references/phase-build.md`, `phase-review.md` and `phase-done.md` — and a `resume` row at the start of the session that picks the work up, in the same three files. `site` is the gate that writes the row; `phase` is `state.phase` at the moment of writing, so a `leave` row written after `phase-done` already names the phase the next session runs. A session resumed through an abort handler — a replan after a Work-phase abort, a cap-pause resume — is not a site in that table and writes no row at either end. Best-effort like every other row: it never blocks a phase transition.

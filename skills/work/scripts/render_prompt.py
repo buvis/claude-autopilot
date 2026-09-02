@@ -150,9 +150,7 @@ def _check_required_paths(require_file: list[str], require_parent: list[str]) ->
             return 7
     for raw in require_file:
         if not Path(raw).is_file():
-            print(
-                f"render_prompt: required file does not exist: {raw}", file=sys.stderr
-            )
+            print(f"render_prompt: required file does not exist: {raw}", file=sys.stderr)
             return 7
     for raw in require_parent:
         if not Path(raw).parent.is_dir():

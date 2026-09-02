@@ -178,7 +178,7 @@ For long **Bash** (builds, tests), still prefer the FOREGROUND with an explicit 
 Every session handoff is the same three steps:
 
 1. **Apply the transition** with one `autopilot phase-done --outcome <outcome>` call (table below). It reads the current phase from `state.json`, looks the pair up in `cli/transitions.py`, and commits the next phase together with every field effect that transition mandates — in ONE transaction. There is no `--phase` flag and no per-effect flag: a caller cannot supply a mismatched phase, and cannot forget an effect.
-2. **Print the site's banner** (shown at the invoking site in the gate file).
+2. **Write the `leave` handoff row, then print the site's banner** (shown at the invoking site in the gate file). The row is `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py handoff --site <build|review|done> --edge leave --phase <state.phase> --prd <state.prd>`, best-effort (`work/references/subagent-dispatch.md` § Dispatch telemetry); `state.phase` already names the next session's phase because step 1 committed it. A new site row in the table below gets its row from this step, not from a per-site sentence.
 3. **End the turn.** In loop mode the loop driver reads `state.json` and relaunches per its decision table above; outside the loop the user re-invokes `/autopilot:run-autopilot` and the same resume logic applies. Do NOT continue into the next gate's phases in this session, even if context budget appears sufficient.
 
 | site | `--outcome` | what the transition commits |

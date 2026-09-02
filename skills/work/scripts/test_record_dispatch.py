@@ -175,11 +175,84 @@ def test_start_opens_a_row_carrying_the_prompt_bytes_and_prints_its_id(
     )
 
     assert exit_code == 0
-    printed = capsys.readouterr().out.rstrip("\n")
+    count, printed = capsys.readouterr().out.splitlines()
+    assert count == "1234"
     assert _HEX_ID.match(printed)
     assert _rows(autopilot / "dispatch-metrics.jsonl") == [
         {"id": printed, "kind": "devon", "task": "2", "queued_at": 4000, "prompt_bytes": 1234},
     ]
+
+
+def test_start_with_a_prompt_file_measures_it_and_prints_the_count_then_the_id(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # The hand-built lanes already spend a call measuring their prompt for the
+    # budget; this is that call, printing the same two lines a flagged render
+    # prints, so opening the row costs them nothing extra.
+    autopilot = _project(tmp_path)
+    prompt = tmp_path / "proj" / "prompt.txt"
+    prompt.write_bytes("café\n".encode("utf-8"))
+    monkeypatch.chdir(tmp_path / "proj")
+    _pin_clock(monkeypatch, 5000)
+
+    exit_code = record_dispatch.main(
+        ["start", "--kind", "deslop", "--task", "4", "--prompt-file", str(prompt)],
+    )
+
+    assert exit_code == 0
+    count, printed = capsys.readouterr().out.splitlines()
+    assert count == "6"  # bytes, not characters
+    assert _HEX_ID.match(printed)
+    assert _rows(autopilot / "dispatch-metrics.jsonl") == [
+        {"id": printed, "kind": "deslop", "task": "4", "queued_at": 5000, "prompt_bytes": 6},
+    ]
+
+
+def test_start_on_an_unreadable_prompt_file_exits_2_and_opens_no_row(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # This call doubles as the budget measurement, and a prompt that cannot be
+    # read cannot be dispatched, so it is the one telemetry call that fails
+    # loud with a non-zero exit instead of stamping a null count.
+    autopilot = _project(tmp_path)
+    monkeypatch.chdir(tmp_path / "proj")
+
+    exit_code = record_dispatch.main(
+        ["start", "--kind", "devon", "--task", "1", "--prompt-file", str(tmp_path / "no.txt")],
+    )
+
+    assert exit_code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "record_dispatch: prompt file unreadable" in captured.err
+    assert not (autopilot / "dispatch-metrics.jsonl").exists()
+
+
+def test_end_names_a_skipped_unparseable_line_and_the_missing_start_row(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # A null elapsed_s has to say why on stderr: a garbage line in the working
+    # copy, or simply no start row, is otherwise indistinguishable from a
+    # dispatch that was never opened.
+    autopilot = _project(tmp_path)
+    (autopilot / "dispatch-metrics.jsonl").write_text("not json\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path / "proj")
+    _pin_clock(monkeypatch, 6000)
+
+    exit_code = record_dispatch.main(["end", "deadbeef", "--outcome", "ok"])
+
+    assert exit_code == 0
+    err = capsys.readouterr().err
+    assert "skipped 1 unparseable line" in err
+    assert "no start row for deadbeef" in err
+    last = (autopilot / "dispatch-metrics.jsonl").read_text(encoding="utf-8").splitlines()[-1]
+    assert json.loads(last)["elapsed_s"] is None
 
 
 @pytest.mark.parametrize(
@@ -187,7 +260,7 @@ def test_start_opens_a_row_carrying_the_prompt_bytes_and_prints_its_id(
     [
         ["end", "deadbeef", "--outcome", "ok"],
         ["handoff", "--site", "build", "--edge", "resume", "--phase", "build", "--prd", "x.md"],
-        ["start", "--kind", "tess", "--task", "1"],
+        ["start", "--kind", "tess", "--task", "1", "--prompt-bytes", "5"],
     ],
 )
 def test_an_unresolvable_autopilot_dir_writes_nothing_and_exits_zero(
@@ -209,7 +282,9 @@ def test_an_unresolvable_autopilot_dir_writes_nothing_and_exits_zero(
     captured = capsys.readouterr()
     assert captured.err == ""
     if argv[0] == "start":
-        assert _HEX_ID.match(captured.out.rstrip("\n"))
+        count, printed = captured.out.splitlines()
+        assert count == "5"
+        assert _HEX_ID.match(printed)
     else:
         assert captured.out == ""
 
@@ -229,7 +304,9 @@ def test_an_unwritable_file_drops_the_row_loudly_and_exits_zero(
     exit_code = record_dispatch.main(["end", "deadbeef", "--outcome", "error"])
 
     assert exit_code == 0
-    assert "record_dispatch: append failed" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "record_dispatch: start row lookup failed" in err
+    assert "record_dispatch: append failed" in err
 
 
 def test_concurrent_appends_from_parallel_processes_all_survive(

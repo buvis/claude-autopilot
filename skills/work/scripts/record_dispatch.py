@@ -1,22 +1,17 @@
 #!/usr/bin/env python3
-"""Dispatch timing ledger for ``/work`` (PRD 00168).
+"""Dispatch timing ledger for ``/work`` (PRD 00168): one JSONL row per dispatch
+start, one per end and one per session-handoff edge, appended to
+``dev/local/autopilot/dispatch-metrics.jsonl`` and its GC-exempt ``ledger/``
+mirror. Every write is best-effort and exits 0; no gate reads these rows.
 
-Nothing in the pack said when anything happened: the attempt record carries
-no timestamp and ``loop-metrics.jsonl`` is one row per session, so a 6-hour
-gap between two commits could not be split into model work, quota waits,
-handoff latency or a hung tool. This appends one JSONL row per dispatch start,
-one per dispatch end and one per session-handoff edge to
-``dev/local/autopilot/dispatch-metrics.jsonl``, mirrored into the GC-exempt
-``ledger/`` copy the way the loop mirrors its own rows.
-
-    record_dispatch.py start --kind KIND --task ID [--prompt-bytes N]
+    record_dispatch.py start --kind KIND --task ID (--prompt-file PATH | --prompt-bytes N)
     record_dispatch.py end ID --outcome ok|timeout|killed|error|lost [--detail TEXT]
     record_dispatch.py handoff --site build|review|done --edge leave|resume --phase P --prd PRD
 
-Every write is best-effort: an unresolvable autopilot dir, an unwritable file
-or an id with no start row all exit 0. Telemetry never blocks a dispatch or a
-phase transition, and no gate reads these rows. ``render_prompt.py`` imports
-``start_row`` so a render opens the row for free.
+``start`` prints the prompt's byte count and then the id, the two lines a
+flagged ``render_prompt.py`` prints; ``render_prompt.py`` imports ``start_row``.
+An unreadable ``--prompt-file`` exits 2 with no row: that call is also the
+budget measurement, and a prompt that cannot be read cannot be dispatched.
 """
 
 from __future__ import annotations
@@ -69,7 +64,7 @@ def start_row(
     autopilot_dir: Path | None,
     kind: str,
     task: str,
-    prompt_bytes: int | None,
+    prompt_bytes: int,
 ) -> str:
     """Open a dispatch row and return its id; no dir means no write, same id."""
     dispatch_id = secrets.token_hex(4)
@@ -88,20 +83,32 @@ def start_row(
 
 
 def _queued_at(autopilot_dir: Path, dispatch_id: str) -> int | None:
-    """The start row's ``queued_at`` for ``dispatch_id``, or None without one."""
+    """The start row's ``queued_at`` for ``dispatch_id``, or None, said on stderr."""
     try:
         lines = (autopilot_dir / FILENAME).read_text(encoding="utf-8").splitlines()
-    except OSError:
+    except OSError as err:
+        print(f"record_dispatch: start row lookup failed: {err}", file=sys.stderr)
         return None
+    skipped = 0
     for line in lines:
         try:
             row = json.loads(line)
         except ValueError:
+            skipped += 1
             continue
         if isinstance(row, dict) and row.get("id") == dispatch_id:
             queued_at = row.get("queued_at")
             if isinstance(queued_at, int):
                 return queued_at
+    if skipped:
+        print(
+            f"record_dispatch: skipped {skipped} unparseable line(s) in {FILENAME}",
+            file=sys.stderr,
+        )
+    print(
+        f"record_dispatch: no start row for {dispatch_id}, elapsed_s is null",
+        file=sys.stderr,
+    )
     return None
 
 
@@ -112,7 +119,9 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     start = verbs.add_parser("start", help="open a row for a hand-built dispatch")
     start.add_argument("--kind", required=True)
     start.add_argument("--task", required=True)
-    start.add_argument("--prompt-bytes", type=int)
+    size = start.add_mutually_exclusive_group(required=True)
+    size.add_argument("--prompt-file", help="the written prompt; its size is the count")
+    size.add_argument("--prompt-bytes", type=int)
 
     end = verbs.add_parser("end", help="close a dispatch row")
     end.add_argument("id")
@@ -131,7 +140,15 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     autopilot_dir = find_autopilot_dir(Path.cwd())
     if args.verb == "start":
-        print(start_row(autopilot_dir, args.kind, args.task, args.prompt_bytes))
+        prompt_bytes = args.prompt_bytes
+        if args.prompt_file is not None:
+            try:
+                prompt_bytes = Path(args.prompt_file).stat().st_size
+            except OSError as err:
+                print(f"record_dispatch: prompt file unreadable: {err}", file=sys.stderr)
+                return 2
+        print(prompt_bytes)
+        print(start_row(autopilot_dir, args.kind, args.task, prompt_bytes))
     elif autopilot_dir is None:
         return 0
     elif args.verb == "end":

@@ -1,12 +1,8 @@
 """Tests for render_prompt.py's dispatch telemetry flags (PRD 00168).
 
-Split from test_render_prompt.py: that file sits at 748 lines and these cases
-pushed it past the pack's own 800-line file limit (the step-5.65 style gate
-flagged `FILE | test_render_prompt.py | 870 lines` on this PRD's first gate
-run), the same reason test_command_budget_prose.py is its own module.
-
-Same loader idiom as the sibling file, so the module under test is the real
-script at its real path and the cwd is whatever each test chose.
+Split from test_render_prompt.py to stay under the 800-line file limit. Same
+loader idiom as the sibling file, so the module under test is the real script
+at its real path and the cwd is whatever each test chose.
 """
 
 from __future__ import annotations

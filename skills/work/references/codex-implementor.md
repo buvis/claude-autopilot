@@ -187,6 +187,11 @@ the departures there, not here:
   change": do not latch `codex_no_edit`; record the exit code in
   `codex_no_edit_probe_exit` instead and continue through the capability path
   normally;
+- close the dispatch row when `TaskOutput` returns —
+  `record_dispatch.py end <id> --outcome ok`, `error` on a non-zero exit,
+  `timeout` after the second deadline (`references/subagent-dispatch.md`
+  § Dispatch telemetry); the Claude fallback that follows a kill is its own
+  dispatch and opens its own row with `start --prompt-file`;
 - completion judged by the `-o` file plus the step-5.5 test gate — **never by
   exit code alone**;
 - **edit-enabled sandbox: `-a` (`--sandbox workspace-write`), never `-y`.**

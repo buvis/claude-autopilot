@@ -13,9 +13,9 @@ separate phases. Core `SKILL.md` (always loaded) carries the shared mechanics.
 
 **Skip the entire review-rework loop if:** `"review"` is in `phases_completed` — the loop already converged in a prior session and handed off (see "Hand off to the finalize session" in Phase 5). Skip Phases 4, 5, and 6, and resume directly at Phase 9 (`references/phase-done.md`).
 
-**Skip this cycle's review if:** A review file exists in `dev/local/reviews/` for the current cycle (filename pattern `{prd-name}-review-{cycle}.md`).
+Write the `resume` handoff row first, best-effort: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py handoff --site review --edge resume --phase review --prd <state.prd>` (`work/references/subagent-dispatch.md` § Dispatch telemetry). It sits below the loop-level skip above, whose path resumes into Phase 9 and writes the `done` row there, and above the cycle skip below, so a crash-resume with this cycle's review file already on disk still stamps its edge.
 
-Write the `resume` handoff row first, best-effort: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py handoff --site review --edge resume --phase review --prd <state.prd>` (`work/references/subagent-dispatch.md` § Dispatch telemetry).
+**Skip this cycle's review if:** A review file exists in `dev/local/reviews/` for the current cycle (filename pattern `{prd-name}-review-{cycle}.md`).
 
 Invoke `/autopilot:review-work-completion` skill. Every cycle runs ALL lenses (its roster, PRD 00015): Alice (consensus), Blake (blind, PRD-only), Bob (doubt rubric D1-D5 + de-slop; Claude fallback when codex is down), Carl (UI, optional), plus Eve as a fifth lens when that skill's step 1 doubt-reviewer resolution rule activates her. That rule is the single home of the Codex doubt-roster guard; this phase only invokes it. The skill's consolidation records `state.doubts_rubric_verdicts` from Bob's rubric lines (replaced each cycle; the final cycle's verdicts are what Phase 9 renders).
 
