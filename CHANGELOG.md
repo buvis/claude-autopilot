@@ -32,7 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   render is byte-identical to before. Every Tess, Ivan and Pat render in
   `/autopilot:work` passes them, Devon and the self-deslop pass open theirs
   with `record_dispatch.py start`, and one `end` call after each dispatch
-  returns closes the row. Every write is best-effort: an
+  returns closes the row. Every session handoff writes a `leave` row before
+  it stops and a `resume` row when the next session picks up, so a multi-hour
+  gap between two commits can be split into dispatch runtime and handoff
+  latency from the ledger alone. Every write is best-effort: an
   unresolvable autopilot dir, an unwritable file or an id with no start row
   exits 0, so telemetry never blocks a dispatch or a phase transition.
 

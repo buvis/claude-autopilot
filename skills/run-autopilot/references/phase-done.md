@@ -9,6 +9,8 @@ loaded) carries the shared mechanics and the test-pinned invariants.
 
 ## Phase 9: Completion
 
+Write the `resume` handoff row first, best-effort: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py handoff --site done --edge resume --phase done --prd <state.prd>` (`work/references/subagent-dispatch.md` § Dispatch telemetry).
+
 1. **Commit history is left as-is.** Autopilot does NOT rewrite the PRD's commit history; the user squashes/groups commits manually before pushing. (Why the old regroup engine was deleted: `references/design-rationale.md` § Commit history.)
 
 2. Update state: set `phase: "done"` and `next_phase: "done"`
@@ -62,7 +64,7 @@ Summary:
 ### Continuation
 
 10. Check remaining PRDs with `autopilot select` (its `source` is `drained` exactly when neither `wip/` nor `backlog/` holds one). Any left?
-   - **Yes** → run the **Session handoff procedure** (core `SKILL.md` § Session Loop) with the **PRD → PRD** site row: one `autopilot phase-done --outcome more_prds` call. That transition IS the per-PRD reset (`cli/records.PER_PRD_RESET_FIELDS` is the single authoritative list) plus `phase`/`next_phase: "build"`, committed together — the next PRD starts a fresh plan, not a rework dispatch, so clearing here prevents stale values from surviving if the next PRD aborts before reaching those phases. Delete `dev/local/autopilot/replan-context.md` if it exists (defensive — plan-tasks deletes it on success, but a malformed prior session may have left it). **`batch` is preserved in full, including `batch.catchup_completed_at` and `batch.catchup_head_sha`** — Phase 1 of the next PRD reads these to decide between full catchup and delta refresh. Print:
+   - **Yes** → run the **Session handoff procedure** (core `SKILL.md` § Session Loop) with the **PRD → PRD** site row: one `autopilot phase-done --outcome more_prds` call. That transition IS the per-PRD reset (`cli/records.PER_PRD_RESET_FIELDS` is the single authoritative list) plus `phase`/`next_phase: "build"`, committed together — the next PRD starts a fresh plan, not a rework dispatch, so clearing here prevents stale values from surviving if the next PRD aborts before reaching those phases. Delete `dev/local/autopilot/replan-context.md` if it exists (defensive — plan-tasks deletes it on success, but a malformed prior session may have left it). **`batch` is preserved in full, including `batch.catchup_completed_at` and `batch.catchup_head_sha`** — Phase 1 of the next PRD reads these to decide between full catchup and delta refresh. Write the `leave` handoff row (`python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py handoff --site done --edge leave --phase build --prd <state.prd>`, best-effort). Print:
      ```
      ── AUTOPILOT ── {prd-name} done ── next PRD in new session ────────
      ```
