@@ -206,11 +206,9 @@ def test_check_returns_syntax_error_not_stale_when_a_known_hook_is_both_drifted_
 
 
 def test_check_syntax_error_detail_has_no_embedded_newline(tmp_path: Path) -> None:
-    # py_compile's own message for this exact snippet is multi-line (a
-    # "File ..., line N" header, the source excerpt, a caret, then
-    # "SyntaxError: ..." on its own line) — the detail column must collapse
-    # that to one line, since the batch probe parses "the first broken TSV
-    # line" and an embedded newline would split one record into several.
+    # The detail column is compile()'s one-line str(exc): the batch probe
+    # parses "the first broken TSV line", so an embedded newline would split
+    # one record into several.
     hooks_dir = tmp_path / "hooks"
     hooks_dir.mkdir()
     (hooks_dir / "broken.py").write_text("def f(:\n    pass\n", encoding="utf-8")
@@ -280,10 +278,9 @@ def test_cli_stdout_line_count_is_target_count_plus_one_summary_line_for_a_multi
     tmp_path: Path,
 ) -> None:
     # A record is "<verdict>\t<target>\t<detail>" as ONE TSV line per
-    # target. py_compile's message for this snippet spans several physical
-    # lines; if that were embedded verbatim, stdout would carry more lines
-    # than (targets + 1 summary line) and the batch probe's "first broken
-    # TSV line" parsing would see a truncated record.
+    # target: the detail is compile()'s one-line str(exc), so stdout carries
+    # exactly targets + 1 summary line and the batch probe's "first broken
+    # TSV line" parsing never sees a truncated record.
     hooks_dir = tmp_path / "hooks"
     hooks_dir.mkdir()
     (hooks_dir / "good.py").write_text("X = 1\n", encoding="utf-8")

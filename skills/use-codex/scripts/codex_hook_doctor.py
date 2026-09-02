@@ -82,13 +82,18 @@ def _verdict_for(
     return "ok", ""
 
 
+def _load_hooks(config: Path) -> dict:
+    data = json.loads(config.read_text(encoding="utf-8"))
+    return data["hooks"]
+
+
 def check(
     *,
     config: Path,
     aegis_root: Path,
     autopilot_root: Path,
 ) -> list[tuple[str, str, str]]:
-    hooks = json.loads(config.read_text(encoding="utf-8"))["hooks"]
+    hooks = _load_hooks(config)
     if not isinstance(hooks, dict):
         raise TypeError("hooks must be an object")
     config_dir = config.parent
@@ -282,7 +287,7 @@ def repair(
     hooks_dir = config_dir / "hooks"
     tests_dir = hooks_dir / "tests"
 
-    hooks = json.loads(config.read_text(encoding="utf-8"))["hooks"]
+    hooks = _load_hooks(config)
     registered = {_resolve_target(c, config_dir) for c in _iter_commands(hooks)}
 
     out: list[tuple[str, str, str]] = []
@@ -301,7 +306,7 @@ def repair(
         if result is not None:
             out.append(result)
 
-    cleanup_hooks = json.loads(config.read_text(encoding="utf-8"))["hooks"]
+    cleanup_hooks = _load_hooks(config)
     cleanup_registered = {
         _resolve_target(c, config_dir) for c in _iter_commands(cleanup_hooks)
     }

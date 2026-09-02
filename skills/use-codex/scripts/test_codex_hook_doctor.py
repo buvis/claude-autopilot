@@ -22,6 +22,7 @@ instead of `ok`.
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import subprocess
@@ -65,11 +66,14 @@ def _run_cli(args: list[str], timeout: int = 10) -> subprocess.CompletedProcess[
     )
 
 
-def _snapshot(root: Path) -> dict[str, int]:
-    """Relative path -> size (-1 for directories) for every entry under
-    `root`, used to prove a run left the tree untouched."""
+def _snapshot(root: Path) -> dict[str, str | int]:
+    """Relative path -> sha256 of the bytes (-1 for directories) for every
+    entry under `root`, used to prove a run left the tree untouched. A hash,
+    not a size: a same-size rewrite must fail the read-only proofs."""
     return {
-        str(p.relative_to(root)): (p.stat().st_size if p.is_file() else -1)
+        str(p.relative_to(root)): (
+            hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() else -1
+        )
         for p in root.rglob("*")
     }
 
@@ -146,8 +150,8 @@ def test_check_returns_empty_for_a_zero_byte_target(tmp_path: Path) -> None:
 def test_check_returns_syntax_error_with_the_compile_message_in_detail(
     tmp_path: Path,
 ) -> None:
-    # Non-empty but broken Python must fail via py_compile, and the detail
-    # column is the only place the compile error is surfaced to a reader.
+    # Non-empty but broken Python must fail compile(), and the detail column
+    # (its one-line str(exc)) is the only place the error reaches a reader.
     hooks_dir = tmp_path / "hooks"
     hooks_dir.mkdir()
     (hooks_dir / "broken.py").write_text("def f(:\n    pass\n", encoding="utf-8")

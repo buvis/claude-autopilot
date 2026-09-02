@@ -651,7 +651,9 @@ def test_repair_tolerates_a_non_utf8_sibling_py_file_while_scanning_common_py_im
     # rewriting _common.py, repair scans every sibling *.py for
     # "from _common import" names — bad_sibling's bytes are not valid
     # UTF-8, so that scan must not blow up the whole run with an uncaught
-    # UnicodeDecodeError.
+    # UnicodeDecodeError: the sibling is recorded as unreadable, _common.py
+    # is refused and left as it was, and the exit is 1 because bad_sibling
+    # itself verdicts syntax_error.
     hooks_dir = tmp_path / "hooks"
     hooks_dir.mkdir()
     (hooks_dir / "_common.py").write_text("OLD = 1\n", encoding="utf-8")
@@ -677,9 +679,15 @@ def test_repair_tolerates_a_non_utf8_sibling_py_file_while_scanning_common_py_im
     )
 
     lines = [line for line in result.stdout.splitlines() if line]
-    assert any(line.startswith("summary\t") for line in lines)
+    common_row = next(
+        line
+        for line in lines
+        if line.startswith(f"unrepairable\t{hooks_dir / '_common.py'}\t")
+    )
+    assert "bad_sibling.py: unreadable" in common_row
+    assert result.returncode == 1
     assert "Traceback" not in result.stderr
-    assert result.returncode in (0, 1, 3)
+    assert (hooks_dir / "_common.py").read_bytes() == b"OLD = 1\n"
     assert (hooks_dir / "bad_sibling.py").read_bytes() == b"\xff\xfe\x00bad\n"
 
 
