@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: the codex probe line in the Implementor Mix batch-report
   section appends `; hooks: <hook_doctor>` whenever the doctor-first batch
   probe recorded a stale hook copy or its own failure summary.
+- **work**: a per-dispatch timing ledger at
+  `dev/local/autopilot/dispatch-metrics.jsonl`, mirrored into the GC-exempt
+  `ledger/` copy the way `loop-metrics.jsonl` is. `record_dispatch.py` writes
+  it: `start` opens a row (queued time, prompt bytes, an id), `end` closes it
+  with the elapsed seconds and an outcome (`ok`, `timeout`, `killed`, `error`,
+  `lost`), and `handoff` stamps one edge of a session handoff. Every write is
+  best-effort: an unresolvable autopilot dir, an unwritable file or an id with
+  no start row exits 0, so telemetry never blocks a dispatch or a phase
+  transition.
 
 ### Changed
 
