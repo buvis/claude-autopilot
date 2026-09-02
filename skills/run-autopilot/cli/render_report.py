@@ -350,8 +350,8 @@ def _probe_line(state: dict) -> str:
     probe = state.get("codex_probe") or {}
     batch_id = (state.get("batch") or {}).get("id")
     if not probe or probe.get("batch_id") != batch_id:
-        probe_line = "codex probe: not run"
-    elif probe.get("verdict") == "unhealthy":
+        return "codex probe: not run"
+    if probe.get("verdict") == "unhealthy":
         probe_line = (
             f"codex probe: unhealthy (backend: {probe.get('backend')}; "
             f"detail: {probe.get('detail')})"

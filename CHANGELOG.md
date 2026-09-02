@@ -67,6 +67,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hook is now removed as the placeholder it is, instead of being rewritten from
   the canonical source. The cleanup exemption covers registered targets plus
   `_common.py`, not every known basename.
+- **run-autopilot**: the batch report's `; hooks:` note no longer leaks onto a
+  probe left over from an earlier batch. A mismatched-batch probe renders
+  exactly `codex probe: not run`, so a stale note cannot be read as describing
+  the current batch.
 
 ## [0.3.0] - 2026-09-01
 
