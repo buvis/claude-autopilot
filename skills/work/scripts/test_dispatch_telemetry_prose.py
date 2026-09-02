@@ -256,14 +256,12 @@ def test_retention_lists_the_ledger_mirror_as_durable() -> None:
     )
 
 
-def test_the_changelog_names_the_ledger_under_unreleased() -> None:
+def test_the_changelog_names_the_ledger() -> None:
+    # The whole file, not [Unreleased]: a release moves the entry under its
+    # version heading, and the entry is what the changelog rule mandates.
     changelog = _CHANGELOG.read_text()
-    unreleased = changelog[changelog.index("## [Unreleased]") :]
-    next_release = unreleased.find("\n## [", 1)
-    if next_release != -1:
-        unreleased = unreleased[:next_release]
-    assert "dispatch-metrics.jsonl" in unreleased, (
-        "CHANGELOG.md has no [Unreleased] entry naming "
+    assert "dispatch-metrics.jsonl" in changelog, (
+        "CHANGELOG.md has no entry naming "
         "dev/local/autopilot/dispatch-metrics.jsonl; the ledger is user-visible "
         "and the changelog rule is blocking."
     )
