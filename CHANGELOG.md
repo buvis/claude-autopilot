@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in `~/.codex/hooks.json` against the canonical plugin sources that own it,
   reporting `ok`/`stale`/`no_canonical`/`missing`/`empty`/`syntax_error` per
   target with a summary line and an exit code a batch probe can branch on.
+- **use-codex**: `codex_hook_doctor.py repair [--dry-run]` restores
+  missing/empty/stale known hooks from their canonical source and removes
+  orphaned zero-byte placeholders. Operator-only — the unattended write fence
+  denies writes under `~/.codex`, so a batch never runs it.
+- **run-autopilot**: the codex probe line in the Implementor Mix batch-report
+  section appends `; hooks: <hook_doctor>` whenever the doctor-first batch
+  probe recorded a stale hook copy or its own failure summary.
 
 ### Changed
 
@@ -23,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rather than letting it satisfy the cheap tier's size bound, and the
   unknown-`default_model` warning is emitted by the CLI so the classifier
   core stays free of side effects.
+- **work**: the codex batch health probe runs the hook doctor first. A broken
+  hook (`codex_hook_doctor.py check` exits 1 or 2) marks the probe
+  `unhealthy` and skips the live probe for the rest of the batch with no
+  escalation stamp; a stale-only result (exit 3) still runs the live probe
+  and records `hook_doctor: "stale: <basenames>"` alongside it.
 
 ## [0.3.0] - 2026-09-01
 

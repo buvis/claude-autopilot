@@ -61,7 +61,11 @@ counts, then only the subsections whose sources are non-empty:
   Reading note: the exclusion line is two populations sharing one line —
   plan-time buckets partition the plan-time-ineligible tasks, while the
   dispatch-time memory reroutes (PRD 00075, deduplicated by task) come from
-  the eligible population; read it as two lists, not one partition.
+  the eligible population; read it as two lists, not one partition. The codex
+  probe line appends `; hooks: <hook_doctor>` whenever `codex_probe.hook_doctor`
+  is present and not `"ok"` — a stale hook copy (`hooks: stale: <basenames>`)
+  or the doctor-first sub-probe's own summary line when it found something
+  broken; the suffix is omitted when `hook_doctor` is absent or `"ok"`.
 
 Absent fields never fail the render: empty arrays omit their section,
 `state.tasks[]` missing/empty renders `no implementor data`, and a

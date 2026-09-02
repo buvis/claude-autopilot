@@ -57,6 +57,26 @@ state.codex_probe = {
 Mismatch or field absent → re-probe and overwrite the slice. Match → reuse the
 cached verdict, never re-probe.
 
+**Doctor-first.** Once the batch-scope check above says a re-probe is needed,
+run the hook doctor before the live probe — a foreground Bash local file scan,
+no dispatch:
+
+```
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex_hook_doctor.py check
+```
+
+Exit 1 or 2: write `codex_probe.verdict: "unhealthy"`, `detail: "hook_doctor:
+<the first broken TSV line>"`, `hook_doctor: "<the doctor's own summary
+line>"`, and `backend` as resolved by `command -v codex` — then skip the live
+probe below entirely (no codex dispatch this batch, infra semantics, no
+escalation stamp). Exit 0 or 3: run the live probe unchanged below, and add
+`hook_doctor: "ok"` (exit 0) or `hook_doctor: "stale: <basenames>"` (exit 3,
+the stale/no_canonical targets' basenames) to the slice — a stale hook copy
+does not gate the rung by itself; the live probe below still decides
+`"healthy"`/`"unhealthy"`. **A batch never runs `repair`:** the unattended
+write fence denies writes under `~/.codex`, and `repair` is the operator's
+explicit command, never something a batch invokes on its own.
+
 **The probe must EXERCISE TOOL USE, not just completion.** Dispatch it exactly
 like a real implementor run:
 

@@ -88,3 +88,34 @@ bash ${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex-run.sh -a -o /tmp/resu
 ```
 
 Run `${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex-run.sh --help` for all options.
+
+## Hook doctor
+
+`${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex_hook_doctor.py` verdicts
+every hook target registered in a codex `hooks.json` against the canonical
+plugin source that owns it.
+
+```bash
+# Read-only: verdict every target, print one TSV line per target plus a summary
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex_hook_doctor.py check
+
+# Restore missing/empty/stale known hooks from their canonical source and
+# remove orphaned zero-byte placeholders; --dry-run reports without writing
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex_hook_doctor.py repair [--dry-run]
+```
+
+Exit codes (both subcommands; `repair`'s reflects the post-repair state, or
+the pre-repair state unchanged under `--dry-run`):
+
+- `0` — every target verdicts `ok`.
+- `1` — one or more targets verdict `missing`/`empty`/`syntax_error` (broken).
+- `2` — the doctor itself could not run (config not found, invalid JSON, no
+  `hooks` key, or a root it could not resolve).
+- `3` — nothing broken, but one or more targets verdict `stale`/`no_canonical`.
+
+**`repair` is operator-only — never run it from a batch.** The unattended
+write fence denies writes under `~/.codex`, and rewriting hook files is
+exactly the kind of high-impact unattended action the fence exists to block.
+Run `repair` by hand when `check` (or the codex batch health probe,
+`work/references/codex-implementor.md` § Codex batch health probe) reports
+something broken or stale.

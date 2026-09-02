@@ -735,3 +735,45 @@ def test_check_resolves_enforce_prd_location_against_autopilot_root_not_aegis_ro
     verdict, target, _detail = result[0]
     assert verdict == "ok"
     assert target == str(hooks_dir / "enforce_prd_location.py")
+
+
+# ---------------------------------------------------------------------------
+# Prose pins — the doctor-first batch probe docs stay in sync with the tool
+# ---------------------------------------------------------------------------
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_codex_implementor_doc_names_doctor_before_first_codex_run_dispatch() -> None:
+    # The doctor-first paragraph must precede the codex-run.sh -a live-probe
+    # dispatch block, not just appear somewhere in the file.
+    doc = (
+        _REPO_ROOT / "skills" / "work" / "references" / "codex-implementor.md"
+    ).read_text(encoding="utf-8")
+
+    doctor_pos = doc.find("codex_hook_doctor.py")
+    dispatch_pos = doc.find("codex-run.sh -a")
+
+    assert doctor_pos != -1
+    assert dispatch_pos != -1
+    assert doctor_pos < dispatch_pos
+
+
+def test_state_schema_doc_names_hook_doctor() -> None:
+    doc = (
+        _REPO_ROOT
+        / "skills"
+        / "run-autopilot"
+        / "references"
+        / "state-schema.md"
+    ).read_text(encoding="utf-8")
+
+    assert "hook_doctor" in doc
+
+
+def test_use_codex_skill_doc_names_repair() -> None:
+    doc = (_REPO_ROOT / "skills" / "use-codex" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "repair" in doc
