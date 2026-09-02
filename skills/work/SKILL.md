@@ -79,7 +79,7 @@ See **Subagent Dispatch Budget and Watchdog** below — every Agent dispatch mus
 
 **Watchdog:** every Agent dispatch must be wrapped in a watchdog: dispatch with `run_in_background: true`, wait with a `Monitor` timer (15-minute CHECK-IN — on expiry probe for progress and extend, 45-minute hard cap; kill only on two no-progress probes or the cap), and after any `TaskStop` inspect the tree before re-dispatching — a killed agent usually died at its verification tail with complete work on disk, which you verify independently and accept, never redo. Genuinely dead agents route to the **Result lost / hung** row of `references/gate-failure.md` § Step 4 result table (→ the infrastructure-failure circuit breaker, step 4.2). A foreground `Agent` call that hangs blocks this session indefinitely — never dispatch one unwatched.
 
-See `references/subagent-dispatch.md` for the measurement procedure, the verbatim abort-instruction line, the abort-handoff steps, helper-script (`use-codex`/`use-gemini`/`use-qwen`) handling, and the six distinct deadlines (15 min / 10 min × 2 / 20 min, plus the 60000 / 300000 / 600000 ms foreground Bash budgets, by mechanism). Read it before your first Agent dispatch in a session. Elsewhere in this file, "must satisfy the **Subagent Dispatch Budget**" and "**Subagent Watchdog**" mean exactly this section — the numbers are not restated at call sites.
+See `references/subagent-dispatch.md` for the measurement procedure, the verbatim abort-instruction line, the abort-handoff steps, helper-script (`use-codex`/`use-gemini`/`use-qwen`) handling, and the six distinct deadlines (15 min / 10 min × 2 / 20 min, plus the 60000 / 300000 / 600000 ms foreground Bash budgets, by mechanism). Read it before your first Agent dispatch in a session. Elsewhere in this file, "must satisfy the **Subagent Dispatch Budget**" and "**Subagent Watchdog**" mean exactly this section — the numbers are not restated at call sites. **Telemetry:** every render call passes `--dispatch-kind <persona> --dispatch-task <task-id>` and prints the dispatch id on its second stdout line (the first line is still the budget measurement); a dispatch with no render — Devon at 2.85, the deslop pass at 5.6 — opens its row with `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind <devon|deslop> --task <task-id> --prompt-bytes <count>` instead. When the dispatch returns — the completion notification, a `TaskStop`, or the helper script's `TaskOutput` wait coming back — close the row with one call: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py end <id> --outcome <ok|timeout|killed|error|lost>`. The row catalogue and the outcome mapping are in `references/subagent-dispatch.md` § Dispatch telemetry. A telemetry failure is never a dispatch failure: every call exits 0, nothing on the way to a task's outcome reads the rows, and a call that fails is never retried.
 
 ## Per-task model dispatch
 
@@ -224,7 +224,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUG
   --set-file TASK_ACCEPTANCE_CRITERIA=dev/local/tmp/tess-<task-id>-acceptance.txt \
   --set-file SAMPLE_TEST_FILE=<one representative existing test file> \
   --set-cmd PUBLIC_INTERFACES="cat $(printf '%q ' <interface files>)" \
-  --set TEST_FRAMEWORK="<pytest/jest/vitest/etc>" \
+  --set TEST_FRAMEWORK="<pytest/jest/vitest/etc>" --dispatch-kind tess --dispatch-task <task-id> \
   --require-file <each absolute path to an existing file the task touches, one flag per path> \
   --require-parent <each absolute path to a file the task creates, one flag per path>
 ```
@@ -252,7 +252,7 @@ Before committing Tess's tests, review them in the main session against the four
 
 The step-2.8 test quality gate is **unchanged** and runs for every tier — only this Agent dispatch is conditional. A Devon dispatch obeys the **Per-task model dispatch** rule (passes `model: opus`, or `model: fable` on a rescued task). Escalation interplay is automatic: when the review gate escalates a review-flagged task to `opus`, the rework attempt regains Devon with no extra mechanism. (Why tier-gated: `references/design-rationale.md` § tier-gated pipeline.)
 
-See `references/adversarial-test-prompt.md` § Procedure for how Devon runs, and the file's prompt template section for what it receives. Devon prompts must satisfy the **Subagent Dispatch Budget**.
+See `references/adversarial-test-prompt.md` § Procedure for how Devon runs, and the file's prompt template section for what it receives. Devon prompts must satisfy the **Subagent Dispatch Budget**. Devon's prompt is filled by hand, so no render opens his row: run `record_dispatch.py start --kind devon --task <task-id> --prompt-bytes <its byte count>` before the Agent call and hold the printed id for the `end` call (§ Subagent Dispatch Budget and Watchdog, Telemetry).
 
 ### 2.9. Commit tests
 
@@ -290,7 +290,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUG
   --set-cmd FAILING_TESTS="cat $(printf '%q ' <test_file_1> [test_file_2 ...])" \
   --set-file ARCHITECTURE_CONTEXT=<a single existing file, e.g. AGENTS.md, when one file covers it> \
   --set-file FILE_PATHS=dev/local/tmp/ivan-<task-id>-files.txt \
-  --set RETRY_INSTRUCTION="" \
+  --set RETRY_INSTRUCTION="" --dispatch-kind ivan --dispatch-task <task-id> \
   --require-file <each absolute FILE_PATHS entry that exists today, one flag per path> \
   --require-parent <each absolute FILE_PATHS entry the task creates, one flag per path>
 ```
@@ -401,7 +401,7 @@ git diff-tree --no-commit-id --name-only -r HEAD
 
 Compute `net_lines = insertions - deletions` (from `--shortstat`) and `file_count` (lines from `diff-tree`). If `net_lines < 30` OR `file_count < 2`, skip the dispatch — the cleanup overhead exceeds the slop budget for trivially small changes. Record `self_deslop: "skipped:trivial"` on the latest attempt (see "Outcome logging" below) and proceed directly to step 5.65.
 
-**Read `references/self-deslop-prompt.md` § Procedure before the first step-5.6 dispatch of a batch** — it carries the dispatch contract (a **fresh** Agent call at `state.tasks[i].model`, **Subagent Dispatch Budget** + **Subagent Watchdog**), the placeholder substitutions, and the outcome table that maps each subagent result to its `self_deslop` value. `{{task_description}}` comes from `tasks[i].description`, falling back to the name-only body when `description` is absent — and an empty-string `description` counts as absent and falls back to the task name, because an empty body is the less useful payload of the two.
+**Read `references/self-deslop-prompt.md` § Procedure before the first step-5.6 dispatch of a batch** — it carries the dispatch contract (a **fresh** Agent call at `state.tasks[i].model`, **Subagent Dispatch Budget** + **Subagent Watchdog**), the placeholder substitutions, and the outcome table that maps each subagent result to its `self_deslop` value. `{{task_description}}` comes from `tasks[i].description`, falling back to the name-only body when `description` is absent — and an empty-string `description` counts as absent and falls back to the task name, because an empty body is the less useful payload of the two. The pass fills its template by hand, so open its row with `record_dispatch.py start --kind deslop --task <task-id> --prompt-bytes <its byte count>` before the Agent call and close it with `end` when the subagent returns (Telemetry, above).
 
 **Outcome logging.** Hold the result in-session and write it as the `self_deslop` field of the attempt record step 6 builds — do NOT write it here as a separate indexed state mutation. On a first attempt `tasks[i].attempts` is still empty at this point (step 6 is what appends the entry), so a `tasks[i].attempts[-1].self_deslop` write fails outright: `statectl` exits 1 with `json-path index out of range: [-1]`, reproduced against a scratch state. Carrying the value into step 6's payload also keeps the whole task transition in the one `task-done` write.
 
@@ -434,7 +434,7 @@ Compute `net_lines = insertions - deletions` (from `--shortstat`) and `file_coun
      --set-cmd DIFF="git diff BASE_SHA..HEAD_SHA" \
      --set-file SIMPLIFICATION_MANDATE=${CLAUDE_PLUGIN_ROOT}/skills/work/references/simplification-mandate.md \
      --set-file VERIFICATION_RESULT=dev/local/tmp/review-task-<id>-verification.txt \
-     --set CONTRACT_CORRECTION=""
+     --set CONTRACT_CORRECTION="" --dispatch-kind pat --dispatch-task <id>
    ```
    The **Pat persona** (`${CLAUDE_PLUGIN_ROOT}/agents/pat.md`) already carries the read-only statement and the reporting contract — one finding per line as `SEVERITY | file:line | issue | fix` (severities CRITICAL/HIGH/MEDIUM/LOW), or the literal line `NO FINDINGS` — so do not restate them here. Conventions and the placeholder table: `review-work-completion/references/agent-registry.md`. If `pat.md` is missing or its frontmatter does not parse, treat it as a runner failure (step 4.2's one re-dispatch) — never fall back to a hand-written prompt. The stdout integer from the render call **is** the Subagent Dispatch Budget measurement — no separate `wc -c`.
 3. **Read `references/per-task-review.md` before the first step-5.7 dispatch of a batch** — it carries the verification file this render reads, the tool-less `sonnet-run.sh` dispatch command (never `-a`/`-y`), the `parse_review.py` output-contract gate and its one correction retry, the result-handling ladder (CLOSURE verdicts, CRITICAL/HIGH, the 3-cycle cap, a runner failure recorded as `review: failed:<cause>`), § Delta re-runs (every cycle after the first resumes `<pat_session_id>` with the `<last_reviewed_sha>..HEAD` delta instead of re-sending the task diff) and its `resume_failed` fallback, and why the lane is tier-gated. One row stays here, because a passing review still has to stamp it:
@@ -459,7 +459,7 @@ Skip for documentation-only or configuration-only tasks.
 
 After step 6, decide whether to finish the remaining tasks in this session or hand them to a fresh one.
 
-**If no pending tasks remain**, skip this step — proceed to step 7. Final verification runs in whichever session finishes the last task. Otherwise resolve the autopilot dir with `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/_walk_up.py --bash` and read `<dir>/.handoff-requested`: **absent** → return to step 1 for the next task, no handoff. **Present** → **read `references/task-boundary-handoff.md` and follow its procedure** (clean-tree check, marker removal, banner, contract card, `next_phase: "build"`, STOP). Do NOT return to step 1 and do NOT run step 7 on that path.
+**If no pending tasks remain**, skip this step — proceed to step 7. Final verification runs in whichever session finishes the last task. Otherwise resolve the autopilot dir with `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/_walk_up.py --bash` and read `<dir>/.handoff-requested`: **absent** → return to step 1 for the next task, no handoff. **Present** → **read `references/task-boundary-handoff.md` and follow its procedure** (clean-tree check, marker removal, banner, contract card, the `leave` handoff row, `next_phase: "build"`, STOP). Do NOT return to step 1 and do NOT run step 7 on that path.
 
 ### 7. Final verification (once per work phase)
 

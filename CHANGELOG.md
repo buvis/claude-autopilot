@@ -29,7 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the start row for free: `render_prompt.py --dispatch-kind <persona>
   --dispatch-task <id>` appends it with the byte count the render already
   prints and echoes the id on a second stdout line; without both flags the
-  render is byte-identical to before. Every write is best-effort: an
+  render is byte-identical to before. Every Tess, Ivan and Pat render in
+  `/autopilot:work` passes them, Devon and the self-deslop pass open theirs
+  with `record_dispatch.py start`, and one `end` call after each dispatch
+  returns closes the row. Every write is best-effort: an
   unresolvable autopilot dir, an unwritable file or an id with no start row
   exits 0, so telemetry never blocks a dispatch or a phase transition.
 

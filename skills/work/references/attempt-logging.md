@@ -32,6 +32,8 @@ At every task exit — success in `SKILL.md` step 6, abort in step 4 (timeout / 
 }
 ```
 
+**Timing is deliberately not an attempt field.** No timestamp, duration or prompt size is stamped here: an attempt spans several dispatches — Tess, Ivan, Pat and their retries — so one pair of stamps could not say which of them took the hour. Those live in the dispatch ledger, `dev/local/autopilot/dispatch-metrics.jsonl` (one start row and one end row per dispatch, joined on `id`, plus one row per session-handoff edge; `references/subagent-dispatch.md` § Dispatch telemetry), and a task's runtime is read from its rows there, keyed on `task`.
+
 **Cardinality (PRD 00065)**: today `/autopilot:work` appends exactly one entry per task at exit. Under in-loop escalation the rule widens to one entry per rung/dispatch-group: each rung that dispatched writes its own entry when the task escalates away from it or exits on it. `attempt` numbers stay sequential across rungs (`len(existing)+1`). This is a widening, not a break — a task that never escalates still writes exactly one entry, byte-identical to today.
 
 **Field semantics**:

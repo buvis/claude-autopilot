@@ -66,7 +66,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUG
   --out dev/local/tmp/dispatch-tess-<task-id>-retry-<n>.txt \
   --set-file QUALITY_FEEDBACK=dev/local/tmp/tess-<task-id>-gate-<n>.txt \
   --set-file TASK_DESCRIPTION=<the same scratch file step 2.7 used> \
-  --set-file TASK_ACCEPTANCE_CRITERIA=dev/local/tmp/tess-<task-id>-acceptance.txt
+  --set-file TASK_ACCEPTANCE_CRITERIA=dev/local/tmp/tess-<task-id>-acceptance.txt --dispatch-kind tess --dispatch-task <task-id>
 ```
 
 Write the gate findings (one per line) to the `QUALITY_FEEDBACK` scratch file with the Write tool. Max 2 quality gate retries.

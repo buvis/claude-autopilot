@@ -77,7 +77,7 @@ For cycle `<n>` (2 or 3):
      --out dev/local/tmp/review-task-<id>-rerun-<n>.md \
      --set-file PRIOR_FINDINGS=dev/local/tmp/review-task-<id>-prior-<n>.txt \
      --set-cmd DELTA_DIFF="git diff <last_reviewed_sha>..HEAD" \
-     --set UNCHANGED_NOTE="You already reviewed <task_base_sha>..<last_reviewed_sha> earlier in this conversation. That range is unchanged and is not repeated here."
+     --set UNCHANGED_NOTE="You already reviewed <task_base_sha>..<last_reviewed_sha> earlier in this conversation. That range is unchanged and is not repeated here." --dispatch-kind pat --dispatch-task <id>
    ```
 
 3. Dispatch it with `-R` where the first dispatch had `-S`, same output file:

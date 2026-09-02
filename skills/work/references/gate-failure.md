@@ -140,7 +140,7 @@ step 5.7's confirmed-finding retry and step 7's regression fix.
     --set-file FAILING_TESTS=dev/local/tmp/ivan-retry-tests-<task-id>-<n>.md \
     --set-file ARCHITECTURE_CONTEXT=<the same source step 3 used> \
     --set-file FILE_PATHS=dev/local/tmp/ivan-<task-id>-files.txt \
-    --set RETRY_INSTRUCTION="Fix only what the failing test output points to. Do not refactor passing code, adjust unrelated files, or change style."
+    --set RETRY_INSTRUCTION="Fix only what the failing test output points to. Do not refactor passing code, adjust unrelated files, or change style." --dispatch-kind ivan --dispatch-task <task-id>
   ```
   The code-quality rules block is already permanent in `ivan.md`, so there is nothing to re-include. `FAILING_TESTS` comes from **one** source on a retry: write the original failing tests plus the new failure output to `dev/local/tmp/ivan-retry-tests-<task-id>-<n>.md` once per retry and pass it with `--set-file`. Do not also pass `--set-cmd FAILING_TESTS` — the last flag would silently win, and the failure output is exactly what the retry needs to carry.
 
@@ -160,7 +160,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUG
   --set-file FAILING_TESTS=dev/local/tmp/ivan-style-violations-<task-id>.md \
   --set-file ARCHITECTURE_CONTEXT=<the same source step 3 used> \
   --set-file FILE_PATHS=dev/local/tmp/ivan-<task-id>-style-files.txt \
-  --set RETRY_INSTRUCTION="Fix only the listed style-limit violations. You may create new modules in the directories marked above and update imports in the listed files to use them. Do not change behavior, do not touch other code, and do not modify tests except to split a test file a violation line names."
+  --set RETRY_INSTRUCTION="Fix only the listed style-limit violations. You may create new modules in the directories marked above and update imports in the listed files to use them. Do not change behavior, do not touch other code, and do not modify tests except to split a test file a violation line names." --dispatch-kind ivan --dispatch-task <task-id>
 ```
 
 `FAILING_TESTS` carries the gate's violation lines, nothing else — the render
