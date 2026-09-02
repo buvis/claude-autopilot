@@ -509,17 +509,11 @@ def test_repair_reports_common_py_unrepairable_when_canonical_is_unreadable_and_
     make_canonical: Callable[[Path], object],
     tmp_path: Path,
 ) -> None:
-    # The canonical _common.py is read as UTF-8 before the rewrite so its
-    # top-level defs can be checked against sibling imports. Non-UTF-8 bytes
-    # (UnicodeDecodeError) or a directory (OSError) there used to raise
-    # straight through repair(): exit 2, no TSV row for any target. The
-    # sibling scan a few lines up already tolerates both; the canonical read
-    # must too, degrading to one unrepairable row.
-    # hooks/_common.py is empty (a broken verdict), so the post-repair exit
-    # is 1: it stays empty while validate_commit_msg.py gets repaired. Empty
-    # also keeps check() away from the canonical: for a known target that
-    # compiles, _verdict_for reads the canonical unguarded, and a directory
-    # there still exits 2 (outside PRD 00169).
+    # Before rewriting _common.py, repair reads the canonical as UTF-8 to check
+    # its defs against sibling imports; undecodable bytes or a directory there
+    # used to abort the whole run (exit 2, no rows) instead of costing one
+    # unrepairable row. hooks/_common.py is empty so it stays broken (exit 1)
+    # and check() never reads the canonical itself (unguarded there, PRD 00173).
     hooks_dir = tmp_path / "hooks"
     hooks_dir.mkdir()
     common = hooks_dir / "_common.py"

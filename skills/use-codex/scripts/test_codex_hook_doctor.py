@@ -427,6 +427,30 @@ def test_cli_config_without_a_hooks_key_exits_2(tmp_path: Path) -> None:
     assert result.returncode == 2
 
 
+def test_cli_config_whose_hooks_value_is_not_an_object_exits_2(tmp_path: Path) -> None:
+    # `hooks` present but a list: the doctor names the shape problem on
+    # stderr and exits 2, rather than surfacing a raw AttributeError from
+    # iterating it. The guard lives in _load_hooks, so repair() gets it too.
+    config_path = tmp_path / "hooks.json"
+    config_path.write_text(json.dumps({"hooks": []}), encoding="utf-8")
+    aegis_root, autopilot_root = _fake_roots(tmp_path)
+
+    result = _run_cli(
+        [
+            "--config",
+            str(config_path),
+            "--aegis-root",
+            str(aegis_root),
+            "--autopilot-root",
+            str(autopilot_root),
+        ],
+    )
+
+    assert result.returncode == 2
+    assert "hooks must be an object" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
 def test_cli_all_ok_exits_0_with_one_tsv_line_and_a_summary(tmp_path: Path) -> None:
     hooks_dir = tmp_path / "hooks"
     hooks_dir.mkdir()
