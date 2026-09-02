@@ -74,9 +74,11 @@ def test_end_after_a_start_row_computes_elapsed_from_queued_at(
 def test_end_with_no_start_row_records_a_null_elapsed_and_exits_zero(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     # A lost or mistyped id must not turn a telemetry call into a failure the
-    # dispatch pays for; the row still lands so the outcome is on record.
+    # dispatch pays for; the row still lands so the outcome is on record, and
+    # stderr says why the elapsed time is null.
     autopilot = _project(tmp_path)
     monkeypatch.chdir(tmp_path / "proj")
     _pin_clock(monkeypatch, 2000)
@@ -86,6 +88,7 @@ def test_end_with_no_start_row_records_a_null_elapsed_and_exits_zero(
     )
 
     assert exit_code == 0
+    assert "no start row for cafebabe" in capsys.readouterr().err
     assert _rows(autopilot / "dispatch-metrics.jsonl") == [
         {
             "id": "cafebabe",
@@ -158,31 +161,6 @@ def test_handoff_writes_its_site_edge_stamp_phase_and_prd(
     ]
 
 
-def test_start_opens_a_row_carrying_the_prompt_bytes_and_prints_its_id(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    # Devon and the self-deslop pass fill their prompts by hand, so no render
-    # opens their row; this verb is their one call, and its id is what the
-    # end call later joins on.
-    autopilot = _project(tmp_path)
-    monkeypatch.chdir(tmp_path / "proj")
-    _pin_clock(monkeypatch, 4000)
-
-    exit_code = record_dispatch.main(
-        ["start", "--kind", "devon", "--task", "2", "--prompt-bytes", "1234"],
-    )
-
-    assert exit_code == 0
-    count, printed = capsys.readouterr().out.splitlines()
-    assert count == "1234"
-    assert _HEX_ID.match(printed)
-    assert _rows(autopilot / "dispatch-metrics.jsonl") == [
-        {"id": printed, "kind": "devon", "task": "2", "queued_at": 4000, "prompt_bytes": 1234},
-    ]
-
-
 def test_start_with_a_prompt_file_measures_it_and_prints_the_count_then_the_id(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -210,19 +188,22 @@ def test_start_with_a_prompt_file_measures_it_and_prints_the_count_then_the_id(
     ]
 
 
+@pytest.mark.parametrize("prompt", ["no.txt", "proj"], ids=["missing", "directory"])
 def test_start_on_an_unreadable_prompt_file_exits_2_and_opens_no_row(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    prompt: str,
 ) -> None:
     # This call doubles as the budget measurement, and a prompt that cannot be
     # read cannot be dispatched, so it is the one telemetry call that fails
-    # loud with a non-zero exit instead of stamping a null count.
+    # loud with a non-zero exit instead of stamping a null count. The file is
+    # read, not stat'ed: a directory has a size and is not a prompt.
     autopilot = _project(tmp_path)
     monkeypatch.chdir(tmp_path / "proj")
 
     exit_code = record_dispatch.main(
-        ["start", "--kind", "devon", "--task", "1", "--prompt-file", str(tmp_path / "no.txt")],
+        ["start", "--kind", "devon", "--task", "1", "--prompt-file", str(tmp_path / prompt)],
     )
 
     assert exit_code == 2
@@ -232,16 +213,19 @@ def test_start_on_an_unreadable_prompt_file_exits_2_and_opens_no_row(
     assert not (autopilot / "dispatch-metrics.jsonl").exists()
 
 
-def test_end_names_a_skipped_unparseable_line_and_the_missing_start_row(
+def test_end_names_a_skipped_unparseable_line_even_when_the_start_row_is_found(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    # A null elapsed_s has to say why on stderr: a garbage line in the working
-    # copy, or simply no start row, is otherwise indistinguishable from a
-    # dispatch that was never opened.
+    # A garbage line in the working copy is reported whether or not the
+    # lookup succeeds; a warning that depends on where the garbage sits
+    # relative to the match is a warning nobody can rely on.
     autopilot = _project(tmp_path)
-    (autopilot / "dispatch-metrics.jsonl").write_text("not json\n", encoding="utf-8")
+    (autopilot / "dispatch-metrics.jsonl").write_text(
+        'not json\n{"id":"deadbeef","kind":"ivan","task":"1","queued_at":1000,"prompt_bytes":9}\n',
+        encoding="utf-8",
+    )
     monkeypatch.chdir(tmp_path / "proj")
     _pin_clock(monkeypatch, 6000)
 
@@ -250,9 +234,9 @@ def test_end_names_a_skipped_unparseable_line_and_the_missing_start_row(
     assert exit_code == 0
     err = capsys.readouterr().err
     assert "skipped 1 unparseable line" in err
-    assert "no start row for deadbeef" in err
+    assert "no start row" not in err
     last = (autopilot / "dispatch-metrics.jsonl").read_text(encoding="utf-8").splitlines()[-1]
-    assert json.loads(last)["elapsed_s"] is None
+    assert json.loads(last)["elapsed_s"] == 5000
 
 
 @pytest.mark.parametrize(
@@ -260,7 +244,7 @@ def test_end_names_a_skipped_unparseable_line_and_the_missing_start_row(
     [
         ["end", "deadbeef", "--outcome", "ok"],
         ["handoff", "--site", "build", "--edge", "resume", "--phase", "build", "--prd", "x.md"],
-        ["start", "--kind", "tess", "--task", "1", "--prompt-bytes", "5"],
+        ["start", "--kind", "tess", "--task", "1", "--prompt-file", "prompt.txt"],
     ],
 )
 def test_an_unresolvable_autopilot_dir_writes_nothing_and_exits_zero(
@@ -271,8 +255,9 @@ def test_an_unresolvable_autopilot_dir_writes_nothing_and_exits_zero(
 ) -> None:
     # Telemetry outside any autopilot tree (a manual /work run, a scratch
     # checkout) is a no-op, not an error: nothing is written anywhere and the
-    # dispatch proceeds. `start` still prints an id so the caller's next
-    # line is the same either way.
+    # dispatch proceeds. `start` still prints the count and an id so the
+    # caller's next line is the same either way.
+    (tmp_path / "prompt.txt").write_text("hello", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
 
     exit_code = record_dispatch.main(argv)

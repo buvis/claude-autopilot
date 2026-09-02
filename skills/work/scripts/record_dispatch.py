@@ -4,7 +4,7 @@ start, one per end and one per session-handoff edge, appended to
 ``dev/local/autopilot/dispatch-metrics.jsonl`` and its GC-exempt ``ledger/``
 mirror. Every write is best-effort and exits 0; no gate reads these rows.
 
-    record_dispatch.py start --kind KIND --task ID (--prompt-file PATH | --prompt-bytes N)
+    record_dispatch.py start --kind KIND --task ID --prompt-file PATH
     record_dispatch.py end ID --outcome ok|timeout|killed|error|lost [--detail TEXT]
     record_dispatch.py handoff --site build|review|done --edge leave|resume --phase P --prd PRD
 
@@ -86,25 +86,28 @@ def _queued_at(autopilot_dir: Path, dispatch_id: str) -> int | None:
     """The start row's ``queued_at`` for ``dispatch_id``, or None, said on stderr."""
     try:
         lines = (autopilot_dir / FILENAME).read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        lines = []  # no dispatch has been opened here yet: an empty ledger, not a failure
     except OSError as err:
         print(f"record_dispatch: start row lookup failed: {err}", file=sys.stderr)
         return None
+    rows: list[object] = []
     skipped = 0
     for line in lines:
         try:
-            row = json.loads(line)
+            rows.append(json.loads(line))
         except ValueError:
             skipped += 1
-            continue
-        if isinstance(row, dict) and row.get("id") == dispatch_id:
-            queued_at = row.get("queued_at")
-            if isinstance(queued_at, int):
-                return queued_at
     if skipped:
         print(
             f"record_dispatch: skipped {skipped} unparseable line(s) in {FILENAME}",
             file=sys.stderr,
         )
+    for row in rows:
+        if isinstance(row, dict) and row.get("id") == dispatch_id:
+            queued_at = row.get("queued_at")
+            if isinstance(queued_at, int):
+                return queued_at
     print(
         f"record_dispatch: no start row for {dispatch_id}, elapsed_s is null",
         file=sys.stderr,
@@ -119,9 +122,9 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     start = verbs.add_parser("start", help="open a row for a hand-built dispatch")
     start.add_argument("--kind", required=True)
     start.add_argument("--task", required=True)
-    size = start.add_mutually_exclusive_group(required=True)
-    size.add_argument("--prompt-file", help="the written prompt; its size is the count")
-    size.add_argument("--prompt-bytes", type=int)
+    start.add_argument(
+        "--prompt-file", required=True, help="the written prompt; its size is the count"
+    )
 
     end = verbs.add_parser("end", help="close a dispatch row")
     end.add_argument("id")
@@ -140,13 +143,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     autopilot_dir = find_autopilot_dir(Path.cwd())
     if args.verb == "start":
-        prompt_bytes = args.prompt_bytes
-        if args.prompt_file is not None:
-            try:
-                prompt_bytes = Path(args.prompt_file).stat().st_size
-            except OSError as err:
-                print(f"record_dispatch: prompt file unreadable: {err}", file=sys.stderr)
-                return 2
+        try:
+            prompt_bytes = len(Path(args.prompt_file).read_bytes())
+        except OSError as err:
+            print(f"record_dispatch: prompt file unreadable: {err}", file=sys.stderr)
+            return 2
         print(prompt_bytes)
         print(start_row(autopilot_dir, args.kind, args.task, prompt_bytes))
     elif autopilot_dir is None:

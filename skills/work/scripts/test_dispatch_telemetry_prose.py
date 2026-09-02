@@ -104,25 +104,24 @@ def test_step_6_5_writes_the_leave_row_before_the_stop() -> None:
     )
 
 
-def test_every_reference_render_carries_the_flags_for_its_persona() -> None:
-    # One expectation per file, by count: a reference that grows a second
-    # render block without the flags fails here instead of quietly opening
-    # no row for the retry, the style fix or the delta re-run.
-    for name, kind, renders in (
-        ("gate-failure.md", "ivan", 2),
-        ("test-author-prompt.md", "tess", 1),
-        ("per-task-review.md", "pat", 1),
-    ):
-        text = (_REFS / name).read_text()
-        assert text.count(_RENDER) == renders, (
-            f"references/{name} has {text.count(_RENDER)} render blocks, not "
-            f"{renders}; retarget this pin and add the flags to the new one."
-        )
-        assert text.count(f"--dispatch-kind {kind} --dispatch-task") == renders, (
-            f"references/{name}: not every render block passes "
-            f"`--dispatch-kind {kind} --dispatch-task`, so that dispatch opens "
-            "no start row."
-        )
+def test_every_render_block_in_the_skill_carries_both_flags() -> None:
+    # A scan, not an enumeration: a render block added to any reference opens
+    # no row unless it carries the flags, and a count pinned per file cannot
+    # see a block in a file it does not name. The floor keeps the scan honest
+    # when a marker rename would otherwise make it match nothing.
+    blocks = 0
+    for path in (_SKILL_MD, *sorted(_REFS.glob("*.md"))):
+        for chunk in path.read_text().split(_RENDER)[1:]:
+            block = chunk.split("```", 1)[0]
+            blocks += 1
+            assert "--dispatch-kind" in block and "--dispatch-task" in block, (
+                f"{path}: a render_prompt.py block carries no `--dispatch-kind` / "
+                "`--dispatch-task`, so that dispatch opens no start row."
+            )
+    assert blocks >= 7, (
+        f"found {blocks} render blocks across SKILL.md and references/, fewer "
+        "than the seven this PRD wired; the marker or a block has moved."
+    )
 
 
 def test_the_reference_defines_the_rows_the_outcomes_and_the_never_blocks_rule() -> (
@@ -262,12 +261,9 @@ def test_the_changelog_names_the_ledger_under_unreleased() -> None:
     )
 
 
-# --- cycle-1 review: the holes the panel found in the wiring -----------------
-
-
 def test_the_watchdog_kill_closes_the_row_exactly_once() -> None:
-    # As first written the kill branch said "close timeout" and then "the row
-    # closes ok", which an executor can follow as two end rows for one id.
+    # One dispatch, one end row: the kill branch closes on what TaskStop
+    # reports, never `timeout` and then `ok` for the same id.
     dispatch = (_REFS / "subagent-dispatch.md").read_text()
     watchdog = _section(dispatch, "## Subagent Watchdog", "## Foreground command budgets")
     assert "exactly once" in watchdog, (
@@ -277,9 +273,8 @@ def test_the_watchdog_kill_closes_the_row_exactly_once() -> None:
 
 
 def test_a_codex_deadline_kill_maps_to_one_outcome() -> None:
-    # codex-implementor.md kills on the second TaskOutput deadline; listing
-    # that kill under `killed` while the deadline sits under `timeout` maps
-    # one event two ways.
+    # A deadline kill is `timeout`; `killed` is a stop before any deadline
+    # fired, so no event maps to two outcomes.
     section = (_REFS / "subagent-dispatch.md").read_text()
     section = section[section.index("## Dispatch telemetry") :]
     assert "before any deadline fired" in section, (
@@ -301,12 +296,20 @@ def test_the_hand_built_lanes_measure_and_open_in_one_call() -> None:
         )
 
 
-def test_a_re_dispatch_opens_its_own_row() -> None:
+def test_a_re_dispatch_keeps_its_id_and_closes_it_again() -> None:
+    # The reused prompt was measured once, so a re-dispatch pays no `start`;
+    # its second end row on the same id is what keeps the attempt on record.
     gate = (_REFS / "gate-failure.md").read_text()
     breaker = _section(gate, "## Infrastructure-failure circuit breaker", "## Step 4 result table")
-    assert "start --kind <the same kind>" in breaker, (
-        "references/gate-failure.md § Infrastructure-failure circuit breaker "
-        "re-dispatches on the first dispatch's closed id, or on no id at all."
+    assert "keeps the first dispatch's telemetry id" in breaker, (
+        "references/gate-failure.md § Infrastructure-failure circuit breaker no "
+        "longer says the re-dispatch keeps its id, so it either opens a second "
+        "row (an extra call) or closes nothing."
+    )
+    dispatch = (_REFS / "subagent-dispatch.md").read_text()
+    assert "A re-dispatch keeps its id" in dispatch, (
+        "references/subagent-dispatch.md § Dispatch telemetry dropped the "
+        "re-dispatch rule, so a reader has no answer for the second attempt."
     )
     codex = (_REFS / "codex-implementor.md").read_text()
     checklist = codex[codex.index("## Codex dispatch") :]

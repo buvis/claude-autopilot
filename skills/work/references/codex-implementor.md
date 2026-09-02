@@ -189,9 +189,9 @@ the departures there, not here:
   normally;
 - close the dispatch row when `TaskOutput` returns —
   `record_dispatch.py end <id> --outcome ok`, `error` on a non-zero exit,
-  `timeout` after the second deadline (`references/subagent-dispatch.md`
-  § Dispatch telemetry); the Claude fallback that follows a kill is its own
-  dispatch and opens its own row with `start --prompt-file`;
+  `lost` when the `-o` file is missing or empty, `timeout` after the second
+  deadline (`references/subagent-dispatch.md` § Dispatch telemetry); the Claude fallback that follows a kill keeps the same
+  id and closes it again when it returns;
 - completion judged by the `-o` file plus the step-5.5 test gate — **never by
   exit code alone**;
 - **edit-enabled sandbox: `-a` (`--sandbox workspace-write`), never `-y`.**

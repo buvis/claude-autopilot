@@ -202,7 +202,7 @@ A dispatch that has no render — Devon (step 2.85) and the self-deslop pass (st
 python3 <plugin root>/skills/work/scripts/record_dispatch.py start --kind <devon|deslop> --task <task-id> --prompt-file <the written prompt>
 ```
 
-**Every dispatch is one row, a re-dispatch included.** Step 4.2's one infrastructure re-dispatch and the codex → Claude fallback (`references/codex-implementor.md` § Codex dispatch) reuse an already-rendered prompt file, so no render opens a row for them: open one with `start --kind <the same kind> --task <task-id> --prompt-file <that prompt file>` before the re-dispatch and close it on its own id. Never close a second dispatch on the first one's already-closed id, and never skip its end row.
+**A re-dispatch keeps its id.** Step 4.2's one infrastructure re-dispatch and the codex → Claude fallback (`references/codex-implementor.md` § Codex dispatch) reuse an already-rendered, already-measured prompt file, so they open no new row and pay no extra call: close the first attempt (`lost` or `timeout`), re-dispatch, and when that returns close the **same id** again. An id can therefore carry more than one end row; the last one is the terminal outcome, and its `elapsed_s` spans every attempt, which is what the task actually cost. Never skip that second end row.
 
 (`<plugin root>` is the value `SKILL.md` resolves for `${CLAUDE_PLUGIN_ROOT}`, as in § Reflow tripwire.)
 

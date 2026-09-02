@@ -232,7 +232,7 @@ After completion, `state.tasks` is already current — every task-lifecycle tran
 
 ### Hand off to a fresh session for reviews
 
-After the build completes (all tasks done), do NOT continue into the review phases in the same session — the review surface spawns multiple cloud reviewers and needs a clean context window. Run the **Session handoff procedure** (core `SKILL.md` § Session Loop) with the **build → review** site row, write the `leave` handoff row (`python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py handoff --site build --edge leave --phase review --prd <state.prd>`, best-effort), and print:
+After the build completes (all tasks done), do NOT continue into the review phases in the same session — the review surface spawns multiple cloud reviewers and needs a clean context window. Run the **Session handoff procedure** (core `SKILL.md` § Session Loop) with the **build → review** site row (its step 2 writes `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py handoff --site build --edge leave --phase review --prd <state.prd>` here), and print:
 
 ```
 ── AUTOPILOT ── PRD: {prd-name} ── Build complete ──────────────────
