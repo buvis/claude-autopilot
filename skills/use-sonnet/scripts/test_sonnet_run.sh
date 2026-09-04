@@ -80,24 +80,23 @@ run_sonnet() {
 # ══ T1: plain -f run (headless claude --print) ════════════════════════════════
 run_sonnet t1 -f "$PROMPT_FILE_T"
 
-# 1. Child stdin must be redirected to /dev/null. Without the guard the child
-#    inherits the wrapper's stdin and reads SENTINEL_STDIN_DATA (the PRD 00040
-#    hang class: a child blocking on inherited stdin stalls unattended runs).
-if [ -f "$CLAUDE_STDIN_FILE" ] && [ ! -s "$CLAUDE_STDIN_FILE" ]; then
-    PASS "claude child stdin is /dev/null"
+# 1. Prompt mode sends the prompt bytes on child stdin, replacing rather than
+#    inheriting the wrapper's SENTINEL_STDIN_DATA.
+if cmp -s "$PROMPT_FILE_T" "$CLAUDE_STDIN_FILE"; then
+    PASS "plain -f sends the prompt bytes exactly on claude stdin"
 else
-    FAIL "claude child stdin is /dev/null" \
-         "stub captured $(wc -c < "$CLAUDE_STDIN_FILE" 2>/dev/null | tr -d ' ' || echo '?') byte(s) of stdin; expected 0 (child inherited the wrapper's stdin instead of /dev/null)"
+    FAIL "plain -f sends the prompt bytes exactly on claude stdin" \
+         "stdin differs from the prompt file or includes inherited SENTINEL_STDIN_DATA"
 fi
 
-# 2. Argv regression lock for the plain -f run (adding the stdin guard must
-#    not perturb argv): claude --print --model sonnet <PROMPT>.
+# 2. Prompt mode argv contains only the headless model flags; the prompt is not
+#    duplicated as a positional token.
 EXPECTED_ARGV_FILE="$WORK/t1.expected"
-printf '%s\n' "--print" "--model" "sonnet" "$SONNET_PROMPT" > "$EXPECTED_ARGV_FILE"
+printf '%s\n' "--print" "--model" "sonnet" > "$EXPECTED_ARGV_FILE"
 if diff -q "$EXPECTED_ARGV_FILE" "$CLAUDE_ARGV_FILE" >/dev/null 2>&1; then
-    PASS "plain -f argv is exactly: --print --model sonnet <PROMPT>"
+    PASS "plain -f argv is exactly: --print --model sonnet"
 else
-    FAIL "plain -f argv is exactly: --print --model sonnet <PROMPT>" \
+    FAIL "plain -f argv is exactly: --print --model sonnet" \
          "got: $(tr '\n' ' ' < "$CLAUDE_ARGV_FILE" 2>/dev/null || echo '<no claude invocation>')"
 fi
 
@@ -243,24 +242,25 @@ else
          "argv: $(tr '\n' ' ' < "$CLAUDE_ARGV_FILE" 2>/dev/null || echo '<no claude invocation>')"
 fi
 
-# 14b. The prompt must still reach claude as its own token. This is the exact
-#      regression the two-token form caused, and the one a pair assertion
-#      cannot see: the flag was there, the prompt was gone.
-if grep -qxF -- "$SONNET_PROMPT" "$CLAUDE_ARGV_FILE"; then
-    PASS '-t "": the prompt still reaches claude as its own argv token'
+# 14b. The prompt reaches claude only on stdin.
+if cmp -s "$PROMPT_FILE_T" "$CLAUDE_STDIN_FILE" \
+   && ! grep -qxF -- "$SONNET_PROMPT" "$CLAUDE_ARGV_FILE"; then
+    PASS '-t "": prompt is exact on stdin and absent from argv'
 else
-    FAIL '-t "": the prompt still reaches claude as its own argv token' \
+    FAIL '-t "": prompt is exact on stdin and absent from argv' \
          "argv: $(tr '\n' ' ' < "$CLAUDE_ARGV_FILE" 2>/dev/null || echo '<no claude invocation>')"
 fi
 
 # ══ T11: -t LIST passes the list through ══════════════════════════════════════
 run_sonnet t11 -t Read -f "$PROMPT_FILE_T"
 
-# 15. -t Read: argv carries the single token --tools=Read, prompt intact.
-if grep -qxF -- "--tools=Read" "$CLAUDE_ARGV_FILE" && grep -qxF -- "$SONNET_PROMPT" "$CLAUDE_ARGV_FILE"; then
-    PASS "-t Read: argv carries --tools=Read with the prompt intact"
+# 15. -t Read retains its flag while the prompt travels only on stdin.
+if grep -qxF -- "--tools=Read" "$CLAUDE_ARGV_FILE" \
+   && ! grep -qxF -- "$SONNET_PROMPT" "$CLAUDE_ARGV_FILE" \
+   && cmp -s "$PROMPT_FILE_T" "$CLAUDE_STDIN_FILE"; then
+    PASS "-t Read: argv carries --tools=Read and prompt is only on stdin"
 else
-    FAIL "-t Read: argv carries --tools=Read with the prompt intact" \
+    FAIL "-t Read: argv carries --tools=Read and prompt is only on stdin" \
          "argv: $(tr '\n' ' ' < "$CLAUDE_ARGV_FILE" 2>/dev/null || echo '<no claude invocation>')"
 fi
 
@@ -280,29 +280,30 @@ fi
 T13_UUID="11111111-2222-3333-4444-555555555555"
 run_sonnet t13 -S "$T13_UUID" -f "$PROMPT_FILE_T"
 
-# 17. -S: argv carries the pair --session-id <uuid> on the --print path, with the
-#     prompt still its own token (the -t regression class).
+# 17. -S retains its session flags while the prompt travels only on stdin.
 if argv_has_pair "$CLAUDE_ARGV_FILE" "--session-id" "$T13_UUID" \
    && grep -qxF -- "--print" "$CLAUDE_ARGV_FILE" \
-   && grep -qxF -- "$SONNET_PROMPT" "$CLAUDE_ARGV_FILE"; then
-    PASS "-S UUID: argv carries --print, --session-id UUID and the prompt"
+   && ! grep -qxF -- "$SONNET_PROMPT" "$CLAUDE_ARGV_FILE" \
+   && cmp -s "$PROMPT_FILE_T" "$CLAUDE_STDIN_FILE"; then
+    PASS "-S UUID: flags stay on argv and prompt is only on stdin"
 else
-    FAIL "-S UUID: argv carries --print, --session-id UUID and the prompt" \
+    FAIL "-S UUID: flags stay on argv and prompt is only on stdin" \
          "argv: $(tr '\n' ' ' < "$CLAUDE_ARGV_FILE" 2>/dev/null || echo '<no claude invocation>')"
 fi
 
 # ══ T14: -R ID resumes that session in print mode ═════════════════════════════
 run_sonnet t14 -R "$T13_UUID" -f "$PROMPT_FILE_T"
 
-# 18. -R: argv carries --print and the pair --resume <id>, prompt intact. The
+# 18. -R: argv carries --print and the pair --resume <id>. The
 #     existing -r path deliberately drops --print, so a resume that lost it
 #     would hang an unattended re-review on a TTY that is not there.
 if argv_has_pair "$CLAUDE_ARGV_FILE" "--resume" "$T13_UUID" \
    && grep -qxF -- "--print" "$CLAUDE_ARGV_FILE" \
-   && grep -qxF -- "$SONNET_PROMPT" "$CLAUDE_ARGV_FILE"; then
-    PASS "-R ID: argv carries --print, --resume ID and the prompt"
+   && ! grep -qxF -- "$SONNET_PROMPT" "$CLAUDE_ARGV_FILE" \
+   && cmp -s "$PROMPT_FILE_T" "$CLAUDE_STDIN_FILE"; then
+    PASS "-R ID: flags stay on argv and prompt is only on stdin"
 else
-    FAIL "-R ID: argv carries --print, --resume ID and the prompt" \
+    FAIL "-R ID: flags stay on argv and prompt is only on stdin" \
          "argv: $(tr '\n' ' ' < "$CLAUDE_ARGV_FILE" 2>/dev/null || echo '<no claude invocation>')"
 fi
 
@@ -338,6 +339,37 @@ if [ "$RC" -ne 0 ] && [ ! -f "$CLAUDE_ARGV_FILE" ]; then
     PASS "-R with -r exits non-zero with no claude invocation"
 else
     FAIL "-R with -r exits non-zero with no claude invocation" \
+         "rc=$RC; stderr: $(cat "$STDERR_F"); argv: $(tr '\n' ' ' < "$CLAUDE_ARGV_FILE" 2>/dev/null || echo '<none>')"
+fi
+
+# ══ T18: option-looking prompt bytes stay data, not argv ══════════════════════
+T18_PROMPT_FILE="$WORK/option-looking-prompt.txt"
+printf '%s' '- [ ] item' > "$T18_PROMPT_FILE"
+run_sonnet t18 -f "$T18_PROMPT_FILE"
+
+# 22. Leading dash bytes are preserved exactly on stdin and never parsed or
+#     forwarded as a positional argv token.
+if cmp -s "$T18_PROMPT_FILE" "$CLAUDE_STDIN_FILE" \
+   && ! grep -qxF -- '- [ ] item' "$CLAUDE_ARGV_FILE"; then
+    PASS "option-looking prompt is exact on stdin and absent from argv"
+else
+    FAIL "option-looking prompt is exact on stdin and absent from argv" \
+         "argv: $(tr '\n' ' ' < "$CLAUDE_ARGV_FILE" 2>/dev/null || echo '<no claude invocation>')"
+fi
+
+# ══ T19: empty prompt file is rejected without dispatch ══════════════════════
+T19_PROMPT_FILE="$WORK/empty-prompt.txt"
+: > "$T19_PROMPT_FILE"
+run_sonnet t19 -f "$T19_PROMPT_FILE"
+
+# 23. Empty prompt files fail with the required diagnostic and do not invoke
+#     claude, avoiding an accidental empty headless request.
+if [ "$RC" -eq 1 ] \
+   && grep -qF "Prompt required" "$STDERR_F" 2>/dev/null \
+   && [ ! -f "$CLAUDE_ARGV_FILE" ]; then
+    PASS "empty prompt file exits 1 with Prompt required and no claude invocation"
+else
+    FAIL "empty prompt file exits 1 with Prompt required and no claude invocation" \
          "rc=$RC; stderr: $(cat "$STDERR_F"); argv: $(tr '\n' ' ' < "$CLAUDE_ARGV_FILE" 2>/dev/null || echo '<none>')"
 fi
 
