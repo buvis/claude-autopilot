@@ -225,10 +225,11 @@ case $MODE in
             usage >&2
             exit 1
         fi
-        # Headless (--print) dispatch: guard child stdin so an unattended
-        # background run can never hang on a child reading the inherited
-        # stdin (PRD 00040 hang class). Interactive/resume/continue modes
-        # keep stdin - they need the TTY.
-        run_cmd claude --print --model "$MODEL" $PERM "${SESSION_ARGS[@]}" "${ADD_DIRS[@]}" "${TOOLS[@]}" "$PROMPT" < /dev/null
+        # Headless (--print) dispatch: the prompt travels as the child's stdin,
+        # never as a positional argv token that could be parsed as a flag. The
+        # finite pipe also guards against a child hanging on the inherited
+        # wrapper stdin (PRD 00040 hang class). Interactive/resume/continue
+        # modes keep stdin - they need the TTY.
+        printf '%s' "$PROMPT" | run_cmd claude --print --model "$MODEL" $PERM "${SESSION_ARGS[@]}" "${ADD_DIRS[@]}" "${TOOLS[@]}"
         ;;
 esac
