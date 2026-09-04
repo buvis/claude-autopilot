@@ -249,7 +249,10 @@ chain. They are scoped to different moments.
   no-op: the classifier rule-widening this knob was built to revert was
   withdrawn after review, so the `legacy` row and the current row of the
   step 4.7 tier classifier are identical — setting it changes nothing today.
-  Any other value or absent -> the same (unchanged) classifier row.
+  Any other value or absent -> the same (unchanged) classifier row. It is
+  read by no script: `classify_tier.py` never consults it, so it does not
+  guard the `_MECHANICAL_MAX_*` constants; reverting a tuned constant is a
+  `git revert` of the accepting commit.
 - `_AUTOPILOT_MODEL_BUILD=<model>`: the pre-existing env override, and the
   sonnet-first kill-switch (PRD 00076). Setting it forces every build launch
   to that model regardless of promotion signals.
@@ -262,6 +265,16 @@ chain. They are scoped to different moments.
 - No decay knob exists. PRD 00111 reserved one and then did not need it:
   `_AUTOPILOT_MODEL_BUILD` already pins every build launch to a chosen model,
   which overrides decay and promotion alike (§ Decay).
+
+## Tuning
+
+`skills/run-autopilot/scripts/tune_routing.py` reads
+`dev/local/autopilot/ledger/attempts.jsonl` and writes
+`dev/local/audit-results/routing-proposal-<date>.md` (plus a `.patch` when
+the mechanical row's line budget should halve). It proposes only: every
+signal needs 12 rows before it moves, and it never edits a rule surface or
+sets a kill-switch. The operator applies a proposal by hand and reverts it
+with `git revert`.
 
 ## Decay
 

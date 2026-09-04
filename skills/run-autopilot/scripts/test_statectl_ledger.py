@@ -108,6 +108,8 @@ class StatectlLedgerTest(unittest.TestCase):
                 "task_name",
                 "task_model",
                 "qwen_eligible",
+                "task_tier_reason",
+                "task_qwen_excluded_reason",
                 "recorded_at",
                 "attempt",
             },
@@ -125,6 +127,50 @@ class StatectlLedgerTest(unittest.TestCase):
         self.assertIsNone(rows[2]["task_model"])
         self.assertIsNone(rows[2]["qwen_eligible"])
         self.assertEqual(rows[3]["attempt"], fixture["tasks"][1]["attempts"][1])
+
+    def test_tier_reason_and_qwen_excluded_reason_are_copied_onto_every_row(
+        self,
+    ) -> None:
+        fixture = _state_with_attempts()
+        fixture["tasks"][0]["tier_reason"] = "mechanical"
+        fixture["tasks"][0]["qwen_excluded_reason"] = "files"
+        self.write_state(fixture)
+        self.assertEqual(self.run_cli("complete-prd", PRD).returncode, 0)
+        task1_rows = [row for row in self.ledger_rows() if row["task_id"] == "task-1"]
+        self.assertEqual(len(task1_rows), 2)
+        for row in task1_rows:
+            self.assertEqual(row["task_tier_reason"], "mechanical")
+            self.assertEqual(row["task_qwen_excluded_reason"], "files")
+
+    def test_a_legacy_task_without_tier_fields_writes_null_for_both(self) -> None:
+        fixture = _state_with_attempts()
+        self.write_state(fixture)
+        self.assertEqual(self.run_cli("complete-prd", PRD).returncode, 0)
+        row = self.ledger_rows()[0]
+        self.assertEqual(
+            set(row),
+            {
+                "batch_id",
+                "prd",
+                "task_id",
+                "task_name",
+                "task_model",
+                "qwen_eligible",
+                "task_tier_reason",
+                "task_qwen_excluded_reason",
+                "recorded_at",
+                "attempt",
+            },
+        )
+        self.assertIsNone(row["task_tier_reason"])
+        self.assertIsNone(row["task_qwen_excluded_reason"])
+        self.assertEqual(row["batch_id"], "202608260001")
+        self.assertEqual(row["prd"], PRD)
+        self.assertEqual(row["task_id"], "task-1")
+        self.assertEqual(row["task_name"], "First")
+        self.assertEqual(row["task_model"], "sonnet")
+        self.assertIs(row["qwen_eligible"], True)
+        self.assertEqual(row["attempt"], fixture["tasks"][0]["attempts"][0])
 
     def test_append_keeps_an_existing_row_that_lacks_a_trailing_newline(
         self,

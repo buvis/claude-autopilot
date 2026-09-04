@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **run-autopilot**: attempt ledger rows carry `task_tier_reason` and
+  `task_qwen_excluded_reason`; `tune_routing.py` proposes routing changes
+  from the ledger
+
 ### Fixed
 
 - **run-autopilot**: a headless session that stands down for a peer session

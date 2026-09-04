@@ -393,7 +393,9 @@ def append_attempt_rows(state: dict[str, Any], prd: str, ledger_path: Path) -> i
             continue  # same tolerance as _find_task
         attempts = task.get("attempts") or []
         if not isinstance(attempts, list):
-            raise schema.SchemaError(f"task {task.get('id')!r} attempts is not an array")
+            raise schema.SchemaError(
+                f"task {task.get('id')!r} attempts is not an array"
+            )
         rows.extend(
             {
                 "batch_id": (state.get("batch") or {}).get("id"),
@@ -402,6 +404,8 @@ def append_attempt_rows(state: dict[str, Any], prd: str, ledger_path: Path) -> i
                 "task_name": task.get("name"),
                 "task_model": task.get("model"),
                 "qwen_eligible": task.get("qwen_eligible"),
+                "task_tier_reason": task.get("tier_reason"),
+                "task_qwen_excluded_reason": task.get("qwen_excluded_reason"),
                 "recorded_at": recorded_at,
                 "attempt": attempt,
             }
@@ -417,8 +421,7 @@ def append_attempt_rows(state: dict[str, Any], prd: str, ledger_path: Path) -> i
                 fh.seek(-1, os.SEEK_END)
                 if fh.read(1) != b"\n":
                     fh.write(b"\n")
-            for row in rows:
-                fh.write((json.dumps(row) + "\n").encode("utf-8"))
+            fh.writelines((json.dumps(row) + "\n").encode("utf-8") for row in rows)
     except OSError as err:
         raise schema.SchemaError(f"ledger write failed: {err}") from err
     return len(rows)

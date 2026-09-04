@@ -251,7 +251,7 @@ File: `dev/local/autopilot/ledger/attempts.jsonl` (PRD 00143) - the durable per-
 One JSON object per line:
 
 ```json
-{"batch_id": "202608260001", "prd": "00143-example.md", "task_id": "task-1", "task_name": "First", "task_model": "sonnet", "qwen_eligible": true, "recorded_at": "2026-08-26T10:00:00Z", "attempt": {"attempt": 2, "model": "opus", "outcome": "completed", "escalation_reason": "gate_failure", "escalated_from": "sonnet"}}
+{"batch_id": "202608260001", "prd": "00143-example.md", "task_id": "task-1", "task_name": "First", "task_model": "sonnet", "qwen_eligible": true, "task_tier_reason": "default", "task_qwen_excluded_reason": null, "recorded_at": "2026-08-26T10:00:00Z", "attempt": {"attempt": 2, "model": "opus", "outcome": "completed", "escalation_reason": "gate_failure", "escalated_from": "sonnet"}}
 ```
 
 | Field | Type | Description |
@@ -262,10 +262,12 @@ One JSON object per line:
 | `task_name` | string? | `tasks[i].name`. |
 | `task_model` | string? | `tasks[i].model` (the plan-time tier); `null` when absent. |
 | `qwen_eligible` | bool? | `tasks[i].qwen_eligible`; `null` when absent. |
+| `task_tier_reason` | string? | `tasks[i].tier_reason` (the plan-time rule that set the tier, see the `tasks[].tier_reason` row above); `null` when absent (plans created before PRD 00160). |
+| `task_qwen_excluded_reason` | string? | the plan-time `tasks[i].qwen_excluded_reason` (why plan-tasks excluded the task from qwen routing, distinct from the attempt-level field of the same name inside `attempt`); `null` when absent. |
 | `recorded_at` | string | ISO 8601 UTC (`%Y-%m-%dT%H:%M:%SZ`) of the write; every row of one close shares it. |
 | `attempt` | object | The `tasks[i].attempts[j]` object verbatim (`tasks[].attempts` above), nothing added or normalized. |
 
-**Readers** (audit-qwen, the 00113 tuner) live outside this plugin and read the ledger instead of live state; an absent file means "no closed PRDs yet" and is never an error.
+**Readers** (audit-qwen outside this plugin; `scripts/tune_routing.py`, PRD 00170, inside it) read the ledger instead of live state; an absent file means "no closed PRDs yet" and is never an error.
 
 ## Fable rescue ledger
 
