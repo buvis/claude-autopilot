@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **use-codex**: report unreadable hook targets (including on Python 3.14+), failed repairs, and orphan cleanup errors once per target, continue processing remaining hooks, and clean up failed repair writes without overwriting or deleting pre-existing temporary files.
+
+## [0.5.1] - 2026-09-05
+
 ### Added
 
 - **review-work-completion**: persist Carl's permanent unavailability for the
@@ -15,7 +21,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **use-codex**: report unreadable hook targets (including on Python 3.14+), failed repairs, and orphan cleanup errors once per target, continue processing remaining hooks, and clean up failed repair writes without overwriting or deleting pre-existing temporary files.
 - **use-gemini**: restore Carl's Copilot lane with a served Gemini Flash pin,
   distinguish permanent model/client-tier rejection (exit 4) from runtime
   failures, try native Gemini for rejected default prompt runs, and keep
