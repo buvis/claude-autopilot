@@ -230,6 +230,11 @@ case $MODE in
         # finite pipe also guards against a child hanging on the inherited
         # wrapper stdin (PRD 00040 hang class). Interactive/resume/continue
         # modes keep stdin - they need the TTY.
+        # ponytail: the test stub always drains, so it can't model a real
+        # `claude` exiting 0 without draining a >64 KiB prompt before closing
+        # its stdin - that races SIGPIPE against printf's write and reports
+        # 141 for a successful run under `set -eo pipefail`; if this is ever
+        # observed, feed the prompt from a temp file instead of this pipe.
         printf '%s' "$PROMPT" | run_cmd claude --print --model "$MODEL" $PERM "${SESSION_ARGS[@]}" "${ADD_DIRS[@]}" "${TOOLS[@]}"
         ;;
 esac

@@ -83,10 +83,10 @@ run_sonnet t1 -f "$PROMPT_FILE_T"
 # 1. Prompt mode sends the prompt bytes on child stdin, replacing rather than
 #    inheriting the wrapper's SENTINEL_STDIN_DATA.
 if cmp -s "$PROMPT_FILE_T" "$CLAUDE_STDIN_FILE"; then
-    PASS "plain -f sends the prompt bytes exactly on claude stdin"
+    PASS "claude child stdin is exactly the prompt, never the wrapper's stdin"
 else
-    FAIL "plain -f sends the prompt bytes exactly on claude stdin" \
-         "stdin differs from the prompt file or includes inherited SENTINEL_STDIN_DATA"
+    FAIL "claude child stdin is exactly the prompt, never the wrapper's stdin" \
+         "captured $(wc -c < "$CLAUDE_STDIN_FILE" 2>/dev/null || echo 0) bytes on claude stdin, expected $(wc -c < "$PROMPT_FILE_T")"
 fi
 
 # 2. Prompt mode argv contains only the headless model flags; the prompt is not
@@ -371,6 +371,40 @@ if [ "$RC" -eq 1 ] \
 else
     FAIL "empty prompt file exits 1 with Prompt required and no claude invocation" \
          "rc=$RC; stderr: $(cat "$STDERR_F"); argv: $(tr '\n' ' ' < "$CLAUDE_ARGV_FILE" 2>/dev/null || echo '<none>')"
+fi
+
+# ══ T20: -f prompt file ending in a newline is delivered minus that newline ══
+# Pins (does not change) the pre-existing `PROMPT=$(cat "$PROMPT_FILE")` read:
+# command substitution strips a single trailing newline before the prompt
+# reaches claude's stdin.
+T20_PROMPT_FILE="$WORK/trailing-newline-prompt.txt"
+printf '%s\n' "$SONNET_PROMPT" > "$T20_PROMPT_FILE"
+T20_EXPECTED_FILE="$WORK/trailing-newline-prompt.expected"
+printf '%s' "$SONNET_PROMPT" > "$T20_EXPECTED_FILE"
+run_sonnet t20 -f "$T20_PROMPT_FILE"
+
+# 24. A prompt file ending in \n reaches claude's stdin with that trailing
+#     newline stripped, matching the pre-existing $(cat "$PROMPT_FILE") read.
+if cmp -s "$T20_EXPECTED_FILE" "$CLAUDE_STDIN_FILE"; then
+    PASS "-f prompt ending in newline is delivered minus its final newline"
+else
+    FAIL "-f prompt ending in newline is delivered minus its final newline" \
+         "captured $(wc -c < "$CLAUDE_STDIN_FILE" 2>/dev/null || echo 0) bytes on claude stdin, expected $(wc -c < "$T20_EXPECTED_FILE")"
+fi
+
+# ══ T21: a prompt larger than 64 KiB still dispatches and delivers byte-exact ═
+T21_PROMPT_FILE="$WORK/large-prompt.txt"
+# 70000 bytes, comfortably past the 65536-byte (64 KiB) pipe buffer.
+head -c 70000 /dev/zero | tr '\0' 'a' > "$T21_PROMPT_FILE"
+run_sonnet t21 -f "$T21_PROMPT_FILE"
+
+# 25. A prompt larger than the OS pipe buffer still exits 0 and is delivered
+#     byte-exact on claude's stdin.
+if [ "$RC" -eq 0 ] && cmp -s "$T21_PROMPT_FILE" "$CLAUDE_STDIN_FILE"; then
+    PASS "prompt larger than 64 KiB exits 0 and is delivered byte-exact"
+else
+    FAIL "prompt larger than 64 KiB exits 0 and is delivered byte-exact" \
+         "rc=$RC; captured $(wc -c < "$CLAUDE_STDIN_FILE" 2>/dev/null || echo 0) bytes on claude stdin, expected $(wc -c < "$T21_PROMPT_FILE")"
 fi
 
 # ══ summary ═══════════════════════════════════════════════════════════════════

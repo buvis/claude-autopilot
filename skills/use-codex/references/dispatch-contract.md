@@ -14,11 +14,11 @@ echo 'Your prompt here (can contain "quotes", parens(), etc.)' > /tmp/model-prom
 ~/.agents/skills/use-<backend>/scripts/<backend>-run.sh -f /tmp/model-prompt.txt
 ```
 
-Prompts pass via argument or `-f` file, never stdin.
+Prompts pass via argument or `-f` file; callers never pipe a prompt into the run script's own stdin. (use-sonnet's headless dispatch pipes the prompt into the *child's* stdin internally - see Child Stdin Policy below - which is a different boundary from how a caller invokes the run script.)
 
 ## Child Stdin Policy
 
-Every headless child CLI invocation (the `-p`/`--print`/`codex exec` dispatch paths, plus preflight probes and the `mise env` PATH lookup) redirects the child's stdin with `< /dev/null`, so an unattended background dispatch can never hang on a child reading the inherited stdin (the PRD 00040 hang class). Documented exception: interactive (`-i`), bare `-r`/`--resume`, and `-c`/`--continue` invocations keep stdin - they legitimately need the TTY. Never dispatch those modes unattended.
+Every headless child CLI invocation (the `-p`/`--print`/`codex exec` dispatch paths, plus preflight probes and the `mise env` PATH lookup) redirects the child's stdin with `< /dev/null`, so an unattended background dispatch can never hang on a child reading the inherited stdin (the PRD 00040 hang class). Documented exception: interactive (`-i`), bare `-r`/`--resume`, and `-c`/`--continue` invocations keep stdin - they legitimately need the TTY. Never dispatch those modes unattended. Second documented exception: use-sonnet's headless prompt-mode dispatch feeds the child's stdin from `printf '%s' "$PROMPT" | claude --print ...` instead of `< /dev/null`, so a prompt whose first byte is `-` is delivered as data rather than parsed as an option; this still forecloses the PRD 00040 hang class because the pipe carries only the finite prompt bytes and closes at EOF, so the child can never block reading the wrapper's inherited stdin.
 
 ## Error Stream Convention
 

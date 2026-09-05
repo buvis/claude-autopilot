@@ -20,10 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the loop as a pause quoting the marker's reason, instead of being counted
   as a death, burning the retry, and parking the healthy PRD.
 - **use-sonnet**: the headless prompt-mode dispatch sends the prompt on the
-  child's stdin instead of as a positional argv token. A `-f` prompt file is
-  streamed byte-exact, an option-looking prompt (e.g. `- [ ] item`) is never
-  parsed as a flag, and a missing or empty prompt still fails before any
-  dispatch.
+  child's stdin instead of as a positional argv token. A `-f` prompt file's
+  contents are delivered on stdin exactly as read (a trailing newline is
+  already stripped by the pre-existing `$(cat ...)` prompt read), an
+  option-looking prompt (e.g. `- [ ] item`) is never parsed as a flag, and a
+  missing or empty prompt still fails before any dispatch.
 
 ## [0.4.1] - 2026-09-02
 
