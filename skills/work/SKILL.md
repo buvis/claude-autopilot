@@ -30,6 +30,7 @@ Implement pending tasks one-by-one, committing after each completion.
     `## What to remove` section is inlined into the step-5.6 deslop dispatch
   - `${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/compute_mech_facts.py` - imported
     by path from `scripts/check_style_limits.py` (step 5.65 style-limit gate) for the per-function line spans
+  - `${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/detect_tautological_tests.py` - run by the step-2.8 test quality gate on Tess's test files
 - CLIs: `git`, `python3`
 - Optional (explicit fallback exists): `use-gemini` skill (UI tasks), `use-qwen`
   skill, `use-codex` skill (an unhealthy or absent codex falls back to Claude at
@@ -236,7 +237,7 @@ Tess prompts must satisfy the **Subagent Dispatch Budget**.
 
 ### 2.8. Test quality gate (main session)
 
-Before committing Tess's tests, review them in the main session against the four-check rubric in `references/test-author-prompt.md` § Quality gate (behavior names, real assertions, edge cases, no tautologies); **read that section before running the gate.** If any check fails, dispatch Tess again with specific feedback about what's weak, rendered from `tess-retry-prompt.md` — never author the retry by hand. Max 2 quality gate retries.
+Before committing Tess's tests, run the computed shape check and review them in the main session against the four-check rubric in `references/test-author-prompt.md` § Quality gate (behavior names, real assertions, edge cases, no tautologies); **read that section before running the gate.** If any check fails, dispatch Tess again with specific feedback about what's weak, rendered from `tess-retry-prompt.md` — never author the retry by hand. Max 2 quality gate retries.
 
 **Total Tess budget:** max 5 dispatches across the entire test authoring phase (quality gate + adversarial rounds combined). If exhausted, flag weakness in task output and proceed. Don't block the pipeline forever.
 

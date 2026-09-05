@@ -52,6 +52,14 @@ Moved verbatim out of `SKILL.md` step 2.8 (PRD 00119-v2). SKILL.md keeps the
 gate rule and the total-Tess budget; the rubric and the retry render live here.
 **Read this section before running the gate on Tess's first test file.**
 
+**Run the computed shape check first**, on every test file Tess wrote or changed:
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/detect_tautological_tests.py <test file>...
+```
+
+It prints one `[MECH] {emoji} <test> <reason> | File: <path>:<line> | Task: general` line per test whose shape cannot fail (a constant or self-comparing assert, an `A or B` hedge, a swallowed exception, `raises(Exception)`, no assertion at all) and always exits 0. **Every `[MECH]` line is a check-4 failure**: copy it verbatim into the `QUALITY_FEEDBACK` file, then judge the four checks below by reading. The script sees shape only; a test that restates the code in a perfectly valid shape is still check 4's to catch by hand. The same script runs at review (`review-work-completion` step 3), so a shape that slips past here comes back as a `mech-check` finding and a rework cycle — cheaper to fix now.
+
 Before committing Tess's tests, review them in the main session against this checklist:
 
 1. **Behavior names?** Each test name describes a behavior ("rejects empty email"), not an implementation detail ("calls validateEmail")

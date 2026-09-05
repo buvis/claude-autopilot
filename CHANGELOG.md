@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pass. Step 6 absorbs every hit into the consolidated table as a
   `mech-check` finding; rubric R2, the testing checklist and the doubt lens
   name the rule.
+- **work**: the step-2.8 test quality gate runs `detect_tautological_tests.py`
+  on Tess's test files before the four-check rubric; every hit is gate
+  feedback, so a test that cannot fail is reworked before it is committed.
 - **run-autopilot**: attempt ledger rows carry `task_tier_reason` and
   `task_qwen_excluded_reason`; `tune_routing.py` proposes routing changes
   from the ledger

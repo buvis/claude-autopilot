@@ -239,6 +239,33 @@ def test_step_2_7_includes_a_harness_contract_when_one_exists() -> None:
     )
 
 
+def test_step_2_8_runs_the_shape_check_before_the_four_check_rubric() -> None:
+    # A tautological test that reaches the review comes back as a mech-check
+    # finding and a rework cycle; step 2.8 is where it is cheapest to catch.
+    # Two pins: the step names the check, and the reference the step routes
+    # to carries the script plus the every-hit-is-a-failure rule.
+    needle = "detect_tautological_tests.py"
+    start = _TEXT.index("### 2.8.")
+    end = _TEXT.index("### 2.85.", start)
+    step_2_8 = _TEXT[start:end]
+
+    assert "shape check" in step_2_8, (
+        f"{_SKILL_MD}: step 2.8 no longer tells the orchestrator to run the "
+        "computed shape check before the four-check rubric."
+    )
+
+    reference = (_SKILL_MD.parent / "references" / "test-author-prompt.md").read_text()
+    gate = reference[reference.index("## Quality gate") :]
+    assert needle in gate, (
+        f"references/test-author-prompt.md § Quality gate never names {needle!r}, "
+        "so the gate is back to judging tautologies by eye alone."
+    )
+    assert "Every `[MECH]` line is a check-4 failure" in gate, (
+        "references/test-author-prompt.md § Quality gate must say every [MECH] "
+        "line is a gate failure, or a hit is advisory and gets waved through."
+    )
+
+
 def test_step_3_defines_failing_tests_for_test_only_tasks() -> None:
     # PRD 00141: step 2.7 already skips Tess for test-only, docs-only and
     # config-only tasks, but step 3 never said what fills FAILING_TESTS when
