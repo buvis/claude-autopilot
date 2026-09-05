@@ -63,7 +63,7 @@ def _verdict_for(
     # (`check` is contractually read-only, and a batch runs it against the
     # real ~/.codex) and, handed the raw bytes, honours a PEP 263 coding
     # cookie the way the interpreter would. ValueError covers a null byte on
-    # 3.10/3.11 (SyntaxError from 3.12) and is UnicodeDecodeError's base.
+    # 3.10 (SyntaxError from 3.11) and is UnicodeDecodeError's base.
     try:
         compile(target.read_bytes(), str(target), "exec")
     except (SyntaxError, ValueError) as exc:
@@ -74,9 +74,11 @@ def _verdict_for(
         root_name, canonical_rel = known
         root = aegis_root if root_name == "aegis" else autopilot_root
         canonical = root / canonical_rel
-        if not canonical.exists():
+        try:
+            canonical_bytes = canonical.read_bytes()
+        except OSError:
             return "no_canonical", ""
-        if canonical.read_bytes() != target.read_bytes():
+        if canonical_bytes != target.read_bytes():
             return "stale", ""
 
     return "ok", ""
@@ -130,12 +132,12 @@ def _missing_common_import_names(hooks_dir: Path, canonical: Path) -> list[str]:
             tree = ast.parse(py_file.read_text(encoding="utf-8"))
         except SyntaxError:
             unparseable.append(
-                f"{py_file.name}: SyntaxError (cannot verify _common imports)"
+                f"{py_file.name}: SyntaxError (cannot verify _common imports)",
             )
             continue
-        except (UnicodeDecodeError, OSError):
+        except (ValueError, OSError):
             unparseable.append(
-                f"{py_file.name}: unreadable (cannot verify _common imports)"
+                f"{py_file.name}: unreadable (cannot verify _common imports)",
             )
             continue
         for node in ast.walk(tree):
@@ -146,12 +148,12 @@ def _missing_common_import_names(hooks_dir: Path, canonical: Path) -> list[str]:
         canonical_tree = ast.parse(canonical.read_text(encoding="utf-8"))
     except SyntaxError:
         unparseable.append(
-            f"{canonical.name}: SyntaxError (cannot verify _common imports)"
+            f"{canonical.name}: SyntaxError (cannot verify _common imports)",
         )
         return sorted(imported) + unparseable
-    except (UnicodeDecodeError, OSError):
+    except (ValueError, OSError):
         unparseable.append(
-            f"{canonical.name}: unreadable (cannot verify _common imports)"
+            f"{canonical.name}: unreadable (cannot verify _common imports)",
         )
         return sorted(imported) + unparseable
 
@@ -162,7 +164,9 @@ def _missing_common_import_names(hooks_dir: Path, canonical: Path) -> list[str]:
 
 
 def _repair_unknown(
-    verdict: str, target_str: str, detail: str
+    verdict: str,
+    target_str: str,
+    detail: str,
 ) -> tuple[str, str, str] | None:
     if verdict in ("missing", "empty", "syntax_error"):
         why = detail or f"no canonical source for unknown hook ({verdict})"
@@ -190,23 +194,29 @@ def _repair_known(
     root_name, canonical_rel = known
     root = aegis_root if root_name == "aegis" else autopilot_root
     canonical = root / canonical_rel
-    if not canonical.exists():
+    try:
+        canonical_bytes = canonical.read_bytes()
+    except OSError:
         return ("unrepairable", target_str, f"no canonical source ({canonical})")
 
     if target.name == "_common.py":
         missing = _missing_common_import_names(hooks_dir, canonical)
         if missing:
-            why = (
-                "sibling imports names not defined in canonical _common.py: "
-                + ", ".join(missing)
-            )
+            why = ", ".join(missing)
+            # Sole entry = the canonical's own marker: no sibling is to blame,
+            # so the prefix would lie. Matching the marker's "<name>: " shape is
+            # safe — a Python identifier can hold neither ':' nor '.'.
+            if not (len(missing) == 1 and missing[0].startswith(f"{canonical.name}: ")):
+                why = (
+                    "sibling imports names not defined in canonical _common.py: " + why
+                )
             return ("unrepairable", target_str, why)
 
     if dry_run:
         return ("would-repair", target_str, str(canonical))
 
     tmp_path = target.with_name(target.name + ".tmp")
-    tmp_path.write_bytes(canonical.read_bytes())
+    tmp_path.write_bytes(canonical_bytes)
     os.replace(tmp_path, target)
     return ("repaired", target_str, str(canonical))
 
@@ -234,11 +244,7 @@ def _repair_target(
     # _common.py is never named by a command, so it is always "unregistered".
     # Excluding it here keeps its repair path; the placeholder scan exempts it
     # too, so without this it would be neither repaired nor removed.
-    if (
-        verdict == "empty"
-        and target not in registered
-        and target.name != "_common.py"
-    ):
+    if verdict == "empty" and target not in registered and target.name != "_common.py":
         return None  # zero-byte + unregistered -> handled by the placeholder scan below
 
     if known is None:
@@ -256,7 +262,9 @@ def _repair_target(
 
 
 def _remove_orphaned_empty(
-    hooks_dir: Path, registered: set[Path], dry_run: bool
+    hooks_dir: Path,
+    registered: set[Path],
+    dry_run: bool,
 ) -> list[tuple[str, str, str]]:
     out: list[tuple[str, str, str]] = []
     if not hooks_dir.is_dir():
@@ -376,14 +384,17 @@ def _run_subcommand(
         )
         # Exit code reflects the post-repair state (identical to the
         # pre-repair state when --dry-run is set).
-        verdicts = check(config=config, aegis_root=aegis_root, autopilot_root=autopilot_root)
+        verdicts = check(
+            config=config, aegis_root=aegis_root, autopilot_root=autopilot_root
+        )
         return results, verdicts
     results = check(config=config, aegis_root=aegis_root, autopilot_root=autopilot_root)
     return results, results
 
 
 def _report(
-    results: list[tuple[str, str, str]], verdicts: list[tuple[str, str, str]]
+    results: list[tuple[str, str, str]],
+    verdicts: list[tuple[str, str, str]],
 ) -> int:
     ok = sum(1 for verdict, _, _ in verdicts if verdict == "ok")
     stale = sum(1 for verdict, _, _ in verdicts if verdict in ("stale", "no_canonical"))

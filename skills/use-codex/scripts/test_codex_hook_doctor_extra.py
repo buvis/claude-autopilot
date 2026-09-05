@@ -1,5 +1,5 @@
 """Tests for codex_hook_doctor.py — check() edge cases, the repair() verdicts
-PRD 00169 widened, and doc-sync pins.
+PRDs 00169 and 00173 widened, and doc-sync pins.
 
 Split out of test_codex_hook_doctor.py to keep both files under the
 project's file-length limit. Shares `_fake_roots`, `_write_config`,
@@ -432,7 +432,7 @@ def test_repair_rewrites_a_known_hook_that_fails_to_compile_from_canonical(
     # one state check was tightened to catch stayed unrepaired. A known hook
     # that cannot compile has no working state worth preserving.
     config_path, target, aegis_root, autopilot_root = _syntax_broken_known_hook(
-        tmp_path
+        tmp_path,
     )
     canonical = aegis_root / "hooks" / "validate_commit_msg.py"
     canonical.write_text("canonical = 2\n", encoding="utf-8")
@@ -460,7 +460,7 @@ def test_repair_reports_a_known_hook_that_fails_to_compile_unrepairable_without_
     # Same broken hook, no canonical source under aegis_root: repair must
     # still emit a row naming why, and leave the bytes alone.
     config_path, target, aegis_root, autopilot_root = _syntax_broken_known_hook(
-        tmp_path
+        tmp_path,
     )
     before = target.read_bytes()
 
@@ -480,7 +480,7 @@ def test_repair_dry_run_reports_would_repair_for_a_known_hook_that_fails_to_comp
     tmp_path: Path,
 ) -> None:
     config_path, target, aegis_root, autopilot_root = _syntax_broken_known_hook(
-        tmp_path
+        tmp_path,
     )
     canonical = aegis_root / "hooks" / "validate_commit_msg.py"
     canonical.write_text("canonical = 2\n", encoding="utf-8")
@@ -498,22 +498,23 @@ def test_repair_dry_run_reports_would_repair_for_a_known_hook_that_fails_to_comp
 
 
 @pytest.mark.parametrize(
-    "make_canonical",
+    ("make_canonical", "expected_detail"),
     [
-        lambda path: path.write_bytes('X = "\xe9"\n'.encode("latin-1")),
-        lambda path: path.mkdir(),
+        (
+            lambda path: path.write_bytes('X = "\xe9"\n'.encode("latin-1")),
+            "_common.py: unreadable (cannot verify _common imports)",
+        ),
+        (lambda path: path.mkdir(), "no canonical source ({canonical})"),
     ],
     ids=["latin-1 bytes", "directory"],
 )
 def test_repair_reports_common_py_unrepairable_when_canonical_is_unreadable_and_still_repairs_siblings(
     make_canonical: Callable[[Path], object],
+    expected_detail: str,
     tmp_path: Path,
 ) -> None:
-    # Before rewriting _common.py, repair reads the canonical as UTF-8 to check
-    # its defs against sibling imports; undecodable bytes or a directory there
-    # used to abort the whole run (exit 2, no rows) instead of costing one
-    # unrepairable row. hooks/_common.py is empty so it stays broken (exit 1)
-    # and check() never reads the canonical itself (unguarded there, PRD 00173).
+    # A broken canonical must not prevent repairs to other targets.
+    # The empty _common.py stays broken (exit 1) after its repair is refused.
     hooks_dir = tmp_path / "hooks"
     hooks_dir.mkdir()
     common = hooks_dir / "_common.py"
@@ -539,16 +540,138 @@ def test_repair_reports_common_py_unrepairable_when_canonical_is_unreadable_and_
     )
 
     lines = [line for line in result.stdout.splitlines() if line]
-    common_row = next(line for line in lines if line.startswith(f"unrepairable\t{common}\t"))
-    assert "_common.py: unreadable (cannot verify _common imports)" in common_row
+    common_row = next(
+        line for line in lines if line.startswith(f"unrepairable\t{common}\t")
+    )
+    assert common_row == (
+        f"unrepairable\t{common}\t"
+        + expected_detail.format(canonical=aegis_root / "hooks" / "_common.py")
+    )
     assert any(
         line.startswith(f"repaired\t{hooks_dir / 'validate_commit_msg.py'}\t")
         for line in lines
     )
-    assert (hooks_dir / "validate_commit_msg.py").read_bytes() == canonical_sibling.read_bytes()
+    assert (
+        hooks_dir / "validate_commit_msg.py"
+    ).read_bytes() == canonical_sibling.read_bytes()
     assert common.read_bytes() == b""
     assert result.returncode == 1
     assert "Traceback" not in result.stderr
+
+
+def _canonical_case(tmp_path: Path, name: str) -> tuple[Path, Path, list[str]]:
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    target = hooks_dir / name
+    target.write_text("local = 1\n", encoding="utf-8")
+    config = tmp_path / "hooks.json"
+    _write_config(config, {"PreToolUse": [f"python3 hooks/{name}"]})
+    aegis_root, autopilot_root = _fake_roots(tmp_path)
+    (aegis_root / "hooks").mkdir()
+    args = [
+        "--config",
+        str(config),
+        "--aegis-root",
+        str(aegis_root),
+        "--autopilot-root",
+        str(autopilot_root),
+    ]
+    return target, aegis_root / "hooks" / name, args
+
+
+@pytest.mark.parametrize("extra_args", [[], ["--dry-run"]], ids=["repair", "dry-run"])
+def test_directory_canonical_reports_one_target_without_aborting(
+    tmp_path: Path,
+    extra_args: list[str],
+) -> None:
+    target, canonical, args = _canonical_case(tmp_path, "validate_commit_msg.py")
+    canonical.mkdir()
+    before = _snapshot(tmp_path)
+
+    checked = _run_cli(args)
+    assert checked.returncode == 3
+    assert checked.stdout.splitlines() == [
+        f"no_canonical\t{target}\t",
+        "summary\t0 ok, 1 stale, 0 broken",
+    ]
+    assert checked.stderr == ""
+
+    repaired = _run_repair_cli(args + extra_args)
+    assert repaired.returncode == 3
+    assert repaired.stdout.splitlines() == [
+        f"unrepairable\t{target}\tno canonical source ({canonical})",
+        "summary\t0 ok, 1 stale, 0 broken",
+    ]
+    assert repaired.stderr == ""
+    assert _snapshot(tmp_path) == before
+
+
+_SIBLING_PREFIX = "sibling imports names not defined in canonical _common.py: "
+
+
+@pytest.mark.parametrize(
+    ("bad_is_canonical", "marker_name", "exit_code", "expect_prefix"),
+    [(False, "bad_sibling.py", 1, True), (True, "_common.py", 3, False)],
+    ids=["sibling", "canonical"],
+)
+def test_null_byte_blocks_common_repair_without_aborting(
+    tmp_path: Path,
+    bad_is_canonical: bool,
+    marker_name: str,
+    exit_code: int,
+    expect_prefix: bool,
+) -> None:
+    common, canonical, args = _canonical_case(tmp_path, "_common.py")
+    if bad_is_canonical:
+        bad = canonical
+    else:
+        bad = common.with_name("bad_sibling.py")
+        canonical.write_text("canonical = 2\n", encoding="utf-8")
+    bad.write_bytes(b"\x00")
+    before = _snapshot(tmp_path)
+
+    result = _run_repair_cli(args)
+
+    assert result.returncode == exit_code
+    detail = next(
+        line
+        for line in result.stdout.splitlines()
+        if line.startswith(f"unrepairable\t{common}\t")
+    ).split("\t")[2]
+    assert (
+        f"{marker_name}: unreadable (cannot verify _common imports)" in detail
+        or f"{marker_name}: SyntaxError (cannot verify _common imports)" in detail
+    )
+    # Pins both arms of the canonical-only conditional: the sibling case must
+    # keep the prefix, the canonical-only case must drop it.
+    assert detail.startswith(_SIBLING_PREFIX) is expect_prefix
+    assert result.stderr == ""
+    assert _snapshot(tmp_path) == before
+
+
+@pytest.mark.parametrize(
+    ("canonical_bytes", "marker"),
+    [(b"\xff", "unreadable"), (b"def f(:\n", "SyntaxError")],
+    ids=["undecodable", "syntax-error"],
+)
+def test_canonical_only_failure_detail_has_no_sibling_prefix(
+    tmp_path: Path,
+    canonical_bytes: bytes,
+    marker: str,
+) -> None:
+    common, canonical, args = _canonical_case(tmp_path, "_common.py")
+    canonical.write_bytes(canonical_bytes)
+    before = _snapshot(tmp_path)
+
+    result = _run_repair_cli(args)
+
+    assert result.returncode == 3
+    assert result.stdout.splitlines() == [
+        f"unrepairable\t{common}\t_common.py: {marker} (cannot verify _common imports)",
+        "summary\t0 ok, 1 stale, 0 broken",
+    ]
+    assert result.stderr == ""
+    assert _snapshot(tmp_path) == before
 
 
 # ---------------------------------------------------------------------------
@@ -612,8 +735,7 @@ def test_use_codex_skill_doc_names_repair() -> None:
     assert "never run it from a batch" in section
     assert "`0` — every target verdicts `ok`." in section
     assert (
-        "`1` — one or more targets verdict `missing`/`empty`/`syntax_error`"
-        in section
+        "`1` — one or more targets verdict `missing`/`empty`/`syntax_error`" in section
     )
     assert "`2` — the doctor itself could not run" in section
     assert (
