@@ -51,10 +51,16 @@ def _verdict_for(
     aegis_root: Path,
     autopilot_root: Path,
 ) -> tuple[str, str]:
-    if not target.exists():
-        return "missing", ""
-    if target.stat().st_size == 0:
-        return "empty", ""
+    try:
+        if not target.exists():
+            return "missing", ""
+        if target.stat().st_size == 0:
+            return "empty", ""
+        target_bytes = target.read_bytes()
+    except OSError as exc:
+        # Unreadable hooks gate the rung off just like invalid Python;
+        # reuse syntax_error so report counting and exit codes stay unchanged.
+        return "syntax_error", str(exc)
 
     # Syntax outranks staleness: a hook that cannot compile fails on every
     # tool call, and `stale` exits 3 (rung stays on) while `syntax_error`
@@ -65,7 +71,7 @@ def _verdict_for(
     # cookie the way the interpreter would. ValueError covers a null byte on
     # 3.10 (SyntaxError from 3.11) and is UnicodeDecodeError's base.
     try:
-        compile(target.read_bytes(), str(target), "exec")
+        compile(target_bytes, str(target), "exec")
     except (SyntaxError, ValueError) as exc:
         return "syntax_error", str(exc)
 
@@ -78,7 +84,8 @@ def _verdict_for(
             canonical_bytes = canonical.read_bytes()
         except OSError:
             return "no_canonical", ""
-        if canonical_bytes != target.read_bytes():
+        # Compare the bytes that compiled, without another target read/race.
+        if canonical_bytes != target_bytes:
             return "stale", ""
 
     return "ok", ""
@@ -216,8 +223,16 @@ def _repair_known(
         return ("would-repair", target_str, str(canonical))
 
     tmp_path = target.with_name(target.name + ".tmp")
-    tmp_path.write_bytes(canonical_bytes)
-    os.replace(tmp_path, target)
+    try:
+        tmp_path.write_bytes(canonical_bytes)
+        os.replace(tmp_path, target)
+    except OSError as exc:
+        detail = str(exc)
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except OSError as cleanup_exc:
+            detail += f"; temp cleanup failed: {cleanup_exc}"
+        return ("unrepairable", target_str, detail)
     return ("repaired", target_str, str(canonical))
 
 
