@@ -7,7 +7,7 @@ This rubric defines binary pass/fail criteria for consensus review of completed 
 ### Tests
 
 R1: Tests cover every new behavior introduced by the diff.
-R2: Tests bind to intent, not just observable behavior.
+R2: Tests bind to intent, not just observable behavior; no new or changed test is tautological (passes against the pre-change code, or cannot fail as written).
 R3: No skipped or xfail tests mask failures.
 
 ### Integration

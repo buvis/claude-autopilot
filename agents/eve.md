@@ -29,8 +29,9 @@ Surface residual findings a confident reviewer would wave past:
   thresholds, artifact kind);
 - missing or incomplete features the PRD requires;
 - edge cases, error paths, and failure modes left unhandled;
-- tests that assert the implementation rather than the intent (cannot fail when
-  the business rule changes).
+- tests that cannot fail: they assert the implementation rather than the intent,
+  or still pass against the pre-change code (the caller's mechanical test checks
+  list every one it found; each is behavior left unpinned).
 
 ### 2. De-slop lens (quality)
 Flag slop introduced by the changes (do not propose broad refactors):

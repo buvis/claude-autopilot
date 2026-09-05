@@ -54,6 +54,9 @@ do not flag it.
 - [ ] Error paths tested
 - [ ] Integration tests if crossing boundaries
 - [ ] Tests actually run and pass
+- [ ] No tautological test — every new or changed test fails against the
+      pre-change code (the context's fail-first replay block), and no assert
+      is constant, self-comparing, or an either-or hedge (the shapes block)
 
 ## Security
 
