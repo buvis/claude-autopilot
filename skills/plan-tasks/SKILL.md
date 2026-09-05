@@ -191,10 +191,12 @@ Below the 150K threshold → task ships as-is.
 
 ### 4.6. Split tasks (context + eligibility)
 
-Step 4.6 has **two independent split triggers**. The existing context-budget trigger is unchanged; the eligibility trigger is new (PRD 00032, widened by PRD 00019) and pushes separable backend work toward the `<=3`-file shape that `/autopilot:work` can route to qwen.
+Step 4.6 has **two independent split triggers**. The existing context-budget trigger is unchanged; the eligibility trigger pushes separable backend work toward the qualified single-file shape that `/autopilot:work` can route to qwen (PRD 00174).
 
 - **Context-budget trigger** (always active): when `estimated_tokens > THRESHOLD` (150K normally; replan-context.md budget in replan mode), the task is too big for a single context window.
-- **Eligibility trigger** (infra-gated, see the qwen infra preflight subsection below): a **backend** task (UI/backend definition: see step 4.7 — UI matches the "Gemini-first tasks" list in `${CLAUDE_PLUGIN_ROOT}/skills/work/SKILL.md`, everything else is backend) touching `>=4` files is split toward `<=3`-file pieces so each subtask can route to qwen. The split is valid only when **cleanly separable** — judged from the PRD's Functional Decomposition and Dependency Graph, with each resulting piece required to independently compile and carry its own passing tests (no piece depends on a symbol another piece introduces). **A trait definition cannot be split from its implementations.**
+- **Eligibility trigger** (infra-gated, see the qwen infra preflight subsection below): a **backend** task (UI/backend definition: see step 4.7 — UI matches the "Gemini-first tasks" list in `${CLAUDE_PLUGIN_ROOT}/skills/work/SKILL.md`, everything else is backend) touching `>=2` files may split into one-file pieces so each subtask can route to qwen. The split is valid only when **cleanly separable** — judged from the PRD's Functional Decomposition and Dependency Graph, with each resulting piece required to independently compile and carry its own passing tests (no piece depends on a symbol another piece introduces). **A trait definition cannot be split from its implementations.** Correlated implementation/test, interface/implementation, and implementation/caller edits remain together and route above Qwen; do not manufacture a task boundary to gain eligibility.
+
+An inseparable two-file task stays one task and is Qwen-ineligible (`files`); a separable two-file task may become two independently gated one-file tasks. Count only expected implementor writes: Tess-owned tests that Ivan must only read are outside that write set, while tests Ivan must edit count as writes.
 
 When **both** triggers apply to the same task, a **single split pass** satisfies both — do not run two passes. After splitting, each subtask is re-estimated per step 4.5 and re-classified per step 4.7 (so `qwen_eligible` reflects the new file count).
 
@@ -309,11 +311,11 @@ This guarantees:
 After the classifier has settled `final_tier` (the floor above included), compute the `qwen_eligible` boolean that `/autopilot:work` (PRD 00031) reads to decide qwen routing. The formula (widened by PRD 00019) is:
 
 ```
-qwen_eligible = task is backend (not UI) AND model in {haiku, sonnet} AND files_touched <= 3 AND task edits no public contract
+qwen_eligible = task is backend (not UI) AND model in {haiku, sonnet} AND files_touched == 1 AND task edits no public contract
 ```
 
 - `model` is the tier the classifier printed (the same value persisted as the top-level `model` key).
-- `files_touched` is the per-task file count already used in step 4.5 and handed to the classifier as the file slice.
+- Here `files_touched` counts distinct, non-empty expected implementor-writable file paths, excluding read-only context and Tess-owned tests; it does not change the step-4.5 context estimate or the classifier's inputs. Empty or missing file slices are ineligible (`files`).
 - **UI** = the task matches the **"Gemini-first tasks"** list in `${CLAUDE_PLUGIN_ROOT}/skills/work/SKILL.md`. Anything not matching that list is **backend**. Reuse `work`'s list as the single source of truth so producer and consumer agree by construction — do not restate the list here; if it changes in `work`, this rule inherits the change.
 - **Public contract** = the `contract_edit` fact judged above under its evidence rule. Reuse that value as the single source of truth so the tier and this flag cannot disagree; do not restate the definition here and do not widen its evidence. `contract_edit` false means the task edits no public contract.
 
@@ -322,7 +324,7 @@ Each of the following yields `qwen_eligible = false` independently, with the nam
 - The task matches the UI list (Gemini's domain, not qwen's) → `ui`.
 - `model == "opus"` (opus tier is never qwen-eligible) → `tier`.
 - The task edits a public contract, meaning `contract_edit` is true → `contract`.
-- `files_touched >= 4` (qwen under-covers wide multi-file tasks) → `files`.
+- `files_touched >= 2` or `files_touched == 0` (outside the measured single-file scope) → `files`.
 
 **`qwen_excluded_reason`**: on **every** ineligible task, also persist `qwen_excluded_reason` — one of `ui` / `tier` / `files` / `contract`. When several conditions fail, record the FIRST failing one in the order above (`ui` → `tier` → `contract` → `files`). `contract` is recorded ahead of `files` because the codex rung's fence (`run-autopilot/references/model-ladder.md` § Codex rung) admits `files` but must exclude `contract`, so a task that both spans many files and edits a public contract has to record `contract`, keeping it off codex. Eligible tasks omit the key. This makes under-routing auditable per batch: the Phase 9 Implementor Mix render counts exclusions by reason (PRD 00019).
 
@@ -332,6 +334,8 @@ The flag is computed **from** the classifier output; it does **not** alter the t
 
 **Persist** `model`, `tier_reason`, the `qwen_eligible` flag, and (on ineligible tasks) the `qwen_excluded_reason` alongside the existing token estimate as top-level keys in the task's `task-add` JSON payload, e.g.:
 
+A one-file backend task → `qwen_eligible: true`; a two-file backend task → `qwen_eligible: false`, `qwen_excluded_reason: "files"` (both Sonnet, no public-contract edit):
+
 ```json
 {"estimated_tokens": 72000, "est_context_peak": 92000, "model": "sonnet", "tier_reason": "default", "qwen_eligible": true}
 ```
@@ -340,7 +344,7 @@ The flag is computed **from** the classifier output; it does **not** alter the t
 {"estimated_tokens": 90000, "est_context_peak": 110000, "model": "sonnet", "tier_reason": "default", "qwen_eligible": false, "qwen_excluded_reason": "files"}
 ```
 
-`qwen_eligible` is persisted on **every** task `plan-tasks` creates. `/autopilot:work` reads the field directly and does no re-judging — it routes per `qwen_eligible` + its own qwen infra preflight (see `${CLAUDE_PLUGIN_ROOT}/skills/work/SKILL.md`).
+`qwen_eligible` is persisted on **every** task `plan-tasks` creates. `/autopilot:work` retains that classification and reconciles the concrete `FILE_PATHS` write set before routing, so stale multi-file eligibility cannot bypass the single-file fence (see `${CLAUDE_PLUGIN_ROOT}/skills/work/SKILL.md`).
 
 On legacy plans created before PRD 00025, `state.tasks[i].model` is simply absent — `/autopilot:work` falls back to omitting the Agent `model` parameter so subagents inherit the session model (backwards-compatible). Likewise, on legacy plans created before PRD 00032, `state.tasks[i].qwen_eligible` is absent and `/autopilot:work` treats it as `false` (routes to Claude at the task's tier); plans created before PRD 00019 lack `qwen_excluded_reason`, which readers treat as `unknown` — never an error. Plans created before PRD 00160 lack `tier_reason`; readers render the tier as unexplained rather than failing.
 
@@ -388,7 +392,7 @@ Output:
 - Execution order (phases)
 - Any PRD ambiguities needing clarification
 - **Derived-structure note**: when step 3 derived the Functional Decomposition or Dependency Graph from the Requirements (the PRD stated neither), say so — one line naming what was derived, so the reviewer treats the sequencing as inferred rather than PRD-pinned.
-- **Irreducible-coupling reports**: for every `>=4`-file backend task kept whole because step 4.6's eligibility trigger judged it not cleanly separable, report the task and the coupling. The task will route to Claude (not qwen) at its tier — surface why so the planner sees the routing consequence rather than the task being silently kept whole.
+- **Irreducible-coupling reports**: for every backend task with two or more expected implementor-writable files kept whole because step 4.6's eligibility trigger judged it not cleanly separable, report the task and the coupling. The task routes above Qwen through the existing Codex/Claude fences — surface why so the planner sees the routing consequence.
 - **PRD-vs-design contract conflicts**: when a design doc was consumed (step 3) and any task's `Contract` was taken from the design doc over a conflicting PRD statement, list each conflict (the PRD's version vs the design doc's, and which task). The design doc won; surface the divergence so the planner can confirm the design's refinement was intended.
 
 ## Granularity Guide

@@ -312,14 +312,14 @@ def _preflight_outcomes_line(attempts: list[dict]) -> str | None:
 def _exclusion_line(tasks: list[dict]) -> str | None:
     """Exclusion line: two populations sharing one line (batch-report format
     § Exclusion line) — plan-time buckets over ineligible tasks, then
-    dispatch-time memory reroutes deduplicated by task."""
+    dispatch-time write-set/memory reroutes deduplicated by task."""
     plan: dict[str, int] = {}
     for task in tasks:
         if not task.get("qwen_eligible"):
             reason = task.get("qwen_excluded_reason") or "unknown"
             plan[reason] = plan.get(reason, 0) + 1
     dispatch: dict[str, int] = {}
-    for bucket in ("memory_pressure", "memory_probe_failed"):
+    for bucket in ("files", "memory_pressure", "memory_probe_failed"):
         hit = sum(
             1
             for task in tasks

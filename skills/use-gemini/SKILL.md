@@ -9,9 +9,9 @@ compatibility: "Host-independent dispatch recipe requiring the named external mo
 Gemini runs through the helper script `scripts/gemini-run.sh`, which maps a
 stable flag interface onto two backends and resolves the mise-managed binary.
 
-> **Backend:** The helper prefers the GitHub Copilot CLI (it is the only
-> backend that serves the `gemini-3.1-pro-preview` model) and falls back to the
-> native `gemini` CLI when copilot is absent. Force a backend with
+> **Backend:** The helper prefers the GitHub Copilot CLI and falls back to the
+> native `gemini` CLI when copilot is absent, or when its default prompt run
+> reports a permanently unavailable model. Force a backend with
 > `GEMINI_BACKEND=copilot` or `GEMINI_BACKEND=gemini`. Both CLIs are
 > mise-managed and may not be on PATH; the helper resolves them via `mise which`.
 
@@ -20,8 +20,7 @@ stable flag interface onto two backends and resolves the mise-managed binary.
 - Files read from other skill dirs:
   `${CLAUDE_PLUGIN_ROOT}/skills/use-codex/references/dispatch-contract.md` - mandatory,
   applies verbatim (see below)
-- CLIs: `copilot` (preferred - the only backend serving
-  `gemini-3.1-pro-preview`) or the native `gemini` CLI; `mise which` for
+- CLIs: `copilot` (preferred) or the native `gemini` CLI; `mise which` for
   resolution of either
 
 ## Dispatch Contract (shared)
@@ -30,18 +29,67 @@ Background dispatch and waiting (TaskOutput-only waiting), following up, error h
 
 Gemini-specific delta: if the helper reports no backend CLI found, or the Copilot monthly quota is exhausted, report that and stop - do not silently fall back to another tool. For a quota error you may offer `GEMINI_BACKEND=gemini` (native CLI) as an alternative.
 
+Permanent rejection is different: the helper tries native Gemini once for an
+unforced prompt run with no `-m`. Explicit backends, model overrides, interactive
+and resumed sessions never switch CLIs after rejection. Exit 4 means permanently
+unavailable after any eligible fallback; report the stderr reason without
+retrying the same configuration. If fallback fails transiently, its runtime
+exit code is returned instead; stderr retains both backend reasons.
+
 ## Model Selection
 
 - **Copilot backend (default):** spends Copilot AI credits per call (multiplier
   set by the model; not exposed headlessly - check the interactive `/model`
-  picker). Default model is `gemini-3.1-pro-preview` ("Gemini 3.1 Pro
-  (Preview)"). Per policy, Gemini-via-Copilot is allowed because Claude does not
+  picker). `DEFAULT_COPILOT_MODEL` in `scripts/gemini-run.sh` is the single
+  production pin; `--help` prints its current value. The 2026-09-05 picker
+  offered Gemini Flash successors but rejected the former Pro Preview pin;
+  Carl stays on Gemini using the newest offered Flash model. Per policy,
+  Gemini-via-Copilot is allowed because Claude does not
   provide Gemini.
 - **Native gemini backend** (`GEMINI_BACKEND=gemini`): bills your Google/Gemini
-  API account, no Copilot multiplier; cannot serve the 3.1 Pro Preview model.
+  API account, no Copilot multiplier.
   With no `-m`, the CLI picks its own default.
 
 Pass `-m MODEL` only when the user asks for a specific model.
+
+### Check the pin (opt-in, live)
+
+Run `mise exec -- copilot`, then `/model` to inspect the installed backend's
+authenticated model picker. A listing alone does not prove inference works.
+Use this probe to check the runner's actual pin without duplicating it:
+
+```bash
+prompt_file=$(mktemp)
+printf '%s\n' 'Reply with exactly GEMINI_PIN_OK. Do not use tools.' > "$prompt_file"
+GEMINI_BACKEND=copilot bash ${CLAUDE_PLUGIN_ROOT}/skills/use-gemini/scripts/gemini-run.sh -s -f "$prompt_file"
+probe_status=$?
+rm -f "$prompt_file"
+printf 'Gemini pin probe exit: %s\n' "$probe_status"
+```
+
+Exit 0 plus `GEMINI_PIN_OK` confirms that the pinned model served the probe;
+exit 4 reports permanent rejection. Other failures leave availability
+unverified. Forcing copilot prevents a native fallback from hiding a stale pin.
+This command uses the network, existing login, and Copilot credits. Never add
+it to `dev/bin/release-checks`; that suite remains hermetic with stub binaries.
+
+### Exit codes and output
+
+| Code | Meaning |
+| --- | --- |
+| 0 | Backend succeeded (or `--help` printed); verify review output is non-empty. |
+| 1 | Usage, setup, temporary/output file error, or ordinary backend failure with code 1, 3, or 4. |
+| 3 | Nested dispatch refused; no backend ran. |
+| 4 | Model unavailable or client tier ineligible after any eligible fallback. |
+| Other non-zero | Backend/tool status propagated, including signal exits such as 130 or 143; a runtime failure, not classified permanent rejection. |
+
+Child codes 3 and 4 without a recognized stderr rejection map to 1 to keep the
+reserved codes unambiguous. Original backend errors and backend/model selection
+are on stderr; record them in the review file. `-o` saves stdout after
+classification and also streams stdout to the terminal. On exit 4 it creates
+no partial output file and leaves any existing destination untouched; never
+reuse that old file as this run's review. Ordinary failed runs retain partial
+stdout for salvage. Diagnostics stay on stderr, outside the review text.
 
 ## Running a Task
 

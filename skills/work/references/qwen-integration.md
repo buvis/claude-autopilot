@@ -1,8 +1,21 @@
 # Qwen Integration
 
-How to invoke local qwen for task implementation via the `~/.agents/skills/use-qwen/scripts/qwen-run.sh` helper, which wraps the `pi` agent against a llama.cpp-served model. Always pass the prompt with `-f <file>`. The helper defaults to `unsloth/Qwen3.6-27B-MTP-GGUF:UD-Q6_K_XL`; `-m` overrides it, but an autopilot dispatch runs under `--approved-only`, so any id it names must be in the approved registry or the run is refused. Inference is local and free — no API cost, no token billing.
+How to invoke local qwen for task implementation via the `~/.agents/skills/use-qwen/scripts/qwen-run.sh` helper, which wraps the `pi` agent against a llama.cpp-served model. Always pass the prompt with `-f <file>`. The qualified Qwen3.8 model is `unsloth/Qwen3.8-27B-GGUF:UD-Q6_K_XL`. An autopilot dispatch runs under `--approved-only`; preflight selects a live approved id and the dispatch must pass that same id with `-m`, so it does not rely on the external helper's default. Inference is local and free — no API cost, no token billing.
 
-Qwen routing is gated by `state.tasks[i].qwen_eligible` (written upstream by `/autopilot:plan-tasks`) and by the **Preflight** below. `work`'s step 3 routing table picks qwen only when the flag is `true` AND preflight is healthy; otherwise it falls back to Claude at the task's original tier.
+Qwen is a speculative one-shot implementor. The last valid qualification is
+Qwen3.8's 6/6 single-file round; autonomous trust remains `single-file-only`.
+The 2026-09-03 multi-file eval in agent-skills reported Qwen 4/6 versus Sonnet
+6/6, but its first completion review found contaminated baselines and missing
+line-history checks. That comparison remains pending review and a clean rerun;
+it is not decision-grade evidence for widening trust. Sonnet remains the
+correctness fallback and reviewer.
+
+Planning and dispatch both require exactly one expected implementor-writable
+file, in addition to the backend, tier and no-public-contract predicates.
+Two-or-more-file tasks route above Qwen through the existing Codex/Claude
+fences; `work` reconciles stale planner flags against the concrete `FILE_PATHS`
+before selection. Empty write sets fail closed to Claude. Healthy preflight
+alone does not grant task eligibility.
 
 ## Preflight
 
@@ -52,14 +65,61 @@ live here. **Read this section before the first qwen dispatch of a batch.**
 
 ## One-shot attempt budget — and why it always escalates to Sonnet
 
-A qwen-routed task gets exactly one qwen attempt. If qwen's output fails the step-5.5 per-task test gate, the re-dispatch targets **Claude Sonnet** regardless of the task's original tier (`haiku` → Sonnet, `sonnet` → Sonnet). qwen never re-runs for the same task.
+A qwen-routed task gets exactly one qwen attempt. If qwen's output fails the output guards below or the step-5.5 per-task test gate, the re-dispatch targets **Claude Sonnet** regardless of the task's original tier (`haiku` → Sonnet, `sonnet` → Sonnet). qwen never re-runs for the same task.
 
 The fixed-Sonnet target is intentional and asymmetric vs. the **preflight-failure** fallback (which keeps the original tier: `haiku` → Haiku, `sonnet` → Sonnet). Two different failure shapes, two different recoveries:
 
 - **Preflight failure** is an *infrastructure* signal — qwen was unreachable, couldn't spawn its inference worker, was missing a model, or had no resolvable `pi`. The task itself was never attempted; nothing observable suggests the task is harder than its plan-time tier said. Preserve the tier the planner picked.
-- **Step-5.5 gate failure after a qwen attempt** is a *correctness* signal — qwen produced code that did not pass the tests Tess wrote. The empirical evidence from this attempt says the task is harder than its qwen-eligible classification implied (qwen-eligible = non-UI + `≤3`-file + `haiku`/`sonnet` + no public-contract edit). A retry at the same tier on the same model family would be cheap but risk under-powering the retry; Sonnet is the conservative floor that any qwen-eligible task can re-run at. Escalating from `haiku` to `sonnet` here is the price of having tried qwen in the first place.
+- **Step-5.5 gate failure after a qwen attempt** is a *correctness* signal — qwen produced code that did not pass the tests Tess wrote. The empirical evidence from this attempt says the task is harder than its qwen-eligible classification implied (qwen-eligible = non-UI + single-file + `haiku`/`sonnet` + no public-contract edit). A retry at the same tier on the same model family would be cheap but risk under-powering the retry; Sonnet is the conservative floor that any qwen-eligible task can re-run at. Escalating from `haiku` to `sonnet` here is the price of having tried qwen in the first place.
 
 The normal max-2 step-5.5 retry budget then applies to the Sonnet re-dispatches (not qwen). The qwen attempt does NOT consume a slot in that budget — it consumed the (single) qwen attempt instead.
+
+## Output guards
+
+`scripts/work_routing.py` is the pure decision model of step 3: pass Ivan's
+scratch file text as `route(..., file_paths=...)`; missing input fails closed.
+The caller supplies `task.is_test_only` in its effective copy from the step-2.7
+task classification, using `test_only_diff` on paths relative to the Git work
+tree. Never classify absolute path ancestors as part of the task's write set.
+The executable output guard calls its `qwen_attempt_outcome` classifier.
+
+Before dispatch, write the exact Tess-owned test paths to
+`dev/local/tmp/qwen-<task-id>-tests.txt` (one absolute path per line), and run:
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_qwen_output.py before --repo-root <git-work-tree> --test-commit <test_commit_sha> --files-file dev/local/tmp/ivan-<task-id>-files.txt --tests-file dev/local/tmp/qwen-<task-id>-tests.txt --snapshot dev/local/tmp/qwen-<task-id>-snapshot.json
+```
+
+For a bare-backed project, also pass `--git-dir <bare-git-dir>`; the root is
+the Git work tree, not necessarily the project directory. For docs/config
+tasks without Tess, use an empty tests file and `<task_base_sha>` as the test
+commit. Test-only tasks retain the non-Qwen path. The guard requires a clean
+implementation slice and tests matching the canonical commit in both index
+and worktree. Preparation failure skips Qwen for Claude at tier without
+consuming an attempt. Foreign dirty paths are allowed and remain untouched.
+Qwen may edit only its named implementation file; it must not stage or commit.
+
+Immediately after Qwen exits 0, **before staging, committing, or step 5.5**, run:
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_qwen_output.py after --snapshot dev/local/tmp/qwen-<task-id>-snapshot.json
+```
+
+Exit 0 means a task-owned implementation diff survives Git's commit normalization (clean filters and filemode rules) and all Tess-owned paths
+match `<test_commit_sha>` in both index and worktree (disk contents and file modes are checked directly, even under Git index shortcuts); proceed to the normal
+commit/test gate. The implementation check probes staging in a temporary copy of
+the Git index; the live index and worktree stay untouched. Foreign edits never satisfy this check. Exit 1 prints the
+capability verdict: `qwen_test_mutation` takes precedence over `qwen_no_edit`.
+Consume the attempt and follow `gate-failure.md` § Qwen output rejection.
+Exit 2 is indeterminate: do not stage, commit, or execute the potentially
+modified tests; resolve the guard failure before accepting any work.
+
+After any non-success result, including nonzero exit or a watchdog stop, first
+verify the helper is gone, then run the same `after` command with
+`--tests-only`. A mutation still takes the same rejection/restoration path;
+exit 0 resumes the original failure handler (`next: "handle_failure"`) and
+never classifies an unsuccessful process as a no-edit success. The guard must
+run before every fallback so Sonnet never inherits an altered oracle.
 
 ## Prompt Template
 
@@ -152,7 +212,7 @@ The task's acceptance criteria prose is intentionally omitted. Tests ARE the spe
 
 Qwen finishes one file and silently drops the rest of a multi-file task.
 
-**Fix**: `state.tasks[i].qwen_eligible` already restricts qwen to `≤3`-file backend tasks at planning time (see PRD 00032, widened by PRD 00019). If a wider task slips through, the step-5.5 per-task test gate catches it — the one-shot qwen attempt budget then escalates the next attempt to Claude Sonnet.
+**Fix**: the single-file predicate and dispatch-time `FILE_PATHS` fence reject multi-file tasks before Qwen runs. Only a clean multi-file eval and review can justify widening this boundary.
 
 ### Over-claims completeness
 
@@ -180,7 +240,7 @@ The llama.cpp server is running but serves a different model than `~/.pi/agent/m
 
 `qwen-run.sh` returned a non-zero exit code.
 
-**Fix**: Do not silently re-dispatch on qwen. The one-shot qwen attempt budget (see `SKILL.md` step 5.5) escalates the next attempt to Claude Sonnet — qwen failure consumes the attempt but does not consume a slot in the max-2 retry budget for the Claude Sonnet re-dispatches.
+**Fix**: Verify the helper is gone and run the Output guards `after --tests-only` path before fallback; a test mutation must be restored or isolated first. Do not silently re-dispatch on qwen. The one-shot qwen attempt budget (see `SKILL.md` step 5.5) escalates the next attempt to Claude Sonnet — qwen failure consumes the attempt but does not consume a slot in the max-2 retry budget for the Claude Sonnet re-dispatches.
 
 ## Scope (moved from SKILL.md step 3, PRD 00119-v2)
 

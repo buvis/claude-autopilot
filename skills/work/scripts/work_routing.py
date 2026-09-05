@@ -1,6 +1,6 @@
 """Implementor routing for /work step 3 — the deterministic table plus the codex rung.
 
-Pure decision core: three functions over plain dicts, no I/O, no env reads of its
+Pure decision core over plain dicts, no I/O, no env reads of its
 own, no side effects. It pins the step-3 routing table (the `fable` override,
 rows 1-7, first match wins), the codex interception, and codex attempt outcomes
 so the SKILL.md prose cannot drift from the rules silently.
@@ -105,15 +105,45 @@ def _tier(task: dict) -> str:
     return task.get("model") or "sonnet"
 
 
-def route(task: dict, env: dict, state: dict, probes: dict) -> dict:
+def route(
+    task: dict, env: dict, state: dict, probes: dict, *, file_paths: str | None = None
+) -> dict:
     """Pick the implementor for one claimed task."""
     tier = _tier(task)
     if tier == "fable":
         return {"implementor": "claude", "tier": tier, "rule": "fable_override"}
 
+    paths = list(dict.fromkeys(p for p in (file_paths or "").splitlines() if p.strip()))
+    if not paths:
+        return {
+            "implementor": "claude",
+            "tier": tier,
+            "rule": "empty_write_set",
+            "qwen_excluded_reason": "files",
+        }
+    if task.get("is_test_only", False):
+        return {"implementor": "claude", "tier": tier, "rule": "test_only"}
+
+    exclusion = {}
+    if task.get("qwen_excluded_reason") in {"ui", "tier", "contract"}:
+        task = {**task, "qwen_eligible": False}
+    if (
+        len(paths) >= 2
+        and task.get("qwen_eligible")
+        and not _is_ui(task)
+        and tier != "opus"
+    ):
+        task = {**task, "qwen_eligible": False, "qwen_excluded_reason": "files"}
+        exclusion = {"qwen_excluded_reason": "files"}
+
     rule = _table_row(task, env, state, probes)
     if rule in _INTERCEPTION_ROWS and _intercepted_by_codex(task, env, state):
-        return {"implementor": "codex", "tier": tier, "rule": "codex_interception"}
+        return {
+            "implementor": "codex",
+            "tier": tier,
+            "rule": "codex_interception",
+            **exclusion,
+        }
 
     if rule == "row1":
         implementor = "gemini" if probes["gemini_available"] else "claude"
@@ -121,7 +151,22 @@ def route(task: dict, env: dict, state: dict, probes: dict) -> dict:
         implementor = "qwen"
     else:
         implementor = "claude"
-    return {"implementor": implementor, "tier": tier, "rule": rule}
+    return {"implementor": implementor, "tier": tier, "rule": rule, **exclusion}
+
+
+def qwen_attempt_outcome(implementation_changed: bool, tests_changed: bool) -> dict:
+    """Reject untrustworthy exit-zero output before commit or gate execution."""
+    if not tests_changed and implementation_changed:
+        return {"arm": "pass", "next": "proceed", "cause": None}
+    return {
+        "arm": "capability",
+        "next": "sonnet",
+        "cause": "qwen_test_mutation" if tests_changed else "qwen_no_edit",
+        "outcome": "escalated",
+        "qwen_gate_failed": True,
+        "escalation_reason": "gate_failure",
+        "escalated_from": "qwen",
+    }
 
 
 def micro_lane_eligible(

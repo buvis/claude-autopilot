@@ -222,7 +222,8 @@ class StatectlLedgerTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(self.ledger.exists())
         self.assertEqual(
-            self.load_state()["batch"]["completed_prds"][-1]["filename"], PRD
+            self.load_state()["batch"]["completed_prds"][-1]["filename"],
+            PRD,
         )
 
 

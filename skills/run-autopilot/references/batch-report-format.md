@@ -60,8 +60,10 @@ counts, then only the subsections whose sources are non-empty:
   probe line (PRD 00077) and the capability breaker line (PRD 00065).
   Reading note: the exclusion line is two populations sharing one line —
   plan-time buckets partition the plan-time-ineligible tasks, while the
-  dispatch-time memory reroutes (PRD 00075, deduplicated by task) come from
-  the eligible population; read it as two lists, not one partition. The codex
+  dispatch-time `files`, `memory_pressure`, and `memory_probe_failed` reroutes
+  are deduplicated by task within each bucket; runtime `files` may also occur
+  on an empty write set in an already ineligible plan, so read these as two
+  lists, not one partition. The codex
   probe line appends `; hooks: <hook_doctor>` whenever `codex_probe.hook_doctor`
   is present and not `"ok"` — a stale hook copy (`hooks: stale: <basenames>`)
   or the doctor-first sub-probe's own summary line when it found something

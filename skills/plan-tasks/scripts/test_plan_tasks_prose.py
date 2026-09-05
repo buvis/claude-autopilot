@@ -528,7 +528,7 @@ def test_skill_md_drops_the_retired_automatic_opus_promotions() -> None:
             "still reads as opus work."
         )
     # Same rule, respelled, is the same rule: pin the shape, not the two
-    # spellings. `files_touched >= 4` and `estimated_tokens > THRESHOLD` are
+    # spellings. The Qwen file boundary and `estimated_tokens > THRESHOLD` are
     # deliberately untouched - those are qwen eligibility and the context
     # budget, not tier promotions.
     for pattern, description in (
@@ -637,3 +637,40 @@ def test_design_rationale_records_why_the_rule_1_triggers_retired() -> None:
         "not say which triggers misfired cannot stop the next attempt from "
         "reintroducing them."
     )
+
+
+def test_qwen_predicate_is_exactly_one_nonempty_writable_file() -> None:
+    assert "files_touched == 1" in _STEP_4_7
+    assert "expected implementor-writable" in _STEP_4_7_PROSE
+    assert "Empty or missing" in _STEP_4_7_PROSE
+    assert "files_touched >= 2" in _STEP_4_7_PROSE
+    assert "`ui` → `tier` → `contract` → `files`" in _STEP_4_7_PROSE
+    assert "one-file backend task → `qwen_eligible: true`" in _STEP_4_7_PROSE
+    assert "two-file backend task → `qwen_eligible: false`" in _STEP_4_7_PROSE
+
+
+def test_eligibility_split_requires_independently_gated_one_file_tasks() -> None:
+    assert "touching `>=2` files" in _STEP_4_6_PROSE
+    assert "one-file pieces" in _STEP_4_6_PROSE
+    assert "independently compile and carry its own passing tests" in _STEP_4_6_PROSE
+    assert "no piece depends on a symbol another piece introduces" in _STEP_4_6_PROSE
+    assert "implementation/test, interface/implementation, and implementation/caller" in _STEP_4_6_PROSE
+    assert "inseparable two-file task stays one task" in _STEP_4_6_PROSE
+    assert "separable two-file task may become two independently gated one-file tasks" in _STEP_4_6_PROSE
+
+
+def test_split_examples_keep_the_correlated_export_above_qwen() -> None:
+    examples = (_PLAN_TASKS / "references/task-examples.md").read_text()
+    section = examples.split("## Example 5:", 1)[1]
+    assert "two-or-more expected" in section
+    assert "one-file pieces" in section
+    assert "`metrics.rs` plus its required `mod.rs` export" in section
+    assert '`qwen_eligible: false`, `qwen_excluded_reason: "files"`' in section
+    assert "Each subtask compiles standalone, ships its own tests, and routes to qwen" not in section
+
+
+def test_coupling_summary_reports_all_multifile_qwen_exclusions() -> None:
+    text = Path(__file__).resolve().parents[1].joinpath("SKILL.md").read_text()
+    summary = text.split("**Irreducible-coupling reports**", 1)[1].split("\n", 1)[0]
+    assert "two or more expected implementor-writable files" in summary
+    assert "Codex/Claude fences" in summary

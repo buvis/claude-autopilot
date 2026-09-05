@@ -127,6 +127,48 @@ For codex attribution, `attempts[].model` records the task's own tier (for examp
 - **Routing-time** (step 3, per task): qwen breaker consult → memory-pressure gate → qwen infra preflight → dispatch.
 - **Failure-classification** (here, or on a lost result per step 4.2): an infra failure (preflight fail, watchdog/lost result) falls back at the SAME tier and never enters diagnosis or touches the breaker; a capability failure (a real test-gate failure, this section) enters diagnosis, where repair precedes escalate.
 
+## Qwen output rejection
+
+Before step 5 or any fallback, the output guard can reject a Qwen attempt with
+`qwen_no_edit` (exit-zero with no task-owned implementation diff; foreign dirt does not count)
+or `qwen_test_mutation` (any Tess-owned index/worktree difference from this
+task's `<test_commit_sha>`). Mutation wins when both apply. Do not stage,
+commit, accept Qwen's report, or run the altered tests as an oracle.
+
+Use the existing one-shot `qwen -> sonnet` capability edge, never a Qwen retry
+or a Codex interception. Record the rejected Qwen entry with its guard cause,
+`outcome: "escalated"`, `qwen_gate_failed: true`, and the diagnosis from the
+existing DIAGNOSE flow (Qwen never repairs). Update the breaker exactly once
+as a capability failure under the default mode; preserve the healthy preflight
+cache. Under `legacy`, retain the guard, cause and separate escalation rows,
+but leave diagnosis and the breaker disabled. Neither failure consumes a
+Sonnet retry slot.
+
+**Restore the oracle before Sonnet.** The attempt has no step-5 implementation
+commit, so uncommitted output normally fails the existing ESCALATE reset guard;
+use its fix-forward path and leave foreign files/commits untouched. For a test
+mutation, first confirm the Qwen helper has exited and that the captured test
+paths were exclusively task-owned throughout dispatch. With no concurrent
+writer to those paths and HEAD still at the guard snapshot, re-run:
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_qwen_output.py after --snapshot dev/local/tmp/qwen-<task-id>-snapshot.json --restore-tests
+```
+
+Exit 1 with `tests_restored: true` restores only the captured Tess paths in
+index and worktree from `<test_commit_sha>`, retaining the rejection verdict.
+It never resets the branch or implementation/foreign paths. HEAD movement or
+ambiguous ownership prohibits this restoration: preserve the live tree and
+use an isolated checkout of the canonical test commit for the Sonnet
+fix-forward attempt, or stop until ownership can be resolved. Never dispatch
+Sonnet against mutated tests; never weaken the oracle to unblock escalation.
+
+Then follow ESCALATE points 2–6: update this task's model to Sonnet, dispatch
+Claude Sonnet directly with the guard cause and original committed tests,
+and stamp the new Sonnet row `escalation_reason: "gate_failure"`,
+`escalated_from: "qwen"`. Skip the routing table on this re-dispatch. Test-only
+tasks intentionally editing named tests never take this Qwen path.
+
 ## Retry render (step 5.5)
 
 Moved verbatim out of SKILL.md step 5.5 (PRD 00119-v2). Every re-dispatch in
@@ -197,6 +239,8 @@ success row and the pointer; every failure branch is here.
 | Context exceeded | Append attempt-log entry (`outcome: "aborted"`, `cause: "context_overrun"`). Split task per `references/task-splitting.md`, mark original as blocked. |
 | Error | Invoke `debug-stuck-agent` (step 4.5). On unrecoverable error, append attempt-log entry (`outcome: "aborted"`, `cause: "error"`). Report to user. |
 | Result lost / hung | The Agent result is empty, is `[Tool result missing due to internal error]`, or the Subagent Watchdog killed a hung agent. This is an infrastructure failure, not real work — apply the **infrastructure-failure circuit breaker** (step 4.2). |
+
+**Qwen carve-out.** After any non-success result, stop the helper and verify it is gone, then run the `after --tests-only` output guard before applying this table. A mutation uses Qwen output rejection; an indeterminate guard stops acceptance. Only unchanged canonical tests resume the original failure handler; no-edit applies only to exit-zero success.
 
 **Codex carve-out.** A codex dispatch's timeout, missing/empty `-o` output, and a watchdog-killed hang are all arm 1 (Infra) per `model-ladder.md` § Codex rung — never the generic Timeout / Result-lost-hung rows above, never split-task, never the 4.2 breaker. On timeout, apply the kill-before-fallback rule from the codex dispatch checklist (`references/codex-implementor.md` § Codex dispatch): `TaskStop` the codex background task and verify it is gone BEFORE dispatching the Claude fallback — an orphaned `--sandbox workspace-write` codex keeps write access to the very files the fallback implementor is about to edit, so its late writes either get swept into the fallback's commit or land as unexplained foreign paths. Fall back to Claude at the task's tier, no escalation stamp. The `codex_no_edit` / `codex_no_edit_probe_exit` flags latched during dispatch (step 3) are likewise not resolved here — they are consumed by step 5.5's classification (arm 2), per the same ladder section.
 

@@ -72,6 +72,13 @@ machinery (PRD 00017), through the Fable rescue gate (§ Fable rescue) on the
 way. No new halt class. A `fable` attempt has **no rung above it**: its gate
 failure goes straight to the same exhaustion path, never to an escalation.
 
+Qwen output causes `qwen_no_edit` and `qwen_test_mutation` are capability
+failures on that same one-shot edge, detected before staging or test execution.
+They never retry Qwen, take Codex, or invalidate a healthy preflight cache.
+The runtime single-file fence applies before the table; stale two/three-file
+tasks use the effective `files` exclusion for the existing Codex interception,
+while zero paths fail closed to Claude at tier. Planner metadata is unchanged.
+
 ## Fable rescue
 
 The `opus -> fable` edge is a human gate, not a ladder step. In ladder terms:

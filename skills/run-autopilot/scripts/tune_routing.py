@@ -53,8 +53,14 @@ MECHANICAL_LINES_LITERAL = "_MECHANICAL_MAX_LINES"
 _OUT_OF_SCOPE_REASONS = frozenset({"contract", "algorithmic_risk", "floor"})
 
 _REPORT_REASONS = (
-    "contract", "algorithmic_risk", "floor", "test_port",
-    "packaging", "default", "mechanical", "unattributed",
+    "contract",
+    "algorithmic_risk",
+    "floor",
+    "test_port",
+    "packaging",
+    "default",
+    "mechanical",
+    "unattributed",
 )
 
 
@@ -112,8 +118,12 @@ def dedupe_rows(rows: list[dict]) -> list[dict]:
     seen: set[tuple] = set()
     deduped: list[dict] = []
     for row in rows:
-        key = (row.get("batch_id"), row.get("prd"), row.get("task_id"),
-               row["attempt"].get("attempt"))
+        key = (
+            row.get("batch_id"),
+            row.get("prd"),
+            row.get("task_id"),
+            row["attempt"].get("attempt"),
+        )
         if key in seen:
             continue
         seen.add(key)
@@ -133,32 +143,48 @@ def load_rows(path: Path) -> tuple[list[dict], list[str]]:
 
 
 def _signal_s1(rows: list[dict]) -> dict:
-    matched = [r for r in rows
-               if _reason(r) == "mechanical" and r["attempt"].get("attempt") == 1]
+    matched = [
+        r
+        for r in rows
+        if _reason(r) == "mechanical" and r["attempt"].get("attempt") == 1
+    ]
     n = len(matched)
     escalated = sum(1 for r in matched if r["attempt"].get("outcome") == "escalated")
     rate = escalated / n if n else 0.0
-    unattributed = sum(1 for r in rows
-                        if r["attempt"].get("attempt") == 1 and _reason(r) == "unattributed")
+    unattributed = sum(
+        1
+        for r in rows
+        if r["attempt"].get("attempt") == 1 and _reason(r) == "unattributed"
+    )
     verdict = "PROPOSE" if n >= MIN_ROWS and rate >= S1_ESCALATION_RATE else "HOLD"
     prds = sorted({r["prd"] for r in matched if r.get("prd") is not None})
     return {
-        "verdict": verdict, "n": n, "rate": rate, "prds": prds,
-        "needed": max(0, MIN_ROWS - n), "unattributed": unattributed,
+        "verdict": verdict,
+        "n": n,
+        "rate": rate,
+        "prds": prds,
+        "needed": max(0, MIN_ROWS - n),
+        "unattributed": unattributed,
     }
 
 
 def _signal_s2(rows: list[dict]) -> dict:
-    matched = [r for r in rows
-               if _reason(r) not in _OUT_OF_SCOPE_REASONS
-               and r["attempt"].get("repair_used") is True]
+    matched = [
+        r
+        for r in rows
+        if _reason(r) not in _OUT_OF_SCOPE_REASONS
+        and r["attempt"].get("repair_used") is True
+    ]
     n = len(matched)
     completed = sum(1 for r in matched if r["attempt"].get("outcome") == "completed")
     rate = completed / n if n else 0.0
     verdict = "PROPOSE" if n >= MIN_ROWS and rate < S2_COMPLETED_RATE else "HOLD"
     prds = sorted({r["prd"] for r in matched if r.get("prd") is not None})
     return {
-        "verdict": verdict, "n": n, "rate": rate, "prds": prds,
+        "verdict": verdict,
+        "n": n,
+        "rate": rate,
+        "prds": prds,
         "needed": max(0, MIN_ROWS - n),
     }
 
@@ -167,8 +193,12 @@ def _s3_escalated_next(matched: list[dict], rows: list[dict]) -> int:
     """Count `matched` rows whose same-task next attempt escalated from codex."""
     by_key = {}
     for r in rows:
-        key = (r.get("batch_id"), r.get("prd"), r.get("task_id"),
-               r["attempt"].get("attempt"))
+        key = (
+            r.get("batch_id"),
+            r.get("prd"),
+            r.get("task_id"),
+            r["attempt"].get("attempt"),
+        )
         by_key[key] = r
     escalated = 0
     for r in matched:
@@ -181,27 +211,37 @@ def _s3_escalated_next(matched: list[dict], rows: list[dict]) -> int:
 
 
 def _signal_s3(rows: list[dict]) -> dict:
-    matched = [r for r in rows
-               if _reason(r) not in _OUT_OF_SCOPE_REASONS
-               and r["attempt"].get("implementor") == "codex"]
+    matched = [
+        r
+        for r in rows
+        if _reason(r) not in _OUT_OF_SCOPE_REASONS
+        and r["attempt"].get("implementor") == "codex"
+    ]
     n = len(matched)
     no_edit = sum(1 for r in matched if r["attempt"].get("cause") == "codex_no_edit")
     escalated = _s3_escalated_next(matched, rows)
     no_edit_rate = no_edit / n if n else 0.0
     escalated_rate = escalated / n if n else 0.0
-    verdict = "PROPOSE" if n >= MIN_ROWS and (
-        no_edit_rate >= S3_FAILURE_RATE or escalated_rate >= S3_FAILURE_RATE
-    ) else "HOLD"
+    verdict = (
+        "PROPOSE"
+        if n >= MIN_ROWS
+        and (no_edit_rate >= S3_FAILURE_RATE or escalated_rate >= S3_FAILURE_RATE)
+        else "HOLD"
+    )
     prds = sorted({r["prd"] for r in matched if r.get("prd") is not None})
     return {
-        "verdict": verdict, "n": n, "rate": max(no_edit_rate, escalated_rate),
-        "no_edit_rate": no_edit_rate, "escalated_rate": escalated_rate,
-        "prds": prds, "needed": max(0, MIN_ROWS - n),
+        "verdict": verdict,
+        "n": n,
+        "rate": max(no_edit_rate, escalated_rate),
+        "no_edit_rate": no_edit_rate,
+        "escalated_rate": escalated_rate,
+        "prds": prds,
+        "needed": max(0, MIN_ROWS - n),
     }
 
 
 def _report(rows: list[dict]) -> dict:
-    counts = {reason: 0 for reason in _REPORT_REASONS}
+    counts = dict.fromkeys(_REPORT_REASONS, 0)
     for r in rows:
         if r["attempt"].get("outcome") == "escalated":
             reason = _reason(r)
@@ -212,8 +252,10 @@ def _report(rows: list[dict]) -> dict:
 def signals(rows: list[dict]) -> dict[str, dict]:
     """Aggregate deduped ledger `rows` into `S1`, `S2`, `S3` and `report`."""
     return {
-        "S1": _signal_s1(rows), "S2": _signal_s2(rows),
-        "S3": _signal_s3(rows), "report": _report(rows),
+        "S1": _signal_s1(rows),
+        "S2": _signal_s2(rows),
+        "S3": _signal_s3(rows),
+        "report": _report(rows),
     }
 
 
@@ -228,7 +270,9 @@ def _mechanical_literal(classifier_text: str | None) -> int | None:
     if classifier_text is None:
         return None
     matches = re.findall(
-        rf"^{MECHANICAL_LINES_LITERAL} = (\d+)$", classifier_text, re.MULTILINE
+        rf"^{MECHANICAL_LINES_LITERAL} = (\d+)$",
+        classifier_text,
+        re.MULTILINE,
     )
     return int(matches[0]) if len(matches) == 1 else None
 
@@ -238,18 +282,23 @@ def _build_s1_patch(classifier_text: str, old: int, new: int) -> str:
     new_text = re.sub(
         rf"^{MECHANICAL_LINES_LITERAL} = {old}$",
         f"{MECHANICAL_LINES_LITERAL} = {new}",
-        classifier_text, count=1, flags=re.MULTILINE,
+        classifier_text,
+        count=1,
+        flags=re.MULTILINE,
     )
     new_lines = new_text.splitlines(keepends=True)
     diff = difflib.unified_diff(
-        old_lines, new_lines,
+        old_lines,
+        new_lines,
         fromfile="a/skills/plan-tasks/scripts/classify_tier.py",
         tofile="b/skills/plan-tasks/scripts/classify_tier.py",
     )
     return "".join(diff)
 
 
-def _render_s1(sig: dict, classifier_text: str | None, date: str) -> tuple[list[str], str | None]:
+def _render_s1(
+    sig: dict, classifier_text: str | None, date: str
+) -> tuple[list[str], str | None]:
     lines = ["## S1 mechanical row", ""]
     old = _mechanical_literal(classifier_text)
     if old is None:
@@ -268,7 +317,7 @@ def _render_s1(sig: dict, classifier_text: str | None, date: str) -> tuple[list[
         lines.append(f"- patch: routing-proposal-{date}.patch")
         lines.append(
             "- Revert: git revert the accepting commit; _PLAN_TASKS_FLOOR is "
-            "read by no script, so it does not guard the constant."
+            "read by no script, so it does not guard the constant.",
         )
         patch = _build_s1_patch(classifier_text, old, new)
     lines.append("")
@@ -285,8 +334,7 @@ def _render_s2(sig: dict) -> list[str]:
     lines.append(line)
     if verdict == "PROPOSE":
         lines.append(
-            "- proposal: remove the Repair row from model-ladder.md "
-            "§ Per-rung budgets"
+            "- proposal: remove the Repair row from model-ladder.md § Per-rung budgets",
         )
         lines.append("- Revert: git revert the accepting commit.")
     lines.append("")
@@ -297,15 +345,17 @@ def _render_s3(sig: dict) -> list[str]:
     lines = ["## S3 codex rung", ""]
     verdict = sig["verdict"]
     prds_str = ", ".join(sig["prds"]) if sig["prds"] else "none"
-    line = (f"- {verdict}: n={sig['n']} no_edit_rate={sig['no_edit_rate']:.2f} "
-            f"escalated_rate={sig['escalated_rate']:.2f} prds={prds_str}")
+    line = (
+        f"- {verdict}: n={sig['n']} no_edit_rate={sig['no_edit_rate']:.2f} "
+        f"escalated_rate={sig['escalated_rate']:.2f} prds={prds_str}"
+    )
     if verdict == "HOLD":
         line += _hold_suffix(sig["needed"], "rates below", "S3_FAILURE_RATE")
     lines.append(line)
     if verdict == "PROPOSE":
         lines.append(
             "- proposal: set _WORK_CODEX_RUNG=off for the next batch "
-            "(operator action; code never sets it)"
+            "(operator action; code never sets it)",
         )
         lines.append("- Revert: unset _WORK_CODEX_RUNG.")
     lines.append("")
@@ -314,8 +364,10 @@ def _render_s3(sig: dict) -> list[str]:
 
 def _render_report(report: dict) -> list[str]:
     lines = [
-        "## Escalations by tier reason", "",
-        "| tier_reason | escalated |", "|---|---|",
+        "## Escalations by tier reason",
+        "",
+        "| tier_reason | escalated |",
+        "|---|---|",
     ]
     counts = report["escalations_by_reason"]
     # A reason value the classifier does not emit today still shows, after
@@ -335,7 +387,8 @@ def _render_sources(sources: dict) -> list[str]:
         recorded = f"{sources['recorded_at_min']} .. {sources['recorded_at_max']}"
     audit_qwen = sources["audit_qwen"] or "none"
     return [
-        "## Sources", "",
+        "## Sources",
+        "",
         f"- ledger: {sources['ledger']}",
         f"- rows: {sources['rows']}",
         f"- deduped rows: {sources['deduped_rows']}",
@@ -348,11 +401,15 @@ def _render_sources(sources: dict) -> list[str]:
 
 
 def render(
-    signals: dict, sources: dict, date: str, classifier_text: str | None
+    signals: dict,
+    sources: dict,
+    date: str,
+    classifier_text: str | None,
 ) -> tuple[str, str | None]:
     """Render the markdown proposal and, on S1 PROPOSE, the S1 patch."""
     lines: list[str] = [
-        f"# Routing proposal {date}", "",
+        f"# Routing proposal {date}",
+        "",
         f"Floors: MIN_ROWS = {MIN_ROWS}; S1_ESCALATION_RATE = {S1_ESCALATION_RATE}; "
         f"S2_COMPLETED_RATE = {S2_COMPLETED_RATE}; S3_FAILURE_RATE = {S3_FAILURE_RATE}",
         "",
@@ -375,18 +432,26 @@ def _newest_audit_qwen(out_dir: Path) -> str | None:
     return candidates[-1].name if candidates else None
 
 
-def _build_sources(ledger_path: Path, out_dir: Path, raw_rows: list[dict],
-                    rows: list[dict], unparsed: list[str]) -> dict:
+def _build_sources(
+    ledger_path: Path,
+    out_dir: Path,
+    raw_rows: list[dict],
+    rows: list[dict],
+    unparsed: list[str],
+) -> dict:
     prds = sorted({r["prd"] for r in rows if r.get("prd") is not None})
     recorded_ats = sorted(
         r["recorded_at"] for r in rows if isinstance(r.get("recorded_at"), str)
     )
     return {
-        "ledger": str(ledger_path), "rows": len(raw_rows), "deduped_rows": len(rows),
+        "ledger": str(ledger_path),
+        "rows": len(raw_rows),
+        "deduped_rows": len(rows),
         "prds": prds,
         "recorded_at_min": recorded_ats[0] if recorded_ats else None,
         "recorded_at_max": recorded_ats[-1] if recorded_ats else None,
-        "unparsed": len(unparsed), "audit_qwen": _newest_audit_qwen(out_dir),
+        "unparsed": len(unparsed),
+        "audit_qwen": _newest_audit_qwen(out_dir),
     }
 
 
@@ -397,7 +462,7 @@ def _valid_date(value: str) -> str:
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Propose routing rule changes from ledger outcomes (PRD 00170)."
+        description="Propose routing rule changes from ledger outcomes (PRD 00170).",
     )
     parser.add_argument("--ledger", type=Path, default=None)
     parser.add_argument("--out-dir", type=Path, default=None)
@@ -408,8 +473,13 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 def _default_classifier_path() -> Path:
     # scripts/ -> run-autopilot/ -> skills/ -> repo root
-    return (Path(__file__).resolve().parents[3] / "skills" / "plan-tasks"
-            / "scripts" / "classify_tier.py")
+    return (
+        Path(__file__).resolve().parents[3]
+        / "skills"
+        / "plan-tasks"
+        / "scripts"
+        / "classify_tier.py"
+    )
 
 
 def _resolve_paths(args: argparse.Namespace) -> tuple[Path, Path, Path, str] | int:
@@ -467,8 +537,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         text = ledger_path.read_text(encoding="utf-8")
     except OSError as exc:
-        print(f"tune_routing: cannot read ledger {ledger_path}: {exc}",
-              file=sys.stderr)
+        print(f"tune_routing: cannot read ledger {ledger_path}: {exc}", file=sys.stderr)
         return 1
     raw_rows, unparsed = parse_rows(text)
     if not raw_rows:

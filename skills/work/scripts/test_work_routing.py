@@ -145,6 +145,7 @@ def _route(
         _env() if env is None else env,
         _state() if state is None else state,
         _probes() if probes is None else probes,
+        file_paths="src/implementation.py",
     )
 
 

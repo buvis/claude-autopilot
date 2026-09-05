@@ -1,9 +1,9 @@
 #!/bin/bash
 # Run Gemini for code analysis/editing.
 #
-# Backend: prefers the GitHub Copilot CLI (serves Gemini 3.1 Pro Preview, which
-# the native Gemini CLI cannot), falls back to the native `gemini` CLI when
-# copilot is absent. Override with GEMINI_BACKEND=copilot|gemini.
+# Backend: prefers GitHub Copilot; falls back to native `gemini` when absent
+# or permanently unavailable for a default prompt run.
+# Override with GEMINI_BACKEND=copilot|gemini.
 #
 # Copilot billing note: every call spends Copilot AI credits (multiplier set by
 # the model). The native gemini backend bills your Google/Gemini account with no
@@ -42,9 +42,12 @@ resolve_bin() {
     echo "$p"
 }
 
-# Backend selection. copilot preferred (it is the only backend that serves the
-# gemini-3.1-pro-preview model); native gemini is the fallback.
+# Backend selection. Explicit backend/model/session choices never switch CLIs.
 BACKEND="${GEMINI_BACKEND:-}"
+case "$BACKEND" in
+    ""|copilot|gemini) ;;
+    *) echo "ERROR: invalid GEMINI_BACKEND: $BACKEND" >&2; exit 1 ;;
+esac
 COPILOT_BIN="$(resolve_bin copilot)"
 GEMINI_BIN="$(resolve_bin gemini)"
 if [ -z "$BACKEND" ]; then
@@ -68,9 +71,9 @@ if [ -z "$BACKEND" ]; then
     exit 1
 fi
 
-# Copilot default model. gemini-3.1-pro-preview = "Gemini 3.1 Pro (Preview)".
+# Single production pin, verified in copilot /model on 2026-09-05.
 # Override with -m. The native gemini backend keeps the CLI default unless -m.
-DEFAULT_COPILOT_MODEL="gemini-3.1-pro-preview"
+DEFAULT_COPILOT_MODEL="gemini-3.8-flash"
 
 MODEL=""          # empty = backend default
 MODE="prompt"     # prompt, interactive, resume, continue
@@ -96,7 +99,7 @@ usage() {
     echo "  -s, --silent           Quiet output (copilot only; gemini -p is already clean)"
     echo "  -d, --dir DIR          Include extra directory in the workspace (can repeat)"
     echo "  -f, --file FILE        Read prompt from file"
-    echo "  -o, --output FILE      Write output to file (via tee)"
+    echo "  -o, --output FILE      Save stdout after classification (also streams to stdout)"
     echo "  -r, --resume [ID]      Resume session ('latest' or index; default: latest)"
     echo "  -c, --continue         Resume most recent session"
     echo "  -h, --help             Show this help"
@@ -174,17 +177,46 @@ if [ -n "$PROMPT_FILE" ]; then
     PROMPT=$(cat "$PROMPT_FILE")
 fi
 
-# Build and run command
+# Keep stderr separate for classification; never classify the model's prose.
+RUN_TMP=$(mktemp -d) || exit 1
+trap 'rm -rf "$RUN_TMP"' EXIT
+mkfifo "$RUN_TMP/stderr.pipe" || exit 1
+
+permanently_unavailable() {
+    grep -Eiq 'Model "[^"]+" from --model flag is not available|IneligibleTierError|reasonCode[^[:alnum:]]+UNSUPPORTED_CLIENT' "$RUN_TMP/stderr"
+}
+
+# Preserve ordinary failure output for salvage, but do not publish a rejected
+# backend's partial output. An existing destination is left untouched on exit 4.
 run_cmd() {
+    local rc=0 stderr_pid
+    # Stream prompts/diagnostics immediately, then wait for tee to finish before
+    # classifying. Merely redirecting stderr to a file hides interactive prompts.
+    tee "$RUN_TMP/stderr" < "$RUN_TMP/stderr.pipe" >&2 &
+    stderr_pid=$!
     if [ -n "$OUTPUT_FILE" ]; then
-        "$@" 2>&1 | tee "$OUTPUT_FILE"
+        "$@" 2> "$RUN_TMP/stderr.pipe" | tee "$RUN_TMP/stdout" || rc=$?
     else
-        "$@"
+        "$@" 2> "$RUN_TMP/stderr.pipe" || rc=$?
     fi
+    wait "$stderr_pid" || return 1
+    if [ "$rc" -ne 0 ] && permanently_unavailable; then
+        echo "ERROR: $BACKEND permanently unavailable (model/client tier rejected)." >&2
+        return 4
+    fi
+    if [ -n "$OUTPUT_FILE" ]; then
+        cat "$RUN_TMP/stdout" > "$OUTPUT_FILE" || return 1
+    fi
+    # Reserve 3 for the recursion guard and 4 for classified unavailability.
+    case "$rc" in
+        3|4) echo "ERROR: $BACKEND exited $rc (runtime failure)." >&2; return 1 ;;
+    esac
+    return "$rc"
 }
 
 run_copilot() {
     local model="${MODEL:-$DEFAULT_COPILOT_MODEL}"
+    echo "gemini-run: backend=copilot model=$model" >&2
     local dirs=()
     local d
     for d in "${RAW_DIRS[@]}"; do dirs+=(--add-dir "$d"); done
@@ -232,6 +264,7 @@ run_copilot() {
 }
 
 run_gemini() {
+    echo "gemini-run: backend=gemini model=${MODEL:-CLI-default}" >&2
     # Flags common to every invocation. --skip-trust avoids the workspace-trust
     # prompt blocking headless (-p) runs.
     local common=(--skip-trust)
@@ -269,7 +302,16 @@ run_gemini() {
 }
 
 if [ "$BACKEND" = "copilot" ]; then
-    run_copilot
+    rc=0
+    run_copilot || rc=$?
+    if [ "$rc" -eq 4 ] && [ -z "${GEMINI_BACKEND:-}" ] &&
+       [ -z "$MODEL" ] && [ "$MODE" = "prompt" ] && [ -n "$GEMINI_BIN" ]; then
+        echo "gemini-run: trying native gemini fallback after permanent rejection." >&2
+        BACKEND=gemini
+        run_gemini
+    else
+        exit "$rc"
+    fi
 else
     run_gemini
 fi

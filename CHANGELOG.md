@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **review-work-completion**: persist Carl's permanent unavailability for the
+  batch, skip later dispatches and retries across cycles and PRDs, and record
+  the original failure's cycle and PRD in each skipped review.
+
+### Fixed
+
+- **use-gemini**: restore Carl's Copilot lane with a served Gemini Flash pin,
+  distinguish permanent model/client-tier rejection (exit 4) from runtime
+  failures, try native Gemini for rejected default prompt runs, and keep
+  rejected output out of review files. Document an opt-in live pin probe and
+  make permanent reviewer unavailability visible in reviews and user summaries.
+- **work**: limit Qwen planning and dispatch to its qualified single-file scope, preserve Codex routing for wider tasks, and escalate no-edit or test-mutating Qwen attempts to Sonnet before committing or testing.
+
 ## [0.5.0] - 2026-09-05
 
 ### Added

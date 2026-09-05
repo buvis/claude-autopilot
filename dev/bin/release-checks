@@ -10,7 +10,8 @@ set -euo pipefail
 
 echo "[checks] reviewer registry"
 uv run --no-project --with pytest python -m pytest -q \
-  skills/review-work-completion/scripts/test_agent_registry.py
+  skills/review-work-completion/scripts/test_agent_registry.py \
+  skills/review-work-completion/scripts/test_carl_skip_prose.py
 
 echo "[checks] hook registration"
 uv run --no-project --with pytest python -m pytest -q \

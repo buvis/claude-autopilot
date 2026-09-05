@@ -55,7 +55,18 @@ Bash tool (run_in_background: true):
   ${CLAUDE_PLUGIN_ROOT}/skills/use-gemini/scripts/gemini-run.sh -f "{carl_prompt_file_absolute_path}" -o "{abs_repo_path}/dev/local/tmp/carl-output-{id}.txt"
 ```
 
-`-o` writes Carl's output straight to the file step 6 consolidates. When the background command completes, read `carl-output-{id}.txt`. If `gemini-run.sh` exits non-zero (e.g. monthly quota exceeded), skip Carl and proceed with the other reviewers (graceful degradation).
+`-o` saves Carl's stdout after failure classification; capture stderr separately
+in the background command's log for backend/model selection and failure reasons.
+On exit 0, read `carl-output-{id}.txt`, require non-empty reviewer text, and record
+the backend/model from stderr in Carl's review section (including any native
+fallback). On exit 4, record **Carl: permanently unavailable** with the rejected
+backend/model and stderr reason in the review file and user summary. Do not
+retry unchanged configuration: the helper already attempted an eligible native
+fallback. Exit 3 means nested dispatch refused. Other non-zero exits, including
+quota, are one-off runtime failures; record the code/reason and follow
+`retry-policy.md`. All failures let the other reviewers proceed, but none counts
+as a completed Carl review. On exit 4 no new `-o` file is published; an existing
+file is untouched and must never be consolidated as this run's result.
 
 ## Blake: Filesystem notes
 

@@ -41,14 +41,18 @@ CLASSIFIER_FIXTURE = (
 )
 
 CLASSIFIER_NO_LITERAL = (
-    "#!/usr/bin/env python3\n"
-    "_MECHANICAL_MAX_FILES = 2\n"
-    "PHRASES = ()\n"
+    "#!/usr/bin/env python3\n_MECHANICAL_MAX_FILES = 2\nPHRASES = ()\n"
 )
 
 
-def _row(prd: str, task_id: str, attempt_no: int, outcome: str,
-         tier_reason: str | None = None, **attempt_fields) -> dict:
+def _row(
+    prd: str,
+    task_id: str,
+    attempt_no: int,
+    outcome: str,
+    tier_reason: str | None = None,
+    **attempt_fields,
+) -> dict:
     """One full ledger row, per state-schema.md § Attempt ledger."""
     attempt = {"attempt": attempt_no, "model": "sonnet", "outcome": outcome}
     attempt.update(attempt_fields)
@@ -68,7 +72,8 @@ def _row(prd: str, task_id: str, attempt_no: int, outcome: str,
 
 def _write_ledger(path: Path, rows: list) -> None:
     path.write_text(
-        "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8"
+        "\n".join(json.dumps(r) for r in rows) + "\n",
+        encoding="utf-8",
     )
 
 
@@ -93,10 +98,19 @@ def _sources_stub(rows: list) -> dict:
     }
 
 
-def _run_cli(ledger: Path, out_dir: Path, date: str,
-             classifier: Path | None = None) -> subprocess.CompletedProcess:
-    args = ["python3", str(SCRIPT), "--ledger", str(ledger),
-            "--out-dir", str(out_dir), "--date", date]
+def _run_cli(
+    ledger: Path, out_dir: Path, date: str, classifier: Path | None = None
+) -> subprocess.CompletedProcess:
+    args = [
+        "python3",
+        str(SCRIPT),
+        "--ledger",
+        str(ledger),
+        "--out-dir",
+        str(out_dir),
+        "--date",
+        date,
+    ]
     if classifier is not None:
         args += ["--classifier", str(classifier)]
     return subprocess.run(args, capture_output=True, text=True)
@@ -109,13 +123,24 @@ class TuneRoutingTest(unittest.TestCase):
         changed lines halve _MECHANICAL_MAX_LINES."""
         prd = "00001-example.md"
         rows = [
-            _row(prd, f"task-{i}", 1, "escalated" if i < 7 else "completed",
-                 tier_reason="mechanical")
+            _row(
+                prd,
+                f"task-{i}",
+                1,
+                "escalated" if i < 7 else "completed",
+                tier_reason="mechanical",
+            )
             for i in range(12)
         ]
         rows += [
-            _row(prd, f"task-{i}", 2, "completed", tier_reason="mechanical",
-                 escalated_from="haiku")
+            _row(
+                prd,
+                f"task-{i}",
+                2,
+                "completed",
+                tier_reason="mechanical",
+                escalated_from="haiku",
+            )
             for i in range(7)
         ]
         with tempfile.TemporaryDirectory() as tmp:
@@ -135,14 +160,16 @@ class TuneRoutingTest(unittest.TestCase):
 
             check = subprocess.run(
                 ["git", "apply", "--check", str(patch_path)],
-                cwd=tmp_path, capture_output=True, text=True,
+                cwd=tmp_path,
+                capture_output=True,
+                text=True,
             )
             self.assertEqual(check.returncode, 0, check.stderr)
 
             changed = [
-                line for line in patch_path.read_text().splitlines()
-                if line.startswith(("+", "-"))
-                and not line.startswith(("+++", "---"))
+                line
+                for line in patch_path.read_text().splitlines()
+                if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
             ]
             self.assertEqual(
                 changed,
@@ -153,8 +180,13 @@ class TuneRoutingTest(unittest.TestCase):
         """S1: n=11 < MIN_ROWS -> HOLD naming `needed: 1 more rows`, no patch."""
         prd = "00001-example.md"
         rows = [
-            _row(prd, f"task-{i}", 1, "escalated" if i < 6 else "completed",
-                 tier_reason="mechanical")
+            _row(
+                prd,
+                f"task-{i}",
+                1,
+                "escalated" if i < 6 else "completed",
+                tier_reason="mechanical",
+            )
             for i in range(11)
         ]
         with tempfile.TemporaryDirectory() as tmp:
@@ -171,7 +203,7 @@ class TuneRoutingTest(unittest.TestCase):
             self.assertIn("- HOLD: n=11", md)
             self.assertIn("needed: 1 more rows", md)
             self.assertFalse(
-                (out_dir / "routing-proposal-2026-01-01.patch").exists()
+                (out_dir / "routing-proposal-2026-01-01.patch").exists(),
             )
 
     def test_s1_at_floor_with_low_rate_holds_on_rate_not_on_count(self) -> None:
@@ -179,13 +211,19 @@ class TuneRoutingTest(unittest.TestCase):
         never `needed: 0 more rows`."""
         prd = "00001-example.md"
         rows = [
-            _row(prd, f"task-{i}", 1, "escalated" if i < 5 else "completed",
-                 tier_reason="mechanical")
+            _row(
+                prd,
+                f"task-{i}",
+                1,
+                "escalated" if i < 5 else "completed",
+                tier_reason="mechanical",
+            )
             for i in range(12)
         ]
         sig = tr.signals(rows)
-        md, patch = tr.render(sig, _sources_stub(rows), "2026-01-01",
-                              CLASSIFIER_FIXTURE)
+        md, patch = tr.render(
+            sig, _sources_stub(rows), "2026-01-01", CLASSIFIER_FIXTURE
+        )
         self.assertEqual(sig["S1"]["verdict"], "HOLD")
         self.assertIn("- HOLD: n=12 rate=0.42", md)
         self.assertIn("rate below S1_ESCALATION_RATE", md)
@@ -196,8 +234,14 @@ class TuneRoutingTest(unittest.TestCase):
         """S2: n=12 repair_used rows, rate=5/12 < 0.5 -> PROPOSE."""
         prd = "00001-example.md"
         rows = [
-            _row(prd, f"task-{i}", 1, "completed" if i < 5 else "aborted",
-                 tier_reason="default", repair_used=True)
+            _row(
+                prd,
+                f"task-{i}",
+                1,
+                "completed" if i < 5 else "aborted",
+                tier_reason="default",
+                repair_used=True,
+            )
             for i in range(12)
         ]
         sig = tr.signals(rows)
@@ -213,8 +257,9 @@ class TuneRoutingTest(unittest.TestCase):
             fields = {"implementor": "codex"}
             if i < 6:
                 fields["cause"] = "codex_no_edit"
-            rows.append(_row(prd, f"task-{i}", 1, "completed",
-                              tier_reason="default", **fields))
+            rows.append(
+                _row(prd, f"task-{i}", 1, "completed", tier_reason="default", **fields)
+            )
         sig = tr.signals(rows)
         self.assertEqual(sig["S3"]["verdict"], "PROPOSE")
         md, patch = tr.render(sig, _sources_stub(rows), "2026-01-01", None)
@@ -227,13 +272,26 @@ class TuneRoutingTest(unittest.TestCase):
         The Claude follow-up rows are not codex rows and never inflate n."""
         prd = "00001-example.md"
         rows = [
-            _row(prd, f"task-{i}", 1, "escalated" if i < 6 else "completed",
-                 tier_reason="default", implementor="codex")
+            _row(
+                prd,
+                f"task-{i}",
+                1,
+                "escalated" if i < 6 else "completed",
+                tier_reason="default",
+                implementor="codex",
+            )
             for i in range(12)
         ]
         rows += [
-            _row(prd, f"task-{i}", 2, "completed", tier_reason="default",
-                 implementor="claude", escalated_from="codex")
+            _row(
+                prd,
+                f"task-{i}",
+                2,
+                "completed",
+                tier_reason="default",
+                implementor="claude",
+                escalated_from="codex",
+            )
             for i in range(6)
         ]
         sig = tr.signals(rows)
@@ -260,11 +318,18 @@ class TuneRoutingTest(unittest.TestCase):
         rows = []
         for reason in ("contract", "algorithmic_risk", "floor"):
             for i in range(12):
-                rows.append(_row(
-                    prd, f"{reason}-{i}", 1, "escalated", tier_reason=reason,
-                    repair_used=True, implementor="codex",
-                    cause="codex_no_edit",
-                ))
+                rows.append(
+                    _row(
+                        prd,
+                        f"{reason}-{i}",
+                        1,
+                        "escalated",
+                        tier_reason=reason,
+                        repair_used=True,
+                        implementor="codex",
+                        cause="codex_no_edit",
+                    )
+                )
         sig = tr.signals(rows)
         self.assertEqual(sig["S1"]["n"], 0)
         self.assertEqual(sig["S1"]["verdict"], "HOLD")
@@ -280,10 +345,12 @@ class TuneRoutingTest(unittest.TestCase):
     def test_unknown_tier_reason_still_appears_in_the_report_table(self) -> None:
         """A reason value the classifier does not emit today is rendered
         after the fixed eight rows, never dropped from the table."""
-        rows = [_row("00001-example.md", "task-1", 1, "escalated",
-                     tier_reason="widened")]
-        md, _patch = tr.render(tr.signals(rows), _sources_stub(rows),
-                               "2026-01-01", CLASSIFIER_FIXTURE)
+        rows = [
+            _row("00001-example.md", "task-1", 1, "escalated", tier_reason="widened")
+        ]
+        md, _patch = tr.render(
+            tr.signals(rows), _sources_stub(rows), "2026-01-01", CLASSIFIER_FIXTURE
+        )
         table = md.split("## Escalations by tier reason")[1]
         self.assertIn("| unattributed | 0 |\n| widened | 1 |", table)
 
@@ -334,7 +401,7 @@ class TuneRoutingTest(unittest.TestCase):
             raw, reasons = tr.parse_rows(ledger.read_text(encoding="utf-8"))
             self.assertEqual(len(raw), 3)
             self.assertTrue(
-                any("UNPARSED: attempt.outcome" in r for r in reasons)
+                any("UNPARSED: attempt.outcome" in r for r in reasons),
             )
 
             classifier = _write_classifier(tmp_path)
@@ -351,8 +418,13 @@ class TuneRoutingTest(unittest.TestCase):
         S1 PROPOSE ledger."""
         prd = "00001-example.md"
         rows = [
-            _row(prd, f"task-{i}", 1, "escalated" if i < 7 else "completed",
-                 tier_reason="mechanical")
+            _row(
+                prd,
+                f"task-{i}",
+                1,
+                "escalated" if i < 7 else "completed",
+                tier_reason="mechanical",
+            )
             for i in range(12)
         ]
         with tempfile.TemporaryDirectory() as tmp:
@@ -367,7 +439,7 @@ class TuneRoutingTest(unittest.TestCase):
             md = (out_dir / "routing-proposal-2026-01-01.md").read_text()
             self.assertIn("UNPARSED: _MECHANICAL_MAX_LINES", md)
             self.assertFalse(
-                (out_dir / "routing-proposal-2026-01-01.patch").exists()
+                (out_dir / "routing-proposal-2026-01-01.patch").exists(),
             )
 
     def test_two_runs_same_inputs_are_byte_identical(self) -> None:
@@ -375,8 +447,13 @@ class TuneRoutingTest(unittest.TestCase):
         `.patch` files (no timestamps beyond the given date, sorted lists)."""
         prd = "00001-example.md"
         rows = [
-            _row(prd, f"task-{i}", 1, "escalated" if i < 7 else "completed",
-                 tier_reason="mechanical")
+            _row(
+                prd,
+                f"task-{i}",
+                1,
+                "escalated" if i < 7 else "completed",
+                tier_reason="mechanical",
+            )
             for i in range(12)
         ]
         with tempfile.TemporaryDirectory() as tmp:

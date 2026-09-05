@@ -69,7 +69,16 @@ Check these exist:
 
 Under autopilot, `state.prd` names the PRD, so this guard does not apply — review that PRD's work. A single wip PRD is unambiguous and passes straight through.
 
-**Optional - Carl (Gemini):** check `${CLAUDE_PLUGIN_ROOT}/skills/use-gemini/scripts/gemini-run.sh` is executable AND a backend CLI resolves - `copilot` (preferred; serves `gemini-3.1-pro-preview`) OR native `gemini` (`mise which`/`command -v` succeeds for either). If both pass, Carl is active. If neither CLI resolves, skip Carl and proceed with the three remaining reviewers - this is graceful degradation, not a failure. Note in the final review file which reviewers ran. (Carl on the copilot backend spends Copilot AI credits; a "monthly quota exceeded" error from the helper is a runtime skip, not a prerequisite failure.)
+**Optional - Carl (Gemini), batch check first:** read
+`state.batch.unavailable_reviewers` before probing any binary. Missing field
+means `[]`. When it contains `carl`, Carl is inactive for this cycle: no dispatch,
+no retry, and no `ui` key in `state.review_lenses` when step 5 replaces the lens
+roster. Retain `state.batch.unavailable_reviewer_details.carl` as the skip origin
+for step 6 and omit Carl from `reviewers:`. This applies to every later cycle
+and PRD in the same batch. On a standalone run with no `state.json`, do not
+create state; fall through to the binary check below.
+
+**Carl binary check (only when not batch-skipped):** check `${CLAUDE_PLUGIN_ROOT}/skills/use-gemini/scripts/gemini-run.sh` is executable AND a backend CLI resolves - `copilot` (preferred; pin owned by the helper) OR native `gemini` (`mise which`/`command -v` succeeds for either). If both pass, Carl is active; binary presence alone does not establish model availability. If neither CLI resolves, skip Carl and record `Carl: unavailable (no backend CLI)` in the final review file. Do not run a live probe here; the opt-in operator probe lives in `use-gemini/SKILL.md`. Step 5 classifies dispatch results: exit 4 records `Carl: permanently unavailable` with the stderr reason; a quota or other runtime failure records a one-off failure. Carl on copilot spends Copilot AI credits.
 
 Create if missing: `dev/local/tmp/`, `dev/local/reviews/`
 
@@ -260,11 +269,33 @@ With 1M context, agent prompts can include more background — full PRD, archite
 
 > Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/await_reviewer_outputs.py --budget 100 <absolute -o output path of each CLI reviewer dispatched>` as a foreground Bash call. If the last stdout line is `WAITING`, run the same command again — up to 30 times total. Return the script's final output verbatim (`DONE`, or `WAITING` plus the pending files after 30 runs). Do nothing else: no reading the output files, no review commentary.
 
-The Watcher is scaffolding, not a reviewer: its return is never saved, consolidated, or counted by the retry policy. Once every reviewer's output is in hand (including a Bob fallback's), `TaskStop` the Watcher if it is still running, then proceed to step 6. A `WAITING` return after 30 runs (~50 min) means a CLI reviewer stalled — treat that reviewer as failed per `references/retry-policy.md`.
+The Watcher is scaffolding, not a reviewer: its return is never saved, consolidated, or counted by the retry policy. Once every reviewer has either produced output (including a Bob fallback's) or reached a terminal failure/unavailability result, `TaskStop` the Watcher if it is still running, then proceed to step 6. A rejected Carl deliberately publishes no output file; classify his process exit and do not wait for that missing file. A `WAITING` return after 30 runs (~50 min) means a still-running CLI reviewer stalled — treat that reviewer as failed per `references/retry-policy.md`.
 
 **Do not Write or Edit ANY reviewer output (Alice's and Blake's included) until ALL reviewers have reported.** The CLIs self-write via `-o`; subagent-returned text is saved only in step 6, after every reviewer has completed - even if a subagent returns first.
 
 **Bob fallback (the doubt lens never drops).** If `codex-run.sh` exits non-zero with exit 3 (codex unavailable), dispatch a Claude Task subagent with Bob's exact assembled prompt (doubt lens + rubric included) and use its output as Bob's. On exit 4 (codex ran but failed, e.g. quota), FIRST check the wrapper's `codex-review-last.jsonl` sidecar: exit 4 has a documented false-positive mode (quota markers matched in codex's own command args or gateguard noise) where codex actually finished — if the sidecar holds a complete review (findings plus all `D{n}:` verdict lines), salvage it as Bob's output and skip the fallback entirely. Only when no complete review is salvageable dispatch the Claude fallback; only if that also fails does Bob count as a failed reviewer per `references/retry-policy.md`.
+
+**Carl availability.** Apply `references/agent-invocation.md`'s Carl exit-code
+contract before retry policy. Exit 4 is permanent configuration unavailability,
+not a one-off skip: record `Carl: permanently unavailable` and the backend/model
+and stderr reason in the review file and user summary; do not retry unchanged
+configuration or consolidate a pre-existing output file. Exit 3 is a dispatch
+guard refusal. Other non-zero results are runtime failures (including quota),
+recorded with their code and reason. Continue with the remaining reviewers.
+On success, record the selected backend/model from the runner's stderr, including
+any fallback, and require non-empty reviewer text before counting Carl as run.
+
+**Latch Carl for the batch (autopilot only).** On exit 4 and when `state.json`
+exists, append `carl` once to `state.batch.unavailable_reviewers` (default `[]`)
+and set `state.batch.unavailable_reviewer_details.carl` to
+`{"cycle": state.cycle, "prd": state.prd}`. Merge both into `state.json` in one
+write, sibling fields untouched (including other batch fields and reviewer
+entries); never overwrite the first failure's origin on subsequent cycles.
+Do not latch exit 3, quota, transient failures, or a successful native fallback.
+Standalone reviews create no state. The latch survives per-PRD reset because
+`cli/records.py` preserves `batch` in full, and expires with the batch. A new
+batch tries Carl again; an operator can remove his list entry and detail at a
+session boundary after repair to re-enable him within this batch.
 
 **Alice on the workflow engine** (`CONSENSUS_ENGINE` is `workflow` or `shadow`; skip this whole block on `legacy`). The workflow call goes in the SAME single dispatch message as the other reviewers — it is a foreground tool call whose inner agents are live subagents, so it holds a headless session open exactly as a Task subagent does. The Watcher rule above is unchanged: it exists for the background-Bash CLI reviewers.
 
@@ -313,6 +344,18 @@ Read these before proceeding:
 - `references/retry-policy.md` - retry and format compliance rules
 
 ### 6. Consolidate findings
+
+**Report the batch skip.** When step 1 batch-skipped Carl, write this line in
+the review file's top matter, using the first failure's `cycle` and `prd` from
+`state.batch.unavailable_reviewer_details.carl`, not this cycle's values:
+
+`carl: skipped (permanently unavailable since cycle {n} of {prd})`
+
+Write it on every later cycle, including cycle 1 of later PRDs in the batch;
+omit Carl from `reviewers:` and the consolidation inputs. He has no `ui` lens
+key this cycle. A manually populated legacy list without origin still suppresses
+dispatch: use `unknown` for each missing origin value rather than inventing one.
+The cycle that first receives exit 4 records the failure per step 5 instead.
 
 **Close out the lens roster (autopilot runs).** When `state.review_lenses` was stamped in step 5, set each lens to `"done"`, or `"failed"` for a reviewer that failed per `references/retry-policy.md` (a lens rescued by a fallback — e.g. Bob's Claude fallback — is `"done"`). Skip on standalone runs.
 

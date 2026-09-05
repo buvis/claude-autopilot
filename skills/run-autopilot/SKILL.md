@@ -241,6 +241,12 @@ Idempotent, safe on every invocation. `mkdir` before any move is mandatory: a mo
 
 **Batch-identity rollover.** When `state.batch` already exists at selection, mint a fresh `batch.id` (new `<yyyymmddHHMM>` timestamp, reset `completed_prds: []`) ONLY for a *genuinely closed* surviving batch: `phase == "done"` AND `next_phase == ""` (empty). Both conditions are required — only the batch-end "No more PRDs" branch writes the empty `next_phase`, while Phase 9 step 2 sets a transient `phase: "done"` (with `next_phase: "done"`) BEFORE the verified wip→done move, so a failed move or mid-Phase-9 crash leaves that shape and must NOT roll over (rolling over there would wipe the in-progress batch's `completed_prds` and mint a spurious id). Every normal in-progress resume preserves `batch.id` unchanged. (Forensics: `references/design-rationale.md` § Batch-identity rollover.)
 
+On that closed-batch rollover, delete `batch.unavailable_reviewers` and
+`batch.unavailable_reviewer_details` in the same state update as the new id.
+Interactive batch end retains `state.json`, so expiry cannot depend on file
+deletion. Every in-progress resume preserves both fields, including transitions
+to another PRD in the same batch; only a new batch tries a rejected Carl again.
+
 ## Phase 3 invariants (work — full procedure: `references/phase-build.md`)
 
 **`work_start_sha` is captured once per PRD.** Run `git rev-parse HEAD` and write it to `state.work_start_sha` before dispatching `/autopilot:work`, but only if it is unset for the current PRD (`state.work_start_sha` absent or empty). If it is already set, **do NOT re-capture** — a cap-rotation (or any other build re-entry on resume) re-enters the build gate with pending tasks, and the existing value marks the true PRD start; re-capturing the HEAD-at-rotation would shrink the review diff (`work_start_sha..HEAD`) to post-rotation commits only. `review-work-completion` uses `work_start_sha..HEAD` as the full-review diff range, so the doubt lens sees the PRD's whole work range. Phase 9 step 10 clears the field on the PRD-to-PRD reset, so each PRD in a multi-PRD batch captures fresh and ranges never overlap.

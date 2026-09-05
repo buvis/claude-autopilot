@@ -47,9 +47,20 @@ mkdir -p "$STUBDIR"
 cat > "$STUBDIR/copilot" <<'STUB'
 #!/bin/bash
 printf '%s\n' "$@" > "${COPILOT_ARGV_FILE:?}"
+if [ -n "${LIVE_STDERR_FILE:-}" ]; then
+    printf '%s\n' 'APPROVAL_PROMPT' >&2
+    attempts=0
+    until grep -qF 'APPROVAL_PROMPT' "$LIVE_STDERR_FILE"; do
+        attempts=$((attempts + 1))
+        [ "$attempts" -lt 100 ] || exit 91
+        sleep 0.02
+    done
+fi
 cat > "${COPILOT_STDIN_FILE:?}"
 echo "stub-copilot-ran"
-exit "${STUB_EXIT_CODE:-0}"
+[ -z "${COPILOT_STDOUT:-}" ] || printf '%s\n' "$COPILOT_STDOUT"
+[ -z "${COPILOT_STDERR:-}" ] || printf '%s\n' "$COPILOT_STDERR" >&2
+exit "${COPILOT_EXIT_CODE:-${STUB_EXIT_CODE:-0}}"
 STUB
 chmod +x "$STUBDIR/copilot"
 
@@ -58,7 +69,8 @@ cat > "$STUBDIR/gemini" <<'STUB'
 printf '%s\n' "$@" > "${GEMINI_ARGV_FILE:?}"
 cat > "${GEMINI_STDIN_FILE:?}"
 echo "stub-gemini-ran"
-exit "${STUB_EXIT_CODE:-0}"
+[ -z "${GEMINI_STDERR:-}" ] || printf '%s\n' "$GEMINI_STDERR" >&2
+exit "${GEMINI_EXIT_CODE:-${STUB_EXIT_CODE:-0}}"
 STUB
 chmod +x "$STUBDIR/gemini"
 
@@ -104,11 +116,12 @@ fi
 # 2. Argv regression lock for the plain -f run (adding the stdin guard must
 #    not perturb argv): --model <default> + read-review perms + -p <prompt>.
 EXPECTED_ARGV_FILE="$WORK/t1.expected"
-printf '%s\n' "--model" "gemini-3.1-pro-preview" "--allow-all-tools" "--deny-tool=write" "-p" "$GEMINI_PROMPT" > "$EXPECTED_ARGV_FILE"
+EXPECTED_MODEL="gemini-3.8-flash"
+printf '%s\n' "--model" "$EXPECTED_MODEL" "--allow-all-tools" "--deny-tool=write" "-p" "$GEMINI_PROMPT" > "$EXPECTED_ARGV_FILE"
 if diff -q "$EXPECTED_ARGV_FILE" "$COPILOT_ARGV_FILE" >/dev/null 2>&1; then
-    PASS "plain -f argv is exactly: --model gemini-3.1-pro-preview --allow-all-tools --deny-tool=write -p <PROMPT>"
+    PASS "plain -f argv is exactly: --model $EXPECTED_MODEL --allow-all-tools --deny-tool=write -p <PROMPT>"
 else
-    FAIL "plain -f argv is exactly: --model gemini-3.1-pro-preview --allow-all-tools --deny-tool=write -p <PROMPT>" \
+    FAIL "plain -f argv is exactly: --model $EXPECTED_MODEL --allow-all-tools --deny-tool=write -p <PROMPT>" \
          "got: $(tr '\n' ' ' < "$COPILOT_ARGV_FILE" 2>/dev/null || echo '<no copilot invocation>')"
 fi
 
@@ -275,6 +288,146 @@ guard_case() {
 guard_case t9a "AUTOPILOT_DISPATCH_DEPTH=1: refuses with exit 3, no backend call" AUTOPILOT_DISPATCH_DEPTH=1
 guard_case t9b "CODEX_SESSION_ID set: refuses with exit 3, no backend call" CODEX_SESSION_ID=deadbeef
 guard_case t9c "COPILOT_CLI set: refuses with exit 3, no backend call" COPILOT_CLI=1
+
+# ══ T10: permanent rejection, fallback, and output isolation ════════════════
+export COPILOT_EXIT_CODE=1
+export COPILOT_STDERR="Error: Model \"$EXPECTED_MODEL\" from --model flag is not available."
+export GEMINI_BACKEND=copilot
+run_gemini t10 -f "$PROMPT_FILE_T" -o "$WORK/t10.out"
+if [ "$RC" -eq 4 ] && grep -qF "$COPILOT_STDERR" "$STDERR_F" &&
+   [ ! -e "$WORK/t10.out" ] && [ ! -f "$GEMINI_ARGV_FILE" ]; then
+    PASS "forced unavailable model: exit 4, stderr reason, no output or fallback"
+else
+    FAIL "forced unavailable model" "rc=$RC; stderr: $(cat "$STDERR_F")"
+fi
+
+printf '%s\n' 'existing review' > "$WORK/existing.out"
+run_gemini t10_existing -f "$PROMPT_FILE_T" -o "$WORK/existing.out"
+if [ "$RC" -eq 4 ] && [ "$(cat "$WORK/existing.out")" = 'existing review' ]; then
+    PASS "unavailability preserves an existing output file"
+else
+    FAIL "unavailability preserves an existing output file" "rc=$RC"
+fi
+unset GEMINI_BACKEND
+
+run_gemini t11 -f "$PROMPT_FILE_T" -o "$WORK/t11.out"
+if [ "$RC" -eq 0 ] && [ -f "$COPILOT_ARGV_FILE" ] &&
+   [ -f "$GEMINI_ARGV_FILE" ] && [ ! -s "$GEMINI_STDIN_FILE" ] &&
+   [ "$(cat "$WORK/t11.out")" = 'stub-gemini-ran' ] &&
+   grep -qF 'trying native gemini fallback' "$STDERR_F"; then
+    PASS "default rejection falls back successfully; output contains only native result"
+else
+    FAIL "default rejection fallback" "rc=$RC; stderr: $(cat "$STDERR_F")"
+fi
+
+export GEMINI_EXIT_CODE=1
+export GEMINI_STDERR='IneligibleTierError: This client is no longer supported for Gemini Code Assist for individuals'
+run_gemini t12 -f "$PROMPT_FILE_T" -o "$WORK/t12.out"
+if [ "$RC" -eq 4 ] && [ -f "$COPILOT_ARGV_FILE" ] &&
+   [ -f "$GEMINI_ARGV_FILE" ] && [ ! -e "$WORK/t12.out" ] &&
+   grep -qF "$COPILOT_STDERR" "$STDERR_F" && grep -qF "$GEMINI_STDERR" "$STDERR_F"; then
+    PASS "both backends rejected: native tried before exit 4, both reasons, no output"
+else
+    FAIL "both backends rejected" "rc=$RC; stderr: $(cat "$STDERR_F")"
+fi
+
+export GEMINI_BACKEND=gemini
+export GEMINI_STDERR='{"reasonCode":"UNSUPPORTED_CLIENT","tierId":"free-tier"}'
+run_gemini t13 -f "$PROMPT_FILE_T"
+if [ "$RC" -eq 4 ] && [ ! -f "$COPILOT_ARGV_FILE" ] &&
+   grep -qF "$GEMINI_STDERR" "$STDERR_F"; then
+    PASS "native reasonCode rejection is classified without -o"
+else
+    FAIL "native reasonCode rejection" "rc=$RC"
+fi
+unset GEMINI_BACKEND GEMINI_EXIT_CODE GEMINI_STDERR
+
+run_gemini t14 -m custom-model -f "$PROMPT_FILE_T"
+if [ "$RC" -eq 4 ] && [ ! -f "$GEMINI_ARGV_FILE" ] &&
+   argv_has_pair "$COPILOT_ARGV_FILE" --model custom-model; then
+    PASS "explicit model never switches backends on rejection"
+else
+    FAIL "explicit model never switches backends" "rc=$RC"
+fi
+
+run_gemini t15 -r existing-session -f "$PROMPT_FILE_T"
+if [ "$RC" -eq 4 ] && [ ! -f "$GEMINI_ARGV_FILE" ]; then
+    PASS "resume never switches backends on rejection"
+else
+    FAIL "resume never switches backends" "rc=$RC"
+fi
+
+export COPILOT_STDERR='monthly quota exceeded'
+export COPILOT_EXIT_CODE=7
+run_gemini t16 -f "$PROMPT_FILE_T" -o "$WORK/t16.out"
+if [ "$RC" -eq 7 ] && [ ! -f "$GEMINI_ARGV_FILE" ] &&
+   [ "$(cat "$WORK/t16.out")" = 'stub-copilot-ran' ] &&
+   grep -qF "$COPILOT_STDERR" "$STDERR_F"; then
+    PASS "quota retains exit code and partial stdout without fallback"
+else
+    FAIL "quota retains exit code and partial stdout" "rc=$RC"
+fi
+
+export COPILOT_EXIT_CODE=0
+export COPILOT_STDERR='IneligibleTierError mentioned in a successful diagnostic'
+run_gemini t17 -f "$PROMPT_FILE_T"
+if [ "$RC" -eq 0 ] && [ ! -f "$GEMINI_ARGV_FILE" ]; then
+    PASS "successful stderr mentioning rejection is not classified as failure"
+else
+    FAIL "successful stderr mentioning rejection" "rc=$RC"
+fi
+
+export COPILOT_STDERR='generic failure'
+for code in 3 4; do
+    export COPILOT_EXIT_CODE="$code"
+    run_gemini "t18_$code" -f "$PROMPT_FILE_T"
+    if [ "$RC" -eq 1 ] && [ ! -f "$GEMINI_ARGV_FILE" ] &&
+       grep -qF "exited $code (runtime failure)" "$STDERR_F"; then
+        PASS "unclassified child exit $code cannot impersonate a reserved status"
+    else
+        FAIL "unclassified child exit $code" "rc=$RC"
+    fi
+done
+unset COPILOT_EXIT_CODE COPILOT_STDERR
+
+export GEMINI_BACKEND=typo
+run_gemini t19 -f "$PROMPT_FILE_T"
+if [ "$RC" -eq 1 ] && [ ! -f "$COPILOT_ARGV_FILE" ] &&
+   [ ! -f "$GEMINI_ARGV_FILE" ] && grep -qF 'invalid GEMINI_BACKEND' "$STDERR_F"; then
+    PASS "invalid backend fails before dispatch"
+else
+    FAIL "invalid backend" "rc=$RC"
+fi
+unset GEMINI_BACKEND
+
+# ══ T20: interactive stderr must reach caller while backend is still running ═
+export LIVE_STDERR_FILE="$WORK/t20.stderr"
+run_gemini t20 -i "$GEMINI_PROMPT"
+unset LIVE_STDERR_FILE
+if [ "$RC" -eq 0 ] && grep -qF 'SENTINEL_STDIN_DATA' "$COPILOT_STDIN_FILE"; then
+    PASS "interactive approval prompt is visible before child exits; stdin preserved"
+else
+    FAIL "interactive stderr visibility" "rc=$RC"
+fi
+
+export LIVE_STDERR_FILE="$WORK/t21.stderr"
+run_gemini t21 -r existing-session
+unset LIVE_STDERR_FILE
+if [ "$RC" -eq 0 ] && grep -qF 'SENTINEL_STDIN_DATA' "$COPILOT_STDIN_FILE"; then
+    PASS "bare resume approval prompt is visible before child exits; stdin preserved"
+else
+    FAIL "bare resume stderr visibility" "rc=$RC"
+fi
+
+export COPILOT_STDOUT='IneligibleTierError is a finding in the reviewed source'
+export COPILOT_EXIT_CODE=7
+run_gemini t22 -f "$PROMPT_FILE_T"
+if [ "$RC" -eq 7 ] && [ ! -f "$GEMINI_ARGV_FILE" ]; then
+    PASS "rejection words in model stdout cannot trigger classification or fallback"
+else
+    FAIL "stdout rejection words" "rc=$RC"
+fi
+unset COPILOT_STDOUT COPILOT_EXIT_CODE
 
 # ══ summary ═══════════════════════════════════════════════════════════════════
 echo ""
