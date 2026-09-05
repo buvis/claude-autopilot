@@ -195,8 +195,11 @@ def _repair_known(
         return None
 
     target = Path(target_str)
-    if target.is_symlink():
-        return ("skipped", target_str, "symlink")
+    try:
+        if target.is_symlink():
+            return ("skipped", target_str, "symlink")
+    except OSError as exc:
+        return ("unrepairable", target_str, str(exc))
 
     root_name, canonical_rel = known
     root = aegis_root if root_name == "aegis" else autopilot_root
@@ -231,15 +234,20 @@ def _write_repair(
     canonical_bytes: bytes,
 ) -> tuple[str, str, str]:
     tmp_path = target.with_name(target.name + ".tmp")
+    created = False
     try:
-        tmp_path.write_bytes(canonical_bytes)
+        # Exclusive creation preserves existing files and symlinks at this path.
+        with tmp_path.open("xb") as stream:
+            created = True
+            stream.write(canonical_bytes)
         os.replace(tmp_path, target)
     except OSError as exc:
         detail = str(exc)
-        try:
-            tmp_path.unlink(missing_ok=True)
-        except OSError as cleanup_exc:
-            detail += f"; temp cleanup failed: {cleanup_exc}"
+        if created:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except OSError as cleanup_exc:
+                detail += f"; temp cleanup failed: {cleanup_exc}"
         return ("unrepairable", str(target), detail)
     return ("repaired", str(target), str(canonical))
 
@@ -286,14 +294,14 @@ def _repair_target(
 
 def _remove_orphaned_empty(
     hooks_dir: Path,
-    registered: set[Path],
+    excluded: set[Path],
     dry_run: bool,
 ) -> list[tuple[str, str, str]]:
     out: list[tuple[str, str, str]] = []
     if not hooks_dir.is_dir():
         return out
     for path in sorted(hooks_dir.glob("*.py")):
-        if path in registered or path.name == "_common.py":
+        if path in excluded or path.name == "_common.py":
             continue
         try:
             if path.stat().st_size != 0:
@@ -343,7 +351,8 @@ def repair(
     cleanup_registered = {
         _resolve_target(c, config_dir) for c in _iter_commands(cleanup_hooks)
     }
-    out.extend(_remove_orphaned_empty(hooks_dir, cleanup_registered, dry_run))
+    cleanup_excluded = cleanup_registered | {Path(target) for _, target, _ in out}
+    out.extend(_remove_orphaned_empty(hooks_dir, cleanup_excluded, dry_run))
     return out
 
 

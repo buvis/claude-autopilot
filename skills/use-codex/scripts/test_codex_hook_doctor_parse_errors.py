@@ -29,7 +29,7 @@ import errno
 import os
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 
 import pytest
 from test_codex_hook_doctor import (
@@ -251,15 +251,21 @@ def test_failed_repair_cleans_tmp_and_repairs_next_target(
     hooks_dir, args = repair_targets
     target = hooks_dir / "protect_config.py"
     temp = target.with_name(target.name + ".tmp")
-    real_write = Path.write_bytes
+    real_open = Path.open
     real_replace = os.replace
     error = OSError(errno.ENOSPC, "No space left on device", str(temp))
 
-    def partial_write(path: Path, data: bytes) -> int:
+    def partial_open(path: Path, *args: Any, **kwargs: Any) -> IO[Any]:
+        stream = real_open(path, *args, **kwargs)
         if path == temp:
-            real_write(path, data[:1])
-            raise error
-        return real_write(path, data)
+            real_write = stream.write
+
+            def failed_write(data: bytes) -> int:
+                real_write(data[:1])
+                raise error
+
+            monkeypatch.setattr(stream, "write", failed_write)
+        return stream
 
     def failed_replace(src: Path, dst: Path) -> None:
         if dst == target:
@@ -267,7 +273,7 @@ def test_failed_repair_cleans_tmp_and_repairs_next_target(
         real_replace(src, dst)
 
     if failure == "partial_write":
-        monkeypatch.setattr(Path, "write_bytes", partial_write)
+        monkeypatch.setattr(Path, "open", partial_open)
     else:
         monkeypatch.setattr(codex_hook_doctor.os, "replace", failed_replace)
 
@@ -359,4 +365,95 @@ def test_orphan_cleanup_error_still_processes_next_target(
         ("removed", str(later), ""),
     ]
     assert target.read_bytes() == b""
+    assert not later.exists()
+
+
+def test_symlink_status_error_keeps_remaining_repair_rows(
+    repair_targets: tuple[Path, list[str]],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    hooks_dir, args = repair_targets
+    target = hooks_dir / "protect_config.py"
+    error = PermissionError(errno.EACCES, "Permission denied", str(target))
+    real_is_symlink = Path.is_symlink
+
+    def failed_is_symlink(path: Path) -> bool:
+        if path == target:
+            raise error
+        return real_is_symlink(path)
+
+    monkeypatch.setattr(Path, "is_symlink", failed_is_symlink)
+
+    assert codex_hook_doctor.main(["repair", *args]) == 3
+    output = capsys.readouterr()
+    rows = [line.split("\t") for line in output.out.splitlines()]
+    assert rows[0] == ["unrepairable", str(target), str(error)]
+    assert rows[1][:2] == ["repaired", str(hooks_dir / "validate_commit_msg.py")]
+    assert rows[2] == ["summary", "1 ok, 1 stale, 0 broken"]
+    assert len(rows) == 3
+    assert output.err == ""
+
+
+@pytest.mark.parametrize("temp_kind", ["readonly_file", "writable_file", "symlink"])
+def test_repair_preserves_preexisting_temp_and_processes_next_target(
+    repair_targets: tuple[Path, list[str]],
+    temp_kind: str,
+) -> None:
+    hooks_dir, args = repair_targets
+    target = hooks_dir / "protect_config.py"
+    temp = target.with_name(target.name + ".tmp")
+    saved = hooks_dir.parent / "saved.py"
+    saved.write_bytes(b"operator data\n")
+    if temp_kind == "symlink":
+        temp.symlink_to(saved)
+    else:
+        temp.write_bytes(b"operator data\n")
+        if temp_kind == "readonly_file":
+            temp.chmod(0o444)
+
+    proc = _run_repair_cli(args)
+
+    assert proc.returncode == 3, proc.stderr
+    rows = [line.split("\t") for line in proc.stdout.splitlines()]
+    assert rows[0][:2] == ["unrepairable", str(target)]
+    assert "File exists" in rows[0][2]
+    assert rows[1][:2] == ["repaired", str(hooks_dir / "validate_commit_msg.py")]
+    assert rows[2] == ["summary", "1 ok, 1 stale, 0 broken"]
+    assert len(rows) == 3
+    assert temp.read_bytes() == b"operator data\n"
+    assert temp.is_symlink() == (temp_kind == "symlink")
+    assert saved.read_bytes() == b"operator data\n"
+    assert target.read_bytes() == b"X = 1\n"
+    assert proc.stderr == ""
+
+
+def test_dangling_orphan_gets_one_row_and_later_orphan_is_removed(
+    tmp_path: Path,
+) -> None:
+    hooks_dir = tmp_path / "hooks"
+    hooks_dir.mkdir()
+    dangling = hooks_dir / "a_dangling.py"
+    dangling.symlink_to(hooks_dir / "absent.py")
+    later = hooks_dir / "z_empty.py"
+    later.touch()
+    config = tmp_path / "hooks.json"
+    _write_config(config, {})
+    aegis_root, autopilot_root = _fake_roots(tmp_path)
+
+    rows = codex_hook_doctor.repair(
+        config=config,
+        aegis_root=aegis_root,
+        autopilot_root=autopilot_root,
+    )
+
+    assert rows == [
+        (
+            "unrepairable",
+            str(dangling),
+            "no canonical source for unknown hook (missing)",
+        ),
+        ("removed", str(later), ""),
+    ]
+    assert dangling.is_symlink()
     assert not later.exists()
