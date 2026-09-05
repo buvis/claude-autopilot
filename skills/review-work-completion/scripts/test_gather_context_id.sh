@@ -7,7 +7,9 @@ set -u
 PASS() { echo "PASS: $1"; }
 FAIL() { echo "FAIL: $1 — $2"; exit 1; }
 
-SCRIPT="$HOME/.claude/skills/review-work-completion/scripts/gather-context.sh"
+# Resolved from this script's own location, like test_codex_doubt_guard.sh:
+# the skill lives in the plugin now, not under ~/.claude/skills/.
+SCRIPT="$(cd "$(dirname "$0")" && pwd)/gather-context.sh"
 DIR="$(mktemp -d)"
 trap 'rm -rf "$DIR"' EXIT
 cd "$DIR"
