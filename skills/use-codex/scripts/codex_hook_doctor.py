@@ -222,6 +222,14 @@ def _repair_known(
     if dry_run:
         return ("would-repair", target_str, str(canonical))
 
+    return _write_repair(target, canonical, canonical_bytes)
+
+
+def _write_repair(
+    target: Path,
+    canonical: Path,
+    canonical_bytes: bytes,
+) -> tuple[str, str, str]:
     tmp_path = target.with_name(target.name + ".tmp")
     try:
         tmp_path.write_bytes(canonical_bytes)
@@ -232,8 +240,8 @@ def _repair_known(
             tmp_path.unlink(missing_ok=True)
         except OSError as cleanup_exc:
             detail += f"; temp cleanup failed: {cleanup_exc}"
-        return ("unrepairable", target_str, detail)
-    return ("repaired", target_str, str(canonical))
+        return ("unrepairable", str(target), detail)
+    return ("repaired", str(target), str(canonical))
 
 
 def _repair_target(
@@ -285,16 +293,18 @@ def _remove_orphaned_empty(
     if not hooks_dir.is_dir():
         return out
     for path in sorted(hooks_dir.glob("*.py")):
-        if (
-            path.stat().st_size == 0
-            and path not in registered
-            and path.name != "_common.py"
-        ):
+        if path in registered or path.name == "_common.py":
+            continue
+        try:
+            if path.stat().st_size != 0:
+                continue
             if dry_run:
                 out.append(("would-remove", str(path), ""))
             else:
                 path.unlink()
                 out.append(("removed", str(path), ""))
+        except OSError as exc:
+            out.append(("unrepairable", str(path), str(exc)))
     return out
 
 

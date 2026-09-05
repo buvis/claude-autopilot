@@ -208,6 +208,7 @@ def readonly_hooks(
     if os.geteuid() == 0:
         pytest.skip("root bypasses directory permission bits")
     hooks_dir, _ = repair_targets
+    (hooks_dir / "unused.py").touch()
     mode = hooks_dir.stat().st_mode
     hooks_dir.chmod(0o555)
     try:
@@ -223,17 +224,20 @@ def test_readonly_repair_reports_all_targets_without_tmp_litter(
 
     proc = _run_repair_cli(args)
 
-    assert proc.returncode == 3, proc.stderr
+    assert proc.returncode == 1, proc.stderr
     rows = [line.split("\t") for line in proc.stdout.splitlines()]
     assert rows[0][:2] == ["unrepairable", str(hooks_dir / "protect_config.py")]
     assert "Permission denied" in rows[0][2]
     assert rows[1][:2] == ["unrepairable", str(hooks_dir / "validate_commit_msg.py")]
     assert "Permission denied" in rows[1][2]
-    assert rows[2] == ["summary", "0 ok, 2 stale, 0 broken"]
-    assert len(rows) == 3
+    assert rows[2][:2] == ["unrepairable", str(hooks_dir / "unused.py")]
+    assert "Permission denied" in rows[2][2]
+    assert rows[3] == ["summary", "0 ok, 2 stale, 1 broken"]
+    assert len(rows) == 4
     assert list(hooks_dir.glob("*.tmp")) == []
     assert (hooks_dir / "protect_config.py").read_bytes() == b"X = 1\n"
     assert (hooks_dir / "validate_commit_msg.py").read_bytes() == b"X = 1\n"
+    assert (hooks_dir / "unused.py").read_bytes() == b""
     assert proc.stderr == ""
 
 
@@ -318,3 +322,41 @@ def test_cleanup_failure_is_reported_without_losing_remaining_rows(
     assert (hooks_dir / "validate_commit_msg.py").read_bytes() == b"X = 2\n"
     assert temp.read_bytes() == b"X = 2\n"
     assert output.err == ""
+
+
+@pytest.mark.parametrize("operation", ["stat", "unlink"])
+def test_orphan_cleanup_error_still_processes_next_target(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+) -> None:
+    target = tmp_path / "a_orphan.py"
+    target.touch()
+    later = tmp_path / "z_orphan.py"
+    later.touch()
+    error = PermissionError(errno.EACCES, "Permission denied", str(target))
+    real_stat = Path.stat
+    real_unlink = Path.unlink
+
+    def failed_stat(path: Path, *, follow_symlinks: bool = True) -> os.stat_result:
+        if path == target:
+            raise error
+        return real_stat(path, follow_symlinks=follow_symlinks)
+
+    def failed_unlink(path: Path, missing_ok: bool = False) -> None:
+        if path == target:
+            raise error
+        real_unlink(path, missing_ok=missing_ok)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            Path, operation, {"stat": failed_stat, "unlink": failed_unlink}[operation]
+        )
+        rows = codex_hook_doctor._remove_orphaned_empty(tmp_path, set(), False)
+
+    assert rows == [
+        ("unrepairable", str(target), str(error)),
+        ("removed", str(later), ""),
+    ]
+    assert target.read_bytes() == b""
+    assert not later.exists()

@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **use-codex**: report unreadable hook targets and failed repairs per target, continue processing remaining hooks, and clean up temporary files after failed writes.
+- **use-codex**: report unreadable hook targets, failed repairs, and orphan cleanup errors per target, continue processing remaining hooks, and clean up temporary files after failed writes.
 - **use-gemini**: restore Carl's Copilot lane with a served Gemini Flash pin,
   distinguish permanent model/client-tier rejection (exit 4) from runtime
   failures, try native Gemini for rejected default prompt runs, and keep
