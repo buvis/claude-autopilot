@@ -104,22 +104,24 @@ def test_check_directory_target_reports_error_and_remaining_rows(
     assert proc.stderr == ""
 
 
-def test_target_deleted_between_exists_and_stat_is_verdicted(
+def test_target_deleted_after_stat_is_verdicted(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     target = tmp_path / "gone.py"
     target.write_text("X = 1\n", encoding="utf-8")
     aegis_root, autopilot_root = _fake_roots(tmp_path)
-    real_exists = Path.exists
+    real_stat = Path.stat
 
-    def disappearing_exists(path: Path) -> bool:
-        exists = real_exists(path)
-        if path == target and exists:
+    def disappearing_stat(
+        path: Path, *, follow_symlinks: bool = True
+    ) -> os.stat_result:
+        result = real_stat(path, follow_symlinks=follow_symlinks)
+        if path == target:
             path.unlink()
-        return exists
+        return result
 
-    monkeypatch.setattr(Path, "exists", disappearing_exists)
+    monkeypatch.setattr(Path, "stat", disappearing_stat)
     verdict, detail = codex_hook_doctor._verdict_for(target, aegis_root, autopilot_root)
 
     assert verdict == "syntax_error"
@@ -457,3 +459,36 @@ def test_dangling_orphan_gets_one_row_and_later_orphan_is_removed(
     ]
     assert dangling.is_symlink()
     assert not later.exists()
+
+
+def test_exists_suppressing_permission_error_does_not_hide_target_detail(
+    repair_targets: tuple[Path, list[str]],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    hooks_dir, args = repair_targets
+    target = hooks_dir / "protect_config.py"
+    error = PermissionError(errno.EACCES, "Permission denied", str(target))
+    real_exists = Path.exists
+    real_stat = Path.stat
+
+    def suppressing_exists(path: Path) -> bool:
+        # Python 3.14 exists() suppresses every OSError from stat().
+        return False if path == target else real_exists(path)
+
+    def denied_stat(path: Path, *, follow_symlinks: bool = True) -> os.stat_result:
+        if path == target:
+            raise error
+        return real_stat(path, follow_symlinks=follow_symlinks)
+
+    monkeypatch.setattr(Path, "exists", suppressing_exists)
+    monkeypatch.setattr(Path, "stat", denied_stat)
+
+    assert codex_hook_doctor.main(["check", *args]) == 1
+    output = capsys.readouterr()
+    rows = [line.split("\t") for line in output.out.splitlines()]
+    assert rows[0] == ["syntax_error", str(target), str(error)]
+    assert rows[1] == ["stale", str(hooks_dir / "validate_commit_msg.py"), ""]
+    assert rows[2] == ["summary", "0 ok, 1 stale, 1 broken"]
+    assert len(rows) == 3
+    assert output.err == ""

@@ -52,14 +52,14 @@ def _verdict_for(
     autopilot_root: Path,
 ) -> tuple[str, str]:
     try:
-        if not target.exists():
-            return "missing", ""
         if target.stat().st_size == 0:
             return "empty", ""
-        target_bytes = target.read_bytes()
+    except FileNotFoundError:
+        return "missing", ""
     except OSError as exc:
         # Unreadable hooks gate the rung off just like invalid Python;
-        # reuse syntax_error so report counting and exit codes stay unchanged.
+        # stat preserves errors that exists() suppresses on Python 3.14+.
+        # Reuse syntax_error to preserve report counting and exit codes.
         return "syntax_error", str(exc)
 
     # Syntax outranks staleness: a hook that cannot compile fails on every
@@ -71,8 +71,9 @@ def _verdict_for(
     # cookie the way the interpreter would. ValueError covers a null byte on
     # 3.10 (SyntaxError from 3.11) and is UnicodeDecodeError's base.
     try:
+        target_bytes = target.read_bytes()
         compile(target_bytes, str(target), "exec")
-    except (SyntaxError, ValueError) as exc:
+    except (SyntaxError, ValueError, OSError) as exc:
         return "syntax_error", str(exc)
 
     known = KNOWN_HOOKS.get(target.name)
