@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **use-codex**: report unreadable hook targets (including on Python 3.14+), failed repairs, and orphan cleanup errors once per target, continue processing remaining hooks, and clean up failed repair writes without overwriting or deleting pre-existing temporary files.
+- **work**: generate the per-task review session id with python first and uuidgen as the fallback, so unattended sessions no longer depend on a warden allow for uuidgen.
 
 ## [0.5.1] - 2026-09-05
 
