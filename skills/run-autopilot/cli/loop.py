@@ -339,6 +339,32 @@ def run_purge(repo: Path) -> None:
         pass
 
 
+def _run_agoge_process(
+    claude_bin: str,
+    prompt: str,
+    log_path: Path,
+    cap: int,
+    env: dict,
+) -> int:
+    """Spawn the agoge session under a wall-clock watchdog cap and
+    return its exit code (1 on spawn failure, swallowed by the caller)."""
+    try:
+        with open(log_path, "wb") as log:
+            proc = subprocess.Popen(
+                [claude_bin, "-p", "--permission-mode", "auto", prompt],
+                stdin=subprocess.DEVNULL,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                env=runner.child_env(env)[0],
+            )
+            dog = Watchdog(proc, cap_secs=cap, grace_secs=20).start()
+            rc = proc.wait()
+            dog.cancel()
+            return rc
+    except (OSError, subprocess.SubprocessError):
+        return 1
+
+
 def run_agoge(
     ap_dir: Path,
     batch: str,
@@ -368,21 +394,7 @@ def run_agoge(
     if env.get("_AUTOPILOT_AGOGE_AUTHORIZED") != "0":
         prompt += " --authorized autoclaude-drain"
     cap = routing._env_int(env, "_AUTOPILOT_AGOGE_CAP", 3600)
-    rc = 0
-    try:
-        with open(log_path, "wb") as log:
-            proc = subprocess.Popen(
-                [claude_bin, "-p", "--permission-mode", "auto", prompt],
-                stdin=subprocess.DEVNULL,
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                env=runner.child_env(env)[0],
-            )
-            dog = Watchdog(proc, cap_secs=cap, grace_secs=20).start()
-            rc = proc.wait()
-            dog.cancel()
-    except (OSError, subprocess.SubprocessError):
-        rc = 1
+    rc = _run_agoge_process(claude_bin, prompt, log_path, cap, env)
     if rc == 0:
         print(
             "agoge: packets written to dev/local/audit-results/; walkthrough pending.",
