@@ -376,7 +376,7 @@ def run_agoge(
                 stdin=subprocess.DEVNULL,
                 stdout=log,
                 stderr=subprocess.STDOUT,
-                env={**env, **runner.LAUNCH_ENV},
+                env=runner.child_env(env)[0],
             )
             dog = Watchdog(proc, cap_secs=cap, grace_secs=20).start()
             rc = proc.wait()
