@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **review-work-completion**: state that Bob's exit 3 and exit 4 routing wins over the retry sentence, so neither exit runs a codex retry before the Claude fallback
 - **review-work-completion**: correct the agent registry's stale claim that Bob's prompt forbids commands, and say how his native Claude fallback reads its files
 - **review-work-completion**: close a CLI reviewer's dispatch row when the dispatch ends rather than when its output file is read, so a failure that publishes no file no longer leaves the row open, and record a failed retry's exit code alongside the retry marker
+- **review-work-completion**: tell the Bob-fallback dispatch to swap the persona's read-only-shell reading instruction for the equivalent `Read`-tool instruction, so the native fallback subagent can actually open its context, diff and pack files
+- **review-work-completion**: close a CLI reviewer's dispatch row when the output is unusable due to malformed issue lines or incomplete per-rule verdicts, so those retry-triggering outputs no longer leave the ledger row open
+- **review-work-completion**: record the Bob review section's `after one retry (inlined)` marker whenever the inlined retry was dispatched, not only when it produced verdict lines, so a retry that ran and still failed stays visible
 
 ## [0.5.1] - 2026-09-05
 

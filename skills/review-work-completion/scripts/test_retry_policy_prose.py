@@ -19,6 +19,7 @@ PACK_ROOT = SKILL_DIR.parent.parent
 SKILL_MD = SKILL_DIR / "SKILL.md"
 RETRY_POLICY = SKILL_DIR / "references" / "retry-policy.md"
 AGENT_INVOCATION = SKILL_DIR / "references" / "agent-invocation.md"
+AGENT_REGISTRY = SKILL_DIR / "references" / "agent-registry.md"
 BOB_MD = PACK_ROOT / "agents" / "bob.md"
 
 
@@ -41,6 +42,7 @@ class RetryPolicyProseTests(unittest.TestCase):
         cls.skill = SKILL_MD.read_text(encoding="utf-8")
         cls.retry_policy = RETRY_POLICY.read_text(encoding="utf-8")
         cls.agents = AGENT_INVOCATION.read_text(encoding="utf-8")
+        cls.registry = AGENT_REGISTRY.read_text(encoding="utf-8")
         cls.bob_persona = BOB_MD.read_text(encoding="utf-8")
         cls.refusal = _section(
             cls.retry_policy, "## Lack-of-input refusal (Bob)"
@@ -106,6 +108,49 @@ class RetryPolicyProseTests(unittest.TestCase):
         # at all, which also blocks the read-only commands the appendix now
         # grants him. That phrasing must not resurface.
         self.assertNotIn("Do NOT attempt to run commands", self.bob_persona)
+
+    def test_bob_invocation_exit3_takes_the_claude_fallback_with_no_cli_retry(
+        self,
+    ) -> None:
+        # Exit-routing owns exit 3: straight to the fallback, no CLI retry.
+        self.assertIn(
+            "exit 3 (codex unavailable) dispatches Bob's Claude fallback straight away",
+            self.bob_invocation,
+        )
+        self.assertIn("neither takes a CLI retry", self.bob_invocation)
+
+    def test_bob_invocation_exit4_checks_the_sidecar_before_falling_back(
+        self,
+    ) -> None:
+        # Exit 4 salvages a complete review from the sidecar before ever
+        # reaching the Claude fallback.
+        self.assertIn(
+            "checks the `codex-review-last.jsonl` sidecar for a complete review to salvage",
+            self.bob_invocation,
+        )
+
+    def test_bob_invocation_other_exits_and_refusal_share_the_one_cli_retry(
+        self,
+    ) -> None:
+        # Every non-3/4 exit, plus the refusal shape, gets the one CLI retry.
+        self.assertIn(
+            "The one CLI retry above applies to every other non-zero exit, "
+            "and to the refusal shape it names",
+            self.bob_invocation,
+        )
+
+    def test_agent_registry_documents_bobs_native_fallback_tool(self) -> None:
+        # The registry must say what tool Bob's native Claude fallback reads
+        # its named files with, in place of the persona's read-only shell
+        # commands.
+        self.assertIn("Bob's fallback reads through the Read tool", self.registry)
+        self.assertIn("with read-only shell commands", self.registry)
+        self.assertIn("(`cat`, `sed -n`, `rg`, `ls`)", self.registry)
+        self.assertIn(
+            "subagent holding `Read` alone, which opens those same named "
+            "files with that",
+            self.registry,
+        )
 
 
 if __name__ == "__main__":

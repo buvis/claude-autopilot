@@ -47,8 +47,7 @@ native hole.
 where no Read tool exists. On the native fallback the same prompt runs on a
 subagent holding `Read` alone, which opens those same named files with that
 tool instead. He does not join the `Read, Bash` lanes below, because every file
-he needs is named in his prompt — he is never told to go find code, which is
-the one thing those lanes need `rg` for.
+he needs is named in his prompt.
 
 **Deviation from the PRD, recorded deliberately.** PRD 00109 specifies
 `tools: Read` for native reviewers with "Victor alone adds Bash". That

@@ -275,7 +275,7 @@ The Watcher is scaffolding, not a reviewer: its return is never saved, consolida
 
 **Do not Write or Edit ANY reviewer output (Alice's and Blake's included) until ALL reviewers have reported.** The CLIs self-write via `-o`; subagent-returned text is saved only in step 6, after every reviewer has completed - even if a subagent returns first.
 
-**Bob fallback (the doubt lens never drops).** If `codex-run.sh` exits non-zero with exit 3 (codex unavailable), dispatch a Claude Task subagent with Bob's exact assembled prompt (doubt lens + rubric included) and use its output as Bob's. On exit 4 (codex ran but failed, e.g. quota), FIRST check the wrapper's `codex-review-last.jsonl` sidecar: exit 4 has a documented false-positive mode (quota markers matched in codex's own command args or gateguard noise) where codex actually finished — if the sidecar holds a complete review (findings plus all `D{n}:` verdict lines), salvage it as Bob's output and skip the fallback entirely. Only when no complete review is salvageable dispatch the Claude fallback; only if that also fails does Bob count as a failed reviewer per `references/retry-policy.md`.
+**Bob fallback (the doubt lens never drops).** If `codex-run.sh` exits non-zero with exit 3 (codex unavailable), dispatch a Claude Task subagent with Bob's exact assembled prompt (doubt lens + rubric included) and use its output as Bob's. On exit 4 (codex ran but failed, e.g. quota), FIRST check the wrapper's `codex-review-last.jsonl` sidecar: exit 4 has a documented false-positive mode (quota markers matched in codex's own command args or gateguard noise) where codex actually finished — if the sidecar holds a complete review (findings plus all `D{n}:` verdict lines), salvage it as Bob's output and skip the fallback entirely. Only when no complete review is salvageable dispatch the Claude fallback; only if that also fails does Bob count as a failed reviewer per `references/retry-policy.md`. When dispatching the Claude fallback, replace the persona's read-only-shell reading instruction with the equivalent `Read`-tool instruction, so the subagent is told to open `{CONTEXT_FILE}`, `{DIFF_FILE}` and `{PACK_FILE}` with the tool it actually has.
 
 **Carl availability.** Apply `references/agent-invocation.md`'s Carl exit-code
 contract before retry policy. Exit 4 is permanent configuration unavailability,
@@ -372,6 +372,7 @@ Save each subagent reviewer's returned text to `dev/local/tmp/` — **Alice** to
 | the retry itself failed | `--outcome error --detail "retry: exit <n>"` or `--outcome error --detail "retry: lack-of-input"` |
 | non-zero exit, nothing usable published | `--outcome error --detail "exit <n>"` |
 | exit 0 but the refusal shape (`references/retry-policy.md` § Lack-of-input refusal) | `--outcome error --detail "lack-of-input"` |
+| exit 0 but the output is unusable — malformed issue lines, or incomplete per-rule verdicts (`references/retry-policy.md` §§ Format Compliance, Per-Rule Verdict Completeness) | `--outcome error --detail "format-invalid"` |
 
 The rows are mutually exclusive. `--detail` is a single field, so a failed retry encodes both facts in it as `retry: <the failure>` rather than losing one of them. Bob's Claude fallback (a Task subagent, not a CLI dispatch) gets no ledger row.
 
@@ -447,7 +448,7 @@ Stamp the `reviewers:` frontmatter field with the comma-separated lowercase name
 
 **Shadow runs (`CONSENSUS_ENGINE == "shadow"`).** The workflow's `review_markdown` carries the literal token `{{TESTS_LINE}}` (step 5 passed no `tests_line`). Substitute the `Tests:` line composed in step 6 for that token — a file still carrying the token cannot pass `check_review_file.py` — then write the result to `dev/local/tmp/<prd-base>-consensus-shadow-{cycle}.md`. **Never** to `dev/local/reviews/`: step 3's `-review-*.md` glob finds the prior cycle there, and a shadow file in that directory would be mistaken for one. Gate the shadow file with `check_review_file.py --reviewers alice`, then record in the real review file, under Alice's section, the engine's `stats_line` and any verdict divergence from legacy Alice — as an observation, never as a finding. The shadow never gates.
 
-Include all findings even if zero issues. Give each reviewer that ran a `## <Name>` section (their findings, or a one-line all-clear; Bob's keeps his `D{n}:` verdict lines, and records `after one retry (inlined)` when the inlined retry is what produced them), and end the file with the `Verdict:` and `Tests:` lines composed in step 6.
+Include all findings even if zero issues. Give each reviewer that ran a `## <Name>` section (their findings, or a one-line all-clear; Bob's keeps his `D{n}:` verdict lines, and records `after one retry (inlined)` whenever the inlined retry was dispatched, whether or not it produced them), and end the file with the `Verdict:` and `Tests:` lines composed in step 6.
 
 Place the `codex_rung_guard:` line composed in step 6 in the top matter: directly after the `Diff range:` block, before the body sections.
 
