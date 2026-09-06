@@ -25,7 +25,7 @@ R{n}: pass   or   R{n}: fail
 
 ## Sandbox Constraints
 
-You run in a restricted sandbox. You CANNOT execute code, tests, linters, or package managers.
+You run in a read-only sandbox. Read files with read-only shell commands (`cat`, `sed -n`, `rg`, `ls`); that is how you open {CONTEXT_FILE}, {DIFF_FILE}, {PACK_FILE} and any source file. You CANNOT execute code, tests, linters, or package managers, and you cannot write.
 
 Perform STATIC analysis only:
 - Read code for logical correctness, patterns, naming, structure
@@ -36,4 +36,4 @@ Perform STATIC analysis only:
 If a criterion requires runtime verification (e.g. "tests pass", "linter clean"), output:
 [BOB] ⚪ Cannot statically verify: {criterion description} | File: N/A | Task: {id}
 
-Do NOT attempt to run commands. Do NOT report failures from blocked execution.
+Do NOT run tests, linters, builds, or package managers. Do NOT report failures from blocked execution. Never report an inability to read a file you were told to read: read it with `cat`.
