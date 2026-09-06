@@ -136,24 +136,53 @@ SENTINEL_PROMPT="analyze the sentinel case"
 PATH="$RUN_PATH" STUB_ARGV_FILE="$STUB_ARGV_FILE" STUB_STDIN_FILE="$STUB_STDIN_FILE" \
     bash "$CODEX_RUN_SH" "$SENTINEL_PROMPT" <<< 'SENTINEL_STDIN_DATA'
 
-# 1. Codex child stdin must be redirected to /dev/null. Without the guard the
-#    child inherits the wrapper's stdin and would read SENTINEL_STDIN_DATA.
-if [ -s "$STUB_STDIN_FILE" ]; then
-    FAIL "codex child stdin is /dev/null" \
-         "stub captured $(wc -c < "$STUB_STDIN_FILE" | tr -d ' ') byte(s) of stdin; expected 0 (child inherited the wrapper's stdin instead of /dev/null)"
+# 1. Codex child stdin must be exactly the prompt, delivered via a pipe --
+#    never the wrapper's own stdin. Without the guard the child inherits the
+#    wrapper's stdin and would read SENTINEL_STDIN_DATA.
+EXPECTED_STDIN_FILE="$STUBDIR/stdin.expected"
+printf '%s' "$SENTINEL_PROMPT" > "$EXPECTED_STDIN_FILE"
+
+if diff -q "$EXPECTED_STDIN_FILE" "$STUB_STDIN_FILE" >/dev/null 2>&1 && \
+   ! grep -qF "SENTINEL_STDIN_DATA" "$STUB_STDIN_FILE" 2>/dev/null; then
+    PASS "codex child stdin is exactly the prompt, never the wrapper's stdin"
 else
-    PASS "codex child stdin is /dev/null"
+    FAIL "codex child stdin is exactly the prompt, never the wrapper's stdin" \
+         "stub captured stdin: $(cat "$STUB_STDIN_FILE" 2>/dev/null | tr '\n' '|'); expected exactly the prompt '$SENTINEL_PROMPT' with no trace of SENTINEL_STDIN_DATA"
 fi
 
-# 2. Argv regression lock: adding the stdin guard must not perturb argv.
+# 2. Argv regression lock: the prompt moves off argv entirely, replaced by
+#    the literal "-" positional that tells codex to read stdin.
 EXPECTED_ARGV_FILE="$STUBDIR/argv.expected"
-printf '%s\n' "exec" "--skip-git-repo-check" "--sandbox" "read-only" "$SENTINEL_PROMPT" > "$EXPECTED_ARGV_FILE"
+printf '%s\n' "exec" "--skip-git-repo-check" "--sandbox" "read-only" "-" > "$EXPECTED_ARGV_FILE"
 
 if diff -q "$EXPECTED_ARGV_FILE" "$STUB_ARGV_FILE" >/dev/null 2>&1; then
-    PASS "no-flag argv is exactly: codex exec --skip-git-repo-check --sandbox read-only <PROMPT>"
+    PASS "no-flag argv is exactly: codex exec --skip-git-repo-check --sandbox read-only -"
 else
-    FAIL "no-flag argv is exactly: codex exec --skip-git-repo-check --sandbox read-only <PROMPT>" \
+    FAIL "no-flag argv is exactly: codex exec --skip-git-repo-check --sandbox read-only -" \
          "got: $(tr '\n' ' ' < "$STUB_ARGV_FILE")"
+fi
+
+# =============================================================================
+# -f PROMPTFILE: a prompt whose first line looks like a CLI flag (leading
+# dash) must never be argv-parsed -- it is delivered to the codex child
+# verbatim on stdin, byte for byte, exactly like any other prompt.
+# =============================================================================
+DASH_PROMPT_FILE="$STUBDIR/dash_prompt.txt"
+printf '%s\n' "- [ ] item" > "$DASH_PROMPT_FILE"
+: > "$STUB_ARGV_FILE"
+: > "$STUB_STDIN_FILE"
+
+PATH="$RUN_PATH" STUB_ARGV_FILE="$STUB_ARGV_FILE" STUB_STDIN_FILE="$STUB_STDIN_FILE" \
+    bash "$CODEX_RUN_SH" -f "$DASH_PROMPT_FILE" \
+    > /dev/null 2>/dev/null < /dev/null
+
+# 2b. Leading-dash prompt file: codex child stdin is the file's bytes,
+#     verbatim -- never argv-parsed as a flag.
+if diff -q "$DASH_PROMPT_FILE" "$STUB_STDIN_FILE" >/dev/null 2>&1; then
+    PASS "-f PROMPTFILE with a leading-dash first line: codex child stdin is the file's bytes verbatim"
+else
+    FAIL "-f PROMPTFILE with a leading-dash first line: codex child stdin is the file's bytes verbatim" \
+         "stub captured stdin: $(cat "$STUB_STDIN_FILE" 2>/dev/null | tr '\n' '|'); expected file contents: $(cat "$DASH_PROMPT_FILE" 2>/dev/null | tr '\n' '|')"
 fi
 
 # =============================================================================
@@ -247,12 +276,17 @@ else
          "stderr contents: $(cat "$JSON_STDERR_FILE" | tr '\n' '|')"
 fi
 
-# 10. stdin guard still applies on the JSON-path codex invocation.
-if [ -s "$STUB_STDIN_FILE" ]; then
-    FAIL "--emit-thread-id: codex child stdin is /dev/null" \
-         "stub captured $(wc -c < "$STUB_STDIN_FILE" | tr -d ' ') byte(s) of stdin"
+# 10. stdin guard still applies on the JSON-path codex invocation: the child
+#     stdin is exactly the prompt, never the wrapper's SENTINEL stdin.
+EXPECTED_THREAD_STDIN_FILE="$STUBDIR/thread_stdin.expected"
+printf '%s' "$THREAD_PROMPT" > "$EXPECTED_THREAD_STDIN_FILE"
+
+if diff -q "$EXPECTED_THREAD_STDIN_FILE" "$STUB_STDIN_FILE" >/dev/null 2>&1 && \
+   ! grep -qF "SENTINEL_STDIN_DATA" "$STUB_STDIN_FILE" 2>/dev/null; then
+    PASS "--emit-thread-id: codex child stdin is exactly the prompt, never the wrapper's stdin"
 else
-    PASS "--emit-thread-id: codex child stdin is /dev/null"
+    FAIL "--emit-thread-id: codex child stdin is exactly the prompt, never the wrapper's stdin" \
+         "stub captured stdin: $(cat "$STUB_STDIN_FILE" 2>/dev/null | tr '\n' '|'); expected exactly the prompt '$THREAD_PROMPT' with no trace of SENTINEL_STDIN_DATA"
 fi
 
 # =============================================================================
@@ -315,11 +349,14 @@ PATH="$RUN_PATH" STUB_ARGV_FILE="$STUB_ARGV_FILE" STUB_STDIN_FILE="$STUB_STDIN_F
 
 read_argv_array "$STUB_ARGV_FILE"
 
-# 14. argv starts with: exec resume <uuid>
-if [ "${ARGV_ARR[0]:-}" = "exec" ] && [ "${ARGV_ARR[1]:-}" = "resume" ] && [ "${ARGV_ARR[2]:-}" = "$RESUME_UUID" ]; then
-    PASS "--resume-thread: argv starts with 'exec resume <uuid>'"
+# 14. argv starts with: exec resume <uuid>, and ends with the literal "-"
+#     positional that tells codex to read the prompt from stdin.
+RESUME_LAST_IDX=$(( ${#ARGV_ARR[@]} - 1 ))
+if [ "${ARGV_ARR[0]:-}" = "exec" ] && [ "${ARGV_ARR[1]:-}" = "resume" ] && [ "${ARGV_ARR[2]:-}" = "$RESUME_UUID" ] && \
+   [ "${ARGV_ARR[$RESUME_LAST_IDX]:-}" = "-" ]; then
+    PASS "--resume-thread: argv starts with 'exec resume <uuid>' and ends with '-'"
 else
-    FAIL "--resume-thread: argv starts with 'exec resume <uuid>'" \
+    FAIL "--resume-thread: argv starts with 'exec resume <uuid>' and ends with '-'" \
          "argv: $(tr '\n' ' ' < "$STUB_ARGV_FILE")"
 fi
 
@@ -678,21 +715,26 @@ fi
 # path -- exec AND resume.
 # =============================================================================
 RESUME_STDIN_OUTFILE="$STUBDIR/resume_stdin.out"
+RESUME_STDIN_PROMPT="analyze the resume stdin case"
 : > "$STUB_ARGV_FILE"
 : > "$STUB_STDIN_FILE"
 rm -f "$RESUME_STDIN_OUTFILE"
 
 PATH="$RUN_PATH" STUB_ARGV_FILE="$STUB_ARGV_FILE" STUB_STDIN_FILE="$STUB_STDIN_FILE" \
-    bash "$CODEX_RUN_SH" --resume-thread "$RESUME_UUID" -o "$RESUME_STDIN_OUTFILE" "analyze the resume stdin case" \
+    bash "$CODEX_RUN_SH" --resume-thread "$RESUME_UUID" -o "$RESUME_STDIN_OUTFILE" "$RESUME_STDIN_PROMPT" \
     > /dev/null 2>/dev/null <<< 'SENTINEL_STDIN_DATA'
 
-# 37. Resume path: codex child stdin is /dev/null (the wrapper's SENTINEL stdin
-#     must not reach the resumed codex invocation).
-if [ -s "$STUB_STDIN_FILE" ]; then
-    FAIL "--resume-thread: codex child stdin is /dev/null" \
-         "stub captured $(wc -c < "$STUB_STDIN_FILE" | tr -d ' ') byte(s) of stdin; expected 0 (resume argv path did not redirect stdin to /dev/null)"
+# 37. Resume path: codex child stdin is exactly the prompt (the wrapper's
+#     SENTINEL stdin must not reach the resumed codex invocation).
+EXPECTED_RESUME_STDIN_FILE="$STUBDIR/resume_stdin.expected"
+printf '%s' "$RESUME_STDIN_PROMPT" > "$EXPECTED_RESUME_STDIN_FILE"
+
+if diff -q "$EXPECTED_RESUME_STDIN_FILE" "$STUB_STDIN_FILE" >/dev/null 2>&1 && \
+   ! grep -qF "SENTINEL_STDIN_DATA" "$STUB_STDIN_FILE" 2>/dev/null; then
+    PASS "--resume-thread: codex child stdin is exactly the prompt, never the wrapper's stdin"
 else
-    PASS "--resume-thread: codex child stdin is /dev/null"
+    FAIL "--resume-thread: codex child stdin is exactly the prompt, never the wrapper's stdin" \
+         "stub captured stdin: $(cat "$STUB_STDIN_FILE" 2>/dev/null | tr '\n' '|'); expected exactly the prompt '$RESUME_STDIN_PROMPT' with no trace of SENTINEL_STDIN_DATA"
 fi
 
 # =============================================================================
