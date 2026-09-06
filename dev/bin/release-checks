@@ -13,6 +13,10 @@ uv run --no-project --with pytest python -m pytest -q \
   skills/review-work-completion/scripts/test_agent_registry.py \
   skills/review-work-completion/scripts/test_carl_skip_prose.py
 
+echo "[checks] retry policy prose"
+uv run --no-project --with pytest python -m pytest -q \
+  skills/review-work-completion/scripts/test_retry_policy_prose.py
+
 echo "[checks] hook registration"
 uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/scripts/test_review_coverage_hook_registration.py
