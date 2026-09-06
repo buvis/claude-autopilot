@@ -15,8 +15,8 @@ Dispatch Devon to try to write a **wrong** implementation that passes all of Tes
 | Devon result | Action |
 |----------------|--------|
 | Cannot break tests (tests catch all exploits) | Tests are strong. Proceed to 2.9. |
-| Breaks tests with wrong impl that passes | Send Devon's exploit back to Tess: "These tests can be passed by: {wrong impl}. Strengthen them." Then re-run Devon against strengthened tests. Max 2 Tess/Devon rounds. |
-| 2 A/C rounds exhausted | Flag weakness in task output, proceed anyway. |
+| Breaks tests with wrong impl that passes | Send Devon's exploit back to Tess: "These tests can be passed by: {wrong impl}. Strengthen them." Then re-run Devon once against the strengthened tests. Max 1 Tess/Devon round (2 Devon dispatches, 1 strengthen-side Tess dispatch per task). |
+| 1 round exhausted (Devon still breaks the strengthened tests) | Flag weakness in task output, proceed anyway. |
 
 ## Prompt Template
 

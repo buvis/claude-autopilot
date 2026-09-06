@@ -239,7 +239,7 @@ Tess prompts must satisfy the **Subagent Dispatch Budget**.
 
 Before committing Tess's tests, run the computed shape check and review them in the main session against the four-check rubric in `references/test-author-prompt.md` § Quality gate (behavior names, real assertions, edge cases, no tautologies); **read that section before running the gate.** If any check fails, dispatch Tess again with specific feedback about what's weak, rendered from `tess-retry-prompt.md` — never author the retry by hand. Max 2 quality gate retries.
 
-**Total Tess budget:** max 5 dispatches across the entire test authoring phase (quality gate + adversarial rounds combined). If exhausted, flag weakness in task output and proceed. Don't block the pipeline forever.
+**Total Tess budget:** max 4 dispatches across the entire test authoring phase (1 initial + 2 quality-gate retries + 1 adversarial strengthen). If exhausted, flag weakness in task output and proceed. Don't block the pipeline forever.
 
 ### 2.85. Adversarial validation (Devon - devil's advocate)
 
@@ -253,7 +253,7 @@ Before committing Tess's tests, run the computed shape check and review them in 
 
 The step-2.8 test quality gate is **unchanged** and runs for every tier — only this Agent dispatch is conditional. A Devon dispatch obeys the **Per-task model dispatch** rule (passes `model: opus`, or `model: fable` on a rescued task). Escalation interplay is automatic: when the review gate escalates a review-flagged task to `opus`, the rework attempt regains Devon with no extra mechanism. (Why tier-gated: `references/design-rationale.md` § tier-gated pipeline.)
 
-See `references/adversarial-test-prompt.md` § Procedure for how Devon runs, and the file's prompt template section for what it receives. Devon prompts must satisfy the **Subagent Dispatch Budget**. Devon's prompt is filled by hand, so measure it and open his row in one call — `record_dispatch.py start --kind devon --task <task-id> --prompt-file <the written prompt>` prints the byte count that **is** his Subagent Dispatch Budget measurement, then the id — before the Agent call, and hold the id for the `end` call (§ Subagent Dispatch Budget and Watchdog, Telemetry).
+Devon runs at most twice per task: the first pass and one re-check after Tess strengthens (`references/adversarial-test-prompt.md` § Outcomes). See `references/adversarial-test-prompt.md` § Procedure for how Devon runs, and the file's prompt template section for what it receives. Devon prompts must satisfy the **Subagent Dispatch Budget**. Devon's prompt is filled by hand, so measure it and open his row in one call — `record_dispatch.py start --kind devon --task <task-id> --prompt-file <the written prompt>` prints the byte count that **is** his Subagent Dispatch Budget measurement, then the id — before the Agent call, and hold the id for the `end` call (§ Subagent Dispatch Budget and Watchdog, Telemetry).
 
 ### 2.9. Commit tests
 

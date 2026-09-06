@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **review-work-completion**: retry Bob once on a lack-of-input refusal, using an inlined retry prompt that reproduces the review context and diff as text so a sandboxed reviewer with no read access can still respond
 - **review-work-completion**: record every Bob and Carl dispatch, retries included, as a dispatch ledger row
 
+### Changed
+
+- **work**: the Tess/Devon adversarial loop runs one strengthen round (at most 2 Devon and 4 Tess dispatches per task), then flags and proceeds
+
 ### Fixed
 
 - **use-codex**: report unreadable hook targets (including on Python 3.14+), failed repairs, and orphan cleanup errors once per target, continue processing remaining hooks, and clean up failed repair writes without overwriting or deleting pre-existing temporary files.
