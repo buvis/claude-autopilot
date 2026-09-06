@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **review-work-completion**: retry Bob once on a lack-of-input refusal, using an inlined retry prompt that reproduces the review context and diff as text so a sandboxed reviewer with no read access can still respond
+
 ### Fixed
 
 - **use-codex**: report unreadable hook targets (including on Python 3.14+), failed repairs, and orphan cleanup errors once per target, continue processing remaining hooks, and clean up failed repair writes without overwriting or deleting pre-existing temporary files.
