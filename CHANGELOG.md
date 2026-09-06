@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **work**: generate the per-task review session id with python first and uuidgen as the fallback, so unattended sessions no longer depend on a warden allow for uuidgen.
 - **review-work-completion**: Bob's persona permits read-only shell reads, so codex no longer refuses to open its own context and diff
 - **review-work-completion**: state that Bob's exit 3 and exit 4 routing wins over the retry sentence, so neither exit runs a codex retry before the Claude fallback
+- **review-work-completion**: correct the agent registry's stale claim that Bob's prompt forbids commands, and say how his native Claude fallback reads its files
 
 ## [0.5.1] - 2026-09-05
 

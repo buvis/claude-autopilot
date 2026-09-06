@@ -29,7 +29,7 @@ the repo is not a reviewer (discovery 00092 must-have 5). Beyond that:
 | rita, cora, grace, toby, mallory, trent | `Read` | The diff arrives inline in the dispatch prompt; these lanes never hunt for code. `Read` covers the truncated-diff path. |
 | victor | `Read, Bash` | Explicitly told to check the surrounding code, not just the quoted finding. |
 | alice, blake, eve | `Read, Bash` | Each is instructed to find the code itself. |
-| bob, pat | `Read` | CLI-dispatched, and each is read-only on its own lane: Bob's prompt forbids running commands outright, Pat is dispatched with no `-a`/`-y`. |
+| bob, pat | `Read` | CLI-dispatched, and each is read-only on its own lane: Bob's prompt permits read-only shell reads inside codex's sandbox and no mutation, Pat is dispatched with no `-a`/`-y`. Neither is asked to locate code, so `Read` covers the native lane. |
 | carl | `Read, Bash` | CLI-dispatched; documented as able to execute tests, linters and build commands. |
 
 **The CLI three still declare tools.** Their runner owns the tool policy on the
@@ -40,6 +40,15 @@ with Edit and Write. Bob in particular has a documented native fallback (when
 codex is unavailable the same prompt runs on a Claude subagent), so this is not
 hypothetical. Declaring a set costs nothing on the CLI path and closes the
 native hole.
+
+**Bob's fallback reads through the Read tool.** His persona tells him to open
+`{CONTEXT_FILE}`, `{DIFF_FILE}` and `{PACK_FILE}` with read-only shell commands
+(`cat`, `sed -n`, `rg`, `ls`); that instruction is written for codex's sandbox,
+where no Read tool exists. On the native fallback the same prompt runs on a
+subagent holding `Read` alone, which opens those same named files with that
+tool instead. He does not join the `Read, Bash` lanes below, because every file
+he needs is named in his prompt — he is never told to go find code, which is
+the one thing those lanes need `rg` for.
 
 **Deviation from the PRD, recorded deliberately.** PRD 00109 specifies
 `tools: Read` for native reviewers with "Victor alone adds Bash". That
