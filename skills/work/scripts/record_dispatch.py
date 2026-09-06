@@ -116,6 +116,30 @@ def _queued_at(autopilot_dir: Path, dispatch_id: str) -> int | None:
     return found
 
 
+def _spans_handoff(autopilot_dir: Path, queued_at: int, ended_at: int) -> bool:
+    """True if a handoff row's ``at`` sits strictly inside (queued_at, ended_at):
+    part of the dispatch's window was spent away from the work, so its elapsed
+    time cannot be claimed.
+    """
+    try:
+        lines = (autopilot_dir / FILENAME).read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        lines = []
+    for line in lines:
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if (
+            isinstance(row, dict)
+            and row.get("kind") == "handoff"
+            and isinstance(row.get("at"), int)
+            and queued_at < row["at"] < ended_at
+        ):
+            return True
+    return False
+
+
 def open_ids(autopilot_dir: Path) -> list[str]:
     """Ids with a start row (``queued_at``) and no end row (``ended_at``)
     anywhere in the file, in the order each id's start row was first seen.
@@ -221,14 +245,19 @@ def main(argv: list[str] | None = None) -> int:
     elif args.verb == "end":
         ended_at = int(time.time())
         queued_at = _queued_at(autopilot_dir, args.id)
+        elapsed_s = None if queued_at is None else ended_at - queued_at
+        detail = args.detail
+        if queued_at is not None and _spans_handoff(autopilot_dir, queued_at, ended_at):
+            elapsed_s = None
+            detail = f"spans handoff; {args.detail or ''}"
         append_row(
             autopilot_dir,
             {
                 "id": args.id,
                 "ended_at": ended_at,
-                "elapsed_s": None if queued_at is None else ended_at - queued_at,
+                "elapsed_s": elapsed_s,
                 "outcome": args.outcome,
-                "detail": args.detail,
+                "detail": detail,
             },
         )
     else:
