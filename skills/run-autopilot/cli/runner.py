@@ -205,7 +205,7 @@ def spawn(
     if presenter is None:
         presenter = make_presenter(env)
 
-    env_for_child, _dropped_markers = child_env(env)
+    env_for_child = {**env, **LAUNCH_ENV}
     with open(log_path, "wb") as log:
         proc = subprocess.Popen(
             argv,
