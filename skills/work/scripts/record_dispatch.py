@@ -136,9 +136,9 @@ def open_ids(autopilot_dir: Path) -> list[str]:
         if not isinstance(row, dict):
             continue
         dispatch_id = row.get("id")
-        if "queued_at" in row and dispatch_id not in started:
+        if "queued_at" in row and isinstance(dispatch_id, str) and dispatch_id not in started:
             started.append(dispatch_id)
-        if "ended_at" in row:
+        if "ended_at" in row and isinstance(dispatch_id, str):
             ended.add(dispatch_id)
     if skipped:
         print(
