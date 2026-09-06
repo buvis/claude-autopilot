@@ -44,6 +44,12 @@ def _pin_clock(monkeypatch: pytest.MonkeyPatch, now: float) -> None:
     monkeypatch.setattr(record_dispatch, "time", SimpleNamespace(time=lambda: now))
 
 
+def _run_handoff(site: str, edge: str, phase: str, prd: str) -> int:
+    return record_dispatch.main(
+        ["handoff", "--site", site, "--edge", edge, "--phase", phase, "--prd", prd],
+    )
+
+
 def test_end_after_a_start_row_computes_elapsed_from_queued_at(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -229,19 +235,7 @@ def test_handoff_closes_open_rows_as_lost(
     monkeypatch.chdir(tmp_path / "proj")
     _pin_clock(monkeypatch, 4000)
 
-    exit_code = record_dispatch.main(
-        [
-            "handoff",
-            "--site",
-            "build",
-            "--edge",
-            "leave",
-            "--phase",
-            "review",
-            "--prd",
-            "X",
-        ],
-    )
+    exit_code = _run_handoff("build", "leave", "review", "X")
 
     assert exit_code == 0
     expected_tail = [
@@ -297,19 +291,7 @@ def test_handoff_leaves_closed_rows_alone(
     _pin_clock(monkeypatch, 5000)
     rows_before = len(_rows(autopilot / "dispatch-metrics.jsonl"))
 
-    exit_code = record_dispatch.main(
-        [
-            "handoff",
-            "--site",
-            "review",
-            "--edge",
-            "resume",
-            "--phase",
-            "done",
-            "--prd",
-            "Y",
-        ],
-    )
+    exit_code = _run_handoff("review", "resume", "done", "Y")
 
     assert exit_code == 0
     rows_after = _rows(autopilot / "dispatch-metrics.jsonl")

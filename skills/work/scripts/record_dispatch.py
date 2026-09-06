@@ -152,6 +152,33 @@ def open_ids(autopilot_dir: Path) -> list[str]:
     return [dispatch_id for dispatch_id in started if dispatch_id not in ended]
 
 
+def _handoff(autopilot_dir: Path, args: argparse.Namespace) -> None:
+    """Close any dispatches still open at this handoff as lost, then stamp the edge."""
+    at = int(time.time())
+    for dispatch_id in open_ids(autopilot_dir):
+        append_row(
+            autopilot_dir,
+            {
+                "id": dispatch_id,
+                "ended_at": at,
+                "elapsed_s": None,
+                "outcome": "lost",
+                "detail": f"open at {args.site}/{args.edge} handoff",
+            },
+        )
+    append_row(
+        autopilot_dir,
+        {
+            "kind": "handoff",
+            "site": args.site,
+            "edge": args.edge,
+            "at": at,
+            "phase": args.phase,
+            "prd": args.prd,
+        },
+    )
+
+
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Append dispatch timing rows.")
     verbs = parser.add_subparsers(dest="verb", required=True)
@@ -205,29 +232,7 @@ def main(argv: list[str] | None = None) -> int:
             },
         )
     else:
-        at = int(time.time())
-        for dispatch_id in open_ids(autopilot_dir):
-            append_row(
-                autopilot_dir,
-                {
-                    "id": dispatch_id,
-                    "ended_at": at,
-                    "elapsed_s": None,
-                    "outcome": "lost",
-                    "detail": f"open at {args.site}/{args.edge} handoff",
-                },
-            )
-        append_row(
-            autopilot_dir,
-            {
-                "kind": "handoff",
-                "site": args.site,
-                "edge": args.edge,
-                "at": at,
-                "phase": args.phase,
-                "prd": args.prd,
-            },
-        )
+        _handoff(autopilot_dir, args)
     return 0
 
 
