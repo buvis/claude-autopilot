@@ -208,6 +208,122 @@ def test_handoff_writes_its_site_edge_stamp_phase_and_prd(
     ]
 
 
+def test_handoff_closes_open_rows_as_lost(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A crash or forced handoff must not leave a start row open forever: the
+    # id open_ids still reports gets a synthetic lost end row, stamped with
+    # this invocation's own site and edge, before the handoff's own row.
+    autopilot = _project(tmp_path)
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "id": "aaaaaaaa",
+            "kind": "ivan",
+            "task": "1",
+            "queued_at": 1000,
+            "prompt_bytes": 1,
+        },
+    )
+    monkeypatch.chdir(tmp_path / "proj")
+    _pin_clock(monkeypatch, 4000)
+
+    exit_code = record_dispatch.main(
+        [
+            "handoff",
+            "--site",
+            "build",
+            "--edge",
+            "leave",
+            "--phase",
+            "review",
+            "--prd",
+            "X",
+        ],
+    )
+
+    assert exit_code == 0
+    expected_tail = [
+        {
+            "id": "aaaaaaaa",
+            "ended_at": 4000,
+            "elapsed_s": None,
+            "outcome": "lost",
+            "detail": "open at build/leave handoff",
+        },
+        {
+            "kind": "handoff",
+            "site": "build",
+            "edge": "leave",
+            "at": 4000,
+            "phase": "review",
+            "prd": "X",
+        },
+    ]
+    assert _rows(autopilot / "dispatch-metrics.jsonl")[-2:] == expected_tail
+    assert _rows(autopilot / "ledger" / "dispatch-metrics.jsonl")[-2:] == expected_tail
+
+
+def test_handoff_leaves_closed_rows_alone(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # An id with an end row is not open, so it must not get a second,
+    # synthetic lost row on top of its real outcome; only the handoff's own
+    # row should land. Uses the resume edge to cover it alongside leave.
+    autopilot = _project(tmp_path)
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "id": "bbbbbbbb",
+            "kind": "pat",
+            "task": "2",
+            "queued_at": 1000,
+            "prompt_bytes": 2,
+        },
+    )
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "id": "bbbbbbbb",
+            "ended_at": 1010,
+            "elapsed_s": 10,
+            "outcome": "ok",
+            "detail": None,
+        },
+    )
+    monkeypatch.chdir(tmp_path / "proj")
+    _pin_clock(monkeypatch, 5000)
+    rows_before = len(_rows(autopilot / "dispatch-metrics.jsonl"))
+
+    exit_code = record_dispatch.main(
+        [
+            "handoff",
+            "--site",
+            "review",
+            "--edge",
+            "resume",
+            "--phase",
+            "done",
+            "--prd",
+            "Y",
+        ],
+    )
+
+    assert exit_code == 0
+    rows_after = _rows(autopilot / "dispatch-metrics.jsonl")
+    assert len(rows_after) == rows_before + 1
+    assert rows_after[-1] == {
+        "kind": "handoff",
+        "site": "review",
+        "edge": "resume",
+        "at": 5000,
+        "phase": "done",
+        "prd": "Y",
+    }
+
+
 def test_start_with_a_prompt_file_measures_it_and_prints_the_count_then_the_id(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
