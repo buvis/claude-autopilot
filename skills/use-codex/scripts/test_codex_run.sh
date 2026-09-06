@@ -788,6 +788,121 @@ guard_case "CODEX_SESSION_ID set: refuses with exit 3, no codex call" CODEX_SESS
 guard_case "COPILOT_CLI set: refuses with exit 3, no codex call" COPILOT_CLI=1
 
 # =============================================================================
+# -f FILE where FILE exists but cannot be read: a permission failure must be
+# reported as an error, never silently treated as an empty/truncated prompt.
+# =============================================================================
+UNREADABLE_FILE="$STUBDIR/unreadable_prompt.txt"
+printf '%s\n' "some prompt text" > "$UNREADABLE_FILE"
+chmod 000 "$UNREADABLE_FILE"
+UNREADABLE_STDOUT_FILE="$STUBDIR/unreadable.stdout"
+UNREADABLE_STDERR_FILE="$STUBDIR/unreadable.stderr"
+
+# 42. Unreadable prompt file: non-zero exit, error names the file on stderr,
+#     codex never invoked. Skipped (as a PASS) rather than failed spuriously
+#     if the current user (e.g. root) can read anything regardless of mode
+#     bits, since chmod 000 can't produce an unreadable file in that case.
+if [ -r "$UNREADABLE_FILE" ]; then
+    PASS "unreadable prompt file: skipped -- current user can read chmod 000 files"
+else
+    : > "$STUB_ARGV_FILE"
+    : > "$STUB_STDIN_FILE"
+
+    PATH="$RUN_PATH" STUB_ARGV_FILE="$STUB_ARGV_FILE" STUB_STDIN_FILE="$STUB_STDIN_FILE" \
+        bash "$CODEX_RUN_SH" -f "$UNREADABLE_FILE" \
+        > "$UNREADABLE_STDOUT_FILE" 2> "$UNREADABLE_STDERR_FILE" < /dev/null
+    UNREADABLE_EXIT=$?
+
+    if [ "$UNREADABLE_EXIT" -ne 0 ] && \
+       grep -qF "$UNREADABLE_FILE" "$UNREADABLE_STDERR_FILE" 2>/dev/null && \
+       [ ! -s "$STUB_ARGV_FILE" ]; then
+        PASS "unreadable prompt file: non-zero exit, error names the file, codex never invoked"
+    else
+        FAIL "unreadable prompt file: non-zero exit, error names the file, codex never invoked" \
+             "exit: $UNREADABLE_EXIT -- stderr: $(cat "$UNREADABLE_STDERR_FILE" 2>/dev/null) -- argv file bytes: $(wc -c < "$STUB_ARGV_FILE" 2>/dev/null | tr -d ' ')"
+    fi
+fi
+
+# =============================================================================
+# -f FILE containing only a single newline: whitespace-only content is still
+# "no prompt" -- must be treated exactly like an empty/missing prompt, not
+# silently passed through to codex.
+# =============================================================================
+WHITESPACE_PROMPT_FILE="$STUBDIR/whitespace_prompt.txt"
+printf '\n' > "$WHITESPACE_PROMPT_FILE"
+WHITESPACE_STDOUT_FILE="$STUBDIR/whitespace.stdout"
+WHITESPACE_STDERR_FILE="$STUBDIR/whitespace.stderr"
+: > "$STUB_ARGV_FILE"
+: > "$STUB_STDIN_FILE"
+
+PATH="$RUN_PATH" STUB_ARGV_FILE="$STUB_ARGV_FILE" STUB_STDIN_FILE="$STUB_STDIN_FILE" \
+    bash "$CODEX_RUN_SH" -f "$WHITESPACE_PROMPT_FILE" \
+    > "$WHITESPACE_STDOUT_FILE" 2> "$WHITESPACE_STDERR_FILE" < /dev/null
+WHITESPACE_EXIT=$?
+
+# 43. Whitespace-only prompt file: exit 1, "Prompt required" on stderr, codex
+#     never invoked.
+if [ "$WHITESPACE_EXIT" -eq 1 ] && \
+   grep -qF "Prompt required" "$WHITESPACE_STDERR_FILE" 2>/dev/null && \
+   [ ! -s "$STUB_ARGV_FILE" ]; then
+    PASS "-f PROMPTFILE containing only a newline: exit 1, 'Prompt required' on stderr, codex never invoked"
+else
+    FAIL "-f PROMPTFILE containing only a newline: exit 1, 'Prompt required' on stderr, codex never invoked" \
+         "exit: $WHITESPACE_EXIT -- stderr: $(cat "$WHITESPACE_STDERR_FILE" 2>/dev/null) -- argv file bytes: $(wc -c < "$STUB_ARGV_FILE" 2>/dev/null | tr -d ' ')"
+fi
+
+# =============================================================================
+# -f FILE whose contents end in a trailing newline: the bytes delivered to
+# the codex child's stdin must equal the file's bytes exactly, trailing
+# newline included -- a comparison that trims/normalizes whitespace would
+# pass even if the newline were dropped.
+# =============================================================================
+TRAILING_NL_FILE="$STUBDIR/trailing_newline_prompt.txt"
+printf 'analyze the trailing newline case\n' > "$TRAILING_NL_FILE"
+: > "$STUB_ARGV_FILE"
+: > "$STUB_STDIN_FILE"
+
+PATH="$RUN_PATH" STUB_ARGV_FILE="$STUB_ARGV_FILE" STUB_STDIN_FILE="$STUB_STDIN_FILE" \
+    bash "$CODEX_RUN_SH" -f "$TRAILING_NL_FILE" \
+    > /dev/null 2>/dev/null < /dev/null
+
+# 44. Trailing-newline prompt file: codex child stdin is byte-for-byte
+#     identical to the file's contents, trailing newline included.
+if diff -q "$TRAILING_NL_FILE" "$STUB_STDIN_FILE" >/dev/null 2>&1; then
+    PASS "-f PROMPTFILE ending in a newline: codex child stdin is byte-identical, trailing newline included"
+else
+    FAIL "-f PROMPTFILE ending in a newline: codex child stdin is byte-identical, trailing newline included" \
+         "stub captured stdin bytes: $(wc -c < "$STUB_STDIN_FILE" 2>/dev/null | tr -d ' '); expected file bytes: $(wc -c < "$TRAILING_NL_FILE" 2>/dev/null | tr -d ' ')"
+fi
+
+# =============================================================================
+# --emit-thread-id JSON dispatch path: the final token of the codex child's
+# argv must be the literal "-" that tells codex to read its instructions
+# from stdin. The existing cases on this path assert --json is present and
+# --output-last-message carries the -o target, but nothing asserts the final
+# token specifically -- asserting only that "-" appears somewhere in argv
+# would also match an unrelated flag value.
+# =============================================================================
+FINALTOK_THREAD_ID_FILE="$STUBDIR/finaltok_thread_id.out"
+FINALTOK_OUTFILE="$STUBDIR/finaltok.out"
+: > "$STUB_ARGV_FILE"
+: > "$STUB_STDIN_FILE"
+
+PATH="$RUN_PATH" STUB_ARGV_FILE="$STUB_ARGV_FILE" STUB_STDIN_FILE="$STUB_STDIN_FILE" \
+    bash "$CODEX_RUN_SH" --emit-thread-id "$FINALTOK_THREAD_ID_FILE" -o "$FINALTOK_OUTFILE" "analyze the final-token case" \
+    > /dev/null 2>/dev/null < /dev/null
+
+read_argv_array "$STUB_ARGV_FILE"
+
+# 45. --emit-thread-id JSON path: the final argv token is exactly "-".
+FINALTOK_LAST_IDX=$(( ${#ARGV_ARR[@]} - 1 ))
+if [ "${ARGV_ARR[$FINALTOK_LAST_IDX]:-}" = "-" ]; then
+    PASS "--emit-thread-id: final argv token is the literal '-' stdin marker"
+else
+    FAIL "--emit-thread-id: final argv token is the literal '-' stdin marker" \
+         "argv: $(tr '\n' ' ' < "$STUB_ARGV_FILE")"
+fi
+
+# =============================================================================
 echo ""
 echo "SUMMARY: $PASS_COUNT passed, $FAIL_COUNT failed"
 
