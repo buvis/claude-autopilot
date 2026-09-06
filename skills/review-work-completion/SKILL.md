@@ -263,6 +263,8 @@ With 1M context, agent prompts can include more background — full PRD, archite
 
 **Launch ALL active reviewers in a SINGLE message so they run concurrently.** Alice, Blake, and Eve (when active) are Task subagent calls (native Claude tools), dispatched as `autopilot:alice`, `autopilot:blake`, `autopilot:eve` - the bare persona name is not a registered agent type and fails the dispatch outright (`references/agent-registry.md` § Dispatch mechanism). Bob and Carl are parallel **background Bash** commands (`run_in_background: true`) - never wrap a CLI reviewer (codex/gemini) in a subagent, it hangs and strands the whole cycle (see `references/agent-invocation.md`). Put the Task calls, the Watcher (below, if `$_AUTOPILOT_LOOP` is set), and the background Bash calls in the one message - if any CLI reviewer is in the dispatch, the Watcher goes in the same message or nothing holds the session open to see it finish.
 
+**Ledger each CLI reviewer dispatch.** Immediately before each CLI reviewer's background Bash, open a dispatch row: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind bob --task review-{id} --prompt-file <absolute prompt path>` (`--kind carl` for Carl); hold the printed id for step 6's `end` call. A retry (`references/retry-policy.md`) opens a second `start` row under the same `--task`.
+
 **Eve unavailable (codex doubt-roster guard active).** When Eve's dispatch fails after her one-retry budget (`references/agent-invocation.md` for the retry/unavailability semantics), dispatch a Claude Task subagent with Bob's exact assembled doubt prompt as a substitute for her, so a non-codex doubt voice still exists, and use its output as Eve's. Step 6 records which of the three `codex_rung_guard` outcomes resulted.
 
 **Watcher (headless keep-alive — dispatch only when `$_AUTOPILOT_LOOP` is set).** Headless `claude -p` kills background Bash tasks ~5s after the final result; only a live subagent holds the session open (2026-07-12 loop death: every Claude subagent reviewer finished first, the CLI exited at turn end and killed codex mid-review, the loop halted). So in the SAME dispatch message, launch one extra Task subagent named Watcher (general-purpose) whose entire prompt is:
@@ -359,7 +361,11 @@ The cycle that first receives exit 4 records the failure per step 5 instead.
 
 **Close out the lens roster (autopilot runs).** When `state.review_lenses` was stamped in step 5, set each lens to `"done"`, or `"failed"` for a reviewer that failed per `references/retry-policy.md` (a lens rescued by a fallback — e.g. Bob's Claude fallback — is `"done"`). Skip on standalone runs.
 
-Save each subagent reviewer's returned text to `dev/local/tmp/` — **Alice** to `alice-output-{id}.txt`, **Blake** to `blake-output-{id}.txt`, **Eve** (when she ran) or her Claude substitute (when it ran instead) to `eve-output-{id}.txt`, and Bob's Claude fallback (when it ran) to `bob-output-{id}.txt`. Bob's and Carl's CLI outputs are already on disk - their `-o` flag wrote them straight to `bob-output-{id}.txt` / `carl-output-{id}.txt` in step 5. Then run:
+Save each subagent reviewer's returned text to `dev/local/tmp/` — **Alice** to `alice-output-{id}.txt`, **Blake** to `blake-output-{id}.txt`, **Eve** (when she ran) or her Claude substitute (when it ran instead) to `eve-output-{id}.txt`, and Bob's Claude fallback (when it ran) to `bob-output-{id}.txt`. Bob's and Carl's CLI outputs are already on disk - their `-o` flag wrote them straight to `bob-output-{id}.txt` / `carl-output-{id}.txt` in step 5.
+
+**Close the CLI reviewer dispatch rows.** After each output file is read, close its `start` row: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py end <id> --outcome ok` for a usable output, `--outcome error --detail "exit <n>"` for a non-zero exit, or `--outcome error --detail "lack-of-input"` for the refusal shape (`references/retry-policy.md` § Lack-of-input refusal). A retry's `end` row carries `--detail retry`.
+
+Then run:
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/consolidate_findings.py \
