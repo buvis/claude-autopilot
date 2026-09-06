@@ -225,8 +225,10 @@ finalize_codex_json_run() {
     fi
 }
 
-# Runs `printf '%s' "$PROMPT" | "$@" --json --output-last-message "$OUTPUT_FILE" -`
-# and consumes codex's JSONL stream: captures the thread id (when
+# Runs `"$@" --json --output-last-message "$OUTPUT_FILE" -`, feeding the prompt
+# to the child on stdin (that is what the trailing `-` positional selects), so
+# no prompt byte is ever parsed as an option.
+# Consumes codex's JSONL stream: captures the thread id (when
 # EMIT_THREAD_FILE is set) from the thread.started event, prints a
 # `codex-event: <type>` liveness marker per line to stderr, never leaks raw
 # JSONL onto stdout, and on a zero exit cats OUTPUT_FILE to stdout for
