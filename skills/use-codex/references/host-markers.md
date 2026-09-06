@@ -8,6 +8,13 @@ own agent.
 The guard's real backstop is `AUTOPILOT_DISPATCH_DEPTH`. These markers are a
 nicety: they also catch a nesting that starts outside our runners.
 
+## Scrubbed at loop spawn
+
+A loop-launched session strips these markers from the child's environment
+before spawning it, so a nested session no longer inherits its parent's
+vendor CLI identity: see `runner.HOST_MARKERS`. `AUTOPILOT_DISPATCH_DEPTH` is
+exempt from this scrub — it stays visible to the recursion guards.
+
 ## codex (native `codex exec`)
 
 Confirmed set in the child shell:
