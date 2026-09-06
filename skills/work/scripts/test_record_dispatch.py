@@ -402,6 +402,163 @@ def test_end_names_a_skipped_unparseable_line_even_when_the_start_row_is_found(
     assert json.loads(last)["elapsed_s"] == 5000
 
 
+def test_end_after_handoff_reports_null_elapsed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A handoff mid-dispatch means part of the window was spent away from the
+    # work, not on it; the clock cannot tell idle time from working time, so
+    # it must refuse to claim a number at all.
+    autopilot = _project(tmp_path)
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "id": "deadbeef",
+            "kind": "ivan",
+            "task": "3",
+            "queued_at": 1000,
+            "prompt_bytes": 42,
+        },
+    )
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "kind": "handoff",
+            "site": "build",
+            "edge": "leave",
+            "at": 1020,
+            "phase": "build",
+            "prd": "x.md",
+        },
+    )
+    monkeypatch.chdir(tmp_path / "proj")
+    _pin_clock(monkeypatch, 1042)
+
+    exit_code = record_dispatch.main(["end", "deadbeef", "--outcome", "ok"])
+
+    assert exit_code == 0
+    assert _rows(autopilot / "dispatch-metrics.jsonl")[-1] == {
+        "id": "deadbeef",
+        "ended_at": 1042,
+        "elapsed_s": None,
+        "outcome": "ok",
+        "detail": "spans handoff; ",
+    }
+
+
+def test_end_without_handoff_keeps_elapsed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    autopilot = _project(tmp_path)
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "id": "deadbeef",
+            "kind": "ivan",
+            "task": "3",
+            "queued_at": 1000,
+            "prompt_bytes": 42,
+        },
+    )
+    monkeypatch.chdir(tmp_path / "proj")
+    _pin_clock(monkeypatch, 1042)
+
+    exit_code = record_dispatch.main(["end", "deadbeef", "--outcome", "ok"])
+
+    assert exit_code == 0
+    last = _rows(autopilot / "dispatch-metrics.jsonl")[-1]
+    assert isinstance(last["elapsed_s"], int)
+    assert last["elapsed_s"] == 42
+    assert last["detail"] is None
+
+
+def test_end_after_handoff_with_detail_prepends_the_spans_handoff_prefix(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The prefix must prepend to whatever detail the caller gave, not replace
+    # it, so the original reason for the outcome still reaches the row.
+    autopilot = _project(tmp_path)
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "id": "deadbeef",
+            "kind": "ivan",
+            "task": "3",
+            "queued_at": 1000,
+            "prompt_bytes": 42,
+        },
+    )
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "kind": "handoff",
+            "site": "build",
+            "edge": "leave",
+            "at": 1020,
+            "phase": "build",
+            "prd": "x.md",
+        },
+    )
+    monkeypatch.chdir(tmp_path / "proj")
+    _pin_clock(monkeypatch, 1042)
+
+    exit_code = record_dispatch.main(
+        ["end", "deadbeef", "--outcome", "ok", "--detail", "watchdog 45 min"],
+    )
+
+    assert exit_code == 0
+    last = _rows(autopilot / "dispatch-metrics.jsonl")[-1]
+    assert last["elapsed_s"] is None
+    assert last["detail"] == "spans handoff; watchdog 45 min"
+
+
+@pytest.mark.parametrize(
+    "handoff_at",
+    [1000, 1042, 900],
+    ids=["at_queued_at", "at_now", "before_queued_at"],
+)
+def test_end_ignores_a_handoff_outside_the_open_window(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    handoff_at: int,
+) -> None:
+    # "Strictly between" excludes both endpoints, and a handoff from before
+    # this dispatch even opened is not this dispatch's idle time either.
+    autopilot = _project(tmp_path)
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "id": "deadbeef",
+            "kind": "ivan",
+            "task": "3",
+            "queued_at": 1000,
+            "prompt_bytes": 42,
+        },
+    )
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "kind": "handoff",
+            "site": "build",
+            "edge": "leave",
+            "at": handoff_at,
+            "phase": "build",
+            "prd": "x.md",
+        },
+    )
+    monkeypatch.chdir(tmp_path / "proj")
+    _pin_clock(monkeypatch, 1042)
+
+    exit_code = record_dispatch.main(["end", "deadbeef", "--outcome", "ok"])
+
+    assert exit_code == 0
+    last = _rows(autopilot / "dispatch-metrics.jsonl")[-1]
+    assert last["elapsed_s"] == 42
+    assert last["detail"] is None
+
+
 @pytest.mark.parametrize(
     "argv",
     [
