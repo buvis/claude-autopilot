@@ -1357,6 +1357,32 @@ def test_run_agoge_failure_is_swallowed_and_reported(tmp_path, capsys):
     assert "The drain is unaffected" in err
 
 
+def _fake_claude_env_probe(tmp_path: Path) -> str:
+    path = tmp_path / "fake-claude-env-probe"
+    env_file = tmp_path / "agoge-env"
+    path.write_text(
+        f"#!{sys.executable}\nimport json, os\n"
+        f"open({str(env_file)!r}, 'w').write(json.dumps(dict(os.environ)))\n",
+    )
+    path.chmod(path.stat().st_mode | stat.S_IXUSR)
+    return str(path)
+
+
+def test_run_agoge_scrubs_host_markers(tmp_path):
+    (tmp_path / "reports").mkdir()
+    out = io.StringIO()
+    run_agoge(
+        tmp_path,
+        "b-1",
+        2,
+        {"PATH": os.environ["PATH"], "CODEX_SESSION_ID": "abc123"},
+        out,
+        claude_bin=_fake_claude_env_probe(tmp_path),
+    )
+    child_environ = json.loads((tmp_path / "agoge-env").read_text())
+    assert "CODEX_SESSION_ID" not in child_environ
+
+
 def test_drained_branch_runs_purge_and_agoge_with_the_count(tmp_path, monkeypatch):
     purges, agoges = [], []
     monkeypatch.setattr(loop_mod, "run_purge", lambda repo: purges.append(repo))
