@@ -139,7 +139,8 @@ if [ -n "$PROMPT_FILE" ]; then
         echo "ERROR: Prompt file not found: $PROMPT_FILE" >&2
         exit 1
     fi
-    PROMPT=$(cat "$PROMPT_FILE")
+    PROMPT=$(cat "$PROMPT_FILE"; printf 'x')
+    PROMPT="${PROMPT%x}"
 fi
 
 if [ -z "$PROMPT" ]; then
@@ -241,7 +242,7 @@ run_codex_json_path() {
 
     local line type tid codex_exit
     set +e
-    "$@" --json --output-last-message "$OUTPUT_FILE" "$PROMPT" < /dev/null | \
+    printf '%s' "$PROMPT" | "$@" --json --output-last-message "$OUTPUT_FILE" - | \
     while IFS= read -r line; do
         case "$line" in
             *'"type":"'*)
@@ -301,7 +302,7 @@ run_codex() {
     fi
 
     if [ -z "${EMIT_THREAD_FILE:-}" ] && [ -z "${RESUME_SET:-}" ]; then
-        run_cmd codex exec --skip-git-repo-check "${model[@]}" "${sandbox[@]}" "${ADD_DIRS[@]}" "$PROMPT" < /dev/null
+        printf '%s' "$PROMPT" | run_cmd codex exec --skip-git-repo-check "${model[@]}" "${sandbox[@]}" "${ADD_DIRS[@]}" -
         return
     fi
 
