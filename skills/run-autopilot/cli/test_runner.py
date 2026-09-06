@@ -126,6 +126,46 @@ def test_spawn_sets_the_command_scoped_unattended_env(tmp_path):
     assert seen == {key: value for key, value in LAUNCH_ENV.items()}
 
 
+def test_spawn_scrubs_host_markers(tmp_path, capsys):
+    stub = _stub_runner(
+        tmp_path,
+        "import json\nprint(json.dumps(dict(os.environ)))",
+    )
+    ap = _ap_dir(tmp_path)
+    result = spawn(
+        "m",
+        "low",
+        cap_secs=30,
+        autopilot_dir=ap,
+        env={"CODEX_SESSION_ID": "x"},
+        runner_bin=stub,
+        presenter=_Collector(),
+    )
+    dumped = json.loads(result.log_path.read_text())
+    assert "CODEX_SESSION_ID" not in dumped
+    err_lines = [
+        line
+        for line in capsys.readouterr().err.splitlines()
+        if line.startswith("autopilot: scrubbed inherited host markers:")
+    ]
+    assert err_lines == ["autopilot: scrubbed inherited host markers: CODEX_SESSION_ID"]
+
+
+def test_spawn_silent_without_markers(tmp_path, capsys):
+    stub = _stub_runner(tmp_path, 'print("ok")')
+    ap = _ap_dir(tmp_path)
+    spawn(
+        "m",
+        "low",
+        cap_secs=30,
+        autopilot_dir=ap,
+        env={},
+        runner_bin=stub,
+        presenter=_Collector(),
+    )
+    assert "autopilot: scrubbed inherited host markers:" not in capsys.readouterr().err
+
+
 def test_spawn_gives_the_child_devnull_stdin(tmp_path):
     stub = _stub_runner(tmp_path, "print(repr(sys.stdin.read()))")
     ap = _ap_dir(tmp_path)
@@ -230,7 +270,7 @@ def test_host_markers_excludes_the_dispatch_depth_backstop():
 def test_child_env_drops_every_host_marker():
     # Insert in reverse so a correct implementation must actually sort the
     # result rather than happen to mirror the caller's dict order.
-    parent = {name: "1" for name in reversed(HOST_MARKERS)}
+    parent = dict.fromkeys(reversed(HOST_MARKERS), "1")
     parent["PATH"] = "/usr/bin"
     env, dropped = child_env(parent)
     for name in HOST_MARKERS:
