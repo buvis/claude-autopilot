@@ -136,7 +136,11 @@ def open_ids(autopilot_dir: Path) -> list[str]:
         if not isinstance(row, dict):
             continue
         dispatch_id = row.get("id")
-        if "queued_at" in row and isinstance(dispatch_id, str) and dispatch_id not in started:
+        if (
+            "queued_at" in row
+            and isinstance(dispatch_id, str)
+            and dispatch_id not in started
+        ):
             started.append(dispatch_id)
         if "ended_at" in row and isinstance(dispatch_id, str):
             ended.add(dispatch_id)
@@ -156,7 +160,9 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     start.add_argument("--kind", required=True)
     start.add_argument("--task", required=True)
     start.add_argument(
-        "--prompt-file", required=True, help="the written prompt; its size is the count"
+        "--prompt-file",
+        required=True,
+        help="the written prompt; its size is the count",
     )
 
     end = verbs.add_parser("end", help="close a dispatch row")
@@ -199,13 +205,25 @@ def main(argv: list[str] | None = None) -> int:
             },
         )
     else:
+        at = int(time.time())
+        for dispatch_id in open_ids(autopilot_dir):
+            append_row(
+                autopilot_dir,
+                {
+                    "id": dispatch_id,
+                    "ended_at": at,
+                    "elapsed_s": None,
+                    "outcome": "lost",
+                    "detail": f"open at {args.site}/{args.edge} handoff",
+                },
+            )
         append_row(
             autopilot_dir,
             {
                 "kind": "handoff",
                 "site": args.site,
                 "edge": args.edge,
-                "at": int(time.time()),
+                "at": at,
                 "phase": args.phase,
                 "prd": args.prd,
             },
