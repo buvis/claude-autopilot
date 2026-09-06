@@ -231,7 +231,11 @@ def spawn(
     """Run one phase session: launch, tee to last-session.log, present,
     enforce the wall-clock cap. Returns after the session exits (on its
     own or capped). `proc_slot[0]` receives the live Popen so the
-    caller's signal teardown can terminate a mid-flight session."""
+    caller's signal teardown can terminate a mid-flight session.
+
+    The child environment is built by `child_env()`; when it scrubs any
+    host markers, one line naming them is written to stderr, and
+    nothing when none were present."""
     if env is None:
         env = dict(os.environ)
     fallback = env.get("_AUTOPILOT_FALLBACK_MODEL", "claude-sonnet-5[1m]")

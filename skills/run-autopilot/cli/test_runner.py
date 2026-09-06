@@ -298,7 +298,6 @@ def test_host_markers_matches_the_documented_vendor_names():
         "COPILOT_CLI",
         "COPILOT_CLI_BINARY_VERSION",
     )
-    assert isinstance(HOST_MARKERS, tuple)
 
 
 def test_host_markers_excludes_the_dispatch_depth_backstop():

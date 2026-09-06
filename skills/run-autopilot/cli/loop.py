@@ -349,13 +349,14 @@ def _run_agoge_process(
     """Spawn the agoge session under a wall-clock watchdog cap and
     return its exit code (1 on spawn failure, swallowed by the caller)."""
     try:
+        env_for_child, _ = runner.child_env(env)
         with open(log_path, "wb") as log:
             proc = subprocess.Popen(
                 [claude_bin, "-p", "--permission-mode", "auto", prompt],
                 stdin=subprocess.DEVNULL,
                 stdout=log,
                 stderr=subprocess.STDOUT,
-                env=runner.child_env(env)[0],
+                env=env_for_child,
             )
             dog = Watchdog(proc, cap_secs=cap, grace_secs=20).start()
             rc = proc.wait()
