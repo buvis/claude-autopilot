@@ -116,6 +116,38 @@ def _queued_at(autopilot_dir: Path, dispatch_id: str) -> int | None:
     return found
 
 
+def open_ids(autopilot_dir: Path) -> list[str]:
+    """Ids with a start row (``queued_at``) and no end row (``ended_at``)
+    anywhere in the file, in the order each id's start row was first seen.
+    """
+    try:
+        lines = (autopilot_dir / FILENAME).read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        lines = []
+    started: list[str] = []
+    ended: set[str] = set()
+    skipped = 0
+    for line in lines:
+        try:
+            row = json.loads(line)
+        except ValueError:
+            skipped += 1
+            continue
+        if not isinstance(row, dict):
+            continue
+        dispatch_id = row.get("id")
+        if "queued_at" in row and dispatch_id not in started:
+            started.append(dispatch_id)
+        if "ended_at" in row:
+            ended.add(dispatch_id)
+    if skipped:
+        print(
+            f"record_dispatch: skipped {skipped} unparseable line(s) in {FILENAME}",
+            file=sys.stderr,
+        )
+    return [dispatch_id for dispatch_id in started if dispatch_id not in ended]
+
+
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Append dispatch timing rows.")
     verbs = parser.add_subparsers(dest="verb", required=True)
