@@ -151,6 +151,44 @@ def test_spawn_scrubs_host_markers(tmp_path, capsys):
     assert err_lines == ["autopilot: scrubbed inherited host markers: CODEX_SESSION_ID"]
 
 
+def test_spawn_scrub_notice_sorts_multiple_markers_comma_space_joined(
+    tmp_path, capsys
+):
+    # Seeded out of alphabetical order so an implementation that merely
+    # echoed the caller's dict order (rather than sorting) would fail.
+    stub = _stub_runner(
+        tmp_path,
+        "import json\nprint(json.dumps(dict(os.environ)))",
+    )
+    ap = _ap_dir(tmp_path)
+    env = {
+        "COPILOT_CLI": "1",
+        "CODEX_CI": "1",
+        "CODEX_THREAD_ID": "1",
+    }
+    result = spawn(
+        "m",
+        "low",
+        cap_secs=30,
+        autopilot_dir=ap,
+        env=env,
+        runner_bin=stub,
+        presenter=_Collector(),
+    )
+    dumped = json.loads(result.log_path.read_text())
+    assert "COPILOT_CLI" not in dumped
+    assert "CODEX_CI" not in dumped
+    assert "CODEX_THREAD_ID" not in dumped
+    err_lines = [
+        line
+        for line in capsys.readouterr().err.splitlines()
+        if line.startswith("autopilot: scrubbed inherited host markers:")
+    ]
+    assert err_lines == [
+        "autopilot: scrubbed inherited host markers: CODEX_CI, CODEX_THREAD_ID, COPILOT_CLI"
+    ]
+
+
 def test_spawn_silent_without_markers(tmp_path, capsys):
     stub = _stub_runner(tmp_path, 'print("ok")')
     ap = _ap_dir(tmp_path)
