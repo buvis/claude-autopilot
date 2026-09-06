@@ -363,7 +363,17 @@ The cycle that first receives exit 4 records the failure per step 5 instead.
 
 Save each subagent reviewer's returned text to `dev/local/tmp/` — **Alice** to `alice-output-{id}.txt`, **Blake** to `blake-output-{id}.txt`, **Eve** (when she ran) or her Claude substitute (when it ran instead) to `eve-output-{id}.txt`, and Bob's Claude fallback (when it ran) to `bob-output-{id}.txt`. Bob's and Carl's CLI outputs are already on disk - their `-o` flag wrote them straight to `bob-output-{id}.txt` / `carl-output-{id}.txt` in step 5.
 
-**Close the CLI reviewer dispatch rows.** After each output file is read, close its `start` row: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py end <id> --outcome ok` for a usable output, `--outcome error --detail "exit <n>"` for a non-zero exit, or `--outcome error --detail "lack-of-input"` for the refusal shape (`references/retry-policy.md` § Lack-of-input refusal). A retry's `end` row carries `--detail retry`. Bob's Claude fallback (a Task subagent, not a CLI dispatch) gets no ledger row.
+**Close the CLI reviewer dispatch rows.** A `start` row closes when its dispatch reaches a terminal state — the background command exited — not when an output file is read: a terminal failure may publish no `-o` file at all (Carl's exit 4 publishes none), and an unclosed row makes the ledger under-report dispatches. The call is `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py end <id> <flags>`, taking the `<flags>` of the first row below that matches:
+
+| Terminal state | `<flags>` |
+|---|---|
+| the output holds a usable review, first run | `--outcome ok` |
+| the output holds a usable review, produced by the retry | `--outcome ok --detail retry` |
+| the retry itself failed | `--outcome error --detail "retry: exit <n>"` or `--outcome error --detail "retry: lack-of-input"` |
+| non-zero exit, nothing usable published | `--outcome error --detail "exit <n>"` |
+| exit 0 but the refusal shape (`references/retry-policy.md` § Lack-of-input refusal) | `--outcome error --detail "lack-of-input"` |
+
+The rows are mutually exclusive. `--detail` is a single field, so a failed retry encodes both facts in it as `retry: <the failure>` rather than losing one of them. Bob's Claude fallback (a Task subagent, not a CLI dispatch) gets no ledger row.
 
 Then run:
 
@@ -437,7 +447,7 @@ Stamp the `reviewers:` frontmatter field with the comma-separated lowercase name
 
 **Shadow runs (`CONSENSUS_ENGINE == "shadow"`).** The workflow's `review_markdown` carries the literal token `{{TESTS_LINE}}` (step 5 passed no `tests_line`). Substitute the `Tests:` line composed in step 6 for that token — a file still carrying the token cannot pass `check_review_file.py` — then write the result to `dev/local/tmp/<prd-base>-consensus-shadow-{cycle}.md`. **Never** to `dev/local/reviews/`: step 3's `-review-*.md` glob finds the prior cycle there, and a shadow file in that directory would be mistaken for one. Gate the shadow file with `check_review_file.py --reviewers alice`, then record in the real review file, under Alice's section, the engine's `stats_line` and any verdict divergence from legacy Alice — as an observation, never as a finding. The shadow never gates.
 
-Include all findings even if zero issues. Give each reviewer that ran a `## <Name>` section (their findings, or a one-line all-clear; Bob's keeps his `D{n}:` verdict lines), and end the file with the `Verdict:` and `Tests:` lines composed in step 6.
+Include all findings even if zero issues. Give each reviewer that ran a `## <Name>` section (their findings, or a one-line all-clear; Bob's keeps his `D{n}:` verdict lines, and records `after one retry (inlined)` when the inlined retry is what produced them), and end the file with the `Verdict:` and `Tests:` lines composed in step 6.
 
 Place the `codex_rung_guard:` line composed in step 6 in the top matter: directly after the `Diff range:` block, before the body sections.
 

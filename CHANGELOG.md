@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **review-work-completion**: Bob's persona permits read-only shell reads, so codex no longer refuses to open its own context and diff
 - **review-work-completion**: state that Bob's exit 3 and exit 4 routing wins over the retry sentence, so neither exit runs a codex retry before the Claude fallback
 - **review-work-completion**: correct the agent registry's stale claim that Bob's prompt forbids commands, and say how his native Claude fallback reads its files
+- **review-work-completion**: close a CLI reviewer's dispatch row when the dispatch ends rather than when its output file is read, so a failure that publishes no file no longer leaves the row open, and record a failed retry's exit code alongside the retry marker
 
 ## [0.5.1] - 2026-09-05
 
