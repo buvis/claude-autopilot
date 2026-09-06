@@ -486,6 +486,26 @@ def test_step_5_7_mints_a_reviewer_session_id_and_moves_the_review_base() -> Non
         )
 
 
+def test_step_5_7_mints_the_reviewer_id_with_python_before_uuidgen() -> None:
+    # Unattended sessions on a host without a warden allow for uuidgen would
+    # lose the id (and with it the resumable session and the delta re-run), so
+    # the python form must be the one the step names first; uuidgen is only
+    # the fallback (fix(work) fda6abd). The test above passes in either order.
+    start = _TEXT.index("### 5.7.")
+    end = _TEXT.index("### 6.", start)
+    step_5_7 = _TEXT[start:end]
+    python_form = 'python3 -c "import uuid,sys;sys.stdout.write(str(uuid.uuid4()))"'
+
+    assert python_form in step_5_7, (
+        f"{_SKILL_MD}: step 5.7 never names the python uuid4 form, so a host "
+        "without uuidgen mints no reviewer session id."
+    )
+    assert step_5_7.index(python_form) < step_5_7.index("`uuidgen`"), (
+        f"{_SKILL_MD}: step 5.7 names uuidgen before the python form; the "
+        "allowlist-free form must come first and uuidgen stay the fallback."
+    )
+
+
 def test_per_task_review_carries_the_delta_rerun_and_its_fallback() -> None:
     review = (_SKILL_MD.parent / "references" / "per-task-review.md").read_text()
 
