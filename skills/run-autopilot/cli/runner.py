@@ -205,7 +205,12 @@ def spawn(
     if presenter is None:
         presenter = make_presenter(env)
 
-    env_for_child = {**env, **LAUNCH_ENV}
+    env_for_child, dropped = child_env(env)
+    if dropped:
+        print(
+            "autopilot: scrubbed inherited host markers: " + ", ".join(dropped),
+            file=sys.stderr,
+        )
     with open(log_path, "wb") as log:
         proc = subprocess.Popen(
             argv,
