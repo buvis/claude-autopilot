@@ -139,15 +139,26 @@ if [ -n "$PROMPT_FILE" ]; then
         echo "ERROR: Prompt file not found: $PROMPT_FILE" >&2
         exit 1
     fi
-    PROMPT=$(cat "$PROMPT_FILE"; printf 'x')
+    if ! PROMPT=$(cat "$PROMPT_FILE" && printf 'x'); then
+        echo "ERROR: failed to read prompt file: $PROMPT_FILE" >&2
+        exit 1
+    fi
+    # The 'x' sentinel stops command substitution from stripping the file's
+    # trailing newline(s). Deliberate divergence from use-sonnet's
+    # sonnet-run.sh, whose own test_sonnet_run.sh T20 (~line 376) pins the
+    # OPPOSITE behavior ("Pins (does not change) the pre-existing
+    # PROMPT=$(cat "$PROMPT_FILE") read") -- this is not a bug to reconcile.
     PROMPT="${PROMPT%x}"
 fi
 
-if [ -z "$PROMPT" ]; then
-    echo "ERROR: Prompt required" >&2
-    usage >&2
-    exit 1
-fi
+case "$PROMPT" in
+    *[![:space:]]*) ;;
+    *)
+        echo "ERROR: Prompt required" >&2
+        usage >&2
+        exit 1
+        ;;
+esac
 
 if [ -n "${EMIT_THREAD_FILE:-}" ] && [ -z "${OUTPUT_FILE:-}" ]; then
     echo "ERROR: --emit-thread-id requires -o" >&2
@@ -214,7 +225,7 @@ finalize_codex_json_run() {
     fi
 }
 
-# Runs `"$@" --json --output-last-message "$OUTPUT_FILE" "$PROMPT" < /dev/null`
+# Runs `printf '%s' "$PROMPT" | "$@" --json --output-last-message "$OUTPUT_FILE" -`
 # and consumes codex's JSONL stream: captures the thread id (when
 # EMIT_THREAD_FILE is set) from the thread.started event, prints a
 # `codex-event: <type>` liveness marker per line to stderr, never leaks raw
