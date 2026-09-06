@@ -44,6 +44,8 @@ Bash tool (run_in_background: true):
 
 `--emit-thread-id` records the codex session id (from the `thread.started` event) to `bob-thread-{id}.txt`; step 8 stamps it into the review-file frontmatter as `codex_thread_id`, and the next cycle's step 3 reads it back. `--resume-thread` continues that session; an empty/expired thread degrades to a fresh run with a loud stderr note (never a blocked cycle), and it composes with `--emit-thread-id` (re-writing the same id keeps the sidecar fresh for the following cycle). **Never add `--ephemeral` to the cycle-1 dispatch - it disables resume.** `-o` writes codex's review text straight to the file step 6 consolidates - no manual save, no Agent round-trip. When the background command completes, read `bob-output-{id}.txt`. On a non-zero exit or a lack-of-input refusal, retry once per retry-policy.md § Lack-of-input refusal (Bob); only a failed retry makes Bob a failed reviewer, and a single failed CLI reviewer does not block the cycle.
 
+**Exit routing takes precedence over that retry.** SKILL.md step 5's Bob-fallback rules own exits 3 and 4, and neither takes a CLI retry: exit 3 (codex unavailable) dispatches Bob's Claude fallback straight away, and exit 4 (codex ran but failed) first checks the `codex-review-last.jsonl` sidecar for a complete review to salvage, dispatching the Claude fallback only when nothing complete is there. The one CLI retry above applies to every other non-zero exit, and to the refusal shape it names.
+
 ## Carl (Gemini)
 
 Carl is the frontend & design specialist (persona: `agents/carl.md`, which carries the frontend & design appendix). Like Bob, run gemini as a **direct background Bash command, NOT a Task subagent** - a subagent wrapping a CLI hangs (see Bob above).
