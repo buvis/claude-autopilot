@@ -181,6 +181,41 @@ def build_argv(
     return argv
 
 
+def _run_session(
+    argv: list[str],
+    log_path: Path,
+    env_for_child: dict,
+    cap_secs: float,
+    grace_secs: float,
+    presenter,
+    proc_slot: list | None,
+) -> tuple[int, bool]:
+    """Launch the child, tee its stdout to log_path, and stream it to
+    presenter until the process exits (on its own or capped)."""
+    with open(log_path, "wb") as log:
+        proc = subprocess.Popen(
+            argv,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            env=env_for_child,
+        )
+        if proc_slot is not None:
+            proc_slot[0] = proc
+        dog = Watchdog(proc, cap_secs=cap_secs, grace_secs=grace_secs).start()
+        assert proc.stdout is not None
+        try:
+            for line in proc.stdout:
+                log.write(line)
+                log.flush()  # tracon tails this file live
+                presenter.write(line)
+        finally:
+            rc = proc.wait()
+            dog.cancel()
+            presenter.close()
+    return rc, dog.fired
+
+
 def spawn(
     model: str,
     effort: str,
@@ -211,25 +246,13 @@ def spawn(
             "autopilot: scrubbed inherited host markers: " + ", ".join(dropped),
             file=sys.stderr,
         )
-    with open(log_path, "wb") as log:
-        proc = subprocess.Popen(
-            argv,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            env=env_for_child,
-        )
-        if proc_slot is not None:
-            proc_slot[0] = proc
-        dog = Watchdog(proc, cap_secs=cap_secs, grace_secs=grace_secs).start()
-        assert proc.stdout is not None
-        try:
-            for line in proc.stdout:
-                log.write(line)
-                log.flush()  # tracon tails this file live
-                presenter.write(line)
-        finally:
-            rc = proc.wait()
-            dog.cancel()
-            presenter.close()
-    return SpawnResult(returncode=rc, log_path=log_path, cap_fired=dog.fired)
+    rc, cap_fired = _run_session(
+        argv,
+        log_path,
+        env_for_child,
+        cap_secs,
+        grace_secs,
+        presenter,
+        proc_slot,
+    )
+    return SpawnResult(returncode=rc, log_path=log_path, cap_fired=cap_fired)
