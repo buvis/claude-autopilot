@@ -14,7 +14,14 @@ import stat
 import sys
 from pathlib import Path
 
-from cli.runner import LAUNCH_ENV, build_argv, make_presenter, spawn
+from cli.runner import (
+    HOST_MARKERS,
+    LAUNCH_ENV,
+    build_argv,
+    child_env,
+    make_presenter,
+    spawn,
+)
 
 
 class _Collector:
@@ -200,3 +207,48 @@ def test_make_presenter_discards_in_tracon_child_mode(capsys):
     presenter.write(b"never shown\n")
     presenter.close()
     assert capsys.readouterr().out == ""
+
+
+def test_host_markers_matches_the_documented_vendor_names():
+    assert HOST_MARKERS == (
+        "CODEX_CI",
+        "CODEX_SANDBOX",
+        "CODEX_SANDBOX_NETWORK_DISABLED",
+        "CODEX_SESSION_ID",
+        "CODEX_THREAD_ID",
+        "COPILOT_AGENT_SESSION_ID",
+        "COPILOT_CLI",
+        "COPILOT_CLI_BINARY_VERSION",
+    )
+    assert isinstance(HOST_MARKERS, tuple)
+
+
+def test_host_markers_excludes_the_dispatch_depth_backstop():
+    assert "AUTOPILOT_DISPATCH_DEPTH" not in HOST_MARKERS
+
+
+def test_child_env_drops_every_host_marker():
+    # Insert in reverse so a correct implementation must actually sort the
+    # result rather than happen to mirror the caller's dict order.
+    parent = {name: "1" for name in reversed(HOST_MARKERS)}
+    parent["PATH"] = "/usr/bin"
+    env, dropped = child_env(parent)
+    for name in HOST_MARKERS:
+        assert name not in env
+    assert env["PATH"] == "/usr/bin"
+    for key, value in LAUNCH_ENV.items():
+        assert env[key] == value
+    assert dropped == sorted(HOST_MARKERS)
+
+
+def test_child_env_keeps_dispatch_depth():
+    env, dropped = child_env({"AUTOPILOT_DISPATCH_DEPTH": "1"})
+    assert env["AUTOPILOT_DISPATCH_DEPTH"] == "1"
+    assert dropped == []
+
+
+def test_child_env_does_not_mutate_the_input_env():
+    parent = {"CODEX_CI": "1", "PATH": "/usr/bin"}
+    original = dict(parent)
+    child_env(parent)
+    assert parent == original
