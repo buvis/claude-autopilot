@@ -48,8 +48,31 @@ LAUNCH_ENV = {
     "CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS": "0",
 }
 
+HOST_MARKERS = (
+    "CODEX_CI",
+    "CODEX_SANDBOX",
+    "CODEX_SANDBOX_NETWORK_DISABLED",
+    "CODEX_SESSION_ID",
+    "CODEX_THREAD_ID",
+    "COPILOT_AGENT_SESSION_ID",
+    "COPILOT_CLI",
+    "COPILOT_CLI_BINARY_VERSION",
+)
+
 DEFAULT_PROMPT = "/autopilot:run-autopilot"
 DEFAULT_GRACE_SECS = 60
+
+
+def child_env(env: dict) -> tuple[dict, list[str]]:
+    """The command-scoped env for the launched child: strips host-CLI
+    session markers (a nested claude launch must not inherit its parent
+    Codex/Copilot session identity) and layers in LAUNCH_ENV.
+    AUTOPILOT_DISPATCH_DEPTH is kept - it is the depth backstop, not a
+    host marker."""
+    dropped = sorted(name for name in HOST_MARKERS if name in env)
+    result = {key: value for key, value in env.items() if key not in HOST_MARKERS}
+    result.update(LAUNCH_ENV)
+    return result, dropped
 
 
 @dataclass(frozen=True)
@@ -182,14 +205,14 @@ def spawn(
     if presenter is None:
         presenter = make_presenter(env)
 
-    child_env = {**env, **LAUNCH_ENV}
+    env_for_child, _dropped_markers = child_env(env)
     with open(log_path, "wb") as log:
         proc = subprocess.Popen(
             argv,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            env=child_env,
+            env=env_for_child,
         )
         if proc_slot is not None:
             proc_slot[0] = proc

@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **review-work-completion**: record the Bob review section's `after one retry (inlined)` marker whenever the inlined retry was dispatched, not only when it produced verdict lines, so a retry that ran and still failed stays visible
 - **use-codex**: deliver the prompt to the `codex` child over stdin with a trailing `-` positional instead of as a trailing argv string, so a prompt whose first line starts with `-` (e.g. a markdown checklist) is never misparsed as a CLI flag
 - **use-codex**: `-f` prompt files keep their trailing newline when dispatched, while a whitespace-only prompt file is still rejected as "Prompt required"
+- **run-autopilot**: a loop-launched session no longer inherits vendor CLI markers (`CODEX_SESSION_ID`, `COPILOT_CLI`, etc., see `runner.HOST_MARKERS`) from the shell that started it, which previously tripped the codex/gemini nesting guard and forced a Claude fallback
 
 ## [0.5.1] - 2026-09-05
 
