@@ -406,56 +406,59 @@ def test_concurrent_appends_from_parallel_processes_all_survive(
         assert sorted(row["prd"] for row in rows) == [f"p{i}" for i in range(8)]
 
 
+_UNCLOSED_STARTS_ROWS = [
+    {
+        "id": "aaaaaaaa",
+        "kind": "ivan",
+        "task": "1",
+        "queued_at": 1000,
+        "prompt_bytes": 1,
+    },
+    {
+        "id": "aaaaaaaa",
+        "ended_at": 1010,
+        "elapsed_s": 10,
+        "outcome": "ok",
+        "detail": None,
+    },
+    {
+        "id": "bbbbbbbb",
+        "kind": "pat",
+        "task": "2",
+        "queued_at": 2000,
+        "prompt_bytes": 2,
+    },
+    {
+        "kind": "handoff",
+        "site": "build",
+        "edge": "leave",
+        "at": 2500,
+        "phase": "build",
+        "prd": "x.md",
+    },
+    {
+        "id": "bbbbbbbb",
+        "ended_at": 2010,
+        "elapsed_s": 10,
+        "outcome": "ok",
+        "detail": None,
+    },
+    {
+        "id": "cccccccc",
+        "kind": "tess",
+        "task": "3",
+        "queued_at": 3000,
+        "prompt_bytes": 3,
+    },
+]
+
+
 def test_open_ids_lists_only_unclosed_starts(tmp_path: Path) -> None:
     # Two ids get both a start and an end row, one gets only a start, and a
     # handoff row carries neither queued_at nor id: only the truly open id
     # should surface.
     autopilot = _project(tmp_path)
-    for row in (
-        {
-            "id": "aaaaaaaa",
-            "kind": "ivan",
-            "task": "1",
-            "queued_at": 1000,
-            "prompt_bytes": 1,
-        },
-        {
-            "id": "aaaaaaaa",
-            "ended_at": 1010,
-            "elapsed_s": 10,
-            "outcome": "ok",
-            "detail": None,
-        },
-        {
-            "id": "bbbbbbbb",
-            "kind": "pat",
-            "task": "2",
-            "queued_at": 2000,
-            "prompt_bytes": 2,
-        },
-        {
-            "kind": "handoff",
-            "site": "build",
-            "edge": "leave",
-            "at": 2500,
-            "phase": "build",
-            "prd": "x.md",
-        },
-        {
-            "id": "bbbbbbbb",
-            "ended_at": 2010,
-            "elapsed_s": 10,
-            "outcome": "ok",
-            "detail": None,
-        },
-        {
-            "id": "cccccccc",
-            "kind": "tess",
-            "task": "3",
-            "queued_at": 3000,
-            "prompt_bytes": 3,
-        },
-    ):
+    for row in _UNCLOSED_STARTS_ROWS:
         record_dispatch.append_row(autopilot, row)
 
     assert record_dispatch.open_ids(autopilot) == ["cccccccc"]
