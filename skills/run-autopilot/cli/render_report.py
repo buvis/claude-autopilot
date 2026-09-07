@@ -6,7 +6,8 @@ recipe in references/batch-report-format.md. Four blocks, all pure text
 functions the CLI appends to `reports/{batch_id}-report.md`:
 
 - `header(batch_id, started)` - written once at file creation.
-- `prd_section(state, metrics_rows, completed, json_items=None)` - the
+- `prd_section(state, metrics_rows, completed, json_items=None,
+  attempts_ledger=None)` - the
   per-PRD section phase-done Phase 9 step 7 appends: decisions tables,
   doubt rubric verdicts (source-tagged when dual-reviewer, PRD 00038), loop
   metrics (PRD 00013/00018), implementor mix (PRD 00019/00065/00075/00077),
