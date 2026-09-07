@@ -121,18 +121,16 @@ def _read_rows(
 
 def _queued_at(rows: list[dict[str, object]], dispatch_id: str) -> int | None:
     """The start row's ``queued_at`` for ``dispatch_id``, or None, said on stderr."""
-    found = None
     for row in rows:
-        if found is None and row.get("id") == dispatch_id:
+        if row.get("id") == dispatch_id:
             queued_at = row.get("queued_at")
             if isinstance(queued_at, int):
-                found = queued_at
-    if found is None:
-        print(
-            f"record_dispatch: no start row for {dispatch_id}, elapsed_s is null",
-            file=sys.stderr,
-        )
-    return found
+                return queued_at
+    print(
+        f"record_dispatch: no start row for {dispatch_id}, elapsed_s is null",
+        file=sys.stderr,
+    )
+    return None
 
 
 def _spans_handoff(

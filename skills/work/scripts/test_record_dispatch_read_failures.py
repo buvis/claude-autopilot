@@ -66,11 +66,10 @@ def test_handoff_over_an_unreadable_working_file_exits_zero_and_reports_both_fai
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    # handoff calls open_ids before appending its own row. Today that read is
-    # unguarded for OSError and crashes before the row is ever attempted; the
-    # fix must reach the append instead of dying earlier. The append itself
-    # still fails here (the same directory blocks the write too), so the
-    # observable proof of "reached the append" is its own reported failure.
+    # handoff must reach its append even when the open_ids read that
+    # precedes it fails. The append itself still fails here (the same
+    # directory blocks the write too), so the observable proof of "reached
+    # the append" is its own reported failure.
     autopilot = _project(tmp_path)
     (autopilot / "dispatch-metrics.jsonl").mkdir()
     monkeypatch.chdir(tmp_path / "proj")
@@ -124,17 +123,24 @@ def test_end_over_an_unreadable_working_file_does_not_also_report_no_start_row(
 ) -> None:
     # A read failure and "no start row" are two different root causes; the
     # read-failure message must not be followed by the id-not-found message,
-    # since the id lookup never actually ran against a readable ledger.
+    # since the id lookup never actually ran against a readable ledger. The
+    # end row itself must still land: append_row never decodes what is
+    # already there.
     autopilot = _project(tmp_path)
-    (autopilot / "dispatch-metrics.jsonl").mkdir()
+    working = autopilot / "dispatch-metrics.jsonl"
+    working.write_bytes(b"\xff\xfe not utf8\n")
     monkeypatch.chdir(tmp_path / "proj")
 
     exit_code = record_dispatch.main(["end", "deadbeef", "--outcome", "ok"])
 
     assert exit_code == 0
     err = capsys.readouterr().err
-    assert "record_dispatch: start row lookup failed" in err
+    assert err.count("record_dispatch: start row lookup failed") == 1
     assert "record_dispatch: no start row" not in err
+    lines = working.read_bytes().splitlines()
+    appended_row = json.loads(lines[-1].decode("utf-8"))
+    assert appended_row["elapsed_s"] is None
+    assert appended_row["outcome"] == "ok"
 
 
 def test_end_over_one_unparseable_line_warns_exactly_once(
@@ -142,10 +148,8 @@ def test_end_over_one_unparseable_line_warns_exactly_once(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    # end calls _queued_at and then, when a start row was found,
-    # _spans_handoff — both walk the same lines and each names its own
-    # unparseable-line count, so a ledger with exactly one bad line prints
-    # the same warning twice for a single `end` call. It must print once.
+    # One end call reports a malformed line once, because _read_rows owns
+    # that diagnostic and runs once per call.
     autopilot = _project(tmp_path)
     (autopilot / "dispatch-metrics.jsonl").write_text(
         json.dumps({"id": "deadbeef", "queued_at": 1000}) + "\n" + "not json at all\n",

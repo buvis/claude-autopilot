@@ -6,12 +6,16 @@ whether a line lands: the working file, its ``ledger/`` mirror, or nowhere at
 all when no autopilot dir resolves. Time is pinned through the module's own
 ``time`` name so the elapsed arithmetic is asserted, not eyeballed.
 
-This file holds the ``end`` verb's tests. Its siblings
+This file holds the ``end`` verb's tests plus four tests the PRD's own
+exit-criteria commands name here: ``test_open_ids_lists_only_unclosed_starts``,
+``test_handoff_closes_open_rows_as_lost``,
+``test_handoff_resume_closes_open_rows_as_lost``, and
+``test_handoff_leaves_closed_rows_alone``. Its siblings
 (test_record_dispatch_handoff.py, test_record_dispatch_start.py,
 test_record_dispatch_append_row.py, test_record_dispatch_open_ids.py) hold
-the rest, split out to stay under the file size limit; all of them load
-record_dispatch.py and share their helpers through
-record_dispatch_testutil.py.
+the remaining open_ids, handoff, start, and append_row tests, split out to
+stay under the file size limit; all of them load record_dispatch.py and
+share their helpers through record_dispatch_testutil.py.
 """
 
 from __future__ import annotations
