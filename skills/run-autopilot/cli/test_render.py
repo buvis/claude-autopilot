@@ -274,6 +274,133 @@ class PrdSectionTaskCountTests(unittest.TestCase):
         self.assertNotIn("- Tasks: 0/0", text)
 
 
+class PrdSectionCycleCountTests(unittest.TestCase):
+    """The `- Cycles:` line reads state['cycle'] when that key is present
+    (0 included), else the `cycles` of the batch.completed_prds record whose
+    filename matches, else `?` - two real sections came out `- Cycles: ?`
+    because the per-PRD reset wiped the root field before the section
+    rendered."""
+
+    def test_cycles_falls_back_to_completed_prd_record(self) -> None:
+        # Three things vary so only a filename lookup can satisfy them all:
+        # the reported count (no fixed constant), the PRD under render (no
+        # hardcoded filename), and the list position of this PRD's own
+        # record, which sits SECOND behind a decoy carrying a different
+        # count (no first-entry shortcut).
+        for prd, cycles, decoy_cycles in (
+            ("00040-feature-x-v1.md", 4, 9),
+            ("00113-another-prd-v1.md", 7, 3),
+        ):
+            with self.subTest(prd=prd, cycles=cycles):
+                state = _state()
+                del state["cycle"]  # wiped by the per-PRD reset before the render
+                state["prd"] = prd
+                own_record = {
+                    "filename": prd,
+                    "cycles": cycles,
+                    "tasks_completed": 5,
+                    "tasks_total": 6,
+                }
+                decoy = {
+                    **own_record,
+                    "filename": "00001-other-prd-v1.md",
+                    "cycles": decoy_cycles,
+                }
+                state["batch"]["completed_prds"] = [decoy, own_record]
+                text = render_report.prd_section(state, [], NOW)
+                self.assertIn(f"\n- Cycles: {cycles}\n", text)
+                self.assertNotIn(f"- Cycles: {decoy_cycles}", text)
+                self.assertNotIn("- Cycles: ?", text)
+                # Only the Cycles line changes: the record still drives Tasks.
+                self.assertIn("- Tasks: 5/6", text)
+
+    def test_state_cycle_wins_over_a_differing_batch_record(self) -> None:
+        state = _state()
+        self.assertEqual(state["cycle"], 2)
+        state["batch"]["completed_prds"] = [
+            {
+                "filename": state["prd"],
+                "cycles": 9,
+                "tasks_completed": 5,
+                "tasks_total": 6,
+            },
+        ]
+        text = render_report.prd_section(state, [], NOW)
+        self.assertIn("- Cycles: 2", text)
+        self.assertNotIn("- Cycles: 9", text)
+
+    def test_cycles_ignores_bare_string_and_other_prd_entries(self) -> None:
+        # A legacy bare-string entry plus a dict for a DIFFERENT filename that
+        # is otherwise identical in shape to this PRD's own record - same keys,
+        # same value types. Only the filename tells them apart, so a render
+        # that grabs any cycles-carrying entry reports 7 instead of `?`.
+        state = _state()
+        del state["cycle"]
+        own_record_shape = {
+            "filename": state["prd"],
+            "cycles": 4,
+            "tasks_completed": 5,
+            "tasks_total": 6,
+        }
+        other_prd = {
+            **own_record_shape,
+            "filename": "00002-object-entry-v1.md",
+            "cycles": 7,
+        }
+        state["batch"]["completed_prds"] = [
+            "00001-legacy-string-entry-v1.md",
+            other_prd,
+        ]
+        text = render_report.prd_section(state, [], NOW)
+        self.assertIn("\n- Cycles: ?\n", text)
+        self.assertNotIn("- Cycles: 7", text)
+
+    def test_present_zero_state_cycle_is_not_replaced_by_the_batch_record(
+        self,
+    ) -> None:
+        # A cycle of 0 is a real count: the key is present, so the record is
+        # never consulted, even though 0 is falsy.
+        state = _state()
+        state["cycle"] = 0
+        state["batch"]["completed_prds"] = [
+            {
+                "filename": state["prd"],
+                "cycles": 5,
+                "tasks_completed": 5,
+                "tasks_total": 6,
+            },
+        ]
+        text = render_report.prd_section(state, [], NOW)
+        self.assertIn("\n- Cycles: 0\n", text)
+        self.assertNotIn("- Cycles: 5", text)
+
+    def test_cycles_of_zero_in_the_record_renders_zero_not_a_question_mark(
+        self,
+    ) -> None:
+        state = _state()
+        del state["cycle"]
+        state["batch"]["completed_prds"] = [
+            {
+                "filename": state["prd"],
+                "cycles": 0,
+                "tasks_completed": 5,
+                "tasks_total": 6,
+            },
+        ]
+        text = render_report.prd_section(state, [], NOW)
+        self.assertIn("\n- Cycles: 0\n", text)
+        self.assertNotIn("- Cycles: ?", text)
+
+    def test_cycles_renders_question_mark_when_the_record_lacks_cycles(self) -> None:
+        state = _state()
+        del state["cycle"]
+        state["batch"]["completed_prds"] = [
+            {"filename": state["prd"], "tasks_completed": 5, "tasks_total": 6},
+        ]
+        text = render_report.prd_section(state, [], NOW)
+        self.assertIn("- Cycles: ?", text)
+
+
 class AutonomousBlankRowTests(unittest.TestCase):
     """_autonomous drops rows where every cell is empty instead of
     rendering a blank record (R2)."""
