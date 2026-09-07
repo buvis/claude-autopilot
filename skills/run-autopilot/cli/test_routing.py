@@ -26,7 +26,15 @@ from pathlib import Path
 
 import pytest
 
-from cli.routing import OPUS, SONNET, Route, build_model, build_target, route
+from cli.routing import (
+    OPUS,
+    SONNET,
+    Route,
+    build_model,
+    build_target,
+    review_cycle,
+    route,
+)
 
 
 def _box(tmp_path: Path) -> Path:
@@ -506,3 +514,95 @@ def test_route_build_reads_the_real_signal_paths(tmp_path):
         json.dumps({prd: {"status": "approved"}}),
     )
     assert route("build", ap_dir, env={}).model == OPUS
+
+
+# ── review_cycle() and route()'s cycle-aware review effort ──────────────────
+
+
+def _ap_dir_with_cycle(tmp_path: Path, cycle: int | None) -> Path:
+    ap_dir = tmp_path / "dev/local/autopilot"
+    ap_dir.mkdir(parents=True, exist_ok=True)
+    if cycle is not None:
+        (ap_dir / "state.json").write_text(json.dumps({"cycle": cycle}))
+    return ap_dir
+
+
+def test_review_cycle_reads_the_int_value_from_state(tmp_path):
+    ap_dir = _ap_dir_with_cycle(tmp_path, 5)
+    assert review_cycle(ap_dir) == 5
+
+
+def test_review_cycle_defaults_to_one_when_state_file_missing(tmp_path):
+    ap_dir = _ap_dir_with_cycle(tmp_path, None)
+    assert review_cycle(ap_dir) == 1
+    assert not (ap_dir / "state.json").exists()
+
+
+def test_review_cycle_defaults_to_one_when_state_json_is_malformed(tmp_path):
+    ap_dir = _ap_dir_with_cycle(tmp_path, None)
+    (ap_dir / "state.json").write_text("{not json")
+    assert review_cycle(ap_dir) == 1
+
+
+def test_review_cycle_defaults_to_one_when_cycle_is_not_an_int(tmp_path):
+    ap_dir = _ap_dir_with_cycle(tmp_path, None)
+    (ap_dir / "state.json").write_text(json.dumps({"cycle": "two"}))
+    assert review_cycle(ap_dir) == 1
+
+
+def test_review_cycle_defaults_to_one_when_cycle_key_is_absent(tmp_path):
+    ap_dir = _ap_dir_with_cycle(tmp_path, None)
+    (ap_dir / "state.json").write_text(json.dumps({"prd": "00001-x-v1.md"}))
+    assert review_cycle(ap_dir) == 1
+
+
+def test_review_first_cycle_keeps_xhigh(tmp_path):
+    ap_dir = _ap_dir_with_cycle(tmp_path, 1)
+    got = route("review", ap_dir, env={})
+    assert got.effort == "xhigh"
+
+
+def test_review_cycle_zero_or_below_keeps_xhigh(tmp_path):
+    # The contract is explicitly "1 or lower", not "not equal to 1".
+    ap_dir = _ap_dir_with_cycle(tmp_path, 0)
+    got = route("review", ap_dir, env={})
+    assert got.effort == "xhigh"
+
+
+def test_review_rerun_drops_effort_to_high(tmp_path):
+    ap_dir = _ap_dir_with_cycle(tmp_path, 2)
+    got = route("review", ap_dir, env={})
+    assert got.effort == "high"
+    assert got.model == OPUS
+
+
+def test_review_rerun_env_effort_overrides_high(tmp_path):
+    ap_dir = _ap_dir_with_cycle(tmp_path, 2)
+    got = route(
+        "review",
+        ap_dir,
+        env={"_AUTOPILOT_EFFORT_REVIEW_RERUN": "medium"},
+    )
+    assert got.effort == "medium"
+
+
+def test_review_effort_override_wins_on_reruns(tmp_path):
+    ap_dir = _ap_dir_with_cycle(tmp_path, 3)
+    got = route("review", ap_dir, env={"_AUTOPILOT_EFFORT_REVIEW": "xhigh"})
+    assert got.effort == "xhigh"
+
+
+def test_review_effort_override_wins_even_when_empty_string(tmp_path):
+    # The override branch is a membership test ("that key is set in env"),
+    # not the file's usual `.get(key) or default` idiom used elsewhere in
+    # route() - an explicitly set empty string still wins over the
+    # cycle-computed effort.
+    ap_dir = _ap_dir_with_cycle(tmp_path, 2)
+    got = route("review", ap_dir, env={"_AUTOPILOT_EFFORT_REVIEW": ""})
+    assert got.effort == ""
+
+
+def test_review_missing_state_keeps_xhigh(tmp_path):
+    ap_dir = _ap_dir_with_cycle(tmp_path, None)
+    got = route("review", ap_dir, env={})
+    assert got.effort == "xhigh"
