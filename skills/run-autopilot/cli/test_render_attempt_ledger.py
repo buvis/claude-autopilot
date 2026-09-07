@@ -11,6 +11,8 @@ documented in test_render.py's module docstring.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import sys
 import unittest
@@ -196,6 +198,30 @@ class PrdSectionLedgerTests(unittest.TestCase):
         text = render_report.prd_section(state, [], NOW, None, self.tmp / "gone.jsonl")
         self.assertIn("no implementor data", text)
         self.assertIn("## 00040-feature-x-v1.md", text)
+
+    def test_missing_ledger_is_reported_once_on_stderr(self) -> None:
+        # An empty render is right, but a silent one hides a ledger the batch
+        # expected to exist: the operator gets one line naming the path.
+        state = _state()
+        state["tasks"] = []
+        missing = self.tmp / "gone.jsonl"
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            text = render_report.prd_section(state, [], NOW, None, missing)
+        self.assertEqual(len(err.getvalue().splitlines()), 1)
+        self.assertIn(str(missing), err.getvalue())
+        self.assertIn("no implementor data", text)
+
+    def test_unreadable_ledger_is_reported_once_on_stderr(self) -> None:
+        self.ledger.mkdir()  # a directory where the ledger file belongs
+        state = _state()
+        state["tasks"] = []
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            text = render_report.prd_section(state, [], NOW, None, self.ledger)
+        self.assertEqual(len(err.getvalue().splitlines()), 1)
+        self.assertIn(str(self.ledger), err.getvalue())
+        self.assertIn("no implementor data", text)
 
     def test_malformed_ledger_line_is_skipped_and_good_rows_still_count(self) -> None:
         state = _state()

@@ -32,6 +32,7 @@ so those three lines render `?` (R2 of PRD 00122).
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from cli import render_metrics
@@ -433,10 +434,14 @@ def _implementor_mix(state: dict, ledger_rows: list[dict]) -> list[str]:
 
 def _ledger_rows(state: dict, path: Path | None) -> list[dict]:
     """The attempt ledger's rows for this state's PRD and batch, joining the
-    state attempts in the Implementor Mix. No path reads as no rows, and so
-    does an unreadable or malformed one (`render_metrics.load_rows` tolerates
-    both), so such a ledger renders as today."""
+    state attempts in the Implementor Mix. No path reads as no rows silently;
+    a path with no readable ledger file reads as no rows plus one stderr
+    line, and a malformed line is skipped by `render_metrics.load_rows`, so
+    no ledger ever fails the render."""
     if path is None:
+        return []
+    if not path.is_file():
+        print(f"render_report: no readable attempt ledger at {path}", file=sys.stderr)
         return []
     prd = str(state.get("prd", ""))
     batch_id = (state.get("batch") or {}).get("id")
