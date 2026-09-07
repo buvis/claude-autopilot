@@ -109,23 +109,34 @@ def _assumptions(decisions: list[dict]) -> list[str]:
 def _autonomous_row(d: dict) -> list:
     return [
         d.get("cycle"),
-        d.get("issue") or d.get("question"),
+        d.get("issue")
+        or d.get("question")
+        or d.get("decision")
+        or d.get("finding")
+        or d.get("supersedes")
+        or d.get("detail"),
         d.get("severity"),
-        d.get("action"),
-        d.get("reason") or d.get("resolution"),
+        d.get("action") or d.get("disposition"),
+        d.get("reason")
+        or d.get("resolution")
+        or d.get("rationale")
+        or d.get("assumption"),
     ]
 
 
 def is_autonomous_row(entry) -> bool:
     """True when the Autonomous Decisions table draws a row for `entry`: a
     dict whose `type` is not `"assumed-ambiguity"` (those land in Assumptions
-    Made) with at least one non-empty cell (not None, not "") among the five
-    the table renders. `statectl.complete-prd` counts with this same predicate
-    so the write side and the render side agree."""
+    Made) and whose Issue cell holds text, i.e. one of issue / question /
+    decision / finding / supersedes / detail is non-empty. Text in any other
+    cell earns no row, because the row it would draw shows a blank Issue.
+    `statectl.complete-prd` counts with this same predicate so the write side
+    and the render side agree."""
     return (
         isinstance(entry, dict)
         and entry.get("type") != "assumed-ambiguity"
-        and any(cell is not None and cell != "" for cell in _autonomous_row(entry))
+        # Index 1 is the Issue cell.
+        and bool(_autonomous_row(entry)[1])
     )
 
 

@@ -448,13 +448,12 @@ class StatectlCompletePrdTest(unittest.TestCase):
         entry = self.load_state()["batch"]["completed_prds"][-1]
         self.assertEqual(entry["autonomous_decisions"], 6)
 
-    # Defect 2, sharpened: the rule is "has a non-empty cell among the five
-    # the renderer draws" (cycle/issue-or-question/severity/action/reason-or-
-    # resolution), not "has any non-empty value under any key". An entry
-    # whose only populated field is outside those five renders no row and
-    # must not be counted. Paired with a well-formed decision so the expected
-    # count is 1, not 0 - a broken implementation that counts nothing can't
-    # pass by accident.
+    # Defect 2, sharpened: the rule is "the Issue cell holds text" (the first
+    # non-empty of issue/question/decision/finding/supersedes/detail), not
+    # "has any non-empty value under any key". An entry whose only populated
+    # field is outside that chain renders no row and must not be counted.
+    # Paired with a well-formed decision so the expected count is 1, not 0 -
+    # a broken implementation that counts nothing can't pass by accident.
     def test_entry_with_only_non_renderable_keys_is_not_counted(self) -> None:
         self.write_state(
             {
