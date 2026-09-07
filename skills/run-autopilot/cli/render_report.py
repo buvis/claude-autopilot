@@ -455,6 +455,19 @@ def _ledger_rows(state: dict, path: Path | None) -> list[dict]:
     ]
 
 
+def _tasks_line(state: dict, record: dict | None) -> str:
+    """The `- Tasks:` count: the closing batch record's counts when one
+    matches, else the live `state.tasks` statuses, else `?/?` - never the
+    stale state-root fields the batch drain wipes to 0."""
+    if record is not None:
+        return f"{record.get('tasks_completed', '?')}/{record.get('tasks_total', '?')}"
+    tasks = state.get("tasks") or []
+    if not tasks:
+        return "?/?"
+    done = sum(1 for t in tasks if t.get("status") == "completed")
+    return f"{done}/{len(tasks)}"
+
+
 def prd_section(
     state: dict,
     metrics_rows: list[dict],
@@ -480,23 +493,12 @@ def prd_section(
     # `cycle` is present until the per-PRD reset wipes it; after that the
     # closing batch record carries the count (statectl._completed_prd_record).
     cycles = state["cycle"] if "cycle" in state else (record or {}).get("cycles", "?")
-    if record is not None:
-        tasks_line = (
-            f"{record.get('tasks_completed', '?')}/{record.get('tasks_total', '?')}"
-        )
-    else:
-        tasks = state.get("tasks") or []
-        if tasks:
-            done = sum(1 for t in tasks if t.get("status") == "completed")
-            tasks_line = f"{done}/{len(tasks)}"
-        else:
-            tasks_line = "?/?"
     lines = [
         f"## {prd}",
         "",
         f"- Completed: {completed}",
         f"- Cycles: {cycles}",
-        f"- Tasks: {tasks_line}",
+        f"- Tasks: {_tasks_line(state, record)}",
         "",
     ]
     lines += _assumptions(autonomous)
