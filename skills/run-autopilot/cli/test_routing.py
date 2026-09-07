@@ -545,10 +545,51 @@ def test_review_cycle_defaults_to_one_when_state_json_is_malformed(tmp_path):
     assert review_cycle(ap_dir) == 1
 
 
+def test_review_cycle_survives_an_unreadable_state_file(tmp_path, monkeypatch):
+    # An OSError from the read itself (PermissionError, not malformed JSON)
+    # must be swallowed exactly like a missing or malformed state: cycle 1,
+    # xhigh, nothing raised, and the file left untouched.
+    ap_dir = _ap_dir_with_cycle(tmp_path, None)
+    state_path = ap_dir / "state.json"
+    state_path.write_text(json.dumps({"cycle": 5}))
+    before = state_path.read_bytes()
+    original_read_text = Path.read_text
+
+    def _raise(self, *args, **kwargs):
+        if self == state_path:
+            raise PermissionError("denied")
+        return original_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", _raise)
+    assert review_cycle(ap_dir) == 1
+    assert route("review", ap_dir, env={}).effort == "xhigh"
+    assert state_path.read_bytes() == before
+
+
 def test_review_cycle_defaults_to_one_when_cycle_is_not_an_int(tmp_path):
     ap_dir = _ap_dir_with_cycle(tmp_path, None)
     (ap_dir / "state.json").write_text(json.dumps({"cycle": "two"}))
     assert review_cycle(ap_dir) == 1
+
+
+def test_review_cycle_treats_json_true_as_int_one_not_bool(tmp_path):
+    # bool is an int subclass in Python; an isinstance(..., int) check
+    # alone lets True/False leak through where an int is promised.
+    ap_dir = _ap_dir_with_cycle(tmp_path, None)
+    (ap_dir / "state.json").write_text(json.dumps({"cycle": True}))
+    got = review_cycle(ap_dir)
+    assert got == 1
+    assert type(got) is int
+    assert route("review", ap_dir, env={}).effort == "xhigh"
+
+
+def test_review_cycle_treats_json_false_as_int_one_not_bool(tmp_path):
+    ap_dir = _ap_dir_with_cycle(tmp_path, None)
+    (ap_dir / "state.json").write_text(json.dumps({"cycle": False}))
+    got = review_cycle(ap_dir)
+    assert got == 1
+    assert type(got) is int
+    assert route("review", ap_dir, env={}).effort == "xhigh"
 
 
 def test_review_cycle_defaults_to_one_when_cycle_key_is_absent(tmp_path):
@@ -593,6 +634,22 @@ def test_review_effort_override_wins_on_reruns(tmp_path):
     assert got.effort == "xhigh"
 
 
+def test_review_effort_override_wins_over_rerun_override_when_both_set(tmp_path):
+    # _AUTOPILOT_EFFORT_REVIEW forces every cycle; _AUTOPILOT_EFFORT_REVIEW_RERUN
+    # only sets cycle 2+. With both set on a rerun, the always-wins override
+    # must beat the rerun-only value.
+    ap_dir = _ap_dir_with_cycle(tmp_path, 3)
+    got = route(
+        "review",
+        ap_dir,
+        env={
+            "_AUTOPILOT_EFFORT_REVIEW": "xhigh",
+            "_AUTOPILOT_EFFORT_REVIEW_RERUN": "medium",
+        },
+    )
+    assert got.effort == "xhigh"
+
+
 def test_review_effort_override_wins_even_when_empty_string(tmp_path):
     # The override branch is a membership test ("that key is set in env"),
     # not the file's usual `.get(key) or default` idiom used elsewhere in
@@ -628,13 +685,7 @@ def _rows(path: Path) -> list[dict]:
 
 
 def test_metrics_row_carries_effort(tmp_path):
-    # Every call shares one ts_start, one phase and one model, so the
-    # argument is the ONLY thing that can explain each recorded value.
-    # The values are written through verbatim: route() emits "" whenever
-    # _AUTOPILOT_EFFORT_REVIEW is set empty (see the override case above)
-    # and env knobs can name any level at all, so neither a default nor a
-    # known-levels whitelist may stand between the argument and the row.
-    # Each call APPENDS its own line.
+    # Empty and unknown efforts must persist verbatim; repeated calls must append.
     lp = Loop()
     efforts = ["xhigh", "", "unrecognized-level", "medium"]
     for effort in efforts:

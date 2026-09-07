@@ -383,6 +383,42 @@ def test_review_branch_routes_opus_with_review_cap(tmp_path):
     assert launch["cap_secs"] == 10800
 
 
+def test_run_relaunches_a_cycle_two_review_at_high_effort_and_persists_it(tmp_path):
+    lp = make_loop(tmp_path, [terminal_step()])
+    ap = lp._test["ap_dir"]
+    write_state(ap, prd="p.md", next_phase="review", cycle=2, batch={"id": "b"})
+    assert lp.run() == 0
+    launch = lp._test["spawn"].launches[0]
+    assert launch["model"] == "claude-opus-5[1m]"
+    assert launch["effort"] == "high"
+    primary = json.loads(
+        (ap / "loop-metrics.jsonl").read_text().strip().splitlines()[0],
+    )
+    ledger = json.loads(
+        (ap / "ledger" / "loop-metrics.jsonl").read_text().strip().splitlines()[0],
+    )
+    assert primary["effort"] == "high"
+    assert ledger["effort"] == "high"
+
+
+def test_run_once_launches_a_cycle_two_review_at_high_effort_and_persists_it(tmp_path):
+    lp = make_loop(tmp_path, [noop_step])
+    ap = lp._test["ap_dir"]
+    write_state(ap, prd="p.md", next_phase="review", cycle=2, batch={"id": "b"})
+    lp.run_once()
+    launch = lp._test["spawn"].launches[0]
+    assert launch["model"] == "claude-opus-5[1m]"
+    assert launch["effort"] == "high"
+    primary = json.loads(
+        (ap / "loop-metrics.jsonl").read_text().strip().splitlines()[0],
+    )
+    ledger = json.loads(
+        (ap / "ledger" / "loop-metrics.jsonl").read_text().strip().splitlines()[0],
+    )
+    assert primary["effort"] == "high"
+    assert ledger["effort"] == "high"
+
+
 def test_done_branch_routes_sonnet_medium(tmp_path):
     lp = make_loop(tmp_path, [terminal_step()])
     write_state(lp._test["ap_dir"], prd="p.md", next_phase="done", batch={"id": "b"})
