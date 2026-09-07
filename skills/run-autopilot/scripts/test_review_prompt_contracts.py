@@ -28,6 +28,7 @@ _PHASE_REVIEW = (
 )
 _AGENTS = _SKILLS.parent / "agents"
 _RUN_AUTOPILOT_SKILL = _SKILLS / "run-autopilot" / "SKILL.md"
+_SHELL_RULES_HEADING = "## Shell Command Rules"
 
 # The Bash tool-discipline paragraph every Bash-bearing persona must carry
 # verbatim, and the orchestrator skill must lead its Shell Command Rules with.
@@ -189,7 +190,20 @@ class ToolDisciplineContractTests(unittest.TestCase):
 
     def test_orchestrator_skill_carries_tool_discipline(self) -> None:
         skill = _RUN_AUTOPILOT_SKILL.read_text()
-        self.assertIn(TOOL_DISCIPLINE, skill)
+        self.assertEqual(
+            skill.count(TOOL_DISCIPLINE),
+            1,
+            "run-autopilot/SKILL.md must carry TOOL_DISCIPLINE exactly once",
+        )
+        lines = skill.splitlines()
+        self.assertIn(_SHELL_RULES_HEADING, lines)
+        after = lines[lines.index(_SHELL_RULES_HEADING) + 1 :]
+        first_line = next(line for line in after if line.strip())
+        self.assertEqual(
+            first_line,
+            f"- {TOOL_DISCIPLINE}",
+            f"TOOL_DISCIPLINE must be the first bullet under {_SHELL_RULES_HEADING}",
+        )
 
 
 if __name__ == "__main__":
