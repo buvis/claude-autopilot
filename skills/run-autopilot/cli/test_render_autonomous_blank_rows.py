@@ -252,14 +252,15 @@ class AutonomousRowCellAliasTests(unittest.TestCase):
             for cell, keys in chains:
                 for position in range(len(keys) - 1):
                     with self.subTest(value=value, key=keys[position]):
-                        entry = {"cycle": 1, "issue": "i", "severity": "low"}
-                        # Every alias ahead of this one cleared away, so the
-                        # cell can only answer with the non-string or with
-                        # the text sitting right behind it.
-                        for earlier in keys[:position]:
-                            entry.pop(earlier, None)
-                        entry[keys[position]] = value
-                        entry[keys[position + 1]] = "text"
+                        # Only the keys this case needs: no alias ahead of the
+                        # tested one exists at all, so the cell can only answer
+                        # with the non-string or with the text right behind it.
+                        entry = {
+                            "cycle": 1,
+                            "severity": "low",
+                            keys[position]: value,
+                            keys[position + 1]: "text",
+                        }
                         self.assertEqual(
                             render_report._autonomous_row(entry)[cell],
                             "text",

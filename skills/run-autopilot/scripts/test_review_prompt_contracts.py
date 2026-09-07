@@ -132,13 +132,9 @@ class PhaseReviewDecisionShapeTests(unittest.TestCase):
                 f"the append instruction {anchor!r} must appear exactly once, "
                 "so the window below searches the site a reader actually meets",
             )
+            # The count above already proves the anchor is present, so `find`
+            # cannot answer -1 here.
             start = self.phase_review.find(anchor)
-            self.assertNotEqual(
-                start,
-                -1,
-                f"the append instruction {anchor!r} must still be in the review "
-                "gate — deleting an instruction is not a way to carry its shape",
-            )
             window = self.phase_review[start : start + len(anchor) + _SHAPE_WINDOW]
             self.assertIn(
                 _DECISION_ENTRY_SHAPE,

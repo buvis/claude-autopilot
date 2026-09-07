@@ -429,23 +429,23 @@ class PrdSectionLedgerTests(unittest.TestCase):
         self.assertIn("no implementor data", text)
         self.assertIn("## 00040-feature-x-v1.md", text)
 
-    def test_unreadable_regular_file_ledger_is_reported_once_on_stderr(self) -> None:
-        # A directory at the ledger path (the case above) is not the same
-        # thing as a file the process cannot open. The mechanism here is
-        # chmod 000 on a real regular file holding a real row, which root
-        # ignores -- so probe it and skip rather than let the suite pass
-        # because the file stayed readable.
+    def _assert_unopenable_ledger_reported_once(self, mode: int, skip: str) -> None:
+        """A real regular file holding a real row, chmod'ed to `mode`: no
+        rows, exactly one stderr line naming the path, and a section that
+        still renders without it. Root ignores the mode, so probe the file
+        first and skip with `skip` rather than let the case pass because the
+        file stayed readable."""
         state = _state()
         state["tasks"] = []
         self._write_ledger([json.dumps(_ledger_row(state, "1", 1, "claude"))])
-        self.ledger.chmod(0o000)
+        self.ledger.chmod(mode)
         self.addCleanup(self.ledger.chmod, 0o600)
         try:
             self.ledger.read_text(encoding="utf-8")
         except OSError:
             pass
         else:
-            self.skipTest("this user can read a chmod 000 file (running as root?)")
+            self.skipTest(skip)
 
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
@@ -463,6 +463,17 @@ class PrdSectionLedgerTests(unittest.TestCase):
         # The unread row named claude, so a section counting it would prove
         # the file was opened after all.
         self.assertNotIn("| claude | 1 |", text)
+
+    def test_unreadable_regular_file_ledger_is_reported_once_on_stderr(self) -> None:
+        # A directory at the ledger path (the case above) is not the same
+        # thing as a file the process cannot open. The mechanism here is
+        # chmod 000 on a real regular file holding a real row, which root
+        # ignores -- so probe it and skip rather than let the suite pass
+        # because the file stayed readable.
+        self._assert_unopenable_ledger_reported_once(
+            0o000,
+            "this user can read a chmod 000 file (running as root?)",
+        )
 
     def test_write_only_regular_file_ledger_is_reported_once_on_stderr(self) -> None:
         # chmod 000 is not the only way a regular file resists opening. A
@@ -470,34 +481,10 @@ class PrdSectionLedgerTests(unittest.TestCase):
         # a check that asks "are the mode bits exactly 000?" instead of
         # "can I open it?" walks straight past this one. Same root probe:
         # root ignores the mode, and a readable file would pass vacuously.
-        state = _state()
-        state["tasks"] = []
-        self._write_ledger([json.dumps(_ledger_row(state, "1", 1, "claude"))])
-        self.ledger.chmod(0o200)
-        self.addCleanup(self.ledger.chmod, 0o600)
-        try:
-            self.ledger.read_text(encoding="utf-8")
-        except OSError:
-            pass
-        else:
-            self.skipTest("this user can read a write-only file (running as root?)")
-
-        err = io.StringIO()
-        with contextlib.redirect_stderr(err):
-            rows = render_report._ledger_rows(state, self.ledger)
-        self.assertEqual(rows, [])
-        self.assertEqual(len(err.getvalue().splitlines()), 1)
-        self.assertIn(str(self.ledger), err.getvalue())
-
-        err = io.StringIO()
-        with contextlib.redirect_stderr(err):
-            text = render_report.prd_section(state, [], NOW, None, self.ledger)
-        self.assertEqual(len(err.getvalue().splitlines()), 1)
-        self.assertIn(str(self.ledger), err.getvalue())
-        self.assertIn("no implementor data", text)
-        # The unread row named claude, so a section counting it would prove
-        # the file was opened after all.
-        self.assertNotIn("| claude | 1 |", text)
+        self._assert_unopenable_ledger_reported_once(
+            0o200,
+            "this user can read a write-only file (running as root?)",
+        )
 
     def test_malformed_ledger_line_is_skipped_and_good_rows_still_count(self) -> None:
         state = _state()
