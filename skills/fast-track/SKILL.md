@@ -83,7 +83,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUG
 ```
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:tests --task <item> --prompt-file dev/local/tmp/fast-track-<item>-tests.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:tess --task <item> --prompt-file dev/local/tmp/fast-track-<item>-tests.txt
 ```
 
 Both calls print the prompt's byte count; the start call prints the dispatch id
@@ -238,11 +238,11 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUG
 Open one row per lane, one Bash call each:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:consensus --task <item> --prompt-file dev/local/tmp/fast-track-<item>-consensus.txt
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:blind --task <item> --prompt-file dev/local/tmp/fast-track-<item>-blake.txt
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:doubt --task <item> --prompt-file dev/local/tmp/fast-track-<item>-eve.txt
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:codex --task <item> --prompt-file dev/local/tmp/fast-track-<item>-codex.txt
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:gemini --task <item> --prompt-file dev/local/tmp/fast-track-<item>-gemini.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:fanout --task <item> --prompt-file dev/local/tmp/fast-track-<item>-consensus.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:blake --task <item> --prompt-file dev/local/tmp/fast-track-<item>-blake.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:eve --task <item> --prompt-file dev/local/tmp/fast-track-<item>-eve.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:bob --task <item> --prompt-file dev/local/tmp/fast-track-<item>-codex.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:carl --task <item> --prompt-file dev/local/tmp/fast-track-<item>-gemini.txt
 ```
 
 Send all five lanes in one message: three Task calls and two background Bash
@@ -352,12 +352,13 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUG
 ```
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:verify --task <item> --prompt-file dev/local/tmp/fast-track-<item>-verify-<n>.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:victor --task <item> --prompt-file dev/local/tmp/fast-track-<item>-verify-<n>.txt
 ```
 
 ```
 Task tool:
-  subagent_type: autopilot:victor
+  subagent_type: general-purpose
+  model: sonnet
   prompt: the contents of dev/local/tmp/fast-track-<item>-verify-<n>.txt
 ```
 
@@ -376,7 +377,7 @@ that file. The fresh implementor reads the findings and the tests, so it argues
 with neither.
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:rework --task <item> --prompt-file dev/local/tmp/fast-track-<item>-rework.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:ivan --task <item> --prompt-file dev/local/tmp/fast-track-<item>-rework.txt
 ```
 
 A confirmed finding still standing after the delta review goes to the exit rule.
@@ -440,10 +441,10 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py end <id> --
 ```
 
 `--outcome` takes `ok`, `timeout`, `killed`, `error` or `lost`, and `--detail`
-carries the reason. The kinds this lane opens are `fast-track:tests`,
-`fast-track:ivan`, `fast-track:consensus`, `fast-track:blind`,
-`fast-track:doubt`, `fast-track:codex`, `fast-track:gemini`,
-`fast-track:verify`, `fast-track:rework` and `fast-track:delta`.
+carries the reason. The kinds this lane opens are `fast-track:tess`,
+`fast-track:ivan`, `fast-track:fanout`, `fast-track:alice`,
+`fast-track:blake`, `fast-track:eve`, `fast-track:bob`, `fast-track:carl`,
+`fast-track:victor` and `fast-track:delta`.
 
 One more row closes the item itself, after the exit rule:
 
