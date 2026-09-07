@@ -253,20 +253,39 @@ class PrdSectionLedgerTests(unittest.TestCase):
         # A second local row whose implementor is not claude: the section
         # counts every implementor the ledger names, not a claude allowlist.
         mine_qwen = _ledger_row(state, "2", 1, "qwen")
-        # The foreign rows carry the SAME implementor as the local one, so
-        # only a real prd+batch filter can keep claude at 1.
-        other_prd = _ledger_row(state, "3", 1, "claude")
+        # Two DIFFERENT local tasks sharing one attempt number AND one
+        # implementor. They are two attempts; a dedup keyed on (attempt,
+        # implementor) rather than on (task, attempt) collapses them to one
+        # and hides a filter that lets foreign rows through.
+        mine_codex_a = _ledger_row(state, "5", 1, "codex")
+        mine_codex_b = _ledger_row(state, "6", 1, "codex")
+        # The foreign rows reuse LOCAL task ids, so a task-id whitelist cannot
+        # pass for a filter: it would keep these and drop the codex rows. Their
+        # implementors appear nowhere locally, so an unfiltered ledger names
+        # them in the table.
+        other_prd = _ledger_row(state, "1", 2, "mistral")
         other_prd["prd"] = "00099-other-prd.md"
-        other_batch = _ledger_row(state, "4", 1, "claude")
+        other_batch = _ledger_row(state, "2", 2, "grok")
         other_batch["batch_id"] = "202601010000"
         self._write_ledger(
-            [json.dumps(r) for r in (mine, mine_qwen, other_prd, other_batch)],
+            [
+                json.dumps(r)
+                for r in (
+                    mine,
+                    mine_qwen,
+                    mine_codex_a,
+                    mine_codex_b,
+                    other_prd,
+                    other_batch,
+                )
+            ],
         )
         text = render_report.prd_section(state, [], NOW, None, self.ledger)
         self.assertIn("| claude | 1 |", text)
         self.assertIn("| qwen | 1 |", text)
-        self.assertNotIn("| claude | 2 |", text)
-        self.assertNotIn("| claude | 3 |", text)
+        self.assertIn("| codex | 2 |", text)
+        self.assertNotIn("mistral", text)
+        self.assertNotIn("grok", text)
 
     def test_ledger_rows_join_the_state_attempts_in_one_table(self) -> None:
         # Mid-batch (any render before complete-prd drains them), state still
@@ -290,16 +309,12 @@ class PrdSectionLedgerTests(unittest.TestCase):
         self.assertIn("| qwen | 1 |", text)
         self.assertEqual(text.count("| Implementor | Attempts |"), 1)
 
-    def test_missing_ledger_renders_no_implementor_data(self) -> None:
-        state = _state()
-        state["tasks"] = []
-        text = render_report.prd_section(state, [], NOW, None, self.tmp / "gone.jsonl")
-        self.assertIn("no implementor data", text)
-        self.assertIn("## 00040-feature-x-v1.md", text)
-
-    def test_missing_ledger_is_reported_once_on_stderr(self) -> None:
-        # An empty render is right, but a silent one hides a ledger the batch
-        # expected to exist: the operator gets one line naming the path.
+    def test_missing_ledger_renders_no_implementor_data_and_one_stderr_line(
+        self,
+    ) -> None:
+        # The section still renders, without an implementor table. An empty
+        # render is right, but a silent one hides a ledger the batch expected
+        # to exist: the operator gets one line naming the path.
         state = _state()
         state["tasks"] = []
         missing = self.tmp / "gone.jsonl"
@@ -309,8 +324,11 @@ class PrdSectionLedgerTests(unittest.TestCase):
         self.assertEqual(len(err.getvalue().splitlines()), 1)
         self.assertIn(str(missing), err.getvalue())
         self.assertIn("no implementor data", text)
+        self.assertIn("## 00040-feature-x-v1.md", text)
 
-    def test_unreadable_ledger_is_reported_once_on_stderr(self) -> None:
+    def test_directory_ledger_renders_no_implementor_data_and_one_stderr_line(
+        self,
+    ) -> None:
         self.ledger.mkdir()  # a directory where the ledger file belongs
         state = _state()
         state["tasks"] = []
@@ -320,6 +338,7 @@ class PrdSectionLedgerTests(unittest.TestCase):
         self.assertEqual(len(err.getvalue().splitlines()), 1)
         self.assertIn(str(self.ledger), err.getvalue())
         self.assertIn("no implementor data", text)
+        self.assertIn("## 00040-feature-x-v1.md", text)
 
     def test_unreadable_regular_file_ledger_is_reported_once_on_stderr(self) -> None:
         # A directory at the ledger path (the case above) is not the same
@@ -404,14 +423,6 @@ class PrdSectionLedgerTests(unittest.TestCase):
         text = render_report.prd_section(state, [], NOW, None, self.ledger)
         self.assertIn("| claude | 2 |", text)
         self.assertNotIn("no implementor data", text)
-
-    def test_unreadable_ledger_renders_without_implementor_rows(self) -> None:
-        self.ledger.mkdir()  # a directory where the ledger file belongs
-        state = _state()
-        state["tasks"] = []
-        text = render_report.prd_section(state, [], NOW, None, self.ledger)
-        self.assertIn("no implementor data", text)
-        self.assertIn("## 00040-feature-x-v1.md", text)
 
     def test_the_existing_positional_calls_read_no_ledger(self) -> None:
         state = _state()

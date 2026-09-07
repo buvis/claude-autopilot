@@ -122,6 +122,16 @@ class PhaseReviewDecisionShapeTests(unittest.TestCase):
         # shape where the reader of that instruction meets it, so each site is
         # located by its own anchor and searched only in the window after it.
         for anchor in _APPEND_SITE_ANCHORS:
+            # `find` returns the FIRST match, so a second copy of an anchor
+            # would shadow the real site: a decoy paragraph repeating the
+            # anchor and the shape would satisfy the window while the genuine
+            # instruction stayed shapeless.
+            self.assertEqual(
+                self.phase_review.count(anchor),
+                1,
+                f"the append instruction {anchor!r} must appear exactly once, "
+                "so the window below searches the site a reader actually meets",
+            )
             start = self.phase_review.find(anchor)
             self.assertNotEqual(
                 start,

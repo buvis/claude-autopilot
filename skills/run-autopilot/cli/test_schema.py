@@ -18,6 +18,7 @@ implementation was read or referenced.
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -33,6 +34,9 @@ LIVE_STATE_JSON = Path.home() / ".claude/dev/local/autopilot/state.json"
 _SKILL_DIR = Path(__file__).resolve().parent.parent
 GOLDEN_DIR = _SKILL_DIR / "scripts" / "golden"
 CLI_GOLDEN_DIR = _SKILL_DIR / "cli" / "golden"
+# The runnable CLI is the scripts/ shim: cli/statectl.py imports its siblings
+# relatively and carries no __main__ guard, so only this path is a process.
+STATECTL = _SKILL_DIR / "scripts" / "statectl.py"
 
 
 def valid_state() -> dict:
@@ -1561,6 +1565,43 @@ class DuplicateAppendedDecisionEntriesTest(unittest.TestCase):
             str(ctx.exception),
             "autonomous_decisions entry missing severity",
         )
+
+
+class StatectlRejectionCliTest(unittest.TestCase):
+    """The refusal as an operator meets it, driven as a real process: the
+    validator raising inside `mutate`'s apply has to reach the shell as exit 1
+    plus the `rejected:` line, and the write it refused must never land."""
+
+    def test_appending_a_bare_decision_exits_1_and_leaves_the_file_untouched(
+        self,
+    ) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            state_path = Path(tmp) / "state.json"
+            state_path.write_text(json.dumps(valid_state()), encoding="utf-8")
+            before = state_path.read_bytes()
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(STATECTL),
+                    str(state_path),
+                    "append",
+                    "autonomous_decisions",
+                    '{"cycle": 1}',
+                ],
+                capture_output=True,
+                text=True,
+            )
+            after = state_path.read_bytes()
+        self.assertEqual(proc.returncode, 1, proc.stderr)
+        self.assertEqual(
+            proc.stderr.splitlines(),
+            ["rejected: autonomous_decisions entry missing issue"],
+        )
+        # The raise happens before state.transaction writes, so a rejected
+        # append leaves the file byte-identical -- not merely re-serialized.
+        self.assertEqual(after, before)
 
 
 if __name__ == "__main__":

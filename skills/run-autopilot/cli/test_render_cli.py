@@ -97,6 +97,45 @@ class CliWiringTests(unittest.TestCase):
         self.assertIn("## 00040-feature-x-v1.md", text)
         self.assertIn("## Batch Summary", text)
 
+    def test_render_report_reads_the_batch_attempt_ledger(self) -> None:
+        # complete-prd drains state.tasks[].attempts into
+        # <autopilot_dir>/ledger/attempts.jsonl before the section renders, so
+        # the Implementor table exists only if the CLI hands prd_section that
+        # path. Dropping the argument leaves `no implementor data` here while
+        # every in-process ledger test stays green.
+        state = _state()
+        state["tasks"] = []
+        self.state_path.write_text(json.dumps(state), encoding="utf-8")
+        (self.ap_dir / "ledger").mkdir()
+        (self.ap_dir / "ledger" / "attempts.jsonl").write_text(
+            "".join(
+                json.dumps(
+                    {
+                        "batch_id": state["batch"]["id"],
+                        "prd": state["prd"],
+                        "task_id": task_id,
+                        "recorded_at": "2026-09-07T05:48:00Z",
+                        "attempt": {"attempt": attempt, "implementor": implementor},
+                    },
+                )
+                + "\n"
+                for task_id, attempt, implementor in (
+                    ("1", 1, "claude"),
+                    ("1", 2, "claude"),
+                    ("2", 1, "qwen"),
+                )
+            ),
+            encoding="utf-8",
+        )
+        proc = self._run(["render", "report", "--now", NOW])
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        text = (self.ap_dir / "reports" / "202607202320-report.md").read_text(
+            encoding="utf-8",
+        )
+        self.assertNotIn("no implementor data", text)
+        self.assertIn("| claude | 2 |", text)
+        self.assertIn("| qwen | 1 |", text)
+
     def test_render_report_stalled_appends_the_short_form(self) -> None:
         proc = self._run(
             [
