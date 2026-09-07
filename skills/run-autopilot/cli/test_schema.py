@@ -1396,5 +1396,172 @@ class ExistingDecisionEntriesTest(unittest.TestCase):
         self.assertRegex(str(ctx.exception), MISSING_KEY_MESSAGE)
 
 
+class DuplicateAppendedDecisionEntriesTest(unittest.TestCase):
+    """Addition counts occurrences, not membership: a value already sitting in
+    the list can still be added again. Every copy a write pushes past the
+    number `before` held is judged; the copies that merely carry over are not,
+    so a state written by an older loop still loads."""
+
+    def test_a_second_copy_of_an_invalid_entry_is_judged(self) -> None:
+        # The value is already in `before`, so asking only whether it appears
+        # there calls this write an addition of nothing -- and the blank row
+        # the second copy draws lands in the report unchallenged.
+        before = valid_state()
+        before["autonomous_decisions"] = [{"cycle": 1}]
+        after = valid_state()
+        after["autonomous_decisions"] = [{"cycle": 1}, {"cycle": 1}]
+        with self.assertRaises(schema.SchemaError) as ctx:
+            schema.validate_changed(before, after)
+        self.assertEqual(
+            str(ctx.exception),
+            "autonomous_decisions entry missing issue",
+        )
+
+    def test_a_second_copy_of_a_valid_entry_is_accepted(self) -> None:
+        # The mirror, and the case a "refuse any repeat" fix gets wrong:
+        # judging the new copy is the point, not refusing it for being a
+        # repeat. Two identical well-formed decisions draw two readable rows.
+        before = valid_state()
+        before["autonomous_decisions"] = [_valid_decision()]
+        after = valid_state()
+        after["autonomous_decisions"] = [_valid_decision(), _valid_decision()]
+        self.assertIsNone(schema.validate_changed(before, after))
+
+    def test_valid_append_beside_repeated_stubs_is_accepted(self) -> None:
+        # Every stub appears twice, so a fix that judges an entry whenever the
+        # list holds more than one of it refuses a write that only added a
+        # well-formed decision.
+        before = valid_state()
+        before["autonomous_decisions"] = _stub_entries() + _stub_entries()
+        after = valid_state()
+        after["autonomous_decisions"] = (
+            _stub_entries() + _stub_entries() + [_valid_decision()]
+        )
+        self.assertIsNone(schema.validate_changed(before, after))
+
+    def test_an_unchanged_list_of_repeated_stubs_is_never_judged(self) -> None:
+        # The resume path: the write touches `phase`, the decisions list comes
+        # through equal (a fresh copy, not the same object), and not one of its
+        # entries -- all invalid, each of them duplicated -- is re-judged.
+        before = valid_state()
+        before["autonomous_decisions"] = _stub_entries() + _stub_entries()
+        after = valid_state()
+        after["autonomous_decisions"] = _stub_entries() + _stub_entries()
+        after["phase"] = "review"
+        self.assertIsNone(schema.validate_changed(before, after))
+
+    def test_a_write_that_only_removes_entries_judges_nothing(self) -> None:
+        # A removal can only lower an occurrence count, so nothing was added
+        # and nothing is judged -- even though every entry kept, and every
+        # entry dropped, fails the contract. Dropping one copy of each value
+        # is the case a naive count comparison mixes up.
+        remainders = (
+            _stub_entries(),
+            [{"cycle": 1}, {"cycle": 1}],
+            [],
+        )
+        for remainder in remainders:
+            with self.subTest(kept=len(remainder)):
+                before = valid_state()
+                before["autonomous_decisions"] = _stub_entries() + _stub_entries()
+                after = valid_state()
+                after["autonomous_decisions"] = remainder
+                self.assertIsNone(schema.validate_changed(before, after))
+
+    def test_several_copies_of_an_invalid_entry_appended_at_once_are_rejected(
+        self,
+    ) -> None:
+        # Three copies beside none, two more beside one, three more beside
+        # two: whichever of the new copies the validator reaches first, they
+        # are the same value and the refusal names the same key.
+        #
+        # Three different invalid values, each lacking a different key, so the
+        # repeated value is never the one literal a check could recognise by
+        # sight. The bare stub names `issue`; the other two are well-formed
+        # decisions with one prose key removed, so the key named back varies
+        # with the value and a single hardcoded refusal cannot cover all three.
+        missing_action = _valid_decision()
+        del missing_action["action"]
+        missing_reason = _valid_decision()
+        del missing_reason["reason"]
+        invalid_values = (
+            ({"cycle": 1}, "issue"),
+            (missing_action, "action"),
+            (missing_reason, "reason"),
+        )
+        for value, key in invalid_values:
+            for existing, total in ((0, 3), (1, 3), (2, 5)):
+                with self.subTest(missing=key, existing=existing, total=total):
+                    before = valid_state()
+                    before["autonomous_decisions"] = [
+                        dict(value) for _ in range(existing)
+                    ]
+                    after = valid_state()
+                    after["autonomous_decisions"] = [dict(value) for _ in range(total)]
+                    with self.assertRaises(schema.SchemaError) as ctx:
+                        schema.validate_changed(before, after)
+                    self.assertEqual(
+                        str(ctx.exception),
+                        f"autonomous_decisions entry missing {key}",
+                    )
+
+    def test_a_duplicate_added_before_the_end_of_the_list_is_judged(self) -> None:
+        # The discipline AddedDecisionScopeTest already carries, brought to the
+        # duplicate lane. The added copy sits at index 1 of three, so it is not
+        # the last entry, its index is below the length `before` had, and its
+        # value is not the bare {"cycle": 1} stub the cases above drive. A
+        # check that judges only the tail of the list, only the indices past
+        # the old length, or only that one literal, accepts this write and lets
+        # the blank row the second copy draws into the report.
+        incomplete = _valid_decision()
+        del incomplete["issue"]
+        before = valid_state()
+        before["autonomous_decisions"] = [dict(incomplete), _valid_decision()]
+        after = valid_state()
+        after["autonomous_decisions"] = [
+            dict(incomplete),
+            dict(incomplete),
+            _valid_decision(),
+        ]
+        with self.assertRaises(schema.SchemaError) as ctx:
+            schema.validate_changed(before, after)
+        self.assertEqual(
+            str(ctx.exception),
+            "autonomous_decisions entry missing issue",
+        )
+
+    def test_reordering_pre_existing_entries_judges_nothing(self) -> None:
+        # A reorder adds no occurrence of anything: the same values come out
+        # in the same numbers, so every entry merely carried over and none is
+        # re-judged, however invalid they all are. A check that pairs
+        # `after[i]` against `before[i]`, or that judges everything from the
+        # first slot whose value moved, refuses this write -- and a loop whose
+        # state got rewritten in a different order would never load again.
+        before = valid_state()
+        before["autonomous_decisions"] = _stub_entries()
+        after = valid_state()
+        after["autonomous_decisions"] = list(reversed(_stub_entries()))
+        self.assertIsNone(schema.validate_changed(before, after))
+
+    def test_a_carried_over_entry_matches_on_values_not_on_key_names(self) -> None:
+        # The carry-over match compares VALUES. Here the added entry and the
+        # pre-existing one share all five key names and differ only in what
+        # those keys hold, so a count kept under a lossy key -- the sorted key
+        # names, the key count, the `type` -- lets the pre-existing entry pay
+        # for the added one and waves an unpublished severity into the report.
+        bad = _valid_decision()
+        bad["severity"] = "urgent"
+        before = valid_state()
+        before["autonomous_decisions"] = [_valid_decision()]
+        after = valid_state()
+        after["autonomous_decisions"] = [bad, _valid_decision()]
+        with self.assertRaises(schema.SchemaError) as ctx:
+            schema.validate_changed(before, after)
+        self.assertEqual(
+            str(ctx.exception),
+            "autonomous_decisions entry missing severity",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
