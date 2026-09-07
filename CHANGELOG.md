@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **work**: the Tess/Devon adversarial loop runs one strengthen round (at most 2 Devon and 4 Tess dispatches per task), then flags and proceeds
 - **review-work-completion**: carry the tool discipline paragraph into `agents/alice.md`, `agents/blake.md`, `agents/eve.md`, `agents/victor.md`, and `skills/run-autopilot/SKILL.md`, so each Bash-bearing reviewer persona follows the same shell command rules
+- **run-autopilot**: review sessions run on opus at xhigh in cycle 1 and at high on cycle 2 and later, with `_AUTOPILOT_EFFORT_REVIEW` forcing one effort for every cycle and `_AUTOPILOT_EFFORT_REVIEW_RERUN` setting the rerun value
 
 ### Fixed
 
