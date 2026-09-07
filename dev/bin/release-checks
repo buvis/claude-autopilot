@@ -30,3 +30,6 @@ bash skills/use-codex/scripts/test_codex_run.sh
 bash skills/use-codex/scripts/test_codex_run_resume.sh
 bash skills/use-gemini/scripts/test_gemini_run.sh
 bash skills/use-sonnet/scripts/test_sonnet_run.sh
+
+echo "[checks] fast-track lane"
+uv run --no-project --with pytest python -m pytest -q skills/fast-track/scripts

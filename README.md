@@ -10,7 +10,7 @@ reviewer who cannot see your reasoning says otherwise.
 
 ## What's inside
 
-Ten skills:
+Eleven skills:
 
 | Skill | Does |
 |---|---|
@@ -21,6 +21,7 @@ Ten skills:
 | `review-work-completion` | Consensus review of finished work against the PRD |
 | `review-blindly` | Spec-only lens: never sees the diff, finds the code itself |
 | `review-plan` | Critiques a plan before implementation |
+| `fast-track` | Runs one spec card through the full review roster, skipping the loop phases |
 | `use-codex`, `use-gemini`, `use-sonnet` | Non-interactive dispatch to external model CLIs |
 
 Fourteen agents. One implementor (`ivan`), and thirteen reviewers across four
