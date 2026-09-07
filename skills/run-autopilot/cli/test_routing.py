@@ -26,6 +26,7 @@ from pathlib import Path
 
 import pytest
 
+from cli.loop import Loop
 from cli.routing import (
     OPUS,
     SONNET,
@@ -606,3 +607,105 @@ def test_review_missing_state_keeps_xhigh(tmp_path):
     ap_dir = _ap_dir_with_cycle(tmp_path, None)
     got = route("review", ap_dir, env={})
     assert got.effort == "xhigh"
+
+
+# ── Loop._append_metrics(): the effort the router chose, persisted ──────────
+
+
+def _decision(**overrides) -> dict:
+    decision = {
+        "prd": "00090-persist-the-chosen-effort-v1.md",
+        "batch": "20260907-a",
+        "phase_end": "review",
+        "signal": "continue",
+    }
+    decision.update(overrides)
+    return decision
+
+
+def _rows(path: Path) -> list[dict]:
+    return [json.loads(ln) for ln in path.read_text().splitlines() if ln.strip()]
+
+
+def test_metrics_row_carries_effort(tmp_path):
+    # Every call shares one ts_start, one phase and one model, so the
+    # argument is the ONLY thing that can explain each recorded value.
+    # The values are written through verbatim: route() emits "" whenever
+    # _AUTOPILOT_EFFORT_REVIEW is set empty (see the override case above)
+    # and env knobs can name any level at all, so neither a default nor a
+    # known-levels whitelist may stand between the argument and the row.
+    # Each call APPENDS its own line.
+    lp = Loop()
+    efforts = ["xhigh", "", "unrecognized-level", "medium"]
+    for effort in efforts:
+        lp._append_metrics(
+            tmp_path,
+            1000.0,
+            1060.0,
+            _decision(),
+            "build",
+            SONNET,
+            effort,
+        )
+    rows = _rows(tmp_path / "loop-metrics.jsonl")
+    assert [row["effort"] for row in rows] == efforts
+    assert [row["model"] for row in rows] == [SONNET] * len(efforts)
+
+
+def test_metrics_effort_follows_model_and_displaces_no_other_field(tmp_path):
+    # Additive only: every pre-existing key keeps its name, its order and
+    # its computation (the timestamps still truncate toward zero), with
+    # effort inserted directly after model.
+    lp = Loop()
+    decision = _decision(phase_end="done", signal="drain")
+    lp._append_metrics(
+        tmp_path,
+        1_700_000_000.6,
+        1_700_000_123.2,
+        decision,
+        "b",
+        "m",
+        "e",
+    )
+    row = _rows(tmp_path / "loop-metrics.jsonl")[-1]
+    assert list(row) == [
+        "ts_start",
+        "ts_end",
+        "wall_secs",
+        "prd",
+        "batch",
+        "phase_launched",
+        "phase_end",
+        "signal",
+        "model",
+        "effort",
+    ]
+    assert row["ts_start"] == 1_700_000_000
+    assert row["ts_end"] == 1_700_000_123
+    assert row["wall_secs"] == 123
+    assert row["prd"] == decision["prd"]
+    assert row["batch"] == decision["batch"]
+    assert row["phase_launched"] == "b"
+    assert row["phase_end"] == "done"
+    assert row["signal"] == "drain"
+
+
+def test_metrics_effort_reaches_the_ledger_copy_verbatim(tmp_path):
+    # The ledger copy is the same encoded line, not a second rendering
+    # that could drop the new field.
+    ap_dir = tmp_path / "autopilot"
+    ap_dir.mkdir()
+    lp = Loop()
+    lp._append_metrics(ap_dir, 5.0, 9.0, _decision(), "review", OPUS, "high")
+    written = (ap_dir / "loop-metrics.jsonl").read_text()
+    assert (ap_dir / "ledger" / "loop-metrics.jsonl").read_text() == written
+    assert json.loads(written)["effort"] == "high"
+
+
+def test_metrics_append_with_effort_still_never_raises(tmp_path):
+    # The one sanctioned silent failure survives the new parameter: an
+    # unwritable target is swallowed, and no file appears.
+    lp = Loop()
+    missing = tmp_path / "never-created"
+    lp._append_metrics(missing, 1.0, 2.0, _decision(), "build", SONNET, "xhigh")
+    assert not missing.exists()
