@@ -330,3 +330,39 @@ def test_the_cli_prints_the_parsed_card_as_json_and_exits_zero() -> None:
         == "No user-facing docs beyond the fast-track skill reference."
     )
     assert payload == dataclasses.asdict(load_card(card_path))
+
+
+def test_the_cli_exits_two_when_the_card_path_does_not_exist(tmp_path: Path) -> None:
+    # The card path is an operator-typed argument, so a typo is the most common
+    # way this CLI is used wrong. It has to land on the same refusal as a bad
+    # card - exit 2, a message on stderr, nothing on stdout - rather than a
+    # traceback the lane would have to parse.
+    result = _run_cli(tmp_path / "no_such_card.md")
+
+    assert result.returncode == 2
+    assert result.stderr.strip() != ""
+    assert result.stdout == ""
+    assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize("bad_item", ["My Feature!", ""])
+def test_a_non_slug_item_is_refused(tmp_path: Path, bad_item: str) -> None:
+    # The item is a slug because the lane builds branch and file names from it,
+    # so punctuation and a blank value are both refused by name. The two arms
+    # share no shape, so only a [a-z0-9-]+ match passes both. The card is built
+    # here at runtime under a name of its own: the fixtures are the committed
+    # oracle, and a parser keying off fixture filenames has to fail this.
+    lines = _fixture("valid.md").read_text(encoding="utf-8").splitlines()
+    card_path = tmp_path / "runtime_card.md"
+    card_path.write_text(
+        "\n".join(
+            f"item: {bad_item}" if line.startswith("item:") else line for line in lines
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(CardError) as excinfo:
+        load_card(card_path)
+
+    assert excinfo.value.field.lower() == "item"

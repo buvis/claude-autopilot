@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+_ITEM = re.compile(r"[a-z0-9-]+")
 _MODELS = ("sonnet", "opus")
 _SUITES = ("batch", "per-item")
 _CHAIN_TOKENS = ("&&", ";", "|")
@@ -114,7 +116,11 @@ def _check_gates(gates: list[str]) -> None:
 
 def load_card(path: Path) -> Card:
     """Parse one spec card, or raise CardError naming the field that failed."""
-    keys, body = _split_frontmatter(path.read_text(encoding="utf-8"))
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise CardError("card", str(exc)) from exc
+    keys, body = _split_frontmatter(text)
     sections = _split_sections(body)
     _require_sections(sections)
 
@@ -138,8 +144,12 @@ def load_card(path: Path) -> Card:
     if len(goal.strip().splitlines()) > _MAX_GOAL_LINES:
         raise CardError("goal", f"goal past {_MAX_GOAL_LINES} lines: {_TOO_LARGE}")
 
+    item = keys.get("item", "")
+    if not _ITEM.fullmatch(item):
+        raise CardError("item", f"item {item!r} is not a slug matching [a-z0-9-]+")
+
     return Card(
-        item=keys.get("item", ""),
+        item=item,
         model=_require_choice(keys, "model", _MODELS),
         suite=_require_choice(keys, "suite", _SUITES),
         changelog=keys.get("changelog", ""),
