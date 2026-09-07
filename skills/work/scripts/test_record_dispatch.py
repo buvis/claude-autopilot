@@ -35,6 +35,64 @@ record_dispatch = _testutil.record_dispatch
 _project = _testutil.project
 _rows = _testutil.rows
 _pin_clock = _testutil.pin_clock
+_run_handoff = _testutil.run_handoff
+
+_UNCLOSED_STARTS_ROWS = [
+    {
+        "id": "aaaaaaaa",
+        "kind": "ivan",
+        "task": "1",
+        "queued_at": 1000,
+        "prompt_bytes": 1,
+    },
+    {
+        "id": "aaaaaaaa",
+        "ended_at": 1010,
+        "elapsed_s": 10,
+        "outcome": "ok",
+        "detail": None,
+    },
+    {
+        "id": "bbbbbbbb",
+        "kind": "pat",
+        "task": "2",
+        "queued_at": 2000,
+        "prompt_bytes": 2,
+    },
+    {
+        "kind": "handoff",
+        "site": "build",
+        "edge": "leave",
+        "at": 2500,
+        "phase": "build",
+        "prd": "x.md",
+    },
+    {
+        "id": "bbbbbbbb",
+        "ended_at": 2010,
+        "elapsed_s": 10,
+        "outcome": "ok",
+        "detail": None,
+    },
+    {
+        "id": "cccccccc",
+        "kind": "tess",
+        "task": "3",
+        "queued_at": 3000,
+        "prompt_bytes": 3,
+    },
+]
+
+
+def test_open_ids_lists_only_unclosed_starts(tmp_path: Path) -> None:
+    # Two ids get both a start and an end row, one gets only a start, and a
+    # handoff row carries neither queued_at nor id: only the truly open id
+    # should surface.
+    autopilot = _project(tmp_path)
+    for row in _UNCLOSED_STARTS_ROWS:
+        record_dispatch.append_row(autopilot, row)
+
+    assert record_dispatch.open_ids(autopilot) == ["cccccccc"]
 
 
 def test_end_after_a_start_row_computes_elapsed_from_queued_at(
@@ -319,3 +377,139 @@ def test_end_ignores_a_handoff_outside_the_open_window(
     last = _rows(autopilot / "dispatch-metrics.jsonl")[-1]
     assert last["elapsed_s"] == 42
     assert last["detail"] is None
+
+
+def test_handoff_closes_open_rows_as_lost(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A crash or forced handoff must not leave a start row open forever: the
+    # id open_ids still reports gets a synthetic lost end row, stamped with
+    # this invocation's own site and edge, before the handoff's own row.
+    autopilot = _project(tmp_path)
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "id": "aaaaaaaa",
+            "kind": "ivan",
+            "task": "1",
+            "queued_at": 1000,
+            "prompt_bytes": 1,
+        },
+    )
+    monkeypatch.chdir(tmp_path / "proj")
+    _pin_clock(monkeypatch, 4000)
+
+    exit_code = _run_handoff("build", "leave", "review", "X")
+
+    assert exit_code == 0
+    expected_tail = [
+        {
+            "id": "aaaaaaaa",
+            "ended_at": 4000,
+            "elapsed_s": None,
+            "outcome": "lost",
+            "detail": "open at build/leave handoff",
+        },
+        {
+            "kind": "handoff",
+            "site": "build",
+            "edge": "leave",
+            "at": 4000,
+            "phase": "review",
+            "prd": "X",
+        },
+    ]
+    assert _rows(autopilot / "dispatch-metrics.jsonl")[-2:] == expected_tail
+    assert _rows(autopilot / "ledger" / "dispatch-metrics.jsonl")[-2:] == expected_tail
+
+
+def test_handoff_resume_closes_open_rows_as_lost(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Only the leave edge was covered with an open row; a regression that
+    # closed open rows on leave alone would pass unnoticed without this.
+    autopilot = _project(tmp_path)
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "id": "aaaaaaaa",
+            "kind": "ivan",
+            "task": "1",
+            "queued_at": 1000,
+            "prompt_bytes": 1,
+        },
+    )
+    monkeypatch.chdir(tmp_path / "proj")
+    _pin_clock(monkeypatch, 4000)
+
+    exit_code = _run_handoff("build", "resume", "review", "X")
+
+    assert exit_code == 0
+    expected_tail = [
+        {
+            "id": "aaaaaaaa",
+            "ended_at": 4000,
+            "elapsed_s": None,
+            "outcome": "lost",
+            "detail": "open at build/resume handoff",
+        },
+        {
+            "kind": "handoff",
+            "site": "build",
+            "edge": "resume",
+            "at": 4000,
+            "phase": "review",
+            "prd": "X",
+        },
+    ]
+    assert _rows(autopilot / "dispatch-metrics.jsonl")[-2:] == expected_tail
+    assert _rows(autopilot / "ledger" / "dispatch-metrics.jsonl")[-2:] == expected_tail
+
+
+def test_handoff_leaves_closed_rows_alone(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # An id with an end row is not open, so it must not get a second,
+    # synthetic lost row on top of its real outcome; only the handoff's own
+    # row should land. Uses the resume edge to cover it alongside leave.
+    autopilot = _project(tmp_path)
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "id": "bbbbbbbb",
+            "kind": "pat",
+            "task": "2",
+            "queued_at": 1000,
+            "prompt_bytes": 2,
+        },
+    )
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "id": "bbbbbbbb",
+            "ended_at": 1010,
+            "elapsed_s": 10,
+            "outcome": "ok",
+            "detail": None,
+        },
+    )
+    monkeypatch.chdir(tmp_path / "proj")
+    _pin_clock(monkeypatch, 5000)
+    rows_before = len(_rows(autopilot / "dispatch-metrics.jsonl"))
+
+    exit_code = _run_handoff("review", "resume", "done", "Y")
+
+    assert exit_code == 0
+    rows_after = _rows(autopilot / "dispatch-metrics.jsonl")
+    assert len(rows_after) == rows_before + 1
+    assert rows_after[-1] == {
+        "kind": "handoff",
+        "site": "review",
+        "edge": "resume",
+        "at": 5000,
+        "phase": "done",
+        "prd": "Y",
+    }

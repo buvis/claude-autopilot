@@ -23,7 +23,6 @@ record_dispatch = _testutil.record_dispatch
 _project = _testutil.project
 _rows = _testutil.rows
 _pin_clock = _testutil.pin_clock
-_run_handoff = _testutil.run_handoff
 
 
 def test_handoff_writes_its_site_edge_stamp_phase_and_prd(
@@ -59,95 +58,3 @@ def test_handoff_writes_its_site_edge_stamp_phase_and_prd(
             "prd": "00168-record-dispatch-timing-telemetry-v1.md",
         },
     ]
-
-
-def test_handoff_closes_open_rows_as_lost(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # A crash or forced handoff must not leave a start row open forever: the
-    # id open_ids still reports gets a synthetic lost end row, stamped with
-    # this invocation's own site and edge, before the handoff's own row.
-    autopilot = _project(tmp_path)
-    record_dispatch.append_row(
-        autopilot,
-        {
-            "id": "aaaaaaaa",
-            "kind": "ivan",
-            "task": "1",
-            "queued_at": 1000,
-            "prompt_bytes": 1,
-        },
-    )
-    monkeypatch.chdir(tmp_path / "proj")
-    _pin_clock(monkeypatch, 4000)
-
-    exit_code = _run_handoff("build", "leave", "review", "X")
-
-    assert exit_code == 0
-    expected_tail = [
-        {
-            "id": "aaaaaaaa",
-            "ended_at": 4000,
-            "elapsed_s": None,
-            "outcome": "lost",
-            "detail": "open at build/leave handoff",
-        },
-        {
-            "kind": "handoff",
-            "site": "build",
-            "edge": "leave",
-            "at": 4000,
-            "phase": "review",
-            "prd": "X",
-        },
-    ]
-    assert _rows(autopilot / "dispatch-metrics.jsonl")[-2:] == expected_tail
-    assert _rows(autopilot / "ledger" / "dispatch-metrics.jsonl")[-2:] == expected_tail
-
-
-def test_handoff_leaves_closed_rows_alone(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # An id with an end row is not open, so it must not get a second,
-    # synthetic lost row on top of its real outcome; only the handoff's own
-    # row should land. Uses the resume edge to cover it alongside leave.
-    autopilot = _project(tmp_path)
-    record_dispatch.append_row(
-        autopilot,
-        {
-            "id": "bbbbbbbb",
-            "kind": "pat",
-            "task": "2",
-            "queued_at": 1000,
-            "prompt_bytes": 2,
-        },
-    )
-    record_dispatch.append_row(
-        autopilot,
-        {
-            "id": "bbbbbbbb",
-            "ended_at": 1010,
-            "elapsed_s": 10,
-            "outcome": "ok",
-            "detail": None,
-        },
-    )
-    monkeypatch.chdir(tmp_path / "proj")
-    _pin_clock(monkeypatch, 5000)
-    rows_before = len(_rows(autopilot / "dispatch-metrics.jsonl"))
-
-    exit_code = _run_handoff("review", "resume", "done", "Y")
-
-    assert exit_code == 0
-    rows_after = _rows(autopilot / "dispatch-metrics.jsonl")
-    assert len(rows_after) == rows_before + 1
-    assert rows_after[-1] == {
-        "kind": "handoff",
-        "site": "review",
-        "edge": "resume",
-        "at": 5000,
-        "phase": "done",
-        "prd": "Y",
-    }
