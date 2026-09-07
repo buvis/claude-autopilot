@@ -431,6 +431,22 @@ def _implementor_mix(state: dict, ledger_rows: list[dict]) -> list[str]:
     return lines
 
 
+def _ledger_rows(state: dict, path: Path | None) -> list[dict]:
+    """The attempt ledger's rows for this state's PRD and batch, joining the
+    state attempts in the Implementor Mix. No path reads as no rows, and so
+    does an unreadable or malformed one (`render_metrics.load_rows` tolerates
+    both), so such a ledger renders as today."""
+    if path is None:
+        return []
+    prd = str(state.get("prd", ""))
+    batch_id = (state.get("batch") or {}).get("id")
+    return [
+        r
+        for r in render_metrics.load_rows(path)
+        if r.get("prd") == prd and r.get("batch_id") == batch_id
+    ]
+
+
 def prd_section(
     state: dict,
     metrics_rows: list[dict],
@@ -441,20 +457,8 @@ def prd_section(
     """The completed-PRD section appended at Phase 9 step 7. `json_items`
     are the batch deferred JSON's items for this PRD (already filtered by
     the caller); the Deferred to Batch End table renders their union with
-    `state.deferred_decisions`. `attempts_ledger` is the attempt ledger's
-    path: its rows for this PRD and batch join the state attempts in the
-    Implementor Mix, and an absent or unreadable ledger renders as today."""
+    `state.deferred_decisions`. `attempts_ledger` feeds `_ledger_rows`."""
     prd = str(state.get("prd", ""))
-    batch_id = (state.get("batch") or {}).get("id")
-    ledger_rows = (
-        [
-            r
-            for r in render_metrics.load_rows(attempts_ledger)
-            if r.get("prd") == prd and r.get("batch_id") == batch_id
-        ]
-        if attempts_ledger is not None
-        else []
-    )
     autonomous = [
         d for d in state.get("autonomous_decisions") or [] if isinstance(d, dict)
     ]
@@ -490,7 +494,7 @@ def prd_section(
     lines += _doubt_findings(doubts)
     lines += _rubric_verdicts(state.get("doubts_rubric_verdicts") or [])
     lines += ["### Loop Metrics", "", render_metrics.phase_table(metrics_rows), ""]
-    lines += _implementor_mix(state, ledger_rows)
+    lines += _implementor_mix(state, _ledger_rows(state, attempts_ledger))
     lines += _deferred_to_batch_end(_merge_deferral_sinks(deferred, json_items or []))
     return "\n".join(lines)
 
