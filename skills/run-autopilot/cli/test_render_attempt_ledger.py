@@ -316,6 +316,66 @@ class PrdSectionLedgerTests(unittest.TestCase):
         self.assertNotIn("mistral", text)
         self.assertNotIn("grok", text)
 
+    def test_a_foreign_row_naming_a_local_implementor_is_not_counted(self) -> None:
+        # The test above leaves the implementor name free to stand in for the
+        # filter: its foreign rows are the only ones no local row names. Here
+        # all three rows name `claude`, so the implementor cannot discriminate
+        # at all -- the foreign rows differ from the local one only in their
+        # `prd` and their `batch_id`, and each carries its own (task, attempt)
+        # pair so no dedup can absorb them. The COUNT is the assertion: an
+        # unfiltered ledger reads `| claude | 3 |`, and a filter weighing only
+        # one of the two envelope fields reads `| claude | 2 |`.
+        state = _state()
+        state["tasks"] = []
+        mine = _ledger_row(state, "1", 1, "claude")
+        other_prd = _ledger_row(state, "2", 1, "claude")
+        other_prd["prd"] = "00099-other-prd.md"
+        other_batch = _ledger_row(state, "3", 1, "claude")
+        other_batch["batch_id"] = "202601010000"
+        self._write_ledger([json.dumps(r) for r in (mine, other_prd, other_batch)])
+        self.assertEqual(render_report._ledger_rows(state, self.ledger), [mine])
+        text = render_report.prd_section(state, [], NOW, None, self.ledger)
+        self.assertIn("| claude | 1 |", text)
+        self.assertNotIn("| claude | 2 |", text)
+        self.assertNotIn("| claude | 3 |", text)
+
+    def test_a_ledger_of_only_foreign_rows_renders_no_implementor_data(self) -> None:
+        # The boundary the count cases cannot reach: with every row foreign,
+        # the filter has to reject the whole file and the section falls back to
+        # the placeholder. A filter that keeps a row whenever the ledger holds
+        # nothing local -- or one that never rejects anything -- names an
+        # implementor here, and every number under it belongs to another PRD.
+        state = _state()
+        state["tasks"] = []
+        other_prd = _ledger_row(state, "1", 1, "claude")
+        other_prd["prd"] = "00099-other-prd.md"
+        other_batch = _ledger_row(state, "2", 1, "claude")
+        other_batch["batch_id"] = "202601010000"
+        self._write_ledger([json.dumps(r) for r in (other_prd, other_batch)])
+        self.assertEqual(render_report._ledger_rows(state, self.ledger), [])
+        text = render_report.prd_section(state, [], NOW, None, self.ledger)
+        self.assertIn("no implementor data", text)
+        self.assertNotIn("| claude |", text)
+
+    def test_a_row_carrying_an_event_key_is_not_counted_as_an_attempt(self) -> None:
+        # The ledger file holds more than attempts: a row carrying an `event`
+        # key records something the batch did, not an attempt somebody made,
+        # and it is dropped. This one is local in every other respect -- this
+        # PRD, this batch, its own task and attempt number, a full attempt
+        # envelope, and the same implementor as the attempt beside it -- so
+        # only the `event` key can tell it apart, and a reader that parses the
+        # ledger itself and forgets the rule counts an attempt nobody made.
+        state = _state()
+        state["tasks"] = []
+        attempt_row = _ledger_row(state, "1", 1, "claude")
+        event_row = _ledger_row(state, "2", 1, "claude")
+        event_row["event"] = "batch_start"
+        self._write_ledger([json.dumps(r) for r in (attempt_row, event_row)])
+        self.assertEqual(render_report._ledger_rows(state, self.ledger), [attempt_row])
+        text = render_report.prd_section(state, [], NOW, None, self.ledger)
+        self.assertIn("| claude | 1 |", text)
+        self.assertNotIn("| claude | 2 |", text)
+
     def test_ledger_rows_join_the_state_attempts_in_one_table(self) -> None:
         # Mid-batch (any render before complete-prd drains them), state still
         # holds attempts. The ledger is a union with them, not a fallback for

@@ -420,6 +420,45 @@ class DuplicateAppendedDecisionEntriesTest(unittest.TestCase):
                     "autonomous_decisions entry missing severity",
                 )
 
+    def test_an_int_lookalike_on_both_sides_is_matched_key_by_key(self) -> None:
+        # Both entries here carry a lookalike, in DIFFERENT keys. So a matcher
+        # that reduces an entry to one whole-entry flag -- "does any value in
+        # it happen to be a bool or a float?" -- answers yes for both, calls
+        # them the same value, and carries the added one over unjudged. Only
+        # comparing the two entries KEY BY KEY sees that the cycle turned from
+        # an int into a boolean, which is the one value the entry contract
+        # refuses outright. The nested pair is the same rule one level down:
+        # the collision sits inside a dict, where a matcher that weighs only an
+        # entry's top-level values stops looking, and the entry it waves
+        # through carries a severity the report cannot print.
+        bool_cycle_before = _valid_decision()
+        bool_cycle_before["verified"] = True
+        bool_cycle_after = dict(bool_cycle_before)
+        bool_cycle_after["cycle"] = True
+        bool_cycle_after["verified"] = 1
+
+        nested_before = _valid_decision()
+        nested_before["severity"] = "urgent"
+        nested_before["meta"] = {"n": True}
+        nested_after = dict(nested_before)
+        nested_after["meta"] = {"n": 1}
+        self.assertNotIn(nested_before["severity"], schema.DECISION_SEVERITIES)
+
+        for label, existing, added, key in (
+            ("top-level", bool_cycle_before, bool_cycle_after, "cycle"),
+            ("nested", nested_before, nested_after, "severity"),
+        ):
+            with self.subTest(lookalike=label):
+                # The premise: Python calls these two entries equal, so the
+                # write reads as no change at all until types are weighed.
+                self.assertEqual(existing, added)
+                with self.assertRaises(schema.SchemaError) as ctx:
+                    schema.validate_changed(*_decisions_write([existing], [added]))
+                self.assertEqual(
+                    str(ctx.exception),
+                    f"autonomous_decisions entry missing {key}",
+                )
+
     def test_carrying_over_int_lookalike_entries_judges_nothing(self) -> None:
         # The mirror of the two cases above, and the one a fix that simply
         # refuses every entry holding a bool or a float gets wrong. All three
