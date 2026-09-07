@@ -26,6 +26,32 @@ _BLIND_SKILL = _SKILLS / "review-blindly" / "SKILL.md"
 _PHASE_REVIEW = (
     Path(__file__).resolve().parent.parent / "references" / "phase-review.md"
 )
+_AGENTS = _SKILLS.parent / "agents"
+_RUN_AUTOPILOT_SKILL = _SKILLS / "run-autopilot" / "SKILL.md"
+
+# The Bash tool-discipline paragraph every Bash-bearing persona must carry
+# verbatim, and the orchestrator skill must lead its Shell Command Rules with.
+# Read-only personas never touch Bash, so they must not carry it.
+TOOL_DISCIPLINE = (
+    "Never call bash `head`, `tail`, `cat`, `grep`, or `find` - a hook blocks "
+    "them. Use the Read tool (offset/limit), `rg`, or `rg --files` instead. "
+    "Never pipe between heterogeneous commands and never combine an inspection "
+    "(read, list, search, diff) with a test, lint or build invocation in one "
+    "Bash call - run them as separate calls. Pass an explicit `timeout` on "
+    "every Bash call: 60000 ms for an inspection, 300000 ms for a lint run or "
+    "a narrow test run, 600000 ms for a full suite or a full build."
+)
+
+_BASH_BEARING_PERSONAS = ("alice.md", "blake.md", "eve.md", "victor.md")
+_READ_ONLY_PERSONAS = (
+    "pat.md",
+    "rita.md",
+    "cora.md",
+    "grace.md",
+    "toby.md",
+    "mallory.md",
+    "trent.md",
+)
 
 # The entry shape both `autonomous_decisions` append instructions must show
 # verbatim. The state schema also accepts `question` for `issue`, `disposition`
@@ -142,6 +168,28 @@ class PhaseReviewDecisionShapeTests(unittest.TestCase):
                 f"the append instruction {anchor!r} must show the entry shape "
                 "verbatim in its own paragraph, not elsewhere in the file",
             )
+
+
+class ToolDisciplineContractTests(unittest.TestCase):
+    def test_bash_bearing_personas_carry_tool_discipline(self) -> None:
+        for name in _BASH_BEARING_PERSONAS:
+            text = (_AGENTS / name).read_text()
+            self.assertEqual(
+                text.count(TOOL_DISCIPLINE),
+                1,
+                f"agents/{name} must carry TOOL_DISCIPLINE exactly once",
+            )
+        for name in _READ_ONLY_PERSONAS:
+            text = (_AGENTS / name).read_text()
+            self.assertNotIn(
+                TOOL_DISCIPLINE,
+                text,
+                f"agents/{name} is read-only and must not carry TOOL_DISCIPLINE",
+            )
+
+    def test_orchestrator_skill_carries_tool_discipline(self) -> None:
+        skill = _RUN_AUTOPILOT_SKILL.read_text()
+        self.assertIn(TOOL_DISCIPLINE, skill)
 
 
 if __name__ == "__main__":
