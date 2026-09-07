@@ -217,6 +217,11 @@ class RenderReportGuardTests(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.ap_dir = Path(tmp.name) / "dev" / "local" / "autopilot"
         self.ap_dir.mkdir(parents=True)
+        # A real repo always has the attempt ledger; without it render_report
+        # warns on stderr about the missing file and the silence assertions
+        # below would fail on a warning unrelated to the deferral guard.
+        (self.ap_dir / "ledger").mkdir()
+        (self.ap_dir / "ledger" / "attempts.jsonl").write_text("", encoding="utf-8")
         self.state_path = self.ap_dir / "state.json"
         self.state_path.write_text(json.dumps(_state(prd=PRD_00140)), encoding="utf-8")
         (self.ap_dir / "deferred").mkdir()
