@@ -25,6 +25,18 @@ GOLDEN = Path(__file__).resolve().parent / "golden"
 
 NOW = "2026-08-09T12:00:00Z"
 
+# The Implementor Mix lines that come from `state` rather than from the
+# attempts: the qwen exclusion histogram, the codex probe and the breaker.
+STATE_DERIVED_PREFIXES = (
+    "Excluded from qwen:",
+    "codex probe:",
+    "capability breaker:",
+)
+
+
+def _state_derived_lines(text: str) -> list[str]:
+    return [ln for ln in text.splitlines() if ln.startswith(STATE_DERIVED_PREFIXES)]
+
 
 def _state() -> dict:
     return json.loads((GOLDEN / "state-render.json").read_text(encoding="utf-8"))
@@ -131,6 +143,92 @@ class ImplementorMixLedgerTests(unittest.TestCase):
         self.assertIn("no implementor data", text)
         self.assertNotIn("| Implementor | Attempts |", text)
 
+    def test_tasks_without_attempts_keep_the_state_derived_lines(self) -> None:
+        # An empty union costs the report its implementor table and nothing
+        # more. The exclusion, codex-probe and breaker lines are read off
+        # state, not off the attempts, so they must survive the swap to the
+        # placeholder -- this is the state a missing or unreadable ledger
+        # leaves the section in, and dropping them makes the report strictly
+        # less informative than no fix at all.
+        state = _state()
+        state["tasks"] = [{**task, "attempts": []} for task in state["tasks"]]
+        text = "\n".join(render_report._implementor_mix(state, []))
+        self.assertIn("no implementor data", text)
+        self.assertNotIn("| Implementor | Attempts |", text)
+        self.assertIn("Excluded from qwen: contract 1, unknown 1 (plan-time)", text)
+        self.assertIn("codex probe: healthy (backend: codex)", text)
+        self.assertIn("capability breaker: not tripped", text)
+
+    def test_the_state_derived_lines_report_this_state_not_the_fixture(self) -> None:
+        # The same empty-union path as the test above, driven by a DIFFERENT
+        # state: a tripped breaker, a probe on another backend, another
+        # exclusion reason. Restoring the three lines as literals would keep
+        # printing the case above ("healthy", "not tripped"), which is worse
+        # than omitting them because it reports the opposite of the truth.
+        state = _state()
+        state["tasks"] = [{**task, "attempts": []} for task in state["tasks"]]
+        state["tasks"][0]["qwen_excluded_reason"] = "memory_pressure"
+        state["codex_probe"] = {
+            **state["codex_probe"],
+            "verdict": "unhealthy",
+            "backend": "copilot",
+            "detail": "codex CLI not on PATH",
+        }
+        state["qwen_breaker"] = {
+            **state["qwen_breaker"],
+            "tripped": True,
+            "after_task": "t2",
+            "failed_tasks": ["t1", "t2"],
+        }
+        text = "\n".join(render_report._implementor_mix(state, []))
+        self.assertIn("no implementor data", text)
+        self.assertNotIn("Excluded from qwen: contract 1, unknown 1 (plan-time)", text)
+        self.assertNotIn("codex probe: healthy (backend: codex)", text)
+        self.assertNotIn("capability breaker: not tripped", text)
+
+        # Whatever the three lines say for THIS state, they say it the same
+        # way on the unchanged non-empty-union path: the same state with one
+        # attempt added, nothing else touched. An empty union costs the
+        # table, never the state.
+        staffed = json.loads(json.dumps(state))
+        staffed["tasks"][0]["attempts"] = [
+            {"attempt": 1, "implementor": "claude", "preflight_outcome": None},
+        ]
+        with_attempts = "\n".join(render_report._implementor_mix(staffed, []))
+        self.assertIn("| claude | 1 |", with_attempts)
+        self.assertEqual(len(_state_derived_lines(with_attempts)), 3)
+        self.assertEqual(
+            _state_derived_lines(text),
+            _state_derived_lines(with_attempts),
+        )
+
+    def test_each_qwen_preflight_outcome_is_counted_separately(self) -> None:
+        # One healthy attempt is the one shape a hardcoded "healthy 1" can
+        # survive, so the fixture carries two distinct outcomes with
+        # different counts: the line is a histogram of what the attempts
+        # actually reported, not a fixed string.
+        state = _state()
+        state["tasks"] = []
+        rows = [
+            _ledger_row(state, "1", 1, "qwen", preflight_outcome="healthy"),
+            _ledger_row(state, "2", 1, "qwen", preflight_outcome="pi_missing"),
+            _ledger_row(state, "3", 1, "qwen", preflight_outcome="pi_missing"),
+        ]
+        text = "\n".join(render_report._implementor_mix(state, rows))
+        self.assertIn("Qwen preflight outcomes: healthy 1, pi_missing 2", text)
+
+    def test_no_tasks_at_all_render_no_implementor_data_alone(self) -> None:
+        # The boundary on the other side of the case above: with no tasks
+        # there is nothing to say about exclusions, the probe or the breaker,
+        # so restoring those lines unconditionally is also wrong.
+        state = _state()
+        state["tasks"] = []
+        text = "\n".join(render_report._implementor_mix(state, []))
+        self.assertIn("no implementor data", text)
+        self.assertNotIn("Excluded from qwen:", text)
+        self.assertNotIn("codex probe:", text)
+        self.assertNotIn("capability breaker:", text)
+
 
 class PrdSectionLedgerTests(unittest.TestCase):
     """prd_section loads the attempt ledger itself, keeps only the rows for
@@ -222,6 +320,76 @@ class PrdSectionLedgerTests(unittest.TestCase):
         self.assertEqual(len(err.getvalue().splitlines()), 1)
         self.assertIn(str(self.ledger), err.getvalue())
         self.assertIn("no implementor data", text)
+
+    def test_unreadable_regular_file_ledger_is_reported_once_on_stderr(self) -> None:
+        # A directory at the ledger path (the case above) is not the same
+        # thing as a file the process cannot open. The mechanism here is
+        # chmod 000 on a real regular file holding a real row, which root
+        # ignores -- so probe it and skip rather than let the suite pass
+        # because the file stayed readable.
+        state = _state()
+        state["tasks"] = []
+        self._write_ledger([json.dumps(_ledger_row(state, "1", 1, "claude"))])
+        self.ledger.chmod(0o000)
+        self.addCleanup(self.ledger.chmod, 0o600)
+        try:
+            self.ledger.read_text(encoding="utf-8")
+        except OSError:
+            pass
+        else:
+            self.skipTest("this user can read a chmod 000 file (running as root?)")
+
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            rows = render_report._ledger_rows(state, self.ledger)
+        self.assertEqual(rows, [])
+        self.assertEqual(len(err.getvalue().splitlines()), 1)
+        self.assertIn(str(self.ledger), err.getvalue())
+
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            text = render_report.prd_section(state, [], NOW, None, self.ledger)
+        self.assertEqual(len(err.getvalue().splitlines()), 1)
+        self.assertIn(str(self.ledger), err.getvalue())
+        self.assertIn("no implementor data", text)
+        # The unread row named claude, so a section counting it would prove
+        # the file was opened after all.
+        self.assertNotIn("| claude | 1 |", text)
+
+    def test_write_only_regular_file_ledger_is_reported_once_on_stderr(self) -> None:
+        # chmod 000 is not the only way a regular file resists opening. A
+        # write-only file is owned by this process and still unreadable, so
+        # a check that asks "are the mode bits exactly 000?" instead of
+        # "can I open it?" walks straight past this one. Same root probe:
+        # root ignores the mode, and a readable file would pass vacuously.
+        state = _state()
+        state["tasks"] = []
+        self._write_ledger([json.dumps(_ledger_row(state, "1", 1, "claude"))])
+        self.ledger.chmod(0o200)
+        self.addCleanup(self.ledger.chmod, 0o600)
+        try:
+            self.ledger.read_text(encoding="utf-8")
+        except OSError:
+            pass
+        else:
+            self.skipTest("this user can read a write-only file (running as root?)")
+
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            rows = render_report._ledger_rows(state, self.ledger)
+        self.assertEqual(rows, [])
+        self.assertEqual(len(err.getvalue().splitlines()), 1)
+        self.assertIn(str(self.ledger), err.getvalue())
+
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            text = render_report.prd_section(state, [], NOW, None, self.ledger)
+        self.assertEqual(len(err.getvalue().splitlines()), 1)
+        self.assertIn(str(self.ledger), err.getvalue())
+        self.assertIn("no implementor data", text)
+        # The unread row named claude, so a section counting it would prove
+        # the file was opened after all.
+        self.assertNotIn("| claude | 1 |", text)
 
     def test_malformed_ledger_line_is_skipped_and_good_rows_still_count(self) -> None:
         state = _state()
