@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **work**: the Tess/Devon adversarial loop runs one strengthen round (at most 2 Devon and 4 Tess dispatches per task), then flags and proceeds
+- **review-work-completion**: carry the tool discipline paragraph into the four Bash-bearing reviewer personas, so each one follows the same shell command rules as `run-autopilot`'s `SKILL.md`
 
 ### Fixed
 
