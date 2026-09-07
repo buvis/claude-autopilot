@@ -117,6 +117,26 @@ def test_handoff_over_a_non_utf8_working_file_still_appends_its_row(
     }
 
 
+def test_end_over_an_unreadable_working_file_does_not_also_report_no_start_row(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # A read failure and "no start row" are two different root causes; the
+    # read-failure message must not be followed by the id-not-found message,
+    # since the id lookup never actually ran against a readable ledger.
+    autopilot = _project(tmp_path)
+    (autopilot / "dispatch-metrics.jsonl").mkdir()
+    monkeypatch.chdir(tmp_path / "proj")
+
+    exit_code = record_dispatch.main(["end", "deadbeef", "--outcome", "ok"])
+
+    assert exit_code == 0
+    err = capsys.readouterr().err
+    assert "record_dispatch: start row lookup failed" in err
+    assert "record_dispatch: no start row" not in err
+
+
 def test_end_over_one_unparseable_line_warns_exactly_once(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

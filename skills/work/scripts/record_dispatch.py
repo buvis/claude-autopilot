@@ -85,12 +85,14 @@ def start_row(
 def _read_rows(
     autopilot_dir: Path,
     failure: str,
-) -> tuple[list[dict[str, object]], int]:
-    """Parsed dict rows from the working file, and the count of lines skipped
-    for being unparseable JSON. A missing file is an empty ledger, silently;
-    any other read failure (unreadable, not UTF-8) is also treated as an
-    empty ledger, but names itself on stderr as ``failure``.
+) -> tuple[list[dict[str, object]], bool]:
+    """Parsed dict rows from the working file, and whether the file was read
+    successfully. A missing file is an empty ledger, silently, and counts as
+    read successfully; any other read failure (unreadable, not UTF-8) is also
+    treated as an empty ledger, but names itself on stderr as ``failure`` and
+    is reported as unsuccessful.
     """
+    ok = True
     try:
         lines = (autopilot_dir / FILENAME).read_text(encoding="utf-8").splitlines()
     except FileNotFoundError:
@@ -98,6 +100,7 @@ def _read_rows(
     except (OSError, UnicodeDecodeError) as err:
         print(f"record_dispatch: {failure}: {err}", file=sys.stderr)
         lines = []
+        ok = False
     rows: list[dict[str, object]] = []
     skipped = 0
     for line in lines:
@@ -108,7 +111,12 @@ def _read_rows(
             continue
         if isinstance(row, dict):
             rows.append(row)
-    return rows, skipped
+    if skipped:
+        print(
+            f"record_dispatch: skipped {skipped} unparseable line(s) in {FILENAME}",
+            file=sys.stderr,
+        )
+    return rows, ok
 
 
 def _queued_at(rows: list[dict[str, object]], dispatch_id: str) -> int | None:
@@ -150,7 +158,7 @@ def open_ids(autopilot_dir: Path) -> list[str]:
     """Ids with a start row (``queued_at``) and no end row (``ended_at``)
     anywhere in the file, in the order each id's start row was first seen.
     """
-    rows, skipped = _read_rows(autopilot_dir, "working file unreadable")
+    rows, _ = _read_rows(autopilot_dir, "working file unreadable")
     started: list[str] = []
     ended: set[str] = set()
     for row in rows:
@@ -163,11 +171,6 @@ def open_ids(autopilot_dir: Path) -> list[str]:
             started.append(dispatch_id)
         if "ended_at" in row and isinstance(dispatch_id, str):
             ended.add(dispatch_id)
-    if skipped:
-        print(
-            f"record_dispatch: skipped {skipped} unparseable line(s) in {FILENAME}",
-            file=sys.stderr,
-        )
     return [dispatch_id for dispatch_id in started if dispatch_id not in ended]
 
 
@@ -239,13 +242,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     elif args.verb == "end":
         ended_at = int(time.time())
-        rows, skipped = _read_rows(autopilot_dir, "start row lookup failed")
-        if skipped:
-            print(
-                f"record_dispatch: skipped {skipped} unparseable line(s) in {FILENAME}",
-                file=sys.stderr,
-            )
-        queued_at = _queued_at(rows, args.id)
+        rows, ok = _read_rows(autopilot_dir, "start row lookup failed")
+        queued_at = _queued_at(rows, args.id) if ok else None
         elapsed_s = None if queued_at is None else ended_at - queued_at
         detail = args.detail
         if queued_at is not None and _spans_handoff(rows, queued_at, ended_at):
