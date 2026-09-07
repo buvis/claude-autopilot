@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **record_dispatch**: dispatch rows no longer span a session handoff in their elapsed time — a `handoff` call closes any still-open row as `lost` instead of leaving it to be closed across the boundary, and an `end` call whose window spans handoff reports `elapsed_s: null` instead of a number that mixes dispatch runtime with handoff idle time.
+- **record_dispatch**: an unreadable or non-UTF-8 ledger file no longer crashes the `handoff` verb that runs at every session boundary — every read failure is reported on stderr and treated as an empty ledger, keeping the promise that a telemetry failure is never a dispatch failure. An `end` call also reads the ledger once instead of twice, so a malformed line is now reported once rather than twice.
 - **use-codex**: report unreadable hook targets (including on Python 3.14+), failed repairs, and orphan cleanup errors once per target, continue processing remaining hooks, and clean up failed repair writes without overwriting or deleting pre-existing temporary files.
 - **work**: generate the per-task review session id with python first and uuidgen as the fallback, so unattended sessions no longer depend on a warden allow for uuidgen.
 - **review-work-completion**: Bob's persona permits read-only shell reads, so codex no longer refuses to open its own context and diff

@@ -82,16 +82,23 @@ def start_row(
     return dispatch_id
 
 
-def _queued_at(autopilot_dir: Path, dispatch_id: str) -> int | None:
-    """The start row's ``queued_at`` for ``dispatch_id``, or None, said on stderr."""
+def _read_rows(
+    autopilot_dir: Path,
+    failure: str,
+) -> tuple[list[dict[str, object]], int]:
+    """Parsed dict rows from the working file, and the count of lines skipped
+    for being unparseable JSON. A missing file is an empty ledger, silently;
+    any other read failure (unreadable, not UTF-8) is also treated as an
+    empty ledger, but names itself on stderr as ``failure``.
+    """
     try:
         lines = (autopilot_dir / FILENAME).read_text(encoding="utf-8").splitlines()
     except FileNotFoundError:
         lines = []  # no dispatch has been opened here yet: an empty ledger, not a failure
-    except OSError as err:
-        print(f"record_dispatch: start row lookup failed: {err}", file=sys.stderr)
-        return None
-    found = None
+    except (OSError, UnicodeDecodeError) as err:
+        print(f"record_dispatch: {failure}: {err}", file=sys.stderr)
+        lines = []
+    rows: list[dict[str, object]] = []
     skipped = 0
     for line in lines:
         try:
@@ -99,15 +106,19 @@ def _queued_at(autopilot_dir: Path, dispatch_id: str) -> int | None:
         except ValueError:
             skipped += 1
             continue
-        if found is None and isinstance(row, dict) and row.get("id") == dispatch_id:
+        if isinstance(row, dict):
+            rows.append(row)
+    return rows, skipped
+
+
+def _queued_at(rows: list[dict[str, object]], dispatch_id: str) -> int | None:
+    """The start row's ``queued_at`` for ``dispatch_id``, or None, said on stderr."""
+    found = None
+    for row in rows:
+        if found is None and row.get("id") == dispatch_id:
             queued_at = row.get("queued_at")
             if isinstance(queued_at, int):
                 found = queued_at
-    if skipped:
-        print(
-            f"record_dispatch: skipped {skipped} unparseable line(s) in {FILENAME}",
-            file=sys.stderr,
-        )
     if found is None:
         print(
             f"record_dispatch: no start row for {dispatch_id}, elapsed_s is null",
@@ -116,57 +127,33 @@ def _queued_at(autopilot_dir: Path, dispatch_id: str) -> int | None:
     return found
 
 
-def _spans_handoff(autopilot_dir: Path, queued_at: int, ended_at: int) -> bool:
+def _spans_handoff(
+    rows: list[dict[str, object]],
+    queued_at: int,
+    ended_at: int,
+) -> bool:
     """True if a handoff row's ``at`` sits strictly inside (queued_at, ended_at):
     part of the dispatch's window was spent away from the work, so its elapsed
     time cannot be claimed.
     """
-    try:
-        lines = (autopilot_dir / FILENAME).read_text(encoding="utf-8").splitlines()
-    except FileNotFoundError:
-        lines = []
-    spans = False
-    skipped = 0
-    for line in lines:
-        try:
-            row = json.loads(line)
-        except ValueError:
-            skipped += 1
-            continue
+    for row in rows:
         if (
-            isinstance(row, dict)
-            and row.get("kind") == "handoff"
+            row.get("kind") == "handoff"
             and isinstance(row.get("at"), int)
             and queued_at < row["at"] < ended_at
         ):
-            spans = True
-    if skipped:
-        print(
-            f"record_dispatch: skipped {skipped} unparseable line(s) in {FILENAME}",
-            file=sys.stderr,
-        )
-    return spans
+            return True
+    return False
 
 
 def open_ids(autopilot_dir: Path) -> list[str]:
     """Ids with a start row (``queued_at``) and no end row (``ended_at``)
     anywhere in the file, in the order each id's start row was first seen.
     """
-    try:
-        lines = (autopilot_dir / FILENAME).read_text(encoding="utf-8").splitlines()
-    except FileNotFoundError:
-        lines = []
+    rows, skipped = _read_rows(autopilot_dir, "working file unreadable")
     started: list[str] = []
     ended: set[str] = set()
-    skipped = 0
-    for line in lines:
-        try:
-            row = json.loads(line)
-        except ValueError:
-            skipped += 1
-            continue
-        if not isinstance(row, dict):
-            continue
+    for row in rows:
         dispatch_id = row.get("id")
         if (
             "queued_at" in row
@@ -252,10 +239,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     elif args.verb == "end":
         ended_at = int(time.time())
-        queued_at = _queued_at(autopilot_dir, args.id)
+        rows, skipped = _read_rows(autopilot_dir, "start row lookup failed")
+        if skipped:
+            print(
+                f"record_dispatch: skipped {skipped} unparseable line(s) in {FILENAME}",
+                file=sys.stderr,
+            )
+        queued_at = _queued_at(rows, args.id)
         elapsed_s = None if queued_at is None else ended_at - queued_at
         detail = args.detail
-        if queued_at is not None and _spans_handoff(autopilot_dir, queued_at, ended_at):
+        if queued_at is not None and _spans_handoff(rows, queued_at, ended_at):
             elapsed_s = None
             detail = f"spans handoff; {args.detail or ''}"
         append_row(
