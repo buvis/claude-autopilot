@@ -436,9 +436,11 @@ def _implementor_mix(state: dict, ledger_rows: list[dict]) -> list[str]:
 def _ledger_rows(state: dict, path: Path | None) -> list[dict]:
     """The attempt ledger's rows for this state's PRD and batch, joining the
     state attempts in the Implementor Mix. No path reads as no rows silently;
-    a path with no readable ledger file reads as no rows plus one stderr
-    line, and a malformed line is skipped by `render_metrics.load_rows`, so
-    no ledger ever fails the render."""
+    a path with no ledger file there reads as no rows plus one stderr line,
+    and a malformed line is skipped by `render_metrics.load_rows`, so no
+    ledger ever fails the render. A ledger that exists but cannot be opened
+    (permission denied) still reads as no rows silently - `is_file()` does
+    not check readability and `load_rows` swallows the OSError."""
     if path is None:
         return []
     if not path.is_file():
