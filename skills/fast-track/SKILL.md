@@ -29,8 +29,10 @@ thing to do, and the section that stops the item says so.
   `claude -p` kills background Bash about five seconds after the turn ends, and
   two of the five review lenses live in background Bash.
 - **A worktree you know.** Run `git status --porcelain` and account for every
-  dirty path. The lane stages the card's files and leaves foreign paths
-  untouched.
+  dirty path. A dirty path inside the card's `## Files` stops the item before
+  any dispatch: the lane cannot tell that work from the implementor's, and it
+  refuses rather than commit somebody else's edit. The lane stages the card's
+  files and leaves every other dirty path untouched.
 - **Reviewer CLIs.** `${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex-run.sh`
   is executable. The gemini lane is optional: drop it when
   `${CLAUDE_PLUGIN_ROOT}/skills/use-gemini/scripts/gemini-run.sh` or its backend
@@ -39,7 +41,7 @@ thing to do, and the section that stops the item says so.
   prompt names is absolute, because a subagent misresolves a relative
   `dev/local/` path as `~/dev/local/`.
 
-## The card
+## Card
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/fast-track/scripts/card.py <card.md>
@@ -166,18 +168,32 @@ gate still red after that dispatch sends the item to the exit rule with outcome
 
 ## Roster
 
-Five lenses, zero shared context. Every prompt is rendered from the card, the
+Five lenses, no session context. Every prompt is rendered from the card, the
 diff and a persona file, so nothing the driver believes about the change reaches
 a reviewer.
 
 Stage the review inputs first. Run `git diff <base-sha>..HEAD` and save its
-output to `dev/local/tmp/fast-track-<item>.diff` with the Write tool, then copy
+output to `dev/local/tmp/<item>-fast-track.diff` with the Write tool, then copy
 the `## Agent Output Format` section of
 `${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/references/output-formats.md`
 to `dev/local/tmp/fast-track-output-format.md`.
 
+Build the context file the implementation-aware lanes read. With the Write tool,
+put the card verbatim into `dev/local/tmp/<item>-fast-track-context.md` and add
+the changed-file list under a `### Changed Files` heading, then compute the
+mechanical facts over those files:
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/compute_mech_facts.py <each changed file>
+```
+
+It prints per-function line counts from `ast`, lists non-Python and unparseable
+files as skipped, and always exits 0. Append its stdout to the context file with
+the Write tool. A reviewer citing that block cannot get a line count wrong, and
+a finding that contradicts it dies at the table instead of costing a rework.
+
 - **Consensus.** `review-fanout.workflow.js` when that file is on disk,
-  otherwise the `autopilot:alice` subagent. Inputs: the staged card, the staged
+  otherwise the `autopilot:alice` subagent. Inputs: the context file, the staged
   diff and the consensus rubric.
 - **Blind.** `autopilot:blake` receives the card and never the diff. Knowing the
   card alone is the whole lens: he locates the code himself and judges it
@@ -194,7 +210,7 @@ codex, gemini) take one shape:
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/<persona>.md \
   --out dev/local/tmp/fast-track-<item>-<lane>.txt \
-  --set CONTEXT_FILE=<absolute path of the staged card> \
+  --set CONTEXT_FILE=<absolute path of the context file> \
   --set DIFF_FILE=<absolute path of the staged diff> \
   --set PACK_FILE="(no pack available this cycle)" \
   --set-file REVIEW_CHECKLIST=${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/references/review-dimensions.md \
@@ -207,7 +223,14 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUG
 - `agents/blake.md` takes `--set-file PRD=<absolute path of the staged card>`,
   `--set-file RUBRIC=${CLAUDE_PLUGIN_ROOT}/skills/review-blindly/references/rubric.md`
   and the same `--set-file OUTPUT_FORMAT=`; his render call names no diff at all.
-  An unfilled placeholder exits 1, so every one of the three is passed.
+  An unfilled placeholder exits 1, so every one of the three is passed. One
+  check from the repo root decides his last run input: `test -L dev/local`
+  succeeds, or the root's basename starts with a dot. When either holds, prepend
+  a `## Filesystem notes` block to his run inputs, carrying the project root,
+  the `dev/local` realpath, and the line that `rg --files` descends into neither
+  and so cannot see those files. Two paths and that line, nothing about the
+  change: without the block he sweeps a dot-directory with `rg --files` and
+  reports real files as missing.
 - `agents/eve.md` takes `--set PACK_FINDINGS="(no pack available this cycle)"`;
   append the card, the range `<base-sha>..HEAD` and the changed-file list to the
   rendered file as her run inputs.
@@ -247,13 +270,13 @@ Task tool:
 ```
 Bash tool:
   run_in_background: true
-  command: ${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex-run.sh -f <absolute path of fast-track-<item>-codex.txt> -o <absolute path of fast-track-<item>-codex-out.txt>
+  command: ${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex-run.sh -f <absolute path of fast-track-<item>-codex.txt> -o <absolute path of codex-output-<item>.txt>
 ```
 
 ```
 Bash tool:
   run_in_background: true
-  command: ${CLAUDE_PLUGIN_ROOT}/skills/use-gemini/scripts/gemini-run.sh -f <absolute path of fast-track-<item>-gemini.txt> -o <absolute path of fast-track-<item>-gemini-out.txt>
+  command: ${CLAUDE_PLUGIN_ROOT}/skills/use-gemini/scripts/gemini-run.sh -f <absolute path of fast-track-<item>-gemini.txt> -o <absolute path of gemini-output-<item>.txt>
 ```
 
 Codex and gemini run as background Bash, never inside a subagent: a subagent
@@ -275,10 +298,39 @@ stripped; a blank body throws `INVALID_ARGS`. A missing workflow file means the
 `autopilot:alice` Task call above, and one line in the report.
 
 The harness re-invokes you when a background command finishes. Read
-`fast-track-<item>-codex-out.txt` and `fast-track-<item>-gemini-out.txt` then,
-and close every row: `--outcome ok`, or `--outcome error --detail "exit <n>"`
-for a CLI lane that exited non-zero. A lens that reported nothing is a missing
-lens in the report, never a pass. One retry per lane, then it counts as failed.
+`codex-output-<item>.txt` and `gemini-output-<item>.txt` then, and close every
+row: `--outcome ok`, or `--outcome error --detail "exit <n>"` for a CLI lane
+that exited non-zero. A lens that reported nothing is a missing lens in the
+report, never a pass. One retry per lane, then it counts as failed.
+
+Exit 3 from `codex-run.sh` means codex itself is unavailable, so a re-dispatch
+of the same CLI buys nothing. Hand the rendered codex prompt to a
+`general-purpose` Task subagent instead and save its return as the codex lane's
+output, with the persona's read-only-shell reading instruction replaced by the
+same instruction against the `Read` tool. That substitution spends no retry; the
+one-retry budget covers every other failure.
+
+Save each subagent lane's returned text once every lane has reported, to
+`dev/local/tmp/consensus-output-<item>.txt`,
+`dev/local/tmp/blind-output-<item>.txt` and
+`dev/local/tmp/doubt-output-<item>.txt`; the CLI lanes write theirs through
+`-o`. Then consolidate the roster into one table:
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/consolidate_findings.py \
+  CONSENSUS:$PWD/dev/local/tmp/consensus-output-<item>.txt \
+  BLIND:$PWD/dev/local/tmp/blind-output-<item>.txt \
+  DOUBT:$PWD/dev/local/tmp/doubt-output-<item>.txt \
+  CODEX:$PWD/dev/local/tmp/codex-output-<item>.txt \
+  GEMINI:$PWD/dev/local/tmp/gemini-output-<item>.txt
+```
+
+Pass only the lanes that reported. The script reads consensus off the number of
+pairs it gets and merges two lanes describing one defect at the same file into
+a single row. The call carries no `--ledger` flags: this lane keeps no
+settled-decisions ledger, so there is nothing to dismiss against. On a non-zero
+exit, fix the invocation and retry it once; if that also fails, group the
+findings by file yourself and say in the report that the table is model-side.
 
 ## Verify
 
@@ -355,7 +407,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kin
 Findings the delta review confirms join the surviving set. The exit rule reads
 that set.
 
-## Exit rule
+## Exit
 
 `exit_action` in `fast_track_plan.py` is the rule: any surviving CRITICAL or
 HIGH parks the item on a branch, and everything else commits.
@@ -406,7 +458,22 @@ the same fact as free. The row lands in
 
 ## Report
 
-Close with one screen:
+Write the item's report to `dev/local/tmp/<item>-fast-track-review.md` with the
+Write tool before you say anything in chat. One file per item, holding in this
+order:
+
+- the consolidated table `consolidate_findings.py` printed, verbatim;
+- one section per lane, carrying that lane's raised findings, or the reason it
+  reported nothing;
+- the verdict `autopilot:victor` returned on every CRITICAL and HIGH sent to
+  Verify, confirmed or refuted, with the evidence that settled it;
+- the exit line: the outcome (`committed`, `branched` or `stopped`), the branch
+  name when the item is parked, and the findings that survived to put it there.
+
+The file is where the numbers stay after the session ends; the chat summary is
+a pointer to it.
+
+Then close with one screen:
 
 - the item, its card path and the outcome (`committed`, `branched` or
   `stopped`), plus the branch name when the item is parked;
