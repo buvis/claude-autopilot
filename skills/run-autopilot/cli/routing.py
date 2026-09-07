@@ -192,6 +192,21 @@ def build_model(
     return SONNET
 
 
+def review_cycle(autopilot_dir: Path) -> int:
+    """The current review cycle from state.json, else 1.
+
+    Cycle 1 (or a missing/malformed state, or a non-int cycle) is the
+    first review pass; anything above 1 is a rerun.
+    """
+    state = _load_json(autopilot_dir / "state.json")
+    if not isinstance(state, dict):
+        return 1
+    cycle = state.get("cycle")
+    if isinstance(cycle, int):
+        return cycle
+    return 1
+
+
 def route(phase: str, autopilot_dir: Path, env: dict | None = None) -> Route:
     """Model, effort and wall-clock cap for the next spawn.
 
@@ -214,9 +229,16 @@ def route(phase: str, autopilot_dir: Path, env: dict | None = None) -> Route:
             cap_secs=_env_int(env, "_AUTOPILOT_SESSION_MAX", 7200),
         )
     if phase == "review":
+        cycle = review_cycle(autopilot_dir)
+        if cycle <= 1:
+            effort = "xhigh"
+        else:
+            effort = env.get("_AUTOPILOT_EFFORT_REVIEW_RERUN") or "high"
+        if "_AUTOPILOT_EFFORT_REVIEW" in env:
+            effort = env["_AUTOPILOT_EFFORT_REVIEW"]
         return Route(
             model=env.get("_AUTOPILOT_MODEL_REVIEW") or OPUS,
-            effort=env.get("_AUTOPILOT_EFFORT_REVIEW") or "xhigh",
+            effort=effort,
             cap_secs=_env_int(env, "_AUTOPILOT_SESSION_MAX_REVIEW", 10800),
         )
     if phase == "done":
