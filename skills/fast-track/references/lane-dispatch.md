@@ -16,13 +16,9 @@ Ten kinds reach the ledger: `fast-track:tess`, `fast-track:ivan`,
 `fast-track:bob`, `fast-track:carl`, `fast-track:victor` and
 `fast-track:delta`.
 
-Every `start` call prints a dispatch id under the prompt's byte count. Hold
-that id and close the row when the lane reports.
-
 ## Tess: the test author
 
-Runs only when the card's `## Tests` section is empty. The card's `framework`
-and `sample_test` drive it, and it reads the card alone.
+Runs only when the card's `## Tests` section is empty. It reads the card alone.
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/skills/work/references/tess-prompt.md \
@@ -205,9 +201,7 @@ Bash tool:
 
 ## Victor: adversarial verification
 
-One dispatch per CRITICAL or HIGH row that earns verification. Render
-`agents/victor.md` with the five finding fields, then send the rendered body as
-the prompt of a `general-purpose` Task at `model: sonnet`.
+One dispatch per CRITICAL or HIGH row that earns verification.
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/victor.md \

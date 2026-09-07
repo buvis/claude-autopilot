@@ -97,9 +97,6 @@ uv run --no-project --with pytest python -m pytest -q skills/fast-track/scripts
 none
 ```
 
-Copy that shape, not its contents: your own card names your item, your tests
-and your files.
-
 ## An empty `## Tests` section
 
 Leave `## Tests` empty when the tests do not exist yet. The card then carries
@@ -108,15 +105,9 @@ test author dispatch that writes the tests from the goal, the constraints and
 that sample. The author reads the card and nothing else, so the goal has to say
 what passing looks like.
 
-Name the tests instead, and the lane reads those files and goes straight to the
-implementor.
-
 ## Refusals
 
-Every refusal names the field on stderr, in this order: the frontmatter block,
-each missing section, the two keys an empty `## Tests` section needs, the
-gates, the file count, the goal length, the item slug, the model, then the
-suite.
+Every refusal names the field on stderr, in the order below.
 
 | Field | Message | The fix |
 |-------|---------|---------|
