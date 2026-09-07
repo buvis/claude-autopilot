@@ -55,9 +55,13 @@ counts, then only the subsections whose sources are non-empty:
 - **Loop Metrics** — `loop-metrics.jsonl` rows matching this PRD and batch
   (PRD 00013/00018); missing file or no matching rows renders
   `no loop metrics (manual run)`, never a failure.
-- **Implementor Mix** — `state.tasks[]` attempts (PRD 00019): attempt counts
-  per implementor, qwen preflight outcomes, the exclusion line, the codex
-  probe line (PRD 00077) and the capability breaker line (PRD 00065).
+- **Implementor Mix** — `state.tasks[]` attempts (PRD 00019) unioned with
+  this PRD's rows from `dev/local/autopilot/ledger/attempts.jsonl` and
+  deduplicated on task-and-attempt (the state copy wins), because
+  `complete-prd` drains the state attempts into the ledger before this
+  renders: attempt counts per implementor, qwen preflight outcomes, the
+  exclusion line (`state.tasks` only), the codex probe line (PRD 00077)
+  and the capability breaker line (PRD 00065).
   Reading note: the exclusion line is two populations sharing one line —
   plan-time buckets partition the plan-time-ineligible tasks, while the
   dispatch-time `files`, `memory_pressure`, and `memory_probe_failed` reroutes
@@ -70,5 +74,5 @@ counts, then only the subsections whose sources are non-empty:
   broken; the suffix is omitted when `hook_doctor` is absent or `"ok"`.
 
 Absent fields never fail the render: empty arrays omit their section,
-`state.tasks[]` missing/empty renders `no implementor data`, and a
-`codex_probe` from another batch renders `codex probe: not run`.
+`no implementor data` renders only when state and ledger are both empty,
+and a `codex_probe` from another batch renders `codex probe: not run`.
