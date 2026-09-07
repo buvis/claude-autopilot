@@ -1218,6 +1218,131 @@ class Loop:
         ok = decision["state_touched"] and decision["signal"] != "state_write_failed"
         return 0 if ok else 1
 
+    def _loop_gates(self, ap_dir: Path) -> int | None:
+        """The per-iteration gates that run once the autopilot dir is
+        known. An exit code halts the loop (teardown already done);
+        None means this iteration launches a session."""
+        code = self._register(ap_dir)
+        if code is not None:
+            self._teardown()
+            return code
+
+        if pause.consume_pause(ap_dir):
+            return self._stop_on_marker(
+                ap_dir,
+                "paused by operator ON PURPOSE",
+                "Paused by operator at a session boundary. State intact.",
+            )
+
+        pause.clear_paused(ap_dir)  # past the pause branch: this loop runs
+
+        for gate in (self._plugin_gate, self._schema_gate):
+            code = gate(ap_dir)
+            if code is not None:
+                self._teardown()
+                return code
+        return None
+
+    def _launch_phase(self, ap_dir: Path) -> tuple[float, str, routing.Route]:
+        """Read state, route it, announce it, spawn it. Returns the
+        start clock, the phase launched and the route, all three needed
+        by the metrics line the caller appends."""
+        ts_start = self._clock()
+        state = _load_json(ap_dir / "state.json")
+        phase_launched = ""
+        prd_launched = ""
+        if isinstance(state, dict):
+            phase_launched = state.get("next_phase") or ""
+            prd_launched = state.get("prd") or ""
+
+        plan = routing.route(phase_launched, ap_dir, env=self.env)
+        stamp = _dt.datetime.now().strftime("%H:%M:%S")
+        print(
+            f"\n━━ {stamp} · phase {phase_launched or 'bootstrap'} · prd "
+            f"{prd_launched or 'no-prd'} · {plan.model}/{plan.effort} ━━",
+            file=self.out,
+        )
+
+        self._launch(plan, ap_dir)
+        return ts_start, phase_launched, plan
+
+    def _halt(self, message: str, note: str) -> int:
+        print(message, file=self.err)
+        self._notify(f"autopilot ⚠️ {self._repo_name()}", note)
+        self._teardown()
+        return 1
+
+    def _act_continue(self, decision: dict) -> None:
+        if decision["limit_wait"] is not None:
+            print(
+                f"\nautoclaude: usage limit hit; waiting "
+                f"{decision['limit_wait'] // 60} min "
+                f"({decision['detail']}).",
+                file=self.out,
+            )
+            self._notify(
+                f"autopilot ⏳ {self._repo_name()}",
+                f"Usage limit; {decision['detail']}.",
+            )
+            self._sleep(decision["limit_wait"])
+        elif decision["detail"] == "replan":
+            print(
+                "\nWork task prompt overran budget; PRD will be replanned. Continuing…",
+                file=self.out,
+            )
+        else:
+            print(
+                f"\nContinuing (next phase: {decision['next']})…",
+                file=self.out,
+            )
+
+    def _act_branch(self, decision: dict, ap_dir: Path) -> int | None:
+        """The decision signal's branch. An exit code halts the loop
+        (teardown already done); None means another iteration."""
+        branch = decision["signal"]
+        if branch == "state_write_failed":
+            return self._halt(
+                "\nautoclaude: state-write-failed marker present — halting "
+                f"(broken state boundary): {decision['detail']}",
+                f"State write failed: {decision['detail']}",
+            )
+        if branch == "continue":
+            self._act_continue(decision)
+            return None
+        if branch == "paused":
+            if decision.get("stood_down"):
+                pause.consume_pause(ap_dir)
+                return self._stop_on_marker(
+                    ap_dir,
+                    decision["detail"],
+                    f"Session stood down: {decision['stood_down']}. State intact.",
+                )
+            code = self._act_paused(decision, ap_dir / "state.json")
+            self._teardown()
+            return code
+        if branch == "done":
+            code = self._act_done(decision, ap_dir)
+            self._teardown()
+            return code
+        if branch == "died":
+            return self._halt(
+                f"\nautoclaude: session died ({decision['detail']}). "
+                f"Backlog NOT drained. Check {ap_dir}/state.json and "
+                f"{ap_dir}/last-session.log.",
+                f"Stopped: {decision['detail']}. Needs attention.",
+            )
+        if branch == "park":
+            code = self._act_park(decision, ap_dir)
+            if code is not None:
+                self._teardown()
+            return code
+        print(
+            f"\nautoclaude: unknown decision signal '{branch}'; halting.",
+            file=self.err,
+        )
+        self._teardown()
+        return 1
+
     def _run_loop(self) -> int:
         while True:
             code = self._memory_gate()
@@ -1227,47 +1352,11 @@ class Loop:
 
             ap_dir = self._resolve_ap_dir()
 
-            code = self._register(ap_dir)
+            code = self._loop_gates(ap_dir)
             if code is not None:
-                self._teardown()
                 return code
 
-            if pause.consume_pause(ap_dir):
-                return self._stop_on_marker(
-                    ap_dir,
-                    "paused by operator ON PURPOSE",
-                    "Paused by operator at a session boundary. State intact.",
-                )
-
-            pause.clear_paused(ap_dir)  # past the pause branch: this loop runs
-
-            code = self._plugin_gate(ap_dir)
-            if code is not None:
-                self._teardown()
-                return code
-
-            code = self._schema_gate(ap_dir)
-            if code is not None:
-                self._teardown()
-                return code
-
-            ts_start = self._clock()
-            state = _load_json(ap_dir / "state.json")
-            phase_launched = ""
-            prd_launched = ""
-            if isinstance(state, dict):
-                phase_launched = state.get("next_phase") or ""
-                prd_launched = state.get("prd") or ""
-
-            plan = routing.route(phase_launched, ap_dir, env=self.env)
-            stamp = _dt.datetime.now().strftime("%H:%M:%S")
-            print(
-                f"\n━━ {stamp} · phase {phase_launched or 'bootstrap'} · prd "
-                f"{prd_launched or 'no-prd'} · {plan.model}/{plan.effort} ━━",
-                file=self.out,
-            )
-
-            self._launch(plan, ap_dir)
+            ts_start, phase_launched, plan = self._launch_phase(ap_dir)
 
             decision = self._decide(ap_dir, ts_start)
             self._fingerprint_bound(decision, ap_dir / "state.json")
@@ -1282,83 +1371,9 @@ class Loop:
                 plan.effort,
             )
 
-            branch = decision["signal"]
-            if branch == "state_write_failed":
-                print(
-                    "\nautoclaude: state-write-failed marker present — halting "
-                    f"(broken state boundary): {decision['detail']}",
-                    file=self.err,
-                )
-                self._notify(
-                    f"autopilot ⚠️ {self._repo_name()}",
-                    f"State write failed: {decision['detail']}",
-                )
-                self._teardown()
-                return 1
-            if branch == "continue":
-                if decision["limit_wait"] is not None:
-                    print(
-                        f"\nautoclaude: usage limit hit; waiting "
-                        f"{decision['limit_wait'] // 60} min "
-                        f"({decision['detail']}).",
-                        file=self.out,
-                    )
-                    self._notify(
-                        f"autopilot ⏳ {self._repo_name()}",
-                        f"Usage limit; {decision['detail']}.",
-                    )
-                    self._sleep(decision["limit_wait"])
-                elif decision["detail"] == "replan":
-                    print(
-                        "\nWork task prompt overran budget; PRD will be replanned. Continuing…",
-                        file=self.out,
-                    )
-                else:
-                    print(
-                        f"\nContinuing (next phase: {decision['next']})…",
-                        file=self.out,
-                    )
-                continue
-            if branch == "paused":
-                if decision.get("stood_down"):
-                    pause.consume_pause(ap_dir)
-                    return self._stop_on_marker(
-                        ap_dir,
-                        decision["detail"],
-                        f"Session stood down: {decision['stood_down']}. State intact.",
-                    )
-                code = self._act_paused(decision, ap_dir / "state.json")
-                self._teardown()
+            code = self._act_branch(decision, ap_dir)
+            if code is not None:
                 return code
-            if branch == "done":
-                code = self._act_done(decision, ap_dir)
-                self._teardown()
-                return code
-            if branch == "died":
-                print(
-                    f"\nautoclaude: session died ({decision['detail']}). "
-                    f"Backlog NOT drained. Check {ap_dir}/state.json and "
-                    f"{ap_dir}/last-session.log.",
-                    file=self.err,
-                )
-                self._notify(
-                    f"autopilot ⚠️ {self._repo_name()}",
-                    f"Stopped: {decision['detail']}. Needs attention.",
-                )
-                self._teardown()
-                return 1
-            if branch == "park":
-                code = self._act_park(decision, ap_dir)
-                if code is not None:
-                    self._teardown()
-                    return code
-                continue
-            print(
-                f"\nautoclaude: unknown decision signal '{branch}'; halting.",
-                file=self.err,
-            )
-            self._teardown()
-            return 1
 
 
 def main(argv: list[str] | None = None) -> int:
