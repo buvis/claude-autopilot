@@ -104,9 +104,11 @@ Agent tool:
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py end <id> --outcome ok
 ```
 
-Commit the tests on their own, then run them once at the card's scope and watch
-them fail. Red is the point: a test that passes before the implementation exists
-pins nothing.
+Run the card's first `## Gates` line over the new test files before you commit
+them, and watch it come back red. A green suite stops the item with
+`stopped: tests-green-before-implementation`. A test that passes before the
+implementation exists pins nothing. Commit the tests on their own once that
+first gate is red.
 
 ```bash
 git add <the test files>
@@ -163,11 +165,10 @@ each. The parser already refused a chained gate line, so each one runs on its
 own. `suite: per-item` points the test gate at this item's test files;
 `suite: batch` runs the repo suite once, at the last gate.
 
-A gate that exits non-zero stops the lane here. Write the failing command and
-its output to `dev/local/tmp/fast-track-<item>-retry.txt`, re-render the
-Implement block with `--set-file RETRY_INSTRUCTION=` pointed at that file,
-dispatch a fresh `autopilot:ivan` once, and run the gates again from the top. A
-gate still red after that dispatch sends the item to the exit rule with outcome
+A gate that exits non-zero stops the item with `stopped: gate <n>`, where `<n>`
+is the gate's position in the card's list. No reviewer goes out over a gate the
+item has not passed. Write the failing command and its output into the report,
+close the open ledger row, and take the item to the exit rule with outcome
 `stopped`.
 
 ## Roster
