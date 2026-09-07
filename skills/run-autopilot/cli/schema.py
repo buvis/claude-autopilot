@@ -273,9 +273,19 @@ def _validate_added_decision_entries(before: list, after: list) -> None:
     resumed from a state an older loop wrote holds entries that never met this
     contract, and re-judging them would make that state unloadable for a write
     that never touched them.
+
+    "Added" counts occurrences, not membership: each entry in `after` claims a
+    still-unclaimed occurrence of the same value in `before` and carries over,
+    and every copy left over - the ones this write pushed past the number
+    `before` held - is judged. Matching is by value, so order and position are
+    irrelevant, and a second copy of a value already there is still an
+    addition.
     """
+    carried = list(before)
     for entry in after:
-        if entry not in before:
+        if entry in carried:
+            carried.remove(entry)
+        else:
             _validate_decision_entry(entry)
 
 
