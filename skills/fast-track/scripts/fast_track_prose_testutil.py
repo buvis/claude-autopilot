@@ -295,6 +295,8 @@ _EXECUTABLE = re.compile(
 # to are listed.
 _SECTION_STEM = {
     "Preconditions": r"\bprecondition",
+    "Tests": r"\btest",
+    "Gates": r"\bgate",
     "Roster": r"\broster",
     "Rework": r"\brework",
     "Exit": r"\bexit",
