@@ -405,7 +405,13 @@ def _implementor_mix(state: dict, ledger_rows: list[dict]) -> list[str]:
     attempt-ledger rows (`complete-prd` drains `state.tasks[].attempts` into
     the ledger, so state alone reads empty afterwards), deduplicated on
     (task id, attempt number) with the state copy winning. The exclusion
-    line still reads `state.tasks` only."""
+    line still reads `state.tasks` only.
+
+    An empty union swaps the implementor table for the literal line
+    `no implementor data` and costs the section nothing else: the exclusion,
+    codex-probe and capability-breaker lines are derived from `state` rather
+    than from the attempts, so they still render. With no tasks at all there
+    is nothing to say about them and the placeholder stands alone."""
     tasks = state.get("tasks") or []
     lines = ["### Implementor Mix", ""]
 
@@ -421,13 +427,15 @@ def _implementor_mix(state: dict, ledger_rows: list[dict]) -> list[str]:
         attempts.append(attempt)
 
     if not attempts:
-        return lines + ["no implementor data", ""]
+        lines.append("no implementor data")
+        if not tasks:
+            return lines + [""]
+    else:
+        lines += _implementor_table(attempts)
 
-    lines += _implementor_table(attempts)
-
-    preflight_line = _preflight_outcomes_line(attempts)
-    if preflight_line:
-        lines.append(preflight_line)
+        preflight_line = _preflight_outcomes_line(attempts)
+        if preflight_line:
+            lines.append(preflight_line)
 
     exclusion_line = _exclusion_line(tasks)
     if exclusion_line:
@@ -442,14 +450,18 @@ def _implementor_mix(state: dict, ledger_rows: list[dict]) -> list[str]:
 def _ledger_rows(state: dict, path: Path | None) -> list[dict]:
     """The attempt ledger's rows for this state's PRD and batch, joining the
     state attempts in the Implementor Mix. No path reads as no rows silently;
-    a path with no ledger file there reads as no rows plus one stderr line,
-    and a malformed line is skipped by `render_metrics.load_rows`, so no
-    ledger ever fails the render. A ledger that exists but cannot be opened
-    (permission denied) still reads as no rows silently - `is_file()` does
-    not check readability and `load_rows` swallows the OSError."""
+    a path that does not name a READABLE ledger file - missing, a directory,
+    or a regular file this process cannot open - reads as no rows plus
+    exactly one stderr line naming it. Readability is settled by reading the
+    file, never by inspecting its mode bits, which miss a write-only file, a
+    foreign owner, an ACL and an unreadable parent alike. A malformed line
+    inside a readable ledger is skipped by `render_metrics.load_rows`, so no
+    ledger condition ever raises and none ever fails the render."""
     if path is None:
         return []
-    if not path.is_file():
+    try:
+        path.read_bytes()
+    except OSError:
         print(f"render_report: no readable attempt ledger at {path}", file=sys.stderr)
         return []
     prd = str(state.get("prd", ""))
