@@ -49,8 +49,6 @@ _ENUMS: dict[str, set[str]] = {
 }
 
 # The severity vocabulary an appended `autonomous_decisions` entry may use.
-# Published so writers, readers and tests share one list instead of each
-# restating the five strings and drifting apart.
 DECISION_SEVERITIES: frozenset[str] = frozenset(
     {"critical", "high", "medium", "low", "n/a"},
 )
@@ -246,11 +244,7 @@ def _validate_decision_entry(entry: Any) -> None:
     """Reject an appended `autonomous_decisions` entry the batch report cannot
     render, naming the key it lacks.
 
-    The report draws one row per entry, so a missing or unprintable value
-    surfaces as a blank row at batch end - far from the write that caused it,
-    and long after the context needed to fix it is gone. Judging at the append
-    boundary turns that silent blank row into an immediate refusal. An
-    `assumed-ambiguity` entry records what was assumed rather than what was
+    An `assumed-ambiguity` entry records what was assumed rather than what was
     decided, so it carries no cycle, severity, action or reason and is judged
     by its own two keys instead.
     """
