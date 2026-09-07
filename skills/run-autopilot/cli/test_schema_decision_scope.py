@@ -52,6 +52,28 @@ def _stub_entries() -> list:
     return [{"cycle": 1}, {}, {"issue": "", "severity": "urgent"}]
 
 
+def _decisions_write(before_entries: list, after_entries: list) -> tuple[dict, dict]:
+    """(before, after) for a write whose only change is the decisions list."""
+    before = valid_state()
+    before["autonomous_decisions"] = before_entries
+    after = valid_state()
+    after["autonomous_decisions"] = after_entries
+    return before, after
+
+
+# Values Python calls equal to the int 1 without being it: `True == 1` and
+# `1.0 == 1` both hold, so a carry-over match by `==` alone cannot tell an
+# entry carrying one of these from an entry carrying the int.
+INT_LOOKALIKES = (True, 1.0)
+
+
+def _int_lookalike_stubs() -> list:
+    """Entries an older batch wrote whose cycles are `==`-equal to each other
+    without sharing a type: every pairing of True, 1.0 and 1 compares equal.
+    None of them meets the contract, so judging any one of them raises."""
+    return [{"cycle": value, "issue": "i"} for value in (*INT_LOOKALIKES, 1)]
+
+
 class AddedDecisionScopeTest(unittest.TestCase):
     """Every entry a write adds is judged, not only the one at the end of the
     list: a write that records two decisions at once must not smuggle a blank
@@ -349,6 +371,72 @@ class DuplicateAppendedDecisionEntriesTest(unittest.TestCase):
             str(ctx.exception),
             "autonomous_decisions entry missing severity",
         )
+
+    def test_an_int_lookalike_cycle_does_not_claim_an_existing_int_entry(self) -> None:
+        # The carry-over match compares values with `==`, and `True == 1` and
+        # `1.0 == 1` are both true in Python. So an appended entry carrying one
+        # of them reads as equal to the well-formed entry already in the list,
+        # claims its occurrence and is never judged -- while the entry contract
+        # refuses a boolean or float cycle outright. The two have to agree:
+        # this value was never in `before`, so the write added it and it is
+        # judged like any other addition. Driven from both slots, because only
+        # one of the two entries can claim the single occurrence.
+        for lookalike in INT_LOOKALIKES:
+            entry = _valid_decision()
+            entry["cycle"] = lookalike
+            for position, added in (
+                ("first", [entry, _valid_decision()]),
+                ("last", [_valid_decision(), entry]),
+            ):
+                with self.subTest(cycle=repr(lookalike), position=position):
+                    with self.assertRaises(schema.SchemaError) as ctx:
+                        schema.validate_changed(
+                            *_decisions_write([_valid_decision()], added),
+                        )
+                    self.assertEqual(
+                        str(ctx.exception),
+                        "autonomous_decisions entry missing cycle",
+                    )
+
+    def test_an_int_lookalike_in_any_field_makes_the_entry_a_new_one(self) -> None:
+        # `cycle` is not the only key an int can sit in, so a matcher that
+        # compares the cycle by type and everything else with `==` still lets
+        # this write through. The collision is in an extra key the contract
+        # says nothing about; the entry it stands in for is one an older loop
+        # wrote, carrying a severity the report cannot print. The list is the
+        # same length afterwards, so only judging the changed value refuses it.
+        for lookalike in INT_LOOKALIKES:
+            with self.subTest(value=repr(lookalike)):
+                existing = _valid_decision()
+                existing["severity"] = "urgent"
+                existing["consensus"] = 1
+                self.assertNotIn(existing["severity"], schema.DECISION_SEVERITIES)
+                added = dict(existing)
+                added["consensus"] = lookalike
+                with self.assertRaises(schema.SchemaError) as ctx:
+                    schema.validate_changed(*_decisions_write([existing], [added]))
+                self.assertEqual(
+                    str(ctx.exception),
+                    "autonomous_decisions entry missing severity",
+                )
+
+    def test_carrying_over_int_lookalike_entries_judges_nothing(self) -> None:
+        # The mirror of the two cases above, and the one a fix that simply
+        # refuses every entry holding a bool or a float gets wrong. All three
+        # stubs fail the contract and each compares `==`-equal to the other
+        # two, so a matcher that now weighs types has to pair each one with its
+        # OWN type -- otherwise it judges an entry the write never added, and
+        # the state an older loop wrote stops loading whether that write left
+        # the list alone, reordered it, or dropped an entry from it.
+        for label, remaining in (
+            ("unchanged", _int_lookalike_stubs()),
+            ("reordered", list(reversed(_int_lookalike_stubs()))),
+            ("one removed", _int_lookalike_stubs()[1:]),
+        ):
+            with self.subTest(write=label):
+                before, after = _decisions_write(_int_lookalike_stubs(), remaining)
+                after["phase"] = "review"
+                self.assertIsNone(schema.validate_changed(before, after))
 
 
 class StatectlRejectionCliTest(unittest.TestCase):

@@ -70,6 +70,27 @@ def _ledger_row(
     }
 
 
+class _CountingPath(type(Path())):
+    """A ledger path that records every read of itself and can start refusing
+    them after a given number.
+
+    `read_text` and `read_bytes` both go through `Path.open`, so overriding
+    that one method counts a read once however the caller asks for it, and
+    `fails_after` turns a file the filesystem still holds into one whose next
+    read raises -- the boundary a chmod cannot express, since a chmod refuses
+    every read alike.
+
+    `reads` and `fails_after` are set by
+    `PrdSectionLedgerTests._counting_ledger`.
+    """
+
+    def open(self, *args, **kwargs):
+        self.reads.append(kwargs.get("mode", args[0] if args else "r"))
+        if self.fails_after is not None and len(self.reads) > self.fails_after:
+            raise OSError(f"read {len(self.reads)} of {self} refused")
+        return super().open(*args, **kwargs)
+
+
 class ImplementorMixLedgerTests(unittest.TestCase):
     """Implementor Mix counts the union of the state attempts and the
     PRD's attempt-ledger rows: complete-prd empties state.tasks[].attempts
@@ -245,6 +266,14 @@ class PrdSectionLedgerTests(unittest.TestCase):
 
     def _write_ledger(self, lines: list[str]) -> None:
         self.ledger.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def _counting_ledger(self, fails_after: int | None = None) -> _CountingPath:
+        """The ledger path, counting its own reads. `fails_after` is how many
+        reads succeed before every later one raises; None never fails."""
+        path = _CountingPath(str(self.ledger))
+        path.reads = []
+        path.fails_after = fails_after
+        return path
 
     def test_rows_for_another_prd_or_batch_are_not_counted(self) -> None:
         state = _state()
@@ -433,6 +462,81 @@ class PrdSectionLedgerTests(unittest.TestCase):
             "no implementor data",
             render_report.prd_section(state, [], NOW, None),
         )
+
+    def test_the_ledger_is_read_once_per_ledger_rows_call(self) -> None:
+        # Proving a file is readable and then parsing it are two reads of the
+        # same bytes: the whole ledger travels twice on every render, and the
+        # read that matters is the second one. The rows still have to come
+        # back, so a reader that opens nothing at all fails this too.
+        state = _state()
+        self._write_ledger(
+            [
+                json.dumps(_ledger_row(state, "1", 1, "claude")),
+                json.dumps(_ledger_row(state, "2", 1, "qwen")),
+            ],
+        )
+        path = self._counting_ledger()
+        rows = render_report._ledger_rows(state, path)
+        self.assertEqual(
+            [r["attempt"]["implementor"] for r in rows],
+            ["claude", "qwen"],
+        )
+        self.assertEqual(len(path.reads), 1, f"opened for reading: {path.reads}")
+
+    def test_a_ledger_readable_only_once_still_yields_its_rows(self) -> None:
+        # The case that separates one read from two, and the reason the second
+        # read is not free: this file opens for the first read and refuses
+        # every read after it. A render that proves readability and then reads
+        # again for the rows loses them here, and loses them SILENTLY, because
+        # the failure lands inside a loader that swallows OSError -- the
+        # probe's success stands in as proof for a read that never happened.
+        state = _state()
+        self._write_ledger([json.dumps(_ledger_row(state, "1", 1, "claude"))])
+        path = self._counting_ledger(fails_after=1)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            rows = render_report._ledger_rows(state, path)
+        self.assertEqual([r["attempt"]["implementor"] for r in rows], ["claude"])
+        self.assertEqual(err.getvalue(), "")
+
+    def test_a_read_failure_is_reported_once_whichever_read_fails(self) -> None:
+        # Every read of this file raises, so whichever read the render performs
+        # is the one that fails and the one whose failure has to be reported:
+        # no rows, exactly one line naming the path, no exception, and a
+        # section that still renders. A file the process cannot open at all is
+        # the chmod cases above; here the refusal comes from the read itself,
+        # which no mode bit and no pre-flight check can predict.
+        state = _state()
+        state["tasks"] = []
+        self._write_ledger([json.dumps(_ledger_row(state, "1", 1, "claude"))])
+        path = self._counting_ledger(fails_after=0)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            rows = render_report._ledger_rows(state, path)
+        self.assertEqual(rows, [])
+        self.assertEqual(len(err.getvalue().splitlines()), 1)
+        self.assertIn(str(path), err.getvalue())
+
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            text = render_report.prd_section(state, [], NOW, None, path)
+        self.assertEqual(len(err.getvalue().splitlines()), 1)
+        self.assertIn(str(path), err.getvalue())
+        self.assertIn("no implementor data", text)
+        # The unread row named claude, so a section counting it would prove
+        # the file was read after all.
+        self.assertNotIn("| claude | 1 |", text)
+
+    def test_no_ledger_path_reads_nothing_and_reports_nothing(self) -> None:
+        # The one ledger condition that is not a fault: a caller with no
+        # ledger to offer. Reporting it would put a line on stderr for every
+        # render that never asked for a ledger in the first place.
+        state = _state()
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            rows = render_report._ledger_rows(state, None)
+        self.assertEqual(rows, [])
+        self.assertEqual(err.getvalue(), "")
 
 
 if __name__ == "__main__":
