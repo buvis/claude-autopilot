@@ -219,15 +219,15 @@ def _spy_on_the_borrowed_append_row(
     return observed
 
 
+# The renderer reads loop-metrics.jsonl and the ledger mirror is what survives a
+# GC sweep, so one item has to reach both, identically, once. The whole row is
+# spelled out rather than one key: the fast-track lane is the only producer of
+# these rows, so a key that arrives misspelled, as a string instead of an int, or
+# carrying the card's full path instead of its basename lands in the ledger
+# unnoticed and skews every later reading. The key set is compared exactly, which
+# is what refuses the `event` and `effort` keys the dispatch rows carry and this
+# one must not.
 def test_item_row_lands_in_both_ledgers_with_phase_fast_track(tmp_path: Path) -> None:
-    # The renderer reads loop-metrics.jsonl and the ledger mirror is what
-    # survives a GC sweep, so one item has to reach both, identically, once.
-    # The whole row is spelled out rather than one key: the fast-track lane is
-    # the only producer of these rows, so a key that arrives misspelled, as a
-    # string instead of an int, or carrying the card's full path instead of its
-    # basename lands in the ledger unnoticed and skews every later reading.
-    # The key set is compared exactly, which is what refuses the `event` and
-    # `effort` keys the dispatch rows carry and this one must not.
     autopilot_dir = _autopilot_tree(tmp_path)
     card = _card(tmp_path)
     started = int(time.time()) - 90
