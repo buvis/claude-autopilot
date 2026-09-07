@@ -23,6 +23,34 @@ _DOUBT_RUBRIC = (
     Path(__file__).resolve().parent.parent / "references" / "doubt-review-rubric.md"
 )
 _BLIND_SKILL = _SKILLS / "review-blindly" / "SKILL.md"
+_PHASE_REVIEW = (
+    Path(__file__).resolve().parent.parent / "references" / "phase-review.md"
+)
+
+# The entry shape both `autonomous_decisions` append instructions must show
+# verbatim. The state schema also accepts `question` for `issue`, `disposition`
+# for `action` and `resolution` for `reason`, but the instruction shows the
+# PRIMARY key of each pair only — so this literal deliberately does not accept
+# an alias in a primary key's place.
+_DECISION_ENTRY_SHAPE = (
+    '{"cycle": <state.cycle>, "issue": "...", "severity": "...", '
+    '"action": "...", "reason": "..."}'
+)
+
+# A short, stable slice of each append instruction's own text. These anchors are
+# part of the contract: they locate the two sites, and requiring them means an
+# instruction cannot be DELETED to satisfy the shape check. A whole-file count
+# would accept two copies anywhere — including a trailing HTML comment no reader
+# of the instruction ever sees.
+_APPEND_SITE_ANCHORS = (
+    "Record it in `autonomous_decisions` as `routed to verification`",
+    "Log every decision in the state file",
+)
+
+# How far after an anchor the shape still counts as belonging to that site.
+# Roughly a paragraph; far short of the thousands of characters separating the
+# two sites, so neither window can be satisfied by the other site's copy.
+_SHAPE_WINDOW = 600
 
 
 def _rubric_rule_ids(text: str) -> set[str]:
@@ -81,6 +109,33 @@ class BlindSkillContractTests(unittest.TestCase):
     def test_blind_skill_writes_verdict_and_tests_lines(self) -> None:
         self.assertIn("Verdict:", self.skill)
         self.assertIn("Tests:", self.skill)
+
+
+class PhaseReviewDecisionShapeTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.phase_review = _PHASE_REVIEW.read_text()
+
+    def test_phase_review_append_names_the_decision_keys(self) -> None:
+        # "Record it in autonomous_decisions" without naming the keys is how
+        # cycle-only entries got written. Both append sites — the routed-to-
+        # verification row and the log-every-decision paragraph — must carry the
+        # shape where the reader of that instruction meets it, so each site is
+        # located by its own anchor and searched only in the window after it.
+        for anchor in _APPEND_SITE_ANCHORS:
+            start = self.phase_review.find(anchor)
+            self.assertNotEqual(
+                start,
+                -1,
+                f"the append instruction {anchor!r} must still be in the review "
+                "gate — deleting an instruction is not a way to carry its shape",
+            )
+            window = self.phase_review[start : start + len(anchor) + _SHAPE_WINDOW]
+            self.assertIn(
+                _DECISION_ENTRY_SHAPE,
+                window,
+                f"the append instruction {anchor!r} must show the entry shape "
+                "verbatim in its own paragraph, not elsewhere in the file",
+            )
 
 
 if __name__ == "__main__":
