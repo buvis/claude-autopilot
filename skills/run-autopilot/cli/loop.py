@@ -1190,13 +1190,7 @@ class Loop:
         ts_start = self._clock()
         prd = (state.get("prd") or "") if isinstance(state, dict) else ""
         plan = routing.route(next_phase, ap_dir, env=self.env)
-        stamp = _dt.datetime.now().strftime("%H:%M:%S")
-        print(
-            f"\n━━ {stamp} · phase {next_phase} · prd {prd or 'no-prd'} · "
-            f"{plan.model}/{plan.effort} ━━",
-            file=self.out,
-        )
-        self._launch(plan, ap_dir)
+        self._announce_and_launch(ap_dir, next_phase, prd, plan)
 
         decision = self._decide(ap_dir, ts_start)
         # NOT _fingerprint_bound: it parks.
@@ -1243,6 +1237,21 @@ class Loop:
                 return code
         return None
 
+    def _announce_and_launch(
+        self, ap_dir: Path, phase: str, prd: str, plan: routing.Route
+    ) -> None:
+        """Print the launch banner and spawn the routed session. Phase
+        resolution and the banner's empty-phase fallback stay with each
+        caller: `_run_once` passes an already-restricted phase,
+        `_launch_phase` passes `phase_launched or 'bootstrap'`."""
+        stamp = _dt.datetime.now().strftime("%H:%M:%S")
+        print(
+            f"\n━━ {stamp} · phase {phase} · prd {prd or 'no-prd'} · "
+            f"{plan.model}/{plan.effort} ━━",
+            file=self.out,
+        )
+        self._launch(plan, ap_dir)
+
     def _launch_phase(self, ap_dir: Path) -> tuple[float, str, routing.Route]:
         """Read state, route it, announce it, spawn it. Returns the
         start clock, the phase launched and the route, all three needed
@@ -1256,14 +1265,9 @@ class Loop:
             prd_launched = state.get("prd") or ""
 
         plan = routing.route(phase_launched, ap_dir, env=self.env)
-        stamp = _dt.datetime.now().strftime("%H:%M:%S")
-        print(
-            f"\n━━ {stamp} · phase {phase_launched or 'bootstrap'} · prd "
-            f"{prd_launched or 'no-prd'} · {plan.model}/{plan.effort} ━━",
-            file=self.out,
+        self._announce_and_launch(
+            ap_dir, phase_launched or "bootstrap", prd_launched, plan
         )
-
-        self._launch(plan, ap_dir)
         return ts_start, phase_launched, plan
 
     def _halt(self, message: str, note: str) -> int:

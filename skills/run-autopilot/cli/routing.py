@@ -7,10 +7,12 @@ test_autoclaude_build_model.sh, re-expressed in cli/test_routing.py).
 
 Build routes per-PRD (PRD 00076): Sonnet unless a promotion signal
 fires. The absent phase is a BUILD launch (a fresh batch has no
-state.json and resumes at the build gate). A genuinely unknown
-non-empty phase falls to Opus xhigh: fail expensive, never fail dumb.
-Review stays on Opus at xhigh (the decision gate classifies findings);
-finalize (done) is mechanical rendering - Sonnet at medium.
+state.json and resumes at the build gate). A genuinely unknown non-empty
+phase falls to Opus xhigh: fail expensive, never fail dumb. Review stays
+on Opus on every cycle, at effort xhigh on cycle 1 and high on cycle 2
+and later; `_AUTOPILOT_EFFORT_REVIEW` forces one effort on every cycle
+and `_AUTOPILOT_EFFORT_REVIEW_RERUN` sets the rerun value; finalize
+(done) is mechanical rendering - Sonnet at medium.
 
 The `[1m]` suffix is load-bearing: autopilot_context_cap_hook.USAGE_CAP
 (500K) is sized for a 1M window, so every launch model here must carry
@@ -202,7 +204,7 @@ def review_cycle(autopilot_dir: Path) -> int:
     if not isinstance(state, dict):
         return 1
     cycle = state.get("cycle")
-    if isinstance(cycle, int):
+    if isinstance(cycle, int) and not isinstance(cycle, bool):
         return cycle
     return 1
 
