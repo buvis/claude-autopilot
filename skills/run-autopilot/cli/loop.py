@@ -898,7 +898,6 @@ class Loop:
         decision: dict,
         phase_launched: str,
         model: str,
-        effort: str,
     ) -> None:
         """One JSONL line per session, after the decision and before any
         exit path. Observation only - the append can never block or fail
@@ -914,7 +913,6 @@ class Loop:
                 "phase_end": decision["phase_end"],
                 "signal": decision["signal"],
                 "model": model,
-                "effort": effort,
             }
             cost = last_result_field(ap_dir / "last-session.log", "total_cost_usd")
             if isinstance(cost, (int, float)) and not isinstance(cost, bool):
@@ -1201,13 +1199,7 @@ class Loop:
         decision = self._decide(ap_dir, ts_start)
         # NOT _fingerprint_bound: it parks.
         self._append_metrics(
-            ap_dir,
-            ts_start,
-            self._clock(),
-            decision,
-            next_phase,
-            plan.model,
-            plan.effort,
+            ap_dir, ts_start, self._clock(), decision, next_phase, plan.model
         )
         print(
             f"autopilot review-once: signal {decision['signal']} · next phase "
@@ -1279,7 +1271,6 @@ class Loop:
                 decision,
                 phase_launched,
                 plan.model,
-                plan.effort,
             )
 
             branch = decision["signal"]
