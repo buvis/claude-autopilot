@@ -33,6 +33,7 @@ so those three lines render `?` (R2 of PRD 00122).
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -452,25 +453,44 @@ def _ledger_rows(state: dict, path: Path | None) -> list[dict]:
     state attempts in the Implementor Mix. No path reads as no rows silently;
     a path that does not name a READABLE ledger file - missing, a directory,
     or a regular file this process cannot open - reads as no rows plus
-    exactly one stderr line naming it. Readability is settled by reading the
-    file, never by inspecting its mode bits, which miss a write-only file, a
-    foreign owner, an ACL and an unreadable parent alike. A malformed line
-    inside a readable ledger is skipped by `render_metrics.load_rows`, so no
-    ledger condition ever raises and none ever fails the render."""
+    exactly one stderr line naming it. Readability is settled by the single
+    read that also produces the rows, never by a probe read beforehand: a
+    probe cannot speak for the read that follows it, and its success would
+    stand in for a later failure the row loader swallows. That is also why
+    the rows are parsed here rather than by `render_metrics.load_rows`, whose
+    `event`-row rule this carries over. A malformed line is skipped loud on
+    stderr, so no ledger condition ever raises and none ever fails the
+    render."""
     if path is None:
         return []
     try:
-        path.read_bytes()
+        text = path.read_text(encoding="utf-8")
     except OSError:
         print(f"render_report: no readable attempt ledger at {path}", file=sys.stderr)
         return []
     prd = str(state.get("prd", ""))
     batch_id = (state.get("batch") or {}).get("id")
-    return [
-        r
-        for r in render_metrics.load_rows(path)
-        if r.get("prd") == prd and r.get("batch_id") == batch_id
-    ]
+    rows = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            print(
+                f"render_report: skipping malformed line {number} of {path}",
+                file=sys.stderr,
+            )
+            continue
+        if (
+            isinstance(row, dict)
+            # An `event` row records something the batch did, not an attempt.
+            and "event" not in row
+            and row.get("prd") == prd
+            and row.get("batch_id") == batch_id
+        ):
+            rows.append(row)
+    return rows
 
 
 def _tasks_line(state: dict, record: dict | None) -> str:

@@ -266,6 +266,29 @@ def _validate_decision_entry(entry: Any) -> None:
         raise SchemaError("autonomous_decisions entry missing severity")
 
 
+def _same_value(left: Any, right: Any) -> bool:
+    """True when two values are equal AND carry the same types, key by key
+    and all the way down.
+
+    `==` alone cannot answer this: Python holds `True == 1` and `1.0 == 1`,
+    so an entry whose cycle turned from an int into a bool reads as unchanged
+    to `==` while `_validate_decision_entry` refuses it outright. Comparing
+    the type at every position - including inside nested dicts and lists -
+    keeps the two sides of that contract agreeing.
+    """
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict):
+        return left.keys() == right.keys() and all(
+            _same_value(left[key], right[key]) for key in left
+        )
+    if isinstance(left, list):
+        return len(left) == len(right) and all(
+            _same_value(a, b) for a, b in zip(left, right)
+        )
+    return left == right
+
+
 def _validate_added_decision_entries(before: list, after: list) -> None:
     """Judge every `autonomous_decisions` entry this write added.
 
@@ -277,14 +300,17 @@ def _validate_added_decision_entries(before: list, after: list) -> None:
     "Added" counts occurrences, not membership: each entry in `after` claims a
     still-unclaimed occurrence of the same value in `before` and carries over,
     and every copy left over - the ones this write pushed past the number
-    `before` held - is judged. Matching is by value, so order and position are
-    irrelevant, and a second copy of a value already there is still an
-    addition.
+    `before` held - is judged. Matching is by value AND by type
+    (`_same_value`), so order and position are irrelevant, a second copy of a
+    value already there is still an addition, and an entry that merely looks
+    equal to an existing one cannot claim its occurrence.
     """
     carried = list(before)
     for entry in after:
-        if entry in carried:
-            carried.remove(entry)
+        for index, existing in enumerate(carried):
+            if _same_value(existing, entry):
+                del carried[index]
+                break
         else:
             _validate_decision_entry(entry)
 
@@ -301,14 +327,17 @@ def validate_changed(before: dict, after: dict) -> None:
     This is also the only gate that can judge an appended
     `autonomous_decisions` entry, because "added" is a fact about the write,
     not about the state - validate() alone cannot tell a fresh entry from one
-    an older batch left behind.
+    an older batch left behind. That one field asks `_same_value` rather than
+    `changed_fields` whether it changed: a list whose only edit is the TYPE of
+    a value is `==`-equal to the old one, so `changed_fields` would call the
+    write untouched and the added entry would never be judged.
     """
     fields = changed_fields(before, after)
     validate({key: value for key, value in after.items() if key in fields})
 
-    entries = after.get("autonomous_decisions")
-    if "autonomous_decisions" in fields and isinstance(entries, list):
-        existing = before.get("autonomous_decisions")
+    existing = before.get("autonomous_decisions", _MISSING)
+    entries = after.get("autonomous_decisions", _MISSING)
+    if isinstance(entries, list) and not _same_value(existing, entries):
         _validate_added_decision_entries(
             existing if isinstance(existing, list) else [],
             entries,
