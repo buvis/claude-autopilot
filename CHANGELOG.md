@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **review-work-completion**: retry Bob once on a lack-of-input refusal, using an inlined retry prompt that reproduces the review context and diff as text so a sandboxed reviewer with no read access can still respond
 - **review-work-completion**: record every Bob and Carl dispatch, retries included, as a dispatch ledger row
 - **run-autopilot**: refuse an `autonomous_decisions` entry the batch report cannot render at the moment it is appended, naming the key it lacks, instead of drawing a blank row in the batch report at the end of the run
-- **fast-track**: run a single spec card through the full review roster without the autopilot loop phases
+- **fast-track**: run spec cards through the full review roster without the autopilot loop phases, worked in argument order, with the repo-wide suite and the `--push` push happening once after the last item
 
 ### Changed
 

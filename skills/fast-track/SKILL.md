@@ -11,16 +11,16 @@ compatibility: "Requires Bob personal Claude/autoclaude environment or equivalen
 
 # Fast-Track One Card
 
-One spec card in, one reviewed change out. Start the lane in an attended
-session:
+Spec cards in, reviewed changes out. Start the lane in an attended session:
 
 ```text
-/autopilot:fast-track <card.md> --push
+/autopilot:fast-track <card.md> [<card.md> ...] [--push]
 ```
 
-`--push` pushes the working branch after a clean commit exit; leave it off to
-keep the commits local. Work down the sections in order: each one names the next
-thing to do, and the section that stops the item says so.
+The lane runs the cards in the order the arguments give them. `--push` pushes
+once, after the last item; leave it off to keep the commits local. Work down the
+sections in order: each one names the next thing to do, and the section that
+stops the item says so.
 
 ## Preconditions
 
@@ -162,8 +162,9 @@ git commit -m "<type>(<scope>): <description>"
 
 Run the card's `## Gates` lines in the order the card lists them, one Bash call
 each. The parser already refused a chained gate line, so each one runs on its
-own. `suite: per-item` points the test gate at this item's test files;
-`suite: batch` runs the repo suite once, at the last gate.
+own. `suite: per-item` points the test gate at this item's test files. The
+repo-wide suite runs once, after the last item, for a card carrying
+`suite: batch`; the Exit section is where that run happens.
 
 A gate that exits non-zero stops the item with `stopped: gate <n>`, where `<n>`
 is the gate's position in the card's list. No reviewer goes out over a gate the
@@ -421,7 +422,8 @@ that set.
 `exit_action` in `fast_track_plan.py` is the rule: any surviving CRITICAL or
 HIGH parks the item on a branch, and everything else commits.
 
-**Clean.** The commits stay on the working branch. With `--push`, push it now.
+**Clean.** The commits stay on the working branch, and the lane takes the next
+card.
 
 **Blocked.** A confirmed CRITICAL or HIGH never stays on the working branch.
 Park the commits, then put the working branch back where the item started:
@@ -438,6 +440,10 @@ git reset --keep <base-sha>
 `git reset --keep <base-sha>` rewinds the working branch and refuses outright
 rather than clobber a foreign change in the tree. A parked item never pushes.
 Name the branch and the surviving findings in the report.
+
+**End of the run.** After the last item, run the `suite: batch` suite once over
+the whole repo. With `--push` the lane pushes once, after the last item, and
+only over a green batch suite.
 
 ## Ledgers
 
