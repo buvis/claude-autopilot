@@ -125,10 +125,13 @@ def _spans_handoff(autopilot_dir: Path, queued_at: int, ended_at: int) -> bool:
         lines = (autopilot_dir / FILENAME).read_text(encoding="utf-8").splitlines()
     except FileNotFoundError:
         lines = []
+    spans = False
+    skipped = 0
     for line in lines:
         try:
             row = json.loads(line)
         except ValueError:
+            skipped += 1
             continue
         if (
             isinstance(row, dict)
@@ -136,8 +139,13 @@ def _spans_handoff(autopilot_dir: Path, queued_at: int, ended_at: int) -> bool:
             and isinstance(row.get("at"), int)
             and queued_at < row["at"] < ended_at
         ):
-            return True
-    return False
+            spans = True
+    if skipped:
+        print(
+            f"record_dispatch: skipped {skipped} unparseable line(s) in {FILENAME}",
+            file=sys.stderr,
+        )
+    return spans
 
 
 def open_ids(autopilot_dir: Path) -> list[str]:
