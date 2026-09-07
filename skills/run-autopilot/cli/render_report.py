@@ -477,6 +477,9 @@ def prd_section(
         (p for p in completed_prds if isinstance(p, dict) and p.get("filename") == prd),
         None,
     )
+    # `cycle` is present until the per-PRD reset wipes it; after that the
+    # closing batch record carries the count (statectl._completed_prd_record).
+    cycles = state["cycle"] if "cycle" in state else (record or {}).get("cycles", "?")
     if record is not None:
         tasks_line = (
             f"{record.get('tasks_completed', '?')}/{record.get('tasks_total', '?')}"
@@ -492,7 +495,7 @@ def prd_section(
         f"## {prd}",
         "",
         f"- Completed: {completed}",
-        f"- Cycles: {state.get('cycle', '?')}",
+        f"- Cycles: {cycles}",
         f"- Tasks: {tasks_line}",
         "",
     ]
