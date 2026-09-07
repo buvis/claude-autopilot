@@ -145,6 +145,70 @@ def test_an_item_with_no_rows_has_no_dispatches() -> None:
     assert sum(counts.values()) == 0
 
 
+# The rows the test below counts, kept beside its expected counts.
+_MIXED_ROWS: list[dict[str, object]] = [
+    {
+        "id": "0a0a0a0a",
+        "kind": "fast-track:ivan",
+        "task": "widget",
+        "queued_at": 1757280000,
+        "prompt_bytes": 4096,
+    },
+    {
+        "id": "0a0a0a0a",
+        "ended_at": 1757280600,
+        "elapsed_s": 600,
+        "outcome": "ok",
+        "detail": None,
+    },
+    {
+        "id": "0b0b0b0b",
+        "kind": "fast-track:blake",
+        "task": "widget",
+        "queued_at": 1757280610,
+        "prompt_bytes": 3001,
+    },
+    {
+        "id": "0c0c0c0c",
+        "kind": "fast-track:blake",
+        "task": "sprocket",
+        "queued_at": 1757280611,
+        "prompt_bytes": 3002,
+    },
+    {
+        "kind": "handoff",
+        "site": "build",
+        "edge": "leave",
+        "at": 1757280620,
+        "phase": "fast-track",
+        "prd": "none",
+    },
+    {
+        "id": "0d0d0d0d",
+        "kind": "fast-track:eve",
+        "task": "widget",
+        "queued_at": 1757280630,
+        "prompt_bytes": 3100,
+    },
+    {
+        "id": "0b0b0b0b",
+        "kind": "fast-track:blake",
+        "task": "widget",
+        "ended_at": 1757280990,
+        "elapsed_s": 380,
+        "outcome": "ok",
+        "detail": None,
+    },
+    {
+        "id": "0e0e0e0e",
+        "kind": "fast-track:eve",
+        "task": "widget",
+        "queued_at": 1757281000,
+        "prompt_bytes": 3101,
+    },
+]
+
+
 def test_the_counts_come_out_of_the_rows_the_ledger_actually_holds(
     tmp_path: Path,
 ) -> None:
@@ -153,70 +217,8 @@ def test_the_counts_come_out_of_the_rows_the_ledger_actually_holds(
     # the expected counts sit side by side: eve ran twice, blake's second row
     # belongs to another item, the handoff and the end row open nothing, and
     # carl never ran at all.
-    rows: list[dict[str, object]] = [
-        {
-            "id": "0a0a0a0a",
-            "kind": "fast-track:ivan",
-            "task": "widget",
-            "queued_at": 1757280000,
-            "prompt_bytes": 4096,
-        },
-        {
-            "id": "0a0a0a0a",
-            "ended_at": 1757280600,
-            "elapsed_s": 600,
-            "outcome": "ok",
-            "detail": None,
-        },
-        {
-            "id": "0b0b0b0b",
-            "kind": "fast-track:blake",
-            "task": "widget",
-            "queued_at": 1757280610,
-            "prompt_bytes": 3001,
-        },
-        {
-            "id": "0c0c0c0c",
-            "kind": "fast-track:blake",
-            "task": "sprocket",
-            "queued_at": 1757280611,
-            "prompt_bytes": 3002,
-        },
-        {
-            "kind": "handoff",
-            "site": "build",
-            "edge": "leave",
-            "at": 1757280620,
-            "phase": "fast-track",
-            "prd": "none",
-        },
-        {
-            "id": "0d0d0d0d",
-            "kind": "fast-track:eve",
-            "task": "widget",
-            "queued_at": 1757280630,
-            "prompt_bytes": 3100,
-        },
-        {
-            "id": "0b0b0b0b",
-            "kind": "fast-track:blake",
-            "task": "widget",
-            "ended_at": 1757280990,
-            "elapsed_s": 380,
-            "outcome": "ok",
-            "detail": None,
-        },
-        {
-            "id": "0e0e0e0e",
-            "kind": "fast-track:eve",
-            "task": "widget",
-            "queued_at": 1757281000,
-            "prompt_bytes": 3101,
-        },
-    ]
-
     counts = count_item_dispatches(
-        _write_ledger(tmp_path / "mixed_rows.jsonl", rows),
+        _write_ledger(tmp_path / "mixed_rows.jsonl", _MIXED_ROWS),
         "widget",
     )
 
