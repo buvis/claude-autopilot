@@ -398,10 +398,12 @@ class StatectlCompletePrdTest(unittest.TestCase):
         entry = self.load_state()["batch"]["completed_prds"][-1]
         self.assertEqual(entry["autonomous_decisions"], 1)
 
-    # Regression: a naive "drop anything without an issue" fix would exclude
-    # this entry too, undercounting to 0 instead of 1 - one non-empty cell
-    # (cycle alone) is enough for the renderer to draw the row.
-    def test_autonomous_decision_entry_with_only_cycle_populated_is_counted(
+    # The row rule is a text requirement: the renderer draws a row only for
+    # an entry whose issue cell holds text, so an entry carrying nothing but
+    # a cycle number renders no row and must not be counted. Paired with a
+    # well-formed decision so the expected count is 1, not 0 - an
+    # implementation that counts nothing can't pass by accident.
+    def test_autonomous_decision_entry_with_only_cycle_populated_is_not_counted(
         self,
     ) -> None:
         self.write_state(
@@ -412,7 +414,13 @@ class StatectlCompletePrdTest(unittest.TestCase):
                 "tasks_completed": 1,
                 "tasks_total": 1,
                 "autonomous_decisions": [
-                    {},
+                    {
+                        "cycle": 1,
+                        "issue": "a",
+                        "severity": "low",
+                        "action": "auto-fix",
+                        "reason": "x",
+                    },
                     {"cycle": 5},
                 ],
                 "batch": {"parks_consecutive": 0},
@@ -474,9 +482,9 @@ class StatectlCompletePrdTest(unittest.TestCase):
         self.assertEqual(entry["autonomous_decisions"], 1)
 
     # Regression: an entry can carry keys outside the renderer's five cells
-    # AND a populated cell among them - it must still count. Guards against
-    # an over-correction that rejects any entry with an unrecognized key
-    # instead of checking the five cells specifically.
+    # AND the issue text the row rule requires - it must still count. Guards
+    # against an over-correction that rejects any entry with an unrecognized
+    # key instead of reading the issue cell specifically.
     def test_entry_with_non_renderable_key_and_populated_renderable_cell_is_counted(
         self,
     ) -> None:
@@ -488,7 +496,7 @@ class StatectlCompletePrdTest(unittest.TestCase):
                 "tasks_completed": 1,
                 "tasks_total": 1,
                 "autonomous_decisions": [
-                    {"id": 7, "severity": "high"},
+                    {"id": 7, "issue": "a"},
                 ],
                 "batch": {"parks_consecutive": 0},
             },
