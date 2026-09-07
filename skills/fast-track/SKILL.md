@@ -58,6 +58,10 @@ seven `## ` sections (`Goal`, `Tests`, `Files`, `Constraints`, `Docs`, `Gates`,
 with `&&`, `;` or `|`, lists more than 12 files, or runs a goal past 40 lines.
 The last two say the same thing: `card too large for the lane; write a PRD`.
 
+`${CLAUDE_PLUGIN_ROOT}/skills/fast-track/references/spec-card.md` holds the full
+format: the frontmatter keys, the seven sections, one worked card and the
+refusal table.
+
 Stage the card's prose now, with the Write tool, so nothing crosses the shell as
 an argument later: the goal to `dev/local/tmp/fast-track-<item>-goal.txt`, the
 `## Tests` notes to `dev/local/tmp/fast-track-<item>-spec.txt`, the constraints
@@ -171,6 +175,9 @@ gate still red after that dispatch sends the item to the exit rule with outcome
 Five lenses, no session context. Every prompt is rendered from the card, the
 diff and a persona file, so nothing the driver believes about the change reaches
 a reviewer.
+
+`${CLAUDE_PLUGIN_ROOT}/skills/fast-track/references/lane-dispatch.md` expands
+every lane into its own copyable command block.
 
 Stage the review inputs first. Run `git diff <base-sha>..HEAD` and save its
 output to `dev/local/tmp/<item>-fast-track.diff` with the Write tool, then copy
