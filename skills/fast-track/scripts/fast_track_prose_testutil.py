@@ -126,6 +126,9 @@ NEGATOR = re.compile(
 # Verbs a runbook uses to tell someone to do something: imperative and
 # third-person present. `read` is deliberately absent - its past tense is spelt
 # the same, so `the invocation line read X` would pass for an instruction.
+# `push` is here because the exit rule is written in it: without it "the lane
+# pushes once, after the last item" reads as narration and the multi-card pins
+# would ask the document for a wording ("run the push") instead of the rule.
 _PRESENT_VERBS = [
     "run",
     "runs",
@@ -175,6 +178,8 @@ _PRESENT_VERBS = [
     "happens",
     "pass",
     "passes",
+    "push",
+    "pushes",
     "process",
     "processes",
     "start",
@@ -229,6 +234,7 @@ _PARTICIPLES = [
     "addressed",
     "handed",
     "passed",
+    "pushed",
     "processed",
     "started",
     "kept",
@@ -549,11 +555,22 @@ def _reads_as_instruction(text: str) -> bool:
 
 
 def asserted(text: str, pattern: re.Pattern[str]) -> bool:
-    """True when `pattern` matches where no negator in its own clause governs it."""
-    for match in pattern.finditer(text):
+    """True when `pattern` matches where no negator in its own clause governs it.
+
+    A rejected match never hides the text behind it. `finditer` resumes at the
+    end of the match it just yielded, so one negated match swallowing the rest
+    of the sentence would exempt every later match inside it - "nothing in this
+    lane holds a push back for a later card, so push after every item" reads as
+    denied while telling the operator to push per item, and the instruction is
+    in the span the discarded match consumed. The scan restarts one character
+    into a rejected match instead, so the sentence is read to its end.
+    """
+    position = 0
+    while (match := pattern.search(text, position)) is not None:
         head = _CLAUSE.split(text[: match.start()])[-1]
         if not NEGATOR.search(head):
             return True
+        position = match.start() + 1
     return False
 
 

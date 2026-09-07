@@ -15,13 +15,16 @@ The machinery each pin runs on - the passages, the sections, the test for a
 sentence that reads as an instruction, and the word lists that spot a promise
 taken back - lives in fast_track_prose_testutil.py, which carries the reasoning
 behind it. The two stop rules keep their vocabulary in
-fast_track_stop_testutil.py and the two reference documents theirs in
-fast_track_reference_testutil.py, each beside the reasoning for it.
+fast_track_stop_testutil.py, the two reference documents theirs in
+fast_track_reference_testutil.py, and the multi-card contract its own in
+fast_track_multicard_testutil.py, each beside the reasoning for it.
 
 What is pinned here: the roster sends in one message and never one lane at a
 time, its CLI lanes never run in the foreground or inside a subagent, Blake is
-never handed the diff, the preconditions never say nothing blocks a run, and
-the rework section neither reuses the implementor nor drops the cap.
+never handed the diff, the preconditions never say nothing blocks a run, the
+rework section neither reuses the implementor nor drops the cap, and the lane
+takes several cards in argument order, running the batch suite and the push
+once, after the last of them.
 """
 
 from __future__ import annotations
@@ -51,6 +54,7 @@ def _sibling(name: str) -> ModuleType:
 _testutil = _sibling("fast_track_prose_testutil")
 _stop = _sibling("fast_track_stop_testutil")
 _ref = _sibling("fast_track_reference_testutil")
+_multi = _sibling("fast_track_multicard_testutil")
 
 _SKILL_MD = _testutil.SKILL_MD
 _CANCELS = _testutil.CANCELS
@@ -671,9 +675,7 @@ def test_a_red_gate_stops_the_item_with_no_retry_and_no_reviewer() -> None:
         missing=_stop.NO_GATE_STOP,
         cancelled=_stop.GATE_STOP_CANCELLED,
     )
-    assert _stop.stating(stop, _stop.GATE_STOP, _stop.GATE_STOP), (
-        _stop.GATE_STOP_DENIED
-    )
+    assert _stop.stating(stop, _stop.GATE_STOP, _stop.GATE_STOP), _stop.GATE_STOP_DENIED
     # Polarity here too, and in prose: "no reviewer is dispatched" is the rule,
     # "nobody here claims no reviewer waits for a green gate" is the same words
     # granting the opposite, and a fenced English sentence is neither.
@@ -769,3 +771,28 @@ def test_lane_reference_names_every_kind() -> None:
         if any(pattern.search(sentence) for pattern in _CANCELS)
     )
     assert not retired, _ref.KINDS_RETIRED.format(retired=retired[:3])
+
+
+def test_the_lane_takes_several_cards_in_argument_order() -> None:
+    # A usage line that takes one card is a lane run once per card, and a lane
+    # with no stated order has no last item for the batch suite or the push to
+    # wait for.
+    for rule in _multi.ARGUMENT_ORDER_RULES:
+        complaint = _multi.unstated(rule)
+        assert not complaint, complaint
+    for claim, complaint in _multi.ORDER_CLAIMS:
+        _assert_unopposed(list(_passages()), claim, complaint)
+
+
+def test_the_batch_suite_and_the_push_wait_for_the_last_item() -> None:
+    # The bans run first, over the whole body and the frontmatter: a push at an
+    # item's own exit sends the same operator out with the same half of a batch
+    # under `## Ledgers`. Then the pin the bans cannot be - every push and every
+    # repo-suite run naming the run's end, in whatever words it reaches for.
+    for claim, complaint in _multi.PER_ITEM_CLAIMS:
+        _assert_unopposed(list(_passages()), claim, complaint)
+    assert not _asserted(_frontmatter(), _multi.PER_ITEM_PUSH), _multi.FRONTMATTER_PUSH
+    _multi.assert_pinned_to_the_run_end()
+    for rule in _multi.LAST_ITEM_RULES:
+        complaint = _multi.unstated(rule)
+        assert not complaint, complaint
