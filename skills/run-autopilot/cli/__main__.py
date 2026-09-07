@@ -779,7 +779,13 @@ def _run_render(args: argparse.Namespace) -> int:
         json_items = [
             i for i in deferred_items or [] if isinstance(i, dict) and i.get("prd") == prd
         ]
-        block = render_report.prd_section(loaded, prd_rows, now, json_items)
+        block = render_report.prd_section(
+            loaded,
+            prd_rows,
+            now,
+            json_items,
+            autopilot_dir / "ledger" / "attempts.jsonl",
+        )
         dedupe_heading = f"## {prd}"
         missing = render_report.missing_from_report(block, json_items, prd)
     out_path = autopilot_dir / "reports" / f"{batch_id}-report.md"

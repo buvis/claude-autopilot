@@ -32,6 +32,8 @@ so those three lines render `?` (R2 of PRD 00122).
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from cli import render_metrics
 
 _PREFLIGHT_ORDER = (
@@ -390,13 +392,29 @@ def _breaker_line(state: dict, attempts: list[dict]) -> str:
     )
 
 
-def _implementor_mix(state: dict) -> list[str]:
+def _implementor_mix(state: dict, ledger_rows: list[dict]) -> list[str]:
+    """Implementor mix over the union of the state attempts and this PRD's
+    attempt-ledger rows (`complete-prd` drains `state.tasks[].attempts` into
+    the ledger, so state alone reads empty afterwards), deduplicated on
+    (task id, attempt number) with the state copy winning. The exclusion
+    line still reads `state.tasks` only."""
     tasks = state.get("tasks") or []
     lines = ["### Implementor Mix", ""]
-    if not tasks:
+
+    attempts: list[dict] = []
+    seen = set()
+    pairs = [(str(t.get("id")), a) for t in tasks for a in (t.get("attempts") or [])]
+    pairs += [(str(r.get("task_id")), r.get("attempt") or {}) for r in ledger_rows]
+    for task_id, attempt in pairs:
+        key = (task_id, attempt.get("attempt"))
+        if key in seen:
+            continue
+        seen.add(key)
+        attempts.append(attempt)
+
+    if not attempts:
         return lines + ["no implementor data", ""]
 
-    attempts = [a for t in tasks for a in (t.get("attempts") or [])]
     lines += _implementor_table(attempts)
 
     preflight_line = _preflight_outcomes_line(attempts)
@@ -418,12 +436,25 @@ def prd_section(
     metrics_rows: list[dict],
     completed: str,
     json_items: list[dict] | None = None,
+    attempts_ledger: Path | None = None,
 ) -> str:
     """The completed-PRD section appended at Phase 9 step 7. `json_items`
     are the batch deferred JSON's items for this PRD (already filtered by
     the caller); the Deferred to Batch End table renders their union with
-    `state.deferred_decisions`."""
+    `state.deferred_decisions`. `attempts_ledger` is the attempt ledger's
+    path: its rows for this PRD and batch join the state attempts in the
+    Implementor Mix, and an absent or unreadable ledger renders as today."""
     prd = str(state.get("prd", ""))
+    batch_id = (state.get("batch") or {}).get("id")
+    ledger_rows = (
+        [
+            r
+            for r in render_metrics.load_rows(attempts_ledger)
+            if r.get("prd") == prd and r.get("batch_id") == batch_id
+        ]
+        if attempts_ledger is not None
+        else []
+    )
     autonomous = [
         d for d in state.get("autonomous_decisions") or [] if isinstance(d, dict)
     ]
@@ -459,7 +490,7 @@ def prd_section(
     lines += _doubt_findings(doubts)
     lines += _rubric_verdicts(state.get("doubts_rubric_verdicts") or [])
     lines += ["### Loop Metrics", "", render_metrics.phase_table(metrics_rows), ""]
-    lines += _implementor_mix(state)
+    lines += _implementor_mix(state, ledger_rows)
     lines += _deferred_to_batch_end(_merge_deferral_sinks(deferred, json_items or []))
     return "\n".join(lines)
 

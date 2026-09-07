@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **run-autopilot**: the batch report's Implementor Mix section shows the implementor table instead of `no implementor data`, because it now reads the attempt ledger as well as the state file, which `complete-prd` has already drained by the time the section renders
 - **run-autopilot**: the batch report's Autonomous Decisions table shows the text of decisions filed under `decision`, `finding`, `supersedes`, `detail`, `disposition`, `rationale` or `assumption` instead of leaving those cells blank, and it no longer draws a row for an entry that carries nothing but a cycle number
 - **record_dispatch**: dispatch rows no longer span a session handoff in their elapsed time — a `handoff` call closes any still-open row as `lost` instead of leaving it to be closed across the boundary, and an `end` call whose window spans handoff reports `elapsed_s: null` instead of a number that mixes dispatch runtime with handoff idle time.
 - **record_dispatch**: an unreadable or non-UTF-8 ledger file no longer crashes the `handoff` verb that runs at every session boundary — every read failure is reported on stderr and treated as an empty ledger, keeping the promise that a telemetry failure is never a dispatch failure. An `end` call also reads the ledger once instead of twice, so a malformed line is now reported once rather than twice.
