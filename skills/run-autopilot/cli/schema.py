@@ -48,6 +48,13 @@ _ENUMS: dict[str, set[str]] = {
     "consensus_engine": {"legacy", "shadow", "workflow"},
 }
 
+# The severity vocabulary an appended `autonomous_decisions` entry may use.
+# Published so writers, readers and tests share one list instead of each
+# restating the five strings and drifting apart.
+DECISION_SEVERITIES: frozenset[str] = frozenset(
+    {"critical", "high", "medium", "low", "n/a"},
+)
+
 _INT_FIELDS = ("cycle", "rework_cap", "tasks_total", "tasks_completed", "replan_count")
 
 _STR_FIELDS = ("prd", "work_start_sha", "repo_root", "design_doc")
@@ -219,6 +226,65 @@ def changed_fields(before: dict, after: dict) -> set[str]:
     }
 
 
+# The prose pairs an appended decision may speak in either vocabulary. The
+# first name of each pair is the one a refusal names, whichever spelling the
+# entry chose, so an operator reading `rejected:` sees one word per rule.
+_DECISION_PROSE_PAIRS = (
+    ("issue", "question"),
+    ("action", "disposition"),
+    ("reason", "resolution"),
+)
+
+
+def _has_prose(entry: dict, key: str) -> bool:
+    """True when `key` carries the non-empty string the report row prints."""
+    value = entry.get(key)
+    return isinstance(value, str) and value != ""
+
+
+def _validate_decision_entry(entry: Any) -> None:
+    """Reject an appended `autonomous_decisions` entry the batch report cannot
+    render, naming the key it lacks.
+
+    The report draws one row per entry, so a missing or unprintable value
+    surfaces as a blank row at batch end - far from the write that caused it,
+    and long after the context needed to fix it is gone. Judging at the append
+    boundary turns that silent blank row into an immediate refusal. An
+    `assumed-ambiguity` entry records what was assumed rather than what was
+    decided, so it carries no cycle, severity, action or reason and is judged
+    by its own two keys instead.
+    """
+    if not isinstance(entry, dict):
+        raise SchemaError("autonomous_decisions entry missing issue")
+    if entry.get("type") == "assumed-ambiguity":
+        for key in ("question", "assumption"):
+            if not _has_prose(entry, key):
+                raise SchemaError(f"autonomous_decisions entry missing {key}")
+        return
+    for primary, alternative in _DECISION_PROSE_PAIRS:
+        if not _has_prose(entry, primary) and not _has_prose(entry, alternative):
+            raise SchemaError(f"autonomous_decisions entry missing {primary}")
+    cycle = entry.get("cycle")
+    if isinstance(cycle, bool) or not isinstance(cycle, int):
+        raise SchemaError("autonomous_decisions entry missing cycle")
+    severity = entry.get("severity")
+    if not isinstance(severity, str) or severity not in DECISION_SEVERITIES:
+        raise SchemaError("autonomous_decisions entry missing severity")
+
+
+def _validate_added_decision_entries(before: list, after: list) -> None:
+    """Judge every `autonomous_decisions` entry this write added.
+
+    Entries already sitting in `before` are left alone on purpose: a batch
+    resumed from a state an older loop wrote holds entries that never met this
+    contract, and re-judging them would make that state unloadable for a write
+    that never touched them.
+    """
+    for entry in after:
+        if entry not in before:
+            _validate_decision_entry(entry)
+
+
 def validate_changed(before: dict, after: dict) -> None:
     """Validate ONLY the fields `after` changed relative to `before`.
 
@@ -227,9 +293,22 @@ def validate_changed(before: dict, after: dict) -> None:
     every unrelated write afterwards and wedge the loop. Scoping to the
     changed set still rejects a mutation that writes a malformed value for
     the field it targets, which is the failure worth catching.
+
+    This is also the only gate that can judge an appended
+    `autonomous_decisions` entry, because "added" is a fact about the write,
+    not about the state - validate() alone cannot tell a fresh entry from one
+    an older batch left behind.
     """
     fields = changed_fields(before, after)
     validate({key: value for key, value in after.items() if key in fields})
+
+    entries = after.get("autonomous_decisions")
+    if "autonomous_decisions" in fields and isinstance(entries, list):
+        existing = before.get("autonomous_decisions")
+        _validate_added_decision_entries(
+            existing if isinstance(existing, list) else [],
+            entries,
+        )
 
 
 def version_status(state: dict) -> str:
