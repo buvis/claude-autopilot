@@ -68,6 +68,15 @@ an argument later: the goal to `dev/local/tmp/fast-track-<item>-goal.txt`, the
 to `dev/local/tmp/fast-track-<item>-constraints.txt`, and the whole card to
 `dev/local/tmp/fast-track-<item>-card.md`.
 
+Capture the item's starting commit before any commit of its own lands:
+
+```bash
+git rev-parse HEAD
+```
+
+Hold that as `<base-sha>`. The review range `<base-sha>..HEAD` and the blocked
+exit's reset target both read it, and every item captures its own.
+
 ## Tests
 
 A card whose `## Tests` section names test files ships its own spec: read those
@@ -380,6 +389,15 @@ Rework runs at most once: dispatch a fresh `autopilot:ivan` with the confirmed
 findings, the card and the same allowlist, then run the card's gates again from
 the top.
 
+Capture the rework's starting commit before that dispatch:
+
+```bash
+git rev-parse HEAD
+```
+
+Hold that as `<rework-base-sha>`, so the delta range `<rework-base-sha>..HEAD`
+is the rework commit and nothing else.
+
 Write the confirmed findings to `dev/local/tmp/fast-track-<item>-findings.txt`
 and render the Implement block with `--set-file RETRY_INSTRUCTION=` pointed at
 that file. The fresh implementor reads the findings and the tests, so it argues
@@ -429,7 +447,7 @@ card.
 Park the commits, then put the working branch back where the item started:
 
 ```bash
-git branch fast-track/<item>
+git branch fast-track/<item> HEAD
 ```
 
 ```bash
@@ -440,6 +458,13 @@ git reset --keep <base-sha>
 `git reset --keep <base-sha>` rewinds the working branch and refuses outright
 rather than clobber a foreign change in the tree. A parked item never pushes.
 Name the branch and the surviving findings in the report.
+
+Both commands have a failure transition. A `git branch` that exits non-zero
+stops the item there: write the command and its output into the report, close
+the open ledger row, and end the item `stopped: branch-failed`. When
+`git reset --keep <base-sha>` refuses, the item's commits stay on the current
+branch, the report says `branch: refused (<paths>)` with the paths git named,
+and the item ends `stopped: reset-refused`. Nothing is force-reset either way.
 
 **End of the run.** After the last item, run the `suite: batch` suite once over
 the whole repo. With `--push` the lane pushes once, after the last item, and
