@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **run-autopilot**: a cap-out with an unresolved CRITICAL now records the PRD's live commit range as custody (marker, batch mirror, migrated deferrals, refreshed hold PRD) and offers revert / branch-and-revert / accept through `autopilot custody resolve`
+
 ### Fixed
 
 - **fast-track**: the driver now creates `dev/local/autopilot` before the first dispatch so no ledger row is lost, gives Bob's codex prompt Eve's doubt sections, and runs the lane plan, the verify targets, the exit rule and the per-item dispatch count through `fast_track_plan.py` commands instead of applying those rules from memory

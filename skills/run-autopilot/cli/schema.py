@@ -55,7 +55,7 @@ DECISION_SEVERITIES: frozenset[str] = frozenset(
 
 _INT_FIELDS = ("cycle", "rework_cap", "tasks_total", "tasks_completed", "replan_count")
 
-_STR_FIELDS = ("prd", "work_start_sha", "repo_root", "design_doc")
+_STR_FIELDS = ("prd", "work_start_sha", "repo_root", "git_dir", "design_doc")
 
 _LIST_FIELDS = (
     "tasks",

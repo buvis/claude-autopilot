@@ -152,6 +152,7 @@ class PerPrdResetFieldsTest(unittest.TestCase):
             "cap_pause_reason",
             "stall_reason",
             "repo_root",
+            "git_dir",
             "pause_on_ambiguity",
             "review_lenses",
             "contract_card",

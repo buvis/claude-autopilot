@@ -20,9 +20,10 @@ Three dispositions, and the difference is deliberate:
 - Malformed block or
   no frontmatter     -> every default, plus exactly one warning (MALFORMED).
 
-Only the first 20 lines are read, per the Phase-0 contract: a block that has
-not closed by then is malformed, and a `---` rule further down the body can
-never be mistaken for the closing delimiter.
+Only the first 22 lines are read (the Phase-0 contract's 20, plus the two
+custody keys the hold refresh may add): a block that has not closed by then
+is malformed, and a `---` rule further down the body can never be mistaken
+for the closing delimiter.
 
 `default_model` is deliberately NOT recognized here. It belongs to
 `/plan-tasks` and is re-read from the PRD at Phase 6 rework dispatch; Phase 0
@@ -31,7 +32,8 @@ never touches it, so it falls through as an unknown key.
 
 from __future__ import annotations
 
-_HEAD_LINES = 20
+# 20, plus the two custody keys the hold refresh may add.
+_HEAD_LINES = 22
 
 # PRD key -> (state key, allowed values, default). Every one of these takes
 # its default and warns when the value is not allowed.

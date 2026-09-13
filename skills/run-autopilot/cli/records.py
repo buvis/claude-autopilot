@@ -44,11 +44,12 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import re
 import sys
 import uuid
 from pathlib import Path
 
-from . import resume, schema, state
+from . import custody, resume, schema, state
 
 # park_decision used to be imported from scripts/resume_target.py behind a
 # scoped sys.path insert. PRD 00089 absorbed it into cli/resume.py, so it is
@@ -60,7 +61,8 @@ from . import resume, schema, state
 #   product: tasks, review/doubt history, design choices, pause/stall
 #   reasons).
 # - repo_root: reset only per phase-done.md step 10, not the general prose
-#   lists, but still a per-PRD field.
+#   lists, but still a per-PRD field. git_dir (the bare-repo locator beside
+#   it) follows it.
 # - The four fields that leak into the next PRD today (bug this reset
 #   fixes): pause_on_ambiguity, review_lenses, contract_card,
 #   needs_attention.
@@ -82,6 +84,7 @@ PER_PRD_RESET_FIELDS = (
     "cap_pause_reason",
     "stall_reason",
     "repo_root",
+    "git_dir",
     "pause_on_ambiguity",
     "review_lenses",
     "contract_card",
@@ -186,17 +189,40 @@ def _trip(boundary: str) -> None:
         raise RuntimeError(f"failpoint: {boundary}")
 
 
+_RANGE_RE = re.compile(r"[0-9a-f]{40}\.\.[0-9a-f]{40}")
+_CAPTURE_KEYS = ("commit_range", "commits", "branch", "repo_root", "git_dir")
+
+
+def _capture_malformed(stall_op: dict) -> bool:
+    """True when a cap_critical intent's capture is incomplete or invalid:
+    an intent is never accepted half-written and never recaptured."""
+    commits = stall_op.get("commits")
+    return (
+        not isinstance(stall_op.get("commit_range"), str)
+        or not _RANGE_RE.fullmatch(stall_op["commit_range"])
+        or not isinstance(commits, int)
+        or commits < 0
+        or not isinstance(stall_op.get("branch"), str)
+        or not stall_op["branch"]
+        or not isinstance(stall_op.get("repo_root"), str)
+        or not stall_op["repo_root"]
+        or not isinstance(stall_op.get("git_dir"), (str, type(None)))
+    )
+
+
 def _stall_op_malformed(stall_op) -> bool:
     """True when a present stall_op fails the required-string-fields shape
     check shared by do_stall's step-0 guard and do_park's pre-effect
-    guard."""
-    return (
+    guard, or (site == cap_critical) the capture-shape check."""
+    if (
         not isinstance(stall_op, dict)
         or not isinstance(stall_op.get("op_id"), str)
         or not isinstance(stall_op.get("prd"), str)
         or not isinstance(stall_op.get("site"), str)
         or not isinstance(stall_op.get("detail"), str)
-    )
+    ):
+        return True
+    return stall_op["site"] == custody.CUSTODY_SITE and _capture_malformed(stall_op)
 
 
 def _validate_stall_op(new_state: dict) -> None:
@@ -226,20 +252,47 @@ def _validate_stall_commit(new_state: dict) -> None:
     schema.require(parks, int, "batch.parks_consecutive")
 
 
-def _stall_preflight(current: dict, prd: str) -> tuple[str, int | None]:
-    """do_stall's step-0 guard: stall_op malformed/identity checks, then
-    batch.id presence. Returns (op_id, None) on success, ("", <exit code>)
-    on failure - the caller returns immediately when the code is set."""
+def _capture_range(current: dict, autopilot_dir: Path) -> dict:
+    """A fresh cap_critical capture: work_start_sha..HEAD of the state's
+    repo (repo_root, else the project root above autopilot_dir). Raises
+    custody.CustodyError."""
+    repo_root = current.get("repo_root") or str(custody.project_root(autopilot_dir))
+    git_dir = current.get("git_dir")
+    commit_range, commits, branch = custody.capture_range(
+        repo_root,
+        git_dir,
+        str(current.get("work_start_sha") or ""),
+    )
+    return {
+        "commit_range": commit_range,
+        "commits": commits,
+        "branch": branch,
+        "repo_root": repo_root,
+        "git_dir": git_dir,
+    }
+
+
+def _stall_preflight(
+    current: dict,
+    prd: str,
+    site: str,
+    autopilot_dir: Path,
+) -> tuple[str, dict, int | None]:
+    """do_stall's step-0 guard: stall_op malformed/identity checks, batch.id
+    presence, then (cap_critical only) the range capture - reused from a
+    present stall_op, captured fresh otherwise. Returns (op_id, capture,
+    None) on success, ("", {}, <exit code>) on failure - the caller returns
+    immediately when the code is set. `capture` is {} for other sites."""
     stall_op = current.get("stall_op")
     if stall_op:
         if _stall_op_malformed(stall_op):
             print("autopilot: malformed stall_op in state; refusing", file=sys.stderr)
-            return "", 2
+            return "", {}, 2
         if stall_op.get("prd") != prd:
-            return "", 10
+            return "", {}, 10
         state_prd = current.get("prd")
         if state_prd and state_prd != prd:
-            return "", 10
+            return "", {}, 10
         op_id = stall_op["op_id"]
     else:
         op_id = _new_op_id()
@@ -247,9 +300,18 @@ def _stall_preflight(current: dict, prd: str) -> tuple[str, int | None]:
     batch = current.get("batch")
     if not isinstance(batch, dict) or not isinstance(batch.get("id"), str):
         print("autopilot: batch.id missing or not a string; refusing", file=sys.stderr)
-        return "", 2
+        return "", {}, 2
 
-    return op_id, None
+    if site != custody.CUSTODY_SITE:
+        return op_id, {}, None
+    if stall_op:
+        return op_id, {key: stall_op[key] for key in _CAPTURE_KEYS}, None
+    try:
+        capture = _capture_range(current, autopilot_dir)
+    except custody.CustodyError as err:
+        print(f"autopilot: cap_critical custody capture failed: {err}", file=sys.stderr)
+        return "", {}, 2
+    return op_id, capture, None
 
 
 def _mkdir_hold(prds_dir: Path) -> int | None:
@@ -268,13 +330,21 @@ def _stamp_stall_intent(
     prd: str,
     site: str,
     detail: str,
+    capture: dict,
 ) -> int | None:
-    """do_stall's step 2: stamp the intent (idempotent on retry: same
-    op_id). Returns an exit code (2) on failure, None on success."""
+    """do_stall's step 2: stamp the intent, including the cap_critical
+    capture (idempotent on retry: same op_id). Returns an exit code (2) on
+    failure, None on success."""
 
     def _stamp_intent(s: dict) -> dict:
         new_s = dict(s)
-        new_s["stall_op"] = {"op_id": op_id, "prd": prd, "site": site, "detail": detail}
+        new_s["stall_op"] = {
+            "op_id": op_id,
+            "prd": prd,
+            "site": site,
+            "detail": detail,
+            **capture,
+        }
         return new_s
 
     try:
@@ -307,25 +377,74 @@ def _append_stall_deferred(
     site: str,
     detail: str,
     op_id: str,
+    capture: dict,
 ) -> int | None:
-    """do_stall's step 4: append the deferred record, deduped by op_id.
-    Returns an exit code (9) on failure, None on success."""
+    """do_stall's step 4: append the deferred record (plus the cap_critical
+    capture keys), deduped by op_id. Returns an exit code (9) on failure,
+    None on success."""
     try:
         record_defer(
             autopilot_dir,
             prd,
             (current.get("batch") or {}).get("id"),
-            {"type": "stall", "site": site, "detail": detail, "op_id": op_id},
+            {
+                "type": "stall",
+                "site": site,
+                "detail": detail,
+                "op_id": op_id,
+                **capture,
+            },
         )
     except (OSError, ValueError):
         return 9
     return None
 
 
-def _commit_stall(state_path: Path, site: str, extra_mutator) -> int:
+def _record_stall_custody(
+    autopilot_dir: Path,
+    prds_dir: Path,
+    current: dict,
+    prd: str,
+    site: str,
+    detail: str,
+    op_id: str,
+    capture: dict,
+) -> tuple[dict | None, int | None]:
+    """do_stall's step 4b, cap_critical only: custody.record_critical behind
+    the `after-append-before-custody` failpoint. Returns (marker entry for
+    the commit's mirror, None) on success, (None, 9) on failure; (None, None)
+    for every other site."""
+    if site != custody.CUSTODY_SITE:
+        return None, None
+    _trip("after-append-before-custody")
+    rc = custody.record_critical(
+        autopilot_dir=autopilot_dir,
+        prds_dir=prds_dir,
+        current=current,
+        prd=prd,
+        op_id=op_id,
+        detail=detail,
+        capture=capture,
+    )
+    if rc is not None:
+        return None, rc
+    entry = {
+        "prd": prd,
+        "batch": current["batch"]["id"],
+        "op_id": op_id,
+        "detail": detail,
+        **capture,
+    }
+    return entry, None
+
+
+def _commit_stall(
+    state_path: Path, site: str, extra_mutator, entry: dict | None
+) -> int:
     """do_stall's step 5: single commit - reset_prd_fields, the
-    parks_consecutive rule, extra_mutator, then the stall_op delete.
-    Returns the exit code (0 on success, 2 on failure)."""
+    parks_consecutive rule, the batch.critical_on_master mirror of `entry`
+    (cap_critical only), extra_mutator, then the stall_op delete. Returns
+    the exit code (0 on success, 2 on failure)."""
 
     def _commit(s: dict) -> dict:
         new_s = reset_prd_fields(s)
@@ -333,6 +452,8 @@ def _commit_stall(state_path: Path, site: str, extra_mutator) -> int:
         if site != "wrapper_died":
             batch["parks_consecutive"] = 0
         new_s["batch"] = batch
+        if entry is not None:
+            new_s = custody.mirror_mutator(entry)(new_s)
         if extra_mutator is not None:
             new_s = extra_mutator(new_s)
         new_s.pop("stall_op", None)
@@ -357,10 +478,13 @@ def do_stall(
 ) -> int:
     """Run the Loop-mode stall procedure (references/recovery.md) as ONE
     call with a durable intent record (state.stall_op), so a kill at any of
-    the three internal boundaries is recoverable on retry. Returns the exit
-    code (0 stalled | 4 move failed/unverified | 9 deferred-record I/O
-    failed | 2 state unreadable | 10 stall_op conflict). See
-    test_records_stall.py's module docstring for the full contract.
+    the internal boundaries is recoverable on retry. Returns the exit code
+    (0 stalled | 4 move failed/unverified | 9 deferred-record I/O failed or
+    custody write failed | 2 state unreadable or cap_critical range capture
+    failed | 10 stall_op conflict). See test_records_stall.py's module
+    docstring for the full contract; `site == "cap_critical"` adds step 4b
+    (custody.record_critical) between the append and the commit, behind the
+    `after-append-before-custody` failpoint.
     """
     state_path, prds_dir, autopilot_dir = (
         Path(state_path),
@@ -373,7 +497,7 @@ def do_stall(
     except state.StateError:
         return 2
 
-    op_id, rc = _stall_preflight(current, prd)
+    op_id, capture, rc = _stall_preflight(current, prd, site, autopilot_dir)
     if rc is not None:
         return rc
     rc = _mkdir_hold(prds_dir)
@@ -381,7 +505,7 @@ def do_stall(
         return rc
 
     _trip("after-mkdir-before-intent")
-    rc = _stamp_stall_intent(state_path, op_id, prd, site, detail)
+    rc = _stamp_stall_intent(state_path, op_id, prd, site, detail, capture)
     if rc is not None:
         return rc
 
@@ -391,12 +515,20 @@ def do_stall(
         return rc
 
     _trip("after-move-before-append")
-    rc = _append_stall_deferred(autopilot_dir, current, prd, site, detail, op_id)
+    rc = _append_stall_deferred(
+        autopilot_dir, current, prd, site, detail, op_id, capture
+    )
+    if rc is not None:
+        return rc
+
+    entry, rc = _record_stall_custody(
+        autopilot_dir, prds_dir, current, prd, site, detail, op_id, capture
+    )
     if rc is not None:
         return rc
 
     _trip("after-append-before-commit")
-    return _commit_stall(state_path, site, extra_mutator)
+    return _commit_stall(state_path, site, extra_mutator, entry)
 
 
 def _park_mutator(pause_detail: str | None = None):
