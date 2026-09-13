@@ -169,6 +169,13 @@ Task tool:
 
 ### Bob: codex
 
+Bob's prompt is `agents/bob.md` plus Eve's doubt sections, composed the way
+review-work-completion composes it. Render `agents/bob.md` with the shared
+shape above, then, with the Write tool, append the `## Two lenses` and
+`## Rubric verdicts` sections of `${CLAUDE_PLUGIN_ROOT}/agents/eve.md` to
+`dev/local/tmp/fast-track-<item>-codex.txt` and replace `{PACK_FINDINGS}`
+inside them with `(no pack available this cycle)`.
+
 Bob runs as a direct background Bash command, never inside a subagent: a
 subagent cannot hold a background job, and one that shells out to a CLI hangs
 until the item stalls. Pass absolute paths.

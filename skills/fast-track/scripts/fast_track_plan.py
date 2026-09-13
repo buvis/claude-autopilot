@@ -11,10 +11,13 @@ record_dispatch.py appended rather than out of the item's name.
 
 from __future__ import annotations
 
+import argparse
 import json
+import sys
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import NoReturn
 
 _BLOCKING = ("CRITICAL", "HIGH")
 _WORKFLOW_LANE = "fast-track:fanout"
@@ -81,3 +84,64 @@ def count_item_dispatches(ledger: Path, item: str) -> Counter[str]:
         if row.get("task") == item and "queued_at" in row:
             counts[row["kind"]] += 1
     return counts
+
+
+def _fail(path: Path, exc: Exception) -> NoReturn:
+    """One stderr line naming the file, exit 2: a bad row is not an absent file."""
+    reason = f"{type(exc).__name__}: {exc}"
+    print(f"fast_track_plan.py: {path.name}: {reason}", file=sys.stderr)
+    sys.exit(2)
+
+
+def _load_findings(path: Path) -> list[Finding]:
+    """The findings file as rows: a JSON array of objects keyed by the four names."""
+    try:
+        rows = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
+            raise ValueError("not a JSON array of objects")
+        return [Finding(r["severity"], r["title"], r["file"], r["lane"]) for r in rows]
+    except (ValueError, KeyError) as exc:
+        _fail(path, exc)
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="The lane's four decisions, run from SKILL.md.",
+    )
+    verbs = parser.add_subparsers(dest="verb", required=True)
+    lanes = verbs.add_parser("lanes", help="print the item's dispatch kinds in order")
+    for flag in ("--tests-present", "--workflow-available", "--carl-available"):
+        lanes.add_argument(flag, type=int, choices=(0, 1), required=True)
+    for verb in ("verify-targets", "exit-action"):
+        verbs.add_parser(verb).add_argument("findings", type=Path)
+    count = verbs.add_parser("count", help="print the item's dispatches by kind")
+    count.add_argument("ledger", type=Path)
+    count.add_argument("item")
+    return parser
+
+
+def _main() -> None:
+    args = _parser().parse_args()
+    if args.verb == "lanes":
+        lanes = plan_lanes(
+            bool(args.tests_present),
+            bool(args.workflow_available),
+            bool(args.carl_available),
+        )
+        print("\n".join(lanes))
+    elif args.verb == "verify-targets":
+        targets = verify_targets(_load_findings(args.findings))
+        print(json.dumps([asdict(finding) for finding in targets]))
+    elif args.verb == "exit-action":
+        print(exit_action(_load_findings(args.findings)))
+    else:
+        try:
+            counts = count_item_dispatches(args.ledger, args.item)
+        except ValueError as exc:
+            _fail(args.ledger, exc)
+        for kind, n in sorted(counts.items()):
+            print(f"{kind} {n}")
+
+
+if __name__ == "__main__":
+    _main()

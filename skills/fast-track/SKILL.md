@@ -37,9 +37,13 @@ stops the item says so.
   is executable. The gemini lane is optional: drop it when
   `${CLAUDE_PLUGIN_ROOT}/skills/use-gemini/scripts/gemini-run.sh` or its backend
   CLI (`copilot`, or native `gemini`) is absent, and say which in the report.
-- **Staging.** `dev/local/tmp/` exists; create it when it does not. Every path a
-  prompt names is absolute, because a subagent misresolves a relative
-  `dev/local/` path as `~/dev/local/`.
+- **Staging and telemetry.** Create `dev/local/tmp/` and `dev/local/autopilot/`
+  before the first dispatch: `mkdir -p dev/local/autopilot dev/local/tmp`. Both
+  recorders find `dev/local/autopilot` by walking up from the cwd, and with no
+  ancestor holding it they write nothing and exit 0, so a missing directory
+  loses every ledger row of the item. Every path a prompt names is absolute,
+  because a subagent misresolves a relative `dev/local/` path as
+  `~/dev/local/`.
 
 ## Card
 
@@ -77,6 +81,22 @@ git rev-parse HEAD
 
 Hold that as `<base-sha>`. The review range `<base-sha>..HEAD` and the blocked
 exit's reset target both read it, and every item captures its own.
+
+Print the lane plan before any dispatch. Each flag is `1` or `0`:
+`--tests-present` when the card's `## Tests` section names test files,
+`--workflow-available` when `~/.claude/workflows/review-fanout.workflow.js` is
+on disk, `--carl-available` when the gemini backend resolved in the
+preconditions.
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/fast-track/scripts/fast_track_plan.py lanes --tests-present <1 or 0> --workflow-available <1 or 0> --carl-available <1 or 0>
+```
+
+It prints one `fast-track:<kind>` line per dispatch, in dispatch order. The
+sections below open a row for exactly those kinds and dispatch no other lane:
+Tests runs only when `fast-track:tess` is printed, the consensus slot takes the
+backend it names, and gemini goes out only when `fast-track:carl` is on the
+list.
 
 ## Tests
 
@@ -256,6 +276,12 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUG
 
 - `agents/alice.md` for the consensus lane, `agents/bob.md` for codex,
   `agents/carl.md` for gemini.
+- Bob's prompt is `agents/bob.md` plus Eve's doubt sections, composed the way
+  review-work-completion composes it. With the Write tool, append the
+  `## Two lenses` and `## Rubric verdicts` sections of
+  `${CLAUDE_PLUGIN_ROOT}/agents/eve.md` to the `agents/bob.md` render,
+  `dev/local/tmp/fast-track-<item>-codex.txt`, and replace `{PACK_FINDINGS}`
+  inside them with `(no pack available this cycle)`.
 - `agents/blake.md` takes `--set-file PRD=<absolute path of the staged card>`,
   `--set-file RUBRIC=${CLAUDE_PLUGIN_ROOT}/skills/review-blindly/references/rubric.md`
   and the same `--set-file OUTPUT_FORMAT=`; his render call names no diff at all.
@@ -371,13 +397,25 @@ findings by file yourself and say in the report that the table is model-side.
 ## Verify
 
 Every CRITICAL and HIGH finding earns one adversarial verification before it
-costs a rework. `verify_targets` in
-`${CLAUDE_PLUGIN_ROOT}/skills/fast-track/scripts/fast_track_plan.py` is the
-rule: rows raised by the consensus workflow skip this step, because its own
-verifier already tested them, and a MEDIUM or a LOW neither reworks nor blocks
-the exit.
+costs a rework. Write the table's rows to
+`dev/local/tmp/fast-track-<item>-raised.json` with the Write tool, as a JSON
+array of objects with the keys `severity` (`CRITICAL`, `HIGH`, `MEDIUM` or
+`LOW`), `title`, `file` and `lane` (the kind that opened the row for the lens
+that raised it: `fast-track:fanout` for the consensus workflow,
+`fast-track:alice` for the consensus subagent, `fast-track:blake`,
+`fast-track:eve`, `fast-track:bob` or `fast-track:carl`). Then ask the rule
+which rows earn it:
 
-Number the findings that earn verification from 1. For each one, write its
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/fast-track/scripts/fast_track_plan.py verify-targets dev/local/tmp/fast-track-<item>-raised.json
+```
+
+It prints those rows as a JSON array, in the order raised: rows the consensus
+workflow raised skip this step, because its own verifier already tested them,
+and a MEDIUM or a LOW neither reworks nor blocks the exit. It exits 2 on a file
+that is anything but that array.
+
+Number the printed rows from 1. For each one, write its
 title to `dev/local/tmp/fast-track-<item>-finding-<n>-title.txt`, the evidence
 the lane gave to `dev/local/tmp/fast-track-<item>-finding-<n>-evidence.txt` and
 the proof it claimed to `dev/local/tmp/fast-track-<item>-finding-<n>-proof.txt`
@@ -503,14 +541,24 @@ set. The exit rule reads that set.
 
 ## Exit
 
-`exit_action` in `fast_track_plan.py` is the rule: any surviving CRITICAL or
-HIGH parks the item on a branch, and everything else commits.
+Write the surviving set to `dev/local/tmp/fast-track-<item>-surviving.json`
+with the Write tool, in the shape of the raised file: the confirmed findings
+still standing after Delta plus any she raised on the rework diff, or `[]` when
+nothing survived. Then run the exit rule over it:
 
-**Clean.** The commits stay on the working branch, and the lane takes the next
-card.
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/fast-track/scripts/fast_track_plan.py exit-action dev/local/tmp/fast-track-<item>-surviving.json
+```
 
-**Blocked.** A confirmed CRITICAL or HIGH never stays on the working branch.
-Park the commits, then put the working branch back where the item started:
+It prints `commit` or `branch`: any surviving CRITICAL or HIGH parks the item
+on a branch, and everything else commits.
+
+**Clean.** `commit`: the commits stay on the working branch, and the lane takes
+the next card.
+
+**Blocked.** `branch`: a confirmed CRITICAL or HIGH never stays on the working
+branch, so park the commits under `fast-track/<item>`, then put the working
+branch back where the item started:
 
 ```bash
 git branch fast-track/<item> HEAD
@@ -562,6 +610,17 @@ measured USD figure exists; an absent `--cost` records unmeasured, which is not
 the same fact as free. The row lands in
 `dev/local/autopilot/loop-metrics.jsonl` and its `ledger/` mirror.
 
+Then count what the item spent, out of the rows the `start` calls above
+appended:
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/fast-track/scripts/fast_track_plan.py count dev/local/autopilot/dispatch-metrics.jsonl <item>
+```
+
+It prints one `fast-track:<kind> <n>` line per kind the item opened, sorted by
+kind, and exits 2 on a row it cannot parse. Copy those lines into the report as
+printed; they are the item's cost per lane.
+
 ## Report
 
 Write the item's report to `dev/local/tmp/<item>-fast-track-review.md` with the
@@ -574,7 +633,8 @@ order:
 - the verdict `autopilot:victor` returned on every CRITICAL and HIGH sent to
   Verify, confirmed or refuted, with the evidence that settled it;
 - the exit line: the outcome (`committed`, `branched` or `stopped`), the branch
-  name when the item is parked, and the findings that survived to put it there.
+  name when the item is parked, and the findings that survived to put it there;
+- the dispatch counts per kind, as `fast_track_plan.py count` printed them.
 
 The file is where the numbers stay after the session ends; the chat summary is
 a pointer to it.
