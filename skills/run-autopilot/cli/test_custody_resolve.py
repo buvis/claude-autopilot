@@ -340,30 +340,44 @@ class RevertTests(_ResolveCase):
                 self.assert_released(fx, "revert")
 
     def test_conflicting_later_commit_exits_5_and_retains_custody(self) -> None:
-        fx = self.custody()
-        later = fx.commit_file("f2.txt", "changed")  # edits what the range end added
+        for choice in ("revert", "branch-and-revert"):
+            with self.subTest(choice=choice):
+                fx = self.custody()
+                # Edits what the range end added, so the revert conflicts.
+                later = fx.commit_file("f2.txt", "changed")
 
-        proc = self.resolve(fx, "revert")
+                proc = self.resolve(fx, choice)
 
-        self.assertEqual(proc.returncode, 5)
-        self.assertIn("could not revert", proc.stdout + proc.stderr)
-        self.assertEqual(fx.head(), later)
-        # Left for the operator: the stopped revert is still in progress.
-        self.assertTrue(
-            (fx.git_dir / "REVERT_HEAD").exists()
-            or (fx.git_dir / "sequencer").is_dir(),
-        )
-        # The intent row was journaled before git ran, keyed on the HEAD the
-        # rerun will reconcile from; exactly one such row.
-        intent = {
-            "event": "resolving",
-            "op_id": OP_ID,
-            "choice": "revert",
-            "head_before": later,
-        }
-        rows = custody.read_journal(fx.autopilot_dir)
-        self.assertEqual([r for r in rows if r.get("event") == "resolving"], [intent])
-        self.assert_retained(fx)
+                self.assertEqual(proc.returncode, 5)
+                self.assertIn("could not revert", proc.stdout + proc.stderr)
+                self.assertEqual(fx.head(), later)
+                # Left for the operator: the stopped revert is still in progress.
+                self.assertTrue(
+                    (fx.git_dir / "REVERT_HEAD").exists()
+                    or (fx.git_dir / "sequencer").is_dir(),
+                )
+                # The intent row was journaled before git ran, for BOTH
+                # choices, keyed on the HEAD the rerun will reconcile from;
+                # exactly one such row.
+                intent = {
+                    "event": "resolving",
+                    "op_id": OP_ID,
+                    "choice": choice,
+                    "head_before": later,
+                }
+                rows = custody.read_journal(fx.autopilot_dir)
+                self.assertEqual(
+                    [r for r in rows if r.get("event") == "resolving"],
+                    [intent],
+                )
+                if choice == "branch-and-revert":
+                    # Intent, then the branch at the range END, then the
+                    # revert: when the revert stops, the branch is already
+                    # pinned, so a rerun finds it at `end` and skips it.
+                    self.assertEqual(fx.ref(CUSTODY_BRANCH), fx.end)
+                else:
+                    self.assertIsNone(fx.ref(CUSTODY_BRANCH))
+                self.assert_retained(fx)
 
 
 class RerunTests(_ResolveCase):
@@ -543,6 +557,21 @@ class AcceptTests(_ResolveCase):
         self.assertFalse(fx.state_path.exists())
         self.assertEqual(fx.commit_count(), 3)
         self.assert_released(fx, "accept", state=False)
+
+    def test_resolve_still_finds_the_journal_only_entry_after_the_marker_is_deleted(
+        self,
+    ) -> None:
+        # Pending = marker UNION journal. A resolve that reads only the marker
+        # answers "no pending custody" here and strands the entry forever.
+        fx = self.custody()
+        fx.marker_path.unlink()
+
+        proc = self.resolve(fx, "accept")
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("resolved (accept)", proc.stdout)
+        self.assertEqual(fx.commit_count(), 3)
+        self.assert_released(fx, "accept")
 
 
 class RefusalTests(_ResolveCase):
