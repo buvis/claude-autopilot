@@ -62,10 +62,11 @@ The last two say the same thing: `card too large for the lane; write a PRD`.
 format: the frontmatter keys, the seven sections, one worked card and the
 refusal table.
 
-Stage the card's prose now, with the Write tool, so nothing crosses the shell as
-an argument later: the goal to `dev/local/tmp/fast-track-<item>-goal.txt`, the
-`## Tests` notes to `dev/local/tmp/fast-track-<item>-spec.txt`, the constraints
-to `dev/local/tmp/fast-track-<item>-constraints.txt`, and the whole card to
+Stage the card's fields now, with the Write tool, so nothing crosses the shell
+as an argument later: the goal to `dev/local/tmp/fast-track-<item>-goal.txt`,
+the constraints to `dev/local/tmp/fast-track-<item>-constraints.txt`, the
+`## Files` list, one absolute path per line, to
+`dev/local/tmp/fast-track-<item>-files.txt`, and the whole card to
 `dev/local/tmp/fast-track-<item>-card.md`.
 
 Capture the item's starting commit before any commit of its own lands:
@@ -86,14 +87,19 @@ files and go to Implement. An empty section means the card's `framework` and
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/skills/work/references/tess-prompt.md \
   --out dev/local/tmp/fast-track-<item>-tests.txt \
-  --set-file TASK_SUBJECT=dev/local/tmp/fast-track-<item>-goal.txt \
-  --set-file TASK_DESCRIPTION=dev/local/tmp/fast-track-<item>-spec.txt \
+  --set TASK_SUBJECT=<item> \
+  --set-cmd TASK_DESCRIPTION="cat dev/local/tmp/fast-track-<item>-goal.txt dev/local/tmp/fast-track-<item>-files.txt" \
   --set-file TASK_ACCEPTANCE_CRITERIA=dev/local/tmp/fast-track-<item>-constraints.txt \
   --set-file SAMPLE_TEST_FILE=<the card's sample_test> \
-  --set-cmd PUBLIC_INTERFACES="cat $(printf '%q ' <the card's Files entries>)" \
+  --set-cmd PUBLIC_INTERFACES="cat $(printf '%q ' <each Files entry that exists today>)" \
   --set TEST_FRAMEWORK=<the card's framework> \
   --require-file <each Files entry that exists today>
 ```
+
+`TASK_DESCRIPTION` is the goal and the whole `## Files` list, so the author
+reads the paths the card creates beside the ones that exist today.
+`PUBLIC_INTERFACES` opens only the entries that exist: `cat` on a path the item
+has not written yet exits non-zero and takes the render down with it.
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:tess --task <item> --prompt-file dev/local/tmp/fast-track-<item>-tests.txt
@@ -133,7 +139,7 @@ git commit -m "test(<scope>): add tests for <item>"
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/ivan.md \
   --out dev/local/tmp/fast-track-<item>-ivan.txt \
   --set-cmd FAILING_TESTS="cat $(printf '%q ' <the test files>)" \
-  --set-file ARCHITECTURE_CONTEXT=dev/local/tmp/fast-track-<item>-constraints.txt \
+  --set-cmd ARCHITECTURE_CONTEXT="cat dev/local/tmp/fast-track-<item>-constraints.txt $(printf '%q ' <absolute path of the repo's AGENTS.md>)" \
   --set-file FILE_PATHS=dev/local/tmp/fast-track-<item>-files.txt \
   --set RETRY_INSTRUCTION="" \
   --require-file <each Files entry that exists today> \
@@ -141,8 +147,11 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUG
 ```
 
 `FILE_PATHS` is the card's `## Files` list, one absolute path per line, and it
-is the whole allowlist. The implementor receives the failing tests, that
-allowlist and the card's constraints. It receives no acceptance criteria and
+is the whole allowlist. `ARCHITECTURE_CONTEXT` is the card's constraints
+followed by the repo's `AGENTS.md`, the conventions no card repeats; a repo
+without one hands over its `CLAUDE.md`, and a repo with neither hands over
+`/dev/null`, so the `cat` still runs. The implementor receives the failing
+tests, that allowlist and that context. It receives no acceptance criteria and
 nothing from your own reading of the fix.
 
 ```bash
@@ -359,6 +368,12 @@ rule: rows raised by the consensus workflow skip this step, because its own
 verifier already tested them, and a MEDIUM or a LOW neither reworks nor blocks
 the exit.
 
+Number the findings that earn verification from 1. For each one, write its
+title to `dev/local/tmp/fast-track-<item>-finding-<n>-title.txt`, the evidence
+the lane gave to `dev/local/tmp/fast-track-<item>-finding-<n>-evidence.txt` and
+the proof it claimed to `dev/local/tmp/fast-track-<item>-finding-<n>-proof.txt`
+with the Write tool, then render its prompt:
+
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/victor.md \
   --out dev/local/tmp/fast-track-<item>-verify-<n>.txt \
@@ -386,8 +401,8 @@ finding in the report and drop it. What survives is the confirmed set.
 ## Rework
 
 Rework runs at most once: dispatch a fresh `autopilot:ivan` with the confirmed
-findings, the card and the same allowlist, then run the card's gates again from
-the top.
+findings, the card's constraints and the same allowlist, then run the card's
+gates again from the top.
 
 Capture the rework's starting commit before that dispatch:
 
@@ -399,13 +414,34 @@ Hold that as `<rework-base-sha>`, so the delta range `<rework-base-sha>..HEAD`
 is the rework commit and nothing else.
 
 Write the confirmed findings to `dev/local/tmp/fast-track-<item>-findings.txt`
-and render the Implement block with `--set-file RETRY_INSTRUCTION=` pointed at
-that file. The fresh implementor reads the findings and the tests, so it argues
-with neither.
+with the Write tool. That file is the rework's spec, as the test files are
+round one's: the fresh implementor reads the findings with no memory of the
+code they fault, so it argues with nobody.
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/ivan.md \
+  --out dev/local/tmp/fast-track-<item>-rework.txt \
+  --set-file FAILING_TESTS=dev/local/tmp/fast-track-<item>-findings.txt \
+  --set-cmd ARCHITECTURE_CONTEXT="cat dev/local/tmp/fast-track-<item>-constraints.txt $(printf '%q ' <absolute path of the repo's AGENTS.md>)" \
+  --set-file FILE_PATHS=dev/local/tmp/fast-track-<item>-files.txt \
+  --set RETRY_INSTRUCTION="Rework round. The suite is green; the failing tests above are the reviewers' confirmed findings. Address each one and keep the suite green." \
+  --require-file <each Files entry that exists today> \
+  --require-parent <each Files entry the card creates>
+```
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:ivan --task <item> --prompt-file dev/local/tmp/fast-track-<item>-rework.txt
 ```
+
+```
+Agent tool:
+  subagent_type: autopilot:ivan
+  model: <the card's model>
+  prompt: the contents of dev/local/tmp/fast-track-<item>-rework.txt
+```
+
+Close the row, stage the paths the `FILES_TOUCHED:` footer names, and commit
+them as `fix(<item>): address confirmed findings`.
 
 A confirmed finding still standing after the delta review goes to the exit rule.
 The lane opens no second round.

@@ -23,14 +23,17 @@ Runs only when the card's `## Tests` section is empty. It reads the card alone.
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/skills/work/references/tess-prompt.md \
   --out dev/local/tmp/fast-track-<item>-tests.txt \
-  --set-file TASK_SUBJECT=dev/local/tmp/fast-track-<item>-goal.txt \
-  --set-file TASK_DESCRIPTION=dev/local/tmp/fast-track-<item>-spec.txt \
+  --set TASK_SUBJECT=<item> \
+  --set-cmd TASK_DESCRIPTION="cat dev/local/tmp/fast-track-<item>-goal.txt dev/local/tmp/fast-track-<item>-files.txt" \
   --set-file TASK_ACCEPTANCE_CRITERIA=dev/local/tmp/fast-track-<item>-constraints.txt \
   --set-file SAMPLE_TEST_FILE=<the card's sample_test> \
-  --set-cmd PUBLIC_INTERFACES="cat $(printf '%q ' <the card's Files entries>)" \
+  --set-cmd PUBLIC_INTERFACES="cat $(printf '%q ' <each Files entry that exists today>)" \
   --set TEST_FRAMEWORK=<the card's framework> \
   --require-file <each Files entry that exists today>
 ```
+
+`TASK_DESCRIPTION` carries the whole `## Files` list, the entries the card
+creates included; `PUBLIC_INTERFACES` opens only the ones that exist today.
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:tess --task <item> --prompt-file dev/local/tmp/fast-track-<item>-tests.txt
@@ -45,14 +48,16 @@ Agent tool:
 
 ## Ivan: the implementor
 
-Ivan receives the failing tests, the card's `## Files` allowlist and the card's
-constraints, and nothing from the driver's own reading of the fix.
+Ivan receives the failing tests, the card's `## Files` allowlist, the card's
+constraints followed by the repo's `AGENTS.md` (its `CLAUDE.md` when it has no
+`AGENTS.md`, `/dev/null` when it has neither), and nothing from the driver's
+own reading of the fix.
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/ivan.md \
   --out dev/local/tmp/fast-track-<item>-ivan.txt \
   --set-cmd FAILING_TESTS="cat $(printf '%q ' <the test files>)" \
-  --set-file ARCHITECTURE_CONTEXT=dev/local/tmp/fast-track-<item>-constraints.txt \
+  --set-cmd ARCHITECTURE_CONTEXT="cat dev/local/tmp/fast-track-<item>-constraints.txt $(printf '%q ' <absolute path of the repo's AGENTS.md>)" \
   --set-file FILE_PATHS=dev/local/tmp/fast-track-<item>-files.txt \
   --set RETRY_INSTRUCTION="" \
   --require-file <each Files entry that exists today> \
@@ -71,8 +76,10 @@ Task tool:
 ```
 
 A rework opens a second `fast-track:ivan` row for a fresh implementor, at most
-once per item, with `--set-file RETRY_INSTRUCTION=` pointed at the confirmed
-findings.
+once per item. Its render takes the same shape with
+`--out dev/local/tmp/fast-track-<item>-rework.txt` and
+`--set-file FAILING_TESTS=dev/local/tmp/fast-track-<item>-findings.txt`, the
+confirmed findings standing in for the test files as the spec.
 
 ## The roster: five lenses in one message
 
