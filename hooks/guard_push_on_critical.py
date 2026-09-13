@@ -267,8 +267,6 @@ def target_toplevel(cwd: str, call: GitCall) -> str | None:
 def marker_from_locator(cwd: str, call: GitCall) -> str | None:
     """The marker path from `git config autopilot.custodyMarker` as the call
     would see it, or None."""
-    if call.unresolved:
-        return None
     argv = ["git", "-C", os.path.join(cwd, *call.c_dirs)]
     if call.git_dir:
         argv += ["--git-dir", call.git_dir]
@@ -425,7 +423,7 @@ def _check_uncertain(pending: dict, cwd: str, calls: list) -> str | None:
     the command resolves to. Returns the first source with pending custody."""
     blame = cwd if _merge(pending, pending_entries(None, cwd, None)) else None
     for candidates, call in calls:
-        if candidates is None or call.unresolved:
+        if candidates is None:
             continue
         for base in candidates:
             toplevel = target_toplevel(base, call)
