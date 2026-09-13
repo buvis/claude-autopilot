@@ -280,7 +280,8 @@ def _stall_preflight(
 ) -> tuple[str, dict, int | None]:
     """do_stall's step-0 guard: stall_op malformed/identity checks, batch.id
     presence, then (cap_critical only) the range capture - reused from a
-    present stall_op, captured fresh otherwise. Returns (op_id, capture,
+    present stall_op stamped for this site (another site's intent is a
+    conflict, exit 10), captured fresh otherwise. Returns (op_id, capture,
     None) on success, ("", {}, <exit code>) on failure - the caller returns
     immediately when the code is set. `capture` is {} for other sites."""
     stall_op = current.get("stall_op")
@@ -305,6 +306,8 @@ def _stall_preflight(
     if site != custody.CUSTODY_SITE:
         return op_id, {}, None
     if stall_op:
+        if stall_op.get("site") != site:
+            return "", {}, 10
         return op_id, {key: stall_op[key] for key in _CAPTURE_KEYS}, None
     try:
         capture = _capture_range(current, autopilot_dir)
