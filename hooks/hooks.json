@@ -18,6 +18,11 @@
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/enforce_prd_location.py",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/guard_push_on_critical.py",
+            "timeout": 10
           }
         ]
       }

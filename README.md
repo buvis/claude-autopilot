@@ -30,11 +30,15 @@ dimensions (`rita` requirements, `cora` correctness, `grace` quality, `toby`
 tests, `mallory` security, `trent` rubric, `victor` adversarial verification,
 `pat` per-task patches).
 
-One hook: `enforce_prd_location.py`, which keeps working documents in their
+Two hooks. `enforce_prd_location.py` keeps working documents in their
 declared homes instead of scattered through the repo. It runs on `PreToolUse`
 for `Edit`, `Write`, `MultiEdit` and `Bash`: file mode blocks a PRD written
 outside a `dev/local/prds/` lifecycle directory, and Bash mode blocks a command
 that references a repo-root `backlog/`, `wip/`, `hold/` or `done/`.
+`guard_push_on_critical.py` runs on `PreToolUse` for `Bash` and denies a
+`git push` into a repository with pending cap_critical custody (a capped-out
+batch left an unresolved CRITICAL on master); run `autopilot custody resolve`
+first.
 
 **If you already run this hook from your own config, disable one of them** —
 otherwise both fire and you get the same block twice.
