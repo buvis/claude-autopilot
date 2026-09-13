@@ -108,6 +108,112 @@ class MetricsFilterTests(unittest.TestCase):
         self.assertIn("| done | 1 | 10 |  |  |", table)
         self.assertNotIn("0.00", table)
 
+    def test_null_cost_renders_blank_not_zero_in_both_tables(self) -> None:
+        # The fast-track recorder writes `"cost_usd": null` on purpose when no
+        # --cost was passed: the key is present, the value is None, and an
+        # unmeasured item is not a free one. Such a row has to render exactly
+        # like one with no cost key at all - a blank cell, never 0.00, never
+        # the word None, and no TypeError out of the sum. Pinned as equality
+        # against the keyless rendering, for both public renderers.
+        null_row = {
+            "prd": "00001-x.md",
+            "phase_launched": "done",
+            "wall_secs": 10,
+            "cost_usd": None,
+        }
+        keyless_row = {"prd": "00001-x.md", "phase_launched": "done", "wall_secs": 10}
+
+        table = render_metrics.phase_table([null_row])
+        self.assertEqual(table, render_metrics.phase_table([keyless_row]))
+        self.assertIn("| done | 1 | 10 |  |  |", table)
+        self.assertNotIn("0.00", table)
+        self.assertNotIn("None", table)
+
+        summary = render_metrics.render_metrics([null_row])
+        self.assertEqual(summary, render_metrics.render_metrics([keyless_row]))
+        self.assertIn("| 00001-x.md | 1 | 10 |  |", summary)
+        self.assertNotIn("0.00", summary)
+        self.assertNotIn("None", summary)
+
+    def test_null_cost_beside_priced_rows_sums_the_priced_rows_only(self) -> None:
+        # A group that mixes priced rows and a null one shows the priced sum
+        # and nothing else: 3.75 in the group row and again in the Total row,
+        # no 0.00 anywhere, neither addend on its own. Two distinct prices,
+        # so the cell has to come from a real sum rather than from whichever
+        # priced value the renderer happened to keep.
+        rows = [
+            {
+                "prd": "00001-x.md",
+                "phase_launched": "done",
+                "wall_secs": 10,
+                "cost_usd": 1.25,
+            },
+            {
+                "prd": "00001-x.md",
+                "phase_launched": "done",
+                "wall_secs": 5,
+                "cost_usd": 2.50,
+            },
+            {
+                "prd": "00001-x.md",
+                "phase_launched": "done",
+                "wall_secs": 5,
+                "cost_usd": None,
+            },
+        ]
+
+        table = render_metrics.phase_table(rows)
+        self.assertIn("| done | 3 | 20 |  | 3.75 |", table)
+        self.assertEqual(table.count("3.75"), 2)
+        self.assertNotIn("1.25", table)
+        self.assertNotIn("2.50", table)
+        self.assertNotIn("0.00", table)
+
+        summary = render_metrics.render_metrics(rows)
+        self.assertIn("| 00001-x.md | 3 | 20 | 3.75 |", summary)
+        self.assertEqual(summary.count("3.75"), 2)
+        self.assertNotIn("1.25", summary)
+        self.assertNotIn("2.50", summary)
+        self.assertNotIn("0.00", summary)
+
+    def test_a_measured_zero_cost_renders_zero_even_beside_a_null(self) -> None:
+        # 0.0 is a measurement (the item cost nothing); None is the absence of
+        # one. The null-only tests above cannot tell a filter that keeps every
+        # non-null value from one that keeps every truthy value, and the second
+        # blanks every free row. So a free row on its own shows 0.00, and a
+        # free row beside a null still shows 0.00: the null leaves the sum,
+        # the zero stays in it.
+        rows = [
+            {
+                "prd": "00001-x.md",
+                "phase_launched": "done",
+                "wall_secs": 10,
+                "cost_usd": 0.0,
+            },
+            {
+                "prd": "00002-y.md",
+                "phase_launched": "review",
+                "wall_secs": 5,
+                "cost_usd": 0.0,
+            },
+            {
+                "prd": "00002-y.md",
+                "phase_launched": "review",
+                "wall_secs": 2,
+                "cost_usd": None,
+            },
+        ]
+
+        table = render_metrics.phase_table(rows)
+        self.assertIn("| done | 1 | 10 |  | 0.00 |", table)
+        self.assertIn("| review | 2 | 7 |  | 0.00 |", table)
+        self.assertNotIn("None", table)
+
+        summary = render_metrics.render_metrics(rows)
+        self.assertIn("| 00001-x.md | 1 | 10 | 0.00 |", summary)
+        self.assertIn("| 00002-y.md | 2 | 7 | 0.00 |", summary)
+        self.assertNotIn("None", summary)
+
 
 class ReportEdgeTests(unittest.TestCase):
     def test_no_tasks_renders_no_implementor_data(self) -> None:
