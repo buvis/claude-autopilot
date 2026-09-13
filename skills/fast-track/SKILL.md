@@ -407,9 +407,9 @@ Task tool:
 Uncertainty refutes; only a shown broken path confirms. Record each refuted
 finding in the report and drop it. What survives is the confirmed set.
 
-Zero confirmed rows means zero rework and zero delta: skip Rework and Delta
-and go straight to Exit. A roster that raised no CRITICAL or HIGH never reaches
-victor either, so a clean item spends no victor, rework or delta row at all.
+Zero confirmed rows means zero victor, zero rework and zero delta: skip Rework
+and Delta and go straight to Exit. A clean item, one whose roster raised no
+CRITICAL or HIGH, never reaches victor either and spends none of the three rows.
 
 ## Rework
 
