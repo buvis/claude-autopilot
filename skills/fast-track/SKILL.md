@@ -168,13 +168,22 @@ Agent tool:
 Close the row, stage the paths from the `FILES_TOUCHED:` footer, and commit.
 Any other dirty path is foreign: leave it unstaged and name it in the report.
 
+Read the card's `changelog` field. Write the entry into `CHANGELOG.md` under
+the `## [Unreleased]` heading with the Edit tool when `changelog` is not
+`none`, and add `CHANGELOG.md` to the paths the commit names, so the entry
+lands in the same commit as the implementation. When `changelog` is `none`,
+leave `CHANGELOG.md` untouched.
+
 ```bash
 git add <each path the footer names>
 ```
 
 ```bash
-git commit -m "<type>(<scope>): <description>"
+git commit -m "<type>(<scope>): <description>" -- <each path the footer names>
 ```
+
+The pathspec after `--` keeps the commit to those paths: every other index
+entry stays where it is, staged and uncommitted.
 
 ## Gates
 
@@ -441,7 +450,15 @@ Agent tool:
 ```
 
 Close the row, stage the paths the `FILES_TOUCHED:` footer names, and commit
-them as `fix(<item>): address confirmed findings`.
+them as `fix(<item>): address confirmed findings`, scoped the same way.
+
+```bash
+git add <each path the footer names>
+```
+
+```bash
+git commit -m "fix(<item>): address confirmed findings" -- <each path the footer names>
+```
 
 A confirmed finding still standing after the delta review goes to the exit rule.
 The lane opens no second round.
