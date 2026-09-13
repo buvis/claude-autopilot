@@ -302,6 +302,7 @@ _EXECUTABLE = re.compile(
 _SECTION_STEM = {
     "Preconditions": r"\bprecondition",
     "Tests": r"\btest",
+    "Implement": r"\bimplement",
     "Gates": r"\bgate",
     "Roster": r"\broster",
     "Rework": r"\brework",
