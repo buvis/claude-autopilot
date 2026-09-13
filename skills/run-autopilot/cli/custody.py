@@ -50,9 +50,7 @@ def marker_lock(path: Path):
         yield
 
 
-# -- journal ----------------------------------------------------------------
 def append_journal(autopilot_dir: Path, row: dict) -> None:
-    """Append one JSON line to <autopilot_dir>/ledger/custody.jsonl."""
     path = autopilot_dir / JOURNAL_REL
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a", encoding="utf-8") as fh:
@@ -125,7 +123,6 @@ def pending(autopilot_dir: Path) -> list[dict]:
     return list(merged.values())
 
 
-# -- git --------------------------------------------------------------------
 def git_argv(repo_root: str, git_dir: str | None) -> list[str]:
     """The git prefix for a project: --git-dir/--work-tree when the repo is
     bare-backed, else -C."""
@@ -169,14 +166,11 @@ def capture_range(
 
 
 def project_root(autopilot_dir: Path) -> Path:
-    """The project root: three levels up from dev/local/autopilot, else the
-    parent."""
     if autopilot_dir.parts[-3:] == ("dev", "local", "autopilot"):
         return autopilot_dir.parents[2]
     return autopilot_dir.parent
 
 
-# -- marker -----------------------------------------------------------------
 def load_marker(path: Path) -> list[dict]:
     """[] when absent; CustodyError unless the file is {"entries": [dict...]}."""
     if not path.exists():
@@ -208,7 +202,6 @@ def upsert_entry(entries: list[dict], entry: dict) -> tuple[list[dict], bool]:
     return [*entries, entry], True
 
 
-# -- hold PRD refresh (pure) -------------------------------------------------
 def _notice_prefix(batch: str) -> str:
     return f"> **Custody (cap_critical, batch {batch}):**"
 
@@ -260,7 +253,6 @@ def refresh_hold_prd(text: str, entry: dict) -> str:
     return "\n".join(lines)
 
 
-# -- records and state ------------------------------------------------------
 def migration_records(state: dict, op_id: str, prd: str) -> list[dict]:
     """PURE. One deferred record per pending state.deferred_decisions[i],
     keyed "<op_id>-dd<i>"; a decision keeps its own type and cycle."""
