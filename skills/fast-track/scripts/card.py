@@ -92,9 +92,13 @@ def _split_sections(lines: list[str]) -> dict[str, list[str]]:
 
 
 def _require_sections(sections: dict[str, list[str]]) -> None:
+    # A heading with only whitespace under it is the same absence as no
+    # heading. Tests is the one section that may be blank; load_card checks it.
     for name in _SECTIONS.values():
         if name not in sections:
             raise CardError(name, "card is missing this ## section")
+        if name != "tests" and not "".join(sections[name]).strip():
+            raise CardError(name, "card leaves this ## section blank")
 
 
 def _require_choice(keys: dict[str, str], field: str, allowed: tuple[str, ...]) -> str:
