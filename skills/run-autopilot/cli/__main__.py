@@ -79,6 +79,15 @@ Subcommands:
         state-write-failed marker, 1 otherwise (a refused preflight
         included), 130/143/129 on signals - not the state-CLI codes
         below.
+    custody   list --state
+              resolve --state --prd --choice
+        `list` prints custody.pending() (marker union unresolved journal)
+        as one JSON object per line. `resolve --prd <stem|filename|path>
+        --choice {revert,branch-and-revert,accept}` runs custody.resolve():
+        git for the choice on the entry's repo, the durable ledger record,
+        then every custody source cleaned. The schema preflight runs only
+        when state.json exists: a drained batch archives it and both verbs
+        stay legal then.
 
 --state, when omitted, resolves by walking up from cwd via
 _walk_up.find_autopilot_dir() to <dir>/state.json. park's --autopilot-dir,
@@ -97,7 +106,7 @@ Exit codes:
     2   state error (state.json missing or not valid JSON)
     3   no/ignored marker (park)
     4   move failed (stall/park's inner PRD move)
-    5   systemic halt (park)
+    5   systemic halt (park) / git refused or failed (custody resolve)
     6   future-schema state.json: refused before any effect (stall, park,
         reset-prd, restore)
     7   state file already exists (init)
@@ -124,6 +133,7 @@ _SKILL_ROOT = _CLI_DIR.parent
 sys.path.insert(0, str(_SKILL_ROOT))
 
 from cli import (
+    custody,
     eligibility,
     frontmatter,
     gate,
@@ -869,6 +879,45 @@ def _run_restore(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add_custody(subparsers) -> None:
+    p = subparsers.add_parser("custody")
+    verbs = p.add_subparsers(dest="verb", required=True)
+    verbs.add_parser("list").add_argument("--state")
+    resolve = verbs.add_parser("resolve")
+    resolve.add_argument("--state")
+    resolve.add_argument("--prd", required=True)
+    resolve.add_argument(
+        "--choice",
+        required=True,
+        choices=("revert", "branch-and-revert", "accept"),
+    )
+
+
+def _run_custody(args: argparse.Namespace) -> int:
+    state_path = _resolve_state_path(args.state)
+    # Only when state.json exists: a drained batch archives it, and both
+    # verbs stay legal against the marker and journal alone.
+    if state_path.exists():
+        refuse = _schema_version_preflight(state_path)
+        if refuse is not None:
+            return refuse
+    if args.verb == "resolve":
+        return custody.resolve(
+            autopilot_dir=state_path.parent,
+            state_path=state_path,
+            prd=args.prd,
+            choice=args.choice,
+        )
+    try:
+        entries = custody.pending(state_path.parent)
+    except custody.CustodyError as err:
+        print(f"autopilot: {err}", file=sys.stderr)
+        return 9
+    for entry in entries:
+        print(json.dumps(entry))
+    return 0
+
+
 # Registry, not an if/elif chain over sys.argv: PRD 00106 adds entries here
 # (an (add_parser_fn, run_fn) pair per subcommand name).
 _SUBCOMMANDS: dict[str, tuple] = {
@@ -888,6 +937,7 @@ _SUBCOMMANDS: dict[str, tuple] = {
     "status": (_add_status, _run_status),
     "loop": (_add_loop, _run_loop_cmd),
     "review-once": (_add_review_once, _run_review_once),
+    "custody": (_add_custody, _run_custody),
 }
 
 

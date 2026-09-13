@@ -2,8 +2,8 @@
 """custody.py - the cap_critical custody core.
 
 A `cap_critical` stall leaves the PRD's commits live on the protected branch.
-This module records that custody durably so an attended `custody resolve`
-(a later task) can find it: the range capture, the marker file, the
+This module records that custody durably so the attended `custody resolve`
+(`resolve` below) can find it: the range capture, the marker file, the
 append-only journal under ledger/ (GC-exempt, the restore source when the
 marker is trashed), the git-config locator, the hold-PRD refresh, and the
 `batch.critical_on_master` mirror. `records.do_stall` drives it as step 4b
@@ -19,10 +19,12 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
-from . import notify_out, records, render_report, state
+from . import notify_out, records, render_report, schema, state
 
 CUSTODY_SITE = "cap_critical"
 MARKER_NAME = "critical-on-master"
@@ -30,8 +32,11 @@ JOURNAL_REL = "ledger/custody.jsonl"
 CONFIG_KEY = "autopilot.custodyMarker"
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 GIT_TIMEOUT_SECS = 30
+_UNFINISHED = ("REVERT_HEAD", "MERGE_HEAD", "CHERRY_PICK_HEAD", "sequencer")
 
 _SHA_RE = re.compile(r"[0-9a-f]{40}")
+# The line `git revert` writes; reconciliation on a rerun is keyed on it.
+_REVERTS_RE = re.compile(r"^This reverts commit ([0-9a-f]{40})\.$", re.MULTILINE)
 # frontmatter._HEAD_LINES minus the two key lines refresh_hold_prd may add,
 # so a block that closes within this bound still parses after the refresh.
 _BLOCK_HEAD_LINES = 20
@@ -131,8 +136,9 @@ def git_argv(repo_root: str, git_dir: str | None) -> list[str]:
     return ["git", "-C", repo_root]
 
 
-def _git(argv: list[str], *args: str) -> str:
-    """Run git, return stripped stdout; CustodyError on any failure."""
+def _git(argv: list[str], *args: str, ok: tuple[int, ...] = (0,)) -> str:
+    """Run git, return stripped stdout; CustodyError on a timeout or any
+    exit outside `ok` (0 only, unless the caller expects another one)."""
     try:
         proc = subprocess.run(
             [*argv, *args],
@@ -142,7 +148,7 @@ def _git(argv: list[str], *args: str) -> str:
         )
     except (OSError, subprocess.SubprocessError) as err:
         raise CustodyError(f"git {' '.join(args)}: {err}") from err
-    if proc.returncode != 0:
+    if proc.returncode not in ok:
         detail = proc.stderr.strip() or f"exit {proc.returncode}"
         raise CustodyError(f"git {' '.join(args)}: {detail}")
     return proc.stdout.strip()
@@ -325,3 +331,224 @@ def mirror_mutator(entry: dict):
         return new_s
 
     return _upsert_mirror
+
+
+def _drop_mirror(op_id: str):
+    """fn(state)->state removing `op_id` from batch.critical_on_master."""
+
+    def _remove(s: dict) -> dict:
+        batch = dict(s.get("batch") or {})
+        batch["critical_on_master"] = [
+            e for e in batch.get("critical_on_master") or [] if e.get("op_id") != op_id
+        ]
+        return {**s, "batch": batch}
+
+    return _remove
+
+
+def _validate_mirror(new_state: dict) -> None:
+    """Owned-fields validator for the mirror write: only `batch` is checked."""
+    schema.require(new_state.get("batch"), dict, "batch")
+
+
+def _recorded_choice(autopilot_dir: Path, entry: dict) -> str | None:
+    """The `choice` of an `<op_id>-resolve` record already in the batch
+    ledger (the durable boundary of an earlier run), else None."""
+    path = autopilot_dir / "deferred" / f"{entry['batch']}-deferred.json"
+    if not path.exists():
+        return None
+    try:
+        items = json.loads(path.read_text(encoding="utf-8")).get("items") or []
+    except (OSError, ValueError, AttributeError) as err:
+        raise CustodyError(f"batch ledger unreadable ({path}): {err}") from err
+    op_id = f"{entry['op_id']}-resolve"
+    for item in items:
+        if isinstance(item, dict) and item.get("op_id") == op_id:
+            return item.get("choice")
+    return None
+
+
+def _refuse_unless_clean(argv: list[str], entry: dict) -> None:
+    """CustodyError naming the fix when HEAD is not the entry's branch or
+    an unfinished revert/merge/cherry-pick sits in the git dir."""
+    head_branch = _git(argv, "rev-parse", "--abbrev-ref", "HEAD")
+    if head_branch != entry["branch"]:
+        raise CustodyError(f"checkout {entry['branch']} first (HEAD is {head_branch})")
+    git_dir = Path(entry["repo_root"]) / _git(argv, "rev-parse", "--git-dir")
+    for leftover in _UNFINISHED:
+        if (git_dir / leftover).exists():
+            raise CustodyError(f"{git_dir / leftover} exists: finish or abort it first")
+
+
+def _reverted_targets(
+    autopilot_dir: Path,
+    argv: list[str],
+    op_id: str,
+    choice: str,
+    targets: list[str],
+) -> set[str]:
+    """Targets some commit in head_before..HEAD reverts, per the journaled
+    intent row; a first run journals the intent (head_before = HEAD now)
+    and reports none."""
+    _recorded, resolving = _live_rows(read_journal(autopilot_dir))
+    intent = resolving.get(op_id)
+    if intent is None:
+        head = _git(argv, "rev-parse", "HEAD")
+        append_journal(
+            autopilot_dir,
+            {
+                "event": "resolving",
+                "op_id": op_id,
+                "choice": choice,
+                "head_before": head,
+            },
+        )
+        return set()
+    bodies = _git(argv, "rev-list", "--format=%B", f"{intent['head_before']}..HEAD")
+    return set(_REVERTS_RE.findall(bodies)) & set(targets)
+
+
+def _pin_custody_branch(argv: list[str], stem: str, end: str) -> None:
+    """Create custody/<stem> at the range end; one already there is fine,
+    one anywhere else is a CustodyError."""
+    ref = f"refs/heads/custody/{stem}"
+    at = _git(argv, "rev-parse", "--verify", "--quiet", ref, ok=(0, 1))
+    if at == end:
+        return
+    if at:
+        raise CustodyError(f"{ref} exists at {at}, not at the range end {end}")
+    _git(argv, "branch", f"custody/{stem}", end)
+
+
+def _apply_git(autopilot_dir: Path, entry: dict, choice: str) -> int | None:
+    """Step 3 for revert / branch-and-revert (`accept` touches nothing):
+    refuse a wrong or mid-operation checkout, journal the intent, reconcile
+    a rerun, pin the custody branch, revert. None when done; 5 with the
+    operator's fix on stderr when git refused or failed (custody retained,
+    git left as it is)."""
+    if choice == "accept":
+        return None
+    argv = git_argv(entry["repo_root"], entry.get("git_dir"))
+    base, end = entry["commit_range"].split("..")
+    try:
+        _refuse_unless_clean(argv, entry)
+        targets = _git(
+            argv, "rev-list", end if base == EMPTY_TREE else f"{base}..{end}"
+        ).split()
+        reverted = _reverted_targets(
+            autopilot_dir, argv, entry["op_id"], choice, targets
+        )
+        if reverted and reverted != set(targets):
+            raise CustodyError("partial revert; finish by hand, then --choice accept")
+        if choice == "branch-and-revert":
+            _pin_custody_branch(argv, entry["prd"].removesuffix(".md"), end)
+        if not reverted:
+            _git(argv, "revert", "--no-edit", *targets)
+    except CustodyError as err:
+        print(f"autopilot: could not revert {entry['prd']}: {err}", file=sys.stderr)
+        return 5
+    return None
+
+
+def _cleanup(
+    autopilot_dir: Path,
+    state_path: Path,
+    marker_path: Path,
+    entries: list[dict],
+    entry: dict,
+    choice: str,
+) -> int | None:
+    """Step 5, every write idempotent: the `resolved` row, the marker minus
+    this op_id, the locator when no custody for this repo_root remains, the
+    state mirror when state.json exists, then the journal compaction. 9 when
+    the mirror write fails (the journal has closed the custody by then)."""
+    op_id = entry["op_id"]
+    at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    append_journal(
+        autopilot_dir,
+        {
+            "event": "resolved",
+            "op_id": op_id,
+            "prd": entry["prd"],
+            "choice": choice,
+            "at": at,
+        },
+    )
+    write_marker(
+        marker_path, [e for e in load_marker(marker_path) if e.get("op_id") != op_id]
+    )
+    others = [e for e in entries if e["op_id"] != op_id]
+    if not any(e.get("repo_root") == entry["repo_root"] for e in others):
+        argv = git_argv(entry["repo_root"], entry.get("git_dir"))
+        _git(argv, "config", "--local", "--unset", CONFIG_KEY, ok=(0, 5))
+    if state_path.exists():
+        try:
+            state.transaction(
+                state_path, _drop_mirror(op_id), validator=_validate_mirror
+            )
+        except (state.StateError, schema.SchemaError, OSError) as err:
+            print(f"autopilot: mirror stale, custody closed: {err}", file=sys.stderr)
+            return 9
+    compact_journal(autopilot_dir)
+    return None
+
+
+def _resolve_locked(
+    autopilot_dir: Path,
+    state_path: Path,
+    marker_path: Path,
+    prd: str,
+    choice: str,
+) -> int:
+    stem = Path(prd).name.removesuffix(".md")
+    entries = pending(autopilot_dir)
+    entry = next((e for e in entries if e["prd"].removesuffix(".md") == stem), None)
+    if entry is None:
+        print(
+            f"autopilot: no pending custody for {prd} (pass the PRD stem, filename or path)",
+            file=sys.stderr,
+        )
+        return 1
+    recorded = _recorded_choice(autopilot_dir, entry)
+    if recorded is None:
+        refused = _apply_git(autopilot_dir, entry, choice)
+        if refused is not None:
+            return refused
+        record = {
+            "type": "custody",
+            "choice": choice,
+            "commit_range": entry["commit_range"],
+        }
+        records.record_defer(
+            autopilot_dir,
+            entry["prd"],
+            entry["batch"],
+            {**record, "op_id": f"{entry['op_id']}-resolve"},
+        )
+        recorded = choice
+    elif recorded != choice:
+        print(
+            f"autopilot: {entry['prd']} already resolved as {recorded}; finishing cleanup",
+            file=sys.stderr,
+        )
+    failed = _cleanup(autopilot_dir, state_path, marker_path, entries, entry, recorded)
+    if failed is not None:
+        return failed
+    print(f"custody: {entry['prd']} resolved ({recorded})")
+    return 0 if recorded == choice else 1
+
+
+def resolve(*, autopilot_dir: Path, state_path: Path, prd: str, choice: str) -> int:
+    """The attended `custody resolve`, all under marker_lock: find the
+    pending entry by PRD stem, let a choice already in the batch ledger win,
+    else run git for the choice and record it, then clean every custody
+    source. Exit codes: 0 | 1 no pending entry, or a different choice was
+    already recorded | 5 git refused or failed | 9 a source read or write
+    failed."""
+    marker_path = (autopilot_dir / MARKER_NAME).absolute()
+    try:
+        with marker_lock(marker_path):
+            return _resolve_locked(autopilot_dir, state_path, marker_path, prd, choice)
+    except (OSError, ValueError, CustodyError) as err:
+        print(f"autopilot: custody resolve failed: {err}", file=sys.stderr)
+        return 9
