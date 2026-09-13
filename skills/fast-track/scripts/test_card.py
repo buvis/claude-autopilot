@@ -76,6 +76,51 @@ def _run_cli(card_path: Path) -> subprocess.CompletedProcess:
     )
 
 
+# Card attribute -> heading text, for the sections that may not be blank.
+_BLANKABLE_HEADINGS = {
+    "goal": "Goal",
+    "files": "Files",
+    "constraints": "Constraints",
+    "docs": "Docs",
+    "gates": "Gates",
+    "transport_impact": "Transport impact",
+}
+
+
+def _section_span(lines: list[str], heading: str) -> tuple[int, int]:
+    # The body of `## heading` runs from the line after it to the next heading
+    # or the end of the card. `list.index` raising is the right failure for a
+    # card that lost the heading: that is the missing-section rule, not this one.
+    start = lines.index(f"## {heading}") + 1
+    end = next(
+        (i for i in range(start, len(lines)) if lines[i].startswith("## ")),
+        len(lines),
+    )
+    return start, end
+
+
+def _assert_blank_section_is_refused(card_path: Path, section: str) -> None:
+    # The card is checked against the test's own idea of it before the parser
+    # sees it: a fixture that lost its heading, or that still carries a line
+    # of text, would otherwise pass for a blank one on the wrong error.
+    lines = card_path.read_text(encoding="utf-8").splitlines()
+    start, end = _section_span(lines, _BLANKABLE_HEADINGS[section])
+    assert "".join(lines[start:end]).strip() == ""
+
+    with pytest.raises(CardError) as excinfo:
+        load_card(card_path)
+
+    # Equality, not containment: the point is naming THE field, and a message
+    # that lists every section name contains each of them.
+    assert excinfo.value.field.lower() == section
+
+    result = _run_cli(card_path)
+
+    assert result.returncode == 2
+    assert result.stderr.lower().startswith(f"card.py: {section}:")
+    assert result.stdout == ""
+
+
 @pytest.mark.parametrize(
     ("fixture_name", "section"),
     [
@@ -108,6 +153,73 @@ def test_missing_section_names_the_field(fixture_name: str, section: str) -> Non
     assert result.returncode == 2
     assert section in result.stderr.lower()
     assert result.stdout == ""
+
+
+@pytest.mark.parametrize(
+    ("fixture_name", "section"),
+    [
+        ("empty_goal.md", "goal"),
+        ("empty_files.md", "files"),
+        ("empty_constraints.md", "constraints"),
+        ("empty_docs.md", "docs"),
+        ("empty_gates.md", "gates"),
+        ("empty_transport_impact.md", "transport_impact"),
+    ],
+)
+def test_whitespace_only_section_names_the_field(
+    tmp_path: Path,
+    fixture_name: str,
+    section: str,
+) -> None:
+    # A heading with nothing under it is the same absence as no heading at all:
+    # an empty Files section hands the implementor no allowlist and an empty
+    # Gates section runs no verification, so both have to stop the load the
+    # way a deleted section does, naming the field. Each arm blanks exactly one
+    # section and the blanks differ on purpose - two empty lines, a line of
+    # spaces, a line of tabs, a blank at end of file - so a check that only
+    # trims newlines, or only spaces, passes some arms and fails the rest.
+    # Tests is the one section allowed to be empty and is covered by its own
+    # rule below, so it is not in this list. The fixture's bytes are loaded
+    # under a neutral name so the filename predicts nothing: a parser keying
+    # off "empty_*" has to fail here the way it fails the runtime slug test.
+    card_path = tmp_path / "runtime_card.md"
+    card_path.write_bytes(_fixture(fixture_name).read_bytes())
+
+    _assert_blank_section_is_refused(card_path, section)
+
+
+@pytest.mark.parametrize(
+    ("section", "body"),
+    [
+        ("goal", " \t "),
+        ("files", " \t \n\n   "),
+        ("constraints", "\x0c"),
+        ("docs", "   \n   \n   "),
+        ("gates", " "),
+        ("transport_impact", "\t \t"),
+    ],
+)
+def test_a_section_blanked_at_runtime_names_the_field(
+    tmp_path: Path,
+    section: str,
+    body: str,
+) -> None:
+    # The same rule, with blanks no fixture carries: a single mixed line of
+    # space and tab, a mixed line then a blank then spaces, a form feed, three
+    # lines of spaces, one space, tab-space-tab. The six fixtures use five byte
+    # shapes between them, and a parser that recognises those five literal
+    # bodies loads every card here. "Empty after stripping" is the contract,
+    # so the class is closed at runtime from valid.md rather than by adding one
+    # more fixture.
+    lines = _fixture("valid.md").read_text(encoding="utf-8").splitlines()
+    start, end = _section_span(lines, _BLANKABLE_HEADINGS[section])
+    card_path = tmp_path / "runtime_card.md"
+    card_path.write_text(
+        "\n".join(lines[:start] + [body] + lines[end:]) + "\n",
+        encoding="utf-8",
+    )
+
+    _assert_blank_section_is_refused(card_path, section)
 
 
 @pytest.mark.parametrize(
