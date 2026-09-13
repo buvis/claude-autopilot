@@ -138,7 +138,7 @@ def git_argv(repo_root: str, git_dir: str | None) -> list[str]:
 
 def _git(argv: list[str], *args: str, ok: tuple[int, ...] = (0,)) -> str:
     """Run git, return stripped stdout; CustodyError on a timeout or any
-    exit outside `ok` (0 only, unless the caller expects another one)."""
+    exit outside `ok`."""
     try:
         proc = subprocess.run(
             [*argv, *args],
@@ -514,16 +514,16 @@ def _resolve_locked(
         refused = _apply_git(autopilot_dir, entry, choice)
         if refused is not None:
             return refused
-        record = {
-            "type": "custody",
-            "choice": choice,
-            "commit_range": entry["commit_range"],
-        }
         records.record_defer(
             autopilot_dir,
             entry["prd"],
             entry["batch"],
-            {**record, "op_id": f"{entry['op_id']}-resolve"},
+            {
+                "type": "custody",
+                "choice": choice,
+                "commit_range": entry["commit_range"],
+                "op_id": f"{entry['op_id']}-resolve",
+            },
         )
         recorded = choice
     elif recorded != choice:
