@@ -1,6 +1,6 @@
 ---
 name: fast-track
-description: Use when one small, test-specified item should run end to end without the autopilot loop: fresh implementor, five review lenses in one message, one rework, then commit or park. Triggers on "fast-track this card", "run the fast-track lane".
+description: Use when one small, test-specified item should run end to end without the autopilot loop - fresh implementor, five review lenses in one message, one rework, then commit or park. Triggers on "fast-track this card", "run the fast-track lane".
 compatibility: "Requires Bob personal Claude/autoclaude environment or equivalent host adapters for sub-agents, background CLI reviewers, and the dispatch ledger."
 ---
 
