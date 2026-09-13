@@ -235,6 +235,60 @@ def bare(path: str) -> str:
     return path.removeprefix("$PWD/").rstrip(".,;:`\"'")
 
 
+class _Scanner:
+    """One read down the body: what is buffered so far, and where it began."""
+
+    def __init__(self) -> None:
+        self.commands: list[Command] = []
+        self.prose: list[Prose] = []
+        self.pending: list[str] = []
+        self.pending_line = 0
+        self.buffer: list[str] = []
+        self.buffer_line = 0
+        self.section = ""
+        self.language = ""
+        self.in_code = False
+
+    def flush_prose(self) -> None:
+        if self.pending:
+            self.prose.append(Prose(self.pending_line, " ".join(self.pending)))
+            self.pending.clear()
+
+    def flush_command(self) -> None:
+        if self.buffer:
+            self.commands.append(
+                Command(self.buffer_line, self.section, " ".join(self.buffer)),
+            )
+            self.buffer.clear()
+
+    def code_line(self, index: int, line: str) -> None:
+        if self.language != "bash":
+            return
+        stripped = line.strip()
+        if not stripped:
+            self.flush_command()
+            return
+        if not self.buffer:
+            self.buffer_line = index
+        self.buffer.append(stripped.removesuffix("\\").strip())
+        if not stripped.endswith("\\"):
+            self.flush_command()
+
+    def prose_line(self, index: int, line: str) -> None:
+        heading = _HEADING.match(line)
+        if heading:
+            self.flush_prose()
+            if len(heading.group(1)) == 2:
+                self.section = heading.group(2)
+            return
+        if not line.strip() or _BULLET.match(line):
+            self.flush_prose()
+        if line.strip():
+            if not self.pending:
+                self.pending_line = index
+            self.pending.append(line.strip())
+
+
 @lru_cache(maxsize=1)
 def _scan() -> tuple[tuple[Command, ...], tuple[Prose, ...]]:
     """The body as bash commands and prose passages, each with its line.
@@ -246,64 +300,23 @@ def _scan() -> tuple[tuple[Command, ...], tuple[Prose, ...]]:
     because these pins are about order: which step writes a file, and whether it
     runs before the step that opens it.
     """
-    commands: list[Command] = []
-    prose: list[Prose] = []
-    pending: list[str] = []
-    pending_line = 0
-    buffer: list[str] = []
-    buffer_line = 0
-    section = ""
-    language = ""
-    in_code = False
-
-    def flush_prose() -> None:
-        if pending:
-            prose.append(Prose(pending_line, " ".join(pending)))
-            pending.clear()
-
-    def flush_command() -> None:
-        if buffer:
-            commands.append(Command(buffer_line, section, " ".join(buffer)))
-            buffer.clear()
-
+    scanner = _Scanner()
     for index, line in enumerate(_testutil.body().splitlines()):
         fence = _FENCE.match(line)
         if fence:
-            if in_code:
-                flush_command()
+            if scanner.in_code:
+                scanner.flush_command()
             else:
-                flush_prose()
-                language = fence.group(1).lower()
-            in_code = not in_code
-            continue
-        if in_code:
-            if language != "bash":
-                continue
-            stripped = line.strip()
-            if not stripped:
-                flush_command()
-                continue
-            if not buffer:
-                buffer_line = index
-            buffer.append(stripped.removesuffix("\\").strip())
-            if not stripped.endswith("\\"):
-                flush_command()
-            continue
-        heading = _HEADING.match(line)
-        if heading:
-            flush_prose()
-            if len(heading.group(1)) == 2:
-                section = heading.group(2)
-            continue
-        if not line.strip() or _BULLET.match(line):
-            flush_prose()
-        if line.strip():
-            if not pending:
-                pending_line = index
-            pending.append(line.strip())
-    flush_prose()
-    flush_command()
-    return tuple(commands), tuple(prose)
+                scanner.flush_prose()
+                scanner.language = fence.group(1).lower()
+            scanner.in_code = not scanner.in_code
+        elif scanner.in_code:
+            scanner.code_line(index, line)
+        else:
+            scanner.prose_line(index, line)
+    scanner.flush_prose()
+    scanner.flush_command()
+    return tuple(scanner.commands), tuple(scanner.prose)
 
 
 def _unquoted(value: str) -> str:
