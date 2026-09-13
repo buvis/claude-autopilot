@@ -317,6 +317,28 @@ class CapCriticalStallTests(_StallTestCase):
                 self.assertEqual(self._deferred_items(), [])
                 self.assertFalse(self._marker_path().exists())
 
+    def test_exit_10_for_an_intent_stamped_for_another_site_instead_of_a_key_error(
+        self,
+    ) -> None:
+        other_site = {
+            "op_id": "0123456789ab",
+            "prd": self.PRD,
+            "site": "design_gate",
+            "detail": "gate",
+        }
+        self._put_in_wip(content=PRD_TEXT)
+        self._write_state(self._critical_state(stall_op=other_site))
+        raw_before = self.state_path.read_bytes()
+
+        rc = self._do_stall(site="cap_critical")
+
+        self.assertEqual(rc, 10)
+        self.assertEqual(self.state_path.read_bytes(), raw_before)
+        self.assertTrue(self._in_wip())
+        self.assertFalse(self._in_hold())
+        self.assertEqual(self._deferred_items(), [])
+        self.assertFalse(self._marker_path().exists())
+
     def test_retry_after_head_advances_reuses_the_persisted_capture_and_never_recaptures(
         self,
     ) -> None:
