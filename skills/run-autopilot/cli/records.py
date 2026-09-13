@@ -476,22 +476,12 @@ def do_stall(
     autopilot_dir: str | Path,
     extra_mutator=None,
 ) -> int:
-    """Run the Loop-mode stall procedure (references/recovery.md) as ONE
-    call with a durable intent record (state.stall_op), so a kill at any of
-    the internal boundaries is recoverable on retry. Returns the exit code
-    (0 stalled | 4 move failed/unverified | 9 deferred-record I/O failed or
-    custody write failed | 2 state unreadable or cap_critical range capture
-    failed | 10 stall_op conflict). See test_records_stall.py's module
-    docstring for the full contract; `site == "cap_critical"` adds step 4b
-    (custody.record_critical) between the append and the commit, behind the
-    `after-append-before-custody` failpoint.
-    """
-    state_path, prds_dir, autopilot_dir = (
-        Path(state_path),
-        Path(prds_dir),
-        Path(autopilot_dir),
-    )
-
+    """Loop-mode stall as ONE call with a durable intent (state.stall_op); see
+    test_records_stall.py. Exit codes: 0 stalled | 2 state unreadable or
+    capture failed | 4 move failed | 9 record/custody write failed | 10 conflict."""
+    state_path = Path(state_path)
+    prds_dir = Path(prds_dir)
+    autopilot_dir = Path(autopilot_dir)
     try:
         current, _version = state.load(state_path)
     except state.StateError:
@@ -503,30 +493,25 @@ def do_stall(
     rc = _mkdir_hold(prds_dir)
     if rc is not None:
         return rc
-
     _trip("after-mkdir-before-intent")
     rc = _stamp_stall_intent(state_path, op_id, prd, site, detail, capture)
     if rc is not None:
         return rc
-
     _trip("after-intent-before-move")
     rc = _move_prd_to_hold(prds_dir, prd)
     if rc is not None:
         return rc
-
     _trip("after-move-before-append")
     rc = _append_stall_deferred(
         autopilot_dir, current, prd, site, detail, op_id, capture
     )
     if rc is not None:
         return rc
-
     entry, rc = _record_stall_custody(
         autopilot_dir, prds_dir, current, prd, site, detail, op_id, capture
     )
     if rc is not None:
         return rc
-
     _trip("after-append-before-commit")
     return _commit_stall(state_path, site, extra_mutator, entry)
 
