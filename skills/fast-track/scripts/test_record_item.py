@@ -11,11 +11,10 @@ lands under loop-metrics.jsonl, and the shared module is left pointing at
 dispatch-metrics.jsonl afterwards.
 
 record_item.py is not an installed package, so it is loaded by path, the same
-idiom test_card.py uses; render_metrics.py, the consumer of these rows, is
-loaded the same way for the producer-to-renderer tests. Every CLI run is driven
-with `cwd=` inside a tmp_path tree carrying its own dev/local/autopilot
-directory, so the walk-up lands there and no test appends to this repo's own
-ledger.
+idiom test_card.py uses. The cost column's producer-to-renderer tests live in
+test_record_item_render.py. Every CLI run is driven with `cwd=` inside a
+tmp_path tree carrying its own dev/local/autopilot directory, so the walk-up
+lands there and no test appends to this repo's own ledger.
 """
 
 from __future__ import annotations
@@ -36,9 +35,6 @@ _MODULE_PATH = Path(__file__).with_name("record_item.py")
 _RECORD_DISPATCH_PATH = (
     Path(__file__).resolve().parents[2] / "work" / "scripts" / "record_dispatch.py"
 )
-_RENDER_METRICS_PATH = (
-    Path(__file__).resolve().parents[2] / "run-autopilot" / "cli" / "render_metrics.py"
-)
 
 _SPEC = importlib.util.spec_from_file_location("fast_track_record_item", _MODULE_PATH)
 assert _SPEC is not None and _SPEC.loader is not None
@@ -48,18 +44,6 @@ _record_item = importlib.util.module_from_spec(_SPEC)
 # in sys.modules, and an unregistered module makes that lookup fail.
 sys.modules[_SPEC.name] = _record_item
 _SPEC.loader.exec_module(_record_item)
-
-# The consumer of these rows, loaded by the same idiom: the renderers are what
-# the ledger exists for, and only a real row through the real loader can show
-# whether the producer's spelling and the consumer's reading agree.
-_RENDER_SPEC = importlib.util.spec_from_file_location(
-    "autopilot_render_metrics",
-    _RENDER_METRICS_PATH,
-)
-assert _RENDER_SPEC is not None and _RENDER_SPEC.loader is not None
-_render_metrics = importlib.util.module_from_spec(_RENDER_SPEC)
-sys.modules[_RENDER_SPEC.name] = _render_metrics
-_RENDER_SPEC.loader.exec_module(_render_metrics)
 
 append_item_row = _record_item.append_item_row
 
@@ -180,13 +164,6 @@ def _ledger_lines(autopilot_dir: Path) -> tuple[list[str], list[str]]:
     )
 
 
-def _table_row(table: str, prefix: str) -> str:
-    """The one line of a rendered markdown table that starts with prefix."""
-    lines = [line for line in table.splitlines() if line.startswith(prefix)]
-    assert len(lines) == 1, f"expected one {prefix!r} row in:\n{table}"
-    return lines[0]
-
-
 def _record_dispatch_namespace() -> dict:
     """The live namespace of the record_dispatch module record_item imported.
 
@@ -297,170 +274,6 @@ def test_item_row_lands_in_both_ledgers_with_phase_fast_track(tmp_path: Path) ->
     # borrow that forgot to redirect leaves the row under the dispatch name.
     assert not (autopilot_dir / _DISPATCH_FILENAME).exists()
     assert not (autopilot_dir / "ledger" / _DISPATCH_FILENAME).exists()
-
-
-def test_cost_is_null_unless_passed(tmp_path: Path) -> None:
-    # An attended fast-track session has no session log to read a cost out of,
-    # so the recorder never guesses one - but the key still has to be there,
-    # because a row missing it and a row costing nothing are different facts to
-    # anyone summing the column. Asserting presence separately from the value
-    # is what fails an implementation that simply omits the key when no --cost
-    # arrives.
-    without_root = tmp_path / "without-cost"
-    without_root.mkdir()
-    without_dir = _autopilot_tree(without_root)
-    started = int(time.time()) - 30
-
-    result = _run_cli(without_root, _cli_args(_card(without_root), started=started))
-
-    assert result.returncode == 0, result.stderr
-    working_lines, mirror_lines = _ledger_lines(without_dir)
-    assert working_lines == mirror_lines
-    row = json.loads(working_lines[0])
-    assert "cost_usd" in row
-    assert row["cost_usd"] is None
-
-    with_root = tmp_path / "with-cost"
-    with_root.mkdir()
-    with_dir = _autopilot_tree(with_root)
-
-    result = _run_cli(
-        with_root,
-        _cli_args(_card(with_root), started=started, cost="1.25"),
-    )
-
-    assert result.returncode == 0, result.stderr
-    working_lines, mirror_lines = _ledger_lines(with_dir)
-    assert working_lines == mirror_lines
-    priced = json.loads(working_lines[0])
-    # 1.25, not "1.25": the column is summed, and a string sums to nothing.
-    assert priced["cost_usd"] == 1.25
-    assert isinstance(priced["cost_usd"], float)
-
-
-def test_a_row_written_without_cost_renders_through_both_metrics_tables(
-    tmp_path: Path,
-) -> None:
-    # The test above pins the producer to `"cost_usd": null` - key present,
-    # value unknown - and the renderers are the only readers of that key. A
-    # reader that filters costs by key presence lets the null into its sum and
-    # both tables die with a TypeError the first time a fast-track row lands
-    # in a real ledger, which no test of the producer alone can see. The
-    # contract is decided on the consumer side: a null cost renders exactly
-    # like an absent one, a blank cell between the pipes, never 0.00 (an
-    # unmeasured item is not a free one) and never the word None. Driven end
-    # to end - real CLI, real loader, both public renderers - so the two
-    # scripts are checked against each other rather than each against a
-    # fixture written by hand. The model cell is left unpinned: only the cost
-    # cell is this test's business.
-    autopilot_dir = _autopilot_tree(tmp_path)
-
-    result = _run_cli(
-        tmp_path,
-        _cli_args(_card(tmp_path), started=int(time.time()) - 30),
-    )
-
-    assert result.returncode == 0, result.stderr
-    rows = _render_metrics.load_rows(autopilot_dir / _LEDGER_FILENAME)
-    assert len(rows) == 1
-    assert rows[0]["cost_usd"] is None
-    wall = rows[0]["wall_secs"]
-
-    table = _render_metrics.phase_table(rows)
-    summary = _render_metrics.render_metrics(rows)
-
-    phase_row = _table_row(table, "| fast-track |")
-    assert phase_row.startswith(f"| fast-track | 1 | {wall} |")
-    assert phase_row.endswith("|  |")
-    assert "0.00" not in table
-    assert "None" not in table
-    assert f"| widget-slice.md | 1 | {wall} |  |" in summary
-    assert "0.00" not in summary
-    assert "None" not in summary
-
-
-def test_priced_and_unpriced_rows_render_the_priced_sum_alone(
-    tmp_path: Path,
-) -> None:
-    # One batch mixes measured items and unmeasured ones, and they share a
-    # phase and a prd, so they share a cost cell. That cell has to be the sum
-    # of the priced rows, 3.75 - a null that crashes the sum loses the whole
-    # table, and a null dropped from the group is what leaves the sum honest.
-    # Two distinct prices, so the cell has to come from a real sum and not
-    # from whichever priced row the renderer kept. A null coerced to zero
-    # would sum to 3.75 here too, which is why the single unpriced row above
-    # is pinned to a blank cell rather than to 0.00: the two tests hold the
-    # contract between them.
-    autopilot_dir = _autopilot_tree(tmp_path)
-    card = _card(tmp_path)
-    started = int(time.time()) - 20
-
-    first = _run_cli(tmp_path, _cli_args(card, started=started, cost="1.25"))
-    second = _run_cli(tmp_path, _cli_args(card, started=started, cost="2.50"))
-    unpriced = _run_cli(tmp_path, _cli_args(card, started=started))
-
-    assert first.returncode == 0, first.stderr
-    assert second.returncode == 0, second.stderr
-    assert unpriced.returncode == 0, unpriced.stderr
-    rows = _render_metrics.load_rows(autopilot_dir / _LEDGER_FILENAME)
-    assert [row["cost_usd"] for row in rows] == [1.25, 2.50, None]
-    wall = sum(row["wall_secs"] for row in rows)
-
-    table = _render_metrics.phase_table(rows)
-    summary = _render_metrics.render_metrics(rows)
-
-    phase_row = _table_row(table, "| fast-track |")
-    assert phase_row.startswith(f"| fast-track | 3 | {wall} |")
-    assert phase_row.endswith("| 3.75 |")
-    assert "1.25" not in table
-    assert "2.50" not in table
-    assert "0.00" not in table
-    assert f"| widget-slice.md | 3 | {wall} | 3.75 |" in summary
-    assert "1.25" not in summary
-    assert "2.50" not in summary
-    assert "0.00" not in summary
-
-
-def test_a_free_item_renders_zero_not_blank_even_beside_an_unpriced_one(
-    tmp_path: Path,
-) -> None:
-    # --cost 0 is a measurement (the item cost nothing) and no --cost is the
-    # absence of one; the producer keeps them apart as 0.0 and null, and the
-    # two tests above only ever hand the renderers a null or a non-zero price.
-    # A renderer that drops costs by truthiness passes both of them and folds
-    # every free item back into an unmeasured one. So a free row has to show
-    # 0.00 on its own, and again beside an unpriced row in the same group:
-    # the null leaves the sum, the zero stays in it.
-    autopilot_dir = _autopilot_tree(tmp_path)
-    card = _card(tmp_path)
-    started = int(time.time()) - 15
-
-    free = _run_cli(tmp_path, _cli_args(card, started=started, cost="0"))
-
-    assert free.returncode == 0, free.stderr
-    rows = _render_metrics.load_rows(autopilot_dir / _LEDGER_FILENAME)
-    assert [row["cost_usd"] for row in rows] == [0.0]
-    wall = rows[0]["wall_secs"]
-    phase_row = _table_row(_render_metrics.phase_table(rows), "| fast-track |")
-    assert phase_row.startswith(f"| fast-track | 1 | {wall} |")
-    assert phase_row.endswith("| 0.00 |")
-    summary = _render_metrics.render_metrics(rows)
-    assert f"| widget-slice.md | 1 | {wall} | 0.00 |" in summary
-
-    unpriced = _run_cli(tmp_path, _cli_args(card, started=started))
-
-    assert unpriced.returncode == 0, unpriced.stderr
-    rows = _render_metrics.load_rows(autopilot_dir / _LEDGER_FILENAME)
-    assert [row["cost_usd"] for row in rows] == [0.0, None]
-    wall = sum(row["wall_secs"] for row in rows)
-    table = _render_metrics.phase_table(rows)
-    summary = _render_metrics.render_metrics(rows)
-    phase_row = _table_row(table, "| fast-track |")
-    assert phase_row.startswith(f"| fast-track | 2 | {wall} |")
-    assert phase_row.endswith("| 0.00 |")
-    assert "None" not in table
-    assert f"| widget-slice.md | 2 | {wall} | 0.00 |" in summary
-    assert "None" not in summary
 
 
 def test_failed_write_exits_zero_and_says_so(tmp_path: Path) -> None:
