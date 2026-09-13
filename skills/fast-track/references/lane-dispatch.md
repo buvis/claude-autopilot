@@ -32,9 +32,6 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUG
   --require-file <each Files entry that exists today>
 ```
 
-`TASK_DESCRIPTION` carries the whole `## Files` list, the entries the card
-creates included; `PUBLIC_INTERFACES` opens only the ones that exist today.
-
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:tess --task <item> --prompt-file dev/local/tmp/fast-track-<item>-tests.txt
 ```
