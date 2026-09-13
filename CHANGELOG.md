@@ -43,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **use-codex**: `-f` prompt files keep their trailing newline when dispatched, while a whitespace-only prompt file is still rejected as "Prompt required"
 - **run-autopilot**: a loop-launched session no longer inherits vendor CLI markers (`CODEX_SESSION_ID`, `COPILOT_CLI`, etc., see `runner.HOST_MARKERS`) from the shell that started it, which previously tripped the codex/gemini nesting guard and forced a Claude fallback
 - **run-autopilot**: a `cycle` of `true` or `false` in `state.json` now routes the review session as cycle 1 (xhigh), instead of leaking a boolean out of `review_cycle` where an integer cycle is promised
+- **run-autopilot**: the loop-metrics tables render a row whose `cost_usd` is `null` (a fast-track item with no measured cost) with a blank cost cell instead of crashing the batch report, while a measured `0.00` still shows
 
 ## [0.5.1] - 2026-09-05
 

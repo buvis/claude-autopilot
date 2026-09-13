@@ -11,10 +11,12 @@ Pure functions over parsed `loop-metrics.jsonl` rows (PRD 00013 fields:
 - `render_metrics(rows)` - the standalone `autopilot render metrics`
   summary: one row per PRD across the whole file.
 
-Both render existing fields only; a row without `cost_usd` leaves the cell
-blank rather than faking zeros (the wrapper omits the key when the session
-carried no usage payload). `load_rows` skips malformed lines loud on
-stderr - a metrics render must never fail its report.
+Both render existing fields only; a row without `cost_usd`, or with it null,
+leaves the cell blank rather than faking zeros (the wrapper omits the key when
+the session carried no usage payload; the fast-track recorder writes null when
+no cost was passed). A measured 0.0 is a price and renders as 0.00. `load_rows`
+skips malformed lines loud on stderr - a metrics render must never fail its
+report.
 
 `load_rows` returns SESSION rows only. Since PRD 00094 the review gate also
 appends event rows (`{"event": "review_converged", ...}`) to the same file:
@@ -83,13 +85,13 @@ def phase_table(rows: list[dict]) -> str:
             model = row.get("model")
             if model and model not in models:
                 models.append(model)
-        costs = [row["cost_usd"] for row in group if "cost_usd" in row]
+        costs = [row["cost_usd"] for row in group if row.get("cost_usd") is not None]
         wall = sum(int(row.get("wall_secs", 0)) for row in group)
         lines.append(
             f"| {phase} | {len(group)} | {wall} | {', '.join(models)} | {_cost_cell(costs)} |",
         )
     total_wall = sum(int(row.get("wall_secs", 0)) for row in rows)
-    total_costs = [row["cost_usd"] for row in rows if "cost_usd" in row]
+    total_costs = [row["cost_usd"] for row in rows if row.get("cost_usd") is not None]
     lines.append(
         f"| **Total** | {len(rows)} | {total_wall} | | {_cost_cell(total_costs)} |",
     )
@@ -109,10 +111,10 @@ def render_metrics(rows: list[dict]) -> str:
     ]
     for prd, group in prds.items():
         wall = sum(int(row.get("wall_secs", 0)) for row in group)
-        costs = [row["cost_usd"] for row in group if "cost_usd" in row]
+        costs = [row["cost_usd"] for row in group if row.get("cost_usd") is not None]
         lines.append(f"| {prd} | {len(group)} | {wall} | {_cost_cell(costs)} |")
     total_wall = sum(int(row.get("wall_secs", 0)) for row in rows)
-    total_costs = [row["cost_usd"] for row in rows if "cost_usd" in row]
+    total_costs = [row["cost_usd"] for row in rows if row.get("cost_usd") is not None]
     lines.append(
         f"| **Total** | {len(rows)} | {total_wall} | {_cost_cell(total_costs)} |",
     )

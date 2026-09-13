@@ -4,7 +4,7 @@ to ``dev/local/autopilot/loop-metrics.jsonl`` and its GC-exempt ``ledger/``
 mirror, so an attended item renders beside the rows the autopilot loop writes.
 
     record_item.py --item ID --card PATH --model NAME --started EPOCH
-        --outcome committed|branched|stopped --rework N --findings JSON
+        --outcome committed|branched|stopped --rework 0|1 --findings JSON
         --confirmed N [--cost USD]
 
 The append is borrowed from ``record_dispatch.py``, whose writer names that
@@ -59,7 +59,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--model", required=True)
     parser.add_argument("--started", required=True, type=int)
     parser.add_argument("--outcome", required=True, choices=OUTCOMES)
-    parser.add_argument("--rework", required=True, type=int)
+    parser.add_argument("--rework", required=True, type=int, choices=(0, 1))
     parser.add_argument("--findings", required=True, type=json.loads)
     parser.add_argument("--confirmed", required=True, type=int)
     parser.add_argument("--cost", type=float, help="measured USD; absent is unknown")
