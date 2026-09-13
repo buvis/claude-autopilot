@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-09-13
+
 ### Added
 
 - **review-work-completion**: retry Bob once on a lack-of-input refusal, using an inlined retry prompt that reproduces the review context and diff as text so a sandboxed reviewer with no read access can still respond
