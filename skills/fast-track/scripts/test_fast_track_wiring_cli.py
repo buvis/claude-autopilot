@@ -217,3 +217,16 @@ def test_a_malformed_findings_file_exits_2_with_one_stderr_line_naming_it(
     assert result.returncode == 2, (result.returncode, result.stdout, result.stderr)
     lines = result.stderr.strip().splitlines()
     assert len(lines) == 1 and path.name in lines[0], result.stderr
+
+
+@pytest.mark.parametrize("verb", ["verify-targets", "exit-action"])
+def test_an_absent_findings_file_is_refused_like_a_malformed_one_never_a_traceback(
+    tmp_path,
+    verb,
+) -> None:
+    # The driver's Write step skipped or mistimed: still one line, still exit 2.
+    path = tmp_path / "findings.json"
+    result = _run(verb, str(path))
+    assert result.returncode == 2, (result.returncode, result.stdout, result.stderr)
+    lines = result.stderr.strip().splitlines()
+    assert len(lines) == 1 and path.name in lines[0], result.stderr

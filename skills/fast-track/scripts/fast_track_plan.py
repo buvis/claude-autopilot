@@ -100,7 +100,7 @@ def _load_findings(path: Path) -> list[Finding]:
         if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
             raise ValueError("not a JSON array of objects")
         return [Finding(r["severity"], r["title"], r["file"], r["lane"]) for r in rows]
-    except (ValueError, KeyError) as exc:
+    except (OSError, ValueError, KeyError) as exc:
         _fail(path, exc)
 
 
