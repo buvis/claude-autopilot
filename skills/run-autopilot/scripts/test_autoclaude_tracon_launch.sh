@@ -52,10 +52,21 @@ unset _AUTOPILOT_TRACON_CHILD _AUTOPILOT_LOOP
 AP_DIR=""
 
 # Stubs defined AFTER source so they win over the plugin's own definitions.
+# autoclaude hands the loop to caffeinate, which execs a BINARY: a shell
+# function named in argv is "No such file or directory", rc 127 (the
+# 2026-09-13 `autopilot: No such file or directory` outage). The stub keeps
+# that contract via `type -P`, then runs the command in THIS shell so the
+# python3/autopilot stubs below still intercept the loop.
+caffeinate() {
+  shift
+  type -P "$1" >/dev/null || { printf '%s: No such file or directory\n' "$1" >&2; return 127; }
+  "$@"
+}
 python3() {
   case "$*" in
-    *_walk_up.py*) printf '%s\n' "$AP_DIR" ;; # resolve ap dir -> temp
-    *)             command python3 "$@" ;;    # real python3 (duplicate guard)
+    *_walk_up.py*)          printf '%s\n' "$AP_DIR" ;; # resolve ap dir -> temp
+    *cli/__main__.py\ loop) autopilot loop ;;          # the caffeinated loop hand-off
+    *)                      command python3 "$@" ;;    # real python3 (duplicate guard)
   esac
 }
 
@@ -156,10 +167,16 @@ cite() { :; }
 about-plugin() { :; }
 # shellcheck source=/dev/null
 source "$PLUGIN"
+caffeinate() {
+  shift
+  type -P "$1" >/dev/null || { printf '%s: No such file or directory\n' "$1" >&2; return 127; }
+  "$@"
+}
 python3() {
   case "$*" in
-    *_walk_up.py*) printf '%s\n' "$AP_DIR" ;;
-    *)             command python3 "$@" ;;
+    *_walk_up.py*)          printf '%s\n' "$AP_DIR" ;;
+    *cli/__main__.py\ loop) autopilot loop ;;
+    *)                      command python3 "$@" ;;
   esac
 }
 autopilot() {
