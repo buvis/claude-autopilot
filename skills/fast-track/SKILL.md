@@ -407,6 +407,10 @@ Task tool:
 Uncertainty refutes; only a shown broken path confirms. Record each refuted
 finding in the report and drop it. What survives is the confirmed set.
 
+Zero confirmed rows means zero rework and zero delta: skip Rework and Delta
+and go straight to Exit. A roster that raised no CRITICAL or HIGH never reaches
+victor either, so a clean item spends no victor, rework or delta row at all.
+
 ## Rework
 
 Rework runs at most once: dispatch a fresh `autopilot:ivan` with the confirmed
@@ -465,28 +469,37 @@ The lane opens no second round.
 
 ## Delta
 
-The rework commit gets its own review, scoped to what changed:
+The rework commit gets one review, scoped to what changed: a single
+`autopilot:eve` dispatch over `<rework-base-sha>..HEAD`. No other lane runs
+again. Render her prompt from her persona, as in Roster:
 
 ```bash
-git diff <rework-base-sha>..HEAD
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/eve.md \
+  --out dev/local/tmp/fast-track-<item>-delta.txt \
+  --set PACK_FINDINGS="(no pack available this cycle)"
 ```
 
-Re-dispatch the lanes that raised the confirmed findings, in one message, each
-prompt carrying this line above its inputs:
+Append her run inputs to that file with the Write tool: this line first, then
+the confirmed findings one per line, then the range `<rework-base-sha>..HEAD`,
+its changed-file list and the card.
 
 > This is an incremental review of the rework since the previous cycle. For each
 > prior finding listed below, verify it is now resolved in the code, then review
 > the scoped diff for any regression the rework introduced.
 
-The blind lane keeps its card-only prompt here too. One row per re-dispatched
-lane:
-
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:delta --task <item> --prompt-file dev/local/tmp/fast-track-<item>-delta-<lane>.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:delta --task <item> --prompt-file dev/local/tmp/fast-track-<item>-delta.txt
 ```
 
-Findings the delta review confirms join the surviving set. The exit rule reads
-that set.
+```
+Task tool:
+  subagent_type: autopilot:eve
+  prompt: the contents of dev/local/tmp/fast-track-<item>-delta.txt
+```
+
+Close the row when she returns. Each confirmed finding she reports unresolved
+survives, and any finding she raises on the rework diff joins the surviving
+set. The exit rule reads that set.
 
 ## Exit
 

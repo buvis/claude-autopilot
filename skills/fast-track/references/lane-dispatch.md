@@ -233,12 +233,25 @@ refutes: only a shown broken path confirms.
 
 ## Delta: the review after a rework
 
-One row per lane re-dispatched over the rework commit, in one message, each
-prompt carrying the incremental-review line above its inputs. Blake keeps his
-card-only prompt here too.
+One dispatch, `autopilot:eve` over `<rework-base-sha>..HEAD`, and no other
+lane. Her prompt is her persona render with the incremental-review line, the
+confirmed findings, the range, its changed-file list and the card appended as
+run inputs.
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:delta --task <item> --prompt-file dev/local/tmp/fast-track-<item>-delta-<lane>.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/eve.md \
+  --out dev/local/tmp/fast-track-<item>-delta.txt \
+  --set PACK_FINDINGS="(no pack available this cycle)"
+```
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:delta --task <item> --prompt-file dev/local/tmp/fast-track-<item>-delta.txt
+```
+
+```text
+Task tool:
+  subagent_type: autopilot:eve
+  prompt: the contents of dev/local/tmp/fast-track-<item>-delta.txt
 ```
 
 ## Close every row
