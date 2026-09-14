@@ -72,7 +72,7 @@ Persist each task with statectl — the sole writer for state.json (never hand-e
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json task-add <task-json-file>
 ```
 
-Build one JSON object per task and write it to `<task-json-file>` with the Write tool — a task body carries backticks, quotes and newlines, which break as an inline shell argument. Required key: `"name"` (the task title). The body composed per the "Task description format" below goes in `"description"`; every other field this skill assigns (`blocked_by` in step 5, `estimated_tokens` and `est_context_peak` in step 4.5, `model`, `tier_reason`, `qwen_eligible` and `qwen_excluded_reason` in step 4.7) is a top-level key on the same object — flattened, never nested under a `metadata` key. `task-add` assigns the id and prints it to stdout; capture it (`id=$(python3 …/statectl.py dev/local/autopilot/state.json task-add /tmp/task-3.json)`) so later tasks in this same pass can name it in their own `blocked_by` array. Create the tasks in the PRD's dependency/phase order (earlier phases first, so every blocker exists before the tasks it blocks), which is what makes those captured ids available when step 5 builds each `blocked_by` array.
+Build one JSON object per task and write it to `<task-json-file>` with the Write tool — a task body carries backticks, quotes and newlines, which break as an inline shell argument. Required key: `"name"` (the task title). The body composed per the "Task description format" below goes in `"description"`; every other field this skill assigns (`files` - the task's expected implementor-writable repo-relative paths, the same slice step 4.7 writes to `plan-<n>-files.txt` - persisted on every task; `blocked_by` in step 5, `estimated_tokens` and `est_context_peak` in step 4.5, `model`, `tier_reason`, `qwen_eligible` and `qwen_excluded_reason` in step 4.7) is a top-level key on the same object — flattened, never nested under a `metadata` key. `task-add` assigns the id and prints it to stdout; capture it (`id=$(python3 …/statectl.py dev/local/autopilot/state.json task-add /tmp/task-3.json)`) so later tasks in this same pass can name it in their own `blocked_by` array. Create the tasks in the PRD's dependency/phase order (earlier phases first, so every blocker exists before the tasks it blocks), which is what makes those captured ids available when step 5 builds each `blocked_by` array.
 
 To fix a task after creation (not the normal create path): `task-set-body <task-id> <body-file>` replaces `description` verbatim from a raw text file, and `task-set-meta <task-id> <meta-json-file>` merges JSON keys onto the task entry (a `null` value deletes that key).
 
@@ -337,11 +337,11 @@ The flag is computed **from** the classifier output; it does **not** alter the t
 A one-file backend task → `qwen_eligible: true`; a two-file backend task → `qwen_eligible: false`, `qwen_excluded_reason: "files"` (both Sonnet, no public-contract edit):
 
 ```json
-{"estimated_tokens": 72000, "est_context_peak": 92000, "model": "sonnet", "tier_reason": "default", "qwen_eligible": true}
+{"files": ["src/export.py"], "estimated_tokens": 72000, "est_context_peak": 92000, "model": "sonnet", "tier_reason": "default", "qwen_eligible": true}
 ```
 
 ```json
-{"estimated_tokens": 90000, "est_context_peak": 110000, "model": "sonnet", "tier_reason": "default", "qwen_eligible": false, "qwen_excluded_reason": "files"}
+{"files": ["src/export.py", "src/cli.py"], "estimated_tokens": 90000, "est_context_peak": 110000, "model": "sonnet", "tier_reason": "default", "qwen_eligible": false, "qwen_excluded_reason": "files"}
 ```
 
 `qwen_eligible` is persisted on **every** task `plan-tasks` creates. `/autopilot:work` retains that classification and reconciles the concrete `FILE_PATHS` write set before routing, so stale multi-file eligibility cannot bypass the single-file fence (see `${CLAUDE_PLUGIN_ROOT}/skills/work/SKILL.md`).
@@ -359,31 +359,35 @@ Follow PRD's dependency graph:
 
 **Correctness rule:** before you put a task id in a `blocked_by` array, that blocker must already have been created — its id captured from an earlier `task-add` call in this same pass. Never guess an id for a task that does not exist yet (statectl validates `blocked_by` as a list of ints, not that the ids resolve, so a guessed id lands on disk unchallenged). If a dependency only surfaces after its task already exists — a step-4.6 split, or creation order that ends up not matching phase order — add it afterwards with `task-set-meta <task-id> <meta-json-file>`, the file holding `{"blocked_by": [...]}`.
 
-### 5.5. Check the plan against the loop task ceiling (F5)
+### 5.5. Check the plan against the plan-expansion gate (F5)
 
 Once the task list is persisted, run:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/cli/__main__.py check-plan
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/cli/__main__.py check-plan --prd dev/local/prds/wip/<state.prd>
 ```
 
-It counts `state.tasks` itself — never a count you supply — and compares it
-against `cli/policy.LOOP_TASK_CEILING` (15).
+It counts `state.tasks` itself and reads the PRD's task lines, frontmatter and `### Repository Structure` tree. It stalls on three rules: planned tasks over the loop ceiling (`planned > 15`); an expansion ratio over 3.0 with more than 8 planned tasks (`expansion > 3.0`, where expansion is planned tasks divided by the PRD's `- [ ]` task lines); and 2 or more unlisted modules (directories of planned `files` the PRD's Repository Structure tree never names). On a stall it writes a split note grouped by module to `dev/local/autopilot/split-notes/<prd-stem>.md` and prints the stall instruction.
 
-- **Exit 0**: under the ceiling. Continue to step 6.
-- **Exit 3**: over the ceiling. Branch on run mode:
-  - **Loop mode** (`$_AUTOPILOT_LOOP` set): stall the PRD via
-    `references/recovery.md`'s loop-mode stall procedure with
-    `--site oversized_plan`. Do NOT start the build. The batch continues with
-    the next PRD; a human splits this one.
-  - **Interactive**: print the warning and continue. The ceiling is advice
-    here, not a gate.
-- **Exit 2**: state unreadable. Fail loud; do not treat it as a pass.
+- **Exit 0** - under every rule, continue to step 6. A `plan-expansion: unfiled=<n>; drift=checked|skipped (no Repository Structure)` stderr line is a diagnostic naming tasks without `files` or a PRD without a tree; fix the payloads, it is not a stall.
+- **Exit 3** - loop mode (`$_AUTOPILOT_LOOP` set): stall the PRD via `references/recovery.md`'s loop-mode stall procedure with `--site plan_expansion` and the printed detail (`<reasons>; note <path>`) as `--detail`; do NOT start the build; the batch continues with the next PRD. Interactive: print the warning and continue; the gate is advice here, not a gate.
+- **Exit 2** - state or PRD unreadable. Fail loud; do not treat it as a pass.
+
+`plan_expansion: allow` in the PRD frontmatter skips the gate (exit 0 with one stderr line saying so).
+
+An operator who intentionally admits an oversized plan sets `rework_cap: 3` explicitly alongside `plan_expansion: allow` before an unattended resume. Neither the gate nor the frontmatter parser changes the cap automatically. Set both lines in the PRD frontmatter before resuming:
+
+```yaml
+---
+plan_expansion: allow
+rework_cap: 3
+---
+```
 
 Why: PRD 00077 planned to 28 tasks, then burned 15 sessions / 21.5h / $351
 without converging and halted the batch for four days. PRD 00071 (22 tasks)
 did land, so the ceiling is conservative on purpose — it stalls for a human
-rather than refusing to plan. Override per-run with `--ceiling N`.
+rather than refusing to plan. Override per-run with `--ceiling N`. PRD 00167 declared 4 task lines and one module and planned to 21 tasks across five (28 sessions, $345); the thresholds live in `cli/policy.py` and are pinned by its tests.
 
 ### 6. Report summary
 
