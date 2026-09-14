@@ -27,7 +27,7 @@ Subcommands:
         policy.plan_expansion(); exit 3 on a stall verdict (task count over
         the loop ceiling, expansion ratio, or module drift), having written
         <state dir>/split-notes/<prd-stem>.md; exit 2 on an unreadable
-        state or PRD.
+        state or PRD, or when that split note cannot be written.
     select    --prds
         selection.select() over the wip/ and backlog/ listings, gated by
         each backlog candidate's `eligibility:` frontmatter check
@@ -400,6 +400,16 @@ def _check_plan_stall_lines(
     )
 
 
+def _write_split_note(note_path: Path, note: str) -> str | None:
+    """Write the split note; returns the OS error text, or None once written."""
+    try:
+        note_path.parent.mkdir(parents=True, exist_ok=True)
+        note_path.write_text(note, encoding="utf-8")
+    except OSError as err:
+        return str(err)
+    return None
+
+
 def _run_check_plan(args: argparse.Namespace) -> int:
     state_path = _resolve_state_path(args.state)
     try:
@@ -423,6 +433,7 @@ def _run_check_plan(args: argparse.Namespace) -> int:
         else "skipped (no Repository Structure)"
     )
     diag = f"unfiled={verdict.unfiled}; drift={drift_word}"
+    report = verdict.unfiled or drift_word != "checked"
     if verdict.override:
         print(
             "autopilot: check-plan: plan_expansion: allow set in PRD frontmatter; "
@@ -432,12 +443,20 @@ def _run_check_plan(args: argparse.Namespace) -> int:
         return 0
     if verdict.stall:
         note_path = state_path.parent / "split-notes" / f"{prd_path.stem}.md"
-        note_path.parent.mkdir(parents=True, exist_ok=True)
-        note_path.write_text(verdict.note, encoding="utf-8")
+        error = _write_split_note(note_path, verdict.note)
+        if error is not None:
+            print(
+                "autopilot: check-plan failed: cannot write split note "
+                f"{note_path}: {error}",
+                file=sys.stderr,
+            )
+            return 2
         for line in _check_plan_stall_lines(verdict, args.ceiling, note_path):
             print(line, file=sys.stderr)
+        if report:
+            print(f"plan-expansion: {diag}", file=sys.stderr)
         return 3
-    if verdict.unfiled or drift_word != "checked":
+    if report:
         print(f"plan-expansion: {diag}", file=sys.stderr)
     return 0
 
