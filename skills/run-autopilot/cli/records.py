@@ -434,11 +434,39 @@ def _record_stall_custody(
     )
     if rc is not None:
         return None, rc
-    return custody.marker_entry(prd, current["batch"]["id"], op_id, detail, capture), None
+    return custody.marker_entry(
+        prd, current["batch"]["id"], op_id, detail, capture
+    ), None
+
+
+def _write_stall_records(
+    autopilot_dir: Path,
+    prds_dir: Path,
+    current: dict,
+    prd: str,
+    site: str,
+    detail: str,
+    op_id: str,
+    capture: dict,
+) -> tuple[dict | None, int | None]:
+    """do_stall's steps 4 and 4b as one call: the deferred append, then the
+    cap_critical custody record. Returns (marker entry for the commit's
+    mirror or None, None) on success, (None, 9) on failure."""
+    rc = _append_stall_deferred(
+        autopilot_dir, current, prd, site, detail, op_id, capture
+    )
+    if rc is not None:
+        return None, rc
+    return _record_stall_custody(
+        autopilot_dir, prds_dir, current, prd, site, detail, op_id, capture
+    )
 
 
 def _commit_stall(
-    state_path: Path, site: str, extra_mutator, entry: dict | None
+    state_path: Path,
+    site: str,
+    extra_mutator,
+    entry: dict | None,
 ) -> int:
     """do_stall's step 5: single commit - reset_prd_fields, the
     parks_consecutive rule, the batch.critical_on_master mirror of `entry`
@@ -501,12 +529,7 @@ def do_stall(
     if rc is not None:
         return rc
     _trip("after-move-before-append")
-    rc = _append_stall_deferred(
-        autopilot_dir, current, prd, site, detail, op_id, capture
-    )
-    if rc is not None:
-        return rc
-    entry, rc = _record_stall_custody(
+    entry, rc = _write_stall_records(
         autopilot_dir, prds_dir, current, prd, site, detail, op_id, capture
     )
     if rc is not None:
