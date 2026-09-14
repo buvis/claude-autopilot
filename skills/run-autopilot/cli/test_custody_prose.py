@@ -2,7 +2,9 @@
 Phase 0 pending-custody handler and the Phase 3 `state.git_dir` capture in
 `references/phase-build.md`, the loop-mode cap-out range sentence in
 `references/phase-review.md`, and the `cap_critical` slug plus the
-custody-aware exit rows in `references/recovery.md`.
+custody-aware exit rows in `references/recovery.md`. It also pins the
+`[checks] custody push guard` block in `dev/bin/release-checks` and the two
+custody entries under `[Unreleased]` in `CHANGELOG.md`.
 
 Mirrors test_dispatch_prose.py's pattern for pinning a skill file's prose:
 resolve each target file's path relative to this file, read it once, and
@@ -52,8 +54,21 @@ from cli.custody_prose_testutil import (
     _bullet,
     _custody_section,
     _exit_code,
+    _h2_section,
     _rows_starting_with,
     _section,
+)
+
+_REPO_ROOT = _SKILL_DIR.parent.parent
+_RELEASE_CHECKS = _REPO_ROOT / "dev" / "bin" / "release-checks"
+_RELEASE_CHECKS_TEXT = _RELEASE_CHECKS.read_text()
+_CHANGELOG = _REPO_ROOT / "CHANGELOG.md"
+_CHANGELOG_TEXT = _CHANGELOG.read_text()
+
+_CUSTODY_GUARD_BLOCK = (
+    'echo "[checks] custody push guard"\n'
+    "uv run --no-project --with pytest python -m pytest -q "
+    "hooks/test_guard_push_on_critical.py\n"
 )
 
 
@@ -281,3 +296,37 @@ def test_no_manual_range_flag_or_later_feature_leaks_into_the_skill_prose() -> N
                 "internally (no manual range flag), and the stub-minting / "
                 "design rework feature is not part of this task."
             )
+
+
+def test_release_checks_runs_the_custody_push_guard_after_hook_registration() -> None:
+    # The exact two-line block (one-line pytest, like the fast-track block),
+    # placed after hook registration so the hook checks sit together.
+    _assert_in_order(
+        _RELEASE_CHECKS_TEXT,
+        _RELEASE_CHECKS,
+        "the release gate",
+        ('echo "[checks] hook registration"', _CUSTODY_GUARD_BLOCK),
+    )
+
+
+def test_changelog_unreleased_added_carries_both_custody_entries() -> None:
+    unreleased = _h2_section(_CHANGELOG_TEXT, _CHANGELOG, "## [Unreleased]")
+    assert "### Added" in unreleased, (
+        f"{_CHANGELOG}: expected a '### Added' heading under [Unreleased] — not found."
+    )
+    start = unreleased.index("### Added")
+    end = unreleased.find("\n### ", start + 1)
+    added = unreleased[start:] if end == -1 else unreleased[start:end]
+
+    # Located by subject, never by count: other entries share these scopes.
+    pins = (
+        ("- **run-autopilot**:", "autopilot custody resolve"),
+        ("- **hooks**:", "pending cap_critical custody"),
+    )
+    for lead, needle in pins:
+        bullets = _rows_starting_with(added, lead)
+        assert any(needle in bullet for bullet in bullets), (
+            f"{_CHANGELOG}: expected a {lead!r} bullet under [Unreleased] / "
+            f"### Added mentioning {needle!r} — found {len(bullets)} {lead!r} "
+            "bullet(s), none of which does."
+        )
