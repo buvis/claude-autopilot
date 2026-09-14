@@ -104,11 +104,16 @@ class HookFixture:
                     "input_tokens": input_tokens,
                     "cache_read_input_tokens": cache_read,
                     "cache_creation_input_tokens": cache_create,
-                }
+                },
             },
         }
 
-    def run_hook(self, stdin_payload: dict | None = None, *, in_loop: bool = True) -> subprocess.CompletedProcess:
+    def run_hook(
+        self,
+        stdin_payload: dict | None = None,
+        *,
+        in_loop: bool = True,
+    ) -> subprocess.CompletedProcess:
         if stdin_payload is None:
             stdin_payload = {
                 "session_id": "test-session",
@@ -183,8 +188,12 @@ class ContextCapHookTests(unittest.TestCase):
         self.fx.write_state(phase="build")
         self.fx.write_transcript_lines(
             [
-                self.fx.usage_line(input_tokens=50_000, cache_read=40_000, cache_create=10_000),
-            ]
+                self.fx.usage_line(
+                    input_tokens=50_000,
+                    cache_read=40_000,
+                    cache_create=10_000,
+                ),
+            ],
         )
         result = self.fx.run_hook()
         self.assertEqual(result.returncode, 0)
@@ -284,7 +293,9 @@ class ContextCapHookTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as plain:
             plain_path = Path(plain)
             transcript = plain_path / "transcript.jsonl"
-            transcript.write_text(json.dumps(self.fx.usage_line(input_tokens=600_000)) + "\n")
+            transcript.write_text(
+                json.dumps(self.fx.usage_line(input_tokens=600_000)) + "\n",
+            )
             result = subprocess.run(
                 [sys.executable, str(HOOK)],
                 input=json.dumps({"transcript_path": str(transcript)}),
@@ -311,7 +322,9 @@ class ContextCapHookTests(unittest.TestCase):
             ap_dir.parent.mkdir(parents=True)
             os.symlink("/nonexistent/path/that/does/not/exist", str(ap_dir))
             transcript = plain_path / "t.jsonl"
-            transcript.write_text(json.dumps(self.fx.usage_line(input_tokens=200_000)) + "\n")
+            transcript.write_text(
+                json.dumps(self.fx.usage_line(input_tokens=200_000)) + "\n",
+            )
             result = subprocess.run(
                 [sys.executable, str(HOOK)],
                 input=json.dumps({"transcript_path": str(transcript)}),
@@ -330,7 +343,9 @@ class ContextCapHookTests(unittest.TestCase):
         Verifies the OSError path in _latest_usage_total.
         """
         self.fx.write_state(phase="build")
-        self.fx.transcript.write_text(json.dumps(self.fx.usage_line(input_tokens=200_000)) + "\n")
+        self.fx.transcript.write_text(
+            json.dumps(self.fx.usage_line(input_tokens=200_000)) + "\n",
+        )
         original_mode = self.fx.transcript.stat().st_mode
         self.fx.transcript.chmod(0o000)
         self.addCleanup(self.fx.transcript.chmod, original_mode)
@@ -542,7 +557,13 @@ class ContextCapHookTests(unittest.TestCase):
     def _handoff_payload(self) -> dict:
         return json.loads((self.fx.autopilot_dir / ".handoff-requested").read_text())
 
-    def _assert_handoff_payload(self, payload: dict, *, task_id: str, session: str) -> None:
+    def _assert_handoff_payload(
+        self,
+        payload: dict,
+        *,
+        task_id: str,
+        session: str,
+    ) -> None:
         """The marker is a JSON object with exactly four fields: a literal
         `build` phase, the hook's session id, a UTC stamp and the active task
         id. Extra or missing keys are a contract break."""
@@ -556,14 +577,23 @@ class ContextCapHookTests(unittest.TestCase):
         `.handoff-requested` as a JSON payload naming the phase, the hook's
         session id, a UTC ISO-8601 stamp and the in-progress task id. The path
         is non-destructive — no `.cap-fired`, no rotation, no state mutation.
-        No `context_window` is set: the threshold is a single constant."""
+        No `context_window` is set: the threshold is a single constant.
+
+        The session id on stdin is deliberately unlike anything else in this
+        fixture (not the task id, not a default literal), so `session` can only
+        be satisfied by reading the id off the incoming payload."""
         self.fx.write_state(
             phase="build",
             tasks=[{"id": "task-x", "name": "y", "status": "in_progress"}],
         )
         self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=400_000)])
         before = datetime.now(timezone.utc) - timedelta(seconds=1)
-        result = self.fx.run_hook()
+        result = self.fx.run_hook(
+            stdin_payload={
+                "session_id": "sess-9f3a2c",
+                "transcript_path": str(self.fx.transcript),
+            },
+        )
         after = datetime.now(timezone.utc) + timedelta(seconds=1)
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout.strip(), "")
@@ -571,7 +601,7 @@ class ContextCapHookTests(unittest.TestCase):
         handoff = self.fx.autopilot_dir / ".handoff-requested"
         self.assertTrue(handoff.exists())
         payload = self._handoff_payload()
-        self._assert_handoff_payload(payload, task_id="task-x", session="test-session")
+        self._assert_handoff_payload(payload, task_id="task-x", session="sess-9f3a2c")
         # `at` must be a real stamp of this run, not a fixed or empty string.
         stamped = _parse_iso_utc(payload["at"])
         self.assertGreaterEqual(stamped, before)
@@ -661,8 +691,8 @@ class ContextCapHookTests(unittest.TestCase):
                     "session": "earlier-session",
                     "at": "2020-01-02T03:04:05+00:00",
                     "task_id": "task-x",
-                }
-            )
+                },
+            ),
         )
         before = handoff.read_bytes()
         result = self.fx.run_hook()
@@ -687,14 +717,57 @@ class ContextCapHookTests(unittest.TestCase):
                     "session": "earlier-session",
                     "at": stale_at,
                     "task_id": "task-old",
-                }
-            )
+                },
+            ),
         )
         result = self.fx.run_hook()
         self.assertEqual(result.returncode, 0)
         payload = self._handoff_payload()
-        self._assert_handoff_payload(payload, task_id="task-new", session="test-session")
+        self._assert_handoff_payload(
+            payload,
+            task_id="task-new",
+            session="test-session",
+        )
         self.assertGreater(_parse_iso_utc(payload["at"]), _parse_iso_utc(stale_at))
+
+    def test_handoff_marker_task_whose_id_prefixes_the_marked_one_is_overwritten(
+        self,
+    ) -> None:
+        """Task ids match whole, never by appearing somewhere in the marker:
+        `task-1` is a different task from the marked `task-10`, so the marker is
+        rewritten for it. Both stored shapes are checked, because a legacy plain
+        string and a JSON payload both literally contain `task-1`. Treating that
+        as a same-task no-op would silently drop the handoff request for every
+        task whose id is a prefix of the one already named."""
+        self.fx.write_state(
+            phase="build",
+            tasks=[{"id": "task-1", "name": "y", "status": "in_progress"}],
+        )
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=400_000)])
+        handoff = self.fx.autopilot_dir / ".handoff-requested"
+        for label, content in (
+            ("legacy-plain", "task-10"),
+            (
+                "json",
+                json.dumps(
+                    {
+                        "phase": "build",
+                        "session": "earlier-session",
+                        "at": "2020-01-02T03:04:05+00:00",
+                        "task_id": "task-10",
+                    },
+                ),
+            ),
+        ):
+            with self.subTest(existing=label):
+                handoff.write_text(content)
+                result = self.fx.run_hook()
+                self.assertEqual(result.returncode, 0)
+                self._assert_handoff_payload(
+                    self._handoff_payload(),
+                    task_id="task-1",
+                    session="test-session",
+                )
 
     def test_handoff_marker_empty_or_malformed_is_replaced_with_json(self) -> None:
         """Junk left at the marker path (empty, whitespace, unparseable, or
@@ -723,7 +796,9 @@ class ContextCapHookTests(unittest.TestCase):
                     session="test-session",
                 )
 
-    def test_handoff_marker_session_is_empty_string_when_stdin_omits_session_id(self) -> None:
+    def test_handoff_marker_session_is_empty_string_when_stdin_omits_session_id(
+        self,
+    ) -> None:
         """`session` falls back to the empty string only when the payload
         carries no session id — never to a placeholder or the task id."""
         self.fx.write_state(
@@ -731,9 +806,15 @@ class ContextCapHookTests(unittest.TestCase):
             tasks=[{"id": "task-x", "name": "y", "status": "in_progress"}],
         )
         self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=400_000)])
-        result = self.fx.run_hook(stdin_payload={"transcript_path": str(self.fx.transcript)})
+        result = self.fx.run_hook(
+            stdin_payload={"transcript_path": str(self.fx.transcript)},
+        )
         self.assertEqual(result.returncode, 0)
-        self._assert_handoff_payload(self._handoff_payload(), task_id="task-x", session="")
+        self._assert_handoff_payload(
+            self._handoff_payload(),
+            task_id="task-x",
+            session="",
+        )
 
     def test_review_phase_writes_no_handoff_marker(self) -> None:
         """The build-only guard sits ahead of the soft check: over the soft cap
@@ -986,7 +1067,7 @@ class TurnTripwireTests(unittest.TestCase):
 
     def _seed_counter(self, session_id: str, count: int) -> None:
         (self.fx.autopilot_dir / ".turn-counts.json").write_text(
-            json.dumps({"counts": {session_id: count}, "fired": []})
+            json.dumps({"counts": {session_id: count}, "fired": []}),
         )
 
     def test_tripwire_fires_at_300(self) -> None:
@@ -1039,13 +1120,15 @@ class TurnTripwireTests(unittest.TestCase):
         )
         self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=40_000)])
         (self.fx.autopilot_dir / ".turn-counts.json").write_text(
-            json.dumps({"counts": {"test-session": None}, "fired": []})
+            json.dumps({"counts": {"test-session": None}, "fired": []}),
         )
         result = self.fx.run_hook()
         self.assertEqual(result.returncode, 0)
         self.assertFalse((self.fx.autopilot_dir / ".cap-fired").exists())
         # a wrong-shape file (counts not a dict) also resets cleanly
-        (self.fx.autopilot_dir / ".turn-counts.json").write_text(json.dumps({"counts": "nope"}))
+        (self.fx.autopilot_dir / ".turn-counts.json").write_text(
+            json.dumps({"counts": "nope"}),
+        )
         result2 = self.fx.run_hook()
         self.assertEqual(result2.returncode, 0)
 
@@ -1099,11 +1182,15 @@ class DurabilityBeforePublishTests(unittest.TestCase):
         return calls
 
     def test_turn_counter_is_fsynced_before_the_rename_publishes_it(self) -> None:
-        calls = self._publish_order(lambda: self.module._bump_and_check_tripwire(self.ap, "sess-1"))
+        calls = self._publish_order(
+            lambda: self.module._bump_and_check_tripwire(self.ap, "sess-1"),
+        )
         self.assertEqual(calls, ["fsync", "replace"])
 
     def test_state_write_failed_marker_is_fsynced_before_the_rename(self) -> None:
-        calls = self._publish_order(lambda: self.module._write_state_write_failed_marker(self.ap, "detail"))
+        calls = self._publish_order(
+            lambda: self.module._write_state_write_failed_marker(self.ap, "detail"),
+        )
         self.assertEqual(calls, ["fsync", "replace"])
 
     def test_turn_counter_still_survives_a_write_failure_without_firing(self) -> None:
