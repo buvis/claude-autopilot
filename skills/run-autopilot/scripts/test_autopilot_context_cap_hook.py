@@ -15,6 +15,7 @@ import tempfile
 import time
 import unittest
 import unittest.mock
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 HOOK = Path(__file__).parent / "autopilot_context_cap_hook.py"
@@ -28,6 +29,18 @@ def _loop_env() -> dict[str, str]:
     env = dict(os.environ)
     env["_AUTOPILOT_LOOP"] = "test-loop"
     return env
+
+
+def _parse_iso_utc(value: str) -> datetime:
+    """Read a marker's `at` field as an aware UTC datetime.
+
+    The contract pins a UTC ISO-8601 stamp but not how the offset is spelled,
+    so accept a trailing `Z` and read an offset-less stamp as UTC."""
+    text = value[:-1] + "+00:00" if value.endswith("Z") else value
+    parsed = datetime.fromisoformat(text)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _load_hook_module():
@@ -526,23 +539,43 @@ class ContextCapHookTests(unittest.TestCase):
 
     # Soft-threshold handoff ------------------------------------------------
 
+    def _handoff_payload(self) -> dict:
+        return json.loads((self.fx.autopilot_dir / ".handoff-requested").read_text())
+
+    def _assert_handoff_payload(self, payload: dict, *, task_id: str, session: str) -> None:
+        """The marker is a JSON object with exactly four fields: a literal
+        `build` phase, the hook's session id, a UTC stamp and the active task
+        id. Extra or missing keys are a contract break."""
+        self.assertEqual(sorted(payload), ["at", "phase", "session", "task_id"])
+        self.assertEqual(payload["phase"], "build")
+        self.assertEqual(payload["task_id"], task_id)
+        self.assertEqual(payload["session"], session)
+
     def test_soft_threshold_writes_handoff_marker(self) -> None:
         """Usage between the single soft (320K) and hard (500K) caps writes
-        `.handoff-requested` carrying the in-progress task id. The path is
-        non-destructive — no `.cap-fired`, no rotation, no state mutation.
+        `.handoff-requested` as a JSON payload naming the phase, the hook's
+        session id, a UTC ISO-8601 stamp and the in-progress task id. The path
+        is non-destructive — no `.cap-fired`, no rotation, no state mutation.
         No `context_window` is set: the threshold is a single constant."""
         self.fx.write_state(
             phase="build",
             tasks=[{"id": "task-x", "name": "y", "status": "in_progress"}],
         )
         self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=400_000)])
+        before = datetime.now(timezone.utc) - timedelta(seconds=1)
         result = self.fx.run_hook()
+        after = datetime.now(timezone.utc) + timedelta(seconds=1)
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout.strip(), "")
 
         handoff = self.fx.autopilot_dir / ".handoff-requested"
         self.assertTrue(handoff.exists())
-        self.assertEqual(handoff.read_text().strip(), "task-x")
+        payload = self._handoff_payload()
+        self._assert_handoff_payload(payload, task_id="task-x", session="test-session")
+        # `at` must be a real stamp of this run, not a fixed or empty string.
+        stamped = _parse_iso_utc(payload["at"])
+        self.assertGreaterEqual(stamped, before)
+        self.assertLessEqual(stamped, after)
 
         # Non-destructive: hard-cap artifacts must NOT appear.
         self.assertFalse((self.fx.autopilot_dir / ".cap-fired").exists())
@@ -576,27 +609,27 @@ class ContextCapHookTests(unittest.TestCase):
         self.assertTrue((self.fx.autopilot_dir / ".cap-fired").exists())
         self.assertFalse((self.fx.autopilot_dir / ".handoff-requested").exists())
 
-    def test_handoff_marker_same_task_not_rewritten(self) -> None:
-        """When `.handoff-requested` already names the in-progress task, a
-        redundant PostToolUse fire is a no-op (one-shot per task)."""
+    def test_handoff_marker_legacy_plain_same_task_not_rewritten(self) -> None:
+        """A pre-JSON marker holding the bare in-progress task id is still a
+        same-task no-op (one-shot per task): the legacy plain string is left
+        exactly as found, not upgraded to JSON mid-task."""
         self.fx.write_state(
             phase="build",
             tasks=[{"id": "task-x", "name": "y", "status": "in_progress"}],
         )
         self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=400_000)])
-        (self.fx.autopilot_dir / ".handoff-requested").write_text("task-x")
+        handoff = self.fx.autopilot_dir / ".handoff-requested"
+        handoff.write_text("task-x")
+        before = handoff.read_bytes()
         result = self.fx.run_hook()
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout.strip(), "")
-        self.assertEqual(
-            (self.fx.autopilot_dir / ".handoff-requested").read_text().strip(),
-            "task-x",
-        )
+        self.assertEqual(handoff.read_bytes(), before)
 
-    def test_handoff_marker_stale_task_overwritten(self) -> None:
-        """A `.handoff-requested` marker naming an earlier task is rewritten
-        with the current task id, so the handoff request stays current after
-        the session advances."""
+    def test_handoff_marker_legacy_plain_stale_task_overwritten(self) -> None:
+        """A pre-JSON marker naming an earlier task is replaced by a full JSON
+        payload for the current task, so the handoff request stays current
+        after the session advances."""
         self.fx.write_state(
             phase="build",
             tasks=[{"id": "task-new", "name": "y", "status": "in_progress"}],
@@ -605,10 +638,142 @@ class ContextCapHookTests(unittest.TestCase):
         (self.fx.autopilot_dir / ".handoff-requested").write_text("task-old")
         result = self.fx.run_hook()
         self.assertEqual(result.returncode, 0)
-        self.assertEqual(
-            (self.fx.autopilot_dir / ".handoff-requested").read_text().strip(),
-            "task-new",
+        self._assert_handoff_payload(
+            self._handoff_payload(),
+            task_id="task-new",
+            session="test-session",
         )
+
+    def test_handoff_marker_json_same_task_not_rewritten(self) -> None:
+        """A JSON marker whose task_id matches the in-progress task is a
+        no-op: the earlier session id and stamp survive byte-for-byte, so a
+        redundant PostToolUse fire cannot move the request's own timestamp."""
+        self.fx.write_state(
+            phase="build",
+            tasks=[{"id": "task-x", "name": "y", "status": "in_progress"}],
+        )
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=400_000)])
+        handoff = self.fx.autopilot_dir / ".handoff-requested"
+        handoff.write_text(
+            json.dumps(
+                {
+                    "phase": "build",
+                    "session": "earlier-session",
+                    "at": "2020-01-02T03:04:05+00:00",
+                    "task_id": "task-x",
+                }
+            )
+        )
+        before = handoff.read_bytes()
+        result = self.fx.run_hook()
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), "")
+        self.assertEqual(handoff.read_bytes(), before)
+
+    def test_handoff_marker_json_stale_task_overwritten(self) -> None:
+        """A JSON marker naming an earlier task is overwritten with a fresh
+        payload — new task id, this session's id, and a stamp later than the
+        one it replaced."""
+        self.fx.write_state(
+            phase="build",
+            tasks=[{"id": "task-new", "name": "y", "status": "in_progress"}],
+        )
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=400_000)])
+        stale_at = "2020-01-02T03:04:05+00:00"
+        (self.fx.autopilot_dir / ".handoff-requested").write_text(
+            json.dumps(
+                {
+                    "phase": "build",
+                    "session": "earlier-session",
+                    "at": stale_at,
+                    "task_id": "task-old",
+                }
+            )
+        )
+        result = self.fx.run_hook()
+        self.assertEqual(result.returncode, 0)
+        payload = self._handoff_payload()
+        self._assert_handoff_payload(payload, task_id="task-new", session="test-session")
+        self.assertGreater(_parse_iso_utc(payload["at"]), _parse_iso_utc(stale_at))
+
+    def test_handoff_marker_empty_or_malformed_is_replaced_with_json(self) -> None:
+        """Junk left at the marker path (empty, whitespace, unparseable, or
+        JSON that is not an object) names no task, so it must neither block
+        the request nor crash the hook — the next write lands valid JSON."""
+        self.fx.write_state(
+            phase="build",
+            tasks=[{"id": "task-x", "name": "y", "status": "in_progress"}],
+        )
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=400_000)])
+        handoff = self.fx.autopilot_dir / ".handoff-requested"
+        for label, content in (
+            ("empty", ""),
+            ("whitespace", "   \n"),
+            ("not-json", "{not json"),
+            ("json-list", "[1, 2]"),
+            ("json-null", "null"),
+        ):
+            with self.subTest(existing=label):
+                handoff.write_text(content)
+                result = self.fx.run_hook()
+                self.assertEqual(result.returncode, 0)
+                self._assert_handoff_payload(
+                    self._handoff_payload(),
+                    task_id="task-x",
+                    session="test-session",
+                )
+
+    def test_handoff_marker_session_is_empty_string_when_stdin_omits_session_id(self) -> None:
+        """`session` falls back to the empty string only when the payload
+        carries no session id — never to a placeholder or the task id."""
+        self.fx.write_state(
+            phase="build",
+            tasks=[{"id": "task-x", "name": "y", "status": "in_progress"}],
+        )
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=400_000)])
+        result = self.fx.run_hook(stdin_payload={"transcript_path": str(self.fx.transcript)})
+        self.assertEqual(result.returncode, 0)
+        self._assert_handoff_payload(self._handoff_payload(), task_id="task-x", session="")
+
+    def test_review_phase_writes_no_handoff_marker(self) -> None:
+        """The build-only guard sits ahead of the soft check: over the soft cap
+        in `review` requests no handoff — only `build` runs /work tasks."""
+        self.fx.write_state(
+            phase="review",
+            tasks=[{"id": "task-x", "name": "y", "status": "in_progress"}],
+        )
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=400_000)])
+        result = self.fx.run_hook()
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), "")
+        self.assertFalse((self.fx.autopilot_dir / ".handoff-requested").exists())
+
+    def test_missing_or_unreadable_state_writes_no_handoff_marker(self) -> None:
+        """The state-read guard also sits ahead of the soft check. With
+        state.json absent, or present-and-unreadable (permissions 000) while
+        holding a valid build state, nothing may be written."""
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=400_000)])
+        handoff = self.fx.autopilot_dir / ".handoff-requested"
+        state = self.fx.autopilot_dir / "state.json"
+
+        with self.subTest(state="missing"):
+            result = self.fx.run_hook()
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout.strip(), "")
+            self.assertFalse(handoff.exists())
+
+        with self.subTest(state="unreadable"):
+            self.fx.write_state(
+                phase="build",
+                tasks=[{"id": "task-x", "name": "y", "status": "in_progress"}],
+            )
+            original_mode = state.stat().st_mode
+            state.chmod(0o000)
+            self.addCleanup(state.chmod, original_mode)
+            result = self.fx.run_hook()
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout.strip(), "")
+            self.assertFalse(handoff.exists())
 
     def test_cap_fired_marker_for_same_task_blocks_soft_path(self) -> None:
         """When `.cap-fired` already named the in-progress task (a rotation
