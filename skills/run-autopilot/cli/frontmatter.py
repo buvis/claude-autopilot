@@ -50,11 +50,12 @@ _ENUMS: dict[str, tuple[str, tuple[str, ...], str]] = {
 
 _REWORK_CAP_DEFAULT = 2
 
-# The two opt-in markers: recognized only at their exact value, absent
+# The three opt-in markers: recognized only at their exact value, absent
 # otherwise, and never warned about - an unset opt-in is the normal case.
 _OPT_INS: dict[str, tuple[str, str, object]] = {
     "design_gate": ("design_gate", "user", "user"),
     "pause_on_ambiguity": ("pause_on_ambiguity", "true", True),
+    "plan_expansion": ("plan_expansion_override", "allow", True),
 }
 
 MALFORMED_WARNING = (

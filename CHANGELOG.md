@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: a cap-out with an unresolved CRITICAL now records the PRD's live commit range as custody (marker, batch mirror, migrated deferrals, refreshed hold PRD, a `- Commits:` line in the batch report's STALLED section) and offers revert / branch-and-revert / accept through `autopilot custody resolve`
 - **hooks**: deny a Bash `git push` that targets a repository with pending cap_critical custody, naming the PRD, range and resolve command
 - **run-autopilot**: the loop now records a `review_converged` row with the PRD's run conditions (rework cap, per-cycle reviewer roster and severity counts, build models, attempt tiers, task counts) at review-phase exit, and the batch report prints it as `- Run conditions:` (falling back to its task counts instead of `Tasks: 0/0`); a review file that cannot be parsed reads as null rather than zero findings, and a state that names no PRD or batch writes no row instead of crashing the loop
+- **plan-tasks**: the plan gate now stalls a plan that outgrew its PRD - task count over the loop ceiling, expansion ratio over 3.0 with more than 8 tasks, or 2 or more modules the PRD's Repository Structure never names - writes a split note grouped by module, and every task payload persists its `files` slice; `plan_expansion: allow` in the PRD frontmatter skips the gate
 
 ### Fixed
 

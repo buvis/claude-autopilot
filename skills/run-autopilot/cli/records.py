@@ -86,6 +86,7 @@ PER_PRD_RESET_FIELDS = (
     "repo_root",
     "git_dir",
     "pause_on_ambiguity",
+    "plan_expansion_override",
     "review_lenses",
     "contract_card",
     "needs_attention",
