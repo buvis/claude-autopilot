@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import threading
 import unittest
 
 from cli import policy
@@ -99,6 +100,28 @@ def _sections(note: str) -> list[tuple[str, str]]:
         heading, _sep, body = chunk.partition("\n")
         out.append((heading, body))
     return out
+
+
+def _bounded(fn, *args, seconds: float = 5.0):
+    """fn(*args) on a daemon thread joined for `seconds`: its result, or what
+    it raised, or an AssertionError naming fn when it is still running (a
+    parse that loops forever must fail its test, not hang the suite)."""
+    outcome: dict = {}
+
+    def run() -> None:
+        try:
+            outcome["value"] = fn(*args)
+        except Exception as exc:
+            outcome["error"] = exc
+
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    worker.join(seconds)
+    if worker.is_alive():
+        raise AssertionError(f"{fn.__name__} did not return within {seconds}s")
+    if "error" in outcome:
+        raise outcome["error"]
+    return outcome["value"]
 
 
 def _prd_00167() -> str:
@@ -611,6 +634,163 @@ class PlanExpansionTests(unittest.TestCase):
             [line for line in dict(_sections(paired))["src (listed)"].splitlines() if line],
             ["- t0 task 0: src/a.py, src/b.py"],
             "one task's files in one module share a line, `, `-joined in task order",
+        )
+
+    def test_slash_separated_file_entries_make_their_parents_grouping_only(
+        self,
+    ) -> None:
+        prd = _prd_text(2, "src/\n├── auth/login.py\n└── main.py")
+        self.assertEqual(
+            policy.prd_modules(prd),
+            ((), ("src/auth/login.py", "src/main.py")),
+            "src has the implicit descendant src/auth, so neither is a leaf",
+        )
+        listed = _state_with_files("x.md", [["src/auth/login.py"], ["src/main.py"]])
+        self.assertEqual(policy.plan_expansion(listed, prd).drift, ())
+        scattered = policy.plan_expansion(
+            _state_with_files("x.md", [["src/payments/a.py"], ["src/orders/b.py"]]),
+            prd,
+        )
+        self.assertEqual(scattered.drift, ("src/orders", "src/payments"))
+        self.assertEqual(scattered.reasons, ("module_drift",))
+        self.assertTrue(scattered.stall)
+        sibling = policy.plan_expansion(
+            _state_with_files("x.md", [["src/auth/other.py"]]),
+            prd,
+        )
+        self.assertEqual(
+            sibling.drift,
+            ("src/auth",),
+            "a directory implied by a file entry covers nothing beyond that file",
+        )
+
+    def test_slashed_file_entry_demotes_only_its_own_ancestors(self) -> None:
+        prd = _prd_text(2, "src/\n├── auth/login.py\nlib/\n└── x.py")
+        self.assertEqual(
+            policy.prd_modules(prd),
+            (("lib",), ("lib/x.py", "src/auth/login.py")),
+            "src/auth/login.py demotes src alone; the root lib stays a leaf",
+        )
+        verdict = policy.plan_expansion(_state_with_files("x.md", [["lib/y.py"]]), prd)
+        self.assertEqual(verdict.drift, (), "lib still grants recursive coverage")
+
+    def test_root_slash_file_entry_does_not_grant_its_directory(self) -> None:
+        prd = _prd_text(2, "docs/guide.md")
+        self.assertEqual(policy.prd_modules(prd), ((), ("docs/guide.md",)))
+        listed = policy.plan_expansion(
+            _state_with_files("x.md", [["docs/guide.md"]]),
+            prd,
+        )
+        self.assertEqual(listed.drift, ())
+        verdict = policy.plan_expansion(
+            _state_with_files("x.md", [["docs/guide.md"], ["docs/other.md"]]),
+            prd,
+        )
+        self.assertEqual(verdict.drift, ("docs",), "docs is only implied, never a leaf")
+        self.assertNotIn(".", verdict.drift)
+
+    def test_absolute_tree_directory_terminates(self) -> None:
+        prd = _prd_text(1, "/tmp/src/\n└── a.py")
+        self.assertEqual(
+            _bounded(policy.prd_modules, prd),
+            (("/tmp/src",), ("/tmp/src/a.py",)),
+        )
+        state = _state_with_files("x.md", [["/tmp/src/a.py"]])
+        verdict = _bounded(policy.plan_expansion, state, prd)
+        self.assertEqual(verdict.drift, ())
+        self.assertEqual(verdict.unfiled, 0)
+
+    def test_one_character_directory_is_still_a_leaf(self) -> None:
+        modules = _bounded(policy.prd_modules, _prd_text(1, "a/\n└── x.py"))
+        self.assertEqual(modules, (("a",), ("a/x.py",)), "climb to the root")
+
+    def test_task_paths_are_normalized_before_coverage(self) -> None:
+        prd = _prd_text(2, _NESTED_TREE)
+        dotted = _state_with_files("x.md", [["./src/auth/a.py"]])
+        self.assertEqual(policy.plan_expansion(dotted, prd).drift, (), "./ is dropped")
+        climbed = _state_with_files("x.md", [["src/auth/../payments/a.py"]])
+        self.assertEqual(
+            policy.plan_expansion(climbed, prd).drift,
+            ("src/payments",),
+            "a/../b resolves to b before coverage, and drift names the resolved parent",
+        )
+        two_climbs = _state_with_files("x.md", [["src/a/b/../../auth/x.py"]])
+        self.assertEqual(policy.plan_expansion(two_climbs, prd).drift, ())
+
+    def test_tree_entries_are_normalized(self) -> None:
+        prd = _prd_text(1, "./src/\n└── a.py")
+        self.assertEqual(policy.prd_modules(prd), (("src",), ("src/a.py",)))
+        verdict = policy.plan_expansion(_state_with_files("x.md", [["src/x.py"]]), prd)
+        self.assertEqual(verdict.drift, ())
+        inner = _prd_text(1, "src/./auth/\n└── x.py")
+        self.assertEqual(
+            policy.prd_modules(inner),
+            (("src/auth",), ("src/auth/x.py",)),
+            "a ./ inside an entry is dropped too, not only a leading one",
+        )
+
+    def test_non_dict_task_entry_counts_as_unfiled_not_a_crash(self) -> None:
+        strays = ["stray", 42, None, []]
+        state = {
+            "prd": "x.md",
+            "tasks": [*strays, {"id": "2", "name": "t", "files": ["src/a.py"]}],
+        }
+        verdict = policy.plan_expansion(state, _prd_text(1, _SRC_TREE))
+        self.assertEqual(verdict.unfiled, 4, "each stray type counts as unfiled")
+        self.assertEqual(verdict.planned, 5, "stray entries still count as planned")
+        self.assertEqual(verdict.drift, ())
+        sections = _sections(verdict.note)
+        self.assertEqual(
+            [heading for heading, _body in sections],
+            ["src (listed)", "(no files declared)"],
+        )
+        bodies = dict(sections)
+        self.assertEqual(
+            [line for line in bodies["src (listed)"].splitlines() if line],
+            ["- 2 t: src/a.py"],
+        )
+        self.assertEqual(
+            [line for line in bodies["(no files declared)"].splitlines() if line],
+            ["- 0 ", "- 1 ", "- 2 ", "- 3 "],
+            "a stray is labelled `<index> <empty name>`, one line per stray",
+        )
+
+    def test_files_list_of_non_strings_counts_as_unfiled(self) -> None:
+        state = {
+            "prd": "x.md",
+            "tasks": [{"id": "3", "name": "junk", "files": [None, 3]}],
+        }
+        verdict = policy.plan_expansion(state, _prd_text(1, _SRC_TREE))
+        self.assertEqual(verdict.unfiled, 1)
+        self.assertEqual(verdict.planned, 1)
+        self.assertEqual(verdict.drift, ())
+        self.assertEqual(verdict.reasons, ())
+        sections = _sections(verdict.note)
+        self.assertEqual(
+            [heading for heading, _body in sections],
+            ["(no files declared)"],
+        )
+        self.assertEqual(
+            [line for line in sections[0][1].splitlines() if line],
+            ["- 3 junk"],
+        )
+
+    def test_junk_items_in_files_are_ignored_not_disqualifying(self) -> None:
+        state = _state_with_files("x.md", [["lib/x.py", "other/y.py", None]])
+        verdict = policy.plan_expansion(state, _prd_text(1, _SRC_TREE))
+        self.assertEqual(verdict.unfiled, 0, "two real paths make a filed task")
+        self.assertEqual(verdict.drift, ("lib", "other"))
+        self.assertEqual(verdict.reasons, ("module_drift",))
+        self.assertTrue(verdict.stall)
+        sections = _sections(verdict.note)
+        self.assertEqual(
+            [heading for heading, _body in sections],
+            ["lib (UNLISTED)", "other (UNLISTED)"],
+            "the junk item earns neither a module section nor an unfiled section",
+        )
+        self.assertEqual(
+            [line for line in dict(sections)["lib (UNLISTED)"].splitlines() if line],
+            ["- t0 task 0: lib/x.py"],
         )
 
 
