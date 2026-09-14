@@ -1,5 +1,5 @@
 """cli/loop_act.py - the drained-path helpers and the act branches of the loop
-driver, moved from `loop.py` by PRD 00192.
+driver (PRD 00192).
 
 Allowed imports: stdlib, `cli.pause`, `cli.routing`, `cli.runner`,
 `cli.watchdog`, `cli.loop_decision`; never `cli.loop` or `cli.loop_gates`.
