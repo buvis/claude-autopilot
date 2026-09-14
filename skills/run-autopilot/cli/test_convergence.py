@@ -317,6 +317,8 @@ class ReadCycleTests(ConvergenceFixtureCase):
         self.assertEqual(convergence.read_cycle(self.reviews, PRD, 1), unparsed)
         _write(self.review_path("1"), "lorem ipsum dolor sit amet " * 10 + "\n")
         self.assertEqual(convergence.read_cycle(self.reviews, PRD, 1), unparsed)
+
+    def test_partially_parsed_review_file_keeps_its_counts(self) -> None:
         # A parsed review with no consolidated table is a clean converged
         # cycle: the zero dict is right there.
         _write(
