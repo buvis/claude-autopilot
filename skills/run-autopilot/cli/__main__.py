@@ -705,9 +705,14 @@ def _deferred_items(path: Path) -> list | None:
         return None
 
 
-def _stall_range(deferred_items: list | None, prd: str, site: str) -> dict | None:
-    """The last `stall` record for `prd` at `site` carrying a `commit_range`,
-    or None: it feeds the stalled section's custody line (PRD 00187)."""
+def _ranged_stall_record(
+    deferred_items: list | None,
+    prd: str,
+    site: str,
+) -> dict | None:
+    """The whole last `stall` record for `prd` at `site` that carries a
+    `commit_range`, or None: its range and count feed the stalled section's
+    custody line (PRD 00187)."""
     matches = [
         i
         for i in deferred_items or []
@@ -779,7 +784,7 @@ def _select_report_block(
             print("autopilot: --stalled needs --site and --detail", file=sys.stderr)
             return 1
         prd = str(loaded.get("prd", ""))
-        stall = _stall_range(deferred_items, prd, args.site) or {}
+        stall = _ranged_stall_record(deferred_items, prd, args.site) or {}
         block = render_report.stalled_section(
             prd,
             args.site,

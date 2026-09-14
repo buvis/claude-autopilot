@@ -431,14 +431,7 @@ def _record_stall_custody(
     )
     if rc is not None:
         return None, rc
-    entry = {
-        "prd": prd,
-        "batch": current["batch"]["id"],
-        "op_id": op_id,
-        "detail": detail,
-        **capture,
-    }
-    return entry, None
+    return custody.marker_entry(prd, current["batch"]["id"], op_id, detail, capture), None
 
 
 def _commit_stall(

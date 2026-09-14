@@ -280,6 +280,12 @@ def migration_records(state: dict, op_id: str, prd: str) -> list[dict]:
     ]
 
 
+def marker_entry(prd: str, batch: str, op_id: str, detail: str, capture: dict) -> dict:
+    """PURE. The one custody marker entry: the four scalars plus every
+    capture key copied verbatim, as a new dict."""
+    return {"prd": prd, "batch": batch, "op_id": op_id, "detail": detail, **capture}
+
+
 def record_critical(
     *,
     autopilot_dir: Path,
@@ -296,7 +302,7 @@ def record_critical(
     write is idempotent. Returns None on success, 9 on any failure with
     the reason on stderr."""
     batch_id = current["batch"]["id"]
-    entry = {"prd": prd, "batch": batch_id, "op_id": op_id, "detail": detail, **capture}
+    entry = marker_entry(prd, batch_id, op_id, detail, capture)
     marker_path = (autopilot_dir / MARKER_NAME).absolute()
     hold_path = prds_dir / "hold" / prd
     prefix = _notice_prefix(batch_id)
