@@ -775,6 +775,7 @@ def _select_report_block(
     now: str,
     batch_id: str,
     rows: list,
+    event_rows: list,
     deferred_items: list | None,
 ) -> tuple[str, str | None, list[dict]] | int:
     """The report block for the requested form as (block, dedupe_heading,
@@ -802,12 +803,17 @@ def _select_report_block(
     json_items = [
         i for i in deferred_items or [] if isinstance(i, dict) and i.get("prd") == prd
     ]
+    key = {"event": "review_converged", "prd": prd, "batch": batch_id}
+    convergence = next(
+        (r for r in event_rows if all(r.get(k) == v for k, v in key.items())), None
+    )
     block = render_report.prd_section(
         loaded,
         prd_rows,
         now,
         json_items,
         autopilot_dir / "ledger" / "attempts.jsonl",
+        convergence=convergence,
     )
     missing = render_report.missing_from_report(block, json_items, prd)
     return block, f"## {prd}", missing
@@ -826,11 +832,12 @@ def _render_report_surface(
         else autopilot_dir / "loop-metrics.jsonl"
     )
     rows = render_metrics.load_rows(metrics_path)
+    event_rows = render_metrics.load_event_rows(metrics_path)
     deferred_items = _deferred_items(
         autopilot_dir / "deferred" / f"{batch_id}-deferred.json"
     )
     selected = _select_report_block(
-        args, loaded, autopilot_dir, now, batch_id, rows, deferred_items
+        args, loaded, autopilot_dir, now, batch_id, rows, event_rows, deferred_items
     )
     if isinstance(selected, int):
         return selected

@@ -7,8 +7,10 @@ functions the CLI appends to `reports/{batch_id}-report.md`:
 
 - `header(batch_id, started)` - written once at file creation.
 - `prd_section(state, metrics_rows, completed, json_items=None,
-  attempts_ledger=None)` - the
-  per-PRD section phase-done Phase 9 step 7 appends: decisions tables,
+  attempts_ledger=None, *, convergence=None)` - the
+  per-PRD section phase-done Phase 9 step 7 appends: the `- Run
+  conditions:` line from the PRD's review_converged row
+  (`run_conditions_line`, loud when none matches), decisions tables,
   doubt rubric verdicts (source-tagged when dual-reviewer, PRD 00038), loop
   metrics (PRD 00013/00018), implementor mix (PRD 00019/00065/00075/00077),
   and the Deferred to Batch End table over the union of
@@ -508,10 +510,20 @@ def _ledger_rows(state: dict, path: Path | None) -> list[dict]:
     return rows
 
 
-def _tasks_line(state: dict, record: dict | None) -> str:
+def _tasks_line(
+    state: dict, record: dict | None, convergence: dict | None = None
+) -> str:
     """The `- Tasks:` count: the closing batch record's counts when one
-    matches, else the live `state.tasks` statuses, else `?/?` - never the
-    stale state-root fields the batch drain wipes to 0."""
+    matches and reads above 0/0, else the review_converged row's
+    completed/planned, else the live `state.tasks` statuses, else `?/?` -
+    never the stale state-root fields the batch drain wipes to 0."""
+    zero = record is None or not (
+        int(record.get("tasks_completed") or 0) or int(record.get("tasks_total") or 0)
+    )
+    row = convergence or {}
+    done, planned = row.get("tasks_completed"), row.get("tasks_planned")
+    if zero and (done is not None or planned is not None):
+        return f"{'?' if done is None else done}/{'?' if planned is None else planned}"
     if record is not None:
         return f"{record.get('tasks_completed', '?')}/{record.get('tasks_total', '?')}"
     tasks = state.get("tasks") or []
@@ -521,17 +533,53 @@ def _tasks_line(state: dict, record: dict | None) -> str:
     return f"{done}/{len(tasks)}"
 
 
+def run_conditions_line(row: dict) -> str:
+    """The text after `- Run conditions: ` for a review_converged row
+    (convergence.build_row): `?` stands in for null fields only, so a 0
+    cap, count or task number renders as 0."""
+    cap = row.get("rework_cap")
+    count = row.get("cycles_to_converge")
+    noun = "cycle" if count == 1 else "cycles"
+    segments = [
+        f"cap {'?' if cap is None else cap}",
+        f"{'?' if count is None else count} {noun}, {row.get('outcome')}",
+    ]
+    for cycle in row.get("cycles") or []:
+        reviewers = cycle.get("reviewers")
+        findings = cycle.get("findings") or {}
+        counts = [findings.get(k) for k in ("critical", "high", "medium", "low")]
+        segments.append(
+            f"c{cycle.get('cycle')} "
+            f"{'?' if reviewers is None else ','.join(reviewers)} "
+            + "/".join("?" if c is None else str(c) for c in counts)
+        )
+    if row.get("cycles"):
+        segments[-1] += " (crit/high/med/low)"
+    planned = row.get("tasks_planned")
+    in_prd = row.get("tasks_in_prd")
+    segments += [
+        f"build {','.join(row.get('build_models') or []) or '?'}",
+        f"tiers {','.join(row.get('attempt_tiers') or []) or '?'}",
+        f"tasks {'?' if planned is None else planned} planned, "
+        f"{'?' if in_prd is None else in_prd} in PRD",
+    ]
+    return " · ".join(segments)
+
+
 def prd_section(
     state: dict,
     metrics_rows: list[dict],
     completed: str,
     json_items: list[dict] | None = None,
     attempts_ledger: Path | None = None,
+    *,
+    convergence: dict | None = None,
 ) -> str:
     """The completed-PRD section appended at Phase 9 step 7. `json_items`
     are the batch deferred JSON's items for this PRD (already filtered by
     the caller); the Deferred to Batch End table renders their union with
-    `state.deferred_decisions`. `attempts_ledger` feeds `_ledger_rows`."""
+    `state.deferred_decisions`. `attempts_ledger` feeds `_ledger_rows`;
+    `convergence` is this PRD's review_converged event row, or None."""
     prd = str(state.get("prd", ""))
     autonomous = [
         d for d in state.get("autonomous_decisions") or [] if isinstance(d, dict)
@@ -546,12 +594,16 @@ def prd_section(
     # `cycle` is present until the per-PRD reset wipes it; after that the
     # closing batch record carries the count (statectl._completed_prd_record).
     cycles = state["cycle"] if "cycle" in state else (record or {}).get("cycles", "?")
+    conditions = "no review_converged row"
+    if convergence is not None:
+        conditions = run_conditions_line(convergence)
     lines = [
         f"## {prd}",
         "",
         f"- Completed: {completed}",
         f"- Cycles: {cycles}",
-        f"- Tasks: {_tasks_line(state, record)}",
+        f"- Tasks: {_tasks_line(state, record, convergence)}",
+        f"- Run conditions: {conditions}",
         "",
     ]
     lines += _assumptions(autonomous)
