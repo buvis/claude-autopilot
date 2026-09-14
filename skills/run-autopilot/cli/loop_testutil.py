@@ -1,7 +1,5 @@
-"""Shared harness for cli/test_loop*.py, moved out of test_loop.py by
-PRD 00192: the fake clock, the scripted spawn, the state/log writers,
-make_loop, and the autouse fixture that keeps loop runs hermetic. Not a
-test module (no test_ prefix), so nothing here is collected on its own.
+"""Shared harness for cli/test_loop*.py. Not a test module (no test_
+prefix), so nothing here is collected on its own.
 """
 
 from __future__ import annotations
