@@ -78,6 +78,7 @@ def _sample_state(**overrides) -> dict:
         },
         "repo_root": "/repo",
         "pause_on_ambiguity": True,
+        "plan_expansion_override": True,
         "review_lenses": {"consensus": "done"},
         "contract_card": "step 3, invariant X",
         "needs_attention": True,
@@ -154,11 +155,17 @@ class PerPrdResetFieldsTest(unittest.TestCase):
             "repo_root",
             "git_dir",
             "pause_on_ambiguity",
+            "plan_expansion_override",
             "review_lenses",
             "contract_card",
             "needs_attention",
         }
         self.assertEqual(set(records.PER_PRD_RESET_FIELDS), expected)
+        self.assertEqual(
+            len(records.PER_PRD_RESET_FIELDS),
+            len(expected),
+            "a duplicated entry must not hide behind the set comparison",
+        )
 
 
 class ResetPrdFieldsTest(unittest.TestCase):

@@ -43,6 +43,7 @@ class DefaultsTests(unittest.TestCase):
         fields, _warnings = frontmatter.parse(_block("catchup: skip"))
         self.assertNotIn("design_gate", fields)
         self.assertNotIn("pause_on_ambiguity", fields)
+        self.assertNotIn("plan_expansion_override", fields)
 
 
 class RecognizedValueTests(unittest.TestCase):
@@ -82,6 +83,55 @@ class RecognizedValueTests(unittest.TestCase):
             with self.subTest(value=value):
                 other, _ = frontmatter.parse(_block(f"pause_on_ambiguity: {value}"))
                 self.assertNotIn("pause_on_ambiguity", other)
+
+    def test_plan_expansion_recognized_only_at_allow(self) -> None:
+        fields, warnings = frontmatter.parse(_block("plan_expansion: allow"))
+        self.assertIs(fields["plan_expansion_override"], True)
+        self.assertEqual(
+            fields,
+            {**frontmatter.defaults(), "plan_expansion_override": True},
+            "the opt-in adds exactly one state key and nothing else",
+        )
+        self.assertEqual(warnings, [])
+        # The negatives cover a substring match (disallow, allowed, allow now),
+        # a case-folded match (ALLOW, Allow) and a bare `plan_expansion:` line.
+        for value in (
+            "true",
+            "yes",
+            "no",
+            "ALLOW",
+            "Allow",
+            "false",
+            "disallow",
+            "allowed",
+            "allow now",
+            "",
+        ):
+            with self.subTest(value=value):
+                other, no_warnings = frontmatter.parse(
+                    _block(f"plan_expansion: {value}"),
+                )
+                self.assertNotIn("plan_expansion_override", other)
+                self.assertEqual(
+                    no_warnings,
+                    [],
+                    "an unrecognized opt-in is not a warning",
+                )
+
+    def test_plan_expansion_only_counts_inside_a_well_formed_block(self) -> None:
+        fields, warnings = frontmatter.parse("---\nplan_expansion: allow\n\n# A PRD\n")
+        self.assertEqual(
+            fields,
+            frontmatter.defaults(),
+            "an opt-in inside an unterminated block must not be half-applied",
+        )
+        self.assertEqual(warnings, [frontmatter.MALFORMED_WARNING])
+
+        other, no_warnings = frontmatter.parse(
+            _block("title: x") + "\nadd plan_expansion: allow to the frontmatter\n",
+        )
+        self.assertNotIn("plan_expansion_override", other)
+        self.assertEqual(no_warnings, [])
 
     def test_unknown_keys_are_ignored_without_warning(self) -> None:
         # default_model belongs to /plan-tasks and is re-read at Phase 6;
