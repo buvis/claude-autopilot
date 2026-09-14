@@ -84,6 +84,8 @@ def read_journal(autopilot_dir: Path) -> list[dict]:
             ) from err
         if not isinstance(row, dict):
             raise CustodyError(f"custody journal line {number} is not an object")
+        if not isinstance(row.get("op_id"), str):
+            raise CustodyError(f"custody journal line {number} has no string op_id")
         rows.append(row)
     return rows
 
@@ -188,6 +190,8 @@ def load_marker(path: Path) -> list[dict]:
     entries = raw.get("entries") if isinstance(raw, dict) else None
     if not isinstance(entries, list) or not all(isinstance(e, dict) for e in entries):
         raise CustodyError(f'custody marker is not {{"entries": [...]}}: {path}')
+    if not all(isinstance(e.get("op_id"), str) for e in entries):
+        raise CustodyError(f"custody marker entry has no string op_id: {path}")
     return entries
 
 
@@ -244,11 +248,12 @@ def _insert_notice(lines: list[str], notice: str) -> list[str]:
 
 def refresh_hold_prd(text: str, entry: dict) -> str:
     """PURE. Upsert the custody frontmatter keys and this batch's notice
-    line; every other byte of `text` is preserved. Idempotent."""
+    line (the detail's whitespace runs collapsed to one space so it stays
+    one line); every other byte of `text` is preserved. Idempotent."""
     lines = _refresh_block(text.split("\n"), entry)
     prefix = _notice_prefix(entry["batch"])
     notice = (
-        f"{prefix} {entry['detail']} Commits {entry['commit_range']} "
+        f"{prefix} {' '.join(entry['detail'].split())} Commits {entry['commit_range']} "
         f"({entry['commits']}) are live on {entry['branch']}. "
         "Resolve with autopilot custody resolve."
     )
@@ -288,7 +293,8 @@ def record_critical(
     """do_stall step 4b under marker_lock: migration records, marker upsert,
     journal row, git-config locator, hold-PRD refresh (the last durable
     write), then one notification when this batch's notice was new. Every
-    write is idempotent. Returns None on success, 9 on any failure."""
+    write is idempotent. Returns None on success, 9 on any failure with
+    the reason on stderr."""
     batch_id = current["batch"]["id"]
     entry = {"prd": prd, "batch": batch_id, "op_id": op_id, "detail": detail, **capture}
     marker_path = (autopilot_dir / MARKER_NAME).absolute()
@@ -306,7 +312,8 @@ def record_critical(
             text = hold_path.read_text(encoding="utf-8")
             created = not any(line.startswith(prefix) for line in text.splitlines())
             hold_path.write_text(refresh_hold_prd(text, entry), encoding="utf-8")
-    except (OSError, ValueError, CustodyError):
+    except (OSError, ValueError, CustodyError) as err:
+        print(f"autopilot: cap_critical custody write failed: {err}", file=sys.stderr)
         return 9
     if created:
         notify_out.notify(
