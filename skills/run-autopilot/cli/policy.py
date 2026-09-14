@@ -21,6 +21,8 @@ Exposes:
     prd_modules(prd_text) -> (leaf_dirs, listed_files) | None
         Leaf directories and listed files from the PRD's fenced
         `### Repository Structure` tree; None when there is no such tree.
+        A file entry's implicit ancestors are grouping-only: they demote a
+        directory above them from leaf, never grant coverage themselves.
     plan_expansion(state, prd_text, ceiling=LOOP_TASK_CEILING) -> Verdict
         PURE. Fires task_count, expansion and module_drift in that order;
         `plan_expansion: allow` in the PRD frontmatter skips every rule
@@ -107,9 +109,20 @@ def _tree_block(prd_text: str) -> list[str] | None:
     return None
 
 
-def _tree_entries(block: list[str]) -> tuple[set[str], set[str]]:
-    """(recorded dirs, listed files) from the ASCII tree, one entry per line."""
+def _ancestors(path: str) -> list[str]:
+    """`path` and every directory above it, stopping before "", "." and "/"."""
+    out: list[str] = []
+    while path and path not in (".", "/"):
+        out.append(path)
+        path = posixpath.dirname(path)
+    return out
+
+
+def _tree_entries(block: list[str]) -> tuple[set[str], set[str], set[str]]:
+    """(explicit dirs, implicit file ancestors, listed files) from the ASCII
+    tree, one entry per line, each path normalized before it is recorded."""
     dirs: set[str] = set()
+    implicit: set[str] = set()
     files: set[str] = set()
     stack: list[tuple[int, str]] = []
     for raw in block:
@@ -124,24 +137,27 @@ def _tree_entries(block: list[str]) -> tuple[set[str], set[str]]:
             stack.pop()
         path = posixpath.join(stack[-1][1], name) if stack else name
         if not path.endswith("/"):
+            path = posixpath.normpath(path)
             files.add(path)
+            implicit.update(_ancestors(posixpath.dirname(path)))
             continue
-        path = path.rstrip("/")
+        path = posixpath.normpath(path.rstrip("/"))
         stack.append((depth, path))
-        while path and path != ".":
-            dirs.add(path)
-            path = posixpath.dirname(path)
-    return dirs, files
+        dirs.update(_ancestors(path))
+    return dirs, implicit, files
 
 
 def prd_modules(prd_text: str) -> Modules | None:
     """(sorted leaf dirs, sorted listed files) from the PRD's Repository
-    Structure tree, or None when the PRD carries no such fenced tree."""
+    Structure tree, or None when the PRD carries no such fenced tree. A leaf
+    is an explicit directory with no recorded descendant; a file entry's
+    implicit ancestors are grouping-only, so they demote but never grant."""
     block = _tree_block(prd_text)
     if block is None:
         return None
-    dirs, files = _tree_entries(block)
-    leaves = [d for d in dirs if not any(o.startswith(d + "/") for o in dirs)]
+    dirs, implicit, files = _tree_entries(block)
+    known = dirs | implicit
+    leaves = [d for d in dirs if not any(o.startswith(d + "/") for o in known)]
     return tuple(sorted(leaves)), tuple(sorted(files))
 
 
@@ -158,24 +174,29 @@ def _group_tasks(
     tasks: list, modules: Modules
 ) -> tuple[dict[str, list[str]], list[str], set[str]]:
     """Note lines per module in task order, the unfiled task lines, and the
-    set of modules holding at least one uncovered file."""
+    set of modules holding at least one uncovered file. A non-dict task, or
+    one whose `files` holds no usable path, is unfiled."""
     by_module: dict[str, list[str]] = {}
     unfiled: list[str] = []
     uncovered: set[str] = set()
     for index, task in enumerate(tasks):
-        label = f"{task.get('id', index)} {task.get('name', '')}"
-        files = task.get("files")
-        if not isinstance(files, list) or not files:
-            unfiled.append(f"- {label}")
-            continue
+        entry = task if isinstance(task, dict) else {}
+        label = f"{entry.get('id', index)} {entry.get('name', '')}"
+        files = entry.get("files")
         per_module: dict[str, list[str]] = {}
-        for path in files:
-            if not isinstance(path, str):
+        for item in files if isinstance(files, list) else []:
+            if not isinstance(item, str):
+                continue
+            path = posixpath.normpath(item)
+            if path == ".":
                 continue
             module, covered = _file_module(path, modules)
             per_module.setdefault(module, []).append(path)
             if not covered:
                 uncovered.add(module)
+        if not per_module:
+            unfiled.append(f"- {label}")
+            continue
         for module, paths in per_module.items():
             by_module.setdefault(module, []).append(f"- {label}: {', '.join(paths)}")
     return by_module, unfiled, uncovered
