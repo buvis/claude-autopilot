@@ -35,14 +35,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from cli import records
 
 
-def _sample_state(**overrides) -> dict:
-    """A realistic state dict exercising every PER_PRD_RESET_FIELDS member,
-    every RESET_BY_ASSIGNMENT member (with non-default values, to prove the
-    reset overwrites rather than merely defaults), and a representative set
-    of NOT_RESET members including a fully-populated `batch`.
-    """
-    base = {
-        # PER_PRD_RESET_FIELDS members
+def _per_prd_reset_members() -> dict:
+    """Every PER_PRD_RESET_FIELDS member, populated."""
+    return {
         "tasks": [{"id": "t1", "name": "x", "status": "completed"}],
         "task_aborts": [
             {
@@ -82,7 +77,12 @@ def _sample_state(**overrides) -> dict:
         "review_lenses": {"consensus": "done"},
         "contract_card": "step 3, invariant X",
         "needs_attention": True,
-        # RESET_BY_ASSIGNMENT members, given non-default values
+    }
+
+
+def _reset_by_assignment_members() -> dict:
+    """Every RESET_BY_ASSIGNMENT member, given a non-default value."""
+    return {
         "phase": "review",
         "next_phase": "review",
         "phases_completed": ["review"],
@@ -90,7 +90,14 @@ def _sample_state(**overrides) -> dict:
         "tasks_total": 6,
         "tasks_completed": 6,
         "replan_count": 2,
-        # NOT_RESET members
+    }
+
+
+def _not_reset_members() -> dict:
+    """A representative set of NOT_RESET members, with a fully-populated
+    `batch`.
+    """
+    return {
         "prd": "00004-feature-x.md",
         "catchup_mode": "skipped",
         "rework_cap": 3,
@@ -129,8 +136,20 @@ def _sample_state(**overrides) -> dict:
             "parks_consecutive": 0,
         },
     }
-    base.update(overrides)
-    return base
+
+
+def _sample_state(**overrides) -> dict:
+    """A realistic state dict exercising every PER_PRD_RESET_FIELDS member,
+    every RESET_BY_ASSIGNMENT member (with non-default values, to prove the
+    reset overwrites rather than merely defaults), and a representative set
+    of NOT_RESET members including a fully-populated `batch`.
+    """
+    return {
+        **_per_prd_reset_members(),
+        **_reset_by_assignment_members(),
+        **_not_reset_members(),
+        **overrides,
+    }
 
 
 class PerPrdResetFieldsTest(unittest.TestCase):
