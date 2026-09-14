@@ -296,6 +296,20 @@ class IsPushLikeTests(unittest.TestCase):
             "sudo -u bob git push",
             "nice -n 10 git push",
             "env -u VAR git push",
+            # Unmemorisable operands: the rule must parse, not look tails up.
+            f"sudo -u {_NONCE} git push",
+            f"nice -n {int(_NONCE[:4], 16)} git push",
+            f"env -u {_NONCE} git push",
+            # Any value-taking option hides the executable, not just -u / -n.
+            "sudo -g git git push",
+            f"sudo --user {_NONCE} git push",
+            "nice --adjustment 10 git push",
+            # The operand spelt `git` must not read as the executable, and the
+            # real executable after it need not be the bare word.
+            "env -u git git push",
+            "sudo -u git git push",
+            "sudo -u git /usr/bin/git push",
+            "env -u git exec git push",
             # Quote-split `push` inside a push-capable executable's argument.
             "eval \"git pu''sh\"",
             "sh -c 'git pu\"\"sh'",
@@ -307,6 +321,10 @@ class IsPushLikeTests(unittest.TestCase):
         for segment in (
             "git push",
             "echo 'git' 'push'",
+            # A flag-free wrapper is looked through: `echo` / `mytool` is the
+            # executable, and neither is git nor a shell.
+            "command echo 'git' 'push'",
+            "nohup mytool git push",
             "echo push",
             "git log push",
             "git -c push=1 status",
