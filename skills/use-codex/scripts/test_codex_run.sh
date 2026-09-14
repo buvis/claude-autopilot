@@ -48,16 +48,21 @@ DASH_PROMPT_FILE="$STUBDIR/dash_prompt.txt"
 printf '%s\n' "- [ ] item" > "$DASH_PROMPT_FILE"
 run_codex_run -f "$DASH_PROMPT_FILE" > /dev/null 2>/dev/null < /dev/null
 
+read_argv_array "$STUB_ARGV_FILE"
+DASH_PLAIN_LAST_IDX=$(( ${#ARGV_ARR[@]} - 1 ))
+
 # 2b. Leading-dash prompt file, plain path: codex child stdin is the file's
 #     bytes, verbatim -- never argv-parsed as a flag. DASH_PROMPT_FILE itself
 #     ends in a trailing newline (printf's own '\n'), so this same byte-exact
 #     diff also proves trailing-newline preservation -- folds in case 44
-#     (no longer a separate invocation).
-if diff -q "$DASH_PROMPT_FILE" "$STUB_STDIN_FILE" >/dev/null 2>&1; then
-    PASS "-f PROMPTFILE with a leading-dash first line, plain path: codex child stdin is the file's bytes verbatim, trailing newline included"
+#     (no longer a separate invocation). Also checks the final argv token is
+#     the literal "-" stdin marker.
+if diff -q "$DASH_PROMPT_FILE" "$STUB_STDIN_FILE" >/dev/null 2>&1 && \
+   [ "${ARGV_ARR[$DASH_PLAIN_LAST_IDX]:-}" = "-" ]; then
+    PASS "-f PROMPTFILE with a leading-dash first line, plain path: codex child stdin is the file's bytes verbatim, trailing newline included, and the final argv token is '-'"
 else
-    FAIL "-f PROMPTFILE with a leading-dash first line, plain path: codex child stdin is the file's bytes verbatim, trailing newline included" \
-         "stub captured stdin: $(cat "$STUB_STDIN_FILE" 2>/dev/null | tr '\n' '|'); expected file contents: $(cat "$DASH_PROMPT_FILE" 2>/dev/null | tr '\n' '|')"
+    FAIL "-f PROMPTFILE with a leading-dash first line, plain path: codex child stdin is the file's bytes verbatim, trailing newline included, and the final argv token is '-'" \
+         "stub captured stdin: $(cat "$STUB_STDIN_FILE" 2>/dev/null | tr '\n' '|'); expected file contents: $(cat "$DASH_PROMPT_FILE" 2>/dev/null | tr '\n' '|') -- argv: $(tr '\n' ' ' < "$STUB_ARGV_FILE")"
 fi
 
 # 2c. Leading-dash prompt file, json path: same -f PROMPTFILE delivery, but
@@ -74,11 +79,13 @@ run_codex_run --emit-thread-id "$DASH_JSON_THREAD_ID_FILE" -o "$DASH_JSON_OUTFIL
 
 read_argv_array "$STUB_ARGV_FILE"
 DASH_JSON_LAST_IDX=$(( ${#ARGV_ARR[@]} - 1 ))
-if diff -q "$DASH_PROMPT_FILE" "$STUB_STDIN_FILE" >/dev/null 2>&1 && \
+if grep -qxF -- "--json" "$STUB_ARGV_FILE" && \
+   argv_has_pair "$STUB_ARGV_FILE" "--output-last-message" "$DASH_JSON_OUTFILE" && \
+   diff -q "$DASH_PROMPT_FILE" "$STUB_STDIN_FILE" >/dev/null 2>&1 && \
    [ "${ARGV_ARR[$DASH_JSON_LAST_IDX]:-}" = "-" ]; then
-    PASS "-f PROMPTFILE with a leading-dash first line, json path: codex child stdin is the file's bytes verbatim and the final argv token is '-'"
+    PASS "-f PROMPTFILE with a leading-dash first line, json path: argv carries --json and --output-last-message <-o target>, codex child stdin is the file's bytes verbatim and the final argv token is '-'"
 else
-    FAIL "-f PROMPTFILE with a leading-dash first line, json path: codex child stdin is the file's bytes verbatim and the final argv token is '-'" \
+    FAIL "-f PROMPTFILE with a leading-dash first line, json path: argv carries --json and --output-last-message <-o target>, codex child stdin is the file's bytes verbatim and the final argv token is '-'" \
          "stub captured stdin: $(cat "$STUB_STDIN_FILE" 2>/dev/null | tr '\n' '|'); expected file contents: $(cat "$DASH_PROMPT_FILE" 2>/dev/null | tr '\n' '|') -- argv: $(tr '\n' ' ' < "$STUB_ARGV_FILE")"
 fi
 
@@ -171,26 +178,18 @@ else
 fi
 
 # 10. stdin guard still applies on the JSON-path codex invocation: the child
-#     stdin is exactly the prompt, never the wrapper's SENTINEL stdin.
-if child_stdin_is_prompt "$THREAD_PROMPT"; then
-    PASS "--emit-thread-id: codex child stdin is exactly the prompt, never the wrapper's stdin"
-else
-    FAIL "--emit-thread-id: codex child stdin is exactly the prompt, never the wrapper's stdin" \
-         "stub captured stdin: $(cat "$STUB_STDIN_FILE" 2>/dev/null | tr '\n' '|'); expected exactly the prompt '$THREAD_PROMPT' with no trace of SENTINEL_STDIN_DATA"
-fi
-
-# 45. --emit-thread-id JSON path: the final argv token is exactly "-" -- the
-#     literal marker that tells codex to read its instructions from stdin.
-#     Folded into this case-3..10 block's own invocation above (no separate
-#     invocation): asserting only that "-" appears somewhere in argv would
-#     also match an unrelated flag value, so this checks the final position.
+#     stdin is exactly the prompt, never the wrapper's SENTINEL stdin. Also
+#     checks the final argv token is exactly "-" -- the literal marker that
+#     tells codex to read its instructions from stdin; asserting only that
+#     "-" appears somewhere in argv would also match an unrelated flag
+#     value, so this checks the final position.
 read_argv_array "$STUB_ARGV_FILE"
 FINALTOK_LAST_IDX=$(( ${#ARGV_ARR[@]} - 1 ))
-if [ "${ARGV_ARR[$FINALTOK_LAST_IDX]:-}" = "-" ]; then
-    PASS "--emit-thread-id: final argv token is the literal '-' stdin marker"
+if child_stdin_is_prompt "$THREAD_PROMPT" && [ "${ARGV_ARR[$FINALTOK_LAST_IDX]:-}" = "-" ]; then
+    PASS "--emit-thread-id: codex child stdin is exactly the prompt, never the wrapper's stdin, and the final argv token is the literal '-' stdin marker"
 else
-    FAIL "--emit-thread-id: final argv token is the literal '-' stdin marker" \
-         "argv: $(tr '\n' ' ' < "$STUB_ARGV_FILE")"
+    FAIL "--emit-thread-id: codex child stdin is exactly the prompt, never the wrapper's stdin, and the final argv token is the literal '-' stdin marker" \
+         "stub captured stdin: $(cat "$STUB_STDIN_FILE" 2>/dev/null | tr '\n' '|'); expected exactly the prompt '$THREAD_PROMPT' with no trace of SENTINEL_STDIN_DATA -- argv: $(tr '\n' ' ' < "$STUB_ARGV_FILE")"
 fi
 
 # =============================================================================

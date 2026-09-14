@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 # Resume-path test harness for codex-run.sh (macOS bash 3.2 compatible), split
-# out of test_codex_run.sh (tests 14-37) to keep that file under the repo's
-# 800-line cap. Sources the same stub-`codex`-binary setup and assert helpers
-# as its sibling from codex_run_test_lib.sh. Stubs the `codex` binary on PATH
-# and asserts on its OBSERVABLE argv/stdin, never on codex-run.sh's internals.
+# out of test_codex_run.sh to keep that file under the repo's 800-line cap.
+# Stubs the `codex` binary on PATH and asserts on its OBSERVABLE argv/stdin.
 set -u
 
 # Shared assert helpers, stub `codex` binary, and run_codex_run() live in
@@ -12,9 +10,8 @@ set -u
 source "$(cd "$(dirname "$0")" && pwd)/codex_run_test_lib.sh"
 
 # =============================================================================
-# --resume-thread <uuid>: resume argv contract. Default permission flags (no -a/-y): resume
-# forces read-only via `-c sandbox_mode=read-only` because `codex exec
-# resume` rejects -s/--sandbox.
+# --resume-thread <uuid>: resume argv contract. Resume forces read-only via
+# `-c sandbox_mode=read-only` since `codex exec resume` rejects -s/--sandbox.
 # =============================================================================
 RESUME_UUID="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 RESUME_PROMPT="analyze the resume case"
@@ -72,11 +69,7 @@ else
 fi
 
 # =============================================================================
-# --resume-thread <uuid> -o OUT, resume path: -f PROMPTFILE with a
-# leading-dash first line delivered via the resume argv shape instead of a
-# plain string -- codex child stdin is the file's bytes verbatim, and the
-# final argv token is still the literal "-" stdin marker, never argv-parsed
-# as a flag.
+# -f PROMPTFILE with a leading-dash first line, resume path.
 # =============================================================================
 DASH_PROMPT_FILE="$STUBDIR/dash_prompt.txt"
 printf '%s\n' "- [ ] item" > "$DASH_PROMPT_FILE"
@@ -88,11 +81,12 @@ run_codex_run --resume-thread "$RESUME_UUID" -o "$DASH_RESUME_OUTFILE" -f "$DASH
 
 read_argv_array "$STUB_ARGV_FILE"
 DASH_RESUME_LAST_IDX=$(( ${#ARGV_ARR[@]} - 1 ))
-if diff -q "$DASH_PROMPT_FILE" "$STUB_STDIN_FILE" >/dev/null 2>&1 && \
+if [ "${ARGV_ARR[0]:-}" = "exec" ] && [ "${ARGV_ARR[1]:-}" = "resume" ] && [ "${ARGV_ARR[2]:-}" = "$RESUME_UUID" ] && \
+   diff -q "$DASH_PROMPT_FILE" "$STUB_STDIN_FILE" >/dev/null 2>&1 && \
    [ "${ARGV_ARR[$DASH_RESUME_LAST_IDX]:-}" = "-" ]; then
-    PASS "-f PROMPTFILE with a leading-dash first line, resume path: codex child stdin is the file's bytes verbatim and the final argv token is '-'"
+    PASS "-f PROMPTFILE with a leading-dash first line, resume path: argv starts with 'exec resume <uuid>', codex child stdin is the file's bytes verbatim and the final argv token is '-'"
 else
-    FAIL "-f PROMPTFILE with a leading-dash first line, resume path: codex child stdin is the file's bytes verbatim and the final argv token is '-'" \
+    FAIL "-f PROMPTFILE with a leading-dash first line, resume path: argv starts with 'exec resume <uuid>', codex child stdin is the file's bytes verbatim and the final argv token is '-'" \
          "stub captured stdin: $(cat "$STUB_STDIN_FILE" 2>/dev/null | tr '\n' '|'); expected file contents: $(cat "$DASH_PROMPT_FILE" 2>/dev/null | tr '\n' '|') -- argv: $(tr '\n' ' ' < "$STUB_ARGV_FILE")"
 fi
 
@@ -252,9 +246,8 @@ else
 fi
 
 # =============================================================================
-# --emit-thread-id THREADFILE -o OUT (JSON path, no resume) where codex
-# exits non-zero: codex-run.sh's exit code must equal codex's (regression
-# lock for the pipefail exit-capture idiom; may already PASS today).
+# Fresh JSON path (no resume) where codex exits non-zero: codex-run.sh's exit
+# code must equal codex's (pipefail exit-capture regression lock).
 # =============================================================================
 FRESHFAIL_THREAD_ID_FILE="$STUBDIR/freshfail_thread_id.out"
 FRESHFAIL_OUTFILE="$STUBDIR/freshfail.out"
@@ -311,11 +304,8 @@ else
 fi
 
 # =============================================================================
-# --resume-thread <uuid> --emit-thread-id THREADFILE: successful resume run
-# (codex exits 0) where the resumed session emits NO thread.started event.
-# Resume doesn't change a session's thread id, so THREADFILE must still end
-# up holding the id we resumed with -- otherwise the next cycle couldn't
-# resume.
+# Successful resume where the resumed session emits NO thread.started event:
+# THREADFILE must still hold the id we resumed with.
 # =============================================================================
 RESUME_NOSTART_OUTFILE="$STUBDIR/resume_nostart.out"
 RESUME_NOSTART_THREAD_ID_FILE="$STUBDIR/resume_nostart_thread_id.out"
@@ -335,12 +325,8 @@ else
 fi
 
 # =============================================================================
-# --resume-thread <uuid> --emit-thread-id THREADFILE -o OUT where the resume
-# invocation FAILS: the failed resume attempt must NOT emit the capture warning
-# "no thread.started event; thread id not captured". The fresh fallback
-# re-captures the id, and run_codex_resume owns the single "resume failed"
-# warning -- otherwise every failed-resume cycle logs a misleading double
-# warning that claims the id was lost when it was actually recovered.
+# Resume + --emit-thread-id where the resume invocation FAILS: no spurious
+# "thread id not captured" warning -- the fresh fallback recovers the id.
 # =============================================================================
 RESUME_EMIT_FAIL_OUTFILE="$STUBDIR/resume_emit_fail.out"
 RESUME_EMIT_FAIL_THREAD_ID_FILE="$STUBDIR/resume_emit_fail_thread_id.out"
@@ -382,13 +368,8 @@ else
 fi
 
 # =============================================================================
-# --resume-thread <uuid> -o OUT: the RESUME argv path must also feed codex's
-# stdin exactly the prompt, never the wrapper's own stdin. The other resume
-# tests feed the wrapper < /dev/null, so they cannot catch a leaked wrapper
-# stdin on the resume path; feed SENTINEL stdin here and assert the stub saw
-# only the prompt (mirrors tests 1 and 10 for the fresh and emit paths). Pins
-# the PRD promise that the guard holds on EVERY codex argv path -- exec AND
-# resume.
+# The resume argv path must also feed codex's stdin exactly the prompt,
+# never the wrapper's own stdin (mirrors tests 1 and 10 for the fresh path).
 # =============================================================================
 RESUME_STDIN_OUTFILE="$STUBDIR/resume_stdin.out"
 RESUME_STDIN_PROMPT="analyze the resume stdin case"
