@@ -720,69 +720,60 @@ def _stall_range(deferred_items: list | None, prd: str, site: str) -> dict | Non
     return matches[-1] if matches else None
 
 
-def _run_render(args: argparse.Namespace) -> int:
-    now = args.now or _utc_now()
+def _render_metrics_surface(args: argparse.Namespace) -> int:
+    if args.metrics is not None:
+        metrics_path = Path(args.metrics)
+    else:
+        metrics_path = _resolve_state_path(args.state).parent / "loop-metrics.jsonl"
+    print(render_metrics.render_metrics(render_metrics.load_rows(metrics_path)))
+    return 0
 
-    if args.surface == "metrics":
-        if args.metrics is not None:
-            metrics_path = Path(args.metrics)
-        else:
-            metrics_path = _resolve_state_path(args.state).parent / "loop-metrics.jsonl"
-        print(render_metrics.render_metrics(render_metrics.load_rows(metrics_path)))
-        return 0
 
-    state_path = _resolve_state_path(args.state)
-    loaded = _load_state_or_exit(state_path)
-    if isinstance(loaded, int):
-        return loaded
-    autopilot_dir = state_path.parent
-
-    if args.surface == "audit":
-        prd = str(loaded.get("prd", ""))
-        if not prd:
-            print("autopilot: render audit needs state.prd", file=sys.stderr)
-            return 2
-        prd_base = prd.removesuffix(".md")
-        # The reviews dir is derived by climbing to the repo root, so a
-        # --state outside a dev/local/autopilot tree must refuse rather than
-        # plant dev/local/reviews in whatever ancestor happens to be there.
-        if autopilot_dir.parts[-3:] != ("dev", "local", "autopilot"):
-            print(
-                f"autopilot: render audit: {autopilot_dir} is not a "
-                "dev/local/autopilot dir; cannot locate the repo's "
-                "dev/local/reviews",
-                file=sys.stderr,
-            )
-            return 2
-        repo_root = autopilot_dir.parents[2]
-        out_path = repo_root / "dev" / "local" / "reviews" / f"{prd_base}-audit.md"
-        started = now
-        if out_path.exists():
-            try:
-                started = (
-                    render_audit.existing_started(out_path.read_text(encoding="utf-8"))
-                    or now
-                )
-            except OSError:
-                pass
-        text = render_audit.render_audit(loaded, started, now)
-        return _emit(text, out_path, args.stdout, append=False)
-
-    # report
-    batch_id = (loaded.get("batch") or {}).get("id")
-    if not batch_id:
-        print("autopilot: render report needs state.batch.id", file=sys.stderr)
+def _render_audit_surface(
+    args: argparse.Namespace, loaded: dict, autopilot_dir: Path, now: str
+) -> int:
+    prd = str(loaded.get("prd", ""))
+    if not prd:
+        print("autopilot: render audit needs state.prd", file=sys.stderr)
         return 2
-    metrics_path = (
-        Path(args.metrics)
-        if args.metrics is not None
-        else autopilot_dir / "loop-metrics.jsonl"
-    )
-    rows = render_metrics.load_rows(metrics_path)
-    deferred_items = _deferred_items(
-        autopilot_dir / "deferred" / f"{batch_id}-deferred.json"
-    )
-    missing: list[dict] = []
+    prd_base = prd.removesuffix(".md")
+    # The reviews dir is derived by climbing to the repo root, so a
+    # --state outside a dev/local/autopilot tree must refuse rather than
+    # plant dev/local/reviews in whatever ancestor happens to be there.
+    if autopilot_dir.parts[-3:] != ("dev", "local", "autopilot"):
+        print(
+            f"autopilot: render audit: {autopilot_dir} is not a "
+            "dev/local/autopilot dir; cannot locate the repo's "
+            "dev/local/reviews",
+            file=sys.stderr,
+        )
+        return 2
+    repo_root = autopilot_dir.parents[2]
+    out_path = repo_root / "dev" / "local" / "reviews" / f"{prd_base}-audit.md"
+    started = now
+    if out_path.exists():
+        try:
+            started = (
+                render_audit.existing_started(out_path.read_text(encoding="utf-8"))
+                or now
+            )
+        except OSError:
+            pass
+    text = render_audit.render_audit(loaded, started, now)
+    return _emit(text, out_path, args.stdout, append=False)
+
+
+def _select_report_block(
+    args: argparse.Namespace,
+    loaded: dict,
+    autopilot_dir: Path,
+    now: str,
+    batch_id: str,
+    rows: list,
+    deferred_items: list | None,
+) -> tuple[str, str | None, list[dict]] | int:
+    """The report block for the requested form as (block, dedupe_heading,
+    missing), or the exit code of a refused --stalled call."""
     if args.stalled:
         if not args.site or not args.detail:
             print("autopilot: --stalled needs --site and --detail", file=sys.stderr)
@@ -797,26 +788,48 @@ def _run_render(args: argparse.Namespace) -> int:
             commit_range=stall.get("commit_range"),
             commits=stall.get("commits"),
         )
-        dedupe_heading = None
-    elif args.summary:
+        return block, None, []
+    if args.summary:
         deferred_count = None if deferred_items is None else len(deferred_items)
-        block = render_report.batch_summary(loaded, rows, deferred_count)
-        dedupe_heading = None
-    else:
-        prd = str(loaded.get("prd", ""))
-        prd_rows = render_metrics.matching_rows(rows, prd, batch_id)
-        json_items = [
-            i for i in deferred_items or [] if isinstance(i, dict) and i.get("prd") == prd
-        ]
-        block = render_report.prd_section(
-            loaded,
-            prd_rows,
-            now,
-            json_items,
-            autopilot_dir / "ledger" / "attempts.jsonl",
-        )
-        dedupe_heading = f"## {prd}"
-        missing = render_report.missing_from_report(block, json_items, prd)
+        return render_report.batch_summary(loaded, rows, deferred_count), None, []
+    prd = str(loaded.get("prd", ""))
+    prd_rows = render_metrics.matching_rows(rows, prd, batch_id)
+    json_items = [
+        i for i in deferred_items or [] if isinstance(i, dict) and i.get("prd") == prd
+    ]
+    block = render_report.prd_section(
+        loaded,
+        prd_rows,
+        now,
+        json_items,
+        autopilot_dir / "ledger" / "attempts.jsonl",
+    )
+    missing = render_report.missing_from_report(block, json_items, prd)
+    return block, f"## {prd}", missing
+
+
+def _render_report_surface(
+    args: argparse.Namespace, loaded: dict, autopilot_dir: Path, now: str
+) -> int:
+    batch_id = (loaded.get("batch") or {}).get("id")
+    if not batch_id:
+        print("autopilot: render report needs state.batch.id", file=sys.stderr)
+        return 2
+    metrics_path = (
+        Path(args.metrics)
+        if args.metrics is not None
+        else autopilot_dir / "loop-metrics.jsonl"
+    )
+    rows = render_metrics.load_rows(metrics_path)
+    deferred_items = _deferred_items(
+        autopilot_dir / "deferred" / f"{batch_id}-deferred.json"
+    )
+    selected = _select_report_block(
+        args, loaded, autopilot_dir, now, batch_id, rows, deferred_items
+    )
+    if isinstance(selected, int):
+        return selected
+    block, dedupe_heading, missing = selected
     out_path = autopilot_dir / "reports" / f"{batch_id}-report.md"
     if not out_path.exists() and not args.stdout:
         started = render_report.batch_started(loaded, rows)
@@ -835,6 +848,23 @@ def _run_render(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
     return 12
+
+
+def _run_render(args: argparse.Namespace) -> int:
+    now = args.now or _utc_now()
+
+    if args.surface == "metrics":
+        return _render_metrics_surface(args)
+
+    state_path = _resolve_state_path(args.state)
+    loaded = _load_state_or_exit(state_path)
+    if isinstance(loaded, int):
+        return loaded
+    autopilot_dir = state_path.parent
+
+    if args.surface == "audit":
+        return _render_audit_surface(args, loaded, autopilot_dir, now)
+    return _render_report_surface(args, loaded, autopilot_dir, now)
 
 
 def _add_loop(subparsers) -> None:
