@@ -54,9 +54,9 @@ run_codex_run -f "$DASH_PROMPT_FILE" > /dev/null 2>/dev/null < /dev/null
 #     diff also proves trailing-newline preservation -- folds in case 44
 #     (no longer a separate invocation).
 if diff -q "$DASH_PROMPT_FILE" "$STUB_STDIN_FILE" >/dev/null 2>&1; then
-    PASS "-f PROMPTFILE with a leading-dash first line: codex child stdin is the file's bytes verbatim"
+    PASS "-f PROMPTFILE with a leading-dash first line: codex child stdin is the file's bytes verbatim, trailing newline included"
 else
-    FAIL "-f PROMPTFILE with a leading-dash first line: codex child stdin is the file's bytes verbatim" \
+    FAIL "-f PROMPTFILE with a leading-dash first line: codex child stdin is the file's bytes verbatim, trailing newline included" \
          "stub captured stdin: $(cat "$STUB_STDIN_FILE" 2>/dev/null | tr '\n' '|'); expected file contents: $(cat "$DASH_PROMPT_FILE" 2>/dev/null | tr '\n' '|')"
 fi
 

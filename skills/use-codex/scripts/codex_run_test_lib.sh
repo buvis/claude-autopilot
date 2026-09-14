@@ -3,7 +3,7 @@
 # macOS bash 3.2 compatible. Stubs the `codex` binary on PATH and asserts on
 # its OBSERVABLE argv/stdin, never on codex-run.sh's internals.
 
-CODEX_RUN_SH="$(cd "$(dirname "$0")" && pwd)/codex-run.sh"
+CODEX_RUN_SH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/codex-run.sh"
 [ -n "${1:-}" ] && CODEX_RUN_SH="$1"
 
 # ── assert helpers ────────────────────────────────────────────────────────────
