@@ -943,19 +943,9 @@ def test_convergence_row_fields_come_from_state_and_review_files(tmp_path):
 
 
 def test_review_exit_to_review_writes_no_convergence_row(tmp_path):
-    def rework_review(ap_dir: Path) -> None:
-        (ap_dir / "state.json").write_text(
-            json.dumps(
-                {
-                    "prd": "00188-x-v1.md",
-                    "next_phase": "review",
-                    "cycle": 2,
-                    "batch": {"id": "b"},
-                },
-            ),
-        )
-        write_log(ap_dir, {"type": "result"})
-
+    rework_review = _state_step(
+        prd="00188-x-v1.md", next_phase="review", cycle=2, batch={"id": "b"}
+    )
     lp = make_loop(tmp_path, [rework_review, terminal_step()])
     ap = lp._test["ap_dir"]
     write_state(
@@ -972,20 +962,33 @@ def test_review_exit_to_review_writes_no_convergence_row(tmp_path):
 
 
 def test_build_exit_writes_no_convergence_row(tmp_path):
-    def finishing_build(ap_dir: Path) -> None:
-        (ap_dir / "state.json").write_text(
-            json.dumps(
-                {"prd": "00188-x-v1.md", "next_phase": "done", "batch": {"id": "b"}},
-            ),
-        )
-        write_log(ap_dir, {"type": "result"})
-
+    finishing_build = _state_step(
+        prd="00188-x-v1.md", next_phase="done", batch={"id": "b"}
+    )
     lp = make_loop(tmp_path, [finishing_build, terminal_step()])
     ap = lp._test["ap_dir"]
     write_state(ap, prd="00188-x-v1.md", next_phase="build", batch={"id": "b"})
     assert lp.run() == 0
     rows = _metrics_rows(ap)
     assert [row["phase_launched"] for row in rows] == ["build", "done"]
+    assert all("event" not in row for row in rows)
+
+
+def test_review_exit_to_paused_writes_no_convergence_row(tmp_path):
+    pausing_review = _state_step(
+        prd="00188-x-v1.md",
+        phase="paused",
+        next_phase="paused",
+        pause_reason={"detail": "design gate needs the operator"},
+        batch={"id": "b"},
+        cycle=1,
+    )
+    lp = make_loop(tmp_path, [pausing_review])
+    ap = lp._test["ap_dir"]
+    write_state(ap, prd="00188-x-v1.md", next_phase="review", batch={"id": "b"})
+    assert lp.run() == 1
+    rows = _metrics_rows(ap)
+    assert [row.get("phase_launched") for row in rows] == ["review"]
     assert all("event" not in row for row in rows)
 
 

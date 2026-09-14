@@ -35,16 +35,34 @@ def _rows() -> list[dict]:
 
 
 # One review_converged row exactly as the loop appends it to loop-metrics.jsonl.
-CAP_DEFERRED_ROW = json.loads(
-    '{"event":"review_converged","prd":"x","batch":"b","cycles_to_converge":2,'
-    '"outcome":"cap_deferred","ts":1,"rework_cap":2,'
-    '"build_models":["claude-sonnet-5[1m]"],"attempt_tiers":["sonnet"],'
-    '"tasks_planned":21,"tasks_completed":4,"tasks_in_prd":4,"cycles":['
-    '{"cycle":1,"reviewers":["alice","blake","bob"],"verdict":8,'
-    '"findings":{"critical":1,"high":4,"medium":3,"low":0}},'
-    '{"cycle":2,"reviewers":["alice","blake","bob"],"verdict":11,'
-    '"findings":{"critical":0,"high":1,"medium":8,"low":2}}]}',
-)
+CAP_DEFERRED_ROW = {
+    "event": "review_converged",
+    "prd": "x",
+    "batch": "b",
+    "cycles_to_converge": 2,
+    "outcome": "cap_deferred",
+    "ts": 1,
+    "rework_cap": 2,
+    "build_models": ["claude-sonnet-5[1m]"],
+    "attempt_tiers": ["sonnet"],
+    "tasks_planned": 21,
+    "tasks_completed": 4,
+    "tasks_in_prd": 4,
+    "cycles": [
+        {
+            "cycle": 1,
+            "reviewers": ["alice", "blake", "bob"],
+            "verdict": 8,
+            "findings": {"critical": 1, "high": 4, "medium": 3, "low": 0},
+        },
+        {
+            "cycle": 2,
+            "reviewers": ["alice", "blake", "bob"],
+            "verdict": 11,
+            "findings": {"critical": 0, "high": 1, "medium": 8, "low": 2},
+        },
+    ],
+}
 
 # A row where every segment has to come from its own field: a cap of 3, a
 # cycle count (3) above the length of the cycle list (2), an outcome that
@@ -125,12 +143,19 @@ class RunConditionsTests(unittest.TestCase):
     def test_run_conditions_line_marks_nulls_with_question_marks(self) -> None:
         # Null cap, a single cycle whose review file was unreadable (null
         # reviewers and findings), no build models, no tiers, null counts.
-        row = json.loads(
-            '{"rework_cap":null,"cycles_to_converge":1,"outcome":"cap_deferred",'
-            '"build_models":[],"attempt_tiers":[],"tasks_planned":null,'
-            '"tasks_completed":4,"tasks_in_prd":null,"cycles":[{"cycle":1,'
-            '"reviewers":null,"verdict":null,"findings":null}]}',
-        )
+        row = {
+            "rework_cap": None,
+            "cycles_to_converge": 1,
+            "outcome": "cap_deferred",
+            "build_models": [],
+            "attempt_tiers": [],
+            "tasks_planned": None,
+            "tasks_completed": 4,
+            "tasks_in_prd": None,
+            "cycles": [
+                {"cycle": 1, "reviewers": None, "verdict": None, "findings": None}
+            ],
+        }
         self.assertEqual(
             render_report.run_conditions_line(row),
             "cap ? · 1 cycle, cap_deferred · c1 ? ?/?/?/? (crit/high/med/low) · "
@@ -163,6 +188,10 @@ class RunConditionsTests(unittest.TestCase):
         self.assertIn("- Run conditions: no review_converged row\n", text)
 
     def test_convergence_is_keyword_only(self) -> None:
+        text = render_report.prd_section(
+            _state(), _rows(), NOW, [], None, convergence=CAP_DEFERRED_ROW
+        )
+        self.assertIn("- Run conditions: cap 2 ·", text)
         with self.assertRaises(TypeError):
             render_report.prd_section(
                 _state(), _rows(), NOW, [], None, CAP_DEFERRED_ROW

@@ -803,9 +803,9 @@ def _select_report_block(
     json_items = [
         i for i in deferred_items or [] if isinstance(i, dict) and i.get("prd") == prd
     ]
-    key = {"event": "review_converged", "prd": prd, "batch": batch_id}
     convergence = next(
-        (r for r in event_rows if all(r.get(k) == v for k, v in key.items())), None
+        (r for r in event_rows if r.get("event") == "review_converged"
+         and r.get("prd") == prd and r.get("batch") == batch_id), None
     )
     block = render_report.prd_section(
         loaded,
