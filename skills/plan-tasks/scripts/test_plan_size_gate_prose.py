@@ -565,6 +565,14 @@ def test_step_4_7_payloads_carry_files() -> None:
         "missing one, means the examples were reshaped and this suite no "
         "longer knows which is which."
     )
+    files_key = '"files": ['
+    assert all(files_key in p for p in payloads), (
+        f"{_SKILL_MD}: a worked task-add payload in step 4.7 "
+        f"({[p.strip()[:80] for p in payloads if files_key not in p]!r}) "
+        'carries no `"files": [` key. The payload is what the planner copies; '
+        "a key missing from the example is never persisted, and the gate "
+        "finds no per-task modules to compare against the PRD."
+    )
     # The pair is one eligible and one excluded for `files`; any other
     # split (both eligible, excluded for `size`) is not the pair the prose
     # around them describes.

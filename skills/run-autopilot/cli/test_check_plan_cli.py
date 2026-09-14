@@ -189,6 +189,11 @@ class CheckPlanCliTests(unittest.TestCase):
                 "Interactive: this is a warning, continue.",
             ],
         )
+        self.assertEqual(
+            len(result.stderr.splitlines()),
+            2,
+            "fully filed against a tree: no diagnostic line after the stall",
+        )
         self.assertNotIn("oversized_plan", result.stderr)
 
     def test_stall_names_only_the_task_count_when_it_alone_fires(self) -> None:
@@ -365,6 +370,59 @@ class CheckPlanCliTests(unittest.TestCase):
         self.assertIn(f"check-plan failed: cannot read PRD {prd_path}", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
 
+    def test_unwritable_split_note_fails_loud(self) -> None:
+        """A regular file where `split-notes/` must go blocks the note; the
+        stall branch reports it as exit 2 on one line, never a traceback."""
+        with tempfile.TemporaryDirectory() as tmp:
+            state_path = self._write_state(Path(tmp), _state_00167())
+            prd_path = self._write_prd(Path(tmp), _prd_00167())
+            blocker = Path(tmp) / "split-notes"
+            blocker.write_text("not a directory", encoding="utf-8")
+            note_path = blocker / "00004-feature-x.md"
+            result = self._run(
+                ["check-plan", "--state", str(state_path), "--prd", str(prd_path)],
+            )
+            still_a_file = blocker.is_file()
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("check-plan failed", result.stderr)
+        self.assertIn("split-notes", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        lines = result.stderr.splitlines()
+        self.assertEqual(len(lines), 1, result.stderr)
+        self.assertTrue(
+            lines[0].startswith(
+                f"autopilot: check-plan failed: cannot write split note {note_path}: ",
+            ),
+            lines[0],
+        )
+        self.assertRegex(lines[0], r": \[Errno \d+\] ", "the reason is the OS error")
+        self.assertTrue(still_a_file, "no note is written past the blocker")
+
+    def test_unwritable_split_note_file_fails_loud(self) -> None:
+        """A directory where the note itself must go lets `split-notes/` be
+        created but blocks the write; the same one-line exit 2, no traceback."""
+        with tempfile.TemporaryDirectory() as tmp:
+            state_path = self._write_state(Path(tmp), _state_00167())
+            prd_path = self._write_prd(Path(tmp), _prd_00167())
+            note_path = Path(tmp) / "split-notes" / "00004-feature-x.md"
+            note_path.mkdir(parents=True)
+            result = self._run(
+                ["check-plan", "--state", str(state_path), "--prd", str(prd_path)],
+            )
+            still_a_dir = note_path.is_dir()
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        lines = result.stderr.splitlines()
+        self.assertEqual(len(lines), 1, result.stderr)
+        self.assertTrue(
+            lines[0].startswith(
+                f"autopilot: check-plan failed: cannot write split note {note_path}: ",
+            ),
+            lines[0],
+        )
+        self.assertRegex(lines[0], r": \[Errno \d+\] ", "the reason is the OS error")
+        self.assertTrue(still_a_dir, "the blocker survives; nothing is written over it")
+
     def test_success_reports_unfiled_and_skipped_drift(self) -> None:
         state = _state_with_files(
             "00004-feature-x.md",
@@ -383,6 +441,80 @@ class CheckPlanCliTests(unittest.TestCase):
             result.stderr,
         )
         self.assertFalse(split_notes_exists, "a pass writes no split note")
+
+    def test_stall_also_reports_unfiled_and_skipped_drift(self) -> None:
+        """The unfiled/drift diagnostic the pass branch prints follows the
+        two stall lines on a stall, as the third and last stderr line."""
+        with tempfile.TemporaryDirectory() as tmp:
+            state_path = self._write_state(Path(tmp), _state_with_tasks(16))
+            prd_path = self._write_prd(Path(tmp), _prd_text(0))
+            note_path = Path(tmp) / "split-notes" / "00004-feature-x.md"
+            result = self._run(
+                ["check-plan", "--state", str(state_path), "--prd", str(prd_path)],
+            )
+            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertTrue(note_path.exists(), result.stderr)
+        lines = result.stderr.splitlines()
+        self.assertEqual(
+            lines[:2],
+            self._stall_lines("task_count 16 > 15", "task_count", note_path),
+        )
+        self.assertEqual(
+            lines[2:],
+            ["plan-expansion: unfiled=16; drift=skipped (no Repository Structure)"],
+            "16 unfiled tasks and no tree: the diagnostic is the third line",
+        )
+
+    def test_stall_diagnostic_counts_unfiled_against_a_tree(self) -> None:
+        """One unfiled task against a PRD with a tree: the third line says
+        unfiled=1 with drift checked, so neither half of the condition is
+        read off the other."""
+        state = _state_with_files(
+            "00004-feature-x.md",
+            [["src/f0.py"]] * 15 + [None],
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            state_path = self._write_state(Path(tmp), state)
+            prd_path = self._write_prd(Path(tmp), _prd_text(0, _SRC_TREE))
+            note_path = Path(tmp) / "split-notes" / "00004-feature-x.md"
+            result = self._run(
+                ["check-plan", "--state", str(state_path), "--prd", str(prd_path)],
+            )
+            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertTrue(note_path.exists(), result.stderr)
+        lines = result.stderr.splitlines()
+        self.assertEqual(
+            lines[:2],
+            self._stall_lines("task_count 16 > 15", "task_count", note_path),
+        )
+        self.assertEqual(
+            lines[2:],
+            ["plan-expansion: unfiled=1; drift=checked"],
+            "one unfiled task with drift checked still earns the third line",
+        )
+
+    def test_stall_diagnostic_reports_skipped_drift_when_fully_filed(self) -> None:
+        """Fully filed against a tree-less PRD: unfiled=0, yet the skipped
+        drift alone puts the third line on stderr."""
+        with tempfile.TemporaryDirectory() as tmp:
+            state_path = self._write_state(Path(tmp), _src_state(16))
+            prd_path = self._write_prd(Path(tmp), _prd_text(0))
+            note_path = Path(tmp) / "split-notes" / "00004-feature-x.md"
+            result = self._run(
+                ["check-plan", "--state", str(state_path), "--prd", str(prd_path)],
+            )
+            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertTrue(note_path.exists(), result.stderr)
+        lines = result.stderr.splitlines()
+        self.assertEqual(
+            lines[:2],
+            self._stall_lines("task_count 16 > 15", "task_count", note_path),
+        )
+        self.assertEqual(
+            lines[2:],
+            ["plan-expansion: unfiled=0; drift=skipped (no Repository Structure)"],
+            "nothing unfiled but no tree: skipped drift alone earns the third line",
+        )
 
     def test_fully_filed_plan_with_a_tree_passes_silently(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
