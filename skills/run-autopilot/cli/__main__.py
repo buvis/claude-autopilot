@@ -705,6 +705,21 @@ def _deferred_items(path: Path) -> list | None:
         return None
 
 
+def _stall_range(deferred_items: list | None, prd: str, site: str) -> dict | None:
+    """The last `stall` record for `prd` at `site` carrying a `commit_range`,
+    or None: it feeds the stalled section's custody line (PRD 00187)."""
+    matches = [
+        i
+        for i in deferred_items or []
+        if isinstance(i, dict)
+        and i.get("type") == "stall"
+        and i.get("prd") == prd
+        and i.get("site") == site
+        and i.get("commit_range")
+    ]
+    return matches[-1] if matches else None
+
+
 def _run_render(args: argparse.Namespace) -> int:
     now = args.now or _utc_now()
 
@@ -772,11 +787,15 @@ def _run_render(args: argparse.Namespace) -> int:
         if not args.site or not args.detail:
             print("autopilot: --stalled needs --site and --detail", file=sys.stderr)
             return 1
+        prd = str(loaded.get("prd", ""))
+        stall = _stall_range(deferred_items, prd, args.site) or {}
         block = render_report.stalled_section(
-            str(loaded.get("prd", "")),
+            prd,
             args.site,
             args.detail,
             now,
+            commit_range=stall.get("commit_range"),
+            commits=stall.get("commits"),
         )
         dedupe_heading = None
     elif args.summary:

@@ -17,7 +17,9 @@ functions the CLI appends to `reports/{batch_id}-report.md`:
 - `missing_from_report(report_text, json_items, prd)` - the pending,
   unresolved JSON items the rendered section does not contain; the CLI
   exits 12 naming them (PRD 00146).
-- `stalled_section(prd, site, detail, stamp)` - the short STALLED form.
+- `stalled_section(prd, site, detail, stamp, commit_range=None,
+  commits=None)` - the short STALLED form; a `commit_range` adds the
+  `- Commits:` custody line between Detail and Resume (PRD 00187).
 - `batch_summary(state, metrics_rows, deferred_count)` - the batch-end
   block; duration from the batch's metrics rows when any exist, plus the
   skipped count and, when there are any, a `### Skipped` table of the
@@ -68,11 +70,24 @@ def header(batch_id: str, started: str) -> str:
     return f"# Autopilot Batch Report {batch_id}\n\nStarted: {started}\n"
 
 
-def stalled_section(prd: str, site: str, detail: str, stamp: str) -> str:
+def stalled_section(
+    prd: str,
+    site: str,
+    detail: str,
+    stamp: str,
+    commit_range: str | None = None,
+    commits: int | None = None,
+) -> str:
+    custody = (
+        f"- Commits: {commit_range} ({commits}) live on master, custody pending\n"
+        if commit_range
+        else ""
+    )
     return (
         f"## {prd} — STALLED ({site})\n\n"
         f"- Stalled: {stamp}\n"
         f"- Detail: {detail}\n"
+        f"{custody}"
         f"- Resume: move back to dev/local/prds/wip/ and re-run\n"
     )
 

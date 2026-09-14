@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **run-autopilot**: a cap-out with an unresolved CRITICAL now records the PRD's live commit range as custody (marker, batch mirror, migrated deferrals, refreshed hold PRD) and offers revert / branch-and-revert / accept through `autopilot custody resolve`
+- **run-autopilot**: a cap-out with an unresolved CRITICAL now records the PRD's live commit range as custody (marker, batch mirror, migrated deferrals, refreshed hold PRD, a `- Commits:` line in the batch report's STALLED section) and offers revert / branch-and-revert / accept through `autopilot custody resolve`
 - **hooks**: deny a Bash `git push` that targets a repository with pending cap_critical custody, naming the PRD, range and resolve command
 
 ### Fixed
