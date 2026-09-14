@@ -72,6 +72,13 @@ counts, then only the subsections whose sources are non-empty:
   is present and not `"ok"` — a stale hook copy (`hooks: stale: <basenames>`)
   or the doctor-first sub-probe's own summary line when it found something
   broken; the suffix is omitted when `hook_doctor` is absent or `"ok"`.
+- **Run conditions** — one line under `- Tasks:` rendering the PRD's
+  `review_converged` row from `loop-metrics.jsonl` (cap, per-cycle roster
+  and severity counts, build models, attempt tiers, task counts;
+  `state-schema.md` § Convergence rows); `no review_converged row` when the
+  batch's metrics file holds none for this PRD, so an emission gap is loud
+  rather than blank. `- Tasks:` falls back to the row's counts when the
+  closing record is absent or reads `0/0`.
 
 Absent fields never fail the render: empty arrays omit their section,
 `no implementor data` renders only when state and ledger are both empty,

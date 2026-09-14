@@ -286,6 +286,48 @@ One JSON object per line:
 
 **Readers** (audit-qwen outside this plugin; `scripts/tune_routing.py`, PRD 00170, inside it) read the ledger instead of live state; an absent file means "no closed PRDs yet" and is never an error.
 
+## Convergence rows
+
+File: `dev/local/autopilot/loop-metrics.jsonl` and its GC-exempt mirror `dev/local/autopilot/ledger/loop-metrics.jsonl` (PRD 00188) - the `review_converged` event row that records, per PRD, how many review cycles it took to converge and under which cap, build models, attempt tiers and task counts. It shares the file with the per-session rows; the `event` key is what tells the two apart.
+
+**Writer.** `cli/loop.py` `Loop._append_metrics` appends one row per PRD when a session launched as `review` exits with `next_phase: "done"`, after that session's own row and inside the same `try` as it, so it can never fail the loop; an unreadable or malformed `state.json` writes nothing (the session row already written stays). No skill prose writes it: PRD 00188 replaced the `phase-review.md` printf with this mechanical append.
+
+One JSON object per row:
+
+```json
+{"event":"review_converged","prd":"00040-feature-x-v1.md","batch":"202607202320","cycles_to_converge":2,"outcome":"converged","ts":1784701300,"rework_cap":2,"build_models":["claude-sonnet-5"],"attempt_tiers":["sonnet","opus"],"tasks_planned":3,"tasks_completed":3,"tasks_in_prd":3,"cycles":[{"cycle":1,"reviewers":["alice","blake","bob"],"verdict":2,"findings":{"critical":0,"high":1,"medium":1,"low":0}},{"cycle":2,"reviewers":["alice","blake","bob"],"verdict":"converged","findings":{"critical":0,"high":0,"medium":0,"low":0}}]}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `event` | string | Always `review_converged`; the discriminator the session-row loaders drop on. |
+| `prd` | string | `state.prd` (the `00XXX-….md` basename). |
+| `batch` | string | `state.batch.id`. |
+| `cycles_to_converge` | int | `state.cycle` at the write. |
+| `outcome` | string | `cap_deferred` when any `state.deferred_decisions` entry carries `type == "cap-overflow"` (the cap-out path's only sink), else `converged`. |
+| `ts` | int | Epoch seconds at the write. |
+| `rework_cap` | int? | `state.rework_cap`; `null` when absent. |
+| `build_models` | string[] | Distinct `model` of this PRD's session rows with `phase_launched == "build"` in the same batch, first-appearance order. |
+| `attempt_tiers` | string[] | Distinct `tasks[].attempts[].model`, first-appearance order. |
+| `tasks_planned` | int? | `state.tasks_total`, falling back to `len(state.tasks)` (the array is still present at review exit; the Phase 9 per-PRD reset is what drops it). |
+| `tasks_completed` | int? | `state.tasks_completed`, falling back to the count of `state.tasks[]` with `status == "completed"`. |
+| `tasks_in_prd` | int? | Count of lines matching `^- \[[ x]\] ` in `dev/local/prds/wip/<prd>`; `null` when unreadable. |
+| `cycles` | object[] | One entry per cycle `n` in `1..state.cycle`, read from `dev/local/reviews/<prd stem>-review-<n>.md` or its zero-padded twin `-review-<nn>.md`; a missing or unparseable file yields `null` in the three sub-keys below (never zeros: absence must not read as clean). |
+| `cycles[].cycle` | int | `n`. |
+| `cycles[].reviewers` | string[]? | The review file's frontmatter `reviewers:` line, comma-split (the same line `gate.py` reads). |
+| `cycles[].verdict` | string \| int? | Parsed with `gate.VERDICT_RE`: `"converged"` or the integer finding count. |
+| `cycles[].findings` | object? | `{critical, high, medium, low}` counts of consensus table rows matching `^\| \[\d+/\d+\] \|`, bucketed by the first severity mark found in the row (🔴 critical, 🟠 high, 🟡 medium, ⚪ low). |
+
+**Readers**: `cli/render_metrics.load_event_rows` (the session loaders `load_rows` and `_ledger_rows` still drop event rows), `autopilot render report` (the `- Run conditions:` line; `no review_converged row` when the batch's file holds none for the PRD), and `scripts/tracon/model.py`. To answer the July-versus-August question (did the cap or the build model change the converged share?):
+
+```bash
+jq -r 'select(.event=="review_converged") | [(.rework_cap|tostring), (.build_models|join(",")), .outcome] | @tsv' dev/local/autopilot/ledger/loop-metrics.jsonl | sort | uniq -c
+```
+
+Each count is one `(cap, models, outcome)` triple; divided by its `(cap, models)` pair's total it is that pair's converged share.
+
+Stalled PRDs never emit the row: they exit review to `paused`/`build`, not `done`.
+
 ## Fable rescue ledger
 
 File: `dev/local/autopilot/ledger/fable-requests.json` (PRD 00076) - the durable, single source of truth for the Fable rescue. The `ledger/` dir is already GC-exempt (`purge-devlocal` keeps `autopilot/ledger/**` while trashing the rest of `autopilot/**` at 14d), so the ledger survives batch end and the 14d purge with **no new retention rule**.
