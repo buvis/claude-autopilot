@@ -21,6 +21,10 @@ echo "[checks] adversarial cap prose"
 uv run --no-project --with pytest python -m pytest -q \
   skills/work/scripts/test_adversarial_cap_prose.py
 
+echo "[checks] dispatch ledger"
+uv run --no-project --with pytest python -m pytest -q \
+  skills/work/scripts/test_record_dispatch.py
+
 echo "[checks] hook registration"
 uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/scripts/test_review_coverage_hook_registration.py
