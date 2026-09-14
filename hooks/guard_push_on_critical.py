@@ -20,8 +20,9 @@ definitions or `case` patterns; `$( )` and backtick bodies are not evaluated,
 their presence makes the command uncertain; a `cd` inside `{ }` leaks to
 later segments (as in bash); a `cd` whose success is unknown keeps both
 directories as candidates; wrapper options that take a value (`nice -n 10`,
-`sudo -u NAME`) are not modelled. Every limit errs toward a false deny, never
-a false allow. "Cannot tell" is never "nothing pending": custody state that
+`sudo -u NAME`) are not modelled, so a wrapper followed by anything but `git`
+is treated as uncertain. Every limit errs toward a false deny, never a false
+allow. "Cannot tell" is never "nothing pending": custody state that
 exists but cannot be read denies with a `policy hook degraded` line, while a
 bug in the guard itself fails open (loud) like enforce_prd_location.
 """
@@ -173,11 +174,13 @@ def _strip_redirects(words: list[str]) -> list[str]:
     return kept
 
 
-def _unwrap(words: list[str]) -> tuple[list[str], dict[str, str]]:
+def _unwrap(words: list[str]) -> tuple[list[str], dict[str, str], bool]:
     """Drop redirections, then leading reserved words, NAME=value assignments
-    and wrappers with their -flags. Returns (remaining words, assignments)."""
+    and wrappers with their -flags. Returns (remaining words, assignments,
+    whether a wrapper was consumed)."""
     rest = _strip_redirects(words)
     env: dict[str, str] = {}
+    wrapped = False
     while rest:
         word = rest[0]
         if word in _RESERVED:
@@ -187,12 +190,13 @@ def _unwrap(words: list[str]) -> tuple[list[str], dict[str, str]]:
             env[name] = value
             rest = rest[1:]
         elif word in _WRAPPERS:
+            wrapped = True
             rest = rest[1:]
             while rest and rest[0].startswith("-"):
                 rest = rest[1:]
         else:
             break
-    return rest, env
+    return rest, env, wrapped
 
 
 def _needs_expansion(value: str) -> bool:
@@ -207,7 +211,7 @@ def parse_git_call(words: list[str]) -> GitCall | None:
     (flags win over GIT_DIR / GIT_WORK_TREE assignments); `unresolved` marks
     a location or subcommand that needs expansion (`$`, backtick) to know.
     """
-    rest, env = _unwrap(words)
+    rest, env, _wrapped = _unwrap(words)
     if not rest or os.path.basename(rest[0]) != "git":
         return None
     c_dirs: list[str] = []
@@ -233,15 +237,21 @@ def parse_git_call(words: list[str]) -> GitCall | None:
 def is_push_like(words: list[str], segment: str) -> bool:
     """True when the segment mentions push and could run one the parser
     cannot see: an expanded or push-capable executable (`sh -c`, `xargs`,
-    `make`, ...), a command substitution, or a git call needing expansion."""
-    if "push" not in segment:
+    `make`, ...), a wrapper whose value-taking flag hid the executable
+    (`sudo -u NAME`, `nice -n 10`), a command substitution, or a git call
+    needing expansion. The segment is read with quotes and backslashes
+    stripped, the same normalisation `decide` applies."""
+    if "push" not in segment.translate(_QUOTE_CHARS):
         return False
     if any("$(" in word or "`" in word for word in words):
         return True
-    rest, _ = _unwrap(words)
+    rest, _, wrapped = _unwrap(words)
     if not rest:
         return False
-    if _needs_expansion(rest[0]) or os.path.basename(rest[0]) in _PUSH_CAPABLE:
+    exe = os.path.basename(rest[0])
+    if _needs_expansion(rest[0]) or exe in _PUSH_CAPABLE:
+        return True
+    if wrapped and exe != "git":
         return True
     call = parse_git_call(words)
     return call is not None and call.unresolved
@@ -407,7 +417,7 @@ def _walk(
     stack: list[set[str] | None] = []
     for segment, separator in pieces:
         words = shlex.split(segment)
-        rest, _ = _unwrap(words)
+        rest, _, _wrapped = _unwrap(words)
         if rest and rest[0] in {"cd", "pushd"}:
             candidates = _after_cd(candidates, rest[1:])
         elif words:

@@ -397,6 +397,14 @@ class IsPushLikeTests(unittest.TestCase):
             'echo "$(git push)"',
             "echo `git push`",
             'git "${ACTION:-push}"',
+            # A wrapper whose value-taking flag hides the executable: the
+            # parser cannot see past `-u NAME` / `-n 10`, so it is uncertain.
+            "sudo -u bob git push",
+            "nice -n 10 git push",
+            "env -u VAR git push",
+            # Quote-split `push` inside a push-capable executable's argument.
+            "eval \"git pu''sh\"",
+            "sh -c 'git pu\"\"sh'",
         ):
             with self.subTest(segment=segment):
                 self.assertTrue(guard.is_push_like(shlex.split(segment), segment))
@@ -734,6 +742,11 @@ class DecideTests(unittest.TestCase):
             "sh -c 'git push'",
             "zsh -c 'git push'",
             'git "${ACTION:-push}"',
+            "sudo -u bob git push",
+            "nice -n 10 git push",
+            "env -u VAR git push",
+            "eval \"git pu''sh\"",
+            "sh -c 'git pu\"\"sh'",
         ):
             with self.subTest(command=command):
                 reason = self.assertDenied(_bash(command, self.guarded))
