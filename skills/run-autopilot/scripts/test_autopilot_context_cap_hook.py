@@ -28,19 +28,28 @@ def _loop_env() -> dict[str, str]:
     exercise the firing paths must run inside a simulated loop env."""
     env = dict(os.environ)
     env["_AUTOPILOT_LOOP"] = "test-loop"
+    # A zone 5:30 off UTC on every host, so a naive LOCAL stamp dressed up
+    # with a fake `+00:00` falls outside the marker tests' before/after window
+    # here too, not only on a host whose clock happens to sit away from UTC.
+    env["TZ"] = "Asia/Kolkata"
     return env
 
 
 def _parse_iso_utc(value: str) -> datetime:
     """Read a marker's `at` field as an aware UTC datetime.
 
-    The contract pins a UTC ISO-8601 stamp but not how the offset is spelled,
-    so accept a trailing `Z` and read an offset-less stamp as UTC."""
+    The contract pins a UTC ISO-8601 stamp: the raw text must spell a zero
+    offset (`+00:00` or `Z`). A naive stamp, or one on any other offset, is a
+    contract break and fails the calling test outright — nothing here assumes
+    a zone or converts to one."""
+    not_utc = f"`at` must spell a zero UTC offset (+00:00 or Z): {value!r}"
+    if not value.endswith(("+00:00", "Z")):
+        raise AssertionError(not_utc)
     text = value[:-1] + "+00:00" if value.endswith("Z") else value
     parsed = datetime.fromisoformat(text)
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+    if parsed.utcoffset() != timedelta(0):
+        raise AssertionError(not_utc)
+    return parsed
 
 
 def _load_hook_module():
@@ -602,6 +611,12 @@ class ContextCapHookTests(unittest.TestCase):
         self.assertTrue(handoff.exists())
         payload = self._handoff_payload()
         self._assert_handoff_payload(payload, task_id="task-x", session="sess-9f3a2c")
+        # The raw text spells a zero UTC offset; a naive stamp is not "UTC by
+        # convention", it is a contract break.
+        self.assertTrue(
+            payload["at"].endswith(("+00:00", "Z")),
+            f"`at` must carry +00:00 or Z, got {payload['at']!r}",
+        )
         # `at` must be a real stamp of this run, not a fixed or empty string.
         stamped = _parse_iso_utc(payload["at"])
         self.assertGreaterEqual(stamped, before)
@@ -655,6 +670,60 @@ class ContextCapHookTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout.strip(), "")
         self.assertEqual(handoff.read_bytes(), before)
+
+    def test_marker_task_id_reads_a_numeric_legacy_marker_as_that_task_id(self) -> None:
+        """A bare number is a legacy plain marker naming that task, even though
+        it also parses as JSON. Reading it as "no task" would rewrite the marker
+        on every fire for any task with a purely numeric id. Several ids, so a
+        reader that special-cases one literal cannot pass; a bracketed number
+        is JSON that names no task and stays empty."""
+        module = _load_hook_module()
+        for task_id in ("0", "7", "42", "123456"):
+            with self.subTest(marker=task_id):
+                self.assertEqual(module._marker_task_id(task_id), task_id)
+        self.assertEqual(module._marker_task_id("[42]"), "")
+
+    def test_handoff_marker_numeric_legacy_same_task_not_rewritten(self) -> None:
+        """The same-task no-op holds for a numeric id: a legacy plain `19` for
+        in-progress task `19` is left byte-for-byte, exactly like `task-x`. A
+        number the direct test above does not use, so no single literal
+        satisfies both."""
+        self.fx.write_state(
+            phase="build",
+            tasks=[{"id": "19", "name": "y", "status": "in_progress"}],
+        )
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=400_000)])
+        handoff = self.fx.autopilot_dir / ".handoff-requested"
+        handoff.write_text("19")
+        before = handoff.read_bytes()
+        result = self.fx.run_hook()
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), "")
+        self.assertEqual(handoff.read_bytes(), before)
+
+    def test_handoff_marker_non_object_json_beside_a_numeric_task_is_replaced(
+        self,
+    ) -> None:
+        """Reading bare numbers as legacy ids must not widen to every non-object
+        JSON body: `[1]` and `null` name no task, so with task `1` in progress
+        each is replaced by the JSON payload rather than kept as a same-task
+        no-op (a bracket-stripping or str()-of-JSON reading would keep it)."""
+        self.fx.write_state(
+            phase="build",
+            tasks=[{"id": "1", "name": "y", "status": "in_progress"}],
+        )
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=400_000)])
+        handoff = self.fx.autopilot_dir / ".handoff-requested"
+        for label, content in (("json-list", "[1]"), ("json-null", "null")):
+            with self.subTest(existing=label):
+                handoff.write_text(content)
+                result = self.fx.run_hook()
+                self.assertEqual(result.returncode, 0)
+                self._assert_handoff_payload(
+                    self._handoff_payload(),
+                    task_id="1",
+                    session="test-session",
+                )
 
     def test_handoff_marker_legacy_plain_stale_task_overwritten(self) -> None:
         """A pre-JSON marker naming an earlier task is replaced by a full JSON

@@ -36,15 +36,18 @@ inside them, because they have none to stub.
 
 from __future__ import annotations
 
+import argparse
+import importlib
 import json
 import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from cli import handoff
+from cli import handoff, state
 
 CLI_DIR = Path(__file__).resolve().parent
 CLI_MAIN = CLI_DIR / "__main__.py"
@@ -203,6 +206,9 @@ class PhaseDoneMarkerTests(_MarkerTestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(self.read_state()["phase"], "review")
         self.assert_markers_cleared()
+        self.assertNotIn("could not remove", proc.stderr, "a clean removal is silent")
+        self.assertNotIn(str(self.handoff_marker), proc.stderr, "nothing to report")
+        self.assertNotIn(str(self.cap_marker), proc.stderr, "nothing to report")
 
     def test_converged_clears_the_markers_when_the_prd_reaches_done(self) -> None:
         self.write_state(phase="review", next_phase="review", cycle=2)
@@ -300,6 +306,48 @@ class PhaseDoneMarkerTests(_MarkerTestCase):
             self.handoff_marker.exists(),
             "the removable marker must still go when its sibling fails",
         )
+        self.assertIn(
+            str(self.cap_marker),
+            proc.stderr,
+            "the CLI must name the marker it could not remove",
+        )
+        self.assertNotIn(
+            str(self.handoff_marker),
+            proc.stderr,
+            "the sibling that DID go must not be reported as unremovable",
+        )
+
+    def test_a_commit_that_raises_preserves_the_markers(self) -> None:
+        # In-process, so the commit itself can be made to fail: a disk error
+        # inside the transaction is a failed transaction, and a failed
+        # transaction never earns a marker cleanup, whatever the outcome.
+        self.write_state(phase="build", next_phase="build")
+        self.put_markers()
+        cli_main = importlib.import_module("cli.__main__")
+        args = argparse.Namespace(state=str(self.state_path), outcome="tasks_done")
+
+        with unittest.mock.patch.object(
+            state,
+            "transaction",
+            side_effect=OSError("disk full"),
+        ):
+            rc = cli_main._run_phase_done(args)
+
+        self.assertEqual(rc, 2)
+        self.assert_markers_preserved()
+
+
+class ResumeTargetMarkerTests(_MarkerTestCase):
+    def test_a_read_only_resume_target_leaves_both_markers_in_place(self) -> None:
+        # The ordinary same-phase resume: nothing ends the phase or the PRD,
+        # so a pending handoff or cap request must survive untouched.
+        self.write_state(phase="build", next_phase="build")
+        self.put_markers()
+
+        proc = _run(["resume-target", "--state", str(self.state_path)], cwd=self.root)
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assert_markers_preserved()
 
 
 class ResetPrdMarkerTests(_MarkerTestCase):
@@ -329,7 +377,10 @@ class ResetPrdMarkerTests(_MarkerTestCase):
 
 
 class StallMarkerTests(_MarkerTestCase):
-    def _stall(self, detail: str = "design gate refused") -> subprocess.CompletedProcess:
+    def _stall(
+        self,
+        detail: str = "design gate refused",
+    ) -> subprocess.CompletedProcess:
         return _run(
             [
                 "stall",
@@ -426,6 +477,57 @@ class ParkMarkerTests(_MarkerTestCase):
             "nothing was parked, so no commit ran",
         )
         self.assert_markers_preserved()
+
+    def test_park_clears_the_markers_beside_the_state_file_not_the_autopilot_dir_arg(
+        self,
+    ) -> None:
+        # The markers live beside state.json; `--autopilot-dir` only says where
+        # park-requested is read from. When the two differ, the cleanup must
+        # land in the state file's directory and ONLY there: a same-named pair
+        # in --autopilot-dir belongs to some other session and must survive,
+        # so a cleanup that swept both directories cannot pass either.
+        self.write_state(phase="build", next_phase="build", cycle=2)
+        self.put_prd("wip", self.PRD)
+        self.put_markers()
+        elsewhere = self.root / "elsewhere"
+        elsewhere.mkdir()
+        (elsewhere / "park-requested").write_text(
+            json.dumps({"prd": self.PRD, "reason": "wrapper died mid-session"}),
+            encoding="utf-8",
+        )
+        foreign = {
+            elsewhere / HANDOFF_MARKER: "another session's handoff\n",
+            elsewhere / CAP_MARKER: '{"usage": 640000}\n',
+        }
+        for path, body in foreign.items():
+            path.write_text(body, encoding="utf-8")
+
+        proc = _run(
+            [
+                "park",
+                "--state",
+                str(self.state_path),
+                "--autopilot-dir",
+                str(elsewhere),
+                "--prds",
+                str(self.prds_dir),
+            ],
+            cwd=self.root,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertTrue((self.prds_dir / "hold" / self.PRD).exists())
+        self.assertFalse(
+            (elsewhere / "park-requested").exists(),
+            "the park really consumed its request from --autopilot-dir",
+        )
+        self.assert_markers_cleared()
+        for path, body in foreign.items():
+            self.assertEqual(
+                path.read_text(encoding="utf-8"),
+                body,
+                f"{path.name} in --autopilot-dir is not this session's marker",
+            )
 
 
 if __name__ == "__main__":
