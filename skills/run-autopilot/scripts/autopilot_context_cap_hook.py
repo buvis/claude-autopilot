@@ -56,6 +56,7 @@ import os
 import sys
 import tempfile
 from collections.abc import Callable
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -439,7 +440,27 @@ def _set_oversized_stall(autopilot_dir: Path, task_id: str, total: int) -> bool:
     )
 
 
-def _request_handoff(autopilot_dir: Path, task_id: str) -> None:
+def _marker_task_id(text: str) -> str:
+    """Return the task id a `.handoff-requested` marker names, or "".
+
+    Reads both the JSON object this hook writes and the legacy bare task id
+    earlier versions wrote. Anything else — empty, whitespace, a JSON list or
+    null — names no task, so the marker gets replaced.
+    """
+    text = text.strip()
+    if not text:
+        return ""
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return text
+    if isinstance(payload, dict):
+        task_id = payload.get("task_id")
+        return task_id if isinstance(task_id, str) else ""
+    return ""
+
+
+def _request_handoff(autopilot_dir: Path, task_id: str, session_id: str) -> None:
     """Write the `.handoff-requested` marker (one-shot per task).
 
     Unlike the hard-cap rotation, this is non-destructive: state.json is left
@@ -447,22 +468,31 @@ def _request_handoff(autopilot_dir: Path, task_id: str) -> None:
     boundary (after a task commits) and hands off cleanly to a fresh session,
     which resumes build with the remaining pending tasks.
 
-    The marker carries the in-progress task id, mirroring `.cap-fired`. When
-    it already names the current task this is a redundant PostToolUse fire
-    and the function is a no-op; when it names an earlier task (the session
-    advanced without `/work` honoring the marker) it is overwritten so the
-    request stays current. Best-effort: an unwritable autopilot dir is
+    The marker is a JSON object with exactly four fields: the `build` phase,
+    the requesting session's id, a UTC stamp, and the in-progress task id.
+    When an existing marker (JSON or legacy bare task id) already names the
+    current task this is a redundant PostToolUse fire and the function is a
+    no-op, leaving the file byte-identical; when it names an earlier task (the
+    session advanced without `/work` honoring the marker) it is overwritten so
+    the request stays current. Best-effort: an unwritable autopilot dir is
     swallowed, same contract as the marker write on the rotation path.
     """
     marker = autopilot_dir / ".handoff-requested"
     if marker.exists():
         try:
-            if marker.read_text().strip() == task_id:
-                return
+            existing = marker.read_text()
         except OSError:
             return
+        if _marker_task_id(existing) == task_id:
+            return
+    payload = {
+        "phase": "build",
+        "session": session_id,
+        "at": datetime.now(timezone.utc).isoformat(),
+        "task_id": task_id,
+    }
     try:
-        marker.write_text(task_id)
+        marker.write_text(json.dumps(payload))
     except OSError:
         pass
 
@@ -598,11 +628,13 @@ def _marker_dedup_blocks(
     return False
 
 
-def _handle_below_cap(autopilot_dir: Path, task_id: str, total: int) -> None:
+def _handle_below_cap(
+    autopilot_dir: Path, task_id: str, total: int, session_id: str
+) -> None:
     # Below the hard cap. Above the soft cap, request a clean
     # task-boundary handoff (lossless) instead of the hard-cap rotation.
     if total > _soft_limit():
-        _request_handoff(autopilot_dir, task_id)
+        _request_handoff(autopilot_dir, task_id, session_id)
 
 
 def _handle_livelock(
@@ -695,12 +727,11 @@ def main() -> None:
     # invocation; on the crossing call it forces the same hand-off as a cap
     # breach. Runs before the usage check so a low-context runaway is still
     # bounded (and so a missing usage line does not skip the count).
-    session_id = stdin.get("session_id")
-    if (
-        isinstance(session_id, str)
-        and session_id
-        and _bump_and_check_tripwire(autopilot_dir, session_id)
-    ):
+    # The hook's own session id: the tripwire keys its counter on it and the
+    # soft-cap handoff marker records it. Missing or non-string -> "".
+    raw_session_id = stdin.get("session_id")
+    session_id = raw_session_id if isinstance(raw_session_id, str) else ""
+    if session_id and _bump_and_check_tripwire(autopilot_dir, session_id):
         _fire_breach(
             autopilot_dir,
             marker_file,
@@ -714,7 +745,7 @@ def main() -> None:
     if total is None:
         return
     if total <= limit:
-        _handle_below_cap(autopilot_dir, task_id, total)
+        _handle_below_cap(autopilot_dir, task_id, total, session_id)
         return
 
     # Hard-cap breach: livelock-stall if this task already rotated, else rotate.
