@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from cli import loop as loop_mod
+from cli import loop_act
 from cli.loop import Loop
 from cli.runner import SpawnResult
 
@@ -162,9 +162,9 @@ def _no_real_drain_side_effects(monkeypatch):
     """The drained branch shells to purge/agoge, and the orphan sweep
     shells to pgrep/ps on the REAL process table - keep loop runs
     hermetic and fast. Direct tests use the saved originals."""
-    monkeypatch.setattr(loop_mod, "run_purge", lambda repo: None)
+    monkeypatch.setattr(loop_act, "run_purge", lambda repo: None)
     monkeypatch.setattr(
-        loop_mod,
+        loop_act,
         "run_agoge",
         lambda ap_dir, batch, drained, env, out, claude_bin="claude": None,
     )
