@@ -5,7 +5,7 @@ that refuses anything but review/done before spawning, one routed
 spawn, the decision read, one metrics row, exit. No relaunch, no park,
 no notification, and the operator's pause marker is left where it is.
 
-Fixtures come from cli/test_loop.py rather than being duplicated (that
+Fixtures come from cli/loop_testutil.py rather than being duplicated (that
 file is already past 1300 lines; these nine cases would push it further).
 """
 
@@ -17,7 +17,7 @@ import pytest
 
 from cli.loop import Loop
 from cli.routing import OPUS, SONNET
-from cli.test_loop import (
+from cli.loop_testutil import (
     _spawn_tagged_incumbent,
     make_loop,
     noop_step,
