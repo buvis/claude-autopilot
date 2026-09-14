@@ -58,11 +58,21 @@ carries `clarification`, `reviewer_fail`, `sub_skill_fail`, and the others):
   restore` (core `SKILL.md` § State Management) is instead recorded via the
   `state-write-failed` marker (`references/state-schema.md` § Marker files,
   raw stderr in `detail`), and the wrapper halts on it.
-- `oversized_plan` — a loop-mode plan that exceeded the task ceiling (F5).
-  `plan-tasks` step 5.5 runs `autopilot check-plan`; exit 3 in loop mode stalls
-  the PRD here before the build starts, so a human splits it instead of the
-  batch grinding on it. Interactive runs only warn. `detail` carries the task
-  count and the ceiling it broke.
+- `plan_expansion` — a loop-mode plan that tripped the plan-expansion gate:
+  planned tasks over the loop ceiling (`planned > 15`), an expansion ratio over
+  3.0 with more than 8 planned tasks, or 2 or more unlisted modules against the
+  PRD's Repository Structure tree. `plan-tasks` step 5.5 runs
+  `autopilot check-plan --prd`; exit 3 in loop mode stalls the PRD here before
+  the build starts, so a human splits it instead of the batch grinding on it.
+  Interactive runs only warn. `detail` carries the reasons and the split-note path
+  (`dev/local/autopilot/split-notes/<prd-stem>.md`, grouped by module, UNLISTED
+  modules first). Records written before PRD 00189 carry the
+  legacy spelling `oversized_plan` for the task-count rule alone. To resume such
+  a PRD deliberately oversized: move it back to `backlog/` and set BOTH
+  `plan_expansion: allow` and an explicit `rework_cap: 3` in its frontmatter
+  before an unattended resume - the gate skips its rules on the override, and
+  neither the gate nor `autopilot frontmatter` raises the cap automatically; an
+  admitted oversized plan needs the extra cycle written down, not assumed.
 - `cap_critical` — a loop-mode Phase 5 cap-out with an unresolved CRITICAL
   (`references/phase-review.md` Cap check). The stall captures the PRD's
   `work_start_sha..HEAD` range in its preflight, then records custody for an
