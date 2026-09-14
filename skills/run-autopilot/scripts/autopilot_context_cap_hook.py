@@ -692,34 +692,18 @@ def _handle_rotation(
     _emit_envelope(_rotation_instructions(limit))
 
 
-def main() -> None:
-    # Loop guard first: interactive sessions that merely share a cwd tree with
-    # parked autopilot state must never rotate or stall it. Per SKILL.md "Loop
-    # Detection", $_AUTOPILOT_LOOP marks a loop-wrapped session.
-    if not os.environ.get("_AUTOPILOT_LOOP"):
-        return
-
-    stdin = _read_stdin()
-    transcript_path_str = stdin.get("transcript_path")
-    if not isinstance(transcript_path_str, str) or not transcript_path_str:
-        return
-
-    autopilot_dir = find_autopilot_dir(Path.cwd())
-    if autopilot_dir is None:
-        return
-
-    state = _load_state(autopilot_dir)
-    if not state or state.get("phase") != "build":
-        return
-
-    task_id = _in_progress_task_id(state)
-    last_rotation_task = _last_rotation_task(state)
-    marker_file = autopilot_dir / ".cap-fired"
-    if _marker_dedup_blocks(marker_file, task_id, last_rotation_task):
-        return
-
+def _check_caps(
+    stdin: dict[str, Any],
+    autopilot_dir: Path,
+    marker_file: Path,
+    task_id: str,
+    last_rotation_task: str | None,
+    transcript_path: Path,
+) -> None:
+    """Act on the turn tripwire and the usage thresholds, for a fire that has
+    already cleared main()'s loop, build-phase and marker-dedup guards.
+    """
     limit = _usage_limit()
-    transcript_path = Path(transcript_path_str)
     total = _latest_usage_total(transcript_path)
 
     # Turn tripwire: bound the session's tool-call count independently of
@@ -750,6 +734,42 @@ def main() -> None:
 
     # Hard-cap breach: livelock-stall if this task already rotated, else rotate.
     _fire_breach(autopilot_dir, marker_file, task_id, last_rotation_task, limit, total)
+
+
+def main() -> None:
+    # Loop guard first: interactive sessions that merely share a cwd tree with
+    # parked autopilot state must never rotate or stall it. Per SKILL.md "Loop
+    # Detection", $_AUTOPILOT_LOOP marks a loop-wrapped session.
+    if not os.environ.get("_AUTOPILOT_LOOP"):
+        return
+
+    stdin = _read_stdin()
+    transcript_path_str = stdin.get("transcript_path")
+    if not isinstance(transcript_path_str, str) or not transcript_path_str:
+        return
+
+    autopilot_dir = find_autopilot_dir(Path.cwd())
+    if autopilot_dir is None:
+        return
+
+    state = _load_state(autopilot_dir)
+    if not state or state.get("phase") != "build":
+        return
+
+    task_id = _in_progress_task_id(state)
+    last_rotation_task = _last_rotation_task(state)
+    marker_file = autopilot_dir / ".cap-fired"
+    if _marker_dedup_blocks(marker_file, task_id, last_rotation_task):
+        return
+
+    _check_caps(
+        stdin,
+        autopilot_dir,
+        marker_file,
+        task_id,
+        last_rotation_task,
+        Path(transcript_path_str),
+    )
 
 
 def run(payload):
