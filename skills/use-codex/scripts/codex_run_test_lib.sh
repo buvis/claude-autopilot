@@ -11,6 +11,7 @@ PASS_COUNT=0
 FAIL_COUNT=0
 PASS() { echo "PASS: $1"; PASS_COUNT=$((PASS_COUNT + 1)); }
 FAIL() { echo "FAIL: $1 -- $2"; FAIL_COUNT=$((FAIL_COUNT + 1)); }
+SKIP() { echo "SKIP: $1"; }
 
 # Reads FILE (one argv token per line, as the stub writes it) into the
 # global ARGV_ARR indexed array. Bash 3.2 has no mapfile/readarray.

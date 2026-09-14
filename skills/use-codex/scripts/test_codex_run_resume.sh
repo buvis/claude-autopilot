@@ -72,6 +72,31 @@ else
 fi
 
 # =============================================================================
+# --resume-thread <uuid> -o OUT, resume path: -f PROMPTFILE with a
+# leading-dash first line delivered via the resume argv shape instead of a
+# plain string -- codex child stdin is the file's bytes verbatim, and the
+# final argv token is still the literal "-" stdin marker, never argv-parsed
+# as a flag.
+# =============================================================================
+DASH_PROMPT_FILE="$STUBDIR/dash_prompt.txt"
+printf '%s\n' "- [ ] item" > "$DASH_PROMPT_FILE"
+DASH_RESUME_OUTFILE="$STUBDIR/dash_resume.out"
+rm -f "$DASH_RESUME_OUTFILE"
+
+run_codex_run --resume-thread "$RESUME_UUID" -o "$DASH_RESUME_OUTFILE" -f "$DASH_PROMPT_FILE" \
+    > /dev/null 2>/dev/null < /dev/null
+
+read_argv_array "$STUB_ARGV_FILE"
+DASH_RESUME_LAST_IDX=$(( ${#ARGV_ARR[@]} - 1 ))
+if diff -q "$DASH_PROMPT_FILE" "$STUB_STDIN_FILE" >/dev/null 2>&1 && \
+   [ "${ARGV_ARR[$DASH_RESUME_LAST_IDX]:-}" = "-" ]; then
+    PASS "-f PROMPTFILE with a leading-dash first line, resume path: codex child stdin is the file's bytes verbatim and the final argv token is '-'"
+else
+    FAIL "-f PROMPTFILE with a leading-dash first line, resume path: codex child stdin is the file's bytes verbatim and the final argv token is '-'" \
+         "stub captured stdin: $(cat "$STUB_STDIN_FILE" 2>/dev/null | tr '\n' '|'); expected file contents: $(cat "$DASH_PROMPT_FILE" 2>/dev/null | tr '\n' '|') -- argv: $(tr '\n' ' ' < "$STUB_ARGV_FILE")"
+fi
+
+# =============================================================================
 # --resume-thread <FILE>: id is read from the file's first line.
 # =============================================================================
 RESUME_FILE_UUID="bbbbbbbb-cccc-dddd-eeee-ffffffffffff"

@@ -48,16 +48,38 @@ DASH_PROMPT_FILE="$STUBDIR/dash_prompt.txt"
 printf '%s\n' "- [ ] item" > "$DASH_PROMPT_FILE"
 run_codex_run -f "$DASH_PROMPT_FILE" > /dev/null 2>/dev/null < /dev/null
 
-# 2b. Leading-dash prompt file: codex child stdin is the file's bytes,
-#     verbatim -- never argv-parsed as a flag. DASH_PROMPT_FILE itself ends
-#     in a trailing newline (printf's own '\n'), so this same byte-exact
+# 2b. Leading-dash prompt file, plain path: codex child stdin is the file's
+#     bytes, verbatim -- never argv-parsed as a flag. DASH_PROMPT_FILE itself
+#     ends in a trailing newline (printf's own '\n'), so this same byte-exact
 #     diff also proves trailing-newline preservation -- folds in case 44
 #     (no longer a separate invocation).
 if diff -q "$DASH_PROMPT_FILE" "$STUB_STDIN_FILE" >/dev/null 2>&1; then
-    PASS "-f PROMPTFILE with a leading-dash first line: codex child stdin is the file's bytes verbatim, trailing newline included"
+    PASS "-f PROMPTFILE with a leading-dash first line, plain path: codex child stdin is the file's bytes verbatim, trailing newline included"
 else
-    FAIL "-f PROMPTFILE with a leading-dash first line: codex child stdin is the file's bytes verbatim, trailing newline included" \
+    FAIL "-f PROMPTFILE with a leading-dash first line, plain path: codex child stdin is the file's bytes verbatim, trailing newline included" \
          "stub captured stdin: $(cat "$STUB_STDIN_FILE" 2>/dev/null | tr '\n' '|'); expected file contents: $(cat "$DASH_PROMPT_FILE" 2>/dev/null | tr '\n' '|')"
+fi
+
+# 2c. Leading-dash prompt file, json path: same -f PROMPTFILE delivery, but
+#     via the --emit-thread-id/-o invocation shape (case 3-10 below) instead
+#     of the plain-string path -- codex child stdin is still the file's bytes
+#     verbatim, and the final argv token is still the literal "-" stdin
+#     marker, never argv-parsed as a flag.
+DASH_JSON_THREAD_ID_FILE="$STUBDIR/dash_json_thread_id.out"
+DASH_JSON_OUTFILE="$STUBDIR/dash_json.out"
+rm -f "$DASH_JSON_THREAD_ID_FILE" "$DASH_JSON_OUTFILE"
+
+run_codex_run --emit-thread-id "$DASH_JSON_THREAD_ID_FILE" -o "$DASH_JSON_OUTFILE" -f "$DASH_PROMPT_FILE" \
+    > /dev/null 2>/dev/null < /dev/null
+
+read_argv_array "$STUB_ARGV_FILE"
+DASH_JSON_LAST_IDX=$(( ${#ARGV_ARR[@]} - 1 ))
+if diff -q "$DASH_PROMPT_FILE" "$STUB_STDIN_FILE" >/dev/null 2>&1 && \
+   [ "${ARGV_ARR[$DASH_JSON_LAST_IDX]:-}" = "-" ]; then
+    PASS "-f PROMPTFILE with a leading-dash first line, json path: codex child stdin is the file's bytes verbatim and the final argv token is '-'"
+else
+    FAIL "-f PROMPTFILE with a leading-dash first line, json path: codex child stdin is the file's bytes verbatim and the final argv token is '-'" \
+         "stub captured stdin: $(cat "$STUB_STDIN_FILE" 2>/dev/null | tr '\n' '|'); expected file contents: $(cat "$DASH_PROMPT_FILE" 2>/dev/null | tr '\n' '|') -- argv: $(tr '\n' ' ' < "$STUB_ARGV_FILE")"
 fi
 
 # =============================================================================
@@ -267,23 +289,31 @@ chmod 000 "$UNREADABLE_FILE"
 UNREADABLE_STDOUT_FILE="$STUBDIR/unreadable.stdout"
 UNREADABLE_STDERR_FILE="$STUBDIR/unreadable.stderr"
 
-# 42. Unreadable prompt file: non-zero exit, error names the file on stderr,
-#     codex never invoked. Skipped (as a PASS) rather than failed spuriously
-#     if the current user (e.g. root) can read anything regardless of mode
-#     bits, since chmod 000 can't produce an unreadable file in that case.
-if [ -r "$UNREADABLE_FILE" ]; then
-    PASS "unreadable prompt file: skipped -- current user can read chmod 000 files"
+# 42. Unreadable prompt file: exit 1, last stderr line is exactly the
+#     'failed to read prompt file' error, codex never invoked. The cat
+#     invocation inside codex-run.sh's own guard has its stderr unredirected,
+#     so a "Permission denied" line from cat precedes the guard's own
+#     echo'd error -- match the LAST line exactly rather than the whole
+#     file, since that's still an exact (non-substring) match on the text
+#     codex-run.sh itself prints, and distinguishes it from the old runner's
+#     different "ERROR: Prompt required" message just the same. Skipped (not
+#     failed) when the current user is root (uid 0), since root can read
+#     chmod 000 files regardless of mode bits -- gate on the uid itself, not
+#     on file readability, so a PATH shim that fakes `id -u` can exercise
+#     this branch.
+if [ "$(id -u)" = "0" ]; then
+    SKIP "unreadable prompt file: running as root, chmod 000 files are still readable"
 else
     run_codex_run -f "$UNREADABLE_FILE" \
         > "$UNREADABLE_STDOUT_FILE" 2> "$UNREADABLE_STDERR_FILE" < /dev/null
     UNREADABLE_EXIT=$?
 
-    if [ "$UNREADABLE_EXIT" -ne 0 ] && \
-       grep -qF "$UNREADABLE_FILE" "$UNREADABLE_STDERR_FILE" 2>/dev/null && \
+    if [ "$UNREADABLE_EXIT" -eq 1 ] && \
+       [ "$(tail -n 1 "$UNREADABLE_STDERR_FILE" 2>/dev/null)" = "ERROR: failed to read prompt file: $UNREADABLE_FILE" ] && \
        [ ! -s "$STUB_ARGV_FILE" ]; then
-        PASS "unreadable prompt file: non-zero exit, error names the file, codex never invoked"
+        PASS "unreadable prompt file: exit 1, exact 'failed to read prompt file' error on stderr, codex never invoked"
     else
-        FAIL "unreadable prompt file: non-zero exit, error names the file, codex never invoked" \
+        FAIL "unreadable prompt file: exit 1, exact 'failed to read prompt file' error on stderr, codex never invoked" \
              "exit: $UNREADABLE_EXIT -- stderr: $(cat "$UNREADABLE_STDERR_FILE" 2>/dev/null) -- argv file bytes: $(wc -c < "$STUB_ARGV_FILE" 2>/dev/null | tr -d ' ')"
     fi
 fi
