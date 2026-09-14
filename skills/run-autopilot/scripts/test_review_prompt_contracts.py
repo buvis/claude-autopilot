@@ -170,6 +170,34 @@ class PhaseReviewDecisionShapeTests(unittest.TestCase):
                 "verbatim in its own paragraph, not elsewhere in the file",
             )
 
+    def test_phase_review_never_instructs_the_convergence_append(self) -> None:
+        # The loop driver (`cli/loop.py`, `Loop._append_metrics`) writes the
+        # `review_converged` row itself when a review session exits to done.
+        # Prose that still tells the model to printf the row would write it
+        # twice, so the section may only DESCRIBE the wrapper's row, and both
+        # exit sites must say so where the reader meets them.
+        text = self.phase_review
+        self.assertIsNone(
+            re.search(r"printf.*loop-metrics", text),
+            "phase-review.md must not instruct a printf append to loop-metrics",
+        )
+        self.assertNotIn(
+            "Append the `review_converged` line",
+            text,
+            "phase-review.md must not instruct appending the review_converged row",
+        )
+        self.assertIn(
+            "cli/loop.py",
+            text,
+            "phase-review.md must name the loop driver as the row's writer",
+        )
+        self.assertGreaterEqual(
+            text.count("the wrapper records the convergence row at review-phase exit"),
+            2,
+            "both exit sites (converged and cap-out) must say the wrapper "
+            "records the row",
+        )
+
 
 class ToolDisciplineContractTests(unittest.TestCase):
     def test_bash_bearing_personas_carry_tool_discipline(self) -> None:
