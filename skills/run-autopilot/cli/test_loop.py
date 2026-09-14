@@ -31,6 +31,7 @@ from pathlib import Path
 
 import pytest
 
+from cli import convergence
 from cli import loop as loop_mod
 from cli.loop import (
     Loop,
@@ -804,6 +805,90 @@ def test_review_exit_to_done_writes_the_convergence_row(tmp_path):
     assert event["cycles"][1]["verdict"] == 3
     assert event["cycles"][1]["findings"]["high"] == 2
     assert event["cycles"][1]["findings"]["medium"] == 1
+
+
+@pytest.mark.parametrize(
+    "identity",
+    [
+        {"prd": "00188-x-v1.md"},
+        {"prd": "00188-x-v1.md", "batch": {}},
+        {"batch": {"id": "b"}},
+    ],
+    ids=["no-batch", "no-batch-id", "no-prd"],
+)
+def test_review_exit_to_done_without_batch_writes_the_session_row_and_no_event(
+    tmp_path,
+    monkeypatch,
+    identity,
+):
+    # The schema leaves batch, batch.id and prd optional: a row that cannot
+    # name its PRD or batch is skipped BEFORE the builder runs - a decision,
+    # never a KeyError swallowed on the way out. The states carry every run
+    # field a converging review does, so only the missing identity key sets
+    # them apart.
+    def spy(*args, **kwargs):
+        raise AssertionError("build_row must not run for an unidentifiable state")
+
+    monkeypatch.setattr(convergence, "build_row", spy)
+    review_state = {
+        "next_phase": "done",
+        "cycle": 1,
+        "rework_cap": 2,
+        "tasks_total": 3,
+        "tasks_completed": 3,
+        "tasks": [],
+        "deferred_decisions": [],
+        **identity,
+    }
+    lp = make_loop(tmp_path, [_state_step(**review_state), terminal_step()])
+    ap = lp._test["ap_dir"]
+    write_state(ap, prd="00188-x-v1.md", next_phase="review", batch={"id": "b"})
+    assert lp.run() == 0
+    rows = _metrics_rows(ap)
+    assert [row.get("phase_launched") for row in rows] == ["review", "done"]
+    assert all("event" not in row for row in rows)
+
+
+@pytest.mark.parametrize(
+    ("deferred", "outcome"),
+    [
+        (
+            [
+                "cap-overflow",
+                {"type": "cap-overflow", "issue": "x", "severity": "high"},
+            ],
+            "cap_deferred",
+        ),
+        (["cap-overflow", {"type": "question", "issue": "x"}], "converged"),
+    ],
+    ids=["cap-overflow-dict", "question-dict"],
+)
+def test_review_exit_to_done_with_a_non_dict_deferral_still_writes_the_event(
+    tmp_path,
+    deferred,
+    outcome,
+):
+    # A stray string BEFORE the dict, spelling the marker itself: the event
+    # still lands and its outcome follows the dict alone. The state carries
+    # only the five keys the row needs - fewer than the skipped states
+    # above, so a key count cannot tell the two apart.
+    converging_review = _state_step(
+        prd="00188-x-v1.md",
+        next_phase="done",
+        batch={"id": "b"},
+        cycle=1,
+        deferred_decisions=deferred,
+    )
+    lp = make_loop(tmp_path, [converging_review, terminal_step()])
+    ap = lp._test["ap_dir"]
+    write_state(ap, prd="00188-x-v1.md", next_phase="review", batch={"id": "b"})
+    assert lp.run() == 0
+    rows = _metrics_rows(ap)
+    assert [row.get("phase_launched") for row in rows] == ["review", None, "done"]
+    assert [("event" in row) for row in rows] == [False, True, False]
+    assert rows[1]["event"] == "review_converged"
+    assert rows[1]["prd"] == "00188-x-v1.md"
+    assert rows[1]["outcome"] == outcome
 
 
 def test_convergence_row_fields_come_from_state_and_review_files(tmp_path):

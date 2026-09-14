@@ -208,6 +208,47 @@ class OutcomeTests(ConvergenceFixtureCase):
                 row = convergence.build_row(self.ap_dir, state, [], TS)
                 self.assertEqual(row["outcome"], "converged")
 
+    def test_outcome_ignores_non_dict_deferrals(self) -> None:
+        # The stray entries (a string, an int, a null) sit BEFORE the dict,
+        # so a reader that calls .get on every entry in order dies before
+        # it reaches the cap-overflow.
+        deferred = ["stray", 7, None, {"type": "cap-overflow"}]
+        self.assertEqual(
+            convergence.outcome({"deferred_decisions": deferred}),
+            "cap_deferred",
+        )
+        # Only a dict whose type IS cap-overflow counts: a stray string
+        # spelling the marker, the marker inside another dict's text, and a
+        # dict of some other type all read as converged.
+        converged = {
+            "strays": ["stray", 7],
+            "marker_string": ["cap-overflow"],
+            "marker_in_text": [
+                {"type": "question", "issue": "see the cap-overflow rule"},
+            ],
+            "other_type": [{"type": "design-gate"}],
+        }
+        for label, entries in converged.items():
+            with self.subTest(label):
+                self.assertEqual(
+                    convergence.outcome({"deferred_decisions": entries}),
+                    "converged",
+                )
+        row = convergence.build_row(
+            self.ap_dir,
+            _state(deferred_decisions=deferred),
+            [],
+            TS,
+        )
+        self.assertEqual(row["outcome"], "cap_deferred")
+        row = convergence.build_row(
+            self.ap_dir,
+            _state(deferred_decisions=["stray", 7]),
+            [],
+            TS,
+        )
+        self.assertEqual(row["outcome"], "converged")
+
 
 class ReadCycleTests(ConvergenceFixtureCase):
     def test_missing_review_file_reads_null_not_zero(self) -> None:
@@ -228,6 +269,96 @@ class ReadCycleTests(ConvergenceFixtureCase):
         self.assertEqual(
             row["cycles"],
             [{"cycle": 1, "reviewers": None, "verdict": None, "findings": None}],
+        )
+
+    def test_undecodable_review_file_reads_null_not_dropped(self) -> None:
+        # Invalid UTF-8 is unreadable, not fatal: the file's own fields read
+        # null like a missing file and the rest of the row survives. The
+        # first review's ASCII tail would parse under a lenient decode, and
+        # the garbage is long, so neither a replaced-character decode nor a
+        # byte-size threshold can stand in for a strict decode that gives
+        # up. The wip PRD is valid here, so tasks_in_prd proves the row was
+        # built whole.
+        unparsed = {"cycle": 1, "reviewers": None, "verdict": None, "findings": None}
+        garbage = b"\xff\xfe" + b"x" * 200
+        self.review_path("1").write_bytes(
+            b"\xff\xfe\n---\nreviewers: alice\n---\n## Alice\n\nVerdict: converged\n",
+        )
+        _write(self.wip / PRD, PRD_TEXT)
+        self.assertEqual(convergence.read_cycle(self.reviews, PRD, 1), unparsed)
+        self.review_path("1").write_bytes(garbage)
+        self.assertEqual(convergence.read_cycle(self.reviews, PRD, 1), unparsed)
+        row = convergence.build_row(self.ap_dir, _state(cycle=1), [], TS)
+        self.assertEqual(len(row), 13)
+        self.assertEqual(row["event"], "review_converged")
+        self.assertEqual(row["cycles"], [unparsed])
+        self.assertEqual(row["tasks_in_prd"], PRD_CHECKBOXES)
+        # The other way round: a readable review beside an undecodable PRD
+        # nulls only tasks_in_prd - and a valid PRD with no checkbox line
+        # counts 0, so null means unreadable and nothing else.
+        _write(self.review_path("1"), REVIEW_WITH_FINDINGS)
+        (self.wip / PRD).write_bytes(garbage)
+        row = convergence.build_row(self.ap_dir, _state(cycle=1), [], TS)
+        self.assertEqual(len(row), 13)
+        self.assertEqual(row["event"], "review_converged")
+        self.assertIsNone(row["tasks_in_prd"])
+        self.assertEqual(row["cycles"][0]["verdict"], 2)
+        _write(self.wip / PRD, "# PRD\n\nno tasks here\n")
+        row = convergence.build_row(self.ap_dir, _state(cycle=1), [], TS)
+        self.assertEqual(row["tasks_in_prd"], 0)
+
+    def test_unparseable_review_file_reads_null_not_zero(self) -> None:
+        # Neither a `reviewers:` line nor a `Verdict:` line: nothing parsed,
+        # so the findings are unknown - null, never the zero dict. An empty
+        # file and a long prose-only file both read that way (the length
+        # keeps a byte-size threshold from posing as the parse).
+        unparsed = {"cycle": 1, "reviewers": None, "verdict": None, "findings": None}
+        _write(self.review_path("1"), "")
+        self.assertEqual(convergence.read_cycle(self.reviews, PRD, 1), unparsed)
+        _write(self.review_path("1"), "lorem ipsum dolor sit amet " * 10 + "\n")
+        self.assertEqual(convergence.read_cycle(self.reviews, PRD, 1), unparsed)
+        # A parsed review with no consolidated table is a clean converged
+        # cycle: the zero dict is right there.
+        _write(
+            self.review_path("2"),
+            "---\nreviewers: alice\n---\n## Alice\n\nVerdict: converged\n",
+        )
+        self.assertEqual(
+            convergence.read_cycle(self.reviews, PRD, 2),
+            {
+                "cycle": 2,
+                "reviewers": ["alice"],
+                "verdict": "converged",
+                "findings": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            },
+        )
+        # A `Verdict:` line with no `reviewers:` line still parses.
+        _write(self.review_path("3"), "## Alice\n\nVerdict: 1 finding\n")
+        cycle = convergence.read_cycle(self.reviews, PRD, 3)
+        self.assertIsNone(cycle["reviewers"])
+        self.assertEqual(cycle["verdict"], 1)
+        self.assertEqual(
+            cycle["findings"],
+            {"critical": 0, "high": 0, "medium": 0, "low": 0},
+        )
+        # A `reviewers:` line and a table with no `Verdict:` line parses
+        # too: the rows are counted even though the verdict is unknown, so
+        # the findings never follow the verdict into null.
+        _write(
+            self.review_path("4"),
+            "---\nreviewers: alice\n---\n## Alice\n\n"
+            "| Consensus | Severity | Issue | File | Task | Found By |\n"
+            "|-----------|----------|-------|------|------|----------|\n"
+            "| [1/3] | 🟡 Medium | naming | src/z.ts | 1 | Alice |\n",
+        )
+        self.assertEqual(
+            convergence.read_cycle(self.reviews, PRD, 4),
+            {
+                "cycle": 4,
+                "reviewers": ["alice"],
+                "verdict": None,
+                "findings": {"critical": 0, "high": 0, "medium": 1, "low": 0},
+            },
         )
 
     def test_severity_counts_come_from_table_rows_only(self) -> None:
