@@ -634,6 +634,12 @@ class Loop:
                 file=self.err,
             )
             return 1
+        self._write_registry_entry(loops_dir, root, ap_dir)
+        return None
+
+    def _write_registry_entry(self, loops_dir: Path, root: Path, ap_dir: Path) -> None:
+        """Atomic write of this loop's registry entry; a failed write runs
+        unregistered, loud."""
         reg = loops_dir / f"{self.loop_pid}.json"
         entry = {
             "pid": self.loop_pid,
@@ -655,7 +661,6 @@ class Loop:
                 "autoclaude: registry write failed; running unregistered.",
                 file=self.err,
             )
-        return None
 
     def _plugin_gate(self, ap_dir: Path) -> int | None:
         state_path = ap_dir / "state.json"
@@ -746,29 +751,35 @@ class Loop:
 
         state = _load_json(state_path) if decision["signal"] == "" else None
         if isinstance(state, dict):
-            decision["prd"] = state.get("prd") or ""
-            decision["batch"] = (state.get("batch") or {}).get("id") or ""
-            decision["phase_end"] = state.get("next_phase") or ""
-            decision["next"] = decision["phase_end"]
-            detail = pause_detail(state)
-            stalled = None
-            stall = state.get("stall_reason")
-            if isinstance(stall, dict):
-                stalled = stall.get("stalled")
-            if detail:
-                decision["signal"] = "paused"
-                decision["detail"] = detail
-            elif stalled == "subagent_prompt_overrun":
-                decision["signal"] = "continue"
-                decision["detail"] = "replan"
-            elif not decision["next"]:
-                decision["signal"] = "done"
-            elif state_touched:
-                decision["signal"] = "continue"
+            self._decide_from_state(decision, state, state_touched)
 
         if decision["signal"] == "":
             self._decide_no_progress(decision, ap_dir, state_path, ts_start)
         return decision
+
+    def _decide_from_state(
+        self, decision: dict, state: dict, state_touched: bool
+    ) -> None:
+        """The readable-state rows of the table, in signal order."""
+        decision["prd"] = state.get("prd") or ""
+        decision["batch"] = (state.get("batch") or {}).get("id") or ""
+        decision["phase_end"] = state.get("next_phase") or ""
+        decision["next"] = decision["phase_end"]
+        detail = pause_detail(state)
+        stalled = None
+        stall = state.get("stall_reason")
+        if isinstance(stall, dict):
+            stalled = stall.get("stalled")
+        if detail:
+            decision["signal"] = "paused"
+            decision["detail"] = detail
+        elif stalled == "subagent_prompt_overrun":
+            decision["signal"] = "continue"
+            decision["detail"] = "replan"
+        elif not decision["next"]:
+            decision["signal"] = "done"
+        elif state_touched:
+            decision["signal"] = "continue"
 
     def _decide_no_progress(
         self, decision: dict, ap_dir: Path, state_path: Path, ts_start: float
@@ -784,22 +795,7 @@ class Loop:
 
         reset = self._detect_limit(ap_dir / "last-session.log")
         if isinstance(reset, int):
-            wait = usage_limit.wait_decision(
-                reset,
-                now=self._clock(),
-                max_wait_secs=self._int("_AUTOPILOT_LIMIT_WAIT_MAX", 21600),
-            )
-            if wait is not None:
-                stamp = _dt.datetime.fromtimestamp(reset).strftime("%H:%M")
-                decision["signal"] = "continue"
-                decision["detail"] = f"usage-limit; resuming ~{stamp}"
-                decision["limit_wait"] = wait
-            else:
-                decision["signal"] = "died"
-                decision["detail"] = (
-                    "usage-limit reset beyond _AUTOPILOT_LIMIT_WAIT_MAX "
-                    f"({self._int('_AUTOPILOT_LIMIT_WAIT_MAX', 21600)}s)"
-                )
+            self._decide_limit_wait(decision, reset)
             return
 
         api_fail = last_result_field(
@@ -808,38 +804,65 @@ class Loop:
             error_only=True,
         )
         if isinstance(api_fail, str) and _CONNECTION_FAIL.search(api_fail):
-            retries_max = self._int("_AUTOPILOT_NET_RETRIES_MAX", 3)
-            if self._net_retries < retries_max:
-                self._net_retries += 1
-                net_max = self._int("_AUTOPILOT_NET_WAIT_MAX", 1800)
-                deadline = self._clock() + net_max
-                print(
-                    f"\nautoclaude: API unreachable ({api_fail}). Polling "
-                    f"connectivity, max {net_max}s (retry {self._net_retries}"
-                    f"/{retries_max})…",
-                    file=self.err,
-                )
-                ok = False
-                while True:
-                    if self._probe():
-                        ok = True
-                        break
-                    if self._clock() >= deadline:
-                        break
-                    self._sleep(30)
-                if ok:
-                    decision["signal"] = "continue"
-                    decision["detail"] = f"network restored (retry {self._net_retries})"
-                else:
-                    decision["signal"] = "died"
-                    decision["detail"] = f"API unreachable for {net_max}s"
-            else:
-                decision["signal"] = "died"
-                decision["detail"] = (
-                    f"repeated API connection failures ({retries_max} relaunches)"
-                )
+            self._decide_network_outage(decision, api_fail)
             return
 
+        self._decide_died(decision, state_path)
+
+    def _decide_limit_wait(self, decision: dict, reset: int) -> None:
+        """A usage-limit hit is scheduling: wait inside the cap, else die."""
+        wait = usage_limit.wait_decision(
+            reset,
+            now=self._clock(),
+            max_wait_secs=self._int("_AUTOPILOT_LIMIT_WAIT_MAX", 21600),
+        )
+        if wait is not None:
+            stamp = _dt.datetime.fromtimestamp(reset).strftime("%H:%M")
+            decision["signal"] = "continue"
+            decision["detail"] = f"usage-limit; resuming ~{stamp}"
+            decision["limit_wait"] = wait
+        else:
+            decision["signal"] = "died"
+            decision["detail"] = (
+                "usage-limit reset beyond _AUTOPILOT_LIMIT_WAIT_MAX "
+                f"({self._int('_AUTOPILOT_LIMIT_WAIT_MAX', 21600)}s)"
+            )
+
+    def _decide_network_outage(self, decision: dict, api_fail: str) -> None:
+        """A connection failure: poll connectivity inside the retry budget, else die."""
+        retries_max = self._int("_AUTOPILOT_NET_RETRIES_MAX", 3)
+        if self._net_retries < retries_max:
+            self._net_retries += 1
+            net_max = self._int("_AUTOPILOT_NET_WAIT_MAX", 1800)
+            deadline = self._clock() + net_max
+            print(
+                f"\nautoclaude: API unreachable ({api_fail}). Polling "
+                f"connectivity, max {net_max}s (retry {self._net_retries}"
+                f"/{retries_max})…",
+                file=self.err,
+            )
+            ok = False
+            while True:
+                if self._probe():
+                    ok = True
+                    break
+                if self._clock() >= deadline:
+                    break
+                self._sleep(30)
+            if ok:
+                decision["signal"] = "continue"
+                decision["detail"] = f"network restored (retry {self._net_retries})"
+            else:
+                decision["signal"] = "died"
+                decision["detail"] = f"API unreachable for {net_max}s"
+        else:
+            decision["signal"] = "died"
+            decision["detail"] = (
+                f"repeated API connection failures ({retries_max} relaunches)"
+            )
+
+    def _decide_died(self, decision: dict, state_path: Path) -> None:
+        """The died ladder: retry, park, or halt loud on a bootstrap."""
         verdict = died_next(
             decision["prd"],
             self._died_retries,
@@ -1069,37 +1092,7 @@ class Loop:
         to halt."""
         marker = ap_dir / "park-requested"
         if marker.is_file():
-            self._park_relaunches += 1
-            marker_mtime = _mtime(marker)
-            age = (
-                0 if marker_mtime is None else max(0, int(self._clock()) - marker_mtime)
-            )
-            stale_max = max(
-                self._int("_AUTOPILOT_SESSION_MAX", 7200),
-                self._int("_AUTOPILOT_SESSION_MAX_REVIEW", 10800),
-            )
-            if (
-                self._park_relaunches > self._int("_AUTOPILOT_DIED_RETRIES_MAX", 1)
-                or age >= stale_max
-            ):
-                print(
-                    f"\nautoclaude: park-requested unconsumed "
-                    f"({self._park_relaunches} relaunches, {age}s) — halting "
-                    "(systemic).",
-                    file=self.err,
-                )
-                self._notify(
-                    f"autopilot ⚠️ {self._repo_name()}",
-                    "Park marker unconsumed; halting.",
-                )
-                return 1
-            print(
-                f"\nautoclaude: park-requested pending (relaunch "
-                f"{self._park_relaunches}); backing off then relaunching.",
-                file=self.err,
-            )
-            self._sleep(self._int("_AUTOPILOT_PARK_BACKOFF", 30))
-            return None
+            return self._park_marker_pending(marker)
         self._park_relaunches = 0
         try:
             marker.write_text(
@@ -1130,6 +1123,41 @@ class Loop:
             f"autopilot ⏭ {self._repo_name()}",
             f"Parking {decision['prd']}.",
         )
+        return None
+
+    def _park_marker_pending(self, marker: Path) -> int | None:
+        """An unconsumed marker from the previous relaunch: halt when the
+        relaunch budget or the stale age trips, else back off and relaunch."""
+        self._park_relaunches += 1
+        marker_mtime = _mtime(marker)
+        age = (
+            0 if marker_mtime is None else max(0, int(self._clock()) - marker_mtime)
+        )
+        stale_max = max(
+            self._int("_AUTOPILOT_SESSION_MAX", 7200),
+            self._int("_AUTOPILOT_SESSION_MAX_REVIEW", 10800),
+        )
+        if (
+            self._park_relaunches > self._int("_AUTOPILOT_DIED_RETRIES_MAX", 1)
+            or age >= stale_max
+        ):
+            print(
+                f"\nautoclaude: park-requested unconsumed "
+                f"({self._park_relaunches} relaunches, {age}s) — halting "
+                "(systemic).",
+                file=self.err,
+            )
+            self._notify(
+                f"autopilot ⚠️ {self._repo_name()}",
+                "Park marker unconsumed; halting.",
+            )
+            return 1
+        print(
+            f"\nautoclaude: park-requested pending (relaunch "
+            f"{self._park_relaunches}); backing off then relaunching.",
+            file=self.err,
+        )
+        self._sleep(self._int("_AUTOPILOT_PARK_BACKOFF", 30))
         return None
 
     # ── run ──
