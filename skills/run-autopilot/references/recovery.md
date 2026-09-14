@@ -22,9 +22,9 @@ table); `do_stall` never writes it (its own per-PRD reset clears it instead).
 |---|---|---|
 | 0 | stalled | print the STALLED banner, continue the batch |
 | 4 | move failed | PAUSE per the mv-verify invariant (`site: "mv_verify"`) |
-| 9 | deferred-record I/O failed | PAUSE (`site: "statectl_fail"` family) |
+| 9 | deferred-record I/O failed or custody write failed (PRD already in `hold/`, intent retained; re-run the same stall) | PAUSE (`site: "statectl_fail"` family) |
 | 10 | stall_op conflict | PAUSE for human reconciliation |
-| 2 | state unreadable | the corrupted-state row of Error Handling applies |
+| 2 | state unreadable, OR (stderr starts with `autopilot: cap_critical custody capture failed:`) the range capture failed with state and the PRD untouched | corrupted-state row for the former; for the latter retry the same stall ONCE, then PAUSE in every mode: `phase`/`next_phase: "paused"`, `pause_reason = {"site": "sub_skill_fail", "detail": "<the capture stderr line>"}`, PRD left in `wip/`, state otherwise untouched. This is sanctioned batch-halt row 1 (a CRITICAL is about to ship with no custody) — never delete `state.json`, never stall the PRD under another site |
 
 On exit 0, print the banner and continue the batch:
 ```
@@ -63,6 +63,17 @@ carries `clarification`, `reviewer_fail`, `sub_skill_fail`, and the others):
   the PRD here before the build starts, so a human splits it instead of the
   batch grinding on it. Interactive runs only warn. `detail` carries the task
   count and the ceiling it broke.
+- `cap_critical` — a loop-mode Phase 5 cap-out with an unresolved CRITICAL
+  (`references/phase-review.md` Cap check). The stall captures the PRD's
+  `work_start_sha..HEAD` range in its preflight, then records custody for an
+  attended decision: the `critical-on-master` marker
+  (`<autopilot_dir>/critical-on-master`), a `recorded` row in the journal
+  (`ledger/custody.jsonl`), the locator config key `autopilot.custodyMarker`,
+  the `batch.critical_on_master` mirror, and the PRD's pending deferrals
+  migrated into custody as `<op_id>-dd<i>` records. Phase 0's "Handle pending
+  custody" handler (`references/phase-build.md`) closes it with the attended
+  `autopilot custody resolve --prd <stem> --choice <choice>` — `revert`,
+  `branch-and-revert`, or `accept`.
 - `oversized_task`, `escalation_exhausted`, `replan_exhausted`, `clarification` —
   the pre-existing stall sites (plan-tasks per-task oversize, rework
   tier-exhaustion, replan-loop exhaustion, and a loop-mode Phase 2 ambiguity
@@ -169,9 +180,9 @@ Reached from **Phase 2** when `/autopilot:plan-tasks` exits non-zero and writes 
    |---|---|---|
    | 0 | stalled | print the STALLED banner below, continue the batch |
    | 4 | move failed | PAUSE per the mv-verify invariant (`site: "mv_verify"`) |
-   | 9 | deferred-record I/O failed | PAUSE (`site: "statectl_fail"` family) |
+   | 9 | deferred-record I/O failed or custody write failed (PRD already in `hold/`, intent retained; re-run the same stall) | PAUSE (`site: "statectl_fail"` family) |
    | 10 | stall_op conflict | PAUSE for human reconciliation |
-   | 2 | state unreadable | the corrupted-state row of Error Handling applies |
+   | 2 | state unreadable, OR (stderr starts with `autopilot: cap_critical custody capture failed:`) the range capture failed with state and the PRD untouched | corrupted-state row for the former; for the latter retry the same stall ONCE, then PAUSE in every mode: `phase`/`next_phase: "paused"`, `pause_reason = {"site": "sub_skill_fail", "detail": "<the capture stderr line>"}`, PRD left in `wip/`, state otherwise untouched. This is sanctioned batch-halt row 1 (a CRITICAL is about to ship with no custody) — never delete `state.json`, never stall the PRD under another site |
 
    On exit 0, print:
    ```
@@ -229,9 +240,9 @@ Then perform the **stall move**, identical to the "plan-tasks stall: oversized t
 |---|---|---|
 | 0 | stalled | print the STALLED banner below, continue the batch |
 | 4 | move failed | PAUSE per the mv-verify invariant (`site: "mv_verify"`) |
-| 9 | deferred-record I/O failed | PAUSE (`site: "statectl_fail"` family) |
+| 9 | deferred-record I/O failed or custody write failed (PRD already in `hold/`, intent retained; re-run the same stall) | PAUSE (`site: "statectl_fail"` family) |
 | 10 | stall_op conflict | PAUSE for human reconciliation |
-| 2 | state unreadable | the corrupted-state row of Error Handling applies |
+| 2 | state unreadable, OR (stderr starts with `autopilot: cap_critical custody capture failed:`) the range capture failed with state and the PRD untouched | corrupted-state row for the former; for the latter retry the same stall ONCE, then PAUSE in every mode: `phase`/`next_phase: "paused"`, `pause_reason = {"site": "sub_skill_fail", "detail": "<the capture stderr line>"}`, PRD left in `wip/`, state otherwise untouched. This is sanctioned batch-halt row 1 (a CRITICAL is about to ship with no custody) — never delete `state.json`, never stall the PRD under another site |
 
 Delete `dev/local/autopilot/replan-context.md` if it exists (defensive — it should already be gone by the time we reach a rework path; the CLI does not own that file).
 
