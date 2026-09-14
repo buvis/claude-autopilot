@@ -941,24 +941,28 @@ class Loop:
                 fh.write(encoded + "\n")
             # Session row first, so build_row sees this session's batch.
             if phase_launched == "review" and decision.get("phase_end") == "done":
-                event = self._convergence_line(ap_dir, ts_end)
-                if event is None:
-                    return
-                for path in (ap_dir, ledger_dir):
-                    with open(path / "loop-metrics.jsonl", "a", encoding="utf-8") as fh:
-                        fh.write(event + "\n")
+                self._append_convergence(ap_dir, ledger_dir, ts_end)
         except (OSError, ValueError, TypeError):
             pass
 
-    def _convergence_line(self, ap_dir: Path, ts_end: float) -> str | None:
-        """The review_converged row, encoded; None when state.json is gone or
-        malformed (the session row already written stays)."""
+    def _append_convergence(
+        self,
+        ap_dir: Path,
+        ledger_dir: Path,
+        ts_end: float,
+    ) -> None:
+        """The review_converged row, appended to both metrics files; nothing
+        when state.json is gone or malformed (the session row already written
+        stays)."""
         state = _load_json(ap_dir / "state.json")
         if not isinstance(state, dict):
-            return None
+            return
         rows = render_metrics.load_rows(ap_dir / "loop-metrics.jsonl")
         row = convergence.build_row(ap_dir, state, rows, int(ts_end))
-        return json.dumps(row, separators=(",", ":"))
+        event = json.dumps(row, separators=(",", ":"))
+        for path in (ap_dir, ledger_dir):
+            with open(path / "loop-metrics.jsonl", "a", encoding="utf-8") as fh:
+                fh.write(event + "\n")
 
     # ── act branches ──
 

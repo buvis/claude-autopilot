@@ -726,45 +726,58 @@ def _metrics_rows(ap: Path) -> list[dict]:
     return [json.loads(line) for line in primary.decode().strip().splitlines()]
 
 
-def test_review_exit_to_done_writes_the_convergence_row(tmp_path):
-    def converging_review(ap_dir: Path) -> None:
-        (ap_dir / "state.json").write_text(
-            json.dumps(
-                {
-                    "prd": "00188-x-v1.md",
-                    "next_phase": "done",
-                    "batch": {"id": "b"},
-                    "cycle": 2,
-                    "rework_cap": 2,
-                    "tasks_total": 3,
-                    "tasks_completed": 3,
-                    "deferred_decisions": [
-                        {"type": "cap-overflow", "issue": "x", "severity": "high"},
-                    ],
-                },
-            ),
-        )
+def _state_step(**state):
+    """A session that writes ``state`` and a bare result log."""
+
+    def step(ap_dir: Path) -> None:
+        (ap_dir / "state.json").write_text(json.dumps(state))
         write_log(ap_dir, {"type": "result"})
 
-    lp = make_loop(tmp_path, [converging_review, terminal_step()])
-    ap = lp._test["ap_dir"]
+    return step
+
+
+def _write_review(
+    ap: Path,
+    name: str,
+    reviewers: str,
+    verdict: str,
+    *rows: str,
+) -> None:
+    """The review file the convergence row reads: frontmatter, one reviewer
+    section with a findings table of ``rows``, and the verdict line."""
     reviews = ap.parent / "reviews"
     reviews.mkdir(parents=True)
-    (reviews / "00188-x-v1-review-2.md").write_text(
-        "---\n"
-        "reviewers: alice,blake,bob\n"
-        "---\n"
-        "\n"
-        "## Alice\n"
-        "\n"
-        "| # | Severity | Issue |\n"
-        "|---|----------|-------|\n"
-        "| [2/3] | 🟠 High | the gate lies |\n"
-        "| [2/3] | 🟠 High | the mirror drifts |\n"
-        "| [1/3] | 🟡 Medium | typo |\n"
-        "\n"
-        "Verdict: 3 findings\n"
-        "Tests: 1 passed\n",
+    (reviews / name).write_text(
+        f"---\nreviewers: {reviewers}\n---\n\n## Alice\n\n"
+        "| # | Severity | Issue |\n|---|----------|-------|\n"
+        + "".join(f"{row}\n" for row in rows)
+        + f"\nVerdict: {verdict}\n",
+    )
+
+
+def test_review_exit_to_done_writes_the_convergence_row(tmp_path):
+    converging_review = _state_step(
+        prd="00188-x-v1.md",
+        next_phase="done",
+        batch={"id": "b"},
+        cycle=2,
+        rework_cap=2,
+        tasks_total=3,
+        tasks_completed=3,
+        deferred_decisions=[
+            {"type": "cap-overflow", "issue": "x", "severity": "high"},
+        ],
+    )
+    lp = make_loop(tmp_path, [converging_review, terminal_step()])
+    ap = lp._test["ap_dir"]
+    _write_review(
+        ap,
+        "00188-x-v1-review-2.md",
+        "alice,blake,bob",
+        "3 findings",
+        "| [2/3] | 🟠 High | the gate lies |",
+        "| [2/3] | 🟠 High | the mirror drifts |",
+        "| [1/3] | 🟡 Medium | typo |",
     )
     write_state(ap, prd="00188-x-v1.md", next_phase="review", batch={"id": "b"})
     assert lp.run() == 0
@@ -796,57 +809,31 @@ def test_review_exit_to_done_writes_the_convergence_row(tmp_path):
 def test_convergence_row_fields_come_from_state_and_review_files(tmp_path):
     # A different state, review file and a preceding build session: every
     # payload field must move with its source, so a constant row fails.
-    def build(ap_dir: Path) -> None:
-        (ap_dir / "state.json").write_text(
-            json.dumps(
-                {"prd": "00190-y-v1.md", "next_phase": "review", "batch": {"id": "b2"}},
-            ),
-        )
-        write_log(ap_dir, {"type": "result"})
-
-    def converging_review(ap_dir: Path) -> None:
-        (ap_dir / "state.json").write_text(
-            json.dumps(
-                {
-                    "prd": "00190-y-v1.md",
-                    "next_phase": "done",
-                    "batch": {"id": "b2"},
-                    "cycle": 1,
-                    "rework_cap": 3,
-                    "tasks_total": 5,
-                    "tasks_completed": 4,
-                },
-            ),
-        )
-        write_log(ap_dir, {"type": "result"})
-
+    build = _state_step(prd="00190-y-v1.md", next_phase="review", batch={"id": "b2"})
+    converging_review = _state_step(
+        prd="00190-y-v1.md",
+        next_phase="done",
+        batch={"id": "b2"},
+        cycle=1,
+        rework_cap=3,
+        tasks_total=5,
+        tasks_completed=4,
+    )
     lp = make_loop(tmp_path, [build, converging_review, terminal_step()])
     ap = lp._test["ap_dir"]
-    reviews = ap.parent / "reviews"
-    reviews.mkdir(parents=True)
-    (reviews / "00190-y-v1-review-1.md").write_text(
-        "---\n"
-        "reviewers: carl,eve\n"
-        "---\n"
-        "\n"
-        "## Carl\n"
-        "\n"
-        "| # | Severity | Issue |\n"
-        "|---|----------|-------|\n"
-        "| [1/2] | ⚪ Low | nit |\n"
-        "| [2/2] | 🔴 Critical | the row lies |\n"
-        "\n"
-        "Verdict: converged\n",
+    _write_review(
+        ap,
+        "00190-y-v1-review-1.md",
+        "carl,eve",
+        "converged",
+        "| [1/2] | ⚪ Low | nit |",
+        "| [2/2] | 🔴 Critical | the row lies |",
     )
     write_state(ap, prd="00190-y-v1.md", next_phase="build", batch={"id": "b2"})
     assert lp.run() == 0
     rows = _metrics_rows(ap)
-    assert [row.get("phase_launched") for row in rows] == [
-        "build",
-        "review",
-        None,
-        "done",
-    ]
+    phases = [row.get("phase_launched") for row in rows]
+    assert phases == ["build", "review", None, "done"]
     event = rows[2]
     assert event["event"] == "review_converged"
     assert event["prd"] == "00190-y-v1.md"
