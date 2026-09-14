@@ -718,6 +718,205 @@ def test_one_metrics_line_per_session(tmp_path):
     assert [json.loads(row)["signal"] for row in rows] == ["continue", "done"]
 
 
+def _metrics_rows(ap: Path) -> list[dict]:
+    """Parsed rows of the primary metrics file, after checking the ledger
+    mirror is byte-identical to it."""
+    primary = (ap / "loop-metrics.jsonl").read_bytes()
+    assert primary == (ap / "ledger" / "loop-metrics.jsonl").read_bytes()
+    return [json.loads(line) for line in primary.decode().strip().splitlines()]
+
+
+def test_review_exit_to_done_writes_the_convergence_row(tmp_path):
+    def converging_review(ap_dir: Path) -> None:
+        (ap_dir / "state.json").write_text(
+            json.dumps(
+                {
+                    "prd": "00188-x-v1.md",
+                    "next_phase": "done",
+                    "batch": {"id": "b"},
+                    "cycle": 2,
+                    "rework_cap": 2,
+                    "tasks_total": 3,
+                    "tasks_completed": 3,
+                    "deferred_decisions": [
+                        {"type": "cap-overflow", "issue": "x", "severity": "high"},
+                    ],
+                },
+            ),
+        )
+        write_log(ap_dir, {"type": "result"})
+
+    lp = make_loop(tmp_path, [converging_review, terminal_step()])
+    ap = lp._test["ap_dir"]
+    reviews = ap.parent / "reviews"
+    reviews.mkdir(parents=True)
+    (reviews / "00188-x-v1-review-2.md").write_text(
+        "---\n"
+        "reviewers: alice,blake,bob\n"
+        "---\n"
+        "\n"
+        "## Alice\n"
+        "\n"
+        "| # | Severity | Issue |\n"
+        "|---|----------|-------|\n"
+        "| [2/3] | 🟠 High | the gate lies |\n"
+        "| [2/3] | 🟠 High | the mirror drifts |\n"
+        "| [1/3] | 🟡 Medium | typo |\n"
+        "\n"
+        "Verdict: 3 findings\n"
+        "Tests: 1 passed\n",
+    )
+    write_state(ap, prd="00188-x-v1.md", next_phase="review", batch={"id": "b"})
+    assert lp.run() == 0
+    rows = _metrics_rows(ap)
+    assert len(rows) == 3
+    assert "event" not in rows[0] and rows[0]["phase_launched"] == "review"
+    assert "event" not in rows[2] and rows[2]["phase_launched"] == "done"
+    event = rows[1]
+    assert event["event"] == "review_converged"
+    assert event["prd"] == "00188-x-v1.md"
+    assert event["batch"] == "b"
+    assert event["outcome"] == "cap_deferred"
+    assert event["rework_cap"] == 2
+    assert event["cycles_to_converge"] == 2
+    assert event["ts"] == rows[0]["ts_end"]
+    assert event["tasks_planned"] == 3
+    assert event["tasks_completed"] == 3
+    assert event["build_models"] == []  # the review's own row never counts
+    assert [c["cycle"] for c in event["cycles"]] == [1, 2]
+    assert event["cycles"][0]["reviewers"] is None  # cycle 1 has no file
+    assert event["cycles"][0]["verdict"] is None
+    assert event["cycles"][0]["findings"] is None
+    assert event["cycles"][1]["reviewers"] == ["alice", "blake", "bob"]
+    assert event["cycles"][1]["verdict"] == 3
+    assert event["cycles"][1]["findings"]["high"] == 2
+    assert event["cycles"][1]["findings"]["medium"] == 1
+
+
+def test_convergence_row_fields_come_from_state_and_review_files(tmp_path):
+    # A different state, review file and a preceding build session: every
+    # payload field must move with its source, so a constant row fails.
+    def build(ap_dir: Path) -> None:
+        (ap_dir / "state.json").write_text(
+            json.dumps(
+                {"prd": "00190-y-v1.md", "next_phase": "review", "batch": {"id": "b2"}},
+            ),
+        )
+        write_log(ap_dir, {"type": "result"})
+
+    def converging_review(ap_dir: Path) -> None:
+        (ap_dir / "state.json").write_text(
+            json.dumps(
+                {
+                    "prd": "00190-y-v1.md",
+                    "next_phase": "done",
+                    "batch": {"id": "b2"},
+                    "cycle": 1,
+                    "rework_cap": 3,
+                    "tasks_total": 5,
+                    "tasks_completed": 4,
+                },
+            ),
+        )
+        write_log(ap_dir, {"type": "result"})
+
+    lp = make_loop(tmp_path, [build, converging_review, terminal_step()])
+    ap = lp._test["ap_dir"]
+    reviews = ap.parent / "reviews"
+    reviews.mkdir(parents=True)
+    (reviews / "00190-y-v1-review-1.md").write_text(
+        "---\n"
+        "reviewers: carl,eve\n"
+        "---\n"
+        "\n"
+        "## Carl\n"
+        "\n"
+        "| # | Severity | Issue |\n"
+        "|---|----------|-------|\n"
+        "| [1/2] | ⚪ Low | nit |\n"
+        "| [2/2] | 🔴 Critical | the row lies |\n"
+        "\n"
+        "Verdict: converged\n",
+    )
+    write_state(ap, prd="00190-y-v1.md", next_phase="build", batch={"id": "b2"})
+    assert lp.run() == 0
+    rows = _metrics_rows(ap)
+    assert [row.get("phase_launched") for row in rows] == [
+        "build",
+        "review",
+        None,
+        "done",
+    ]
+    event = rows[2]
+    assert event["event"] == "review_converged"
+    assert event["prd"] == "00190-y-v1.md"
+    assert event["batch"] == "b2"
+    assert event["outcome"] == "converged"
+    assert event["rework_cap"] == 3
+    assert event["cycles_to_converge"] == 1
+    assert event["ts"] == rows[1]["ts_end"]
+    assert event["tasks_planned"] == 5
+    assert event["tasks_completed"] == 4
+    assert event["build_models"] == ["claude-sonnet-5[1m]"]
+    assert len(event["cycles"]) == 1
+    assert event["cycles"][0]["cycle"] == 1
+    assert event["cycles"][0]["reviewers"] == ["carl", "eve"]
+    assert event["cycles"][0]["verdict"] == "converged"
+    assert event["cycles"][0]["findings"] == {
+        "critical": 1,
+        "high": 0,
+        "medium": 0,
+        "low": 1,
+    }
+
+
+def test_review_exit_to_review_writes_no_convergence_row(tmp_path):
+    def rework_review(ap_dir: Path) -> None:
+        (ap_dir / "state.json").write_text(
+            json.dumps(
+                {
+                    "prd": "00188-x-v1.md",
+                    "next_phase": "review",
+                    "cycle": 2,
+                    "batch": {"id": "b"},
+                },
+            ),
+        )
+        write_log(ap_dir, {"type": "result"})
+
+    lp = make_loop(tmp_path, [rework_review, terminal_step()])
+    ap = lp._test["ap_dir"]
+    write_state(
+        ap,
+        prd="00188-x-v1.md",
+        next_phase="review",
+        cycle=1,
+        batch={"id": "b"},
+    )
+    assert lp.run() == 0
+    rows = _metrics_rows(ap)
+    assert [row["phase_launched"] for row in rows] == ["review", "review"]
+    assert all("event" not in row for row in rows)
+
+
+def test_build_exit_writes_no_convergence_row(tmp_path):
+    def finishing_build(ap_dir: Path) -> None:
+        (ap_dir / "state.json").write_text(
+            json.dumps(
+                {"prd": "00188-x-v1.md", "next_phase": "done", "batch": {"id": "b"}},
+            ),
+        )
+        write_log(ap_dir, {"type": "result"})
+
+    lp = make_loop(tmp_path, [finishing_build, terminal_step()])
+    ap = lp._test["ap_dir"]
+    write_state(ap, prd="00188-x-v1.md", next_phase="build", batch={"id": "b"})
+    assert lp.run() == 0
+    rows = _metrics_rows(ap)
+    assert [row["phase_launched"] for row in rows] == ["build", "done"]
+    assert all("event" not in row for row in rows)
+
+
 # ── preflights ───────────────────────────────────────────────────────────────
 
 
