@@ -272,9 +272,29 @@ def test_git_push_row_routes_a_guard_denial_to_custody_resolve() -> None:
     )
     where = "the `Git push fails` row"
     _assert_present(row, _SKILL, where, (_PUSH_DENIAL_SENTENCE,))
+    # The resolve instruction belongs to the Interactive cell (the one that
+    # pushes); the Loop-mode cell defers the denial to the attended Phase 0
+    # and never instructs a headless resolve.
+    cells = _cells(row)
+    interactive, loop = cells[1], cells[2]
+    assert _PUSH_DENIAL_SENTENCE in interactive, (
+        f"{_SKILL}: expected the push-denial sentence in the Interactive cell of "
+        f"{where} — found it elsewhere or not at all."
+    )
+    assert _PUSH_DENIAL_SENTENCE not in loop, (
+        f"{_SKILL}: the Loop-mode cell of {where} carries the push-denial sentence "
+        "— an unattended session must not be told to run custody resolve."
+    )
+    _assert_present(
+        loop, _SKILL, f"the Loop-mode cell of {where}", ("Handle pending custody",)
+    )
+    assert "custody resolve" not in loop, (
+        f"{_SKILL}: the Loop-mode cell of {where} names `custody resolve` — loop "
+        "mode leaves resolution to the attended Phase 0."
+    )
     # No countermand after the sentence in its own cell, no strike-through,
     # and no hook bypass anywhere in the row once the sentence is stripped.
-    cell = next(c for c in _cells(row) if _PUSH_DENIAL_SENTENCE in c)
+    cell = interactive
     tail = cell[cell.index(_PUSH_DENIAL_SENTENCE) + len(_PUSH_DENIAL_SENTENCE) :]
     _assert_absent(
         tail,
