@@ -262,6 +262,10 @@ def test_step_5_5_states_the_three_rules_and_their_numbers() -> None:
         "gate stalls plans OVER 15 tasks; inverted, the planner reads a "
         "small plan as the stall and a large one as the pass."
     )
+
+
+def test_step_5_5_states_the_expansion_ratio_rule_and_its_floor() -> None:
+    prose = _STEP_5_5_PROSE
     assert _near(prose, r"\b3\.0\b", r"expansion|ratio"), (
         f"{_SKILL_MD}: step 5.5 no longer states the expansion-ratio rule "
         "with its number - no sentence puts `3.0` beside `expansion` or "
@@ -297,6 +301,10 @@ def test_step_5_5_states_the_three_rules_and_their_numbers() -> None:
         "ratio rule applies with MORE THAN 8 planned tasks; inverted, it "
         "applies to exactly the small plans it was meant to spare."
     )
+
+
+def test_step_5_5_states_the_unlisted_modules_rule_as_two_or_more() -> None:
+    prose = _STEP_5_5_PROSE
     assert _near(prose, r"\b(?:2|two)\b", r"unlisted|module"), (
         f"{_SKILL_MD}: step 5.5 no longer states the unlisted-modules rule "
         "with its number - no sentence puts `2` beside unlisted modules. Two "
@@ -313,6 +321,10 @@ def test_step_5_5_states_the_three_rules_and_their_numbers() -> None:
         "at-most comparison (fewer than / under / at most 2, or 2 or fewer). "
         "The gate stalls on 2 OR MORE unlisted modules."
     )
+
+
+def test_step_5_5_names_plan_expansion_as_the_stall_site() -> None:
+    prose = _STEP_5_5_PROSE
     # `(?!:)` keeps the override key out of it: `plan_expansion: allow`
     # beside `stall` is the override sentence, not the stall site.
     assert _near(prose, r"\bplan_expansion\b(?!:)", r"stall\w*|site"), (
@@ -408,8 +420,10 @@ def test_oversized_override_guidance_explicitly_sets_rework_cap_three() -> None:
         "for them, raised automatically, or never set by hand reverses the "
         "instruction while keeping its words."
     )
-    # The worked example: a fence the operator copies, holding exactly the
-    # two lines between frontmatter delimiters.
+
+
+def _paired_fences() -> list[tuple[int, list[str]]]:
+    """Step 5.5's fences holding both override lines, with their offsets."""
     fences = [
         (
             match.start(),
@@ -417,11 +431,17 @@ def test_oversized_override_guidance_explicitly_sets_rework_cap_three() -> None:
         )
         for match in _FENCE_RE.finditer(_STEP_5_5)
     ]
-    paired = [
+    return [
         (start, lines)
         for start, lines in fences
         if "plan_expansion: allow" in lines and "rework_cap: 3" in lines
     ]
+
+
+def test_oversized_override_guidance_pairs_a_frontmatter_example_fence() -> None:
+    # The worked example: a fence the operator copies, holding exactly the
+    # two lines between frontmatter delimiters.
+    paired = _paired_fences()
     assert paired, (
         f"{_SKILL_MD}: step 5.5 has no code fence holding both a "
         "`plan_expansion: allow` line and a `rework_cap: 3` line. The "
@@ -440,9 +460,13 @@ def test_oversized_override_guidance_explicitly_sets_rework_cap_three() -> None:
         "delimiters make it read as a whole PRD header to reproduce, not "
         "the two lines to add."
     )
+
+
+def test_oversized_override_example_lead_in_names_the_operators_act() -> None:
     # The sentence that introduces the fence names the operator's act. "After
     # the parser runs, the PRD header reads:" introduces the same two lines
     # as the parser's output, and the operator adds nothing.
+    paired = _paired_fences()
     lead_in = _last_sentence_before(_STEP_5_5_PROSE, paired[0][0])
     assert re.search(r"\b(?:set|add|write|carr)\w*", lead_in, re.IGNORECASE), (
         f"{_SKILL_MD}: the sentence introducing step 5.5's paired "
@@ -458,6 +482,10 @@ def test_oversized_override_guidance_explicitly_sets_rework_cap_three() -> None:
         "parser hands the second line to it. Keep the neither/nor sentence "
         "separate from the sentence that introduces the fence."
     )
+
+
+def test_oversized_override_guidance_denies_any_automatic_cap_change() -> None:
+    prose = _STEP_5_5_PROSE
     # No automatic cap mutation: the contract's own clause shape, `neither
     # ... nor ... changes the cap automatically` (or `nothing ...`). A bare
     # `not` before the clause also matched "NOT ONLY the gate but the parser
@@ -521,10 +549,15 @@ def test_step_4_persists_files_on_every_task() -> None:
     )
 
 
-def test_step_4_7_payloads_carry_files() -> None:
-    payloads = [
+def _worked_payloads() -> list[str]:
+    """Step 4.7's worked task-add payload fences."""
+    return [
         block for block in _fenced_blocks(_STEP_4_7) if '"estimated_tokens"' in block
     ]
+
+
+def test_step_4_7_payloads_carry_files() -> None:
+    payloads = _worked_payloads()
     assert len(payloads) == 2, (
         f"{_SKILL_MD}: step 4.7 has {len(payloads)} worked task-add payloads "
         '(fences carrying "estimated_tokens"), not two. The one-file and '
@@ -549,7 +582,10 @@ def test_step_4_7_payloads_carry_files() -> None:
         "exclusion under any other reason is not the example the prose "
         "promises."
     )
-    for payload in payloads:
+
+
+def test_step_4_7_payload_files_are_real_repo_relative_paths() -> None:
+    for payload in _worked_payloads():
         assert '"files": [' in payload, (
             f"{_SKILL_MD}: a worked task-add payload in step 4.7 "
             f'({payload.strip()[:80]!r}) carries no `"files": [` key. The '
@@ -575,6 +611,12 @@ def test_step_4_7_payloads_carry_files() -> None:
                 "path (like `cli/policy.py`). `.`, `..`, `*` or an absolute "
                 "path is a placeholder the gate cannot map to a module."
             )
+
+
+def test_step_4_7_payload_files_agree_with_their_routing_claim() -> None:
+    for payload in _worked_payloads():
+        listed = re.search(r'"files": \[([^\]]*)\]', payload)
+        paths = re.findall(r'"([^"]*)"', listed.group(1)) if listed else []
         # Each example's `files` has to agree with its own routing claim:
         # one path where it says qwen-eligible, two or more where it says
         # excluded for `files`.
