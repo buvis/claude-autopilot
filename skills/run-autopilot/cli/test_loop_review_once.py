@@ -5,8 +5,7 @@ that refuses anything but review/done before spawning, one routed
 spawn, the decision read, one metrics row, exit. No relaunch, no park,
 no notification, and the operator's pause marker is left where it is.
 
-Fixtures come from cli/loop_testutil.py rather than being duplicated (that
-file is already past 1300 lines; these nine cases would push it further).
+Shared fixtures come from cli/loop_testutil.py.
 """
 
 from __future__ import annotations
