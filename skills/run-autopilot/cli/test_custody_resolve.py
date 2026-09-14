@@ -654,6 +654,42 @@ class RefusalTests(_ResolveCase):
         self.assert_retained(fx)
 
 
+class MirrorStaleTests(_ResolveCase):
+    def test_unreadable_mirror_exits_9_with_the_custody_already_closed(self) -> None:
+        # Step 5 writes the mirror LAST: the ledger record, the `resolved`
+        # row, the marker release and the locator unset have all landed by
+        # the time the mirror write fails, so the custody is closed (never
+        # compacted) and a rerun finds nothing pending.
+        fx = self.custody()
+        fx.state_path.write_text("{not json", encoding="utf-8")
+
+        proc = self.resolve(fx, "accept")
+
+        self.assertEqual(proc.returncode, 9, proc.stderr)
+        self.assertIn("mirror stale, custody closed", proc.stderr)
+        self.assertEqual(fx.marker_op_ids(), [])
+        self.assertFalse(fx.marker_path.exists())
+        self.assertIsNone(fx.locator())
+        self.assertEqual(len(fx.resolutions()), 1, fx.resolutions())
+        resolved = [
+            (r["op_id"], r["choice"])
+            for r in custody.read_journal(fx.autopilot_dir)
+            if r.get("event") == "resolved"
+        ]
+        self.assertEqual(resolved, [(OP_ID, "accept")])
+        self.assertEqual(custody.pending(fx.autopilot_dir), [])
+        self.assertEqual(fx.head(), fx.end)
+        self.assertEqual(fx.commit_count(), 3)
+        self.assertEqual(fx.state_path.read_text(encoding="utf-8"), "{not json")
+
+        again = self.resolve(fx, "accept")
+
+        self.assertEqual(again.returncode, 1)
+        self.assertIn("no pending custody for", again.stdout + again.stderr)
+        self.assertEqual(len(fx.resolutions()), 1, fx.resolutions())
+        self.assertEqual(fx.commit_count(), 3)
+
+
 class ListTests(_ResolveCase):
     def test_list_prints_each_pending_entry_as_a_json_line_and_changes_nothing(
         self,

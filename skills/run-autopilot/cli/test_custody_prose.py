@@ -3,8 +3,9 @@ Phase 0 pending-custody handler and the Phase 3 `state.git_dir` capture in
 `references/phase-build.md`, the loop-mode cap-out range sentence in
 `references/phase-review.md`, and the `cap_critical` slug plus the
 custody-aware exit rows in `references/recovery.md`. It also pins the
-`[checks] custody push guard` block in `dev/bin/release-checks` and the two
-custody entries under `[Unreleased]` in `CHANGELOG.md`.
+`[checks] custody push guard` and `[checks] custody core` blocks in
+`dev/bin/release-checks` and the two custody entries under `[Unreleased]` in
+`CHANGELOG.md`.
 
 Mirrors test_dispatch_prose.py's pattern for pinning a skill file's prose:
 resolve each target file's path relative to this file, read it once, and
@@ -148,11 +149,13 @@ def test_pending_custody_handler_logs_the_count_and_continues_in_loop_mode() -> 
 
 def test_pending_custody_handler_pauses_when_custody_state_is_unreadable() -> None:
     custody = _custody_section()
-    _exit_code(custody, _PHASE_BUILD, _CUSTODY_WHERE, 9)
+    at = _exit_code(custody, _PHASE_BUILD, _CUSTODY_WHERE, 9)
+    # Sliced after the exit-9 offset, like the exit-5/STOP sibling: a PAUSE
+    # bound to some other exit row must not satisfy this pin.
     _assert_present(
-        custody,
+        custody[at:],
         _PHASE_BUILD,
-        _CUSTODY_WHERE,
+        f"{_CUSTODY_WHERE} after exit 9",
         ("PAUSE", 'site: "sub_skill_fail"'),
     )
     _assert_absent(custody, _PHASE_BUILD, _CUSTODY_WHERE, ("fine to walk past",))
@@ -306,6 +309,34 @@ def test_release_checks_runs_the_custody_push_guard_after_hook_registration() ->
         _RELEASE_CHECKS,
         "the release gate",
         ('echo "[checks] hook registration"', _CUSTODY_GUARD_BLOCK),
+    )
+
+
+def test_release_checks_runs_the_custody_core_suites_after_the_push_guard() -> None:
+    core = 'echo "[checks] custody core"'
+    recursion = 'echo "[checks] runner recursion guard"'
+    _assert_in_order(
+        _RELEASE_CHECKS_TEXT,
+        _RELEASE_CHECKS,
+        "the release gate",
+        (_CUSTODY_GUARD_BLOCK, core, recursion),
+    )
+    block = _section(_RELEASE_CHECKS_TEXT, _RELEASE_CHECKS, core, recursion)
+    suites = (
+        "custody",
+        "custody_stall",
+        "custody_resolve",
+        "custody_loud",
+        "custody_entry",
+        "custody_prose",
+        "custody_prose_schema",
+        "render_custody",
+    )
+    _assert_present(
+        block,
+        _RELEASE_CHECKS,
+        "the `[checks] custody core` block",
+        tuple(f"skills/run-autopilot/cli/test_{suite}.py" for suite in suites),
     )
 
 

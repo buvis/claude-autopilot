@@ -29,6 +29,17 @@ echo "[checks] custody push guard"
 uv run --no-project --with pytest python -m pytest -q hooks/test_guard_push_on_critical.py
 uv run --no-project --with pytest python -m pytest -q hooks/test_guard_push_grammar.py
 
+echo "[checks] custody core"
+uv run --no-project --with pytest python -m pytest -q \
+  skills/run-autopilot/cli/test_custody.py \
+  skills/run-autopilot/cli/test_custody_stall.py \
+  skills/run-autopilot/cli/test_custody_resolve.py \
+  skills/run-autopilot/cli/test_custody_loud.py \
+  skills/run-autopilot/cli/test_custody_entry.py \
+  skills/run-autopilot/cli/test_custody_prose.py \
+  skills/run-autopilot/cli/test_custody_prose_schema.py \
+  skills/run-autopilot/cli/test_render_custody.py
+
 echo "[checks] runner recursion guard"
 bash skills/use-codex/scripts/test_codex_run.sh
 bash skills/use-codex/scripts/test_codex_run_resume.sh
