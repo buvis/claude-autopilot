@@ -22,8 +22,9 @@ report.
 appends event rows (`{"event": "review_converged", ...}`) to the same file:
 one per PRD, with no `wall_secs` and no `cost_usd`. Counting those as
 sessions would inflate every Sessions and Total cell and open a bogus `?`
-phase row, so any row carrying an `event` key is dropped here. Whatever
-wants those rows reads them itself.
+phase row, so any row carrying an `event` key is dropped here.
+`load_event_rows` is the reader for those: the same read-and-skip loop,
+keeping only the rows that carry an `event` key.
 """
 
 from __future__ import annotations
@@ -56,6 +57,30 @@ def load_rows(path: Path) -> list[dict]:
             )
             continue
         if isinstance(row, dict) and "event" not in row:
+            rows.append(row)
+    return rows
+
+
+def load_event_rows(path: Path) -> list[dict]:
+    """Parse a jsonl metrics file into EVENT rows only (any dict carrying an
+    `event` key); missing file is [], malformed lines skip loud on stderr."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    rows = []
+    for i, line in enumerate(text.splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            print(
+                f"render_metrics: skipping malformed line {i} of {path}",
+                file=sys.stderr,
+            )
+            continue
+        if isinstance(row, dict) and "event" in row:
             rows.append(row)
     return rows
 

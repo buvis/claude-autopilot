@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **run-autopilot**: a cap-out with an unresolved CRITICAL now records the PRD's live commit range as custody (marker, batch mirror, migrated deferrals, refreshed hold PRD, a `- Commits:` line in the batch report's STALLED section) and offers revert / branch-and-revert / accept through `autopilot custody resolve`
 - **hooks**: deny a Bash `git push` that targets a repository with pending cap_critical custody, naming the PRD, range and resolve command
+- **run-autopilot**: the loop now records a `review_converged` row with the PRD's run conditions (rework cap, per-cycle reviewer roster and severity counts, build models, attempt tiers, task counts) at review-phase exit, and the batch report prints it as `- Run conditions:` (falling back to its task counts instead of `Tasks: 0/0`)
 
 ### Fixed
 
