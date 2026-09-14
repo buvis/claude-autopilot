@@ -8,7 +8,7 @@ Exposes:
         be removed is skipped rather than raised: this always runs AFTER the
         commit it follows, so it must never turn a landed transition into a
         failure. Each marker is removed in its OWN try block, so a failure on
-        one cannot skip the other. Nothing else in the directory is touched.
+        one cannot skip the other.
 
 Call it only after a commit that ends the current PRD or phase (phase-done's
 tasks_done/converged/more_prds/drained, reset-prd, a successful stall or
@@ -24,10 +24,10 @@ from pathlib import Path
 MARKERS = (".handoff-requested", ".cap-fired")
 
 
-def clear_markers(autopilot_dir: str | Path) -> None:
+def clear_markers(autopilot_dir: Path) -> None:
     """Remove both markers from `autopilot_dir`, silently and independently."""
     for name in MARKERS:
         try:
-            (Path(autopilot_dir) / name).unlink()
+            (autopilot_dir / name).unlink()
         except OSError:
             pass

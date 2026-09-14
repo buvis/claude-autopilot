@@ -514,8 +514,6 @@ def do_stall(
     _trip("after-append-before-commit")
     rc = _commit_stall(state_path, site, extra_mutator, entry)
     if rc == 0:
-        # The PRD is off this session's plate; a pending handoff or cap
-        # request is about the session that just ended.
         handoff.clear_markers(autopilot_dir)
     return rc
 
