@@ -81,6 +81,23 @@ def outcome(state: dict) -> str:
     return "converged"
 
 
+def _build_models(session_rows: list[dict], prd: str, batch: str) -> list[str]:
+    """Distinct non-empty models of `prd`'s build-phase sessions in `batch`,
+    in first-appearance order."""
+    models: list[str] = []
+    for row in session_rows:
+        model = row.get("model")
+        if (
+            row.get("prd") == prd
+            and row.get("batch") == batch
+            and row.get("phase_launched") == "build"
+            and model
+            and model not in models
+        ):
+            models.append(model)
+    return models
+
+
 def build_row(ap_dir: Path, state: dict, session_rows: list[dict], ts: int) -> dict:
     """The `review_converged` row for `state`; `ap_dir` is
     `<repo>/dev/local/autopilot`. Key order is the contract."""
@@ -89,17 +106,7 @@ def build_row(ap_dir: Path, state: dict, session_rows: list[dict], ts: int) -> d
     tasks = state.get("tasks") or []
     cycle = state.get("cycle")
 
-    build_models: list[str] = []
-    for row in session_rows:
-        model = row.get("model")
-        if (
-            row.get("prd") == prd
-            and row.get("batch") == batch
-            and row.get("phase_launched") == "build"
-            and model
-            and model not in build_models
-        ):
-            build_models.append(model)
+    build_models = _build_models(session_rows, prd, batch)
 
     attempt_tiers: list[str] = []
     for task in tasks:
