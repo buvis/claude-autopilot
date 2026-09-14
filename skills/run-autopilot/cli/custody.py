@@ -353,11 +353,6 @@ def _drop_mirror(op_id: str):
     return _remove
 
 
-def _validate_mirror(new_state: dict) -> None:
-    """Owned-fields validator for the mirror write: only `batch` is checked."""
-    schema.require(new_state.get("batch"), dict, "batch")
-
-
 def _recorded_choice(autopilot_dir: Path, entry: dict) -> str | None:
     """The `choice` of an `<op_id>-resolve` record already in the batch
     ledger (the durable boundary of an earlier run), else None."""
@@ -491,7 +486,9 @@ def _cleanup(
     if state_path.exists():
         try:
             state.transaction(
-                state_path, _drop_mirror(op_id), validator=_validate_mirror
+                state_path,
+                _drop_mirror(op_id),
+                validator=lambda s: schema.require(s.get("batch"), dict, "batch"),
             )
         except (state.StateError, schema.SchemaError, OSError) as err:
             print(f"autopilot: mirror stale, custody closed: {err}", file=sys.stderr)
