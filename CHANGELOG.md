@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: the loop now records a `review_converged` row with the PRD's run conditions (rework cap, per-cycle reviewer roster and severity counts, build models, attempt tiers, task counts) at review-phase exit, and the batch report prints it as `- Run conditions:` (falling back to its task counts instead of `Tasks: 0/0`); a review file that cannot be parsed reads as null rather than zero findings, and a state that names no PRD or batch writes no row instead of crashing the loop
 - **plan-tasks**: the plan gate now stalls a plan that outgrew its PRD - task count over the loop ceiling, expansion ratio over 3.0 with more than 8 tasks, or 2 or more modules the PRD's Repository Structure never names - writes a split note grouped by module, and every task payload persists its `files` slice; `plan_expansion: allow` in the PRD frontmatter skips the gate
 
+### Changed
+
+- **run-autopilot**: `autopilot check-plan` takes a required `--prd`, writes `dev/local/autopilot/split-notes/<prd-stem>.md` on a stall verdict, and records the stall under site `plan_expansion` (`oversized_plan` is the legacy spelling on older records)
+
 ### Fixed
 
 - **fast-track**: the driver now creates `dev/local/autopilot` before the first dispatch so no ledger row is lost, gives Bob's codex prompt Eve's doubt sections, and runs the lane plan, the verify targets, the exit rule and the per-item dispatch count through `fast_track_plan.py` commands instead of applying those rules from memory

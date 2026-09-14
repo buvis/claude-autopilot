@@ -23,8 +23,11 @@ Subcommands:
         records.record_defer() with a JSON-parsed record payload.
     restore   --state
         state.restore(): rolls <state>.bak back over state.json.
-    check-plan --state --ceiling
-        policy.plan_over_ceiling(); exit 3 above the loop task ceiling.
+    check-plan --state --prd --ceiling
+        policy.plan_expansion(); exit 3 on a stall verdict (task count over
+        the loop ceiling, expansion ratio, or module drift), having written
+        <state dir>/split-notes/<prd-stem>.md; exit 2 on an unreadable
+        state or PRD.
     select    --prds
         selection.select() over the wip/ and backlog/ listings, gated by
         each backlog candidate's `eligibility:` frontmatter check
@@ -364,9 +367,37 @@ def _run_defer(args: argparse.Namespace) -> int:
 def _add_check_plan(subparsers) -> None:
     p = subparsers.add_parser("check-plan")
     p.add_argument("--state")
+    p.add_argument("--prd", required=True)
     p.add_argument("--ceiling", type=int, default=policy.LOOP_TASK_CEILING)
     # Deliberately no --count: the whole point of the gate is that the count
     # comes from the snapshot on disk, not from whoever wrote the plan.
+
+
+def _check_plan_stall_lines(
+    verdict: policy.Verdict, ceiling: int, note_path: Path
+) -> tuple[str, str]:
+    """The two stderr lines of a stall: the fired numbers, then the stall
+    instruction whose detail a caller lifts verbatim into `stall --detail`."""
+    per_reason = {
+        "task_count": lambda: f"task_count {verdict.planned} > {ceiling}",
+        "expansion": lambda: (
+            f"expansion {verdict.expansion:.2f} > {policy.EXPANSION_RATIO_MAX} "
+            f"(planned {verdict.planned} > {policy.EXPANSION_MIN_TASKS})"
+        ),
+        "module_drift": lambda: (
+            f"module_drift {len(verdict.drift)} > {policy.MODULE_DRIFT_MAX} "
+            f"({', '.join(verdict.drift)})"
+        ),
+    }
+    numbers = ", ".join(per_reason[reason]() for reason in verdict.reasons)
+    return (
+        f"autopilot: plan expansion gate: {numbers}; note {note_path}",
+        (
+            'Loop mode: stall this PRD (site "plan_expansion", detail '
+            f'"{", ".join(verdict.reasons)}; note {note_path}"). '
+            "Interactive: this is a warning, continue."
+        ),
+    )
 
 
 def _run_check_plan(args: argparse.Namespace) -> int:
@@ -376,15 +407,38 @@ def _run_check_plan(args: argparse.Namespace) -> int:
     except state.StateError as err:
         print(f"autopilot: check-plan failed: {err}", file=sys.stderr)
         return 2
-    over, count = policy.plan_over_ceiling(loaded, args.ceiling)
-    if over:
+    prd_path = Path(args.prd)
+    try:
+        text = prd_path.read_text(encoding="utf-8")
+    except OSError as err:
         print(
-            f"autopilot: plan has {count} tasks, over the {args.ceiling}-task "
-            f'loop ceiling. Loop mode: stall this PRD (site "oversized_plan"). '
-            f"Interactive: this is a warning, continue.",
+            f"autopilot: check-plan failed: cannot read PRD {prd_path}: {err}",
             file=sys.stderr,
         )
+        return 2
+    verdict = policy.plan_expansion(loaded, text, args.ceiling)
+    drift_word = (
+        "checked"
+        if policy.prd_modules(text) is not None
+        else "skipped (no Repository Structure)"
+    )
+    diag = f"unfiled={verdict.unfiled}; drift={drift_word}"
+    if verdict.override:
+        print(
+            "autopilot: check-plan: plan_expansion: allow set in PRD frontmatter; "
+            f"skipping task_count, expansion, module_drift; plan-expansion: {diag}",
+            file=sys.stderr,
+        )
+        return 0
+    if verdict.stall:
+        note_path = state_path.parent / "split-notes" / f"{prd_path.stem}.md"
+        note_path.parent.mkdir(parents=True, exist_ok=True)
+        note_path.write_text(verdict.note, encoding="utf-8")
+        for line in _check_plan_stall_lines(verdict, args.ceiling, note_path):
+            print(line, file=sys.stderr)
         return 3
+    if verdict.unfiled or drift_word != "checked":
+        print(f"plan-expansion: {diag}", file=sys.stderr)
     return 0
 
 
