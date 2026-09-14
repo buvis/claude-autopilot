@@ -410,7 +410,7 @@ def _run_check_plan(args: argparse.Namespace) -> int:
     prd_path = Path(args.prd)
     try:
         text = prd_path.read_text(encoding="utf-8")
-    except OSError as err:
+    except (OSError, UnicodeDecodeError) as err:
         print(
             f"autopilot: check-plan failed: cannot read PRD {prd_path}: {err}",
             file=sys.stderr,

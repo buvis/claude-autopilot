@@ -353,6 +353,18 @@ class CheckPlanCliTests(unittest.TestCase):
         self.assertIn(f"check-plan failed: cannot read PRD {missing}", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
 
+    def test_non_utf8_prd_fails_loud(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            state_path = self._write_state(Path(tmp), _state_with_tasks(3))
+            prd_path = Path(tmp) / "00004-feature-x.md"
+            prd_path.write_bytes(b"# PRD\n\xff\xfe- [ ] task\n")
+            result = self._run(
+                ["check-plan", "--state", str(state_path), "--prd", str(prd_path)],
+            )
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn(f"check-plan failed: cannot read PRD {prd_path}", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
     def test_success_reports_unfiled_and_skipped_drift(self) -> None:
         state = _state_with_files(
             "00004-feature-x.md",

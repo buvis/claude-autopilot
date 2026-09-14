@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **run-autopilot**: `autopilot check-plan` takes a required `--prd`, writes `dev/local/autopilot/split-notes/<prd-stem>.md` on a stall verdict, and records the stall under site `plan_expansion` (`oversized_plan` is the legacy spelling on older records)
+- **run-autopilot**: `autopilot check-plan` takes a required `--prd`, writes `dev/local/autopilot/split-notes/<prd-stem>.md` on a stall verdict, records the stall under site `plan_expansion` (`oversized_plan` is the legacy spelling on older records), and exits 2 on a missing or non-UTF-8 PRD instead of crashing
 
 ### Fixed
 
