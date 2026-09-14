@@ -90,17 +90,7 @@ class _Custody:
             self.autopilot_dir / "deferred" / f"{BATCH_ID}-deferred.json"
         )
         self.repo = root / "repo"
-        bare_dir = root / "repo.git" if bare else None
-        if bare_dir:
-            self.shas = _init_bare_repo(bare_dir, self.repo)
-            self.loc = ["--git-dir", str(bare_dir), "--work-tree", str(self.repo)]
-        else:
-            self.shas = _init_repo(self.repo, branch=branch)
-            self.loc = ["-C", str(self.repo)]
-        self.git_dir = bare_dir or self.repo / ".git"
-        # The CLI's own git needs an identity; the global config is /dev/null.
-        self.git("config", "--local", "user.email", "t@example.com")
-        self.git("config", "--local", "user.name", "t")
+        bare_dir = self._init_git(bare, branch)
         base = custody.EMPTY_TREE if empty_tree_base else self.shas[0]
         self.end = self.shas[2]
         # Newest first: what rev-list <base>..<end> yields and revert expects.
@@ -116,18 +106,39 @@ class _Custody:
             "git_dir": str(bare_dir) if bare_dir else None,
             "branch": branch,
         }
-        self.other: dict | None = None
-        if other:
-            other_root = self.repo if other == "same-repo" else root / "other-repo"
-            other_root.mkdir(exist_ok=True)
-            self.other = {
-                **self.entry,
-                "prd": OTHER_PRD,
-                "op_id": OTHER_OP_ID,
-                "repo_root": str(other_root),
-                "git_dir": self.entry["git_dir"] if other == "same-repo" else None,
-            }
-        entries = [self.entry] + ([self.other] if self.other else [])
+        self.other: dict | None = self._other_entry(other)
+        self._seed_sources([self.entry] + ([self.other] if self.other else []))
+
+    def _init_git(self, bare: bool, branch: str) -> Path | None:
+        """Create the repo, set shas / loc / git_dir; returns the bare dir."""
+        bare_dir = self.root / "repo.git" if bare else None
+        if bare_dir:
+            self.shas = _init_bare_repo(bare_dir, self.repo)
+            self.loc = ["--git-dir", str(bare_dir), "--work-tree", str(self.repo)]
+        else:
+            self.shas = _init_repo(self.repo, branch=branch)
+            self.loc = ["-C", str(self.repo)]
+        self.git_dir = bare_dir or self.repo / ".git"
+        # The CLI's own git needs an identity; the global config is /dev/null.
+        self.git("config", "--local", "user.email", "t@example.com")
+        self.git("config", "--local", "user.name", "t")
+        return bare_dir
+
+    def _other_entry(self, other: str | None) -> dict | None:
+        if not other:
+            return None
+        other_root = self.repo if other == "same-repo" else self.root / "other-repo"
+        other_root.mkdir(exist_ok=True)
+        return {
+            **self.entry,
+            "prd": OTHER_PRD,
+            "op_id": OTHER_OP_ID,
+            "repo_root": str(other_root),
+            "git_dir": self.entry["git_dir"] if other == "same-repo" else None,
+        }
+
+    def _seed_sources(self, entries: list[dict]) -> None:
+        """Marker, `recorded` journal rows, git-config locator, state.json."""
         custody.write_marker(self.marker_path, entries)
         for entry in entries:
             custody.append_journal(self.autopilot_dir, {"event": "recorded", **entry})
