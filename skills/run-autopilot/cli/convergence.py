@@ -28,16 +28,18 @@ CHECKBOX_RE = re.compile(r"^- \[[ x]\] ", re.MULTILINE)
 
 
 def _read_text(path: Path) -> str | None:
-    """File text, or None when the path is missing or not a readable file."""
+    """File text, or None when the path is missing, not a readable file or
+    not UTF-8."""
     try:
         return path.read_text(encoding="utf-8")
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         return None
 
 
 def read_cycle(reviews_dir: Path, prd: str, n: int) -> dict:
     """One cycle's entry from `<stem>-review-<n>.md` (bare first, then
-    zero-padded); unreadable -> reviewers, verdict and findings all None."""
+    zero-padded); unreadable or unparseable (neither a `reviewers:` nor a
+    `Verdict:` line) -> reviewers, verdict and findings all None."""
     stem = prd[:-3] if prd.endswith(".md") else prd
     text = None
     for name in (f"{stem}-review-{n}.md", f"{stem}-review-{n:02d}.md"):
@@ -53,6 +55,8 @@ def read_cycle(reviews_dir: Path, prd: str, n: int) -> dict:
     )
 
     match = VERDICT_RE.search(text)
+    if reviewers is None and match is None:
+        return {"cycle": n, "reviewers": None, "verdict": None, "findings": None}
     verdict: str | int | None = None
     if match:
         verdict = (
@@ -76,7 +80,7 @@ def outcome(state: dict) -> str:
     """`cap_deferred` when a cap-overflow deferral was recorded, else
     `converged`."""
     deferred = state.get("deferred_decisions") or []
-    if any(d.get("type") == "cap-overflow" for d in deferred):
+    if any(isinstance(d, dict) and d.get("type") == "cap-overflow" for d in deferred):
         return "cap_deferred"
     return "converged"
 

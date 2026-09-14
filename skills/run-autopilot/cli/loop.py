@@ -952,10 +952,15 @@ class Loop:
         ts_end: float,
     ) -> None:
         """The review_converged row, appended to both metrics files; nothing
-        when state.json is gone or malformed (the session row already written
-        stays)."""
+        when state.json is gone, malformed or names no prd/batch (the session
+        row already written stays)."""
         state = _load_json(ap_dir / "state.json")
         if not isinstance(state, dict):
+            return
+        # Unidentifiable reads as unreadable: no prd or batch id, no row.
+        prd = state.get("prd")
+        batch = (state.get("batch") or {}).get("id")
+        if not (isinstance(prd, str) and prd and isinstance(batch, str) and batch):
             return
         rows = render_metrics.load_rows(ap_dir / "loop-metrics.jsonl")
         row = convergence.build_row(ap_dir, state, rows, int(ts_end))
