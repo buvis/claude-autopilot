@@ -5,145 +5,10 @@
 # as codex-run.sh grows new behavior (thread-id capture, resume, etc.).
 set -u
 
-CODEX_RUN_SH="$(cd "$(dirname "$0")" && pwd)/codex-run.sh"
-[ -n "${1:-}" ] && CODEX_RUN_SH="$1"
-
-# ── assert helpers ────────────────────────────────────────────────────────────
-PASS_COUNT=0
-FAIL_COUNT=0
-PASS() { echo "PASS: $1"; PASS_COUNT=$((PASS_COUNT + 1)); }
-FAIL() { echo "FAIL: $1 -- $2"; FAIL_COUNT=$((FAIL_COUNT + 1)); }
-
-# Reads FILE (one argv token per line, as the stub writes it) into the
-# global ARGV_ARR indexed array. Bash 3.2 has no mapfile/readarray.
-read_argv_array() {
-    ARGV_ARR=()
-    local _line
-    while IFS= read -r _line; do
-        ARGV_ARR+=("$_line")
-    done < "$1"
-}
-
-# True (exit 0) if FILE contains NEEDLE immediately followed by VALUE as
-# consecutive argv tokens.
-argv_has_pair() {
-    local file="$1" needle="$2" value="$3" prev="" tok
-    while IFS= read -r tok; do
-        if [ "$prev" = "$needle" ] && [ "$tok" = "$value" ]; then
-            return 0
-        fi
-        prev="$tok"
-    done < "$file"
-    return 1
-}
-
-# True (exit 0) if STUB_STDIN_FILE holds exactly PROMPT's bytes, no more, no
-# less (a diff against PROMPT's exact bytes already proves no sentinel
-# wrapper stdin leaked through).
-child_stdin_is_prompt() {
-    local prompt="$1" expected="$STUBDIR/_stdin_expected.tmp"
-    printf '%s' "$prompt" > "$expected"
-    diff -q "$expected" "$STUB_STDIN_FILE" >/dev/null 2>&1
-}
-
-# ── cleanup registry ────────────────────────────────────────────────────────────
-_DIRS=()
-cleanup() {
-    local d
-    for d in "${_DIRS[@]+"${_DIRS[@]}"}"; do
-        rm -rf "$d"
-    done
-}
-trap cleanup EXIT
-
-# ── stub `codex` binary on PATH ────────────────────────────────────────────────
-STUBDIR=$(mktemp -d)
-_DIRS+=("$STUBDIR")
-
-STUB_ARGV_FILE="$STUBDIR/argv.log"
-STUB_STDIN_FILE="$STUBDIR/stdin.log"
-
-cat > "$STUBDIR/codex" <<'STUB'
-#!/bin/bash
-printf '%s\n' "$@" > "$STUB_ARGV_FILE"
-cat > "$STUB_STDIN_FILE"
-
-# Multi-invocation bookkeeping (opt-in: only when the caller sets
-# STUB_ALL_ARGV_FILE). Appends this call's argv to a cumulative log with a
-# delimiter, and bumps an invocation counter, so tests that trigger more
-# than one codex call per run (resume -> fresh fallback) can verify BOTH
-# calls happened.
-if [ -n "${STUB_ALL_ARGV_FILE:-}" ]; then
-    COUNT=$(cat "$STUB_INVOKE_COUNT_FILE" 2>/dev/null)
-    COUNT=${COUNT:-0}
-    COUNT=$((COUNT + 1))
-    printf '%s' "$COUNT" > "$STUB_INVOKE_COUNT_FILE"
-    {
-        printf '%s\n' "=== invocation $COUNT ==="
-        printf '%s\n' "$@"
-    } >> "$STUB_ALL_ARGV_FILE"
-fi
-
-# Simulate codex's JSON path when --output-last-message <FILE> is present:
-# write the review text to that file and emit JSONL events on stdout. Legacy
-# (no --output-last-message) path is untouched below.
-LAST_MSG_FILE=""
-PREV_ARG=""
-IS_RESUME=""
-for arg in "$@"; do
-    if [ "$PREV_ARG" = "--output-last-message" ]; then
-        LAST_MSG_FILE="$arg"
-    fi
-    if [ "$arg" = "resume" ]; then
-        IS_RESUME=1
-    fi
-    PREV_ARG="$arg"
-done
-
-# Forced-failure hooks: STUB_FAIL_RESUME/STUB_FAIL_FRESH make this
-# invocation exit non-zero (distinguished by whether its argv is a resume
-# call), simulating a real codex failure. A forced-fail invocation writes
-# neither the output file nor the JSONL events, like a real failed run.
-if [ -n "$IS_RESUME" ] && [ -n "${STUB_FAIL_RESUME:-}" ]; then
-    exit "$STUB_FAIL_RESUME"
-fi
-if [ -z "$IS_RESUME" ] && [ -n "${STUB_FAIL_FRESH:-}" ]; then
-    exit "$STUB_FAIL_FRESH"
-fi
-
-if [ -n "$LAST_MSG_FILE" ]; then
-    printf '%s' "STUB REVIEW OUTPUT" > "$LAST_MSG_FILE"
-    # STUB_SUPPRESS_THREAD_STARTED (opt-in): omit the thread.started event,
-    # simulating a resumed session that doesn't re-announce its thread id.
-    # Default (unset) behavior is unchanged for every other test.
-    if [ -z "${STUB_SUPPRESS_THREAD_STARTED:-}" ]; then
-        echo '{"type":"thread.started","thread_id":"11111111-2222-3333-4444-555555555555"}'
-    fi
-    echo '{"type":"item.completed"}'
-    echo '{"type":"turn.completed"}'
-fi
-
-exit 0
-STUB
-chmod +x "$STUBDIR/codex"
-
-# codex-run.sh re-prepends mise's own PATH ahead of ours whenever `mise` is
-# reachable, and mise's PATH includes /opt/homebrew/bin (the REAL codex
-# binary), which would shadow the stub. Excluding mise's location from the
-# PATH we hand to codex-run.sh keeps that branch inert, so lookup always
-# resolves to our stub.
-RUN_PATH="$STUBDIR:/usr/bin:/bin"
-
-# Resets the stub capture files, then runs codex-run.sh against the stub with
-# args "$@". Extra STUB_*/env var prefixes and redirections stay at the call
-# site, exactly as they did before this reset-and-invoke boilerplate was
-# extracted.
-run_codex_run() {
-    : > "$STUB_ARGV_FILE"
-    : > "$STUB_STDIN_FILE"
-    PATH="$RUN_PATH" STUB_ARGV_FILE="$STUB_ARGV_FILE" STUB_STDIN_FILE="$STUB_STDIN_FILE" \
-        bash "$CODEX_RUN_SH" "$@"
-}
+# Shared assert helpers, stub `codex` binary, and run_codex_run() live in
+# codex_run_test_lib.sh (also sourced by test_codex_run_resume.sh) -- see
+# that file for CODEX_RUN_SH resolution and the stub's behavior.
+source "$(cd "$(dirname "$0")" && pwd)/codex_run_test_lib.sh"
 
 # =============================================================================
 # Single invocation feeds both assertions below: sentinel, non-empty, non-EOF
@@ -184,7 +49,10 @@ printf '%s\n' "- [ ] item" > "$DASH_PROMPT_FILE"
 run_codex_run -f "$DASH_PROMPT_FILE" > /dev/null 2>/dev/null < /dev/null
 
 # 2b. Leading-dash prompt file: codex child stdin is the file's bytes,
-#     verbatim -- never argv-parsed as a flag.
+#     verbatim -- never argv-parsed as a flag. DASH_PROMPT_FILE itself ends
+#     in a trailing newline (printf's own '\n'), so this same byte-exact
+#     diff also proves trailing-newline preservation -- folds in case 44
+#     (no longer a separate invocation).
 if diff -q "$DASH_PROMPT_FILE" "$STUB_STDIN_FILE" >/dev/null 2>&1; then
     PASS "-f PROMPTFILE with a leading-dash first line: codex child stdin is the file's bytes verbatim"
 else
@@ -287,6 +155,20 @@ if child_stdin_is_prompt "$THREAD_PROMPT"; then
 else
     FAIL "--emit-thread-id: codex child stdin is exactly the prompt, never the wrapper's stdin" \
          "stub captured stdin: $(cat "$STUB_STDIN_FILE" 2>/dev/null | tr '\n' '|'); expected exactly the prompt '$THREAD_PROMPT' with no trace of SENTINEL_STDIN_DATA"
+fi
+
+# 45. --emit-thread-id JSON path: the final argv token is exactly "-" -- the
+#     literal marker that tells codex to read its instructions from stdin.
+#     Folded into this case-3..10 block's own invocation above (no separate
+#     invocation): asserting only that "-" appears somewhere in argv would
+#     also match an unrelated flag value, so this checks the final position.
+read_argv_array "$STUB_ARGV_FILE"
+FINALTOK_LAST_IDX=$(( ${#ARGV_ARR[@]} - 1 ))
+if [ "${ARGV_ARR[$FINALTOK_LAST_IDX]:-}" = "-" ]; then
+    PASS "--emit-thread-id: final argv token is the literal '-' stdin marker"
+else
+    FAIL "--emit-thread-id: final argv token is the literal '-' stdin marker" \
+         "argv: $(tr '\n' ' ' < "$STUB_ARGV_FILE")"
 fi
 
 # =============================================================================
@@ -429,51 +311,6 @@ if [ "$WHITESPACE_EXIT" -eq 1 ] && \
 else
     FAIL "-f PROMPTFILE containing only a newline: exit 1, 'Prompt required' on stderr, codex never invoked" \
          "exit: $WHITESPACE_EXIT -- stderr: $(cat "$WHITESPACE_STDERR_FILE" 2>/dev/null) -- argv file bytes: $(wc -c < "$STUB_ARGV_FILE" 2>/dev/null | tr -d ' ')"
-fi
-
-# =============================================================================
-# -f FILE whose contents end in a trailing newline: the bytes delivered to
-# the codex child's stdin must equal the file's bytes exactly, trailing
-# newline included -- a comparison that trims/normalizes whitespace would
-# pass even if the newline were dropped.
-# =============================================================================
-TRAILING_NL_FILE="$STUBDIR/trailing_newline_prompt.txt"
-printf 'analyze the trailing newline case\n' > "$TRAILING_NL_FILE"
-
-run_codex_run -f "$TRAILING_NL_FILE" > /dev/null 2>/dev/null < /dev/null
-
-# 44. Trailing-newline prompt file: codex child stdin is byte-for-byte
-#     identical to the file's contents, trailing newline included.
-if diff -q "$TRAILING_NL_FILE" "$STUB_STDIN_FILE" >/dev/null 2>&1; then
-    PASS "-f PROMPTFILE ending in a newline: codex child stdin is byte-identical, trailing newline included"
-else
-    FAIL "-f PROMPTFILE ending in a newline: codex child stdin is byte-identical, trailing newline included" \
-         "stub captured stdin bytes: $(wc -c < "$STUB_STDIN_FILE" 2>/dev/null | tr -d ' '); expected file bytes: $(wc -c < "$TRAILING_NL_FILE" 2>/dev/null | tr -d ' ')"
-fi
-
-# =============================================================================
-# --emit-thread-id JSON dispatch path: the final token of the codex child's
-# argv must be the literal "-" that tells codex to read its instructions
-# from stdin. The existing cases on this path assert --json is present and
-# --output-last-message carries the -o target, but nothing asserts the final
-# token specifically -- asserting only that "-" appears somewhere in argv
-# would also match an unrelated flag value.
-# =============================================================================
-FINALTOK_THREAD_ID_FILE="$STUBDIR/finaltok_thread_id.out"
-FINALTOK_OUTFILE="$STUBDIR/finaltok.out"
-
-run_codex_run --emit-thread-id "$FINALTOK_THREAD_ID_FILE" -o "$FINALTOK_OUTFILE" "analyze the final-token case" \
-    > /dev/null 2>/dev/null < /dev/null
-
-read_argv_array "$STUB_ARGV_FILE"
-
-# 45. --emit-thread-id JSON path: the final argv token is exactly "-".
-FINALTOK_LAST_IDX=$(( ${#ARGV_ARR[@]} - 1 ))
-if [ "${ARGV_ARR[$FINALTOK_LAST_IDX]:-}" = "-" ]; then
-    PASS "--emit-thread-id: final argv token is the literal '-' stdin marker"
-else
-    FAIL "--emit-thread-id: final argv token is the literal '-' stdin marker" \
-         "argv: $(tr '\n' ' ' < "$STUB_ARGV_FILE")"
 fi
 
 # =============================================================================
