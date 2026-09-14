@@ -136,6 +136,116 @@ class CliWiringTests(unittest.TestCase):
         self.assertIn("| claude | 2 |", text)
         self.assertIn("| qwen | 1 |", text)
 
+    def test_report_keeps_ledger_only_attempts_with_convergence(self) -> None:
+        # Tasks drained and the batch record wiped to 0/0: the Implementor
+        # table can only come from the ledger, and the task counts and the
+        # Run conditions line only from the review_converged row the golden
+        # loop-metrics.jsonl carries for this PRD and batch.
+        state = _state()
+        state["tasks"] = []
+        state["batch"]["completed_prds"] = [
+            {
+                "filename": state["prd"],
+                "cycles": 2,
+                "tasks_completed": 0,
+                "tasks_total": 0,
+            },
+        ]
+        self.state_path.write_text(json.dumps(state), encoding="utf-8")
+        (self.ap_dir / "ledger").mkdir()
+        (self.ap_dir / "ledger" / "attempts.jsonl").write_text(
+            json.dumps(
+                {
+                    "batch_id": state["batch"]["id"],
+                    "prd": state["prd"],
+                    "task_id": "1",
+                    "recorded_at": "2026-09-07T05:48:00Z",
+                    "attempt": {"attempt": 1, "implementor": "qwen"},
+                },
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        proc = self._run(["render", "report", "--now", NOW])
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        text = (self.ap_dir / "reports" / "202607202320-report.md").read_text(
+            encoding="utf-8",
+        )
+        self.assertIn("| qwen | 1 |", text)
+        self.assertIn("- Run conditions: cap 2 ·", text)
+        self.assertIn("- Tasks: 3/3", text)
+        self.assertNotIn("- Tasks: 0/0", text)
+
+    def test_report_reads_loud_when_no_event_row_matches_the_batch(self) -> None:
+        # The golden event row retagged to another batch: the report must say
+        # so rather than borrow a foreign batch's run conditions.
+        metrics = self.ap_dir / "loop-metrics.jsonl"
+        rows = [
+            json.loads(line)
+            for line in metrics.read_text(encoding="utf-8").splitlines()
+        ]
+        for row in rows:
+            if row.get("event") == "review_converged":
+                row["batch"] = "202601010000"
+        metrics.write_text(
+            "".join(json.dumps(row) + "\n" for row in rows),
+            encoding="utf-8",
+        )
+        proc = self._run(["render", "report", "--now", NOW])
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        text = (self.ap_dir / "reports" / "202607202320-report.md").read_text(
+            encoding="utf-8",
+        )
+        self.assertIn("- Run conditions: no review_converged row", text)
+        self.assertNotIn("- Run conditions: cap 2", text)
+
+    def test_report_reads_loud_when_the_event_row_belongs_to_another_prd(
+        self,
+    ) -> None:
+        # Same batch, another PRD: a multi-PRD batch holds one event row per
+        # PRD, and a match on batch alone would print PRD B's run conditions
+        # under PRD A's heading.
+        metrics = self.ap_dir / "loop-metrics.jsonl"
+        rows = [
+            json.loads(line)
+            for line in metrics.read_text(encoding="utf-8").splitlines()
+        ]
+        for row in rows:
+            if row.get("event") == "review_converged":
+                self.assertEqual(row["batch"], _state()["batch"]["id"])
+                row["prd"] = "00002-object-entry-v1.md"
+        metrics.write_text(
+            "".join(json.dumps(row) + "\n" for row in rows),
+            encoding="utf-8",
+        )
+        proc = self._run(["render", "report", "--now", NOW])
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        text = (self.ap_dir / "reports" / "202607202320-report.md").read_text(
+            encoding="utf-8",
+        )
+        self.assertIn("- Run conditions: no review_converged row", text)
+        self.assertNotIn("- Run conditions: cap 2", text)
+
+    def test_report_reads_the_event_row_from_the_metrics_flag(self) -> None:
+        # `--metrics` names the file for session rows and event rows alike:
+        # the event row lives only in a side file and is stripped from the
+        # default loop-metrics.jsonl, so only a CLI that loads events from
+        # the flagged path can still render the run conditions.
+        default = self.ap_dir / "loop-metrics.jsonl"
+        lines = default.read_text(encoding="utf-8").splitlines(keepends=True)
+        sessions = [line for line in lines if '"event"' not in line]
+        self.assertEqual(len(sessions), len(lines) - 1)
+        default.write_text("".join(sessions), encoding="utf-8")
+        side = self.repo / "side-metrics.jsonl"
+        side.write_text("".join(lines), encoding="utf-8")
+        proc = self._run(["render", "report", "--metrics", str(side), "--now", NOW])
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        text = (self.ap_dir / "reports" / "202607202320-report.md").read_text(
+            encoding="utf-8",
+        )
+        self.assertIn("- Run conditions: cap 2 ·", text)
+        self.assertNotIn("no review_converged row", text)
+
     def test_render_report_stalled_appends_the_short_form(self) -> None:
         proc = self._run(
             [

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Tests for the PRD 00107 render surfaces: render_audit, render_report,
 render_metrics and status, called in process. Their `autopilot render` /
-`autopilot status` CLI wiring lives in test_render_cli.py.
+`autopilot status` CLI wiring lives in test_render_cli.py; the report's
+`- Run conditions:` line has test_render_run_conditions.py.
 
 Goldens live in cli/golden/: the fixture state mirrors the documented
 schema PLUS the live-state deviations the renders must tolerate (bare-string
@@ -58,7 +59,8 @@ class GoldenRenderTests(unittest.TestCase):
     def test_report_section_matches_golden(self) -> None:
         state = _state()
         rows = render_metrics.matching_rows(_rows(), state["prd"], state["batch"]["id"])
-        text = render_report.prd_section(state, rows, NOW)
+        convergence = render_metrics.load_event_rows(GOLDEN / "metrics-render.jsonl")[0]
+        text = render_report.prd_section(state, rows, NOW, convergence=convergence)
         self.assertEqual(
             text,
             (EXPECTED / "report-section.md").read_text(encoding="utf-8"),

@@ -471,6 +471,36 @@ class LoadEventRowsTests(unittest.TestCase):
                     "cycles_to_converge": 2,
                     "outcome": "converged",
                     "ts": 1784701300,
+                    "rework_cap": 2,
+                    "build_models": ["claude-sonnet-5"],
+                    "attempt_tiers": ["sonnet", "opus"],
+                    "tasks_planned": 3,
+                    "tasks_completed": 3,
+                    "tasks_in_prd": 3,
+                    "cycles": [
+                        {
+                            "cycle": 1,
+                            "reviewers": ["alice", "blake", "bob"],
+                            "verdict": 2,
+                            "findings": {
+                                "critical": 0,
+                                "high": 1,
+                                "medium": 1,
+                                "low": 0,
+                            },
+                        },
+                        {
+                            "cycle": 2,
+                            "reviewers": ["alice", "blake", "bob"],
+                            "verdict": "converged",
+                            "findings": {
+                                "critical": 0,
+                                "high": 0,
+                                "medium": 0,
+                                "low": 0,
+                            },
+                        },
+                    ],
                 },
             ],
         )
