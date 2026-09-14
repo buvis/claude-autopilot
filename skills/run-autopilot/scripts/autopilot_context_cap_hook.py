@@ -444,8 +444,10 @@ def _marker_task_id(text: str) -> str:
     """Return the task id a `.handoff-requested` marker names, or "".
 
     Reads both the JSON object this hook writes and the legacy bare task id
-    earlier versions wrote. Anything else — empty, whitespace, a JSON list or
-    null — names no task, so the marker gets replaced.
+    earlier versions wrote. Task ids are integer strings, so a bare number is
+    a legacy task id even though it parses as JSON. Anything else — empty,
+    whitespace, a JSON list or null — names no task, so the marker gets
+    replaced.
     """
     text = text.strip()
     if not text:
@@ -457,7 +459,7 @@ def _marker_task_id(text: str) -> str:
     if isinstance(payload, dict):
         task_id = payload.get("task_id")
         return task_id if isinstance(task_id, str) else ""
-    return ""
+    return text if isinstance(payload, int) else ""
 
 
 def _request_handoff(autopilot_dir: Path, task_id: str, session_id: str) -> None:

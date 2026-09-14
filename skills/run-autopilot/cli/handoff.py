@@ -26,11 +26,7 @@ MARKERS = (".handoff-requested", ".cap-fired")
 
 
 def clear_markers(autopilot_dir: Path) -> None:
-    """Remove both markers from `autopilot_dir`, independently.
-
-    Absent markers are silent; any other OSError is reported on stderr and
-    skipped, so the caller's landed commit is never turned into a failure.
-    """
+    """Remove both markers from `autopilot_dir`, each in its own try block."""
     for name in MARKERS:
         marker = autopilot_dir / name
         try:

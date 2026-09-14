@@ -537,7 +537,7 @@ def do_stall(
     _trip("after-append-before-commit")
     rc = _commit_stall(state_path, site, extra_mutator, entry)
     if rc == 0:
-        handoff.clear_markers(autopilot_dir)
+        handoff.clear_markers(state_path.parent)
     return rc
 
 
