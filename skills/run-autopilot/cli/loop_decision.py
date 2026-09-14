@@ -1,5 +1,5 @@
 """cli/loop_decision.py - the decision table and pure ports of the loop
-driver, moved out of cli/loop.py by PRD 00192.
+driver (PRD 00192).
 
 Allowed imports: stdlib, `cli.pause`, `cli.usage_limit`, `cli.routing`;
 never `cli.loop`, `cli.loop_gates` or `cli.loop_act`.
