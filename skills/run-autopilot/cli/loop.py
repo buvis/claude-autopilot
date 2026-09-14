@@ -48,7 +48,15 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from cli import notify_out, pause, routing, runner, usage_limit
+from cli import (
+    convergence,
+    notify_out,
+    pause,
+    render_metrics,
+    routing,
+    runner,
+    usage_limit,
+)
 from cli import state as state_mod
 from cli.routing import _load_json
 from cli.watchdog import Watchdog
@@ -901,8 +909,9 @@ class Loop:
         effort: str,
     ) -> None:
         """One JSONL line per session, after the decision and before any
-        exit path. Observation only - the append can never block or fail
-        the loop (the one sanctioned silent failure, scoped to itself)."""
+        exit path, plus the review_converged row when a review exits to done.
+        Observation only - the append can never block or fail the loop (the
+        one sanctioned silent failure, scoped to itself)."""
         try:
             line = {
                 "ts_start": int(ts_start),
@@ -930,8 +939,26 @@ class Loop:
             ledger_dir.mkdir(parents=True, exist_ok=True)
             with open(ledger_dir / "loop-metrics.jsonl", "a", encoding="utf-8") as fh:
                 fh.write(encoded + "\n")
+            # Session row first, so build_row sees this session's batch.
+            if phase_launched == "review" and decision.get("phase_end") == "done":
+                event = self._convergence_line(ap_dir, ts_end)
+                if event is None:
+                    return
+                for path in (ap_dir, ledger_dir):
+                    with open(path / "loop-metrics.jsonl", "a", encoding="utf-8") as fh:
+                        fh.write(event + "\n")
         except (OSError, ValueError, TypeError):
             pass
+
+    def _convergence_line(self, ap_dir: Path, ts_end: float) -> str | None:
+        """The review_converged row, encoded; None when state.json is gone or
+        malformed (the session row already written stays)."""
+        state = _load_json(ap_dir / "state.json")
+        if not isinstance(state, dict):
+            return None
+        rows = render_metrics.load_rows(ap_dir / "loop-metrics.jsonl")
+        row = convergence.build_row(ap_dir, state, rows, int(ts_end))
+        return json.dumps(row, separators=(",", ":"))
 
     # ── act branches ──
 
