@@ -288,7 +288,7 @@ One JSON object per line:
 
 ## Convergence rows
 
-File: `dev/local/autopilot/loop-metrics.jsonl` and its GC-exempt mirror `dev/local/autopilot/ledger/loop-metrics.jsonl` (PRD 00188) - the `review_converged` event row that records, per PRD, how many review cycles it took to converge and under which cap, build models, attempt tiers and task counts. It shares the file with the per-session rows; the `event` key is what tells the two apart.
+File: `dev/local/autopilot/loop-metrics.jsonl` and its GC-exempt mirror `dev/local/autopilot/ledger/loop-metrics.jsonl` (PRD 00188) - the `review_converged` event row that records, per PRD, how many review cycles it took to converge and under which cap, build models, attempt tiers and task counts. It shares the file with the per-session rows.
 
 **Writer.** `cli/loop.py` `Loop._append_metrics` appends one row per PRD when a session launched as `review` exits with `next_phase: "done"`, after that session's own row and inside the same `try` as it, so it can never fail the loop; an unreadable or malformed `state.json` writes nothing (the session row already written stays). No skill prose writes it: PRD 00188 replaced the `phase-review.md` printf with this mechanical append.
 
