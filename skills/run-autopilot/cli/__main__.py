@@ -140,6 +140,7 @@ from cli import (
     eligibility,
     frontmatter,
     gate,
+    handoff,
     policy,
     records,
     render_audit,
@@ -333,6 +334,7 @@ def _run_reset_prd(args: argparse.Namespace) -> int:
         )
     except (state.StateError, OSError):
         return 2
+    handoff.clear_markers(state_path.parent)
     return 0
 
 
@@ -661,6 +663,10 @@ def _run_phase_done(args: argparse.Namespace) -> int:
     except (state.StateError, OSError) as err:
         print(f"autopilot: phase-done failed: {err}", file=sys.stderr)
         return 2
+    # Every outcome but `rework` ends the current phase or PRD; rework stays on
+    # the same phase and PRD, so its session continues and its markers stand.
+    if args.outcome != "rework":
+        handoff.clear_markers(state_path.parent)
     print(
         json.dumps(
             {

@@ -27,7 +27,9 @@ Exposes:
              extra_mutator=None) -> int
         The Loop-mode stall procedure (references/recovery.md) as ONE call
         with a durable intent record (state.stall_op), recoverable on retry
-        from a kill at any of its three internal boundaries. See
+        from a kill at any of its three internal boundaries. Clears the
+        handoff/cap markers (cli/handoff.py) once the commit lands, and only
+        then - a stall that never commits leaves them alone. See
         test_records_stall.py's module docstring for the full 0-5 step /
         exit-code / retry contract.
     do_park(state_path, *, prds_dir, autopilot_dir) -> int
@@ -49,7 +51,7 @@ import sys
 import uuid
 from pathlib import Path
 
-from . import custody, resume, schema, state
+from . import custody, handoff, resume, schema, state
 
 # park_decision used to be imported from scripts/resume_target.py behind a
 # scoped sys.path insert. PRD 00089 absorbed it into cli/resume.py, so it is
@@ -510,7 +512,12 @@ def do_stall(
     if rc is not None:
         return rc
     _trip("after-append-before-commit")
-    return _commit_stall(state_path, site, extra_mutator, entry)
+    rc = _commit_stall(state_path, site, extra_mutator, entry)
+    if rc == 0:
+        # The PRD is off this session's plate; a pending handoff or cap
+        # request is about the session that just ended.
+        handoff.clear_markers(autopilot_dir)
+    return rc
 
 
 def _park_mutator(pause_detail: str | None = None):
