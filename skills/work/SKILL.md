@@ -460,7 +460,7 @@ Skip for documentation-only or configuration-only tasks.
 
 After step 6, decide whether to finish the remaining tasks in this session or hand them to a fresh one.
 
-**If no pending tasks remain**, skip this step — proceed to step 7. Final verification runs in whichever session finishes the last task. Otherwise resolve the autopilot dir with `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/_walk_up.py --bash` and read `<dir>/.handoff-requested`: **absent** → return to step 1 for the next task, no handoff. **Present** → **read `references/task-boundary-handoff.md` and follow its procedure** (clean-tree check, marker removal, banner, contract card, the `leave` handoff row, `next_phase: "build"`, STOP). Do NOT return to step 1 and do NOT run step 7 on that path.
+**If no pending tasks remain**, skip this step — proceed to step 7. Final verification runs in whichever session finishes the last task. Otherwise resolve the autopilot dir with `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/_walk_up.py --bash` and read `<dir>/.handoff-requested`: **absent** → return to step 1 for the next task, no handoff. **Present** → **read `references/task-boundary-handoff.md` and follow its procedure** — it routes on whether the marker's own phase matches this session's current phase: a match hands off within that phase (clean-tree check, marker removal, banner, contract card, the `leave` handoff row, STOP); a mismatch or malformed marker is cleaned up and treated as absent. Do NOT return to step 1 and do NOT run step 7 on the handoff path.
 
 ### 7. Final verification (once per work phase)
 
