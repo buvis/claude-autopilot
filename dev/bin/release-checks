@@ -27,6 +27,7 @@ uv run --no-project --with pytest python -m pytest -q \
 
 echo "[checks] custody push guard"
 uv run --no-project --with pytest python -m pytest -q hooks/test_guard_push_on_critical.py
+uv run --no-project --with pytest python -m pytest -q hooks/test_guard_push_grammar.py
 
 echo "[checks] runner recursion guard"
 bash skills/use-codex/scripts/test_codex_run.sh
