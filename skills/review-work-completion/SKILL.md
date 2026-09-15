@@ -413,11 +413,13 @@ Outputs consolidated issues sorted by consensus then severity. See `references/o
 
 **If no issues found:** Skip task creation. Report clean review to user.
 
-**Skip every finding this cycle queued for verification** (the entries written in step 6). Their check runs inside the work phase's step 7; a task here would re-run the whole suite to answer what one command answers, which is the duplication PRD 00164 removed. This step is where "an all-VERIFY cycle creates zero tasks" is actually delivered — Phase 5's routing row runs later and cannot un-create a task. **Match a consolidated row to a queue entry the same way Phase 5 does** — a judgment call on issue text plus file, against the entry's `finding` and `file`, never verbatim identity: `consolidate_findings.py` folds paraphrases onto the first-seen wording, so an exact-text skip would miss precisely the multi-reviewer rows and hand them the task anyway. A queued **CRITICAL or HIGH is not skipped**: it is never routed (`run-autopilot/references/phase-review.md` Phase 5), so it gets its task as today.
+**Skip every finding this cycle queued for verification** (the entries written in step 6). Their check runs inside the work phase's step 7; a task here would re-run the whole suite to answer what one command answers, which is the duplication PRD 00164 removed. This step is where "an all-VERIFY cycle creates zero tasks" is actually delivered — Phase 5's routing row runs later and cannot un-create a task. **Match a consolidated row to a queue entry the same way Phase 5 does** — a judgment call on issue text plus file, against the entry's `finding` and `file`, never verbatim identity: `consolidate_findings.py` folds paraphrases onto the first-seen wording, so an exact-text skip would miss precisely the multi-reviewer rows and hand them the task anyway. A queued **HIGH is not skipped**: it is never routed (`run-autopilot/references/phase-review.md` Phase 5), so it gets its task as today; a queued CRITICAL is never routed either, and its task is Phase 6's (below).
 
 **If issues found, and `dev/local/autopilot/state.json` exists (autopilot run):** Create each follow-up with `task-add`, prioritizing multi-agent consensus:
 
-- Process 🔴 → 🟠 → 🟡 order
+A 🔴 CRITICAL finding gets no task here (PRD 00194): `run-autopilot/references/phase-review.md` Phase 6 § Dispatch rework creates it after the cycle's rework design, so a CRITICAL fix never starts without a reviewed contract. Every other severity is created below as today.
+
+- Process 🟠 → 🟡 order (🔴 rows belong to Phase 6, above)
 - Max 25 tasks (batch overflow into "Misc fixes")
 - Group by theme
 - Tag complexity: `(S)` small, `(M)` medium, `(L)` large
