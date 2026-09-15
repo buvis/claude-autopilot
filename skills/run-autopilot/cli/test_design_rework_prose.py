@@ -129,6 +129,103 @@ def _critical_bullet() -> str:
     return _single_row(_DISPATCH, _PHASE_REVIEW, _DISPATCH_WHERE, _CRITICAL_BULLET_LEAD)
 
 
+def _assert_design_bound(noun: str, verbs: str) -> None:
+    design = _design_paragraph()
+    _assert_bound(design, _PHASE_REVIEW, _DESIGN_WHERE, noun=noun, verbs=verbs)
+
+
+def _assert_failure_bound(noun: str, verbs: str) -> None:
+    failure = _failure_paragraph()
+    _assert_bound(failure, _PHASE_REVIEW, _FAILURE_WHERE, noun=noun, verbs=verbs)
+
+
+def _assert_bullet_bound(noun: str, verbs: str) -> None:
+    bullet = _critical_bullet()
+    _assert_bound(bullet, _PHASE_REVIEW, _CRITICAL_BULLET_WHERE, noun=noun, verbs=verbs)
+
+
+def _assert_design_no_negation(banned: str = _OVERRIDE) -> None:
+    design = _design_paragraph()
+    _assert_no_negation(
+        design,
+        _PHASE_REVIEW,
+        _DESIGN_WHERE,
+        banned=banned,
+        allow=_DESIGN_ALLOW,
+    )
+
+
+def _assert_bullet_no_negation(banned: str = _OVERRIDE) -> None:
+    _assert_no_negation(
+        _critical_bullet(),
+        _PHASE_REVIEW,
+        _CRITICAL_BULLET_WHERE,
+        banned=banned,
+        allow=("not paraphrased",),
+    )
+
+
+def _assert_step_7_critical_paragraph() -> None:
+    # The CRITICAL sentence opens its own paragraph (not a quoted "retired
+    # wording"), binds Phase 6 to the creation, and carries no override.
+    _assert_matches(
+        _STEP_7,
+        _REVIEW_SKILL,
+        _STEP_7_WHERE,
+        r"(?m)^A 🔴 CRITICAL finding gets no task here \(PRD 00194\):",
+        "open a paragraph with the CRITICAL no-task sentence",
+    )
+    critical = _paragraph(_STEP_7, _REVIEW_SKILL, _NO_TASK_HERE)
+    _assert_bound(
+        critical,
+        _REVIEW_SKILL,
+        _NO_TASK_WHERE,
+        noun="Phase 6",
+        verbs="creates",
+    )
+    _assert_present(
+        critical,
+        _REVIEW_SKILL,
+        _NO_TASK_WHERE,
+        (
+            "never starts without a reviewed contract",
+            "Every other severity is created below as today",
+        ),
+    )
+    _assert_no_negation(
+        critical,
+        _REVIEW_SKILL,
+        _NO_TASK_WHERE,
+        banned=_STEP_7_OVERRIDE,
+        allow=("never starts without a reviewed contract",),
+    )
+
+
+def _assert_step_7_queue_paragraph() -> None:
+    # The queue paragraph hands a queued CRITICAL to Phase 6 too.
+    queue = _paragraph(_STEP_7, _REVIEW_SKILL, _QUEUE_LEAD)
+    _assert_present(
+        queue,
+        _REVIEW_SKILL,
+        _QUEUE_WHERE,
+        ("a queued CRITICAL is never routed either", "its task is Phase 6's"),
+    )
+    _assert_bound(
+        queue,
+        _REVIEW_SKILL,
+        _QUEUE_WHERE,
+        noun="a queued CRITICAL",
+        verbs="routed",
+    )
+    _assert_no_negation(
+        queue,
+        _REVIEW_SKILL,
+        _QUEUE_WHERE,
+        banned=_STEP_7_OVERRIDE,
+        allow=_QUEUE_ALLOW,
+    )
+
+
 def test_dispatch_rework_designs_critical_rework_once_before_any_task_add() -> None:
     pins = (
         "--rework <this cycle's review file>",
@@ -140,16 +237,12 @@ def test_dispatch_rework_designs_critical_rework_once_before_any_task_add() -> N
     # First occurrences: the single design call must sit above the batch
     # build, and the batch build above the real creation step — the
     # backticked `task-add <task-json-file>` line, not a bare `task-add`.
-    _assert_in_order(
-        _DISPATCH,
-        _PHASE_REVIEW,
-        _DISPATCH_WHERE,
-        (
-            "ONCE for this cycle",
-            "Build the rework batch from two sources:",
-            "`task-add <task-json-file>`",
-        ),
+    order = (
+        "ONCE for this cycle",
+        "Build the rework batch from two sources:",
+        "`task-add <task-json-file>`",
     )
+    _assert_in_order(_DISPATCH, _PHASE_REVIEW, _DISPATCH_WHERE, order)
     negations = (
         "Do NOT invoke `/autopilot:design-solution`",
         "after the tasks are created",
@@ -159,41 +252,19 @@ def test_dispatch_rework_designs_critical_rework_once_before_any_task_add() -> N
     # The instruction itself, on one line each: the sub-skill bound to an
     # action verb, the below-cap condition bound to that call, and the ONCE
     # call bound to `before` the first task — so a bare token dump fails.
-    design = _design_paragraph()
-    _assert_bound(
-        design,
-        _PHASE_REVIEW,
-        _DESIGN_WHERE,
-        noun="design-solution",
-        verbs="invoke|run|dispatch",
-    )
-    _assert_bound(
-        design,
-        _PHASE_REVIEW,
-        _DESIGN_WHERE,
+    _assert_design_bound(noun="design-solution", verbs="invoke|run|dispatch")
+    _assert_design_bound(
         noun=r"state\.cycle < state\.rework_cap",
         verbs="invoke|run|dispatch",
     )
-    _assert_bound(
-        design,
-        _PHASE_REVIEW,
-        _DESIGN_WHERE,
-        noun="ONCE for this cycle",
-        verbs="before",
-    )
+    _assert_design_bound(noun="ONCE for this cycle", verbs="before")
     _assert_present(
-        design,
+        _design_paragraph(),
         _PHASE_REVIEW,
         _DESIGN_WHERE,
         ("before the first task is created",),
     )
-    _assert_no_negation(
-        design,
-        _PHASE_REVIEW,
-        _DESIGN_WHERE,
-        banned=_OVERRIDE,
-        allow=_DESIGN_ALLOW,
-    )
+    _assert_design_no_negation()
     _assert_no_match(
         _DISPATCH,
         _PHASE_REVIEW,
@@ -210,22 +281,9 @@ def test_every_critical_row_becomes_a_d_task_with_one_owner() -> None:
         "only task-creation point for a 🔴 finding",
     )
     _assert_present(_DISPATCH, _PHASE_REVIEW, _DISPATCH_WHERE, dispatch_pins)
-    design = _design_paragraph()
-    _assert_bound(
-        design,
-        _PHASE_REVIEW,
-        _DESIGN_WHERE,
-        noun="Every unresolved 🔴 row",
-        verbs="becomes|joins",
-    )
-    _assert_bound(design, _PHASE_REVIEW, _DESIGN_WHERE, noun="step 7", verbs="leaves")
-    _assert_no_negation(
-        design,
-        _PHASE_REVIEW,
-        _DESIGN_WHERE,
-        banned=_OVERRIDE,
-        allow=_DESIGN_ALLOW,
-    )
+    _assert_design_bound(noun="Every unresolved 🔴 row", verbs="becomes|joins")
+    _assert_design_bound(noun="step 7", verbs="leaves")
+    _assert_design_no_negation()
 
     # The review skill hands 🔴 rows to Phase 6 and keeps the other
     # severities; the two old sentences that gave CRITICAL a task here must
@@ -244,37 +302,10 @@ def test_every_critical_row_becomes_a_d_task_with_one_owner() -> None:
     )
     _assert_absent(_STEP_7, _REVIEW_SKILL, _STEP_7_WHERE, negations)
 
-    # The CRITICAL sentence opens its own paragraph (not a quoted "retired
-    # wording"), binds Phase 6 to the creation, and carries no override; the
-    # Process bullet is the whole line, so no `, then 🔴 last` tail can ride
-    # on it; the queue paragraph hands a queued CRITICAL to Phase 6 too.
-    _assert_matches(
-        _STEP_7,
-        _REVIEW_SKILL,
-        _STEP_7_WHERE,
-        r"(?m)^A 🔴 CRITICAL finding gets no task here \(PRD 00194\):",
-        "open a paragraph with the CRITICAL no-task sentence",
-    )
-    critical = _paragraph(_STEP_7, _REVIEW_SKILL, _NO_TASK_HERE)
-    _assert_bound(
-        critical, _REVIEW_SKILL, _NO_TASK_WHERE, noun="Phase 6", verbs="creates"
-    )
-    _assert_present(
-        critical,
-        _REVIEW_SKILL,
-        _NO_TASK_WHERE,
-        (
-            "never starts without a reviewed contract",
-            "Every other severity is created below as today",
-        ),
-    )
-    _assert_no_negation(
-        critical,
-        _REVIEW_SKILL,
-        _NO_TASK_WHERE,
-        banned=_STEP_7_OVERRIDE,
-        allow=("never starts without a reviewed contract",),
-    )
+    # The CRITICAL paragraph and the queue paragraph each hand a CRITICAL to
+    # Phase 6; the Process bullet is the whole line, so no `, then 🔴 last`
+    # tail can ride on it.
+    _assert_step_7_critical_paragraph()
     _assert_matches(
         _STEP_7,
         _REVIEW_SKILL,
@@ -282,23 +313,7 @@ def test_every_critical_row_becomes_a_d_task_with_one_owner() -> None:
         _PROCESS_BULLET,
         "keep the whole line `- Process 🟠 → 🟡 order (🔴 rows belong to Phase 6, above)`",
     )
-    queue = _paragraph(_STEP_7, _REVIEW_SKILL, _QUEUE_LEAD)
-    _assert_present(
-        queue,
-        _REVIEW_SKILL,
-        _QUEUE_WHERE,
-        ("a queued CRITICAL is never routed either", "its task is Phase 6's"),
-    )
-    _assert_bound(
-        queue, _REVIEW_SKILL, _QUEUE_WHERE, noun="a queued CRITICAL", verbs="routed"
-    )
-    _assert_no_negation(
-        queue,
-        _REVIEW_SKILL,
-        _QUEUE_WHERE,
-        banned=_STEP_7_OVERRIDE,
-        allow=_QUEUE_ALLOW,
-    )
+    _assert_step_7_queue_paragraph()
     _assert_no_match(
         _STEP_7,
         _REVIEW_SKILL,
@@ -335,45 +350,16 @@ def test_rework_design_reuse_needs_the_source_check_and_the_pass_gate() -> None:
     # check means stale, the pass gate is run, a `result: failed` line takes
     # the failure routing, an interrupted run re-invokes the skill, and only
     # a pass-gate exit 0 reuses the doc — with no "may be omitted" override.
-    design = _design_paragraph()
-    _assert_bound(design, _PHASE_REVIEW, _DESIGN_WHERE, noun="stale", verbs="means")
-    _assert_bound(
-        design,
-        _PHASE_REVIEW,
-        _DESIGN_WHERE,
-        noun=re.escape(_PASS_GATE),
-        verbs="run|exits?|gate",
-    )
-    _assert_bound(
-        design,
-        _PHASE_REVIEW,
-        _DESIGN_WHERE,
-        noun="result: failed",
-        verbs="take|takes|routing",
-    )
-    _assert_bound(
-        design,
-        _PHASE_REVIEW,
-        _DESIGN_WHERE,
-        noun="interrupted run",
-        verbs="invoke|invokes|overwrites",
-    )
-    _assert_bound(
-        design,
-        _PHASE_REVIEW,
-        _DESIGN_WHERE,
-        noun="reuse it and skip the invocation",
-        verbs="exits?",
-    )
-    _assert_no_negation(
-        design,
-        _PHASE_REVIEW,
-        _DESIGN_WHERE,
+    _assert_design_bound(noun="stale", verbs="means")
+    _assert_design_bound(noun=re.escape(_PASS_GATE), verbs="run|exits?|gate")
+    _assert_design_bound(noun="result: failed", verbs="take|takes|routing")
+    _assert_design_bound(noun="interrupted run", verbs="invoke|invokes|overwrites")
+    _assert_design_bound(noun="reuse it and skip the invocation", verbs="exits?")
+    _assert_design_no_negation(
         banned=(
             f"{_OVERRIDE}|may be omitted|skip the pass gate|skip the source check|"
             "reuse it unconditionally"
         ),
-        allow=_DESIGN_ALLOW,
     )
 
 
@@ -381,28 +367,17 @@ def test_critical_d_task_carries_design_then_contract_then_findings() -> None:
     # First occurrences: the new CRITICAL sub-bullet must be the first one in
     # source 2, so its `### Findings (verbatim)` mention lands before the
     # transcribe bullet's — a sub-bullet placed after it fails the order.
-    _assert_in_order(
-        _DISPATCH,
-        _PHASE_REVIEW,
-        _DISPATCH_WHERE,
-        (_DESIGN_LINE, "### Contract", "### Findings (verbatim)"),
-    )
+    blocks = (_DESIGN_LINE, "### Contract", "### Findings (verbatim)")
+    _assert_in_order(_DISPATCH, _PHASE_REVIEW, _DISPATCH_WHERE, blocks)
     _assert_in_order(
         _DISPATCH,
         _PHASE_REVIEW,
         _DISPATCH_WHERE,
         (_CRITICAL_BULLET_LEAD, _TRANSCRIBE_LEAD),
     )
-    _assert_present(
-        _DISPATCH,
-        _PHASE_REVIEW,
-        _DISPATCH_WHERE,
-        ("copied verbatim", "sole contract source"),
-    )
-    negations = (
-        "paraphrase the contract",
-        "below its `### Findings (verbatim)`",
-    )
+    pins = ("copied verbatim", "sole contract source")
+    _assert_present(_DISPATCH, _PHASE_REVIEW, _DISPATCH_WHERE, pins)
+    negations = ("paraphrase the contract", "below its `### Findings (verbatim)`")
     _assert_absent(_DISPATCH, _PHASE_REVIEW, _DISPATCH_WHERE, negations)
 
     # Inside the one bullet: a 🔴 line is what makes a D-task carry the
@@ -410,26 +385,9 @@ def test_critical_d_task_carries_design_then_contract_then_findings() -> None:
     # block holds the design's section byte-identical, and nothing on the
     # bullet tells the reader to summarise instead.
     bullet = _critical_bullet()
-    _assert_in_order(
-        bullet,
-        _PHASE_REVIEW,
-        _CRITICAL_BULLET_WHERE,
-        (_DESIGN_LINE, "### Contract", "### Findings (verbatim)"),
-    )
-    _assert_bound(
-        bullet,
-        _PHASE_REVIEW,
-        _CRITICAL_BULLET_WHERE,
-        noun="🔴 CRITICAL line",
-        verbs="carries",
-    )
-    _assert_bound(
-        bullet,
-        _PHASE_REVIEW,
-        _CRITICAL_BULLET_WHERE,
-        noun="### Contract",
-        verbs="holding|holds",
-    )
+    _assert_in_order(bullet, _PHASE_REVIEW, _CRITICAL_BULLET_WHERE, blocks)
+    _assert_bullet_bound(noun="🔴 CRITICAL line", verbs="carries")
+    _assert_bullet_bound(noun="### Contract", verbs="holding|holds")
     _assert_present(
         bullet,
         _PHASE_REVIEW,
@@ -441,12 +399,8 @@ def test_critical_d_task_carries_design_then_contract_then_findings() -> None:
             "sole contract source",
         ),
     )
-    _assert_no_negation(
-        bullet,
-        _PHASE_REVIEW,
-        _CRITICAL_BULLET_WHERE,
+    _assert_bullet_no_negation(
         banned=f"{_OVERRIDE}|summari[sz]e|paraphrase the contract",
-        allow=("not paraphrased",),
     )
 
 
@@ -476,32 +430,17 @@ def test_at_cap_keeps_the_custody_stall_and_launches_no_rework_design() -> None:
     # The at-cap sentence itself: the cap condition and the "no rework design
     # and no fix task" outcome on one line, the custody stall keeping its
     # slug, and the Cap check named as what already routed the cycle.
-    design = _design_paragraph()
     _assert_bound(
-        design,
+        _design_paragraph(),
         _PHASE_REVIEW,
         _DESIGN_WHERE,
         noun=r"state\.cycle >= state\.rework_cap",
         verbs="no rework design and no fix task",
         window=160,
     )
-    _assert_bound(
-        design,
-        _PHASE_REVIEW,
-        _DESIGN_WHERE,
-        noun=r'site: "cap_critical"',
-        verbs="stall",
-    )
-    _assert_bound(
-        design, _PHASE_REVIEW, _DESIGN_WHERE, noun="Cap check", verbs="routed"
-    )
-    _assert_no_negation(
-        design,
-        _PHASE_REVIEW,
-        _DESIGN_WHERE,
-        banned=_OVERRIDE,
-        allow=_DESIGN_ALLOW,
-    )
+    _assert_design_bound(noun=r'site: "cap_critical"', verbs="stall")
+    _assert_design_bound(noun="Cap check", verbs="routed")
+    _assert_design_no_negation()
 
 
 def test_non_critical_rework_routing_is_unchanged() -> None:
@@ -515,37 +454,11 @@ def test_non_critical_rework_routing_is_unchanged() -> None:
     # Bound on one line each: no 🔴 row is what runs no design, every other
     # severity is what routes as before, and no 🔴 line is what carries
     # neither block — and neither paragraph carries an override.
-    design = _design_paragraph()
-    _assert_bound(design, _PHASE_REVIEW, _DESIGN_WHERE, noun="no 🔴 row", verbs="runs")
-    _assert_bound(
-        design,
-        _PHASE_REVIEW,
-        _DESIGN_WHERE,
-        noun="every other severity",
-        verbs="routes",
-    )
-    _assert_no_negation(
-        design,
-        _PHASE_REVIEW,
-        _DESIGN_WHERE,
-        banned=_OVERRIDE,
-        allow=_DESIGN_ALLOW,
-    )
-    bullet = _critical_bullet()
-    _assert_bound(
-        bullet,
-        _PHASE_REVIEW,
-        _CRITICAL_BULLET_WHERE,
-        noun="no 🔴 line",
-        verbs="carries",
-    )
-    _assert_no_negation(
-        bullet,
-        _PHASE_REVIEW,
-        _CRITICAL_BULLET_WHERE,
-        banned=_OVERRIDE,
-        allow=("not paraphrased",),
-    )
+    _assert_design_bound(noun="no 🔴 row", verbs="runs")
+    _assert_design_bound(noun="every other severity", verbs="routes")
+    _assert_design_no_negation()
+    _assert_bullet_bound(noun="no 🔴 line", verbs="carries")
+    _assert_bullet_no_negation()
 
 
 def test_rework_design_failure_stalls_in_loop_and_pauses_interactively() -> None:
@@ -559,12 +472,8 @@ def test_rework_design_failure_stalls_in_loop_and_pauses_interactively() -> None
         "delete the doc so the next Phase 6 entry regenerates it",
     )
     _assert_present(_DISPATCH, _PHASE_REVIEW, _DISPATCH_WHERE, pins)
-    _assert_in_order(
-        _DISPATCH,
-        _PHASE_REVIEW,
-        _DISPATCH_WHERE,
-        ("Loop mode", "Interactive"),
-    )
+    modes = ("Loop mode", "Interactive")
+    _assert_in_order(_DISPATCH, _PHASE_REVIEW, _DISPATCH_WHERE, modes)
     negations = ("re-invoke the sub-skill ONCE", "never stall")
     _assert_absent(_DISPATCH, _PHASE_REVIEW, _DISPATCH_WHERE, negations)
 
@@ -572,42 +481,22 @@ def test_rework_design_failure_stalls_in_loop_and_pauses_interactively() -> None
     # interactive site bound to the pause, each branch carrying its own
     # site, the retry budget named as spent — and no "re-invoke it twice"
     # or "stalling is unnecessary" override.
+    _assert_failure_bound(noun=r'site: "design_rework"', verbs="stall")
+    _assert_failure_bound(noun=r'"site": "sub_skill_fail"', verbs="paused")
     failure = _failure_paragraph()
-    _assert_bound(
-        failure,
-        _PHASE_REVIEW,
-        _FAILURE_WHERE,
-        noun=r'site: "design_rework"',
-        verbs="stall",
+    branches = (
+        "Loop mode",
+        'site: "design_rework"',
+        "Interactive",
+        '"site": "sub_skill_fail"',
     )
-    _assert_bound(
-        failure,
-        _PHASE_REVIEW,
-        _FAILURE_WHERE,
-        noun=r'"site": "sub_skill_fail"',
-        verbs="paused",
+    _assert_in_order(failure, _PHASE_REVIEW, _FAILURE_WHERE, branches)
+    budget = (
+        "three dispatches were the retry budget",
+        "do not re-invoke it",
+        "create no fix task",
     )
-    _assert_in_order(
-        failure,
-        _PHASE_REVIEW,
-        _FAILURE_WHERE,
-        (
-            "Loop mode",
-            'site: "design_rework"',
-            "Interactive",
-            '"site": "sub_skill_fail"',
-        ),
-    )
-    _assert_present(
-        failure,
-        _PHASE_REVIEW,
-        _FAILURE_WHERE,
-        (
-            "three dispatches were the retry budget",
-            "do not re-invoke it",
-            "create no fix task",
-        ),
-    )
+    _assert_present(failure, _PHASE_REVIEW, _FAILURE_WHERE, budget)
     _assert_no_negation(
         failure,
         _PHASE_REVIEW,
