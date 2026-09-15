@@ -1,7 +1,7 @@
 ---
 name: design-solution
 description: Use when turning a PRD into a reviewed design doc (the HOW) before planning tasks - architecture fit, exact interfaces, reuse, alternatives, then an autonomous adversarial review. Triggers on "design solution", "design this PRD".
-argument-hint: "<prd-path>"
+argument-hint: "<prd-path> [--rework <review-file>]"
 ---
 
 # Design Solution
@@ -39,6 +39,9 @@ PRD-owned.
 - **PRD path** (argument). If omitted, auto-select the single PRD in
   `dev/local/prds/wip/`. Error and stop if `wip/` holds zero or 2+ PRDs
   ("ambiguous - pass the PRD path explicitly").
+- **Rework mode** (`--rework <review-file>`): design one review cycle's
+  CRITICAL fixes instead of the PRD's first implementation - see
+  `## Rework mode`.
 - **Architecture context**, loaded when present (skip silently if absent):
   - the cartographer atlas for this repo
     (`~/.local/share/agents/cartographer/projects/<hash>/atlas.md`)
@@ -50,6 +53,63 @@ PRD-owned.
 `dev/local/designs/<prd-stem>-design.md`, where `<prd-stem>` is the PRD filename
 minus its `.md` extension. Create `dev/local/designs/` if missing - it is a
 durable artifact dir, like `dev/local/reviews/`.
+
+In rework mode the output is `dev/local/designs/<prd-stem>-rework-<cycle>-design.md`,
+where `<cycle>` is the review file's `review:` frontmatter value.
+
+## Rework mode
+
+`/autopilot:design-solution <prd-path> --rework <review-file>` designs one
+review cycle's CRITICAL fixes (PRD 00194). `/autopilot:run-autopilot` Phase 6
+invokes it once per cycle, before any fix task is created. Steps 1-5 run as
+in default mode except where a bullet below says otherwise.
+
+- **Inputs** (step 1): the PRD, plus from `<review-file>`: `<cycle>` = its
+  `review:` frontmatter value, and the CRITICAL rows = every
+  `## Consolidated Findings` table row whose Severity cell is `🔴 Critical`.
+  `<work_start_sha>` = the left side of the `Diff range:` line in the cycle-1
+  review file beside it, `<prd-stem>-review-1.md` (or `-review-01.md`) - under
+  autopilot that range is `work_start_sha..HEAD`, so no flag carries it. Run
+  `git diff --stat <work_start_sha>..HEAD` for the PRD's whole work range, and
+  on cycle 2 or later also `git diff --stat` over `<review-file>`'s own
+  `Diff range:` (the prior cycle's rework commits, the range the prior fix
+  changed); a `Diff range:` holding a single SHA `X` is read as
+  `X..<head_sha>`, `<head_sha>` being `<review-file>`'s frontmatter value. A
+  review file with no `🔴 Critical` row, or no cycle-1 review file with a
+  `Diff range:` line, is a usage error: print
+  `design-solution: --rework needs a 🔴 Critical row and a cycle-1 Diff range` and
+  stop without writing a doc.
+- **Output**: `dev/local/designs/<prd-stem>-rework-<cycle>-design.md` with the
+  same nine sections, same headings, same order as step 3, preceded by one
+  source line directly under the H1 title, exactly
+  `Source review: <review-file> (head_sha <head_sha>)` - the review file path
+  as given and its frontmatter `head_sha`. Phase 6 compares that line before
+  reusing a doc, so a design reviewed for one cycle's findings never supplies
+  the contract for another's. An existing file at that path is overwritten.
+- **`## Architecture fit` opens with a `Prior fix:` paragraph** -
+  what the prior fix changed and why it regressed, quoting the CRITICAL rows'
+  evidence and the files the prior-cycle `git diff --stat` names, and saying
+  whether each CRITICAL was introduced by that fix or only exposed by it. On
+  cycle 1 it reads exactly `Prior fix: none - there was no prior rework fix.`
+- **`## Interfaces & contracts` is the sole contract source** for the cycle's
+  CRITICAL fix tasks: Phase 6 copies it verbatim into each CRITICAL
+  `[D{cycle}]` task's `### Contract` block, so name every symbol exactly, and
+  open each entry with the 🔴 row it closes (`Closes: <row text>`) so a task
+  owner is readable from the shared block.
+- **Review** (step 4): the same three-dispatch procedure, the same 3-dispatch ceiling,
+  prompt package, minimum-engagement check and Claude fallback, unchanged. The
+  prompt additionally carries the CRITICAL rows verbatim so a reviewer judges
+  the fix design against the finding it must close.
+- **Terminal result line** (step 5): after the exit report is decided, append
+  its `result:` value as the last line of `## Review log`, unindented - exactly
+  `result: ok` or `result: failed (open cardinal sins/blockers)`. The Review log
+  is the ninth section, so this is the doc's last non-empty line; Phase 6 reads
+  it as the pass gate. Default mode writes no such line.
+- **Exit report**: the first line is `design-solution: <prd-stem> (rework cycle <n>)`
+  and `doc:` names the rework path; the remaining lines are unchanged. Open
+  cardinal sins or blockers after dispatch 3 end the report with
+  `result: failed (open cardinal sins/blockers)` exactly as step 5 describes;
+  the caller routes the failure.
 
 ## Workflow
 
@@ -222,6 +282,8 @@ design-solution: <prd-stem>
 
 The exit report always lists the iteration count (reviewer dispatches) and the
 per-severity finding counts.
+
+In rework mode the first line reads `design-solution: <prd-stem> (rework cycle <n>)`.
 
 ## Notes
 
