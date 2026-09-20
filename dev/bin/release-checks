@@ -57,3 +57,10 @@ echo "[checks] plan size gate"
 uv run --no-project --with pytest python -m pytest -q \
   skills/plan-tasks/scripts/test_plan_size_gate_prose.py \
   skills/run-autopilot/cli/test_policy.py
+
+echo "[checks] l3"
+uv run --no-project --with pytest python -m pytest -q \
+  skills/run-autopilot/cli/test_loop_prose.py \
+  skills/run-autopilot/cli/test_pause.py \
+  skills/run-autopilot/cli/test_usage_limit.py \
+  skills/run-autopilot/cli/test_loop_decision.py

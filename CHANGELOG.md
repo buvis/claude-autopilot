@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: a legacy handoff marker holding a bare numeric task id is read as that task, so it is no longer rewritten on every hook fire; a stall or park clears the markers beside the state file it committed, not beside a differing `--autopilot-dir`
 - **run-autopilot**: the API-unreachable poll budgets probes (`_AUTOPILOT_NET_WAIT_MAX // 30`, 30 s apart) instead of wall-clock, so a machine that sleeps between two probes no longer spends the outage budget and the loop no longer dies with `repeated API connection failures` after a lid-close
 - **run-autopilot**: a session log whose tail carries a live `rejected` rate-limit event makes the loop sleep to `resetsAt` before relaunching whether or not the session made progress and whatever `overageStatus` says, so a loop never relaunches into the overage allowance; a reset beyond `_AUTOPILOT_LIMIT_WAIT_MAX` still stops the loop
+- **run-autopilot**: a headless session only stands down for a peer whose session name starts with this repository's directory basename; the other repo's loop is no longer evidence of a live owner, and Phase 0 asks that peer (one `SendMessage`, 120 s) and requires writer evidence (a dirty tracked tree, or a state write after the batch's last `leave` handoff row) before it pauses, so a session that merely reads state never stands a batch down
 
 ## [0.5.2] - 2026-09-13
 
