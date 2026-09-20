@@ -149,11 +149,13 @@ def _utcnow_iso() -> str:
 
 class DecisionMixin:
     """Loop's decision table: _decide, _decide_from_state, _decide_no_progress,
-    _decide_limit_wait, _decide_network_outage, _decide_died,
-    _fingerprint_bound. Reads self._int, self._clock, self._sleep, self._probe,
-    self._detect_limit, self.err, and the counters self._net_retries,
+    _limit_wait_for, _yield_at_warning, _decide_limit_wait,
+    _decide_network_outage, _decide_died, _fingerprint_bound. Reads self._int,
+    self._clock, self._sleep, self._probe, self._detect_limit, self.env,
+    self.err, self.loop_pid, the counters self._net_retries,
     self._died_retries, self._fp_prev, self._fp_repeats - all set by
-    Loop.__init__ in cli/loop.py. Imports nothing from cli.loop."""
+    Loop.__init__ in cli/loop.py - and self._oldest_live_loop_pid from
+    GatesMixin. Imports nothing from cli.loop."""
 
     # ── decision table ──
     def _decide(self, ap_dir: Path, ts_start: float) -> dict:
@@ -260,7 +262,35 @@ class DecisionMixin:
         if isinstance(reset, int):
             self._decide_limit_wait(decision, reset)
             return True
-        return False
+        return self._yield_at_warning(decision, log)
+
+    def _yield_at_warning(self, decision: dict, log: Path) -> bool:
+        """Yield the shared five-hour window to the oldest live loop (PRD
+        00199): a live `allowed_warning` in the tail while another loop on
+        this account started earlier means sleep to the reset (through
+        `wait_decision`, bounded by `_AUTOPILOT_LIMIT_WAIT_MAX`) before the
+        next launch. The oldest loop never yields; `_AUTOPILOT_NO_YIELD=1`
+        turns the yield off. True when a wait was decided."""
+        if self.env.get("_AUTOPILOT_NO_YIELD") == "1":
+            return False
+        reset = usage_limit.detect_warning_from_log(log)
+        if not isinstance(reset, int):
+            return False
+        oldest = self._oldest_live_loop_pid()
+        if oldest is None or oldest == self.loop_pid:
+            return False
+        wait = usage_limit.wait_decision(
+            reset,
+            now=self._clock(),
+            max_wait_secs=self._int("_AUTOPILOT_LIMIT_WAIT_MAX", 21600),
+        )
+        if wait is None:
+            return False
+        stamp = _dt.datetime.fromtimestamp(reset).strftime("%H:%M")
+        decision["signal"] = "continue"
+        decision["detail"] = f"yielding the window to loop {oldest} until ~{stamp}"
+        decision["limit_wait"] = wait
+        return True
 
     def _decide_limit_wait(self, decision: dict, reset: int) -> None:
         """A usage-limit hit is scheduling: wait inside the cap, else die."""

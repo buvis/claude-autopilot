@@ -243,6 +243,41 @@ class GatesMixin:
                 file=self.err,
             )
 
+    def _oldest_live_loop_pid(self) -> int | None:
+        """The pid of the live loop with the earliest `started_at` across the
+        whole registry, any repo (PRD 00199: the five-hour window is per
+        account, so every loop on it competes). None when the registry is
+        unreadable or holds no live entry. An entry that is unreadable,
+        malformed or missing `started_at` is named once on stderr and treated
+        as absent - it can never make this loop yield."""
+        loops_dir = Path(self.env.get("_AUTOPILOT_LOOPS_DIR") or DEFAULT_LOOPS_DIR)
+        try:
+            entries = sorted(loops_dir.glob("*.json"))
+        except OSError:
+            return None
+        oldest: tuple[str, int] | None = None
+        for path in entries:
+            data = _load_json(path)
+            pid = data.get("pid") if isinstance(data, dict) else None
+            started = data.get("started_at") if isinstance(data, dict) else None
+            if (
+                not isinstance(pid, int)
+                or isinstance(pid, bool)
+                or not isinstance(started, str)
+                or not started
+            ):
+                print(
+                    f"autoclaude: loop registry entry {path.name} is unreadable or "
+                    "has no started_at; ignored for the window yield.",
+                    file=self.err,
+                )
+                continue
+            if pid != self.loop_pid and not _pid_alive(pid):
+                continue
+            if oldest is None or started < oldest[0]:
+                oldest = (started, pid)
+        return None if oldest is None else oldest[1]
+
     def _plugin_gate(self, ap_dir: Path) -> int | None:
         state_path = ap_dir / "state.json"
         plugins_json = Path(

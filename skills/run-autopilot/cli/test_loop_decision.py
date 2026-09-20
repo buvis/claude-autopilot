@@ -367,6 +367,89 @@ def test_progress_path_ignores_a_limit_banner_in_prose(tmp_path):
     assert lp._test["sleeps"] == []
 
 
+def _warning_event(reset: int) -> dict:
+    return {
+        "type": "rate_limit_event",
+        "rate_limit_info": {
+            "status": "allowed_warning",
+            "resetsAt": reset,
+            "rateLimitType": "five_hour",
+            "utilization": 0.95,
+            "isUsingOverage": False,
+        },
+    }
+
+
+def _progress_with_warning(reset: int, tmp_path: Path, peer: dict | None):
+    """A session that advanced state and ended with an allowed_warning. The
+    peer registry entry is written INSIDE the session, after this loop's own
+    `_register` ran its prune (which would sweep an untagged pid)."""
+
+    def step(ap_dir: Path) -> None:
+        if peer is not None:
+            (tmp_path / "loops" / "peer.json").write_text(json.dumps(peer))
+        (ap_dir / "state.json").write_text(
+            json.dumps({"prd": "p.md", "next_phase": "review", "batch": {"id": "b"}}),
+        )
+        write_log(ap_dir, {"type": "result"}, _warning_event(reset))
+
+    return step
+
+
+# pid 1 is alive on every host; started_at far in the past makes it the oldest.
+_OLDER_PEER = {"pid": 1, "root": "/elsewhere", "started_at": "2000-01-01T00:00:00Z"}
+_YOUNGER_PEER = {"pid": 1, "root": "/elsewhere", "started_at": "2999-01-01T00:00:00Z"}
+
+
+def _run_with_warning(tmp_path, peer, env=None):
+    clock = FakeClock(start=time.time())
+    reset = int(clock.now) + 600
+    lp = make_loop(
+        tmp_path,
+        [_progress_with_warning(reset, tmp_path, peer), terminal_step()],
+        clock=clock,
+        env=env,
+    )
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b"})
+    assert lp.run() == 0
+    return lp
+
+
+def test_younger_loop_yields_at_allowed_warning(tmp_path):
+    # PRD 00199: two registry entries, this loop the younger -> it sleeps to
+    # the warning's reset before its next launch, naming the loop it yields to.
+    lp = _run_with_warning(tmp_path, _OLDER_PEER)
+    assert any(secs >= 600 for secs in lp._test["sleeps"])
+    assert "yielding the window to loop 1 until ~" in lp._test["out"].getvalue()
+    assert _notified(lp, "Usage limit")
+    assert len(lp._test["spawn"].launches) == 2
+
+
+def test_oldest_loop_never_yields(tmp_path):
+    lp = _run_with_warning(tmp_path, _YOUNGER_PEER)
+    assert lp._test["sleeps"] == []
+    assert "yielding" not in lp._test["out"].getvalue()
+
+
+def test_a_lone_loop_never_yields(tmp_path):
+    lp = _run_with_warning(tmp_path, None)
+    assert lp._test["sleeps"] == []
+
+
+def test_no_yield_kill_switch(tmp_path):
+    lp = _run_with_warning(tmp_path, _OLDER_PEER, env={"_AUTOPILOT_NO_YIELD": "1"})
+    assert lp._test["sleeps"] == []
+    assert "yielding" not in lp._test["out"].getvalue()
+
+
+def test_a_registry_entry_without_started_at_is_ignored_loudly_and_never_yields(
+    tmp_path,
+):
+    lp = _run_with_warning(tmp_path, {"pid": 1, "root": "/elsewhere"})
+    assert lp._test["sleeps"] == []
+    assert "peer.json is unreadable or has no started_at" in lp._test["err"].getvalue()
+
+
 def test_network_outage_polls_and_resumes(tmp_path):
     def netfail(ap_dir: Path) -> None:
         write_log(

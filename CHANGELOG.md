@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **run-autopilot**: `autopilot check-plan` takes a required `--prd`, writes `dev/local/autopilot/split-notes/<prd-stem>.md` on a stall verdict, records the stall under site `plan_expansion` (`oversized_plan` is the legacy spelling on older records), exits 2 on a missing or non-UTF-8 PRD or an unwritable split note instead of crashing, and prints the `plan-expansion: unfiled=<n>; drift=...` diagnostic on a stall as well as on a pass
+- **run-autopilot**: after any session whose log carries a live five-hour `allowed_warning`, a loop that is not the oldest live loop in `~/.claude/autopilot-loops/` yields the window by sleeping to the reset (`yielding the window to loop <pid> until ~HH:MM`, bounded by `_AUTOPILOT_LIMIT_WAIT_MAX`) before its next launch; the oldest loop never yields, and `_AUTOPILOT_NO_YIELD=1` turns the yield off
 
 ### Fixed
 

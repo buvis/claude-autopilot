@@ -245,6 +245,41 @@ def test_loops_dir_is_propagated_to_session_children(tmp_path):
     assert lp.env["_AUTOPILOT_LOOP"] == str(lp.loop_pid)
 
 
+def test_oldest_live_loop_pid_picks_the_earliest_started_live_entry(tmp_path):
+    # PRD 00199: the window yield needs the oldest LIVE loop on the account.
+    # A dead pid with an earlier start is skipped; a malformed entry and one
+    # with no started_at are named on stderr and skipped; own pid counts
+    # without a liveness probe.
+    loops = tmp_path / "loops"
+    loops.mkdir()
+    dead = subprocess.Popen([sys.executable, "-c", "pass"])
+    dead.wait()
+    lp = make_loop(tmp_path, [])
+    (loops / "dead.json").write_text(
+        json.dumps({"pid": dead.pid, "root": "/a", "started_at": "1999-01-01T00:00:00Z"}),
+    )
+    (loops / "junk.json").write_text("{not json")
+    (loops / "nostart.json").write_text(json.dumps({"pid": 1, "root": "/b"}))
+    (loops / "own.json").write_text(
+        json.dumps({"pid": lp.loop_pid, "root": "/c", "started_at": "2026-01-01T00:00:00Z"}),
+    )
+    assert lp._oldest_live_loop_pid() == lp.loop_pid
+    (loops / "peer.json").write_text(
+        json.dumps({"pid": 1, "root": "/d", "started_at": "2025-12-31T23:59:59Z"}),
+    )
+    assert lp._oldest_live_loop_pid() == 1
+    err = lp._test["err"].getvalue()
+    assert "junk.json is unreadable or has no started_at" in err
+    assert "nostart.json is unreadable or has no started_at" in err
+
+
+def test_oldest_live_loop_pid_is_none_on_an_empty_or_missing_registry(tmp_path):
+    lp = make_loop(tmp_path, [])
+    assert lp._oldest_live_loop_pid() is None  # loops dir does not exist yet
+    (tmp_path / "loops").mkdir()
+    assert lp._oldest_live_loop_pid() is None
+
+
 def _spawn_forked_loop_shell() -> subprocess.Popen:
     """The tracon layout: a shell that exports the tag AFTER its own exec
     and keeps a tagged child alive. ps reports the EXEC-time environment,
