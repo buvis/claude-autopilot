@@ -119,7 +119,15 @@ _LINE_RE = re.compile(
     r"\s+\|\s+File:\s*(?P<file>.*?)"
     r"\s+\|\s+Task:\s*(?P<task>.*?)\s*$",
 )
-_TRAILING_LINENO_RE = re.compile(r":\d+(?:-\d+)?$")
+# Every line-citation suffix the personas emit (PRD 00198): `:N`, `:N-M`,
+# ` (lines N-M)`, ` (lines 18-22, 423)` and `#L12` / `#L12-L20`. Applied in a
+# loop because one citation can carry two forms (`a.md:12 (lines 3-4)`).
+_TRAILING_LINENO_RE = re.compile(
+    r"(?:\s*\(lines?\s+\d[\d,\s-]*\)|:\d+(?:-\d+)?|#L\d+(?:-L?\d+)?)$"
+)
+# Bob's multi-file shape (review 00191): `N/A (skills/x.py:77, skills/y.py:91)`.
+# The first path inside the parentheses is the citation.
+_NA_PARENS_RE = re.compile(r"^N/A\s*\(\s*([^,)]+)", re.IGNORECASE)
 _WORD_RE = re.compile(r"[a-z0-9_]+")
 
 
@@ -134,15 +142,33 @@ class Finding:
     # auto-dismissed finding so a wrong dismissal is visible, not silent.
     reason: str = ""
     finders: list[str] = field(default_factory=list)
+    # Every member's raw `File:` citation, first-seen order; `render` reads
+    # it to say when a row merged only after suffix stripping.
+    files: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         self.finders = [self.agent] if self.agent else []
+        self.files = [self.file]
+
+
+def strip_citation_suffixes(path: str) -> str:
+    """The citation with every trailing line marker removed, looping until
+    the string stops changing so stacked forms all go."""
+    cleaned = path.strip()
+    na = _NA_PARENS_RE.match(cleaned)
+    if na:
+        cleaned = na.group(1).strip()
+    while True:
+        shorter = _TRAILING_LINENO_RE.sub("", cleaned)
+        if shorter == cleaned:
+            return cleaned
+        cleaned = shorter
 
 
 def normalize_file(path: str) -> tuple[str, ...]:
-    """Path as comparable segments: line-number suffix dropped, separators
-    unified, `./` noise removed."""
-    cleaned = _TRAILING_LINENO_RE.sub("", path.strip()).replace("\\", "/")
+    """Path as comparable segments: line-number suffixes dropped, separators
+    unified, `./` noise removed, lower-cased last."""
+    cleaned = strip_citation_suffixes(path).replace("\\", "/")
     segments = [s for s in cleaned.split("/") if s not in ("", ".")]
     return tuple(s.lower() for s in segments)
 
@@ -237,6 +263,9 @@ def _fold(group: list[Finding]) -> Finding:
         for finder in other.finders:
             if finder not in row.finders:
                 row.finders.append(finder)
+        for cited in other.files:
+            if cited not in row.files:
+                row.files.append(cited)
     return row
 
 
@@ -318,6 +347,17 @@ def split_ledger_dismissed(
     return kept, dismissed
 
 
+def suffix_stripped_citations(row: Finding) -> list[str]:
+    """The row's raw citations that matched its siblings only after a line
+    suffix came off: distinct raw strings, at least one of which changed
+    under stripping. Empty when the citations agreed as written."""
+    if len(set(row.files)) < 2:
+        return []
+    if all(strip_citation_suffixes(f) == f.strip() for f in row.files):
+        return []
+    return list(row.files)
+
+
 def render(merged: list[Finding], total_agents: int) -> str:
     rows = [
         "| Consensus | Severity | Issue | File | Task | Found By |",
@@ -331,11 +371,20 @@ def render(merged: list[Finding], total_agents: int) -> str:
             pair[0],
         ),
     )
-    for _, f in ordered:
+    for position, (_, f) in enumerate(ordered, start=1):
         rows.append(
             f"| [{len(f.finders)}/{total_agents}] | {f.severity} | {f.desc} | "
             f"{f.file} | {f.task} | {', '.join(f.finders)} |",
         )
+        drifted = suffix_stripped_citations(f)
+        if drifted:
+            # Visible in the review file's script-output block, so a
+            # persona drifting back to `(lines a-b)` citations is noticed.
+            print(
+                f"consolidate_findings: row {position} merged citations that "
+                f"matched only after suffix stripping: {' ~ '.join(drifted)}",
+                file=sys.stderr,
+            )
     return "\n".join(rows)
 
 

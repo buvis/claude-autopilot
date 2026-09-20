@@ -1,0 +1,21 @@
+Confirmed: none of those PRD-named outcome strings appear anywhere in the diff.
+
+[ALICE] 🟠 The Gates section dispatches a fresh `autopilot:ivan` retry and reruns the gates on a red gate before stopping the item ("A gate that exits non-zero stops the lane here. Write the failing command ... dispatch a fresh `autopilot:ivan` once, and run the gates again from the top."). The PRD's contract is unambiguous and names no retry at all: "a non-zero exit stops the item with `stopped: gate <n>` and no reviewer is dispatched." This adds an unrequested, full-cost extra implementor dispatch on the exact path the PRD exists to make cheap. | File: /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/fast-track/SKILL.md (lines 166-171) | Task: 4
+[ALICE] 🟠 The Tests section ("Commit the tests on their own, then run them once at the card's scope and watch them fail. Red is the point...") never instructs stopping the item when that check comes back green. The PRD requires this exact case to stop the item with `stopped: tests-green-before-implementation`; that string, and any equivalent stop instruction, is absent from the entire diff (verified by `rg`), so a vacuous Tess-authored test silently proceeds to Ivan instead of halting. | File: /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/fast-track/SKILL.md (lines 121-159) | Task: 4
+[ALICE] 🟠 `--push` is documented to push "now" at each item's clean Exit ("**Clean.** The commits stay on the working branch. With `--push`, push it now."), but the PRD requires `git push` to run once, after the last item's `suite: batch` run is green, "never per item." As written, a multi-card invocation (`/autopilot:fast-track <card1.md> <card2.md> --push`) pushes after every clean item instead of once at the end, risking a push of an unverified partial multi-item state. | File: /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/fast-track/SKILL.md (lines 18-22, 423) | Task: 4
+[ALICE] 🟡 Ivan's commit in the Implement section is never told to include `CHANGELOG.md` when the card's `changelog` field is not `none`, though the PRD's contract explicitly requires "one commit of exactly `FILES_TOUCHED` (plus `CHANGELOG.md` when `changelog` is not `none`)." The `changelog` field is parsed by card.py and documented in spec-card.md but the driver never acts on it. | File: /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/fast-track/SKILL.md (lines 169-207) | Task: 4
+[ALICE] 🟡 fast_track_prose_testutil.py is a ~692-line bespoke "reader model" (disclaimer/archival/rebuttal regex banks, sentence/clause segmentation, pasteable-line detection) built to pin SKILL.md's prose. The reused precedent task 4 was told to follow (test_dispatch_telemetry_prose.py, 374 lines) does the same job with plain substring/section matching. The extra machinery is behavior-preserving and does catch real polarity-flip cases, but it is a large, novel piece of infrastructure for prose pinning that a future maintainer has to understand in full. | File: /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/fast-track/scripts/fast_track_prose_testutil.py | Task: 4
+[ALICE] ⚪ Every `render_prompt.py` call in SKILL.md (Tess, Ivan, consensus/codex/gemini) omits the `--dispatch-kind`/`--dispatch-task` flags the PRD's contract names verbatim for Ivan (matching the reused precedent at skills/work/SKILL.md:294), instead issuing a separate `record_dispatch.py start` call after each render. Functionally equivalent (the ledger row still opens with the right kind/task), but it reads the prompt file twice per dispatch and departs from the cited reuse pattern without being flagged as a deliberate substitution. | File: /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/fast-track/SKILL.md | Task: 4
+
+R1: fail
+R2: pass
+R3: pass
+R4: pass
+R6: pass
+R7: pass
+R8: pass
+R9: fail
+R10: pass
+R11: pass
+R12: pass
+R13: pass

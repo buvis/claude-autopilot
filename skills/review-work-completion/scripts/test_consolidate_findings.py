@@ -153,6 +153,51 @@ def test_same_basename_in_different_directories_is_not_the_same_file() -> None:
     assert not cf.files_match("pkg_a/__init__.py", "pkg_b/__init__.py")
 
 
+# --- citation suffix shapes (PRD 00198) --------------------------------------
+#
+# Review 00186 cycle 1: Alice cites an absolute path with a parenthesised
+# range, Bob cites repo-relative `path:line`. Both name one file.
+
+
+def test_parenthesised_line_range_resolves_to_the_same_file() -> None:
+    assert cf.files_match(
+        "/Users/bob/git/src/github.com/buvis/claude-autopilot/skills/fast-track/"
+        "SKILL.md (lines 166-171)",
+        "skills/fast-track/SKILL.md:166",
+    )
+
+
+def test_comma_separated_ranges_are_one_suffix() -> None:
+    assert cf.files_match("SKILL.md (lines 18-22, 423)", "SKILL.md:18")
+
+
+def test_hash_line_anchor_resolves_to_the_same_file() -> None:
+    assert cf.files_match("src/cli.py#L12-L20", "src/cli.py")
+    assert cf.files_match("src/cli.py#L12", "src/cli.py:12")
+
+
+def test_both_suffix_forms_on_one_citation_are_stripped() -> None:
+    assert cf.normalize_file("a.md:12 (lines 3-4)") == ("a.md",)
+    assert cf.normalize_file("a.md (lines 3-4):12") == ("a.md",)
+
+
+def test_a_directory_named_lines_is_not_a_suffix() -> None:
+    assert cf.normalize_file("docs/lines/notes.md") == ("docs", "lines", "notes.md")
+    assert not cf.files_match("docs/lines/notes.md", "docs/notes.md")
+
+
+def test_a_not_applicable_citation_with_paths_in_parentheses_takes_the_first() -> None:
+    """Bob's multi-file shape from review 00191: `N/A (a.py:77, b.py:91)`."""
+    assert cf.normalize_file("N/A (skills/x.py:77, skills/y.py:91)") == (
+        "skills",
+        "x.py",
+    )
+    assert cf.files_match("N/A (skills/x.py:77, skills/y.py:91)", "skills/x.py")
+    # A bare N/A is unchanged: it still only matches another N/A.
+    assert cf.normalize_file("N/A") == ("n", "a")
+    assert not cf.files_match("N/A", "skills/x.py")
+
+
 # --- consolidation --------------------------------------------------------
 
 
@@ -488,6 +533,98 @@ def test_different_file_findings_sharing_two_numbers_stay_separate() -> None:
     a = _finding("grew from 763 to 822 lines", file="src/cli.py")
     b = _finding("regression: file now spans 763 to 822 lines", file="src/server.py")
     assert not cf.match(a, b)
+
+
+# --- review 00186 cycle-1 replay (PRD 00198) -------------------------------
+#
+# The four reviewer outputs are durable copies of the real files. Carl holds
+# no findings (`[CARL] No issues found`), so every agreement below is an
+# Alice/Bob pair; the review file's "Real consensus" table lists them.
+
+FIXTURES_00186 = Path(__file__).with_name("fixtures") / "review-00186"
+
+# (Alice finding index, Bob finding index) for each row the decision gate
+# re-derived by hand: gate stop, tests-green stop, --push once, CHANGELOG.
+REVIEW_00186_AGREEMENTS = [(0, 7), (1, 6), (2, 11), (3, 15)]
+
+
+def _load_00186() -> dict[str, list[cf.Finding]]:
+    return {
+        agent: cf.parse_agent_output(
+            FIXTURES_00186 / f"{agent.lower()}-output-00186c1.txt", agent
+        )
+        for agent in ("ALICE", "BLAKE", "BOB", "CARL")
+    }
+
+
+def test_review_00186_fixture_holds_the_recorded_finding_counts() -> None:
+    found = _load_00186()
+    assert {k: len(v) for k, v in found.items()} == {
+        "ALICE": 6,
+        "BLAKE": 3,
+        "BOB": 23,
+        "CARL": 0,
+    }
+
+
+def test_review_00186_citations_resolve_to_the_same_file() -> None:
+    """The defect PRD 00198 fixes: Alice's absolute `(lines a-b)` citation
+    and Bob's `path:line` name one file, so the file gate no longer keeps
+    the four real agreements apart."""
+    found = _load_00186()
+    for alice_idx, bob_idx in REVIEW_00186_AGREEMENTS:
+        alice, bob = found["ALICE"][alice_idx], found["BOB"][bob_idx]
+        assert cf.files_match(alice.file, bob.file), (alice.file, bob.file)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "PRD 00198's success criterion is not met by citation normalization "
+        "alone: with files matching, the four pairs' description Jaccard "
+        "measures 0.115 / 0.138 / 0.161 / 0.154 against MERGE_THRESHOLD 0.25 "
+        "and they share no two numeric tokens, so the description gate "
+        "still keeps them apart. Merging them needs a new description "
+        "signal, a design decision outside this PRD."
+    ),
+)
+def test_review_00186_agreements_merge() -> None:
+    found = _load_00186()
+    findings = [f for agent in ("ALICE", "BLAKE", "BOB", "CARL") for f in found[agent]]
+    table = cf.render(cf.consolidate(findings), total_agents=4)
+    rows = [ln for ln in table.splitlines() if ln.startswith("| [2/4]")]
+    assert len(rows) == 4, table
+    for alice_idx, _ in REVIEW_00186_AGREEMENTS:
+        assert any(found["ALICE"][alice_idx].desc in row for row in rows)
+
+
+def test_render_notes_a_row_that_merged_only_after_suffix_stripping(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    rows = cf.consolidate(
+        [
+            cf.Finding("ALICE", "🟠", SYS_EXIT_WORDINGS[0], "src/cli.py (lines 3-9)", "4"),
+            cf.Finding("BOB", "🟠", SYS_EXIT_WORDINGS[1], "src/cli.py:4", "4"),
+        ]
+    )
+    cf.render(rows, total_agents=2)
+    err = capsys.readouterr().err
+    assert err.count("\n") == 1
+    assert "row 1 merged citations that matched only after suffix stripping" in err
+    assert "src/cli.py (lines 3-9) ~ src/cli.py:4" in err
+
+
+def test_render_is_silent_when_citations_agree_as_written(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    rows = cf.consolidate(
+        [
+            cf.Finding("ALICE", "🟠", SYS_EXIT_WORDINGS[0], "src/cli.py", "4"),
+            cf.Finding("BOB", "🟠", SYS_EXIT_WORDINGS[1], "src/cli.py", "4"),
+        ]
+    )
+    cf.render(rows, total_agents=2)
+    assert capsys.readouterr().err == ""
 
 
 def test_numeric_tokens_extracts_only_all_digit_tokens() -> None:

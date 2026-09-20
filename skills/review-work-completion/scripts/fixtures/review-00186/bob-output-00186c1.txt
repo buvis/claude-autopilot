@@ -1,0 +1,41 @@
+[BOB] 🟠 FIX: `git commit -m` includes unrelated changes already staged outside the allowlist. Commit only the item’s paths while preserving the foreign index entries. | File: skills/fast-track/SKILL.md:148 | Task: 4
+[BOB] 🟠 FIX: Neither `<base-sha>` nor `<rework-base-sha>` is captured before use. Record HEAD before the item’s first commit and before rework so review ranges and rollback targets are defined. | File: skills/fast-track/SKILL.md:182 | Task: 4
+[BOB] 🟠 FIX: `_require_sections` accepts empty Goal, Files and Gates sections, allowing a card without an allowlist or verification commands. Reject whitespace-only sections except Tests and add rejection tests. | File: skills/fast-track/scripts/card.py:94 | Task: 1
+[BOB] 🟠 FIX: Default `cost_usd: null` breaks both existing metrics renderers: their cost lists include None and `_cost_cell` calls `sum`. Support null costs in the consumer and add a producer-to-renderer integration test. | File: skills/fast-track/scripts/record_item.py:88 | Task: 3
+[BOB] 🟠 FIX: Ivan’s render reads `fast-track-<item>-files.txt`, but no preceding step creates it; `render_prompt.py` exits 4. Stage the absolute allowlist before rendering and include the required AGENTS.md architecture context. | File: skills/fast-track/SKILL.md:125 | Task: 4
+[BOB] 🟠 FIX: Tess’s PUBLIC_INTERFACES command cats every Files entry, including files the item creates. Any nonexistent entry makes rendering fail before dispatch. Read existing interfaces separately from planned target paths. | File: skills/fast-track/SKILL.md:84 | Task: 4
+[BOB] 🟠 FIX: The red check occurs after committing tests and has no green-result stop. Run the first Gates command before committing; green must stop with `tests-green-before-implementation`, as specified. | File: skills/fast-track/SKILL.md:107 | Task: 4
+[BOB] 🟠 FIX: An initial gate failure dispatches another Ivan and can proceed to reviewers. The PRD requires immediate `stopped: gate <n>` with unreviewed commits reported and no further dispatch. | File: skills/fast-track/SKILL.md:166 | Task: 4
+[BOB] 🟠 FIX: The ordered procedure enters Rework even when the confirmed set is empty. Add an explicit empty-set transition directly to Exit, skipping both Ivan rework and delta dispatch. | File: skills/fast-track/SKILL.md:377 | Task: 4
+[BOB] 🟠 FIX: Reusing the Implement render writes `-ivan.txt`, while the rework ledger call reads unwritten `-rework.txt`. Provide one consistent rework render, using confirmed checks as FAILING_TESTS and the specified rework commit. | File: skills/fast-track/SKILL.md:381 | Task: 4
+[BOB] 🟠 FIX: Delta reruns the original finding lanes instead of the required single Eve dispatch. This changes dispatch counts and leaves Blake unable to inspect prior findings. Send Eve the confirmed list and rework diff once. | File: skills/fast-track/SKILL.md:401 | Task: 4
+[BOB] 🟠 FIX: The driver documents one card and pushes immediately per item. Implement argument-order processing, defer the batch suite until the final item, and push once only after it passes. | File: skills/fast-track/SKILL.md:423 | Task: 4
+[BOB] 🟠 FIX: The blocked exit lacks command-failure transitions. Stop if branch creation fails; if reset refuses, retain the commits and report `branch: refused (<paths>)` with `stopped: reset-refused`. | File: skills/fast-track/SKILL.md:429 | Task: 4
+[BOB] 🟡 FIX: Tess receives Goal as TASK_SUBJECT and the necessarily empty Tests section as TASK_DESCRIPTION. Use item as subject and Goal plus Files as description in both documented render blocks. | File: skills/fast-track/SKILL.md:80 | Task: 4
+[BOB] 🟡 FIX: Bob’s prompt uses only `agents/bob.md`, omitting Eve’s required Two lenses and Rubric verdicts sections. Append both and substitute PACK_FINDINGS so Bob receives the required doubt review. | File: skills/fast-track/SKILL.md:228 | Task: 4
+[BOB] 🟡 FIX: A non-none changelog entry is never written or staged by the driver. Add the required CHANGELOG.md update to the item commit and pin that behavior. | File: skills/fast-track/SKILL.md:148 | Task: 4
+[BOB] 🟡 FIX: Planner functions are not integrated: verify_targets and exit_action are merely cited, while plan_lanes and count_item_dispatches are unused. Add concrete calls with normalized finding inputs and consume their results. | File: skills/fast-track/SKILL.md:345 | Task: 4
+[BOB] 🟡 FIX: Preconditions create only tmp. In a repository without dev/local/autopilot, both recorders silently write nothing. Create the target repository’s telemetry directory before the first dispatch. | File: skills/fast-track/SKILL.md:40 | Task: 4
+[BOB] 🟡 FIX: `--rework` accepts arbitrary integers despite the specified 0-or-1 contract. Add `choices=(0, 1)` and tests rejecting negative and greater-than-one values. | File: skills/fast-track/scripts/record_item.py:62 | Task: 3
+[BOB] 🟡 FIX: The description contains unquoted `loop: fresh`, which is invalid inside a YAML plain scalar. Quote the description or use a folded scalar. | File: skills/fast-track/SKILL.md:3 | Task: 4
+[BOB] 🟡 FIX: Three standalone roster tests duplicate cases already fully asserted by the eight-combination matrix. Remove those duplicate wrappers while retaining the matrix and explicitly required acceptance-test names. | File: skills/fast-track/scripts/test_fast_track_plan.py:375 | Task: 2
+[BOB] 🟡 FIX: `_pasteable`, `_instructive` and `code_fragments` repeat the module’s explanation of fenced commands in lengthy docstrings. Keep the central rationale and replace these repetitions with concise function contracts. | File: skills/fast-track/scripts/fast_track_prose_testutil.py:573 | Task: 4
+[BOB] ⚪ Cannot statically verify: VERIFY — suite success, zero skips and CLI output. Run `uv run --no-project --with pytest python -m pytest -q skills/fast-track/scripts`, `bash dev/bin/release-checks`, and `python3 skills/fast-track/scripts/card.py skills/fast-track/scripts/fixtures/valid.md`. | File: N/A | Task: general
+
+R1: fail
+R2: pass
+R3: pass
+R4: fail
+R6: pass
+R7: fail
+R8: pass
+R9: fail
+R10: fail
+R11: pass
+R12: pass
+R13: pass
+D1: pass
+D2: pass
+D3: pass
+D4: pass
+D5: pass
