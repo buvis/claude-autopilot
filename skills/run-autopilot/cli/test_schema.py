@@ -130,6 +130,16 @@ class ValidateEnumFieldsTest(unittest.TestCase):
         self.assertIn("doubt_reviewer", msg)
         self.assertIn("gpt", msg)
 
+    def test_rejects_out_of_enum_session_model(self) -> None:
+        # PRD 00200: the orchestrator model key accepts sonnet or opus only.
+        state = valid_state()
+        state["session_model"] = "haiku"
+        with self.assertRaises(schema.SchemaError) as ctx:
+            schema.validate(state)
+        msg = str(ctx.exception)
+        self.assertIn("session_model", msg)
+        self.assertIn("haiku", msg)
+
     def test_rejects_out_of_enum_consensus_engine(self) -> None:
         state = valid_state()
         state["consensus_engine"] = "hybrid"

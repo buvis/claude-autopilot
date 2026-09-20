@@ -33,6 +33,7 @@ class DefaultsTests(unittest.TestCase):
                 "design_mode": "run",
                 "doubt_reviewer": "codex",
                 "consensus_engine": "legacy",
+                "session_model": "sonnet",
                 "rework_cap": 2,
             },
         )
@@ -133,6 +134,24 @@ class RecognizedValueTests(unittest.TestCase):
         self.assertNotIn("plan_expansion_override", other)
         self.assertEqual(no_warnings, [])
 
+    def test_session_model_defaults_to_sonnet(self) -> None:
+        # PRD 00200: the session model is its own key, defaulting silently to
+        # sonnet - `default_model: opus` alone must not pick the orchestrator.
+        fields, warnings = frontmatter.parse(_block("default_model: opus"))
+        self.assertEqual(fields["session_model"], "sonnet")
+        self.assertEqual(warnings, [])
+
+    def test_session_model_opus_is_accepted(self) -> None:
+        fields, warnings = frontmatter.parse(_block("session_model: opus"))
+        self.assertEqual(fields["session_model"], "opus")
+        self.assertEqual(warnings, [])
+
+    def test_session_model_bad_value_warns_and_defaults(self) -> None:
+        fields, warnings = frontmatter.parse(_block("session_model: haiku"))
+        self.assertEqual(fields["session_model"], "sonnet")
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("session_model", warnings[0])
+
     def test_unknown_keys_are_ignored_without_warning(self) -> None:
         # default_model belongs to /plan-tasks and is re-read at Phase 6;
         # Phase 0 must not claim it.
@@ -215,6 +234,7 @@ class MalformedBlockTests(unittest.TestCase):
             "design_mode=run",
             "doubt_reviewer=codex",
             "consensus_engine=legacy",
+            "session_model=sonnet",
         ):
             self.assertIn(token, frontmatter.MALFORMED_WARNING)
 
@@ -231,6 +251,7 @@ class GoldenFixtureTests(unittest.TestCase):
                 "design_mode": "run",
                 "doubt_reviewer": "codex",
                 "consensus_engine": "legacy",
+                "session_model": "sonnet",
                 "rework_cap": 3,
                 "design_gate": "user",
                 "pause_on_ambiguity": True,

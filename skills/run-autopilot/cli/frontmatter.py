@@ -27,7 +27,9 @@ for the closing delimiter.
 
 `default_model` is deliberately NOT recognized here. It belongs to
 `/plan-tasks` and is re-read from the PRD at Phase 6 rework dispatch; Phase 0
-never touches it, so it falls through as an unknown key.
+never touches it, so it falls through as an unknown key. The orchestrator
+model is the separate `session_model` key (PRD 00200): `default_model` floors
+the per-task tier, `session_model` picks the build session's model.
 """
 
 from __future__ import annotations
@@ -46,6 +48,7 @@ _ENUMS: dict[str, tuple[str, tuple[str, ...], str]] = {
         ("legacy", "shadow", "workflow"),
         "legacy",
     ),
+    "session_model": ("session_model", ("sonnet", "opus"), "sonnet"),
 }
 
 _REWORK_CAP_DEFAULT = 2
@@ -61,7 +64,7 @@ _OPT_INS: dict[str, tuple[str, str, object]] = {
 MALFORMED_WARNING = (
     "autopilot: PRD frontmatter malformed; defaulting catchup_mode=run, "
     "rework_cap=2, design_mode=run, doubt_reviewer=codex, "
-    "consensus_engine=legacy"
+    "consensus_engine=legacy, session_model=sonnet"
 )
 
 
