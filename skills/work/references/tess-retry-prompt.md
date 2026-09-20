@@ -23,6 +23,7 @@ The original rules still apply. In particular:
 5. SIMPLICITY FIRST: test only the behavior in the acceptance criteria. Strengthening a weak test does not mean adding tests nobody asked for.
 6. NEVER INVENT A CONTRACT: if the requirements name a data structure but do not pin its exact field names, enum values, or types, STOP and report it as a blocker rather than inventing a plausible schema.
 7. SURGICAL: only create/modify test files. Match the existing test file's style.
+8. SIZE LIMITS: keep every test function under 50 lines and every test file under 800 lines; a style-gate line above naming a file or function over a limit is an issue to fix here, by splitting into sibling files named after the test module.
 
 Read only the files listed above. If a file or symbol you need is not listed, stop and report it as a blocker — do not run broad `rg` sweeps to discover scope.
 
