@@ -539,6 +539,48 @@ def test_build_exit_writes_no_convergence_row(tmp_path):
     assert all("event" not in row for row in rows)
 
 
+def test_build_exit_to_done_writes_the_convergence_row_for_a_solo_lane(tmp_path):
+    solo_close = _state_step(
+        prd="00205-s-v1.md",
+        next_phase="done",
+        batch={"id": "b"},
+        cycle=1,
+        rework_cap=2,
+        lane="solo",
+        lane_effective="solo",
+        phases_completed=["review"],
+    )
+    lp = make_loop(tmp_path, [solo_close, terminal_step()])
+    ap = lp._test["ap_dir"]
+    _write_review(ap, "00205-s-v1-review-1.md", "alice", "converged")
+    write_state(ap, prd="00205-s-v1.md", next_phase="build", batch={"id": "b"})
+    assert lp.run() == 0
+    rows = _metrics_rows(ap)
+    events = [row for row in rows if "event" in row]
+    assert len(events) == 1
+    assert rows[0]["phase_launched"] == "build" and rows[0]["lane_effective"] == "solo"
+    assert events[0]["event"] == "review_converged"
+    assert events[0]["outcome"] == "converged"
+    assert events[0]["cycles"][0]["reviewers"] == ["alice"]
+
+
+def test_build_exit_to_done_writes_no_convergence_row_for_the_full_lane(tmp_path):
+    full_close = _state_step(
+        prd="00205-f-v1.md",
+        next_phase="done",
+        batch={"id": "b"},
+        lane="full",
+        lane_effective="full",
+    )
+    lp = make_loop(tmp_path, [full_close, terminal_step()])
+    ap = lp._test["ap_dir"]
+    write_state(ap, prd="00205-f-v1.md", next_phase="build", batch={"id": "b"})
+    assert lp.run() == 0
+    rows = _metrics_rows(ap)
+    assert [row["phase_launched"] for row in rows] == ["build", "done"]
+    assert all("event" not in row for row in rows)
+
+
 def test_review_exit_to_paused_writes_no_convergence_row(tmp_path):
     pausing_review = _state_step(
         prd="00188-x-v1.md",
