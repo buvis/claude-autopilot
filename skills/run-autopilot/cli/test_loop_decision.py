@@ -7,10 +7,11 @@ cli/loop_testutil.py.
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 
-from cli import loop_testutil
+from cli import loop_testutil, usage_limit
 from cli.loop_decision import (
     died_next,
     fingerprint,
@@ -337,6 +338,15 @@ def test_rejected_with_overage_allowed_still_sleeps(tmp_path):
     assert "usage limit hit; waiting" in lp._test["out"].getvalue()
     assert _notified(lp, "Usage limit")
     assert len(lp._test["spawn"].launches) == 2
+    rows = _metrics_rows(lp._test["ap_dir"])
+    assert rows[0]["signal"] == "continue" and rows[0]["limit_wait"] >= 300
+    assert "limit_wait" not in rows[1]
+
+
+def _metrics_rows(ap: Path) -> list[dict]:
+    text = (ap / "loop-metrics.jsonl").read_text()
+    assert text == (ap / "ledger" / "loop-metrics.jsonl").read_text()
+    return [json.loads(line) for line in text.strip().splitlines()]
 
 
 def test_rejected_beyond_cap_still_dies(tmp_path):
@@ -361,7 +371,13 @@ def test_progress_path_ignores_a_limit_banner_in_prose(tmp_path):
         )
         write_log(ap_dir, {"type": "result", "result": "usage limit reached earlier"})
 
-    lp = make_loop(tmp_path, [progress_with_prose, terminal_step()])
+    # The REAL detector, not the harness's always-None stub: a progress path
+    # that consulted `self._detect_limit` would parse this prose and sleep.
+    lp = make_loop(
+        tmp_path,
+        [progress_with_prose, terminal_step()],
+        detect_limit_fn=usage_limit.detect_from_log,
+    )
     write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b"})
     assert lp.run() == 0
     assert lp._test["sleeps"] == []
@@ -423,6 +439,9 @@ def test_younger_loop_yields_at_allowed_warning(tmp_path):
     assert "yielding the window to loop 1 until ~" in lp._test["out"].getvalue()
     assert _notified(lp, "Usage limit")
     assert len(lp._test["spawn"].launches) == 2
+    assert (
+        _metrics_rows(lp._test["ap_dir"])[0]["limit_wait"] >= 600
+    )  # the ledger shows it
 
 
 def test_oldest_loop_never_yields(tmp_path):
@@ -457,10 +476,11 @@ def _yield_probe(tmp_path, monkeypatch, *, oldest, env=None):
 
 
 def test_yield_at_warning_returns_false_when_this_loop_is_the_oldest(
-    tmp_path, monkeypatch
+    tmp_path,
+    monkeypatch,
 ):
-    lp_pid = make_loop(tmp_path / "probe", []).loop_pid
-    result, decision = _yield_probe(tmp_path, monkeypatch, oldest=lp_pid)
+    # make_loop's env carries no _AUTOPILOT_LOOP tag, so loop_pid is os.getpid().
+    result, decision = _yield_probe(tmp_path, monkeypatch, oldest=os.getpid())
     assert result is False
     assert decision == {"signal": "continue", "detail": "", "limit_wait": None}
 
@@ -472,16 +492,22 @@ def test_yield_at_warning_returns_false_with_no_other_live_loop(tmp_path, monkey
 
 
 def test_yield_at_warning_kill_switch_short_circuits_before_reading_the_log(
-    tmp_path, monkeypatch
+    tmp_path,
+    monkeypatch,
 ):
     from cli import loop_decision
 
     def must_not_read(path):
         raise AssertionError("the kill switch must return before the log is read")
 
-    monkeypatch.setattr(loop_decision.usage_limit, "detect_warning_from_log", must_not_read)
+    monkeypatch.setattr(
+        loop_decision.usage_limit, "detect_warning_from_log", must_not_read
+    )
     result, decision = _yield_probe(
-        tmp_path, monkeypatch, oldest=1, env={"_AUTOPILOT_NO_YIELD": "1"}
+        tmp_path,
+        monkeypatch,
+        oldest=1,
+        env={"_AUTOPILOT_NO_YIELD": "1"},
     )
     assert result is False
     assert decision["limit_wait"] is None
@@ -518,7 +544,9 @@ def test_network_outage_polls_and_resumes(tmp_path):
     assert lp.run() == 0
     # The poll message lands on stderr during the decision; the act
     # branch then prints the plain continue line (bash parity).
-    assert "Polling connectivity, max 60 probes (retry 1/3)" in lp._test["err"].getvalue()
+    assert (
+        "Polling connectivity, max 60 probes (retry 1/3)" in lp._test["err"].getvalue()
+    )
     assert "Backlog drained" in lp._test["out"].getvalue()
 
 

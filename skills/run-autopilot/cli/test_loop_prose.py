@@ -48,6 +48,10 @@ def test_stand_down_requires_a_same_repo_peer() -> None:
         ),
     )
     assert "busy interactive peer session in this repo AND" not in _TEXT
+    # The rule lives in § Session Loop, once: a second copy elsewhere would
+    # drift from this one.
+    assert _OPENING in _session_loop()
+    assert _TEXT.count(_OPENING) == 1
 
 
 def test_stand_down_asks_the_peer_before_pausing() -> None:
@@ -67,6 +71,23 @@ def test_stand_down_asks_the_peer_before_pausing() -> None:
     assert "changed within the last 15 minutes" not in procedure
 
 
+def test_state_after_leave_compares_whole_seconds_against_this_prds_leave_row() -> None:
+    # Review 00199: the rows carry no batch id (filter by `prd`), `at` is an
+    # int second (truncate the mtime), and the rule is only sound when every
+    # site writes its `leave` row after its last state write.
+    procedure = _stand_down_paragraph()
+    _assert_all(
+        procedure,
+        "the state_after_leave rule",
+        (
+            "truncated to whole seconds",
+            "and this PRD's `prd`",
+            "writes its `leave` row AFTER its last state and card write",
+            "must set `next_phase` before its row",
+        ),
+    )
+
+
 def test_stand_down_names_the_three_conditions_in_the_marker() -> None:
     procedure = _stand_down_paragraph()
     for condition in ("peer_claimed", "dirty_tree", "state_after_leave"):
@@ -81,11 +102,6 @@ def test_stand_down_names_the_three_conditions_in_the_marker() -> None:
             "`stood_down_condition`",
         ),
     )
-
-
-def test_stand_down_paragraph_sits_inside_session_loop() -> None:
-    assert _OPENING in _session_loop()
-    assert _TEXT.count(_OPENING) == 1
 
 
 def test_operator_runbook_points_at_the_ask_first_rule() -> None:

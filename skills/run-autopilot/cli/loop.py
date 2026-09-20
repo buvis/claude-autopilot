@@ -274,6 +274,10 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
                 "effort": effort,
             }
             line.update(_stood_down_fields(decision))
+            if decision.get("limit_wait") is not None:
+                # A rejected wait or a window yield (PRD 00199): the ledger
+                # shows the sleep, not a bare continue.
+                line["limit_wait"] = decision["limit_wait"]
             cost = last_result_field(ap_dir / "last-session.log", "total_cost_usd")
             if isinstance(cost, (int, float)) and not isinstance(cost, bool):
                 line["cost_usd"] = cost

@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **run-autopilot**: `autopilot check-plan` takes a required `--prd`, writes `dev/local/autopilot/split-notes/<prd-stem>.md` on a stall verdict, records the stall under site `plan_expansion` (`oversized_plan` is the legacy spelling on older records), exits 2 on a missing or non-UTF-8 PRD or an unwritable split note instead of crashing, and prints the `plan-expansion: unfiled=<n>; drift=...` diagnostic on a stall as well as on a pass
 - **run-autopilot**: after any session whose log carries a live five-hour `allowed_warning`, a loop that is not the oldest live loop in `~/.claude/autopilot-loops/` yields the window by sleeping to the reset (`yielding the window to loop <pid> until ~HH:MM`, bounded by `_AUTOPILOT_LIMIT_WAIT_MAX`) before its next launch; the oldest loop never yields, and `_AUTOPILOT_NO_YIELD=1` turns the yield off
-- **run-autopilot**: a stand-down's `paused` row in `loop-metrics.jsonl` now carries `stood_down` (the marker's reason) and `stood_down_condition` (`peer_claimed`, `dirty_tree`, `state_after_leave`, or `unknown` when the marker names none), so a false stand-down is visible in the ledger
+- **run-autopilot**: a stand-down's `paused` row in `loop-metrics.jsonl` now carries `stood_down` (the marker's reason) and `stood_down_condition` (`peer_claimed`, `dirty_tree`, `state_after_leave`, or `unknown` when the marker names none), so a false stand-down is visible in the ledger; a session row that ends in a rejected wait or a window yield carries `limit_wait` (the seconds slept before the relaunch)
 
 ### Fixed
 
