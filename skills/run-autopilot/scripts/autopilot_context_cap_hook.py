@@ -512,12 +512,15 @@ def _emit_envelope(context: str) -> None:
 TURN_COUNTS_FILE = ".turn-counts.json"
 
 
-def _bump_and_check_tripwire(autopilot_dir: Path, session_id: str) -> bool:
-    """Increment this session's tool-call counter and return True exactly once,
-    the call on which it reaches TURN_TRIPWIRE. Fires at most once per session
-    (the session id is recorded under "fired"). A missing or corrupt counter
-    file resets to zero and logs; it never raises. Interactive sessions never
-    reach here — main()'s $_AUTOPILOT_LOOP + build-phase guards run first.
+def _bump_and_check_tripwire(autopilot_dir: Path, session_id: str) -> tuple[int, bool]:
+    """Increment this session's tool-call counter and return `(count, fires)`:
+    the count after this call, and True exactly once, the call on which it
+    reaches TURN_TRIPWIRE. Fires at most once per session (the session id is
+    recorded under "fired"). A missing or corrupt counter file resets to zero
+    and logs; it never raises. Interactive sessions never reach here — main()'s
+    $_AUTOPILOT_LOOP + phase guards run first. The count is also the calls
+    half of the task record (PRD 00200), so it is returned even when the
+    counter could not be persisted (then `fires` is False).
     """
     counts_file = autopilot_dir / TURN_COUNTS_FILE
     data: dict[str, Any] = {"counts": {}, "fired": []}
@@ -572,8 +575,100 @@ def _bump_and_check_tripwire(autopilot_dir: Path, session_id: str) -> bool:
         os.replace(tmp, counts_file)
     except OSError:
         # A counter we cannot persist must not fire (it would re-fire forever).
+        return count, False
+    return count, fires
+
+
+_START_FIELDS = ("usage_at_start", "calls_at_start")
+_DONE_FIELDS = ("usage_at_done", "calls_at_done")
+
+
+def _record_pair(
+    task: dict[str, Any],
+    fields: tuple[str, str],
+    values: tuple[int, int | None],
+    warn: bool,
+) -> bool:
+    """Write the missing half of one usage/calls pair onto `task`.
+
+    A field already holding an int is never rewritten; a field holding a
+    non-int (a string, a bool, null) is treated as absent, named on ONE stderr
+    line per task (when `warn`), and overwritten. A None value (the session
+    count when stdin carried no session id) writes nothing for that field.
+    Returns whether the task changed.
+    """
+    bad = [
+        key
+        for key in fields
+        if key in task
+        and (isinstance(task[key], bool) or not isinstance(task[key], int))
+    ]
+    if bad and warn:
+        print(
+            f"autopilot_context_cap_hook: tasks[{task.get('id')!r}] {', '.join(bad)} "
+            "not an int; treating as absent",
+            file=sys.stderr,
+        )
+    changed = False
+    for key, value in zip(fields, values):
+        if value is None or (key in task and key not in bad):
+            continue
+        task[key] = value
+        changed = True
+    return changed
+
+
+def _record_task_bounds(
+    state: dict[str, Any],
+    task_id: str,
+    total: int,
+    count: int | None,
+    warn: bool = True,
+) -> bool:
+    """Stamp the task usage and call record (PRD 00200) onto `state.tasks`.
+
+    The in-progress task gets `usage_at_start`/`calls_at_start` on the first
+    fire after it turned in_progress; every completed task gets
+    `usage_at_done`/`calls_at_done` on the first fire after it turned
+    completed. Each field is written once (`_record_pair`). Mutates `state`
+    in place and returns whether anything changed, so the caller can decide
+    on the hook's initial read whether a locked write is needed at all, then
+    re-apply the same mutation on the transaction's fresh read (with
+    `warn=False`, so a non-int field is named once, not per pass).
+    """
+    tasks = state.get("tasks")
+    if not isinstance(tasks, list):
         return False
-    return fires
+    changed = False
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        status = task.get("status")
+        if status == "in_progress" and task.get("id") == task_id:
+            changed |= _record_pair(task, _START_FIELDS, (total, count), warn)
+        elif status == "completed":
+            changed |= _record_pair(task, _DONE_FIELDS, (total, count), warn)
+    return changed
+
+
+def _write_task_bounds(
+    autopilot_dir: Path,
+    task_id: str,
+    total: int,
+    count: int | None,
+) -> bool:
+    """Persist `_record_task_bounds` through cli.state.transaction."""
+
+    def _mutate(fresh: dict[str, Any]) -> dict[str, Any]:
+        _record_task_bounds(fresh, task_id, total, count, warn=False)
+        return fresh
+
+    def _validate(new_state: dict[str, Any]) -> None:
+        from cli import schema
+
+        schema.require(new_state.get("tasks"), list, "tasks")
+
+    return _write_via_transaction(autopilot_dir, "task record", _mutate, _validate)
 
 
 def _fire_breach(
@@ -698,38 +793,46 @@ def _check_caps(
     stdin: dict[str, Any],
     autopilot_dir: Path,
     marker_file: Path,
+    state: dict[str, Any],
     task_id: str,
     last_rotation_task: str | None,
     transcript_path: Path,
 ) -> None:
     """Act on the turn tripwire and the usage thresholds, for a fire that has
-    already cleared main()'s loop, build-phase and marker-dedup guards.
+    already cleared main()'s loop, phase and marker-dedup guards.
     """
     limit = _usage_limit()
     total = _latest_usage_total(transcript_path)
 
     # Turn tripwire: bound the session's tool-call count independently of
-    # context size. Counted once per qualifying (build, in-loop, past-dedup)
-    # invocation; on the crossing call it forces the same hand-off as a cap
-    # breach. Runs before the usage check so a low-context runaway is still
-    # bounded (and so a missing usage line does not skip the count).
+    # context size. Counted once per qualifying (guarded-phase, in-loop,
+    # past-dedup) invocation; on the crossing call it forces the same hand-off
+    # as a cap breach. Runs before the usage check so a low-context runaway is
+    # still bounded (and so a missing usage line does not skip the count).
     # The hook's own session id: the tripwire keys its counter on it and the
-    # soft-cap handoff marker records it. Missing or non-string -> "".
+    # handoff marker records it. Missing or non-string -> "".
     raw_session_id = stdin.get("session_id")
     session_id = raw_session_id if isinstance(raw_session_id, str) else ""
-    if session_id and _bump_and_check_tripwire(autopilot_dir, session_id):
-        _fire_breach(
-            autopilot_dir,
-            marker_file,
-            task_id,
-            last_rotation_task,
-            limit,
-            total if total is not None else limit,
-        )
-        return
+    count: int | None = None
+    if session_id:
+        count, fires = _bump_and_check_tripwire(autopilot_dir, session_id)
+        if fires:
+            _fire_breach(
+                autopilot_dir,
+                marker_file,
+                task_id,
+                last_rotation_task,
+                limit,
+                total if total is not None else limit,
+            )
+            return
 
     if total is None:
         return
+    # Task usage and call record (PRD 00200): decided on the hook's own read
+    # so a fire with nothing to stamp costs no locked write.
+    if _record_task_bounds(state, task_id, total, count):
+        _write_task_bounds(autopilot_dir, task_id, total, count)
     if total <= limit:
         _handle_below_cap(autopilot_dir, task_id, total, session_id)
         return
@@ -768,6 +871,7 @@ def main() -> None:
         stdin,
         autopilot_dir,
         marker_file,
+        state,
         task_id,
         last_rotation_task,
         Path(transcript_path_str),

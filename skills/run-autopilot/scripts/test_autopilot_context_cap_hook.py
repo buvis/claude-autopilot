@@ -267,6 +267,105 @@ class ContextCapHookTests(unittest.TestCase):
         out = json.loads(result.stdout)
         self.assertIn("hookSpecificOutput", out)
 
+    # Task usage and call record (PRD 00200) --------------------------------
+
+    def _seed_counter(self, session_id: str, count: int) -> None:
+        (self.fx.autopilot_dir / ".turn-counts.json").write_text(
+            json.dumps({"counts": {session_id: count}, "fired": []}),
+        )
+
+    def _tasks(self) -> list[dict]:
+        return json.loads((self.fx.autopilot_dir / "state.json").read_text())["tasks"]
+
+    def test_usage_and_calls_at_start_are_written_once(self) -> None:
+        """The first PostToolUse after a task turns in_progress stamps the
+        session's usage total and tool-call count on it; a later fire with a
+        different total leaves both fields as first written."""
+        self.fx.write_state(
+            phase="build",
+            tasks=[{"id": "t1", "name": "y", "status": "in_progress"}],
+        )
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=120_000)])
+        self._seed_counter("test-session", 41)
+        result = self.fx.run_hook()
+        self.assertEqual(result.returncode, 0)
+        task = self._tasks()[0]
+        self.assertEqual(task["usage_at_start"], 120_000)
+        self.assertEqual(task["calls_at_start"], 42)
+
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=130_000)])
+        result = self.fx.run_hook()
+        self.assertEqual(result.returncode, 0)
+        task = self._tasks()[0]
+        self.assertEqual(task["usage_at_start"], 120_000)
+        self.assertEqual(task["calls_at_start"], 42)
+        self.assertNotIn("usage_at_done", task)
+
+    def test_usage_and_calls_at_done_are_written_on_completion(self) -> None:
+        """The first PostToolUse after a task turns completed stamps the done
+        pair; a task already carrying it is left alone, and the pending task
+        gets no done pair."""
+        self.fx.write_state(
+            phase="build",
+            tasks=[
+                {
+                    "id": "t1",
+                    "name": "y",
+                    "status": "completed",
+                    "usage_at_start": 100_000,
+                    "calls_at_start": 10,
+                },
+                {
+                    "id": "t0",
+                    "name": "x",
+                    "status": "completed",
+                    "usage_at_start": 40_000,
+                    "calls_at_start": 3,
+                    "usage_at_done": 90_000,
+                    "calls_at_done": 9,
+                },
+                {"id": "t2", "name": "z", "status": "pending"},
+            ],
+        )
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=250_000)])
+        self._seed_counter("test-session", 209)
+        result = self.fx.run_hook()
+        self.assertEqual(result.returncode, 0)
+        done, earlier, pending = self._tasks()
+        self.assertEqual(done["usage_at_done"], 250_000)
+        self.assertEqual(done["calls_at_done"], 210)
+        self.assertEqual(earlier["usage_at_done"], 90_000)
+        self.assertEqual(earlier["calls_at_done"], 9)
+        self.assertNotIn("usage_at_done", pending)
+        self.assertNotIn("usage_at_start", pending)
+
+    def test_non_int_record_field_is_treated_as_absent_with_one_stderr_line(
+        self,
+    ) -> None:
+        """A record field holding a non-int (a string, a bool) is absent: it
+        is rewritten, and exactly one stderr line names it. No crash."""
+        self.fx.write_state(
+            phase="build",
+            tasks=[
+                {
+                    "id": "t1",
+                    "name": "y",
+                    "status": "in_progress",
+                    "usage_at_start": "lots",
+                    "calls_at_start": True,
+                },
+            ],
+        )
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=120_000)])
+        self._seed_counter("test-session", 41)
+        result = self.fx.run_hook()
+        self.assertEqual(result.returncode, 0)
+        task = self._tasks()[0]
+        self.assertEqual(task["usage_at_start"], 120_000)
+        self.assertEqual(task["calls_at_start"], 42)
+        lines = [line for line in result.stderr.splitlines() if "not an int" in line]
+        self.assertEqual(len(lines), 1, result.stderr)
+
     # Walk-up cases ---------------------------------------------------------
 
     def test_finds_autopilot_dir_when_cwd_is_subdirectory(self) -> None:
@@ -1271,8 +1370,10 @@ class DurabilityBeforePublishTests(unittest.TestCase):
             raise OSError("disk full")
 
         with unittest.mock.patch.object(os, "fsync", boom):
-            fired = self.module._bump_and_check_tripwire(self.ap, "sess-1")
+            count, fired = self.module._bump_and_check_tripwire(self.ap, "sess-1")
         self.assertFalse(fired)
+        # The count is still returned for the task record (PRD 00200).
+        self.assertEqual(count, 2)
 
 
 if __name__ == "__main__":
