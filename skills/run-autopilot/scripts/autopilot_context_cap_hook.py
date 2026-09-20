@@ -7,7 +7,8 @@ thresholds against a single cost ceiling:
 
 - **Hard cap** — on overrun, ROTATES the build session. It appends one
   `{task_id, cycle}` entry to `state.cap_rotations`, sets `next_phase` to
-  `"build"`, and emits an `additionalContext` envelope telling the model to
+  the phase it left (`build`, or `review` for a rework session, PRD 00196),
+  and emits an `additionalContext` envelope telling the model to
   hand off to a fresh session (write the loop signal, then STOP). The fresh
   session reads the pending tasks straight from `state.tasks`, skips finished
   build sub-steps by artifact, and `/work` continues at the first non-completed
@@ -114,22 +115,30 @@ TAIL_CHUNK_BYTES = 64 * 1024
 MAX_TAIL_BYTES = 4 * 1024 * 1024
 
 
-def _rotation_instructions(limit: int) -> str:
-    """Build the rotation handoff instructions.
+def _rotation_instructions(limit: int, phase: str) -> str:
+    """Build the rotation handoff instructions for the phase the rotation
+    returns to (`build`, or `review` for a rework session, PRD 00196).
 
     The Stop hook owns the loop handoff from next_phase; no directive
     for that belongs here.
     """
+    resume = (
+        "skips finished build sub-steps by artifact, and /work continues at "
+        "the first non-completed task"
+        if phase == "build"
+        else "resumes at the review gate's rework dispatch (this cycle's "
+        "review file exists), and /work continues at the first non-completed "
+        "rework task"
+    )
     return (
         f"Context cap reached (~{limit // 1000}K tokens). This is a ROTATION: "
         "the rotation entry is already recorded in state.cap_rotations, the "
         "in-flight task was reset to pending so /work re-attempts it as the "
-        "first pending task, and next_phase is set to build. Commit any safe "
-        "partial work, then STOP. The autopilot Stop hook performs the loop "
-        "handoff from next_phase. The fresh session reads the pending tasks "
-        "straight from state.tasks, skips finished build sub-steps by "
-        "artifact, and /work continues at the first non-completed task. Do "
-        "NOT set stall_reason; the PRD is not being re-planned."
+        f"first pending task, and next_phase is set to {phase}. Commit any "
+        "safe partial work, then STOP. The autopilot Stop hook performs the "
+        "loop handoff from next_phase. The fresh session reads the pending "
+        f"tasks straight from state.tasks, {resume}. Do NOT set stall_reason; "
+        "the PRD is not being re-planned."
     )
 
 
@@ -369,9 +378,10 @@ def _append_rotation_to_state(autopilot_dir: Path, task_id: str) -> bool:
                 if isinstance(task, dict) and task.get("id") == task_id:
                     task["status"] = "pending"
                     break
-        # next_phase stays on the build gate: the fresh session resumes build
-        # and /work continues at the first non-completed task.
-        fresh["next_phase"] = "build"
+        # next_phase returns to the phase the rotation left (PRD 00196): the
+        # build gate resumes by artifact and /work continues at the first
+        # non-completed task; the review gate resumes its rework dispatch.
+        fresh["next_phase"] = _phase_of(fresh)
         return fresh
 
     def _validate(new_state: dict[str, Any]) -> None:
@@ -533,6 +543,7 @@ def _fire_breach(
     last_rotation_task: str | None,
     limit: int,
     total: int,
+    phase: str,
 ) -> None:
     """Shared hard-breach action for both the context cap and the turn
     tripwire: livelock-stall when this task already rotated once, else rotate.
@@ -546,7 +557,7 @@ def _fire_breach(
     if last_rotation_task == task_id and task_id != "unknown":
         _handle_livelock(autopilot_dir, marker_file, task_id, total)
     else:
-        _handle_rotation(autopilot_dir, marker_file, task_id, limit)
+        _handle_rotation(autopilot_dir, marker_file, task_id, limit, phase)
 
 
 def _marker_dedup_blocks(
@@ -639,6 +650,7 @@ def _handle_rotation(
     marker_file: Path,
     task_id: str,
     limit: int,
+    phase: str,
 ) -> None:
     # Marker first, gated: if it can't be written, return and retry on the next
     # PostToolUse. The marker is present iff the rotation is recorded, so a
@@ -662,7 +674,7 @@ def _handle_rotation(
             pass
         return
 
-    _emit_envelope(_rotation_instructions(limit))
+    _emit_envelope(_rotation_instructions(limit, phase))
 
 
 def _check_caps(
@@ -700,6 +712,7 @@ def _check_caps(
                 last_rotation_task,
                 limit,
                 total if total is not None else limit,
+                _phase_of(state),
             )
             return
 
@@ -736,7 +749,13 @@ def _record_and_breach(
         # Hard-cap breach: livelock-stall if this task already rotated, else
         # rotate.
         _fire_breach(
-            autopilot_dir, marker_file, task_id, last_rotation_task, _usage_limit(), total
+            autopilot_dir,
+            marker_file,
+            task_id,
+            last_rotation_task,
+            _usage_limit(),
+            total,
+            _phase_of(state),
         )
         return ""
     return done_task

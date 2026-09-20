@@ -207,11 +207,21 @@ class InstructionBuilderContractTests(unittest.TestCase):
 
     # AC1: _rotation_instructions signature -----------------------------------
 
-    def test_rotation_instructions_takes_only_limit_parameter(self) -> None:
-        """_rotation_instructions must accept exactly one parameter named
-        `limit` — no signal_path."""
+    def test_rotation_instructions_takes_limit_and_phase(self) -> None:
+        """_rotation_instructions takes exactly `limit` and `phase` (PRD
+        00196: the envelope names the phase the rotation returns to) — no
+        signal_path."""
         sig = inspect.signature(self.module._rotation_instructions)
-        self.assertEqual(list(sig.parameters), ["limit"])
+        self.assertEqual(list(sig.parameters), ["limit", "phase"])
+
+    def test_rotation_text_names_the_phase(self) -> None:
+        """The envelope says which phase next_phase was set to, so a review
+        session's rotation reads as a return to review, not a build restart."""
+        for phase in ("build", "review"):
+            with self.subTest(phase=phase):
+                text = self.module._rotation_instructions(500_000, phase)
+                self.assertIn(f"next_phase is set to {phase}", text)
+        self.assertNotIn("build", self.module._rotation_instructions(500_000, "review"))
 
     # AC2: _oversized_stall_instructions signature ----------------------------
 
@@ -225,7 +235,7 @@ class InstructionBuilderContractTests(unittest.TestCase):
 
     def test_rotation_text_has_no_signal_write_directive(self) -> None:
         """_rotation_instructions must not emit any signal-write directive."""
-        text = self.module._rotation_instructions(500_000)
+        text = self.module._rotation_instructions(500_000, "build")
         self.assertNotIn("write 'next'", text)
         self.assertNotIn("$_AUTOPILOT_LOOP", text)
         self.assertNotIn("signal", text.lower())
@@ -246,7 +256,7 @@ class InstructionBuilderContractTests(unittest.TestCase):
         """_rotation_instructions must still say ROTATION, STOP, and
         reference build as the next_phase — guards against the builder
         being gutted entirely."""
-        text = self.module._rotation_instructions(500_000)
+        text = self.module._rotation_instructions(500_000, "build")
         self.assertIn("rotation", text.lower())
         self.assertIn("stop", text.lower())
         self.assertIn("build", text.lower())
@@ -292,7 +302,7 @@ class MarkerStateAtomicityTests(unittest.TestCase):
         self._write_state()
         marker = self.ap / ".cap-fired"
         marker.mkdir()
-        self.module._handle_rotation(self.ap, marker, "task-x", 500_000)
+        self.module._handle_rotation(self.ap, marker, "task-x", 500_000, "build")
         after = json.loads((self.ap / "state.json").read_text())
         self.assertEqual(
             after.get("cap_rotations"),
@@ -328,7 +338,7 @@ class MarkerStateAtomicityTests(unittest.TestCase):
         self.module._append_rotation_to_state = lambda *a, **k: False
         captured = io.StringIO()
         with contextlib.redirect_stdout(captured):
-            self.module._handle_rotation(self.ap, marker, "task-x", 500_000)
+            self.module._handle_rotation(self.ap, marker, "task-x", 500_000, "build")
         self.assertFalse(
             marker.exists(),
             "a state-append failure must roll back (unlink) the marker",
