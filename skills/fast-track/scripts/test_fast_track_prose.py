@@ -435,47 +435,40 @@ def test_exit_rule_branches_and_resets_with_keep() -> None:
     )
 
 
-def test_headless_sessions_are_refused() -> None:
+def test_headless_sessions_dispatch_the_watcher() -> None:
     # Headless sessions kill background Bash, which is where two of the five
-    # review lanes live: the lane would run and quietly review with three.
+    # review lanes live. Since PRD 00206 the lane runs inside the loop: the
+    # Watcher subagent (the review phase's keep-alive) holds the session open
+    # until both CLI lanes have written, and is stopped once they have.
     preconditions = _section("Preconditions")
     named = _assert_live(
         [passage for passage in preconditions if "_AUTOPILOT_LOOP" in passage.text],
         "_AUTOPILOT_LOOP",
         missing=(
-            "the preconditions never name `_AUTOPILOT_LOOP`, so the lane will "
-            "start inside a headless loop session that cannot keep its "
-            "background CLI reviewers alive."
+            "the preconditions never name `_AUTOPILOT_LOOP`, so a loop session "
+            "never learns to dispatch the Watcher that keeps its background CLI "
+            "reviewers alive."
         ),
         cancelled=(
             "`_AUTOPILOT_LOOP` appears in the preconditions as a variable the "
             "lane no longer checks."
         ),
     )
-    refusal = re.compile(
-        r"refus\w*|declin\w*|will not run|does not run|abort\w*",
-        re.IGNORECASE,
-    )
-    assert any(refusal.search(passage.text) for passage in named), (
-        f"{_SKILL_MD}: `_AUTOPILOT_LOOP` is named in the preconditions but the "
-        "same passage never refuses the run. A refusal a paragraph away is a "
-        "coincidence of words; a mention without a refusal is a note, not a "
-        "precondition."
-    )
-    refused = [
-        passage
-        for passage in named
-        if any(
-            _asserted(sentence, refusal)
-            for sentence in _sentences_carrying(passage.text, "_AUTOPILOT_LOOP")
+    text = " ".join(passage.text for passage in named)
+    for token in ("Watcher", "await_reviewer_outputs.py", "TaskStop"):
+        assert token in text, (
+            f"{_SKILL_MD}: the `_AUTOPILOT_LOOP` bullet never names `{token}`, so "
+            "a loop session has no keep-alive for the codex and gemini lanes, or "
+            "never stops it."
         )
-    ]
-    assert refused, (
-        f"{_SKILL_MD}: the sentence naming `_AUTOPILOT_LOOP` does not refuse "
-        "the run - the refusal sits in a neighbouring sentence, or is itself "
-        "negated ('nothing here refuses a run'). Then the variable is trivia, "
-        "the lane starts headless, and its two background CLI reviewers die on "
-        "the spot."
+    assert "SAME message as the roster" in text, (
+        f"{_SKILL_MD}: the Watcher must go out in the roster's own message; a "
+        "later turn is too late, the CLIs are already dead."
+    )
+    assert not re.search(r"\brefus\w*", text, re.IGNORECASE), (
+        f"{_SKILL_MD}: the `_AUTOPILOT_LOOP` bullet still refuses the run; since "
+        "PRD 00206 the loop drains fast-track PRDs and the bullet arms the "
+        "Watcher instead."
     )
     _assert_unopposed(
         preconditions,

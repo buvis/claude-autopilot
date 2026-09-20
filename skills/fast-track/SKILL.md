@@ -24,10 +24,21 @@ stops the item says so.
 
 ## Preconditions
 
-- **Attended session.** Check `_AUTOPILOT_LOOP` first: a set value means a
-  headless loop session, and the lane refuses the run there. Headless
-  `claude -p` kills background Bash about five seconds after the turn ends, and
-  two of the five review lenses live in background Bash.
+- **Loop session.** Check `_AUTOPILOT_LOOP` first: a set value means a
+  headless loop session, where `claude -p` kills background Bash about five
+  seconds after the turn ends, and two of the five review lenses live in
+  background Bash. When `_AUTOPILOT_LOOP` is set, dispatch the Watcher
+  subagent (`general-purpose`) in the SAME message as the roster, with the
+  exact prompt `${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/SKILL.md`
+  step 5 gives it: run
+  `python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/await_reviewer_outputs.py --budget 100 <the absolute -o output path of codex and of gemini for this item>`
+  as a foreground Bash call, re-run it while the last stdout line is
+  `WAITING` (up to 30 times total), and return the script's final output
+  verbatim, nothing else. The Watcher is scaffolding, not a reviewer: its
+  return is never saved or consolidated, and once every lane has reported
+  (or reached its terminal failure) `TaskStop` it if it is still running.
+  A `WAITING` return after 30 runs means a stalled CLI lane; count that lane
+  as failed after its one retry, as the Roster says.
 - **A worktree you know.** Run `git status --porcelain` and account for every
   dirty path. A dirty path inside the card's `## Files` stops the item before
   any dispatch: the lane cannot tell that work from the implementor's, and it
@@ -309,7 +320,9 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kin
 
 Send all five lanes in one message: three Task calls and two background Bash
 calls, dispatched together, so the roster costs one turn and every lens reads
-the same change.
+the same change. In a loop session the Watcher subagent of § Preconditions
+(the `Loop session` bullet) goes into that same message: it is what keeps
+the session open until the two background lanes finish.
 
 ```
 Task tool:
