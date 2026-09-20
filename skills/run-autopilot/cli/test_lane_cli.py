@@ -151,3 +151,147 @@ def test_malformed_warning_is_byte_identical(tmp_path: Path) -> None:
     assert proc.stderr.strip().splitlines() == [frontmatter.MALFORMED_WARNING]
     assert (state["lane"], state["lane_reason"]) == ("full", "unparsed")
     assert state["lane_effective"] == "full"
+
+
+# ── lane-check (PRD 00205) ───────────────────────────────────────────────────
+
+_GIT_IDENTITY = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
+
+
+def _git(repo: Path, *args: str) -> str:
+    proc = subprocess.run(
+        ["git", *_GIT_IDENTITY, "-C", str(repo), *args],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return proc.stdout.strip()
+
+
+def _commit(repo: Path, name: str, text: str, message: str = "c") -> None:
+    (repo / name).parent.mkdir(parents=True, exist_ok=True)
+    (repo / name).write_text(text, encoding="utf-8")
+    _git(repo, "add", name)
+    _git(repo, "commit", "-q", "-m", message)
+
+
+def _solo_repo(tmp_path: Path) -> tuple[Path, Path]:
+    """A temp git repo with one commit and a solo-lane state whose
+    work_start_sha is that commit: (repo, state_path)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    _commit(repo, "notes.md", "# notes\n", "base")
+    ap_dir = repo / "dev" / "local" / "autopilot"
+    ap_dir.mkdir(parents=True)
+    state_path = ap_dir / "state.json"
+    state_path.write_text(
+        json.dumps(
+            {
+                "prd": "00205-x-v1.md",
+                "phase": "build",
+                "next_phase": "build",
+                "lane": "solo",
+                "lane_reason": "no_production_code",
+                "lane_effective": "solo",
+                "work_start_sha": _git(repo, "rev-parse", "HEAD"),
+                "repo_root": str(repo),
+            },
+        ),
+        encoding="utf-8",
+    )
+    return repo, state_path
+
+
+def _lane_check(state_path: Path, *extra: str) -> tuple[subprocess.CompletedProcess, dict]:
+    proc = _run(["lane-check", "--state", str(state_path), *extra], cwd=state_path.parent)
+    return proc, json.loads(state_path.read_text(encoding="utf-8"))
+
+
+def test_lane_check_escalates_on_a_production_path(tmp_path: Path) -> None:
+    repo, state_path = _solo_repo(tmp_path)
+    _commit(repo, "pkg/mod.py", "x = 1\n")
+    proc, state = _lane_check(state_path)
+    assert proc.returncode == 3, proc.stderr
+    assert proc.stdout.strip() == "lane: escalate unnamed_path"
+    assert state["lane_effective"] == "full"
+    assert state["lane_escalated"] == {"from": "solo", "signal": "unnamed_path"}
+
+
+def test_lane_check_escalates_on_a_security_diff(tmp_path: Path) -> None:
+    repo, state_path = _solo_repo(tmp_path)
+    _commit(repo, "notes.md", "# notes\npassword: hunter2\n")
+    proc, state = _lane_check(state_path)
+    assert proc.returncode == 3, proc.stderr
+    assert proc.stdout.strip() == "lane: escalate security_diff"
+    assert state["lane_escalated"]["signal"] == "security_diff"
+
+
+def test_lane_check_passes_a_docs_only_diff(tmp_path: Path) -> None:
+    repo, state_path = _solo_repo(tmp_path)
+    before = state_path.read_bytes()
+    _commit(repo, "notes.md", "# notes\nA second line.\n")
+    _commit(repo, "docs/test_guide.py", "def test_ok():\n    assert True\n")
+    proc, _state = _lane_check(state_path)
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == "lane: ok"
+    assert state_path.read_bytes() == before, "a passing check writes nothing"
+
+
+def test_lane_check_records_an_explicit_signal(tmp_path: Path) -> None:
+    _repo, state_path = _solo_repo(tmp_path)
+    proc, state = _lane_check(state_path, "--signal", "critical_finding")
+    assert proc.returncode == 3, proc.stderr
+    assert proc.stdout.strip() == "lane: escalate critical_finding"
+    assert state["lane_effective"] == "full"
+    assert state["lane_escalated"] == {"from": "solo", "signal": "critical_finding"}
+
+
+def test_lane_check_escalates_when_git_fails(tmp_path: Path) -> None:
+    _repo, state_path = _solo_repo(tmp_path)
+    not_a_repo = tmp_path / "elsewhere"
+    not_a_repo.mkdir()
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["repo_root"] = str(not_a_repo)
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    proc, state = _lane_check(state_path)
+    assert proc.returncode == 3, proc.stderr
+    assert proc.stdout.strip() == "lane: escalate check_failed"
+    assert state["lane_escalated"]["signal"] == "check_failed"
+
+
+def test_lane_check_refuses_without_work_start_sha(tmp_path: Path) -> None:
+    _repo, state_path = _solo_repo(tmp_path)
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    del state["work_start_sha"]
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    proc, state = _lane_check(state_path)
+    assert proc.returncode == 2
+    assert "work_start_sha" in proc.stderr
+    assert "lane_escalated" not in state
+
+
+def test_lane_check_rejects_an_unknown_signal(tmp_path: Path) -> None:
+    _repo, state_path = _solo_repo(tmp_path)
+    proc, state = _lane_check(state_path, "--signal", "sideways")
+    # _ArgumentParser maps every usage error to exit 1; 2 is reserved for
+    # state errors (the exit-code table in __main__.py's docstring).
+    assert proc.returncode == 1
+    assert "invalid choice" in proc.stderr
+    assert "lane_escalated" not in state
+
+
+def test_phase_done_lane_reviewed_from_build(tmp_path: Path) -> None:
+    _repo, state_path = _solo_repo(tmp_path)
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["phases_completed"] = []
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    proc = _run(
+        ["phase-done", "--state", str(state_path), "--outcome", "lane_reviewed"],
+        cwd=state_path.parent,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout) == {"phase": "done", "next_phase": "done"}
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["phases_completed"] == ["review"]
+    assert state["next_phase"] == "done"

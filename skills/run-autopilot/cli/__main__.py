@@ -42,6 +42,13 @@ Subcommands:
         (`lane`, `lane_reason`, `lane_effective`; the one reader of
         _AUTOPILOT_LANES), applied to state in ONE transaction and echoed
         as JSON; warnings go to stderr.
+    lane-check --state [--signal critical_finding|high_unresolved|suite_red]
+        lane_check.diff_signal() over state.work_start_sha..HEAD (PRD 00205):
+        exit 0 and `lane: ok` when no escalation signal fires; exit 3 and
+        `lane: escalate <signal>` after one transaction writing
+        lane_effective: "full" and lane_escalated: {"from", "signal"};
+        exit 2 when the state is unreadable or work_start_sha/repo_root is
+        unset. --signal records a session-determined signal instead.
     phase-done --state --outcome
         transitions.apply(): the next phase AND every field effect the
         transition mandates, in one commit. The current phase comes from the
@@ -159,6 +166,7 @@ from cli import (
     gate,
     handoff,
     lane,
+    lane_check,
     policy,
     records,
     render_audit,
@@ -668,6 +676,43 @@ def _run_frontmatter(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add_lane_check(subparsers) -> None:
+    p = subparsers.add_parser("lane-check")
+    p.add_argument("--state")
+    p.add_argument("--signal", choices=lane_check.SESSION_SIGNALS)
+
+
+def _run_lane_check(args: argparse.Namespace) -> int:
+    state_path = _resolve_state_path(args.state)
+    refuse = _schema_version_preflight(state_path)
+    if refuse is not None:
+        return refuse
+    try:
+        data, _status = state.load(state_path)
+    except state.StateError as err:
+        print(f"autopilot: lane-check: {err}", file=sys.stderr)
+        return 2
+    signal = args.signal
+    if signal is None:
+        missing = [k for k in ("work_start_sha", "repo_root") if not data.get(k)]
+        if missing:
+            print(f"autopilot: lane-check: state has no {', '.join(missing)}", file=sys.stderr)
+            return 2
+        signal = lane_check.diff_signal(
+            data["work_start_sha"], data["repo_root"], data.get("git_dir")
+        )
+    if signal is None:
+        print("lane: ok")
+        return 0
+    try:
+        lane_check.escalate(state_path, signal)
+    except (state.StateError, schema.SchemaError, OSError) as err:
+        print(f"autopilot: lane-check: escalation write failed: {err}", file=sys.stderr)
+        return 2
+    print(f"lane: escalate {signal}")
+    return 3
+
+
 def _add_phase_done(subparsers) -> None:
     p = subparsers.add_parser("phase-done")
     p.add_argument("--state")
@@ -1155,6 +1200,7 @@ _SUBCOMMANDS: dict[str, tuple] = {
     "check-plan": (_add_check_plan, _run_check_plan),
     "select": (_add_select, _run_select),
     "frontmatter": (_add_frontmatter, _run_frontmatter),
+    "lane-check": (_add_lane_check, _run_lane_check),
     "phase-done": (_add_phase_done, _run_phase_done),
     "resume-target": (_add_resume_target, _run_resume_target),
     "gate": (_add_gate, _run_gate),
