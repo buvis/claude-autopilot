@@ -37,8 +37,8 @@ LANES = ("solo", "fast-track", "full")
 
 # The lanes whose runbook has shipped. A classified lane outside this set
 # still runs full (`effective`), so the classifier can be measured before a
-# lane goes live.
-RELEASED_LANES = frozenset({"full"})
+# lane goes live. `solo` shipped with PRD 00205 (`references/lane-solo.md`).
+RELEASED_LANES = frozenset({"full", "solo"})
 
 # The fast-track card limits (`skills/fast-track/scripts/card.py`).
 CARD_MAX_FILES = 12

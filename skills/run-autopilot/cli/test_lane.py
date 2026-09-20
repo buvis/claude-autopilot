@@ -310,6 +310,38 @@ def test_plan_cards_goal_limit_is_forty_lines() -> None:
     assert lane.plan_cards(_prd("cli/", "└── loop.py", problem=forty_one)) == []
 
 
+def test_released_lanes_hold_solo(monkeypatch) -> None:
+    assert "solo" in lane.RELEASED_LANES
+    assert lane.effective("solo", None) == "solo"
+
+
+# ── security_triggered (the diff-level port, PRD 00205) ──────────────────────
+
+
+def test_security_triggered_fires_on_a_securityish_changed_path() -> None:
+    assert lane.security_triggered("", ["auth/login.py"])
+    assert not lane.security_triggered("", ["docs/guide.md"])
+
+
+def test_security_triggered_fires_on_an_added_or_removed_line() -> None:
+    assert lane.security_triggered("+token = read()\n", ["cli/x.py"])
+    assert lane.security_triggered("-password = old\n", ["cli/x.py"])
+    assert not lane.security_triggered(" password = context\n", ["cli/x.py"])
+
+
+def test_security_triggered_skips_a_header_pair_but_scans_a_lone_dash_line() -> None:
+    paired = "--- a/secrets.yml\n+++ b/secrets.yml\n+hello\n"
+    assert not lane.security_triggered(paired, ["docs/x.md"])
+    lone = "@@ -1 +1 @@\n--secret-flag\n"  # a removed `-secret-flag` line
+    assert lane.security_triggered(lone, ["docs/x.md"])
+
+
+def test_security_triggered_is_quiet_on_a_docs_diff() -> None:
+    diff = "--- a/notes.md\n+++ b/notes.md\n@@ -1 +1 @@\n-Old line\n+New line\n"
+    assert not lane.security_triggered(diff, ["notes.md"])
+    assert not lane.security_triggered("", [])
+
+
 def test_security_regex_is_the_fanout_regex() -> None:
     # The JS source, ported verbatim: the same alternation, plural suffix and
     # open-ended auth stems.

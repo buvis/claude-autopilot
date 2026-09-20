@@ -103,7 +103,8 @@ def test_frontmatter_verb_echoes_lane_fields(tmp_path: Path) -> None:
     echoed = json.loads(proc.stdout)
     assert echoed["lane"] == "solo"
     assert echoed["lane_reason"] == "no_production_code"
-    assert echoed["lane_effective"] == "full", "solo is unreleased in shadow"
+    # `solo` is a released lane since PRD 00205, so it runs as itself.
+    assert echoed["lane_effective"] == "solo"
     for key in ("lane", "lane_reason", "lane_effective"):
         assert state[key] == echoed[key]
 
