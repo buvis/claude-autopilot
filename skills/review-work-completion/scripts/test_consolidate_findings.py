@@ -242,7 +242,7 @@ def test_merging_is_transitive_across_a_spectrum_of_wordings() -> None:
             cf.Finding("ALICE", "🟡", extreme_a, "src/cli.py", "4"),
             cf.Finding("BOB", "🟡", middle, "src/cli.py", "4"),
             cf.Finding("CARL", "🟡", extreme_b, "src/cli.py", "4"),
-        ]
+        ],
     )
     assert len(rows) == 1
     assert rows[0].finders == ["ALICE", "BOB", "CARL"]
@@ -260,7 +260,7 @@ def test_two_clusters_join_when_a_later_finding_bridges_them() -> None:
             cf.Finding("ALICE", "🟡", extreme_a, "src/cli.py", "4"),
             cf.Finding("CARL", "🔴", extreme_b, "src/cli.py", "4"),
             cf.Finding("BOB", "🟡", middle, "src/cli.py", "4"),
-        ]
+        ],
     )
     assert len(rows) == 1
     assert rows[0].finders == ["ALICE", "CARL", "BOB"]
@@ -377,7 +377,11 @@ def test_blake_reraising_a_settled_deferral_is_auto_dismissed(tmp_path: Path) ->
         ],
     )
     result = _run(
-        f"BLAKE:{blake}", "--ledger", str(ledger), "--ledger-dismiss", "BLAKE"
+        f"BLAKE:{blake}",
+        "--ledger",
+        str(ledger),
+        "--ledger-dismiss",
+        "BLAKE",
     )
     assert result.returncode == 0
     assert "✅ No issues found" in result.stdout
@@ -399,7 +403,11 @@ def test_the_filter_is_blake_only(tmp_path: Path) -> None:
         [{"issue": SYS_EXIT_WORDINGS[0], "file": "src/cli.py", "reason": "settled"}],
     )
     result = _run(
-        f"ALICE:{alice}", "--ledger", str(ledger), "--ledger-dismiss", "BLAKE"
+        f"ALICE:{alice}",
+        "--ledger",
+        str(ledger),
+        "--ledger-dismiss",
+        "BLAKE",
     )
     assert "[1/1]" in result.stdout
     assert "Auto-dismissed" not in result.stdout
@@ -416,7 +424,11 @@ def test_an_unsettled_blake_finding_is_untouched(tmp_path: Path) -> None:
         [{"issue": SYS_EXIT_WORDINGS[0], "file": "src/cli.py", "reason": "settled"}],
     )
     result = _run(
-        f"BLAKE:{blake}", "--ledger", str(ledger), "--ledger-dismiss", "BLAKE"
+        f"BLAKE:{blake}",
+        "--ledger",
+        str(ledger),
+        "--ledger-dismiss",
+        "BLAKE",
     )
     assert "[1/1]" in result.stdout
     assert "Auto-dismissed" not in result.stdout
@@ -431,7 +443,11 @@ def test_malformed_ledger_warns_once_and_drops_no_findings(tmp_path: Path) -> No
     ledger = tmp_path / "ledger.json"
     ledger.write_text("{not json at all", encoding="utf-8")
     result = _run(
-        f"BLAKE:{blake}", "--ledger", str(ledger), "--ledger-dismiss", "BLAKE"
+        f"BLAKE:{blake}",
+        "--ledger",
+        str(ledger),
+        "--ledger-dismiss",
+        "BLAKE",
     )
     assert result.returncode == 0
     assert "[1/1]" in result.stdout
@@ -448,7 +464,11 @@ def test_ledger_that_is_not_a_list_drops_no_findings(tmp_path: Path) -> None:
     ledger = tmp_path / "ledger.json"
     ledger.write_text('{"issue": "wrong shape"}', encoding="utf-8")
     result = _run(
-        f"BLAKE:{blake}", "--ledger", str(ledger), "--ledger-dismiss", "BLAKE"
+        f"BLAKE:{blake}",
+        "--ledger",
+        str(ledger),
+        "--ledger-dismiss",
+        "BLAKE",
     )
     assert "[1/1]" in result.stdout
     assert "not a list" in result.stderr
@@ -476,11 +496,11 @@ def test_three_real_00122_findings_merge_via_shared_numeric_signature(
         [
             "[ALICE] 🟡 test_render.py grew from 763 to 822 lines in this diff, "
             "crossing the project's 800-line file cap (rules/coding-style.md "
-            "\"800 max\"); the new BatchSummaryNonZeroBindingTests additions "
+            '"800 max"); the new BatchSummaryNonZeroBindingTests additions '
             "could follow the existing split precedent "
             "(cli/test_render_autonomous_blank_rows.py is already a separate "
             "file) to bring the main file back under the cap | File: "
-            "${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/cli/test_render.py | Task: 1"
+            "${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/cli/test_render.py | Task: 1",
         ],
     )
     bob = _write(
@@ -489,7 +509,7 @@ def test_three_real_00122_findings_merge_via_shared_numeric_signature(
         [
             "[BOB] 🟡 Added tests push test_render.py to 822 lines, exceeding "
             "the 800-line cap; move BatchSummaryNonZeroBindingTests into a "
-            "focused test module | File: cli/test_render.py:821 | Task: 1"
+            "focused test module | File: cli/test_render.py:821 | Task: 1",
         ],
     )
     carl = _write(
@@ -497,7 +517,7 @@ def test_three_real_00122_findings_merge_via_shared_numeric_signature(
         "carl.txt",
         [
             "[CARL] 🟡 File size exceeds the 800-line limit (822 lines) | "
-            "File: cli/test_render.py | Task: 1"
+            "File: cli/test_render.py | Task: 1",
         ],
     )
     result = _run(
@@ -518,11 +538,11 @@ def test_same_file_findings_sharing_only_one_number_stay_separate() -> None:
     (0.05, measured) means the word-overlap path doesn't rescue it either."""
     a = _finding(
         "memory leak in the connection pool grows after roughly 800 requests "
-        "are served"
+        "are served",
     )
     b = _finding(
         "the retry backoff counter resets incorrectly near iteration 800 "
-        "during long batches"
+        "during long batches",
     )
     assert not cf.match(a, b)
 
@@ -551,7 +571,8 @@ REVIEW_00186_AGREEMENTS = [(0, 7), (1, 6), (2, 11), (3, 15)]
 def _load_00186() -> dict[str, list[cf.Finding]]:
     return {
         agent: cf.parse_agent_output(
-            FIXTURES_00186 / f"{agent.lower()}-output-00186c1.txt", agent
+            FIXTURES_00186 / f"{agent.lower()}-output-00186c1.txt",
+            agent,
         )
         for agent in ("ALICE", "BLAKE", "BOB", "CARL")
     }
@@ -584,9 +605,14 @@ def test_review_00186_pairs_need_the_overlap_signal_not_jaccard() -> None:
     found = _load_00186()
     for alice_idx, bob_idx in REVIEW_00186_AGREEMENTS:
         alice, bob = found["ALICE"][alice_idx], found["BOB"][bob_idx]
-        assert cf.jaccard(cf.tokens(alice.desc), cf.tokens(bob.desc)) < cf.MERGE_THRESHOLD
+        assert (
+            cf.jaccard(cf.tokens(alice.desc), cf.tokens(bob.desc)) < cf.MERGE_THRESHOLD
+        )
         assert len(cf.numeric_tokens(alice.desc) & cf.numeric_tokens(bob.desc)) < 2
-        assert cf.overlap(cf.tokens(alice.desc), cf.tokens(bob.desc)) >= cf.OVERLAP_THRESHOLD
+        assert (
+            cf.overlap(cf.tokens(alice.desc), cf.tokens(bob.desc))
+            >= cf.OVERLAP_THRESHOLD
+        )
 
 
 def test_the_overlap_threshold_sits_inside_the_measured_band() -> None:
@@ -609,7 +635,42 @@ def test_the_overlap_threshold_sits_inside_the_measured_band() -> None:
             (agreed if is_true else distinct).append(score)
     assert len(agreed) == 4
     assert max(distinct) < cf.OVERLAP_THRESHOLD <= min(agreed)
-    assert 0.29 < max(distinct) and min(agreed) < 0.36  # the measured edges
+    assert max(distinct) > 0.29 and min(agreed) < 0.36  # the measured edges
+
+
+def test_overlap_ignores_near_equal_length_pairs() -> None:
+    """Review 00198-2 (Bob): two distinct 11/12-token findings on one file
+    share four tokens (`request`, `handler`, `invalid`, `during`), overlap
+    0.364. The signal is for a terse restatement of a verbose finding, so a
+    pair within OVERLAP_MIN_RATIO of each other falls back to Jaccard and
+    stays apart."""
+    timeout = _finding(
+        "request handler accepts invalid timeout values causing stalled workers "
+        "during shutdown"
+    )
+    passwords = _finding(
+        "request handler logs invalid passwords exposing credentials through "
+        "diagnostic output during authentication"
+    )
+    shared = cf.tokens(timeout.desc) & cf.tokens(passwords.desc)
+    assert len(shared) / min(len(cf.tokens(timeout.desc)), len(cf.tokens(passwords.desc))) > 1 / 3
+    assert cf.overlap(cf.tokens(timeout.desc), cf.tokens(passwords.desc)) == 0.0
+    assert not cf.match(timeout, passwords)
+    assert len(cf.consolidate([timeout, passwords])) == 2
+
+
+def test_the_ratio_floor_sits_under_every_real_agreement() -> None:
+    """The four 00186 agreements have length ratios 1.65 to 2.88 (measured);
+    the floor must stay below the smallest, or a real terse restatement
+    stops merging."""
+    found = _load_00186()
+    ratios = []
+    for alice_idx, bob_idx in REVIEW_00186_AGREEMENTS:
+        a = cf.tokens(found["ALICE"][alice_idx].desc)
+        b = cf.tokens(found["BOB"][bob_idx].desc)
+        ratios.append(max(len(a), len(b)) / min(len(a), len(b)))
+    assert 1.6 < min(ratios) < 1.7
+    assert cf.OVERLAP_MIN_RATIO <= min(ratios)
 
 
 def test_overlap_ignores_pairs_shorter_than_the_token_floor() -> None:
@@ -618,7 +679,7 @@ def test_overlap_ignores_pairs_shorter_than_the_token_floor() -> None:
     must still not match each other (see the transitive test below)."""
     extreme_a = cf.tokens(SYS_EXIT_WORDINGS[0])
     extreme_b = cf.tokens(
-        "exception handling absent: library calls exit rather than raising it"
+        "exception handling absent: library calls exit rather than raising it",
     )
     assert len(extreme_a & extreme_b) / min(len(extreme_a), len(extreme_b)) >= 1 / 3
     assert min(len(extreme_a), len(extreme_b)) < cf.OVERLAP_MIN_TOKENS
@@ -648,9 +709,11 @@ def test_render_notes_a_row_that_merged_only_after_suffix_stripping(
 ) -> None:
     rows = cf.consolidate(
         [
-            cf.Finding("ALICE", "🟠", SYS_EXIT_WORDINGS[0], "src/cli.py (lines 3-9)", "4"),
+            cf.Finding(
+                "ALICE", "🟠", SYS_EXIT_WORDINGS[0], "src/cli.py (lines 3-9)", "4"
+            ),
             cf.Finding("BOB", "🟠", SYS_EXIT_WORDINGS[1], "src/cli.py:4", "4"),
-        ]
+        ],
     )
     cf.render(rows, total_agents=2)
     err = capsys.readouterr().err
@@ -668,9 +731,27 @@ def test_render_is_silent_when_both_citations_carry_a_line_suffix(
         [
             cf.Finding("ALICE", "🟠", SYS_EXIT_WORDINGS[0], "/repo/src/cli.py:4", "4"),
             cf.Finding("BOB", "🟠", SYS_EXIT_WORDINGS[1], "src/cli.py:4", "4"),
-        ]
+        ],
     )
     cf.render(rows, total_agents=2)
+    assert capsys.readouterr().err == ""
+
+
+def test_render_is_silent_on_a_transitive_row_bridged_by_a_bare_basename(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`a/util.py` and `b/util.py` never match each other; the bare
+    `util.py` bridges them into one row. No suffix was stripped, so no
+    drift note (review 00198-2)."""
+    rows = cf.consolidate(
+        [
+            cf.Finding("ALICE", "🟠", SYS_EXIT_WORDINGS[0], "a/util.py", "4"),
+            cf.Finding("BOB", "🟠", SYS_EXIT_WORDINGS[0], "util.py", "4"),
+            cf.Finding("CARL", "🟠", SYS_EXIT_WORDINGS[0], "b/util.py", "4"),
+        ]
+    )
+    assert len(rows) == 1 and rows[0].finders == ["ALICE", "BOB", "CARL"]
+    cf.render(rows, total_agents=3)
     assert capsys.readouterr().err == ""
 
 
@@ -681,7 +762,7 @@ def test_render_is_silent_when_citations_agree_as_written(
         [
             cf.Finding("ALICE", "🟠", SYS_EXIT_WORDINGS[0], "src/cli.py", "4"),
             cf.Finding("BOB", "🟠", SYS_EXIT_WORDINGS[1], "src/cli.py", "4"),
-        ]
+        ],
     )
     cf.render(rows, total_agents=2)
     assert capsys.readouterr().err == ""
@@ -689,6 +770,6 @@ def test_render_is_silent_when_citations_agree_as_written(
 
 def test_numeric_tokens_extracts_only_all_digit_tokens() -> None:
     assert cf.numeric_tokens("grew from 763 to 822 lines, cap 800") == frozenset(
-        {"763", "822", "800"}
+        {"763", "822", "800"},
     )
     assert cf.numeric_tokens("no numbers here at all") == frozenset()

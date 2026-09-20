@@ -63,9 +63,16 @@ MERGE_THRESHOLD = 0.25
 # test_consolidate_findings.py. Under OVERLAP_MIN_TOKENS the coefficient is
 # too coarse to trust: a third of nine tokens is three shared words, which
 # two distinct findings on one file share routinely (the transitive-spectrum
-# fixture's extreme wordings are the pinned example).
+# fixture's extreme wordings are the pinned example). The signal is also
+# only for a terse-versus-verbose pair: two near-equal wordings that share a
+# third of their tokens are Jaccard's job, and there the coefficient
+# over-merges (review 00198-2: two 11/12-token findings on one file, one
+# about timeouts and one about logged passwords, share four tokens). The
+# four real agreements have length ratios 1.65 to 2.88, the false merge 1.09,
+# so the fallback needs a ratio of at least OVERLAP_MIN_RATIO.
 OVERLAP_THRESHOLD = 1 / 3
 OVERLAP_MIN_TOKENS = 10
+OVERLAP_MIN_RATIO = 1.5
 
 SEVERITY_ORDER = {"🔴": 1, "🟠": 2, "🟡": 3, "⚪": 4}
 UNKNOWN_SEVERITY_RANK = 5
@@ -126,7 +133,7 @@ STOPWORDS = frozenset(
         "with",
         "without",
         "would",
-    ]
+    ],
 )
 
 # The bracketed name is skipped, not captured: the NAME half of the caller's
@@ -141,7 +148,7 @@ _LINE_RE = re.compile(
 # ` (lines N-M)`, ` (lines 18-22, 423)` and `#L12` / `#L12-L20`. Applied in a
 # loop because one citation can carry two forms (`a.md:12 (lines 3-4)`).
 _TRAILING_LINENO_RE = re.compile(
-    r"(?:\s*\(lines?\s+\d[\d,\s-]*\)|:\d+(?:-\d+)?|#L\d+(?:-L?\d+)?)$"
+    r"(?:\s*\(lines?\s+\d[\d,\s-]*\)|:\d+(?:-\d+)?|#L\d+(?:-L?\d+)?)$",
 )
 # Bob's multi-file shape (review 00191): `N/A (skills/x.py:77, skills/y.py:91)`.
 # The first path inside the parentheses is the citation.
@@ -183,12 +190,17 @@ def strip_citation_suffixes(path: str) -> str:
         cleaned = shorter
 
 
+def _segments(path: str) -> tuple[str, ...]:
+    """Comparable path segments: separators unified, `./` noise removed,
+    lower-cased. No suffix handling - callers decide that."""
+    cleaned = path.strip().replace("\\", "/")
+    return tuple(s.lower() for s in cleaned.split("/") if s not in ("", "."))
+
+
 def normalize_file(path: str) -> tuple[str, ...]:
-    """Path as comparable segments: line-number suffixes dropped, separators
-    unified, `./` noise removed, lower-cased last."""
-    cleaned = strip_citation_suffixes(path).replace("\\", "/")
-    segments = [s for s in cleaned.split("/") if s not in ("", ".")]
-    return tuple(s.lower() for s in segments)
+    """Path as comparable segments: line-number suffixes dropped first,
+    then `_segments` (lower-casing last)."""
+    return _segments(strip_citation_suffixes(path))
 
 
 def _tails_match(a: tuple[str, ...], b: tuple[str, ...]) -> bool:
@@ -225,10 +237,12 @@ def jaccard(a: frozenset[str], b: frozenset[str]) -> float:
 
 
 def overlap(a: frozenset[str], b: frozenset[str]) -> float:
-    """The shorter set's containment in the longer, 0.0 when either is
-    shorter than OVERLAP_MIN_TOKENS (too few tokens to mean anything)."""
-    shorter = min(len(a), len(b))
-    if shorter < OVERLAP_MIN_TOKENS:
+    """The shorter set's containment in the longer; 0.0 when either is
+    shorter than OVERLAP_MIN_TOKENS (too few tokens to mean anything) or
+    the two are within OVERLAP_MIN_RATIO of each other in length (not a
+    terse-versus-verbose pair, so Jaccard alone decides)."""
+    shorter, longer = min(len(a), len(b)), max(len(a), len(b))
+    if shorter < OVERLAP_MIN_TOKENS or longer < OVERLAP_MIN_RATIO * shorter:
         return 0.0
     return len(a & b) / shorter
 
@@ -287,7 +301,8 @@ def _fold(group: list[Finding]) -> Finding:
     )
     for other in group[1:]:
         if SEVERITY_ORDER.get(
-            other.severity, UNKNOWN_SEVERITY_RANK
+            other.severity,
+            UNKNOWN_SEVERITY_RANK,
         ) < SEVERITY_ORDER.get(
             row.severity,
             UNKNOWN_SEVERITY_RANK,
@@ -342,7 +357,8 @@ def load_ledger(path: Path) -> list[Finding]:
         return []
     if not isinstance(entries, list):
         print(
-            f"consolidate_findings: ignoring ledger {path}: not a list", file=sys.stderr
+            f"consolidate_findings: ignoring ledger {path}: not a list",
+            file=sys.stderr,
         )
         return []
     settled = []
@@ -380,22 +396,16 @@ def split_ledger_dismissed(
     return kept, dismissed
 
 
-def _raw_segments(citation: str) -> tuple[str, ...]:
-    """normalize_file without the suffix stripping: what the path gate
-    would have seen before PRD 00198."""
-    cleaned = citation.strip().replace("\\", "/")
-    return tuple(s.lower() for s in cleaned.split("/") if s not in ("", "."))
-
-
 def suffix_stripped_citations(row: Finding) -> list[str]:
     """The row's raw citations when at least one pair of them would NOT have
-    matched as written and only did once a line suffix came off. Empty when
-    every pair already agreed by path tail (`src/cli.py:4` beside
-    `/repo/src/cli.py:4` is not drift, both carry the same suffix)."""
-    raw = [_raw_segments(f) for f in row.files]
-    for i, a in enumerate(raw):
-        for b in raw[i + 1 :]:
-            if not _tails_match(a, b):
+    matched as written (`_segments`, suffixes intact) and DOES match once
+    the line suffixes come off (`normalize_file`). Empty when every pair
+    already agreed by path tail (`src/cli.py:4` beside `/repo/src/cli.py:4`
+    is not drift) and for a transitive row whose outer citations never match
+    each other at all (`a/util.py` and `b/util.py` bridged by `util.py`)."""
+    for i, a in enumerate(row.files):
+        for b in row.files[i + 1 :]:
+            if not _tails_match(_segments(a), _segments(b)) and files_match(a, b):
                 return list(row.files)
     return []
 
