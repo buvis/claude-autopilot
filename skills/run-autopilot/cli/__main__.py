@@ -98,9 +98,11 @@ Subcommands:
         {"minted": [...], "skipped": n}; idempotent, so a rerun prints an
         empty list. When state.json exists, the new basenames are also
         appended (deduplicated) to state.batch.minted_stubs, the batch-wide
-        count the batch-end notification reports. Exit 2 on an unreadable or
+        count the batch-end notification reports. An absent ledger (the
+        batch deferred nothing) prints an empty result and exits 0 with a
+        stderr note. Exit 2 on a present but unreadable, undecodable or
         invalid ledger, 9 on a failed stub or state write (the stubs already
-        written stay and own their keys, so the retry mints only the rest).
+        published stay and own their keys, so the retry mints only the rest).
 
 --state, when omitted, resolves by walking up from cwd via
 _walk_up.find_autopilot_dir() to <dir>/state.json. park's --autopilot-dir,

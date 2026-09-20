@@ -28,17 +28,23 @@ Two revisions of one work unit (`00042-foo-v1.md`, `00042-foo-v2.md`) share
 a number by design and are not a collision.
 
 Errors: `LedgerError` (a ValueError; distinct from fablectl's ledger of the
-same name, which is the fable-attempt ledger) for an unreadable or
-shape-invalid deferred JSON; OSError from any read or write. A run that
-fails midway leaves the stubs it wrote, and each of those owns its key, so
-a retry mints only the rest.
+same name, which is the fable-attempt ledger) for a deferred JSON that
+exists but cannot be read, decoded or is not `{"items": [...]}`; an absent
+ledger (a batch that deferred nothing never creates one) mints nothing and
+is not an error. OSError from any stub write. Publication is exclusive and
+atomic (sidecar write, then `os.link`), so a rival holding the exact same
+name is never replaced and a crash mid-write publishes nothing. A run that
+fails midway leaves the stubs it published, and each of those owns its key,
+so a retry mints only the rest.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import sys
 from pathlib import Path
 
 from . import custody, render_report, selection
@@ -57,6 +63,64 @@ TRIAGE_TASK = (
 )
 
 
+# The frozen hold artifact: the create-prd minimal template's heading order
+# (H1, Problem, Solution, Requirements, Must have, Nice to have, Implementation,
+# Module: triage, Dependencies, Tasks, Phase 0: Foundation, Phase 1: Core,
+# Success Criteria), inlined so the plugin never reads an operator's template.
+_STUB_TEMPLATE = """\
+---
+catchup: skip
+design: skip
+ledger: deferred/{batch_id}-deferred.json
+ledger_key: {key}
+source_prd: {source_prd}
+severity: {severity}
+---
+
+# Triage: {title}
+
+## Problem
+
+{problem}
+## Solution
+
+Attended triage. A human promotes this finding into a backlog PRD through \
+normal PRD authoring and review, or closes it. Autopilot never drains \
+`dev/local/prds/hold/`, and this stub is never auto-promoted.
+
+## Requirements
+
+### Must have
+- A triage decision for ledger key `{key}`: a backlog PRD, or closed.
+
+### Nice to have
+- None until triage.
+
+## Implementation
+
+### Module: triage
+- **Location**: `dev/local/prds/hold/`
+- **Responsibility**: hold ledger key `{key}` from `{source_prd}` until a human \
+triages it
+- **Exports**: none
+
+### Dependencies
+- triage: No dependencies (foundation)
+
+## Tasks
+
+### Phase 0: Foundation
+{task}
+
+### Phase 1: Core
+No implementation tasks until attended triage.
+
+## Success Criteria
+
+- This file is no longer under `dev/local/prds/hold/`.
+"""
+
+
 class LedgerError(ValueError):
     """The batch deferred JSON is unreadable or not `{"items": [...]}`."""
 
@@ -67,15 +131,21 @@ def ledger_key(text) -> str:
     return hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:12]
 
 
-def load_ledger(path: Path) -> list:
-    """The ledger's `items`, or LedgerError naming what is wrong with it."""
+def load_ledger(path: Path) -> list | None:
+    """The ledger's `items`; None when the file does not exist (a batch that
+    deferred nothing never creates it); LedgerError naming what is wrong with
+    a file that exists but cannot be read or is not `{"items": [...]}`."""
+    if not path.exists():
+        return None
     try:
-        raw = path.read_text(encoding="utf-8")
+        raw = path.read_bytes()
     except OSError as err:
         raise LedgerError(f"cannot read ledger {path}: {err}") from err
     try:
         content = json.loads(raw)
     except ValueError as err:
+        # json.loads decodes the bytes itself, so a UnicodeDecodeError lands
+        # here as the ValueError it is, not as a traceback.
         raise LedgerError(f"ledger {path} is not valid JSON: {err}") from err
     if not isinstance(content, dict) or not isinstance(content.get("items"), list):
         raise LedgerError(f'ledger {path} is not {{"items": [...]}}')
@@ -152,20 +222,45 @@ def _claimed_by_other(prds_dir: Path, own: Path) -> bool:
 
 
 def _write_candidate(path: Path, content: str) -> None:
-    """The single write of a stub; module-level so a test can interpose a
-    rival claim between this write and the rescan that follows it."""
-    path.write_text(content, encoding="utf-8")
+    """Publish a stub at `path` exclusively and atomically: the content goes
+    to a dotted sidecar first, then `os.link` publishes it under `path`,
+    which fails with FileExistsError when a rival already holds that exact
+    name and never exposes a half-written file (a crash mid-write leaves only
+    the sidecar, which no reader treats as a PRD). Module-level so a test can
+    interpose a rival claim between this write and the rescan that follows."""
+    sidecar = path.with_name(f".{path.name}.tmp")
+    try:
+        sidecar.write_text(content, encoding="utf-8")
+        os.link(sidecar, path)
+    finally:
+        sidecar.unlink(missing_ok=True)
+
+
+def _relink(path: Path, fresh: Path) -> bool:
+    """Move our own stub to `fresh` without ever replacing a rival there:
+    True when the new name was taken by us, False when it already existed."""
+    try:
+        os.link(path, fresh)
+    except FileExistsError:
+        return False
+    path.unlink()
+    return True
 
 
 def _allocate(prds_dir: Path, slug: str, content: str) -> Path:
     hold = prds_dir / "hold"
     hold.mkdir(parents=True, exist_ok=True)
-    path = hold / f"{next_sequence(prds_dir):05d}-triage-{slug}-v1.md"
-    _write_candidate(path, content)
+    while True:
+        path = hold / f"{next_sequence(prds_dir):05d}-triage-{slug}-v1.md"
+        try:
+            _write_candidate(path, content)
+        except FileExistsError:
+            continue
+        break
     while _claimed_by_other(prds_dir, path):
         fresh = hold / f"{next_sequence(prds_dir):05d}-triage-{slug}-v1.md"
-        path.rename(fresh)
-        path = fresh
+        if _relink(path, fresh):
+            path = fresh
     return path
 
 
@@ -195,12 +290,8 @@ def _title(row: dict, key: str) -> str:
     return text if len(text) <= _TITLE_MAX else text[: _TITLE_MAX - 3].rstrip() + "..."
 
 
-def render_stub(row: dict, batch_id: str, key: str) -> str:
-    """The hold artifact: the create-prd minimal heading order, filled with
-    ledger provenance and the single triage action."""
-    source_prd = str(row.get("prd") or "unknown")
-    title = _title(row, key)
-    problem = [
+def _problem(row: dict, batch_id: str, source_prd: str) -> str:
+    lines = [
         f"Deferred finding with no PRD owner when this stub was minted: "
         f"{_provenance(row, batch_id)}, raised against `{source_prd}`.",
         "",
@@ -208,62 +299,22 @@ def render_stub(row: dict, batch_id: str, key: str) -> str:
     for field in ("issue", "detail"):
         value = row.get(field)
         if isinstance(value, str) and value.strip():
-            problem += [f"{field.capitalize()}: {value}", ""]
-    return "\n".join(
-        [
-            "---",
-            "catchup: skip",
-            "design: skip",
-            f"ledger: deferred/{batch_id}-deferred.json",
-            f"ledger_key: {key}",
-            f"source_prd: {source_prd}",
-            f"severity: {_severity(row)}",
-            "---",
-            "",
-            f"# Triage: {title}",
-            "",
-            "## Problem",
-            "",
-            *problem,
-            "## Solution",
-            "",
-            "Attended triage. A human promotes this finding into a backlog PRD "
-            "through normal PRD authoring and review, or closes it. Autopilot "
-            "never drains `dev/local/prds/hold/`, and this stub is never "
-            "auto-promoted.",
-            "",
-            "## Requirements",
-            "",
-            "### Must have",
-            f"- A triage decision for ledger key `{key}`: a backlog PRD, or closed.",
-            "",
-            "### Nice to have",
-            "- None until triage.",
-            "",
-            "## Implementation",
-            "",
-            "### Module: triage",
-            "- **Location**: `dev/local/prds/hold/`",
-            f"- **Responsibility**: hold ledger key `{key}` from `{source_prd}` "
-            "until a human triages it",
-            "- **Exports**: none",
-            "",
-            "### Dependencies",
-            "- triage: No dependencies (foundation)",
-            "",
-            "## Tasks",
-            "",
-            "### Phase 0: Foundation",
-            TRIAGE_TASK,
-            "",
-            "### Phase 1: Core",
-            "No implementation tasks until attended triage.",
-            "",
-            "## Success Criteria",
-            "",
-            "- This file is no longer under `dev/local/prds/hold/`.",
-            "",
-        ]
+            lines += [f"{field.capitalize()}: {value}", ""]
+    return "\n".join(lines)
+
+
+def render_stub(row: dict, batch_id: str, key: str) -> str:
+    """The hold artifact: the create-prd minimal heading order, filled with
+    ledger provenance and the single triage action."""
+    source_prd = str(row.get("prd") or "unknown")
+    return _STUB_TEMPLATE.format(
+        batch_id=batch_id,
+        key=key,
+        source_prd=source_prd,
+        severity=_severity(row),
+        title=_title(row, key),
+        problem=_problem(row, batch_id, source_prd),
+        task=TRIAGE_TASK,
     )
 
 
@@ -276,6 +327,9 @@ def mint_stubs(autopilot_dir: Path, prds_dir: Path, batch_id: str) -> dict:
     duplicate of an earlier row).
     """
     rows = load_ledger(Path(autopilot_dir) / "deferred" / f"{batch_id}-deferred.json")
+    if rows is None:
+        print("autopilot: mint-stubs: ledger absent, nothing to mint", file=sys.stderr)
+        return {"minted": [], "skipped": 0}
     prds_dir = Path(prds_dir)
     heads = _prd_heads(prds_dir)
     minted: list[str] = []

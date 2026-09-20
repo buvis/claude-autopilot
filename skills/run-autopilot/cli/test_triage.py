@@ -320,6 +320,52 @@ def test_a_revision_of_the_same_work_unit_is_not_a_collision(tree, monkeypatch) 
     ]
 
 
+def test_a_rival_at_the_identical_path_is_never_overwritten(tree, monkeypatch) -> None:
+    """00195 review 1, HIGH: a rival that picked the same number AND slug lands
+    on our exact path; publication must refuse it and renumber, not truncate."""
+    autopilot, prds = tree
+    rival = prds / "hold" / "00001-triage-example-topic-v1.md"
+    real_next = triage.next_sequence
+    planted = {"done": False}
+
+    def plant_rival_then_answer(prds_dir: Path) -> int:
+        number = real_next(prds_dir)
+        if not planted["done"]:
+            planted["done"] = True
+            rival.write_text("# rival stub, same number and slug\n")
+        return number
+
+    monkeypatch.setattr(triage, "next_sequence", plant_rival_then_answer)
+    _ledger(autopilot, [_row()])
+    minted = triage.mint_stubs(autopilot, prds, BATCH)["minted"]
+    assert rival.read_text() == "# rival stub, same number and slug\n"
+    assert minted == ["00002-triage-example-topic-v1.md"]
+    assert sorted(p.name for p in _hold_files(prds)) == [rival.name, *minted]
+
+
+def test_a_write_cut_short_after_the_key_claims_nothing_on_retry(tree, monkeypatch) -> None:
+    """00195 review 1, HIGH: ledger_key sits on line 5, so a stub truncated
+    mid-write must not survive as a published owner."""
+    autopilot, prds = tree
+    _ledger(autopilot, [_row()])
+    real_write_text = Path.write_text
+
+    def truncate(self: Path, data: str, *args, **kwargs):
+        if self.parent == prds / "hold":
+            real_write_text(self, data[: data.index("severity:")], *args, **kwargs)
+            raise OSError("disk full")
+        return real_write_text(self, data, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", truncate)
+    with pytest.raises(OSError):
+        triage.mint_stubs(autopilot, prds, BATCH)
+    monkeypatch.setattr(Path, "write_text", real_write_text)
+    assert _hold_files(prds) == [], "a truncated stub was published"
+    retry = triage.mint_stubs(autopilot, prds, BATCH)
+    assert len(retry["minted"]) == 1
+    assert "## Success Criteria" in _hold_files(prds)[0].read_text()
+
+
 def test_partial_write_failure_leaves_a_retry_that_mints_only_the_rest(tree, monkeypatch) -> None:
     autopilot, prds = tree
     rows = [_row(issue="first"), _row(issue="second"), _row(issue="third")]
@@ -424,14 +470,30 @@ def test_cli_explicit_prds_flag_wins_over_the_state_default(tmp_path) -> None:
 
 def test_cli_exits_2_on_unreadable_or_invalid_ledger(tmp_path) -> None:
     autopilot, _prds = _tree(tmp_path)
-    missing = _run(["mint-stubs", "--batch", BATCH], cwd=tmp_path)
-    assert missing.returncode == 2 and "cannot read ledger" in missing.stderr
+    (autopilot / "deferred" / f"{BATCH}-deferred.json").mkdir()
+    unreadable = _run(["mint-stubs", "--batch", BATCH], cwd=tmp_path)
+    assert unreadable.returncode == 2 and "cannot read ledger" in unreadable.stderr
+    (autopilot / "deferred" / f"{BATCH}-deferred.json").rmdir()
+    (autopilot / "deferred" / f"{BATCH}-deferred.json").write_bytes(b'{"items": [\xff]}')
+    bad_bytes = _run(["mint-stubs", "--batch", BATCH], cwd=tmp_path)
+    assert bad_bytes.returncode == 2 and "not valid JSON" in bad_bytes.stderr
     (autopilot / "deferred" / f"{BATCH}-deferred.json").write_text("{not json")
     invalid = _run(["mint-stubs", "--batch", BATCH], cwd=tmp_path)
     assert invalid.returncode == 2 and "not valid JSON" in invalid.stderr
     (autopilot / "deferred" / f"{BATCH}-deferred.json").write_text('{"items": "nope"}')
     shape = _run(["mint-stubs", "--batch", BATCH], cwd=tmp_path)
     assert shape.returncode == 2 and '"items"' in shape.stderr
+
+
+def test_cli_treats_an_absent_ledger_as_nothing_to_mint(tmp_path) -> None:
+    """00195 review 1: a batch that deferred nothing has no ledger file, and
+    the step-6 and batch-end sites still call the verb."""
+    autopilot, prds = _tree(tmp_path)
+    proc = _run(["mint-stubs", "--batch", BATCH], cwd=tmp_path)
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout) == {"minted": [], "skipped": 0}
+    assert "ledger absent, nothing to mint" in proc.stderr
+    assert _hold_files(prds) == []
 
 
 def test_cli_exits_9_on_write_failure_and_the_retry_is_idempotent(tmp_path) -> None:

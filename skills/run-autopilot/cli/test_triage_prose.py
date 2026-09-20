@@ -143,6 +143,7 @@ def test_phase_9_step_6_mints_after_the_migration_and_never_after_a_failed_defer
             "exited 9 mints nothing",
             "idempotent",
             "hold/<NNNNN>-triage-<slug>-v1.md",
+            "ledger absent, nothing to mint",
             "autopilot never drains `hold/`",
             "neither triages them nor changes the review roster",
         ),
