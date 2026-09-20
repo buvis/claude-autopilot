@@ -673,6 +673,10 @@ def _finish_park(
     except state.StateError:
         return 2
     parks_consecutive = (consult_state.get("batch") or {}).get("parks_consecutive", 0)
+    # A lane-routed PRD parked mid-build carries its lane (PRD 00205), so the
+    # STALLED report says which runbook died.
+    if consult_state.get("lane_effective"):
+        reason = f"{reason}; lane={consult_state['lane_effective']}"
 
     decision = resume.park_decision(marker, wip_filenames, parks_consecutive)
     if decision.endswith("systemic halt"):

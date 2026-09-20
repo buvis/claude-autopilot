@@ -225,6 +225,19 @@ class StaleMarkerTests(_ParkTestCase):
 
 
 class NormalParkTests(_ParkTestCase):
+    def test_park_detail_carries_the_lane_of_a_lane_routed_prd(self) -> None:
+        # PRD 00205: a solo PRD parked by the died-retry names its lane in the
+        # deferred record, so the STALLED report says which runbook died.
+        self._put_in_wip()
+        self._write_marker(reason="wrapper died mid-session")
+        self._write_state(self._sample_state(lane="solo", lane_effective="solo"))
+
+        self.assertEqual(self._do_park(), 0)
+        self.assertEqual(
+            self._deferred_items()[0]["detail"],
+            "wrapper died mid-session; lane=solo",
+        )
+
     def test_normal_park_moves_prd_records_stall_and_resets_state(self) -> None:
         self._put_in_wip()
         self._write_marker(reason="wrapper died mid-session")

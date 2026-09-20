@@ -534,6 +534,33 @@ class GateBlocksDecisionTests(unittest.TestCase):
         self.assertFalse(blocks)
         self.assertEqual(msg, "")
 
+    def test_gate_accepts_a_solo_lane_review_file(self) -> None:
+        # PRD 00205: a solo close lands phase done + ["review"] through
+        # `lane_reviewed`, and its one-reviewer file passes the REAL gate
+        # (reviewer section, verdict, tests, codex guard), no mock.
+        (self._reviews_dir() / "S-review-1.md").write_text(
+            "---\nhead_sha: abc123\nreviewers: alice\n---\n\n"
+            "## Alice\n\nNo findings.\n\n"
+            "Verdict: converged\n"
+            "Tests: none (docs-only)\n"
+            "codex_rung_guard: not fired\n",
+        )
+        blocks, msg = hook.gate_blocks(
+            self.autopilot_dir,
+            {"phase": "done", "prd": "S.md", "phases_completed": ["review"]},
+        )
+        self.assertFalse(blocks, msg)
+        self.assertEqual(msg, "")
+
+    def test_gate_blocks_a_solo_close_without_a_review_file(self) -> None:
+        self._reviews_dir()  # empty: the solo pass wrote nothing
+        blocks, msg = hook.gate_blocks(
+            self.autopilot_dir,
+            {"phase": "done", "prd": "S.md", "phases_completed": ["review"]},
+        )
+        self.assertTrue(blocks)
+        self.assertIn("no work-completion review file found for S", msg)
+
     def test_converged_prd_still_blocks_on_missing_review_file(self) -> None:
         # Guard against a fix that over-broadens: a genuine convergence
         # (phases_completed contains "review") for the current prd must

@@ -33,6 +33,9 @@ Run `autopilot park` (one Bash call). It consumes the marker, reconciles any
 pending `stall_op` first, performs the verified `wip/`→`hold/` move, the
 deferred record, and a single-commit reset/increment/pause, then deletes the
 marker last. See `cli/records.py`'s `do_park` docstring for the full contract.
+The deferred record's `detail` is the marker's reason plus a
+`; lane=<lane_effective>` term when the parked PRD was lane-routed (PRD
+00205), so a solo PRD parked by the died-retry carries its lane.
 
 | Exit code | Meaning | Action |
 |---|---|---|
@@ -153,7 +156,12 @@ Read `state.lane_effective`, which step 5 wrote beside `state.lane` and `state.l
 ── AUTOPILOT ── lane: <lane> (<reason>), running full ──
 ```
 
-`full` continues to Phase 1. Shadow: in this release `lane.RELEASED_LANES` holds `full` only, so every PRD continues to Phase 1; the lane is recorded in the session rows and the batch report and acted on by nothing. `_AUTOPILOT_LANES=off` in the loop environment forces `full` for every PRD.
+Then branch on `state.lane_effective`:
+
+- `full`: continue to Phase 1.
+- `solo`: read `references/lane-solo.md` and follow it; Phases 1 to 3 do not run for this PRD. The runbook builds the PRD in this session, runs `autopilot lane-check`, takes one zero-context review pass and closes with `autopilot phase-done --outcome lane_reviewed`, or escalates into the full review gate with `--outcome tasks_done`.
+
+An unreleased lane (one outside `lane.RELEASED_LANES`) always reads `full` here, with the `running full` banner above; the lane is still recorded in the session rows and the batch report. `_AUTOPILOT_LANES=off` in the loop environment forces `full` for every PRD.
 
 ## Phase 1: Catchup
 

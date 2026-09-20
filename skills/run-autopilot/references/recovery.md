@@ -47,7 +47,8 @@ carries `clarification`, `reviewer_fail`, `sub_skill_fail`, and the others):
 - `wrapper_died` — the wrapper parked a PRD after a died-session retry budget
   (or a fingerprint-thrash bound) exhausted; consumed by the Phase 0 "Handle
   park request" handler (`references/phase-build.md`). The `detail` disambiguates
-  death vs thrash.
+  death vs thrash, and ends `; lane=<lane_effective>` when the PRD was
+  lane-routed (a solo build that died mid-session, PRD 00205).
 - `design_gate` — a loop-mode Phase 1.5 design gate (`design_gate: user`) that
   cannot ask a human; records the design doc path in the deferred `detail`.
 - `blocking_escalation` — a loop-mode Phase 5 blocking escalation; records the
