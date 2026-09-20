@@ -143,6 +143,18 @@ Semantics the table cannot carry:
 - `consensus_engine`: selects the engine behind Alice's consensus leg (`review-work-completion` step 1). `legacy` is today's single subagent; `workflow` makes the `review-fanout` workflow her leg; `shadow` runs both, with legacy gating and the workflow recorded as a non-gating observation.
 - `pause_on_ambiguity: true` — in loop mode a requirements ambiguity STALLS the PRD instead of being resolved by assumption; it never pauses the batch (see Phase 2).
 
+The same call also classifies the PRD's effort lane (`cli/lane.py`) and writes `lane`, `lane_reason` and `lane_effective` in the same transaction; step 5.5 reads them.
+
+### 5.5. Route by lane
+
+Read `state.lane_effective`, which step 5 wrote beside `state.lane` and `state.lane_reason` (`cli/lane.py` decides; three lanes: `solo`, `fast-track`, `full`). When it differs from `state.lane`, print
+
+```
+── AUTOPILOT ── lane: <lane> (<reason>), running full ──
+```
+
+`full` continues to Phase 1. Shadow: in this release `lane.RELEASED_LANES` holds `full` only, so every PRD continues to Phase 1; the lane is recorded in the session rows and the batch report and acted on by nothing. `_AUTOPILOT_LANES=off` in the loop environment forces `full` for every PRD.
+
 ## Phase 1: Catchup
 
 **Skip if:** the batch cache is fresh (the batch-cache freshness check below holds — the capsule is already current), OR `state.catchup_mode == "skip"`. The skip is by ARTIFACT (capsule freshness), not `phases_completed` membership.

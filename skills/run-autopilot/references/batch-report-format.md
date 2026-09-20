@@ -36,6 +36,13 @@ code `-1` means the check never ran at all (timeout, or an unusable cwd);
 Skipped PRDs are still in `backlog/` — nothing was parked, and the next drain
 re-evaluates each one.
 
+`- PRDs by lane: solo N, fast-track N, full N; escalated N` renders under
+`- PRDs skipped:` (PRD 00204), counted from the batch's `completed_prds`
+records by `lane_effective` (the lane that ran); a record carrying
+`lane_escalated` counts under its escalated-to lane and under `escalated`.
+Records without a `lane_effective` (bare strings, pre-lane dicts) append
+`; unclassified N`, only when N > 0.
+
 ## What a completed-PRD section carries
 
 One `## {prd_filename}` section per PRD: completion stamp, cycles, task
@@ -79,6 +86,13 @@ counts, then only the subsections whose sources are non-empty:
   batch's metrics file holds none for this PRD, so an emission gap is loud
   rather than blank. `- Tasks:` falls back to the row's counts when the
   closing record is absent or reads `0/0`.
+- **Lane** — one line under `- Run conditions:`,
+  `- Lane: <lane_effective> (classified <lane>, <lane_reason>)` (PRD 00204),
+  read from the state while Phase 0 has not overwritten the fields, else
+  from the closing `completed_prds` record; a record carrying
+  `lane_escalated` (`{"from": <lane>, "signal": <slug>}`) ends the line with
+  `, escalated from <lane>: <signal>`. When neither carries `lane` the line
+  reads `- Lane: unclassified`, loud rather than blank.
 
 Absent fields never fail the render: empty arrays omit their section,
 `no implementor data` renders only when state and ledger are both empty,
