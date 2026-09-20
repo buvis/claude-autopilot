@@ -38,3 +38,20 @@ def test_marker_is_read_only_at_step_6_5() -> None:
     )
     for needle in ("read only here", "`task-done` write has landed"):
         assert needle in step_6_5, f"{_WORK_SKILL}: step 6.5 lacks {needle!r}"
+
+
+def test_build_gate_hands_off_at_design_and_plan_edges() -> None:
+    # The hook writes no marker with no task in progress, so the build gate
+    # applies the rule itself at both pre-task edges, naming both estimates.
+    text = _PHASE_BUILD.read_text()
+    design_exit = _section(text, "After design completes", "## Phase 2: Planning")
+    plan_exit = _section(text, "After completion, `state.tasks` is already current", "## Phase 3: Work")
+    for where, edge in (("Phase 1.5 exit", design_exit), ("Phase 2 exit", plan_exit)):
+        for needle in (
+            "TURN_TRIPWIRE - count < FIRST_TASK_CALLS_ESTIMATE",
+            "USAGE_CAP - total < FIRST_TASK_USAGE_ESTIMATE",
+            "fresh build session",
+        ):
+            assert needle in edge, f"{_PHASE_BUILD}: the {where} lacks {needle!r}"
+    for needle in (".turn-counts.json", "`last.count`", "`last.usage`", "450 - count < 200"):
+        assert needle in design_exit, f"{_PHASE_BUILD}: the gate-edge check lacks {needle!r}"
