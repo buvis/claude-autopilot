@@ -668,26 +668,41 @@ def _check_caps(
 
     done_task: str | None = None
     if total is not None:
-        # Task usage and call record (PRD 00200): decided on the hook's own
-        # read so a fire with nothing to stamp costs no locked write.
-        changed, done_task = record_task_bounds(state, task_id, total, count)
-        if changed:
-            _write_task_bounds(autopilot_dir, task_id, total, count)
-        if total > limit:
-            # Hard-cap breach: livelock-stall if this task already rotated,
-            # else rotate.
-            _fire_breach(
-                autopilot_dir,
-                marker_file,
-                task_id,
-                last_rotation_task,
-                limit,
-                total,
-            )
+        done_task = _record_and_breach(
+            autopilot_dir, marker_file, state, task_id, last_rotation_task, total, count
+        )
+        if done_task == "":
             return
     # No usage line yet leaves the calls half of the headroom rule in force.
     boundary_task = task_id if task_id != "unknown" else done_task
     _handle_below_cap(autopilot_dir, state, boundary_task, total, count, session_id)
+
+
+def _record_and_breach(
+    autopilot_dir: Path,
+    marker_file: Path,
+    state: dict[str, Any],
+    task_id: str,
+    last_rotation_task: str | None,
+    total: int,
+    count: int | None,
+) -> str | None:
+    """Stamp the task record, then act on a hard-cap breach. Returns the id
+    of the task whose done pair this fire stamped (the boundary to judge),
+    None when none did, or "" after a breach (the caller stops there)."""
+    # Task usage and call record (PRD 00200): decided on the hook's own read
+    # so a fire with nothing to stamp costs no locked write.
+    changed, done_task = record_task_bounds(state, task_id, total, count)
+    if changed:
+        _write_task_bounds(autopilot_dir, task_id, total, count)
+    if total > _usage_limit():
+        # Hard-cap breach: livelock-stall if this task already rotated, else
+        # rotate.
+        _fire_breach(
+            autopilot_dir, marker_file, task_id, last_rotation_task, _usage_limit(), total
+        )
+        return ""
+    return done_task
 
 
 def main() -> None:

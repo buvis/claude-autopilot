@@ -96,17 +96,23 @@ def bump_and_check_tripwire(
     if fires:
         data["fired"].append(session_id)
     data["last"] = {"session": session_id, "count": count, "usage": total}
+    persisted = persist_turn_counts(counts_file, data)
+    # A counter we cannot persist must not fire (it would re-fire forever).
+    return count, fires and persisted
+
+
+def persist_turn_counts(counts_file: Path, data: dict[str, Any]) -> bool:
+    """Publish `data` to `counts_file` with fsync before the rename; False on
+    any OSError. Explicit handle rather than write_text: the counter must be
+    on disk before the rename publishes it, or a power loss resurrects an old
+    count and the tripwire re-fires (or never fires) for that session."""
     try:
         tmp = counts_file.with_suffix(".json.tmp")
-        # Explicit handle rather than write_text: the counter must be on disk
-        # before the rename publishes it, or a power loss resurrects an old
-        # count and the tripwire re-fires (or never fires) for that session.
         with open(tmp, "w", encoding="utf-8") as fh:
             fh.write(json.dumps(data))
             fh.flush()
             os.fsync(fh.fileno())
         os.replace(tmp, counts_file)
     except OSError:
-        # A counter we cannot persist must not fire (it would re-fire forever).
-        return count, False
-    return count, fires
+        return False
+    return True

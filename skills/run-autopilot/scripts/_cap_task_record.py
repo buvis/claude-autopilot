@@ -78,8 +78,9 @@ def record_task_bounds(
     """Stamp the record onto `state.tasks`; return `(changed, done_task)`.
 
     `done_task` is the id of the task whose done pair was stamped on THIS
-    fire and that carries a start pair - the task that just crossed its
-    boundary with a measured cost - else None. Mutates `state` in place, so
+    fire - the task that just crossed its boundary - else None; whether its
+    record is usable is `last_task_cost`'s call (an unusable one falls back
+    to the estimates and is named on stderr there). Mutates `state` in place, so
     the caller can decide on the hook's initial read whether a locked write
     is needed at all, then re-apply the same mutation on the transaction's
     fresh read (with `warn=False`, so a non-int field is named once).
@@ -99,8 +100,7 @@ def record_task_bounds(
             task, DONE_FIELDS, (total, count), warn
         ):
             changed = True
-            has_start = all(int_field(task, key) is not None for key in START_FIELDS)
-            if has_start and isinstance(task.get("id"), str):
+            if isinstance(task.get("id"), str):
                 done_task = task["id"]
     return changed, done_task
 

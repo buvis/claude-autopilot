@@ -187,13 +187,13 @@ class HeadroomHandoffTests(unittest.TestCase):
 
     def test_headroom_with_no_task_in_progress_writes_no_handoff_marker(self) -> None:
         """Headroom exhausted with no in-progress task and no task crossing
-        its boundary on this fire (the completed task carries no record):
-        there is no task boundary to hand off at, so the hook writes nothing.
-        A marker written here (as `unknown`) made the next session hand off
-        after one task."""
+        its boundary on this fire (the completed task's record is already
+        stamped): there is no task boundary to hand off at, so the hook
+        writes nothing. A marker written here (as `unknown`) made the next
+        session hand off after one task."""
         self.fx.write_state(
             phase="build",
-            tasks=[{"id": "1", "name": "t", "status": "completed"}],
+            tasks=[_completed("1", usage=(100_000, 250_000), calls=(20, 220))],
         )
         self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=400_000)])
         result = self.fx.run_hook()
@@ -242,6 +242,34 @@ class HeadroomHandoffTests(unittest.TestCase):
         result = self.fx.run_hook()
         self.assertEqual(result.returncode, 0)
         self.assertFalse(self._marker_written())
+
+    def test_completion_fire_with_a_malformed_start_still_judges_the_boundary(
+        self,
+    ) -> None:
+        """A completing task whose start bound is a non-int still has its
+        boundary judged on the completion fire, by the estimates, and the
+        malformed bound is named on one stderr line then and there (review 2
+        of PRD 00200). 360K leaves 140K, under the 150K estimate: marker."""
+        self.fx.write_state(
+            phase="build",
+            tasks=[
+                {
+                    "id": "t1",
+                    "name": "big",
+                    "status": "completed",
+                    "usage_at_start": "lots",
+                    "calls_at_start": 20,
+                },
+            ],
+        )
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=360_000)])
+        self.fx.seed_counter("test-session", 119)
+        result = self.fx.run_hook()
+        self.assertEqual(result.returncode, 0)
+        self.assertTrue(self._marker_written())
+        self.assertEqual(self._handoff_payload()["task_id"], "t1")
+        lines = [line for line in result.stderr.splitlines() if "not an int" in line]
+        self.assertEqual(len(lines), 1, result.stderr)
 
     def test_stale_start_from_an_earlier_session_is_restamped(self) -> None:
         """A start pair above this session's own total and count was stamped

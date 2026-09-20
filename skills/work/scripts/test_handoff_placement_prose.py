@@ -61,6 +61,7 @@ def test_build_gate_hands_off_at_design_and_plan_edges() -> None:
         "`last.usage`",
         "450 - count < 200",
         "always describes the running session",
+        "the calls comparison stays in force",
     ):
         assert needle in design_exit, (
             f"{_PHASE_BUILD}: the gate-edge check lacks {needle!r}"
