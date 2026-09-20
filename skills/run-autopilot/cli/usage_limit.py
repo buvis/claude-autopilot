@@ -146,22 +146,60 @@ def detect(cwd: str, projects_root: Path = DEFAULT_PROJECTS_ROOT) -> int | None:
     return _reset_epoch(text, _entry_ts(entry))
 
 
-def _rejected_reset(tail: str) -> int | None:
-    """Reset epoch from the tail's last rejected rate_limit_event, else None."""
-    epoch = None
+def _rate_limit_infos(tail: str):
+    """The `rate_limit_info` dicts of the tail's rate_limit_event lines, in order."""
     for line in tail.splitlines():
         try:
             entry = json.loads(line)
         except ValueError:
             continue
-        if entry.get("type") != "rate_limit_event":
+        if not isinstance(entry, dict) or entry.get("type") != "rate_limit_event":
             continue
-        info = entry.get("rate_limit_info", {})
-        if info.get("status") == "rejected" and isinstance(info.get("resetsAt"), int):
-            epoch = info["resetsAt"]
+        info = entry.get("rate_limit_info")
+        if isinstance(info, dict):
+            yield info
+
+
+def _live_epoch(epoch: int | None) -> int | None:
     if epoch is not None and time.time() > epoch + GRACE_SECS:
         return None  # reset already passed -> stale record, not a live limit
     return epoch
+
+
+def _rejected_reset(tail: str) -> int | None:
+    """Reset epoch from the tail's last rejected rate_limit_event, else None."""
+    epoch = None
+    for info in _rate_limit_infos(tail):
+        if info.get("status") == "rejected" and isinstance(info.get("resetsAt"), int):
+            epoch = info["resetsAt"]
+    return _live_epoch(epoch)
+
+
+def _warning_reset(tail: str) -> int | None:
+    """Reset epoch from the tail's last five-hour `allowed_warning`
+    rate_limit_event, else None (PRD 00199). Only the five-hour window is a
+    scheduling signal: the seven-day one is reported, never waited on."""
+    epoch = None
+    for info in _rate_limit_infos(tail):
+        if (
+            info.get("status") == "allowed_warning"
+            and info.get("rateLimitType") == "five_hour"
+            and isinstance(info.get("resetsAt"), int)
+        ):
+            epoch = info["resetsAt"]
+    return _live_epoch(epoch)
+
+
+def _read_tail(path: Path) -> tuple[str, float] | None:
+    """The log's last TAIL_BYTES and its mtime, or None when unreadable."""
+    try:
+        stat = path.stat()
+        with open(path, "rb") as fh:
+            if stat.st_size > TAIL_BYTES:
+                fh.seek(stat.st_size - TAIL_BYTES)
+            return fh.read().decode("utf-8", errors="replace"), stat.st_mtime
+    except OSError:
+        return None
 
 
 def detect_from_log(path: Path) -> int | None:
@@ -174,21 +212,32 @@ def detect_from_log(path: Path) -> int | None:
     the fallback, with the file's mtime anchoring the reset parse (the log
     stops being written the moment the session exits).
     """
-    try:
-        stat = path.stat()
-        with open(path, "rb") as fh:
-            if stat.st_size > TAIL_BYTES:
-                fh.seek(stat.st_size - TAIL_BYTES)
-            tail = fh.read().decode("utf-8", errors="replace")
-    except OSError:
+    read = _read_tail(path)
+    if read is None:
         return None
+    tail, mtime = read
     epoch = _rejected_reset(tail)
     if epoch is not None:
         return epoch
     if not LIMIT_TEXT.search(tail):
         return None
-    anchor = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
+    anchor = datetime.fromtimestamp(mtime, tz=timezone.utc)
     return _reset_epoch(tail, anchor)
+
+
+def detect_rejected_from_log(path: Path) -> int | None:
+    """Reset epoch of a live rejected rate_limit_event in the log's tail, else
+    None. The event only, never the prose banner: this is the check the loop
+    runs after a session that made progress, where hand-off text mentioning
+    limits must not read as a hit (PRD 00199)."""
+    read = _read_tail(path)
+    return None if read is None else _rejected_reset(read[0])
+
+
+def detect_warning_from_log(path: Path) -> int | None:
+    """Reset epoch of a live five-hour allowed_warning in the log's tail, else None."""
+    read = _read_tail(path)
+    return None if read is None else _warning_reset(read[0])
 
 
 def wait_decision(
