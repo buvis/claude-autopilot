@@ -22,5 +22,5 @@ Otherwise (every imported Contract-named target already exists — this is an ed
 | Outcome | Action |
 |---------|--------|
 | ≥1 test fails | Expected red. Proceed to step 3. |
-| All pass | Accidentally-green tests bind nothing. Send the run output back to Tess ("these tests pass with no implementation — strengthen them to fail against the current tree"); this consumes the **Total Tess budget** (step 2.8; on exhaustion flag and proceed per that step). Commit the strengthened tests (`test(<scope>): strengthen tests for <feature>`), re-capture `<test_commit_sha>` per step 2.9, and re-run this check. |
+| All pass | Accidentally-green tests bind nothing. Send the run output back to Tess ("these tests pass with no implementation — strengthen them to fail against the current tree"); this consumes the **Total Tess budget** (step 2.8; on exhaustion flag and proceed per that step). Commit the strengthened tests (`test(<scope>): strengthen tests for <feature>`), re-capture `<test_commit_sha>` per step 2.85, and re-run this check. |
 | Tests cannot run standalone (they import the not-yet-built feature, or the runner cannot execute them) | Record `red_check: skipped:<cause>` in the task's attempt entry and the phase report (fail loud; a skipped check must never read as a passed one), then proceed to step 3. |

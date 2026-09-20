@@ -51,6 +51,11 @@ def test_tests_commit_before_devon() -> None:
     assert "Devon (step 2.85)" not in text and "Devon at 2.85" not in text, (
         f"{_SKILL_MD}: a cross-reference still places Devon at step 2.85."
     )
+    red_check = (_WORK_DIR / "references" / "red-check.md").read_text()
+    assert "per step 2.9," not in red_check and "per step 2.85" in red_check, (
+        "references/red-check.md still sends the strengthen path to step 2.9 "
+        "(Devon) to re-capture <test_commit_sha>; the capture is step 2.85."
+    )
 
 
 def test_strengthened_tests_are_committed_before_devon_round_two() -> None:
@@ -91,11 +96,16 @@ def test_step_2_resumes_from_a_wip_commit() -> None:
     # duplicated on 2026-09-13, task 13).
     text = _SKILL_MD.read_text()
     step_2 = _section(text, _SKILL_MD, "### 2. Claim and start task", "### 2.5.")
+    # Both anchors are re-derived on a resume (00202 review 1, Bob): item 1's
+    # HEAD is the wip commit itself, so without this the pre-rotation half of
+    # the task is outside every per-task gate and step 5.5 has no test SHA.
     for needle in (
         "git log -1 --format=%s",
         'ends in "wip - rotated mid-task"',
         "continue at the step it names instead of dispatching Tess",
         "continues at step 2.9",
+        "parent of the earliest",
+        "newest `test(` commit",
     ):
         assert needle in step_2, (
             f"{_SKILL_MD}: step 2 lacks {needle!r}, so a session after a "

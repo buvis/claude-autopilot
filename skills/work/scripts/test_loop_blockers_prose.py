@@ -31,7 +31,14 @@ def test_pat_dispatch_is_foreground_never_backgrounded() -> None:
     dispatch = _section(
         _PER_TASK_REVIEW.read_text(), _PER_TASK_REVIEW, "## Dispatch", "## Delta re-runs"
     )
-    for needle in ("foreground Bash call", "never with `run_in_background`", "`Monitor`"):
+    # `600000` is pinned too: the Bash tool's maximum, and the parked patch
+    # said 900000, which the tool rejects.
+    for needle in (
+        "foreground Bash call",
+        "never with `run_in_background`",
+        "`Monitor`",
+        "600000",
+    ):
         assert needle in dispatch, (
             f"{_PER_TASK_REVIEW}: § Dispatch lacks {needle!r}, so nothing stops "
             "the orchestrator from backgrounding Pat and ending the turn."
@@ -49,3 +56,8 @@ def test_devon_skips_prose_pin_tasks() -> None:
             f"{_WORK_SKILL}: step 2.9 lacks {needle!r}, so a prose-pin task "
             "still pays for a Devon round that cannot keep anything."
         )
+    schema = (_WORK_DIR / "references" / "attempt-logging.md").read_text()
+    assert '"devon": "skipped:prose"' in schema, (
+        "references/attempt-logging.md does not define the `devon` attempt "
+        "field, so step 2.9 writes a stamp the schema never names."
+    )

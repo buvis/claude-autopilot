@@ -91,7 +91,7 @@ depends on them being there.
 | 14 | § CRITICAL blocked-verification and cargo-backgrounding paragraphs | 46, 48 | `subagent-dispatch.md` | the never-ask rule and its two exceptions | none |
 | 15 | § 4 result table and the codex carve-out | 342-350 | `gate-failure.md` § Step 4 result table | the Success row and the pointer | none |
 | 16 | § 5.5 per-language narrow-scope commands | 388-391 | `gate-failure.md` § Narrow scope | the narrowest-scope rule | none |
-| 17 | § 2.9 test-commit SHA capture block | 268-272 | `gate-failure.md` § Test-commit SHA | capture-it-here and the `<test_commit_sha>` name | none |
+| 17 | § 2.85 (§ 2.9 until PRD 00202) test-commit SHA capture block | then 268-272 | `gate-failure.md` § Test-commit SHA | capture-it-here and the `<test_commit_sha>` name | none |
 | 18 | § 6 `task-done` write semantics | 462-464 | `attempt-logging.md` § task-done semantics | the do-NOT-set-separately rule and the `task-start` pair | none |
 | 19 | § Attempt logging `implementor` / `preflight_outcome` / `qwen_excluded_reason` bullets | 145-147 | `attempt-logging.md` § Dispatch-provenance fields | the `pipeline` bullet (a pinned tier enumeration) | `test_fablectl.py` `check_line_enumerations` scans `SKILL.md`, not this reference - tier enumerations must not move |
 | 20 | § Passing values flag table and the `--set-cmd` quoting rule | 126-137 | `subagent-dispatch.md` § Passing values to render_prompt.py | the never-`--set` rule and the dispatch-target preflight | `test_dispatch_prose.py::test_task_authored_prose_flags_never_cross_the_shell_via_set` (an absence check - unaffected) |
