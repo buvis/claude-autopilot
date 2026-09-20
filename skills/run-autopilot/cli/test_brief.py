@@ -104,3 +104,6 @@ def test_malformed_id_entries_never_render_a_python_repr():
     assert "pending: 4; rework: 5\n" in text
     only_bad = render_brief({"rework_task_ids": [None, {}]}, NOW)
     assert "rework: none\n" in only_bad
+    # An empty or blank id is not an id: never a blank field or a leading comma.
+    assert "rework: none\n" in render_brief({"rework_task_ids": [""]}, NOW)
+    assert "rework: 5\n" in render_brief({"rework_task_ids": ["", " ", "5"]}, NOW)

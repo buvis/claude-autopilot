@@ -55,7 +55,9 @@ def _count(value) -> str:
 
 
 def _is_id(value) -> bool:
-    return isinstance(value, str) or (isinstance(value, int) and not isinstance(value, bool))
+    if isinstance(value, str):
+        return bool(value.strip())
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 def _id_list(value) -> str:
