@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from cli import brief
 from cli.brief import READ_NEXT, render_brief
 
 GOLDEN = Path(__file__).resolve().parent / "golden"
@@ -93,4 +92,15 @@ def test_paused_lists_recovery_only_and_done_lists_the_done_gate():
 def test_read_next_paths_carry_the_plugin_root_placeholder():
     for entries in READ_NEXT.values():
         for path, _reason in entries:
-            assert path.startswith(brief._PLUGIN + "/")
+            assert path.startswith("${CLAUDE_PLUGIN_ROOT}/skills/")
+
+
+def test_malformed_id_entries_never_render_a_python_repr():
+    state = {
+        "tasks": [{"status": "pending"}, {"id": 4, "status": "pending"}, "junk"],
+        "rework_task_ids": [None, {"id": "2"}, True, "5"],
+    }
+    text = render_brief(state, NOW)
+    assert "pending: 4; rework: 5\n" in text
+    only_bad = render_brief({"rework_task_ids": [None, {}]}, NOW)
+    assert "rework: none\n" in only_bad

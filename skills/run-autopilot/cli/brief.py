@@ -54,10 +54,15 @@ def _count(value) -> str:
     return str(value) if isinstance(value, int) and not isinstance(value, bool) else "none"
 
 
+def _is_id(value) -> bool:
+    return isinstance(value, str) or (isinstance(value, int) and not isinstance(value, bool))
+
+
 def _id_list(value) -> str:
-    if not isinstance(value, list) or not value:
-        return "none"
-    return ", ".join(str(item) for item in value)
+    """Comma-joined ids; entries that are not a str or int are dropped, and a
+    list with none left renders `none` (never a Python repr)."""
+    ids = [str(item) for item in value if _is_id(item)] if isinstance(value, list) else []
+    return ", ".join(ids) if ids else "none"
 
 
 def _json_or_none(value) -> str:
@@ -74,11 +79,11 @@ def _batch_line(batch) -> str:
     return f"- batch: {_text(batch.get('id'))} ({done} PRDs done)"
 
 
-def _pending_ids(tasks) -> list[str]:
+def _pending_ids(tasks) -> list:
     if not isinstance(tasks, list):
         return []
     return [
-        str(task.get("id"))
+        task.get("id")
         for task in tasks
         if isinstance(task, dict) and task.get("status") != "completed"
     ]
@@ -103,6 +108,9 @@ def _where(state: dict) -> list[str]:
 
 
 def _read_next(next_phase) -> list[str]:
+    # A next_phase the table does not know (a legacy `blind`/`doubt`, a typo)
+    # renders `- none` exactly like a missing one: the header already shows
+    # the odd value, and Phase 0 falls back to its state reads.
     entries = READ_NEXT.get(next_phase) if isinstance(next_phase, str) else None
     if not entries:
         return ["## Read next", "- none"]

@@ -733,6 +733,29 @@ class StatectlWriteBriefTest(unittest.TestCase):
                 self.assertNotIn("Traceback", result.stderr)
                 self.assertFalse(self.out.exists(), f"{label}: no brief may be written")
 
+    def test_write_brief_state_that_is_a_directory_exits_two_not_a_traceback(self) -> None:
+        # Present but unreadable (IsADirectoryError is an OSError, not a
+        # FileNotFoundError): one exit-2 line, no brief.
+        self.state.mkdir()
+        result = self.run_cli("write-brief", str(self.out))
+        self.assertEqual(result.returncode, 2)
+        self.assertIn(str(self.state), result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertFalse(self.out.exists())
+
+    def test_write_brief_unencodable_card_exits_two_and_keeps_the_old_brief(self) -> None:
+        # A lone surrogate survives json.loads but cannot be UTF-8 encoded:
+        # the failure must land before the previous brief is truncated.
+        # Raw JSON text so `\ud800` is a JSON escape the parser turns into a
+        # surrogate, not a literal backslash-u json.dumps would double-escape.
+        self.state.write_text('{"phase": "build", "contract_card": "step: \\ud800 bad"}')
+        self.out.write_text("# previous brief\n")
+        result = self.run_cli("write-brief", str(self.out))
+        self.assertEqual(result.returncode, 2)
+        self.assertIn(str(self.out), result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertEqual(self.out.read_text(), "# previous brief\n")
+
     def test_write_brief_unwritable_target_exits_two_naming_it(self) -> None:
         self.state.write_text(json.dumps({"phase": "build"}))
         target = Path(self.tmp.name) / "absent-dir" / "session-brief.md"

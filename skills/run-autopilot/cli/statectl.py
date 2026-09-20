@@ -534,13 +534,17 @@ def write_brief(state_path: Path, out_path: Path) -> None:
     reported as StateError too, so the caller sees one exit-2 line and the
     hand-off that asked for the brief goes on without it.
     """
-    _raw, data = read_and_parse(state_path)
-    if not isinstance(data, dict):
-        raise StateError(f"{state_path}: state root is not an object")
+    try:
+        _raw, data = read_and_parse(state_path)
+    except OSError as err:  # exists but unreadable: a permission or a directory
+        raise StateError(f"cannot read {state_path}: {err}") from err
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     try:
-        out_path.write_text(brief.render_brief(data, now), encoding="utf-8")
-    except OSError as err:
+        # Encode before opening the target: a lone surrogate in the card must
+        # fail here, not after the previous brief was truncated.
+        payload = brief.render_brief(data, now).encode("utf-8")
+        out_path.write_bytes(payload)
+    except (OSError, UnicodeEncodeError) as err:
         raise StateError(f"cannot write {out_path}: {err}") from err
 
 
@@ -647,6 +651,27 @@ def _build_task_id_apply(verb: str, arg: str, rest: list[str]) -> Callable[[Any]
     return lambda data: do_task_done(data, arg, attempt)
 
 
+def _run_verb(verb: str, state_path: Path, arg: str, rest: list[str]) -> None:
+    """Dispatch one verb; every failure is left to `main`'s exit-code mapping."""
+    if verb == "get":
+        _raw, data = read_and_parse(state_path)
+        print(json.dumps(get_value(data, parse_path(arg))))
+    elif verb == "write-brief":
+        write_brief(state_path, Path(arg))
+    elif verb == "complete-prd":
+        # Routed here, not through _build_apply: the ledger path derives
+        # from the state path, which the builders never see.
+        ledger = state_path.parent / "ledger" / "attempts.jsonl"
+        mutate(state_path, lambda data: do_complete_prd(data, arg, ledger))
+    else:
+        result = mutate(state_path, _build_apply(verb, arg, rest))
+        if result is not None:
+            # task-add is the only mutating verb that answers today:
+            # callers need the id it assigned. Every other verb's apply
+            # returns None, so it stays silent on success.
+            print(result)
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv and argv[0] in ("-h", "--help"):
@@ -667,23 +692,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        if verb == "get":
-            _raw, data = read_and_parse(state_path)
-            print(json.dumps(get_value(data, parse_path(arg))))
-        elif verb == "write-brief":
-            write_brief(state_path, Path(arg))
-        elif verb == "complete-prd":
-            # Routed here, not through _build_apply: the ledger path derives
-            # from the state path, which the builders never see.
-            ledger = state_path.parent / "ledger" / "attempts.jsonl"
-            mutate(state_path, lambda data: do_complete_prd(data, arg, ledger))
-        else:
-            result = mutate(state_path, _build_apply(verb, arg, rest))
-            if result is not None:
-                # task-add is the only mutating verb that answers today:
-                # callers need the id it assigned. Every other verb's apply
-                # returns None, so it stays silent on success.
-                print(result)
+        _run_verb(verb, state_path, arg, rest)
     except state.FutureSchemaError as err:
         print(f"autopilot: {err}", file=sys.stderr)
         return 6
