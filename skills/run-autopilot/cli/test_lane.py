@@ -315,6 +315,11 @@ def test_released_lanes_hold_solo() -> None:
     assert lane.effective("solo", None) == "solo"
 
 
+def test_released_lanes_hold_fast_track() -> None:
+    assert "fast-track" in lane.RELEASED_LANES
+    assert lane.effective("fast-track", None) == "fast-track"
+
+
 # ── security_triggered (the diff-level port, PRD 00205) ──────────────────────
 
 

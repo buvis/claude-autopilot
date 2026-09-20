@@ -151,6 +151,77 @@ def test_solo_review_file_shape_is_gate_shaped() -> None:
         assert token in review, token
 
 
+# ── the fast-track runbook (PRD 00206) ───────────────────────────────────────
+
+_LANE_FAST_TRACK = _REFERENCES / "lane-fast-track.md"
+
+
+def _fast_track() -> str:
+    return _LANE_FAST_TRACK.read_text(encoding="utf-8")
+
+
+def _sentences(text: str) -> list[str]:
+    return re.split(r"(?<=[.!?])\s+", " ".join(text.split()))
+
+
+def test_step_5_5_fast_track_branch_names_the_runbook() -> None:
+    step = _step_5_5()
+    assert "`fast-track`: read `references/lane-fast-track.md` and follow it" in step
+    assert "unless the runbook falls back to full" in step
+
+
+def test_fast_track_runbook_orders_render_mirror_run_consolidate_close() -> None:
+    words = ("Render", "Mirror", "Run", "Consolidate", "Close")
+    heads = _headings(_fast_track())
+    positions = [next(i for i, h in enumerate(heads) if word in h) for word in words]
+    assert positions == sorted(positions), heads
+
+
+def test_fast_track_runbook_falls_back_to_full_on_uncardable() -> None:
+    render = _section(_fast_track(), "## 1. Render")
+    matching = [
+        s
+        for s in _sentences(render)
+        if all(t in s for t in ("lane_effective", "full", "uncardable", "Phase 1"))
+    ]
+    assert matching, "no one sentence carries the fallback: lane_effective, full, uncardable, Phase 1"
+    assert "cards_from_prd.py" in render and "--out dev/local/tmp/<prd-stem>-cards" in render
+
+
+def test_fast_track_runbook_stalls_a_branched_card() -> None:
+    run = _section(_fast_track(), "## 3. Run")
+    for token in ("fast_track_blocked", "autopilot stall", "fast-track/<item>"):
+        assert token in run, token
+    assert "--site fast_track_blocked" in run
+    assert "Every earlier card's commits stay on the working branch" in run
+
+
+def test_fast_track_runbook_never_pushes() -> None:
+    carrying = [s for s in _sentences(_fast_track()) if "--push" in s]
+    assert carrying, "the runbook must say what it does with --push"
+    assert all("never passed" in s for s in carrying), carrying
+
+
+def test_fast_track_review_file_names_the_lanes_that_ran() -> None:
+    consolidate = _section(_fast_track(), "## 4. Consolidate")
+    for token in (
+        "reviewers:",
+        "alice or fanout",
+        "blake",
+        "eve",
+        "bob",
+        "carl",
+        "Verdict: converged",
+        "Tests: N passed, M failed, K skipped (fast-track batch suite)",
+        "codex_rung_guard: not fired",
+        "-review-1.md",
+    ):
+        assert token in consolidate, token
+    assert "Invoke `/autopilot:fast-track <card path>` through the Skill tool" in " ".join(
+        _section(_fast_track(), "## 3. Run").split()
+    )
+
+
 def test_solo_attempt_record_uses_orchestrator_and_solo_pipeline() -> None:
     implement = " ".join(_section(_solo(), "## 2. Implement").split())
     assert '"implementor": "orchestrator"' in implement

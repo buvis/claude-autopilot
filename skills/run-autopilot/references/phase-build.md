@@ -160,6 +160,7 @@ Then branch on `state.lane_effective`:
 
 - `full`: continue to Phase 1.
 - `solo`: read `references/lane-solo.md` and follow it; Phases 1 to 3 do not run for this PRD. The runbook builds the PRD in this session, runs `autopilot lane-check`, takes one zero-context review pass and closes with `autopilot phase-done --outcome lane_reviewed`, or escalates into the full review gate with `--outcome tasks_done`.
+- `fast-track`: read `references/lane-fast-track.md` and follow it; Phases 1 to 3 do not run for this PRD unless the runbook falls back to full. The runbook renders one card per `lane.plan_cards` plan with `cards_from_prd.py` (an exit 2 there writes `lane_effective: "full"` and `lane_reason: "uncardable"` and continues to Phase 1), runs `/autopilot:fast-track` per card, consolidates the cards' tables into the review file and closes with `--outcome lane_reviewed`, or stalls a parked card with site `fast_track_blocked`.
 
 An unreleased lane (one outside `lane.RELEASED_LANES`) always reads `full` here, with the `running full` banner above; the lane is still recorded in the session rows and the batch report. `_AUTOPILOT_LANES=off` in the loop environment forces `full` for every PRD.
 

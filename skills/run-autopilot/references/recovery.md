@@ -80,6 +80,13 @@ carries `clarification`, `reviewer_fail`, `sub_skill_fail`, and the others):
   before an unattended resume - the gate skips its rules on the override, and
   neither the gate nor `autopilot frontmatter` raises the cap automatically; an
   admitted oversized plan needs the extra cycle written down, not assumed.
+- `fast_track_blocked` — a fast-track-lane PRD (`references/lane-fast-track.md`,
+  PRD 00206) whose card's exit rule printed `branch`: a confirmed CRITICAL or
+  HIGH survived the card's roster, so fast-track parked that card's commits
+  under `fast-track/<item>` and the runbook stalls the PRD here. `detail` is
+  `fast-track/<item>: <surviving findings>`. Every earlier card's commits stay
+  on the working branch, since each passed its roster. Resume: resolve the
+  findings on the parked branch, then move the PRD back to `backlog/`.
 - `cap_critical` — a loop-mode Phase 5 cap-out with an unresolved CRITICAL
   (`references/phase-review.md` Cap check). The stall captures the PRD's
   `work_start_sha..HEAD` range in its preflight, then records custody for an
