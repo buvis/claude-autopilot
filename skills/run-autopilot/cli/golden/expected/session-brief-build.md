@@ -5,6 +5,7 @@
 - batch: 202609201200 (2 PRDs done)
 - prd: 00042-add-the-session-brief-v1.md
 - phase: build, next_phase: build, cycle: 2
+- lane: full (classified full, design)
 - tasks: 3/7 done; pending: 4, 5, 6, 7; rework: 2, 5
 - stall_reason: none; pause_reason: none; cap_rotations: 1
 

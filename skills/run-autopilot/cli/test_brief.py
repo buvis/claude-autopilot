@@ -39,6 +39,16 @@ def test_missing_fields_render_as_none():
     assert "## Read next\n- none\n" in text
 
 
+def test_lane_line_renders_none_without_a_lane():
+    # PRD 00205: a state written before the lane fields existed, or with a
+    # malformed lane_effective, renders `- lane: none` after the phase line.
+    for state in ({}, {"lane_effective": 3, "lane": "solo"}):
+        text = render_brief(state, NOW)
+        assert "- phase: none, next_phase: none, cycle: none\n- lane: none\n" in text
+    text = render_brief({"lane_effective": "full", "lane": "solo", "lane_reason": "override"}, NOW)
+    assert "- lane: full (classified solo, override)\n" in text
+
+
 def test_malformed_fields_render_as_none_not_a_crash():
     state = {
         "phase": 7,

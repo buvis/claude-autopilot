@@ -91,6 +91,17 @@ def _pending_ids(tasks) -> list:
     ]
 
 
+def _lane_line(state: dict) -> str:
+    # PRD 00205: the effective lane beside its classification, `none` on a
+    # state written before the lane fields existed.
+    if not isinstance(state.get("lane_effective"), str):
+        return "- lane: none"
+    return (
+        f"- lane: {_text(state.get('lane_effective'))} (classified "
+        f"{_text(state.get('lane'))}, {_text(state.get('lane_reason'))})"
+    )
+
+
 def _where(state: dict) -> list[str]:
     rotations = state.get("cap_rotations")
     return [
@@ -100,6 +111,7 @@ def _where(state: dict) -> list[str]:
         f"- prd: {_text(state.get('prd'))}",
         f"- phase: {_text(state.get('phase'))}, next_phase: "
         f"{_text(state.get('next_phase'))}, cycle: {_count(state.get('cycle'))}",
+        _lane_line(state),
         f"- tasks: {_count(state.get('tasks_completed'))}/{_count(state.get('tasks_total'))}"
         f" done; pending: {_id_list(_pending_ids(state.get('tasks')))};"
         f" rework: {_id_list(state.get('rework_task_ids'))}",

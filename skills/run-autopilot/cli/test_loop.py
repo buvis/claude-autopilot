@@ -276,7 +276,7 @@ def test_session_row_carries_lane_fields(tmp_path):
     ap = lp._test["ap_dir"]
     write_state(ap, prd="00204-x-v1.md", next_phase="build", batch={"id": "b"})
     assert lp.run() == 0
-    row = _metrics_rows(ap)[0]  # the mirror is byte-identical
+    row = metrics_rows(ap)[0]  # the mirror is byte-identical
     assert row["phase_launched"] == "build"
     assert row["lane"] == "solo"
     assert row["lane_effective"] == "full"
@@ -287,7 +287,7 @@ def test_session_row_lane_is_null_without_state_fields(tmp_path):
     ap = lp._test["ap_dir"]
     write_state(ap, prd="00204-x-v1.md", next_phase="build", batch={"id": "b"})
     assert lp.run() == 0
-    (row,) = _metrics_rows(ap)
+    (row,) = metrics_rows(ap)
     assert row["lane"] is None
     assert row["lane_effective"] is None
 
@@ -555,7 +555,7 @@ def test_build_exit_to_done_writes_the_convergence_row_for_a_solo_lane(tmp_path)
     _write_review(ap, "00205-s-v1-review-1.md", "alice", "converged")
     write_state(ap, prd="00205-s-v1.md", next_phase="build", batch={"id": "b"})
     assert lp.run() == 0
-    rows = _metrics_rows(ap)
+    rows = metrics_rows(ap)
     events = [row for row in rows if "event" in row]
     assert len(events) == 1
     assert rows[0]["phase_launched"] == "build" and rows[0]["lane_effective"] == "solo"
@@ -576,7 +576,7 @@ def test_build_exit_to_done_writes_no_convergence_row_for_the_full_lane(tmp_path
     ap = lp._test["ap_dir"]
     write_state(ap, prd="00205-f-v1.md", next_phase="build", batch={"id": "b"})
     assert lp.run() == 0
-    rows = _metrics_rows(ap)
+    rows = metrics_rows(ap)
     assert [row["phase_launched"] for row in rows] == ["build", "done"]
     assert all("event" not in row for row in rows)
 
