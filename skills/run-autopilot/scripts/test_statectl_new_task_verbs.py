@@ -659,6 +659,89 @@ class StatectlNewTaskVerbsTest(unittest.TestCase):
         self.assertEqual(criteria, "(none recorded)")
 
 
+class StatectlWriteBriefTest(unittest.TestCase):
+    """PRD 00201: `write-brief <out.md>` renders the session brief, read-only."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.state = Path(self.tmp.name) / "state.json"
+        self.out = Path(self.tmp.name) / "session-brief.md"
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def run_cli(self, *args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            ["python3", str(STATECTL), str(self.state), *args],
+            capture_output=True,
+            text=True,
+        )
+
+    def test_write_brief_writes_the_file_and_exits_zero(self) -> None:
+        self.state.write_text(
+            json.dumps(
+                {
+                    "phase": "build",
+                    "next_phase": "review",
+                    "prd": "00042-x-v1.md",
+                    "cycle": 1,
+                    "tasks_total": 2,
+                    "tasks_completed": 2,
+                    "tasks": [
+                        {"id": "1", "status": "completed"},
+                        {"id": "2", "status": "completed"},
+                    ],
+                    "contract_card": "step: build/Phase 3 | invariants: x | next: review",
+                },
+            ),
+        )
+        before = self.state.read_bytes()
+        result = self.run_cli("write-brief", str(self.out))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "")
+        text = self.out.read_text(encoding="utf-8")
+        self.assertRegex(
+            text.splitlines()[0],
+            r"^# Session brief \(written \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z at build -> review\)$",
+        )
+        self.assertIn("- prd: 00042-x-v1.md\n", text)
+        self.assertIn("- tasks: 2/2 done; pending: none; rework: none\n", text)
+        self.assertIn("step: build/Phase 3 | invariants: x | next: review\n", text)
+        self.assertIn("references/phase-review.md` - the gate you are entering\n", text)
+        # Read-only: no mutation, no schema stamp, no .bak.
+        self.assertEqual(self.state.read_bytes(), before)
+        self.assertFalse(Path(str(self.state) + ".bak").exists())
+
+    def test_write_brief_with_no_card_and_no_batch_renders_the_placeholders(self) -> None:
+        self.state.write_text(json.dumps({"phase": "build", "next_phase": "paused"}))
+        self.assertEqual(self.run_cli("write-brief", str(self.out)).returncode, 0)
+        text = self.out.read_text(encoding="utf-8")
+        self.assertIn("- batch: none\n", text)
+        self.assertIn("## Contract card\n(none yet)\n", text)
+        self.assertIn("references/recovery.md", text)
+
+    def test_write_brief_unreadable_state_exits_two(self) -> None:
+        for label, content in (("missing", None), ("corrupt", "{not json")):
+            with self.subTest(label=label):
+                if content is None:
+                    self.state.unlink(missing_ok=True)
+                else:
+                    self.state.write_text(content)
+                result = self.run_cli("write-brief", str(self.out))
+                self.assertEqual(result.returncode, 2)
+                self.assertIn(str(self.state), result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+                self.assertFalse(self.out.exists(), f"{label}: no brief may be written")
+
+    def test_write_brief_unwritable_target_exits_two_naming_it(self) -> None:
+        self.state.write_text(json.dumps({"phase": "build"}))
+        target = Path(self.tmp.name) / "absent-dir" / "session-brief.md"
+        result = self.run_cli("write-brief", str(target))
+        self.assertEqual(result.returncode, 2)
+        self.assertIn(str(target), result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
+
 def _derive_dispatch_placeholders(task: dict) -> tuple:
     """Local pin of the /work dispatch placeholder derivation documented in
     work/SKILL.md and work/references/self-deslop-prompt.md:

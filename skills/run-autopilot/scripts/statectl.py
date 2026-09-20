@@ -22,6 +22,7 @@ CLI and exit codes are unchanged:
     python3 statectl.py <state-path> task-set-status <task-id> pending|in_progress|completed
     python3 statectl.py <state-path> tasks-clear
     python3 statectl.py <state-path> complete-prd <prd-filename>
+    python3 statectl.py <state-path> write-brief <out-md>
 
     0  ok
     1  bad argument, unsupported json-path, or a value the schema rejects
@@ -65,6 +66,7 @@ from cli.statectl import (
     mutate,
     parse_path,
     read_and_parse,
+    write_brief,
 )
 
 __all__ = [
@@ -91,6 +93,7 @@ __all__ = [
     "mutate",
     "parse_path",
     "read_and_parse",
+    "write_brief",
 ]
 
 

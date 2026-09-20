@@ -19,8 +19,12 @@ CLI:
     python3 statectl.py <state-path> task-set-status <task-id> <status>
     python3 statectl.py <state-path> tasks-clear
     python3 statectl.py <state-path> complete-prd <prd-filename>
+    python3 statectl.py <state-path> write-brief <out-md>
 
-`get` prints the JSON value at <json-path> to stdout. Every other verb mutates
+`get` prints the JSON value at <json-path> to stdout. `write-brief` reads the
+state and renders `cli/brief.render_brief` to <out-md> (PRD 00201): exit 0 on a
+readable state file, 2 with the reason on stderr otherwise; it never mutates
+the state. Every other verb mutates
 the file under an exclusive advisory lock, preserving every sibling field,
 writing one rotating `<state-path>.bak` and replacing the file atomically. A
 missing or corrupt file exits 2 without touching it; a bad argument, an
@@ -53,7 +57,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from . import render_report, schema, state
+from . import brief, render_report, schema, state
 
 # statectl's exit-2 contract is state.StateError's: same class, not a parallel
 # one, so `except StateError` in main() cannot miss a boundary failure.
@@ -501,7 +505,8 @@ USAGE = (
     "       statectl.py <state-path> task-set-status <task-id> "
     "pending|in_progress|completed\n"
     "       statectl.py <state-path> tasks-clear\n"
-    "       statectl.py <state-path> complete-prd <prd-filename>"
+    "       statectl.py <state-path> complete-prd <prd-filename>\n"
+    "       statectl.py <state-path> write-brief <out-md>"
 )
 
 _PATH_VERBS = ("get", "set", "append", "del")
@@ -516,7 +521,27 @@ _TASK_VERBS = (
     "task-set-status",
     "tasks-clear",
     "complete-prd",
+    "write-brief",
 )
+
+
+def write_brief(state_path: Path, out_path: Path) -> None:
+    """Render the session brief for `state_path` into `out_path`.
+
+    A read-only verb: the state is parsed through the same boundary `get`
+    uses (a missing or corrupt file raises StateError, exit 2), rendered with
+    the current UTC time in the header, and written whole. A failed write is
+    reported as StateError too, so the caller sees one exit-2 line and the
+    hand-off that asked for the brief goes on without it.
+    """
+    _raw, data = read_and_parse(state_path)
+    if not isinstance(data, dict):
+        raise StateError(f"{state_path}: state root is not an object")
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        out_path.write_text(brief.render_brief(data, now), encoding="utf-8")
+    except OSError as err:
+        raise StateError(f"cannot write {out_path}: {err}") from err
 
 
 def _read_json_file(path_str: str) -> Any:
@@ -645,6 +670,8 @@ def main(argv: list[str] | None = None) -> int:
         if verb == "get":
             _raw, data = read_and_parse(state_path)
             print(json.dumps(get_value(data, parse_path(arg))))
+        elif verb == "write-brief":
+            write_brief(state_path, Path(arg))
         elif verb == "complete-prd":
             # Routed here, not through _build_apply: the ledger path derives
             # from the state path, which the builders never see.
