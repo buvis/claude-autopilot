@@ -75,3 +75,8 @@ uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/scripts/test_autopilot_cap_review_phase.py \
   skills/run-autopilot/scripts/test_review_resume_prose.py \
   skills/work/scripts/test_handoff_placement_prose.py
+
+echo "[checks] design rework prose"
+uv run --no-project --with pytest python -m pytest -q \
+  skills/run-autopilot/scripts/test_design_review_contract.py \
+  skills/run-autopilot/cli/test_design_rework_prose.py

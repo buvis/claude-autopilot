@@ -43,14 +43,21 @@ from cli.custody_prose_testutil import (
     _assert_present,
     _bullet,
     _deferred_log_section,
+    _h2_section,
     _paragraph,
     _prose,
+    _rows_starting_with,
     _section,
     _single_row,
 )
 
 _REVIEW_SKILL = _SKILL_DIR.parent / "review-work-completion" / "SKILL.md"
 _REVIEW_SKILL_TEXT = _REVIEW_SKILL.read_text()
+_REPO_ROOT = _SKILL_DIR.parent.parent
+_RELEASE_CHECKS = _REPO_ROOT / "dev" / "bin" / "release-checks"
+_RELEASE_CHECKS_TEXT = _RELEASE_CHECKS.read_text()
+_CHANGELOG = _REPO_ROOT / "CHANGELOG.md"
+_CHANGELOG_TEXT = _CHANGELOG.read_text()
 _DISPATCH = _prose(
     _section(
         _REVIEW_TEXT,
@@ -535,6 +542,43 @@ def test_recovery_and_schema_list_the_design_rework_slug() -> None:
         "the deferred-log `stall` bullet",
         ("`design_rework`",),
     )
+
+
+def test_release_checks_runs_both_design_contract_suites() -> None:
+    echo = 'echo "[checks] design rework prose"'
+    assert echo in _RELEASE_CHECKS_TEXT, (
+        f"{_RELEASE_CHECKS}: expected the {echo!r} block — not found."
+    )
+    block = _RELEASE_CHECKS_TEXT[_RELEASE_CHECKS_TEXT.index(echo) :]
+    _assert_present(
+        block,
+        _RELEASE_CHECKS,
+        "the `[checks] design rework prose` block",
+        (
+            "skills/run-autopilot/scripts/test_design_review_contract.py",
+            "skills/run-autopilot/cli/test_design_rework_prose.py",
+        ),
+    )
+
+
+def test_changelog_unreleased_added_carries_both_design_rework_entries() -> None:
+    unreleased = _h2_section(_CHANGELOG_TEXT, _CHANGELOG, "## [Unreleased]")
+    assert "### Added" in unreleased, (
+        f"{_CHANGELOG}: expected a '### Added' heading under [Unreleased] — not found."
+    )
+    start = unreleased.index("### Added")
+    end = unreleased.find("\n### ", start + 1)
+    added = unreleased[start:] if end == -1 else unreleased[start:end]
+    for lead, needle in (
+        ("- **design-solution**:", "--rework"),
+        ("- **run-autopilot**:", "design_rework"),
+    ):
+        bullets = _rows_starting_with(added, lead)
+        assert any(needle in bullet for bullet in bullets), (
+            f"{_CHANGELOG}: expected a {lead!r} bullet under [Unreleased] / "
+            f"### Added mentioning {needle!r} — found {len(bullets)} {lead!r} "
+            "bullet(s), none of which does."
+        )
 
 
 def test_roster_sentence_and_escalation_caveat_survive() -> None:
