@@ -24,10 +24,11 @@ construction. The loop-metrics tail is deliberately NOT an input -
 00111 retired signal 6 (repeat build session), and restoring that read
 in any form is the decay regression.
 
-`default_model` is parsed with the wrapper's own line grammar, NOT
-cli/frontmatter.py: that module's Phase-0 contract deliberately excludes
-the key (it belongs to /plan-tasks), caps at 20 head lines and strips
-delimiter whitespace, none of which this signal ever did.
+`session_model` (PRD 00200) is parsed with the wrapper's own line grammar,
+NOT cli/frontmatter.py: that module's Phase-0 contract caps at 22 head
+lines and strips delimiter whitespace, neither of which this signal ever
+did. It replaced `default_model` as signal 1: that key floors the per-task
+tier for /plan-tasks and no longer buys an opus orchestrator.
 """
 
 from __future__ import annotations
@@ -41,8 +42,8 @@ from pathlib import Path
 OPUS = "claude-opus-5[1m]"
 SONNET = "claude-sonnet-5[1m]"
 
-_DEFAULT_MODEL_OPUS = re.compile(
-    r"^[ \t]*default_model[ \t]*:[ \t]*(\"opus\"|'opus'|opus)[ \t]*$",
+_SESSION_MODEL_RE = re.compile(
+    r"^[ \t]*session_model[ \t]*:[ \t]*(?:\"(opus|sonnet)\"|'(opus|sonnet)'|(opus|sonnet))[ \t]*$",
 )
 _TRAILING_COMMENT = re.compile(r"[ \t]+#.*$")
 _PRD_GLOB = "[0-9][0-9][0-9][0-9][0-9]-*"
@@ -82,28 +83,29 @@ def build_target(prds_dir: Path) -> Path | None:
     return None
 
 
-def _frontmatter_pins_opus(prd_path: Path) -> bool:
-    """Signal 1: a real (uncommented) `default_model: opus` key in the
-    LEADING frontmatter block only.
+def _frontmatter_session_model(prd_path: Path) -> str | None:
+    """Signal 1: the value of a real (uncommented) `session_model` key in
+    the LEADING frontmatter block only - `"opus"` or `"sonnet"` - else None.
 
     The wrapper's awk grammar verbatim: line 1 must be exactly `---` (no
     whitespace tolerance), the scan stops at the next exact `---`, a
     trailing comment needs whitespace before its `#` (YAML semantics:
     `opus#suffix` is the scalar value, `opus  # rationale` is opus), and
-    the value must be exactly opus, bare or matched-quoted.
+    the value must be exactly opus or sonnet, bare or matched-quoted.
     """
     try:
         lines = prd_path.read_text(encoding="utf-8", errors="replace").splitlines()
     except OSError:
-        return False
+        return None
     if not lines or lines[0] != "---":
-        return False
+        return None
     for line in lines[1:]:
         if line == "---":
-            return False
-        if _DEFAULT_MODEL_OPUS.match(_TRAILING_COMMENT.sub("", line)):
-            return True
-    return False
+            return None
+        match = _SESSION_MODEL_RE.match(_TRAILING_COMMENT.sub("", line))
+        if match:
+            return next(group for group in match.groups() if group)
+    return None
 
 
 def _load_json(path: Path):
@@ -181,7 +183,7 @@ def build_model(
     target_path = build_target(prds_dir)
     if target_path is None:
         return SONNET
-    if _frontmatter_pins_opus(target_path):
+    if _frontmatter_session_model(target_path) == "opus":
         return OPUS
     target = target_path.name
     if _state_signals_fire(state_path, target) or _ledger_has_key(

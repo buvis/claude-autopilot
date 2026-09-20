@@ -9,7 +9,8 @@ rows become "returns a string, never raises" by construction.
 Contract pinned:
 * target PRD = lowest 00XXX- basename in wip/, else backlog/ - never
   state.prd, which between PRDs still names the FINISHED one;
-* OPUS when ANY of: (1) target frontmatter default_model: opus,
+* OPUS when ANY of: (1) target frontmatter session_model: opus (PRD 00200;
+  default_model floors the task tier and no longer promotes the session),
   (2) state.replan_count > 0, (3a) state.stall_reason != null,
   (3b) a type:"stall" item naming the target in the 2 NEWEST
   deferred logs by FILENAME, (4) state.cap_rotations non-empty,
@@ -45,12 +46,12 @@ def _box(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _write_prd(path: Path, default_model: str | None = None) -> None:
+def _write_prd(path: Path, session_model: str | None = None) -> None:
     text = ""
-    if default_model is not None:
+    if session_model is not None:
         text = (
             "---\ncatchup: skip\nrework_cap: 3\n"
-            f"default_model: {default_model}\ndesign: skip\n---\n"
+            f"session_model: {session_model}\ndesign: skip\n---\n"
         )
     text += f"\n# {path.name}\n\n## Problem\n\nFixture PRD.\n"
     path.write_text(text)
@@ -155,7 +156,7 @@ def test_done_and_hold_are_not_candidates(tmp_path):
     assert build_target(box / "prds") is None
 
 
-def test_signal1_frontmatter_opus_promotes(tmp_path):
+def test_signal1_session_model_opus_promotes(tmp_path):
     box = _box(tmp_path)
     prd = "00007-emit-the-batch-summary-v1.md"
     _write_prd(box / "prds/wip" / prd, "opus")
@@ -163,26 +164,53 @@ def test_signal1_frontmatter_opus_promotes(tmp_path):
     assert _model(box) == OPUS
 
 
+def test_default_model_opus_no_longer_promotes(tmp_path):
+    # PRD 00200: `default_model` is the per-task tier floor for
+    # /autopilot:plan-tasks. Alone in the frontmatter, with no other signal,
+    # it buys no opus orchestrator - $283 of $556 build spend went to
+    # sessions that only orchestrated.
+    box = _box(tmp_path)
+    prd = "00200-decouple-the-session-model-v1.md"
+    _write_prd_fm(
+        box / "prds/wip" / prd,
+        "catchup: skip\ndefault_model: opus\ndesign: skip",
+    )
+    _state(box, prd)
+    assert _model(box) == SONNET
+
+
+def test_session_model_sonnet_is_explicit_sonnet(tmp_path):
+    # An explicit sonnet beside an opus task floor is still a sonnet session.
+    box = _box(tmp_path)
+    prd = "00201-explicit-sonnet-v1.md"
+    _write_prd_fm(
+        box / "prds/wip" / prd,
+        "catchup: skip\ndefault_model: opus\nsession_model: sonnet\ndesign: skip",
+    )
+    _state(box, prd)
+    assert _model(box) == SONNET
+
+
 def test_signal1_body_mention_is_not_frontmatter(tmp_path):
-    # The BODY quotes "default_model: opus" (PRDs about model routing
+    # The BODY quotes "session_model: opus" (PRDs about model routing
     # really do); only the frontmatter block counts.
     box = _box(tmp_path)
     prd = "00082-tune-the-echo-stopwords-v1.md"
     path = box / "prds/wip" / prd
     _write_prd(path, "sonnet")
-    path.write_text(path.read_text() + "\n## Notes\n\n    default_model: opus\n")
+    path.write_text(path.read_text() + "\n## Notes\n\n    session_model: opus\n")
     _state(box, prd)
     assert _model(box) == SONNET
 
 
 def test_signal1_no_frontmatter_at_all_ignores_body(tmp_path):
-    # No block to find: taking the FIRST default_model: line anywhere in
+    # No block to find: taking the FIRST session_model: line anywhere in
     # the file wrongly promotes here.
     box = _box(tmp_path)
     prd = "00019-widen-the-qwen-gate-v1.md"
     path = box / "prds/wip" / prd
     _write_prd(path)
-    path.write_text(path.read_text() + "\nBody prose:\n\n    default_model: opus\n")
+    path.write_text(path.read_text() + "\nBody prose:\n\n    session_model: opus\n")
     _state(box, prd)
     assert _model(box) == SONNET
 
@@ -193,61 +221,61 @@ def test_signal1_no_frontmatter_at_all_ignores_body(tmp_path):
         (
             "no space after colon",
             OPUS,
-            "catchup: skip\ndefault_model:opus\ndesign: skip",
+            "catchup: skip\nsession_model:opus\ndesign: skip",
         ),
         (
             "whitespace around key and value",
             OPUS,
-            "catchup: skip\n  default_model  :  opus  \ndesign: skip",
+            "catchup: skip\n  session_model  :  opus  \ndesign: skip",
         ),
-        ("double-quoted", OPUS, 'catchup: skip\ndefault_model: "opus"\ndesign: skip'),
-        ("single-quoted", OPUS, "catchup: skip\ndefault_model: 'opus'\ndesign: skip"),
-        ("letter suffix", SONNET, "catchup: skip\ndefault_model: opusX\ndesign: skip"),
+        ("double-quoted", OPUS, 'catchup: skip\nsession_model: "opus"\ndesign: skip'),
+        ("single-quoted", OPUS, "catchup: skip\nsession_model: 'opus'\ndesign: skip"),
+        ("letter suffix", SONNET, "catchup: skip\nsession_model: opusX\ndesign: skip"),
         (
             "word suffix",
             SONNET,
-            "catchup: skip\ndefault_model: opus-extra\ndesign: skip",
+            "catchup: skip\nsession_model: opus-extra\ndesign: skip",
         ),
-        ("any suffix", SONNET, "catchup: skip\ndefault_model: opusy\ndesign: skip"),
+        ("any suffix", SONNET, "catchup: skip\nsession_model: opusy\ndesign: skip"),
         (
             "commented no indent",
             SONNET,
-            "catchup: skip\n# default_model: opus\ndesign: skip",
+            "catchup: skip\n# session_model: opus\ndesign: skip",
         ),
         (
             "commented indented",
             SONNET,
-            "catchup: skip\n  # default_model: opus\ndesign: skip",
+            "catchup: skip\n  # session_model: opus\ndesign: skip",
         ),
         (
             "trailing comment on another key",
             SONNET,
-            "catchup: skip # default_model: opus\ndesign: skip",
+            "catchup: skip # session_model: opus\ndesign: skip",
         ),
         (
             "mismatched quotes",
             SONNET,
-            "catchup: skip\ndefault_model: \"opus'\ndesign: skip",
+            "catchup: skip\nsession_model: \"opus'\ndesign: skip",
         ),
         (
             "real sonnet beside a commented opus decoy",
             SONNET,
-            "catchup: skip\ndefault_model: sonnet\n# default_model: opus\ndesign: skip",
+            "catchup: skip\nsession_model: sonnet\n# session_model: opus\ndesign: skip",
         ),
         (
             "glued hash is part of the value",
             SONNET,
-            "catchup: skip\ndefault_model: opus#suffix\ndesign: skip",
+            "catchup: skip\nsession_model: opus#suffix\ndesign: skip",
         ),
         (
             "glued hash repeating the word",
             SONNET,
-            "catchup: skip\ndefault_model: opus#opus\ndesign: skip",
+            "catchup: skip\nsession_model: opus#opus\ndesign: skip",
         ),
         (
             "whitespace-preceded inline comment",
             OPUS,
-            "catchup: skip\ndefault_model: opus  # rationale\ndesign: skip",
+            "catchup: skip\nsession_model: opus  # rationale\ndesign: skip",
         ),
     ],
 )
