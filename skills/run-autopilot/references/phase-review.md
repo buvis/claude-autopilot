@@ -17,6 +17,8 @@ Write the `resume` handoff row first, best-effort: `python3 ${CLAUDE_PLUGIN_ROOT
 
 **Skip this cycle's review if:** A review file exists in `dev/local/reviews/` for the current cycle (filename pattern `{prd-name}-review-{cycle}.md`).
 
+**Skip Phases 4 and 5 and resume at Phase 6 "Dispatch rework"** when this cycle's review file exists and `state.rework_task_ids` names a task whose status is not `completed` (PRD 00196). That is a rework session the context-cap hook rotated (it now guards review-phase rework and sets `next_phase: "review"`, so the fresh session lands here): the review and the decision gate already ran, the rework tasks are queued, and the rotated task is back to `pending`. Re-reviewing would re-run every lens against unfinished rework; resume the dispatch instead. When every listed task is `completed`, this skip does not fire and the gate continues as today.
+
 Invoke `/autopilot:review-work-completion` skill. Every cycle runs ALL lenses (its roster, PRD 00015): Alice (consensus), Blake (blind, PRD-only), Bob (doubt rubric D1-D5 + de-slop; Claude fallback when codex is down), Carl (UI, optional), plus Eve as a fifth lens when that skill's step 1 doubt-reviewer resolution rule activates her. That rule is the single home of the Codex doubt-roster guard; this phase only invokes it. The skill's consolidation records `state.doubts_rubric_verdicts` from Bob's rubric lines (replaced each cycle; the final cycle's verdicts are what Phase 9 renders).
 
 After completion, stay on `phase: "review"` and `next_phase: "review"` (the decision gate is part of the review surface).
