@@ -298,6 +298,16 @@ def test_effective_forces_full_when_off_or_unreleased(monkeypatch) -> None:
     assert lane.effective("full", None) == "full"
     monkeypatch.setattr(lane, "RELEASED_LANES", frozenset({"full", "solo"}))
     assert lane.effective("solo", None) == "solo"
+    # The switch wins on its own: a RELEASED lane still runs full under off.
+    assert lane.effective("solo", "off") == "full"
+
+
+def test_plan_cards_goal_limit_is_forty_lines() -> None:
+    forty = "\n".join(f"Problem line {n}." for n in range(39))  # + 1 task item
+    (plan,) = lane.plan_cards(_prd("cli/", "└── loop.py", problem=forty))
+    assert len(plan.goal_lines) == 40
+    forty_one = forty + "\nProblem line 39."
+    assert lane.plan_cards(_prd("cli/", "└── loop.py", problem=forty_one)) == []
 
 
 def test_security_regex_is_the_fanout_regex() -> None:

@@ -128,9 +128,12 @@ def test_invalid_override_warns_and_classifies(tmp_path: Path) -> None:
 
 
 def test_absent_lane_key_is_silent(tmp_path: Path) -> None:
-    proc, _state = _frontmatter(tmp_path, SOLO_PRD)
+    proc, state = _frontmatter(tmp_path, SOLO_PRD)
     assert proc.returncode == 0
     assert proc.stderr == ""
+    # Silence is not absence: the classified fields still land.
+    assert json.loads(proc.stdout)["lane"] == "solo"
+    assert (state["lane"], state["lane_reason"]) == ("solo", "no_production_code")
 
 
 def test_valid_override_is_written_as_the_lane(tmp_path: Path) -> None:
