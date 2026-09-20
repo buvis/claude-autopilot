@@ -98,6 +98,15 @@ def _pairs(body: list[str]) -> dict[str, str]:
     return pairs
 
 
+def declared(text: str) -> dict[str, str]:
+    """The flat `key: value` pairs of the frontmatter block, read under the
+    same `_HEAD_LINES` window `parse` uses; `{}` on a malformed or absent
+    block. For callers that read keys `parse` does not recognize (the lane
+    classifier's `lane:` and `design:`)."""
+    body = _block(text)
+    return {} if body is None else _pairs(body)
+
+
 def _rework_cap(raw: str) -> int | None:
     """`raw` as a positive int, or None when it is not one."""
     try:
