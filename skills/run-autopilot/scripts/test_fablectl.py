@@ -950,7 +950,7 @@ def combined_doc(primary: Path, extra: Path) -> Doc:
 PINNED_SECTIONS = (
     "## Per-task model dispatch",
     "## Attempt logging",
-    "### 2.85.",
+    "### 2.9.",
     "### 3.",
     "### 5.5.",
     "### 5.7.",
@@ -1297,7 +1297,7 @@ def check_gate_row(
 def check_devon_row(doc: Doc) -> list[str]:
     return check_gate_row(
         doc,
-        "### 2.85.",
+        "### 2.9.",
         DEVON_ACTION,
         "skips Devon - the rescue rung belongs with `opus` on the dispatch side",
     )
@@ -1542,7 +1542,7 @@ class WorkSkillFableContractTest(unittest.TestCase):
     def test_devon_is_dispatched_for_a_fable_task(self) -> None:
         self.reject(
             check_devon_row(self.doc),
-            f"{WORK_SKILL} step 2.85: the Devon tier gate has no `fable` row "
+            f"{WORK_SKILL} step 2.9: the Devon tier gate has no `fable` row "
             "carrying the DISPATCH action. The rescue rung runs the deepest "
             "pipeline, like `opus`, so its own row must dispatch Devon.",
         )

@@ -110,13 +110,20 @@ def _handoff_procedure() -> str:
     return _TEXT[start : _TEXT.index("\n### ", start + 1)]
 
 
+_WRITE_BRIEF = r"statectl\.py \S+ write-brief dev/local/autopilot/session-brief\.md"
+_SKILLS = _SKILL.parent.parent
+_WORK_HANDOFF = _SKILLS / "work" / "references" / "task-boundary-handoff.md"
+_REVIEW_SKILL = _SKILLS / "review-work-completion" / "SKILL.md"
+_PHASE_BUILD = _SKILLS / "run-autopilot" / "references" / "phase-build.md"
+_PHASE_REVIEW = _SKILLS / "run-autopilot" / "references" / "phase-review.md"
+
+
 def test_every_handoff_site_writes_the_brief() -> None:
-    # PRD 00201: the run-autopilot site. The work task-boundary handoff and
-    # the review-work-completion cycle transition are outside lane L3; their
-    # lines are named in the 00201 T4 commit's Integrator trailer, and this
-    # test grows to cover them once they land.
+    # PRD 00201: the run-autopilot site, the work task-boundary handoff
+    # (step h) and the review-work-completion cycle transition each write
+    # the brief right after their contract card.
     procedure = _handoff_procedure()
-    match = re.search(r"statectl\.py \S+ write-brief dev/local/autopilot/session-brief\.md", procedure)
+    match = re.search(_WRITE_BRIEF, procedure)
     assert match, f"{_SKILL}: the handoff procedure has no write-brief line"
     _assert_all(
         procedure,
@@ -128,6 +135,38 @@ def test_every_handoff_site_writes_the_brief() -> None:
     assert procedure.index("phase-done --outcome") < match.start() < procedure.index(
         "record_dispatch.py handoff"
     )
+    work = _WORK_HANDOFF.read_text(encoding="utf-8")
+    step_h = work[work.index("h. **Write the contract card**") :]
+    work_match = re.search(_WRITE_BRIEF, step_h)
+    assert work_match, f"{_WORK_HANDOFF}: step h has no write-brief line"
+    assert step_h.index("set-contract-card") < work_match.start() < step_h.index(
+        "record_dispatch.py handoff"
+    ), f"{_WORK_HANDOFF}: step h writes the brief outside card < brief < leave row"
+    review = _REVIEW_SKILL.read_text(encoding="utf-8")
+    card = review[review.index("**Write the contract card** at this cycle transition") :]
+    card = card[: card.index("\n")]
+    assert re.search(_WRITE_BRIEF, card), (
+        f"{_REVIEW_SKILL}: the cycle-transition card paragraph has no write-brief line"
+    )
+
+
+def test_phase_0_opens_with_the_brief() -> None:
+    # PRD 00201: the first paragraph under the build and review gate headings
+    # points at the brief, and names the fallback when it disagrees with state.
+    for path, heading in (
+        (_PHASE_BUILD, "## Phase 0: PRD Selection\n"),
+        (_PHASE_REVIEW, "## Phase 4: Review\n"),
+    ):
+        text = path.read_text(encoding="utf-8")
+        start = text.index(heading) + len(heading)
+        opening = text[start : text.index("\n\n", start + 2)]
+        for needle in (
+            "Read `dev/local/autopilot/session-brief.md` if it exists",
+            "Where section replaces the state reads",
+            "Read next section lists",
+            "fall back to the state reads",
+        ):
+            assert needle in opening, f"{path}: the {heading.strip()} opening lacks {needle!r}"
 
 
 def test_operator_runbook_points_at_the_ask_first_rule() -> None:

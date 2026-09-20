@@ -261,6 +261,15 @@ class InstructionBuilderContractTests(unittest.TestCase):
         self.assertIn("stop", text.lower())
         self.assertIn("build", text.lower())
 
+    def test_rotation_text_names_the_wip_commit(self) -> None:
+        """PRD 00202: a rotation tells the session to commit the task's dirty
+        allowlist files as a wip commit naming the step reached, so the next
+        session resumes step 2 from that commit instead of losing the work."""
+        text = self.module._rotation_instructions(500_000, "build")
+        self.assertIn("chore(<scope>): wip - rotated mid-task", text)
+        self.assertIn("Tess or Ivan allowlist", text)
+        self.assertIn("(tess, devon or ivan)", text)
+
     # AC6: stall text still names the oversized stall and stalled state -------
 
     def test_stall_text_still_describes_oversized_stall(self) -> None:

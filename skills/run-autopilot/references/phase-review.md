@@ -11,6 +11,8 @@ separate phases. Core `SKILL.md` (always loaded) carries the shared mechanics.
 
 ## Phase 4: Review
 
+Read `dev/local/autopilot/session-brief.md` if it exists (PRD 00201). Its Where section replaces the state reads below; open only the files its Read next section lists. When its phase disagrees with `state.json`, fall back to the state reads.
+
 **Skip the entire review-rework loop if:** `"review"` is in `phases_completed` — the loop already converged in a prior session and handed off (see "Hand off to the finalize session" in Phase 5). Skip Phases 4, 5, and 6, and resume directly at Phase 9 (`references/phase-done.md`).
 
 Write the `resume` handoff row first, best-effort: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py handoff --site review --edge resume --phase review --prd <state.prd>` (`work/references/subagent-dispatch.md` § Dispatch telemetry). It sits below the loop-level skip above, whose path resumes into Phase 9 and writes the `done` row there, and above the cycle skip below, so a crash-resume with this cycle's review file already on disk still stamps its edge.

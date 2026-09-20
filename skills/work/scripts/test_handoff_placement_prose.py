@@ -15,6 +15,7 @@ from pathlib import Path
 _SKILLS = Path(__file__).resolve().parent.parent.parent
 _WORK_SKILL = _SKILLS / "work" / "SKILL.md"
 _PHASE_BUILD = _SKILLS / "run-autopilot" / "references" / "phase-build.md"
+_HANDOFF = _SKILLS / "work" / "references" / "task-boundary-handoff.md"
 
 _PLACEMENT_SENTENCE = (
     "A marker seen before this step is carried to this step; between the "
@@ -71,4 +72,27 @@ def test_build_gate_hands_off_at_design_and_plan_edges() -> None:
     abort = _section(text, "### Handle Work-phase abort", "### Handle pending custody")
     assert "_walk_up.py --clear-cap" in abort, (
         f"{_PHASE_BUILD}: the cap-rotation handler never clears `.cap-fired`"
+    )
+
+
+def test_handoff_reference_names_the_headroom_rule_not_a_soft_cap() -> None:
+    # PRD 00200 replaced the flat soft cap with the headroom rule; the
+    # reference and its banner must not describe the old trigger.
+    text = _HANDOFF.read_text()
+    for needle in ("headroom rule fires (PRD 00200)", "headroom rule fired"):
+        assert needle in text, f"{_HANDOFF}: lacks {needle!r}"
+    for stale in ("SOFT_CAP", "_soft_limit", "soft threshold", "context near soft cap"):
+        assert stale not in text, f"{_HANDOFF}: still says {stale!r}"
+
+
+def test_leave_row_is_the_last_write_before_the_stop() -> None:
+    # PRD 00199: the next session compares state.json's mtime against the
+    # leave row's timestamp, so next_phase must be set BEFORE the row.
+    text = _HANDOFF.read_text()
+    step_h = text[text.index("h. **Write the contract card**") :]
+    assert step_h.index("set `state.next_phase`") < step_h.index(
+        "record_dispatch.py handoff"
+    ), f"{_HANDOFF}: step h writes the leave row before state.next_phase"
+    assert "last write before the stop" in step_h, (
+        f"{_HANDOFF}: step h no longer says the leave row is the last write"
     )

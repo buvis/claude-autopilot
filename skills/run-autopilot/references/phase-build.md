@@ -9,6 +9,8 @@ the test-pinned invariants this file references.
 
 ## Phase 0: PRD Selection
 
+Read `dev/local/autopilot/session-brief.md` if it exists (PRD 00201). Its Where section replaces the state reads below; open only the files its Read next section lists. When its phase disagrees with `state.json`, fall back to the state reads.
+
 ### Ensure lifecycle directories exist
 
 Before anything else — before the abort handlers and before PRD selection — run

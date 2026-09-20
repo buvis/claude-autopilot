@@ -98,8 +98,8 @@ PER_PRD_RESET_FIELDS = (
 # - batch: preserved in full - it tracks the whole batch, not one PRD. That
 #   includes batch.skips (PRD 00137): the eligibility gate's skip records
 #   belong to the drain, not to whichever PRD it eventually picked.
-# - catchup_mode, rework_cap, doubt_reviewer, consensus_engine: re-derived
-#   by Phase 0 from the next PRD's frontmatter, not carried forward.
+# - catchup_mode, rework_cap, doubt_reviewer, consensus_engine, session_model:
+#   re-derived by Phase 0 from the next PRD's frontmatter, not carried forward.
 # - qwen_gate_failures_consecutive, qwen_breaker, codex_probe, qwen_preflight:
 #   batch-scoped, each with its own lazy reset elsewhere.
 # - schema_version: stamped by the state.transaction boundary, not here.

@@ -85,6 +85,13 @@ commits. It never pushed — the user re-reviewed and pushed manually anyway —
 it was pure risk (conflict aborts, backup branches) for no shipped benefit.
 Autopilot now leaves history alone; the user squashes manually before pushing.
 
+## Rotation scars are not release notes (PRD 00202)
+
+A `chore(<scope>): wip - rotated mid-task` subject is a rotation scar, not a
+release note: `chore` is an accepted type in aegis `validate_commit_msg.py` and
+needs no CHANGELOG entry; step 2 of the next work session reads the body and
+resumes at the step it names.
+
 ## Batch catchup cache (Phase 1)
 
 Between PRDs in the same batch on the same branch, a full `/git-ferry:catchup` re-gather
@@ -136,7 +143,7 @@ confident reviewer waves past. All are needed.
 
 Per-task review is **tier-gated** (PRD 00044): `/autopilot:work` step 5.7 dispatches the
 per-task code reviewer only for `sonnet`- and `opus`-tier tasks; `haiku`-tier
-tasks skip it (as does the opus-only Devon adversarial dispatch at step 2.85).
+tasks skip it (as does the opus-only Devon adversarial dispatch at step 2.9).
 This does not leave haiku-tier work unreviewed — the mandated PRD-level lens
 battery reviews every task's diff regardless of tier, so it covers haiku-tier
 tasks that skipped the per-task layer. The gate drops only the per-task layer
