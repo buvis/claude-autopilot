@@ -187,7 +187,9 @@ class DecisionMixin:
         if isinstance(state, dict):
             self._decide_from_state(decision, state, state_touched)
 
-        if decision["signal"] == "":
+        if decision["signal"] == "continue":
+            self._limit_wait_for(ap_dir, decision)
+        elif decision["signal"] == "":
             self._decide_no_progress(decision, ap_dir, state_path, ts_start)
         return decision
 
@@ -227,9 +229,7 @@ class DecisionMixin:
             decision["stood_down"] = reason
             return
 
-        reset = self._detect_limit(ap_dir / "last-session.log")
-        if isinstance(reset, int):
-            self._decide_limit_wait(decision, reset)
+        if self._limit_wait_for(ap_dir, decision):
             return
 
         api_fail = last_result_field(
@@ -242,6 +242,25 @@ class DecisionMixin:
             return
 
         self._decide_died(decision, state_path)
+
+    def _limit_wait_for(self, ap_dir: Path, decision: dict) -> bool:
+        """The limit check both paths share (PRD 00199). A live rejected
+        event in the session log's tail sets the wait (or the beyond-cap
+        death) whether or not the session made progress and whatever
+        `overageStatus` says: a relaunch into overage is never scheduled.
+        On the progress path only the event counts, never the prose banner
+        (hand-off text may mention limits); the no-progress path keeps the
+        injected detector, event first then banner. True when a wait or a
+        death was decided."""
+        log = ap_dir / "last-session.log"
+        if decision["signal"] == "continue":
+            reset = usage_limit.detect_rejected_from_log(log)
+        else:
+            reset = self._detect_limit(log)
+        if isinstance(reset, int):
+            self._decide_limit_wait(decision, reset)
+            return True
+        return False
 
     def _decide_limit_wait(self, decision: dict, reset: int) -> None:
         """A usage-limit hit is scheduling: wait inside the cap, else die."""

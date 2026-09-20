@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: handoff markers are cleared at lifecycle edges instead of surviving into the next phase or PRD, and a marker that cannot be removed is now reported by its path instead of failing silently
 - **run-autopilot**: a legacy handoff marker holding a bare numeric task id is read as that task, so it is no longer rewritten on every hook fire; a stall or park clears the markers beside the state file it committed, not beside a differing `--autopilot-dir`
 - **run-autopilot**: the API-unreachable poll budgets probes (`_AUTOPILOT_NET_WAIT_MAX // 30`, 30 s apart) instead of wall-clock, so a machine that sleeps between two probes no longer spends the outage budget and the loop no longer dies with `repeated API connection failures` after a lid-close
+- **run-autopilot**: a session log whose tail carries a live `rejected` rate-limit event makes the loop sleep to `resetsAt` before relaunching whether or not the session made progress and whatever `overageStatus` says, so a loop never relaunches into the overage allowance; a reset beyond `_AUTOPILOT_LIMIT_WAIT_MAX` still stops the loop
 
 ## [0.5.2] - 2026-09-13
 

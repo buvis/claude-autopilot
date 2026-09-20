@@ -7,6 +7,7 @@ cli/loop_testutil.py.
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 from cli import loop_testutil
@@ -291,6 +292,79 @@ def test_usage_limit_beyond_the_wait_cap_dies(tmp_path):
     write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b"})
     assert lp.run() == 1
     assert "beyond _AUTOPILOT_LIMIT_WAIT_MAX" in lp._test["err"].getvalue()
+
+
+def _rejected_event(reset: int, overage: str = "allowed") -> dict:
+    return {
+        "type": "rate_limit_event",
+        "rate_limit_info": {
+            "status": "rejected",
+            "resetsAt": reset,
+            "rateLimitType": "five_hour",
+            "overageStatus": overage,
+            "isUsingOverage": True,
+        },
+    }
+
+
+def _progress_then_rejected(reset: int):
+    """A session that advanced state AND ended with a rejected event."""
+
+    def step(ap_dir: Path) -> None:
+        (ap_dir / "state.json").write_text(
+            json.dumps({"prd": "p.md", "next_phase": "review", "batch": {"id": "b"}}),
+        )
+        write_log(ap_dir, {"type": "result"}, _rejected_event(reset))
+
+    return step
+
+
+def test_rejected_with_overage_allowed_still_sleeps(tmp_path):
+    # PRD 00199: progress made, tail carries rejected + overageStatus allowed.
+    # The loop sleeps to the reset before relaunching instead of spending
+    # overage. The event's staleness check reads the real clock, so the fake
+    # clock starts at real time here.
+    clock = FakeClock(start=time.time())
+    reset = int(clock.now) + 300
+    lp = make_loop(
+        tmp_path,
+        [_progress_then_rejected(reset), terminal_step()],
+        clock=clock,
+    )
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b"})
+    assert lp.run() == 0
+    assert any(secs >= 300 for secs in lp._test["sleeps"])
+    assert "usage limit hit; waiting" in lp._test["out"].getvalue()
+    assert _notified(lp, "Usage limit")
+    assert len(lp._test["spawn"].launches) == 2
+
+
+def test_rejected_beyond_cap_still_dies(tmp_path):
+    clock = FakeClock(start=time.time())
+    lp = make_loop(
+        tmp_path,
+        [_progress_then_rejected(int(clock.now) + 50_000)],
+        clock=clock,
+    )
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b"})
+    assert lp.run() == 1
+    assert "beyond _AUTOPILOT_LIMIT_WAIT_MAX" in lp._test["err"].getvalue()
+    assert len(lp._test["spawn"].launches) == 1
+
+
+def test_progress_path_ignores_a_limit_banner_in_prose(tmp_path):
+    # Hand-off text that merely mentions a limit is not a hit: only the
+    # rejected event schedules a wait after a session that made progress.
+    def progress_with_prose(ap_dir: Path) -> None:
+        (ap_dir / "state.json").write_text(
+            json.dumps({"prd": "p.md", "next_phase": "review", "batch": {"id": "b"}}),
+        )
+        write_log(ap_dir, {"type": "result", "result": "usage limit reached earlier"})
+
+    lp = make_loop(tmp_path, [progress_with_prose, terminal_step()])
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b"})
+    assert lp.run() == 0
+    assert lp._test["sleeps"] == []
 
 
 def test_network_outage_polls_and_resumes(tmp_path):
