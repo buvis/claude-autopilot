@@ -45,6 +45,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 from pathlib import Path
 
 from . import custody, render_report, selection
@@ -223,22 +224,34 @@ def _claimed_by_other(prds_dir: Path, own: Path) -> bool:
 
 def _write_candidate(path: Path, content: str) -> None:
     """Publish a stub at `path` exclusively and atomically: the content goes
-    to a dotted sidecar first, then `os.link` publishes it under `path`,
-    which fails with FileExistsError when a rival already holds that exact
-    name and never exposes a half-written file (a crash mid-write leaves only
-    the sidecar, which no reader treats as a PRD). Module-level so a test can
-    interpose a rival claim between this write and the rescan that follows."""
-    sidecar = path.with_name(f".{path.name}.tmp")
+    to a dotted sidecar that is unique to this call (`mkstemp`, so two writers
+    racing for the same name never share one), then `os.link` publishes it
+    under `path`, which fails with FileExistsError when a rival already holds
+    that exact name and never exposes a half-written file (a crash mid-write
+    leaves only the sidecar, which no reader treats as a PRD). Module-level
+    so a test can interpose a rival claim between this write and the rescan
+    that follows."""
+    sidecar = _stage(path, content)
     try:
-        sidecar.write_text(content, encoding="utf-8")
         os.link(sidecar, path)
     finally:
         sidecar.unlink(missing_ok=True)
 
 
+def _stage(path: Path, content: str) -> Path:
+    """Write `content` to a sidecar unique to this call beside `path`."""
+    handle, name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    with os.fdopen(handle, "w", encoding="utf-8") as fh:
+        fh.write(content)
+    return Path(name)
+
+
 def _relink(path: Path, fresh: Path) -> bool:
     """Move our own stub to `fresh` without ever replacing a rival there:
-    True when the new name was taken by us, False when it already existed."""
+    True when the new name was taken by us, False when it already existed.
+    A crash between the link and the unlink leaves an identical twin under
+    both numbers; the retry sees the key owned and skips it, and attended
+    triage closes the extra file."""
     try:
         os.link(path, fresh)
     except FileExistsError:

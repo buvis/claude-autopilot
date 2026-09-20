@@ -343,23 +343,44 @@ def test_a_rival_at_the_identical_path_is_never_overwritten(tree, monkeypatch) -
     assert sorted(p.name for p in _hold_files(prds)) == [rival.name, *minted]
 
 
+def test_each_publication_uses_its_own_sidecar(tree, monkeypatch) -> None:
+    """00195 review 2, HIGH: a sidecar named after the target alone is shared
+    by two writers racing for the same name; one truncates the other's
+    published inode. Every call must stage through a sidecar of its own."""
+    _autopilot, prds = tree
+    target = prds / "hold" / "00001-triage-example-topic-v1.md"
+    real_stage = triage._stage
+    sidecars: list[str] = []
+
+    def record(path: Path, content: str) -> Path:
+        sidecar = real_stage(path, content)
+        sidecars.append(sidecar.name)
+        return sidecar
+
+    monkeypatch.setattr(triage, "_stage", record)
+    triage._write_candidate(target, "first writer\n")
+    with pytest.raises(FileExistsError):
+        triage._write_candidate(target, "second writer\n")
+    assert len(sidecars) == 2 and sidecars[0] != sidecars[1], sidecars
+    assert target.read_text() == "first writer\n"
+    assert [p.name for p in (prds / "hold").iterdir()] == [target.name], "sidecar litter"
+
+
 def test_a_write_cut_short_after_the_key_claims_nothing_on_retry(tree, monkeypatch) -> None:
     """00195 review 1, HIGH: ledger_key sits on line 5, so a stub truncated
     mid-write must not survive as a published owner."""
     autopilot, prds = tree
     _ledger(autopilot, [_row()])
-    real_write_text = Path.write_text
+    real_stage = triage._stage
 
-    def truncate(self: Path, data: str, *args, **kwargs):
-        if self.parent == prds / "hold":
-            real_write_text(self, data[: data.index("severity:")], *args, **kwargs)
-            raise OSError("disk full")
-        return real_write_text(self, data, *args, **kwargs)
+    def truncate(path: Path, content: str) -> Path:
+        real_stage(path, content[: content.index("severity:")])
+        raise OSError("disk full")
 
-    monkeypatch.setattr(Path, "write_text", truncate)
+    monkeypatch.setattr(triage, "_stage", truncate)
     with pytest.raises(OSError):
         triage.mint_stubs(autopilot, prds, BATCH)
-    monkeypatch.setattr(Path, "write_text", real_write_text)
+    monkeypatch.setattr(triage, "_stage", real_stage)
     assert _hold_files(prds) == [], "a truncated stub was published"
     retry = triage.mint_stubs(autopilot, prds, BATCH)
     assert len(retry["minted"]) == 1
