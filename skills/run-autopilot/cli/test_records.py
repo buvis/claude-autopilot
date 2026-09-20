@@ -435,6 +435,10 @@ class SchemaResetParityTest(unittest.TestCase):
             "doubt_reviewer",
             "consensus_engine",
             "session_model",
+            # Re-derived per PRD by the frontmatter verb (PRD 00204).
+            "lane",
+            "lane_reason",
+            "lane_effective",
             "qwen_gate_failures_consecutive",
             "qwen_breaker",
             "codex_probe",
