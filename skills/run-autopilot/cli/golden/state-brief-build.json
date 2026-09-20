@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "repo_root": "/Users/dev/git/src/github.com/buvis/example",
+  "prd": "00042-add-the-session-brief-v1.md",
+  "phase": "build",
+  "next_phase": "build",
+  "phases_completed": [],
+  "cycle": 2,
+  "rework_cap": 3,
+  "tasks_total": 7,
+  "tasks_completed": 3,
+  "rework_task_ids": ["2", "5"],
+  "cap_rotations": [{"task_id": "4", "cycle": 1}],
+  "batch": {
+    "id": "202609201200",
+    "mode": "autopilot",
+    "parks_consecutive": 0,
+    "completed_prds": [
+      "00040-legacy-string-entry-v1.md",
+      {
+        "filename": "00041-object-entry-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 2,
+        "tasks_total": 2
+      }
+    ]
+  },
+  "tasks": [
+    {"id": "1", "name": "Add the renderer", "status": "completed"},
+    {"id": "2", "name": "Add the verb", "status": "completed"},
+    {"id": "3", "name": "Name the brief in the launch prompt", "status": "completed"},
+    {"id": "4", "name": "Write the brief at the handoff sites", "status": "in_progress"},
+    {"id": "5", "name": "Open Phase 0 with the brief", "status": "pending"},
+    {"id": "6", "name": "Pin the prose", "status": "pending"},
+    {"id": "7", "name": "Changelog", "status": "pending"}
+  ],
+  "contract_card": "step: build/Phase 3 (work, task 4 of 7) | invariants: statectl is the sole state.json writer; work_start_sha captured once per PRD | next: build -> review once task 7 completes (autopilot phase-done --outcome tasks_done)"
+}
