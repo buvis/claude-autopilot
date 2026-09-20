@@ -72,4 +72,5 @@ uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/scripts/test_autopilot_cap_headroom.py \
   skills/run-autopilot/scripts/test_autopilot_cap_breach.py \
   skills/run-autopilot/scripts/test_autopilot_cap_rotation.py \
+  skills/run-autopilot/scripts/test_review_resume_prose.py \
   skills/work/scripts/test_handoff_placement_prose.py
