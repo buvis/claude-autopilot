@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **run-autopilot**: Phase 0 now classifies every PRD into an effort lane (`solo`, `fast-track` or `full`) from its named paths and frontmatter, in shadow: the lane, its reason and the effective lane are written to state, carried on every session row and the closing batch record, and rendered as `- Lane:` per PRD and `- PRDs by lane:` in the batch summary, while every PRD still runs the full loop; a `lane:` frontmatter key overrides the classifier and `_AUTOPILOT_LANES=off` forces `full` for a whole batch. Follow-up: the `create-prd` and `review-prd-backlog` skills (agent-skills repo) need to learn the `lane:` key
 - **run-autopilot**: the solo lane is live for solo-classified PRDs (docs, prose, tests, config: no production path named): `references/lane-solo.md` builds the PRD in one session with no implementor dispatch, `autopilot lane-check` escalates in code on an unnamed production or hook path, a security-ish diff, a failed git read, a CRITICAL, a surviving HIGH, a red suite or a failed review pass (keeping every commit and handing the build to the full review gate), one zero-context review pass writes the gate-shaped review file, and `autopilot phase-done --outcome lane_reviewed` closes the PRD with the convergence marker; the report's `- Lane:` line names any escalation and a parked solo PRD carries `lane=` in its stall detail
+- **run-autopilot**: the fast-track lane is live for card-sized PRDs (at most two cards of at most 12 paths): `references/lane-fast-track.md` renders one spec card per plan with `skills/fast-track/scripts/cards_from_prd.py` (a PRD it cannot render falls back to the full loop as `uncardable`), runs `/autopilot:fast-track` per card inside the batch, consolidates the cards' tables into the review file and closes with `lane_reviewed`, or stalls a parked card with site `fast_track_blocked`
+
+### Changed
+
+- **fast-track**: the lane runs in loop mode: a headless session no longer refuses the run; when `_AUTOPILOT_LOOP` is set it dispatches the Watcher subagent beside the roster to keep the codex and gemini lanes alive and stops it once every lane reported. The roster, verify, rework, delta and exit sections are unchanged
 
 ## [0.5.3] - 2026-09-20
 
