@@ -4,8 +4,8 @@ Phase 0 pending-custody handler and the Phase 3 `state.git_dir` capture in
 `references/phase-review.md`, and the `cap_critical` slug plus the
 custody-aware exit rows in `references/recovery.md`. It also pins the
 `[checks] custody push guard` and `[checks] custody core` blocks in
-`dev/bin/release-checks` and the two custody entries under `[Unreleased]` in
-`CHANGELOG.md`.
+`dev/bin/release-checks` and the two custody entries under an `### Added`
+heading in `CHANGELOG.md` (wherever the release moved them).
 
 Mirrors test_dispatch_prose.py's pattern for pinning a skill file's prose:
 resolve each target file's path relative to this file, read it once, and
@@ -55,7 +55,7 @@ from cli.custody_prose_testutil import (
     _bullet,
     _custody_section,
     _exit_code,
-    _h2_section,
+    _added_bullets,
     _rows_starting_with,
     _section,
 )
@@ -340,14 +340,10 @@ def test_release_checks_runs_the_custody_core_suites_after_the_push_guard() -> N
     )
 
 
-def test_changelog_unreleased_added_carries_both_custody_entries() -> None:
-    unreleased = _h2_section(_CHANGELOG_TEXT, _CHANGELOG, "## [Unreleased]")
-    assert "### Added" in unreleased, (
-        f"{_CHANGELOG}: expected a '### Added' heading under [Unreleased] — not found."
-    )
-    start = unreleased.index("### Added")
-    end = unreleased.find("\n### ", start + 1)
-    added = unreleased[start:] if end == -1 else unreleased[start:end]
+def test_changelog_added_carries_both_custody_entries() -> None:
+    # The whole file's Added blocks, not [Unreleased]: a release moves the
+    # entry under its version heading.
+    added = _added_bullets(_CHANGELOG_TEXT, _CHANGELOG)
 
     # Located by subject, never by count: other entries share these scopes.
     pins = (
@@ -357,7 +353,7 @@ def test_changelog_unreleased_added_carries_both_custody_entries() -> None:
     for lead, needle in pins:
         bullets = _rows_starting_with(added, lead)
         assert any(needle in bullet for bullet in bullets), (
-            f"{_CHANGELOG}: expected a {lead!r} bullet under [Unreleased] / "
-            f"### Added mentioning {needle!r} — found {len(bullets)} {lead!r} "
+            f"{_CHANGELOG}: expected a {lead!r} bullet under a "
+            f"### Added heading mentioning {needle!r} — found {len(bullets)} {lead!r} "
             "bullet(s), none of which does."
         )

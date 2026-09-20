@@ -43,7 +43,7 @@ from cli.custody_prose_testutil import (
     _assert_present,
     _bullet,
     _deferred_log_section,
-    _h2_section,
+    _added_bullets,
     _paragraph,
     _prose,
     _rows_starting_with,
@@ -561,22 +561,18 @@ def test_release_checks_runs_both_design_contract_suites() -> None:
     )
 
 
-def test_changelog_unreleased_added_carries_both_design_rework_entries() -> None:
-    unreleased = _h2_section(_CHANGELOG_TEXT, _CHANGELOG, "## [Unreleased]")
-    assert "### Added" in unreleased, (
-        f"{_CHANGELOG}: expected a '### Added' heading under [Unreleased] — not found."
-    )
-    start = unreleased.index("### Added")
-    end = unreleased.find("\n### ", start + 1)
-    added = unreleased[start:] if end == -1 else unreleased[start:end]
+def test_changelog_added_carries_both_design_rework_entries() -> None:
+    # The whole file's Added blocks, not [Unreleased]: a release moves the
+    # entry under its version heading.
+    added = _added_bullets(_CHANGELOG_TEXT, _CHANGELOG)
     for lead, needle in (
         ("- **design-solution**:", "--rework"),
         ("- **run-autopilot**:", "design_rework"),
     ):
         bullets = _rows_starting_with(added, lead)
         assert any(needle in bullet for bullet in bullets), (
-            f"{_CHANGELOG}: expected a {lead!r} bullet under [Unreleased] / "
-            f"### Added mentioning {needle!r} — found {len(bullets)} {lead!r} "
+            f"{_CHANGELOG}: expected a {lead!r} bullet under a "
+            f"### Added heading mentioning {needle!r} — found {len(bullets)} {lead!r} "
             "bullet(s), none of which does."
         )
 

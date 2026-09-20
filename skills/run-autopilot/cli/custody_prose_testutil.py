@@ -197,6 +197,18 @@ def _h2_section(text: str, path: Path, heading: str) -> str:
     return text[start:] if end == -1 else text[start:end]
 
 
+def _added_bullets(text: str, path: Path) -> str:
+    """Every `### Added` block of the changelog, joined.
+
+    A release stamps `[Unreleased]` into a version heading, so a pin that
+    slices `[Unreleased]` alone goes red at the first release after it
+    landed; the whole file keeps the entry wherever the release moved it.
+    """
+    blocks = re.findall(r"(?ms)^### Added[ \t]*$\n(.*?)(?=^##)", text + "\n## ")
+    assert blocks, f"{path}: expected at least one '### Added' heading — not found."
+    return "\n".join(blocks)
+
+
 def _paragraph(text: str, path: Path, lead: str) -> str:
     """Slice the paragraph that starts with `lead`, up to the next blank line."""
     assert lead in text, f"{path}: expected a paragraph starting {lead!r} — not found."

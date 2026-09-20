@@ -26,6 +26,7 @@ from cli.custody_prose_testutil import (
     _REVIEW_TEXT,
     _ROSTER_SENTENCE,
     _SKILL_DIR,
+    _added_bullets,
     _assert_absent,
     _assert_in_order,
     _assert_present,
@@ -252,14 +253,14 @@ def test_release_checks_l4_block_runs_both_triage_test_files() -> None:
     )
 
 
-def test_changelog_unreleased_added_carries_the_stub_minting_entry() -> None:
-    text = _CHANGELOG.read_text()
-    unreleased = _section(text, _CHANGELOG, "## [Unreleased]", "\n## [")
-    added = _section(unreleased, _CHANGELOG, "### Added", "### Changed")
+def test_changelog_added_carries_the_stub_minting_entry() -> None:
+    # The whole file's Added blocks, not [Unreleased]: a release moves the
+    # entry under its version heading.
+    added = _added_bullets(_CHANGELOG.read_text(), _CHANGELOG)
     _assert_present(
         added,
         _CHANGELOG,
-        "the [Unreleased] Added section",
+        "the changelog's Added sections",
         (
             "- **run-autopilot**: `autopilot mint-stubs --batch <id>` mints one "
             "`dev/local/prds/hold/<NNNNN>-triage-<slug>-v1.md` triage stub",
@@ -271,7 +272,7 @@ def test_changelog_unreleased_added_carries_the_stub_minting_entry() -> None:
     _assert_present(
         added,
         _CHANGELOG,
-        "the [Unreleased] Added section",
+        "the changelog's Added sections",
         ("- **design-solution**: `--rework <review-file>`", "- **hooks**: deny a Bash `git push`"),
     )
 
