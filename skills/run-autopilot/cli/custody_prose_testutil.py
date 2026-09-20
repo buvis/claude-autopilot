@@ -77,11 +77,12 @@ _NEGATION = (
 
 # Built by concatenation on purpose: the acceptance criterion sweeps the
 # whole `skills/run-autopilot` tree with `rg` for these exact strings and
-# must find nothing, so this file may not spell any of them out.
+# must find nothing, so this file may not spell any of them out. The
+# stub-minting verb left this list when PRD 00195 landed it (its call sites
+# are pinned by test_triage_prose.py).
 _ABSENT_NEEDLES = (
     "--" + "commit-range",
     "--" + "range",
-    "mint" + "-stubs",
     "custody " + "stub",
     "design" + "-rework",
 )

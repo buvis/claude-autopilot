@@ -371,3 +371,113 @@ def test_frozen_ddb_slice_mints_twelve_then_zero(tree) -> None:
         "skipped": len(golden["items"]),
     }
     assert len(_hold_files(prds)) == 12
+
+
+# --- CLI -------------------------------------------------------------------
+
+
+def _run(args: list[str], cwd: Path) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, str(CLI_MAIN), *args],
+        capture_output=True,
+        text=True,
+        cwd=str(cwd),
+    )
+
+
+def _state(autopilot: Path, **extra) -> Path:
+    path = autopilot / "state.json"
+    data = {
+        "prd": "00167-example-v1.md",
+        "phase": "done",
+        "next_phase": "done",
+        "batch": {"id": BATCH, "completed_prds": [], **extra},
+    }
+    path.write_text(json.dumps(data), encoding="utf-8")
+    return path
+
+
+def test_cli_prints_the_minted_list_and_resolves_paths_by_walk_up(tmp_path) -> None:
+    autopilot, prds = _tree(tmp_path)
+    _ledger(autopilot, [_row(), _stall_row()])
+    proc = _run(["mint-stubs", "--batch", BATCH], cwd=prds / "wip")
+    assert proc.returncode == 0, proc.stderr
+    out = json.loads(proc.stdout)
+    assert len(out["minted"]) == 2 and out["skipped"] == 0
+    assert [p.name for p in _hold_files(prds)] == out["minted"]
+    again = _run(["mint-stubs", "--batch", BATCH, "--state", str(autopilot / "state.json")], cwd=tmp_path)
+    assert json.loads(again.stdout) == {"minted": [], "skipped": 2}
+
+
+def test_cli_explicit_prds_flag_wins_over_the_state_default(tmp_path) -> None:
+    autopilot, _prds = _tree(tmp_path)
+    elsewhere = tmp_path / "elsewhere" / "prds"
+    (elsewhere / "hold").mkdir(parents=True)
+    _ledger(autopilot, [_row()])
+    proc = _run(
+        ["mint-stubs", "--batch", BATCH, "--state", str(autopilot / "state.json"), "--prds", str(elsewhere)],
+        cwd=tmp_path,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert len(list((elsewhere / "hold").glob("*.md"))) == 1
+
+
+def test_cli_exits_2_on_unreadable_or_invalid_ledger(tmp_path) -> None:
+    autopilot, _prds = _tree(tmp_path)
+    missing = _run(["mint-stubs", "--batch", BATCH], cwd=tmp_path)
+    assert missing.returncode == 2 and "cannot read ledger" in missing.stderr
+    (autopilot / "deferred" / f"{BATCH}-deferred.json").write_text("{not json")
+    invalid = _run(["mint-stubs", "--batch", BATCH], cwd=tmp_path)
+    assert invalid.returncode == 2 and "not valid JSON" in invalid.stderr
+    (autopilot / "deferred" / f"{BATCH}-deferred.json").write_text('{"items": "nope"}')
+    shape = _run(["mint-stubs", "--batch", BATCH], cwd=tmp_path)
+    assert shape.returncode == 2 and '"items"' in shape.stderr
+
+
+def test_cli_exits_9_on_write_failure_and_the_retry_is_idempotent(tmp_path) -> None:
+    autopilot, prds = _tree(tmp_path)
+    _ledger(autopilot, [_row()])
+    (prds / "hold").rmdir()
+    (prds / "hold").write_text("a file where the hold dir should be")
+    proc = _run(["mint-stubs", "--batch", BATCH], cwd=tmp_path)
+    assert proc.returncode == 9 and "write failed" in proc.stderr
+    (prds / "hold").unlink()
+    (prds / "hold").mkdir()
+    retry = _run(["mint-stubs", "--batch", BATCH], cwd=tmp_path)
+    assert retry.returncode == 0 and len(json.loads(retry.stdout)["minted"]) == 1
+
+
+def test_cli_accumulates_batch_minted_stubs_across_calls(tmp_path) -> None:
+    autopilot, prds = _tree(tmp_path)
+    state_path = _state(autopilot)
+    _ledger(autopilot, [_row(issue="one")])
+    first = _run(["mint-stubs", "--batch", BATCH], cwd=tmp_path)
+    assert first.returncode == 0, first.stderr
+    _ledger(autopilot, [_row(issue="one"), _row(issue="two")])
+    second = _run(["mint-stubs", "--batch", BATCH], cwd=tmp_path)
+    assert json.loads(second.stdout)["minted"] == ["00002-triage-example-topic-v1.md"]
+    third = _run(["mint-stubs", "--batch", BATCH], cwd=tmp_path)
+    assert json.loads(third.stdout)["minted"] == []
+    stubs = json.loads(state_path.read_text())["batch"]["minted_stubs"]
+    assert stubs == [p.name for p in _hold_files(prds)] and len(stubs) == 2
+
+
+def test_cli_keeps_an_earlier_count_of_12_when_the_final_call_mints_zero(tmp_path) -> None:
+    autopilot, prds = _tree(tmp_path)
+    earlier = [f"{n:05d}-triage-earlier-v1.md" for n in range(1, 13)]
+    state_path = _state(autopilot, minted_stubs=earlier)
+    (autopilot / "deferred" / f"{BATCH}-deferred.json").write_text(GOLDEN.read_text())
+    for name in earlier:
+        (prds / "hold" / name).write_text("ledger_key: placeholder\n")
+    triage.mint_stubs(autopilot, prds, BATCH)  # the 12 real stubs, minted earlier
+    final = _run(["mint-stubs", "--batch", BATCH], cwd=tmp_path)
+    assert json.loads(final.stdout)["minted"] == []
+    assert len(json.loads(state_path.read_text())["batch"]["minted_stubs"]) == 12
+
+
+def test_cli_without_a_state_file_still_mints_and_records_nothing(tmp_path) -> None:
+    autopilot, prds = _tree(tmp_path)
+    _ledger(autopilot, [_row()])
+    proc = _run(["mint-stubs", "--batch", BATCH], cwd=tmp_path)
+    assert proc.returncode == 0 and len(_hold_files(prds)) == 1
+    assert not (autopilot / "state.json").exists()

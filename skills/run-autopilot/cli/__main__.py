@@ -91,6 +91,16 @@ Subcommands:
         then every custody source cleaned. The schema preflight runs only
         when state.json exists: a drained batch archives it and both verbs
         stay legal then.
+    mint-stubs --batch [--state] [--prds]
+        triage.mint_stubs() over <autopilot dir>/deferred/<batch>-deferred.json
+        (PRD 00195): one `hold/<NNNNN>-triage-<slug>-v1.md` per open
+        CRITICAL/HIGH or cap_critical-stall row that no PRD owns yet. Prints
+        {"minted": [...], "skipped": n}; idempotent, so a rerun prints an
+        empty list. When state.json exists, the new basenames are also
+        appended (deduplicated) to state.batch.minted_stubs, the batch-wide
+        count the batch-end notification reports. Exit 2 on an unreadable or
+        invalid ledger, 9 on a failed stub or state write (the stubs already
+        written stay and own their keys, so the retry mints only the rest).
 
 --state, when omitted, resolves by walking up from cwd via
 _walk_up.find_autopilot_dir() to <dir>/state.json. park's --autopilot-dir,
@@ -106,7 +116,8 @@ Exit codes:
     0   ok
     1   usage error (unknown/missing subcommand, bad flags, malformed
         --json, --state unresolved - which also blocks --prds's default)
-    2   state error (state.json missing or not valid JSON)
+    2   state error (state.json missing or not valid JSON); unreadable or
+        invalid deferred ledger (mint-stubs)
     3   no/ignored marker (park)
     4   move failed (stall/park's inner PRD move)
     5   systemic halt (park) / git refused or failed (custody resolve)
@@ -114,7 +125,8 @@ Exit codes:
         reset-prd, restore)
     7   state file already exists (init)
     8   backup refused: missing or corrupt .bak (restore)
-    9   deferred-record I/O failed (defer, or stall/park's inner append)
+    9   deferred-record I/O failed (defer, or stall/park's inner append);
+        stub or state write failed (mint-stubs)
     10  stall_op conflict (stall/park)
     11  init's parent directory does not exist (init)
     12  a pending deferred-JSON item is missing from the rendered PRD
@@ -153,6 +165,7 @@ from cli import (
     statectl,
     status,
     transitions,
+    triage,
 )
 
 # Explicit guarded insert (mirrors records.py's own): no longer relies on
@@ -1058,6 +1071,50 @@ def _run_custody(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add_mint_stubs(subparsers) -> None:
+    p = subparsers.add_parser("mint-stubs")
+    p.add_argument("--state")
+    p.add_argument("--batch", required=True)
+    p.add_argument("--prds")
+
+
+def _record_minted(state_path: Path, minted: list[str]) -> int:
+    """Append the new basenames to `state.batch.minted_stubs`, deduplicated:
+    the batch-wide count the batch-end notification reports. Lives under
+    `batch` so the per-PRD reset keeps it across the batch's mint calls."""
+
+    def apply(data: dict) -> None:
+        stubs = data.setdefault("batch", {}).setdefault("minted_stubs", [])
+        stubs.extend(name for name in minted if name not in stubs)
+
+    try:
+        statectl.mutate(state_path, apply)
+    except (state.StateError, schema.SchemaError, OSError) as err:
+        print(f"autopilot: mint-stubs: recording minted stubs failed: {err}", file=sys.stderr)
+        return 9
+    return 0
+
+
+def _run_mint_stubs(args: argparse.Namespace) -> int:
+    state_path = _resolve_state_path(args.state)
+    autopilot_dir = state_path.parent
+    prds_dir = Path(_resolve_prds_path(args.prds, autopilot_dir))
+    try:
+        result = triage.mint_stubs(autopilot_dir, prds_dir, args.batch)
+    except triage.LedgerError as err:
+        print(f"autopilot: mint-stubs: {err}", file=sys.stderr)
+        return 2
+    except OSError as err:
+        print(f"autopilot: mint-stubs: write failed: {err}", file=sys.stderr)
+        return 9
+    # Printed before the state write: the minted list is the caller's answer,
+    # and a bookkeeping failure must not swallow it.
+    print(json.dumps(result))
+    if result["minted"] and state_path.exists():
+        return _record_minted(state_path, result["minted"])
+    return 0
+
+
 # Registry, not an if/elif chain over sys.argv: PRD 00106 adds entries here
 # (an (add_parser_fn, run_fn) pair per subcommand name).
 _SUBCOMMANDS: dict[str, tuple] = {
@@ -1078,6 +1135,7 @@ _SUBCOMMANDS: dict[str, tuple] = {
     "loop": (_add_loop, _run_loop_cmd),
     "review-once": (_add_review_once, _run_review_once),
     "custody": (_add_custody, _run_custody),
+    "mint-stubs": (_add_mint_stubs, _run_mint_stubs),
 }
 
 
