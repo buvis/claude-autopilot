@@ -47,14 +47,16 @@ def test_tess_retry_prompt_treats_style_lines_as_issues() -> None:
 
 
 def test_quality_gate_runs_the_style_script_on_test_files() -> None:
-    # SKILL.md step 2.8 keeps the rule and a read-first pointer (the body is
-    # at its 500-line ceiling); test-author-prompt.md § Quality gate carries
-    # the invocation. Both halves are pinned: a pointer to a missing section
-    # is a gate nobody runs, and a section nothing points at is the same.
+    # SKILL.md step 2.8 keeps the rule, the invocation and a read-first
+    # pointer (the body is at its 500-line ceiling); test-author-prompt.md
+    # § Quality gate carries the diff construction. Both halves are pinned: a
+    # pointer to a missing section is a gate nobody runs, and a section
+    # nothing points at is the same.
     text = _SKILL_MD.read_text()
     start = text.index("### 2.8.")
     step_2_8 = text[start : text.index("### 2.85.", start)]
     for needle in (
+        "check_style_limits.py --diff dev/local/tmp/test-diff-<task-id>.txt",
         "over the test files only",
         "Style limits on the test files",
         "Exit 1 is a quality-gate failure",
