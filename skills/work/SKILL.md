@@ -195,6 +195,7 @@ For the first available task:
    python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/_walk_up.py --clear-cap
    ```
    No-op when no ancestor has the dir or the marker is already absent (first task of the phase); always exits 0. Use exactly this single-command form — no `d=$(...)` shell variable, so the permission matcher can resolve it.
+3. **Resume from a rotation scar (PRD 00202).** Read `git log -1 --format=%s`. When the subject ends in "wip - rotated mid-task" for this task, read the commit body and continue at the step it names instead of dispatching Tess. A `test(` subject for this task with no wip commit (tests committed, rotation before Devon) continues at step 2.9. Any other subject starts at step 2.5 as usual.
 
 ### 2.5. Load project context
 
@@ -243,12 +244,7 @@ Before committing Tess's tests, run the computed shape check and review them in 
 
 ### 2.85. Commit tests
 
-```bash
-git add <test_files>
-```
-```bash
-git commit -m "test(<scope>): add tests for <feature>"
-```
+Two Bash calls, never chained: `git add <test_files>`, then `git commit -m "test(<scope>): add tests for <feature>"`.
 
 Tests are committed separately before implementation, making the TDD boundary auditable in git history — and before Devon, so the quality-gated tests never sit uncommitted through the longest dispatches of a task (a rotation mid-Devon lost a 603-line test file once, and a rotation after a committed test file re-dispatched Tess with the identical prompt; PRD 00202).
 

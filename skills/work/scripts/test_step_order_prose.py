@@ -82,3 +82,22 @@ def test_strengthened_tests_are_committed_before_devon_round_two() -> None:
             f"{_ADVERSARIAL}: the outcome table lacks {needle!r}, so the "
             "strengthen round never commits before Devon's re-check."
         )
+
+
+def test_step_2_resumes_from_a_wip_commit() -> None:
+    # The rotation envelope commits dirty allowlisted files as
+    # `chore(<scope>): wip - rotated mid-task`; without this step-2 read the
+    # next session re-dispatches Tess with the identical prompt (33 minutes
+    # duplicated on 2026-09-13, task 13).
+    text = _SKILL_MD.read_text()
+    step_2 = _section(text, _SKILL_MD, "### 2. Claim and start task", "### 2.5.")
+    for needle in (
+        "git log -1 --format=%s",
+        'ends in "wip - rotated mid-task"',
+        "continue at the step it names instead of dispatching Tess",
+        "continues at step 2.9",
+    ):
+        assert needle in step_2, (
+            f"{_SKILL_MD}: step 2 lacks {needle!r}, so a session after a "
+            "rotation cannot resume from the wip commit."
+        )
