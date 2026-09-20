@@ -88,11 +88,13 @@ def test_total_tess_budget_is_four() -> None:
     )
 
 
-def test_step_2_85_states_devons_per_task_maximum() -> None:
-    step_2_85 = _section(_SKILL_TEXT, _SKILL_MD, "### 2.85.", "### 2.9.")
+def test_step_2_9_states_devons_per_task_maximum() -> None:
+    # Devon moved from 2.85 to 2.9 when PRD 00202 put the test commit ahead
+    # of him; the cap sentence moved with the step.
+    step_2_9 = _section(_SKILL_TEXT, _SKILL_MD, "### 2.9.", "### 2.95.")
     needle = "Devon runs at most twice per task"
 
-    assert needle in step_2_85, (
-        f"{_SKILL_MD}: expected step 2.85 to state {needle!r} — not found. "
+    assert needle in step_2_9, (
+        f"{_SKILL_MD}: expected step 2.9 to state {needle!r} — not found. "
         "The per-task Devon maximum appears to have drifted or been removed."
     )

@@ -57,8 +57,8 @@ for each pending task:
     a. task-start <id>
     b. Tess writes tests (from requirements only)
     c. test quality gate (main session)
-    d. Devon tries to break tests (adversarial validation)
-    e. commit tests
+    d. commit tests
+    e. Devon tries to break tests (adversarial validation)
     f. Ivan implements against failing tests
     g. verify THIS task's tests pass (retry Ivan if needed)
     h. commit implementation
@@ -80,19 +80,19 @@ See **Subagent Dispatch Budget and Watchdog** below — every Agent dispatch mus
 
 **Watchdog:** every Agent dispatch must be wrapped in a watchdog: dispatch with `run_in_background: true`, wait with a `Monitor` timer (15-minute CHECK-IN — on expiry probe for progress and extend, 45-minute hard cap; kill only on two no-progress probes or the cap), and after any `TaskStop` inspect the tree before re-dispatching — a killed agent usually died at its verification tail with complete work on disk, which you verify independently and accept, never redo. Genuinely dead agents route to the **Result lost / hung** row of `references/gate-failure.md` § Step 4 result table (→ the infrastructure-failure circuit breaker, step 4.2). A foreground `Agent` call that hangs blocks this session indefinitely — never dispatch one unwatched.
 
-See `references/subagent-dispatch.md` for the measurement procedure, the verbatim abort-instruction line, the abort-handoff steps, helper-script (`use-codex`/`use-gemini`/`use-qwen`) handling, and the six distinct deadlines (15 min / 10 min × 2 / 20 min, plus the 60000 / 300000 / 600000 ms foreground Bash budgets, by mechanism). Read it before your first Agent dispatch in a session. Elsewhere in this file, "must satisfy the **Subagent Dispatch Budget**" and "**Subagent Watchdog**" mean exactly this section — the numbers are not restated at call sites. **Telemetry:** every render call passes `--dispatch-kind <persona> --dispatch-task <task-id>` and prints the dispatch id on its second stdout line (the first line is still the budget measurement); a dispatch with no render — Devon at 2.85, the deslop pass at 5.6 — opens its row with `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind <devon|deslop> --task <task-id> --prompt-file <the written prompt>` instead, which prints the same two lines and is that prompt's budget measurement. When the dispatch returns — the completion notification, a `TaskStop`, or the helper script's `TaskOutput` wait coming back — close the row with one call: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py end <id> --outcome <ok|timeout|killed|error|lost>`. The row catalogue and the outcome mapping are in `references/subagent-dispatch.md` § Dispatch telemetry. A telemetry failure is never a dispatch failure: every call exits 0 (the one exception is `start --prompt-file` on a prompt it cannot read, which exits 2 because that call is also the budget measurement), nothing on the way to a task's outcome reads the rows, and a call that fails is never retried.
+See `references/subagent-dispatch.md` for the measurement procedure, the verbatim abort-instruction line, the abort-handoff steps, helper-script (`use-codex`/`use-gemini`/`use-qwen`) handling, and the six distinct deadlines (15 min / 10 min × 2 / 20 min, plus the 60000 / 300000 / 600000 ms foreground Bash budgets, by mechanism). Read it before your first Agent dispatch in a session. Elsewhere in this file, "must satisfy the **Subagent Dispatch Budget**" and "**Subagent Watchdog**" mean exactly this section — the numbers are not restated at call sites. **Telemetry:** every render call passes `--dispatch-kind <persona> --dispatch-task <task-id>` and prints the dispatch id on its second stdout line (the first line is still the budget measurement); a dispatch with no render — Devon at 2.9, the deslop pass at 5.6 — opens its row with `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind <devon|deslop> --task <task-id> --prompt-file <the written prompt>` instead, which prints the same two lines and is that prompt's budget measurement. When the dispatch returns — the completion notification, a `TaskStop`, or the helper script's `TaskOutput` wait coming back — close the row with one call: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py end <id> --outcome <ok|timeout|killed|error|lost>`. The row catalogue and the outcome mapping are in `references/subagent-dispatch.md` § Dispatch telemetry. A telemetry failure is never a dispatch failure: every call exits 0 (the one exception is `start --prompt-file` on a prompt it cannot read, which exits 2 because that call is also the budget measurement), nothing on the way to a task's outcome reads the rows, and a call that fails is never retried.
 
 ## Per-task model dispatch
 
 Before any Agent call for a task, read the task's `model` field in its `state.tasks` entry (`state.tasks[i].model`) and pass it as the Agent tool's `model` parameter.
 
-Applies to **every** Agent call this skill dispatches, including follow-up dispatches inside compound steps: Tess and her quality-gate/adversarial-round re-dispatches (steps 2.7-2.85), Devon (2.85), and Ivan and every Ivan re-dispatch (3, 5.5, 5.7 fix, 7 regression fix). (The step-5.7 reviewer is a fixed-model helper-script dispatch via `use-sonnet`, not an Agent call — the `model` parameter does not apply to it.) If you add a new Agent call to this skill, pass `model` from `state.tasks[i].model` — no exceptions.
+Applies to **every** Agent call this skill dispatches, including follow-up dispatches inside compound steps: Tess and her quality-gate/adversarial-round re-dispatches (steps 2.7-2.9), Devon (2.9), and Ivan and every Ivan re-dispatch (3, 5.5, 5.7 fix, 7 regression fix). (The step-5.7 reviewer is a fixed-model helper-script dispatch via `use-sonnet`, not an Agent call — the `model` parameter does not apply to it.) If you add a new Agent call to this skill, pass `model` from `state.tasks[i].model` — no exceptions.
 
 **Qwen one-shot-per-task budget carve-out (step 5.5 only).** When the failing attempt's implementor was qwen (helper-script `use-qwen`, NOT an Agent dispatch — qwen never used `state.tasks[i].model`), every step-5.5 re-dispatch for that task targets **Claude Sonnet** regardless of `state.tasks[i].model` — never qwen again for that task. This is the one-shot-per-task qwen attempt budget — one qwen dispatch per task, never a per-PRD or per-batch cap — the ladder's `qwen -> sonnet` capability edge (`run-autopilot/references/model-ladder.md` § Capability ladders and § Per-rung budgets; why: `references/design-rationale.md` § one shot): qwen gets exactly 1 dispatch per task, a qwen gate failure escalates to Sonnet immediately with zero qwen retries for that task, and step 5.5's Claude-rung budget then runs entirely on Claude Sonnet — see step 5.5 below for the full diagnose/repair/escalate flow this now drives. Applies unchanged under `_AUTOPILOT_ESCALATION=legacy` (model-ladder.md § Kill-switches). All non-step-5.5 Agent calls continue to obey `state.tasks[i].model` with no exceptions.
 
 Accepted values: `"haiku"`, `"sonnet"`, `"opus"`. A fourth value, `"fable"`, is the human-gated rescue rung above `opus` (`run-autopilot/references/model-ladder.md` § Rungs).
 
-**A task carrying `state.tasks[i].model: "fable"` overrides the step-3 Deterministic routing table outright** — set only by the Fable rescue gate (`run-autopilot/references/recovery.md` § Rework escalation exhausted): never qwen, never Gemini, always a Claude Agent dispatch at `model: "fable"`, whatever the rows of that table would pick. `fable` is never a session model and is never selected autonomously — a human-approved rescue is the only writer of this value (`run-autopilot/references/model-ladder.md` § Fable rescue). It runs at the same depth as `opus`: Devon at step 2.85, the step-5.7 per-task review, and `pipeline: "full"`.
+**A task carrying `state.tasks[i].model: "fable"` overrides the step-3 Deterministic routing table outright** — set only by the Fable rescue gate (`run-autopilot/references/recovery.md` § Rework escalation exhausted): never qwen, never Gemini, always a Claude Agent dispatch at `model: "fable"`, whatever the rows of that table would pick. `fable` is never a session model and is never selected autonomously — a human-approved rescue is the only writer of this value (`run-autopilot/references/model-ladder.md` § Fable rescue). It runs at the same depth as `opus`: Devon at step 2.9, the step-5.7 per-task review, and `pipeline: "full"`.
 
 **Legacy plans** (created before `state.tasks[i].model` existed) have no model field. Omit the `model` parameter — subagents inherit the session model. This preserves the legacy behavior bit-for-bit.
 
@@ -129,7 +129,7 @@ Every Tess and Ivan dispatch prompt - initial and retry, regardless of mechanism
 At every task exit — success in step 6, abort in step 4 (timeout / context exceeded / error after debug), or via the Subagent Dispatch Budget overrun path — append one entry to `state.tasks[i].attempts[]`. Each entry carries:
 
 - **`implementor`**, **`preflight_outcome`** and **`qwen_excluded_reason`** — the dispatch-provenance trio: what actually dispatched (never what the table picked), the probe verdict written explicitly on every entry, and the row-4 pressure exclusion. **Read `references/attempt-logging.md` § Dispatch-provenance fields before writing the first attempt entry of a task** for each field's exact values.
-- **`pipeline`** — the tier-gated depth this attempt ran, keyed on `state.tasks[i].model`: `haiku` → `"minimal"` (Tess + Ivan), `sonnet` → `"lean"` (+ step-5.7 reviewer), `opus` → `"full"` (+ Devon at step 2.85); absent/legacy is treated as `sonnet` → `"lean"`. `fable` → `"full"` as well — the rescue rung runs the deepest pipeline, like `opus`. Written at every task exit; a Phase-6 escalation to `opus` records `"full"`.
+- **`pipeline`** — the tier-gated depth this attempt ran, keyed on `state.tasks[i].model`: `haiku` → `"minimal"` (Tess + Ivan), `sonnet` → `"lean"` (+ step-5.7 reviewer), `opus` → `"full"` (+ Devon at step 2.9); absent/legacy is treated as `sonnet` → `"lean"`. `fable` → `"full"` as well — the rescue rung runs the deepest pipeline, like `opus`. Written at every task exit; a Phase-6 escalation to `opus` records `"full"`.
 
 See `references/attempt-logging.md` for the full entry schema, field semantics, and the atomic write procedure.
 
@@ -241,21 +241,7 @@ Before committing Tess's tests, run the computed shape check and review them in 
 
 **Total Tess budget:** max 4 dispatches across the entire test authoring phase (1 initial + 2 quality-gate retries + 1 adversarial strengthen). If exhausted, flag weakness in task output and proceed. Don't block the pipeline forever.
 
-### 2.85. Adversarial validation (Devon - devil's advocate)
-
-**Tier gate — Devon runs on the deepest rungs only, `opus` and `fable`.** Read the task's `model` field (`state.tasks[i].model`):
-
-| `state.tasks[i].model` | Devon (step 2.85) |
-|-----------------------|-------------------|
-| `opus` | dispatch Devon (below) |
-| `fable` | dispatch Devon (below) — the rescue rung runs the deepest pipeline, like `opus` |
-| anything else — `haiku`, `sonnet`, absent/legacy or unknown (both treated as `sonnet`) | skip Devon, proceed to step 2.9 |
-
-The step-2.8 test quality gate is **unchanged** and runs for every tier — only this Agent dispatch is conditional. A Devon dispatch obeys the **Per-task model dispatch** rule (passes `model: opus`, or `model: fable` on a rescued task). Escalation interplay is automatic: when the review gate escalates a review-flagged task to `opus`, the rework attempt regains Devon with no extra mechanism. (Why tier-gated: `references/design-rationale.md` § tier-gated pipeline.)
-
-Devon runs at most twice per task: the first pass and one re-check after Tess strengthens (`references/adversarial-test-prompt.md` § Outcomes). See `references/adversarial-test-prompt.md` § Procedure for how Devon runs, and the file's prompt template section for what it receives. Devon prompts must satisfy the **Subagent Dispatch Budget**. Devon's prompt is filled by hand, so measure it and open his row in one call — `record_dispatch.py start --kind devon --task <task-id> --prompt-file <the written prompt>` prints the byte count that **is** his Subagent Dispatch Budget measurement, then the id — before the Agent call, and hold the id for the `end` call (§ Subagent Dispatch Budget and Watchdog, Telemetry).
-
-### 2.9. Commit tests
+### 2.85. Commit tests
 
 ```bash
 git add <test_files>
@@ -264,9 +250,23 @@ git add <test_files>
 git commit -m "test(<scope>): add tests for <feature>"
 ```
 
-Tests are committed separately before implementation, making the TDD boundary auditable in git history.
+Tests are committed separately before implementation, making the TDD boundary auditable in git history — and before Devon, so the quality-gated tests never sit uncommitted through the longest dispatches of a task (a rotation mid-Devon lost a 603-line test file once, and a rotation after a committed test file re-dispatched Tess with the identical prompt; PRD 00202).
 
-**Capture this task's test-commit SHA** immediately and hold it in-session as `<test_commit_sha>` — **read `references/gate-failure.md` § Test-commit SHA before moving on** for the command and its one reader, step 5.5's ESCALATE reset. Step 5.7's `BASE_SHA` is `<task_base_sha>` from step 2, not this.
+**Capture this task's test-commit SHA** immediately and hold it in-session as `<test_commit_sha>` — the last test commit, so a step-2.9 strengthen commit replaces it — **read `references/gate-failure.md` § Test-commit SHA before moving on** for the command and its one reader, step 5.5's ESCALATE reset. Step 5.7's `BASE_SHA` is `<task_base_sha>` from step 2, not this.
+
+### 2.9. Adversarial validation (Devon - devil's advocate)
+
+**Tier gate — Devon runs on the deepest rungs only, `opus` and `fable`.** Read the task's `model` field (`state.tasks[i].model`):
+
+| `state.tasks[i].model` | Devon (step 2.9) |
+|-----------------------|-------------------|
+| `opus` | dispatch Devon (below) |
+| `fable` | dispatch Devon (below) — the rescue rung runs the deepest pipeline, like `opus` |
+| anything else — `haiku`, `sonnet`, absent/legacy or unknown (both treated as `sonnet`) | skip Devon, proceed to step 2.95 |
+
+The step-2.8 test quality gate is **unchanged** and runs for every tier — only this Agent dispatch is conditional. A Devon dispatch obeys the **Per-task model dispatch** rule (passes `model: opus`, or `model: fable` on a rescued task). Escalation interplay is automatic: when the review gate escalates a review-flagged task to `opus`, the rework attempt regains Devon with no extra mechanism. (Why tier-gated: `references/design-rationale.md` § tier-gated pipeline.)
+
+Devon runs at most twice per task: the first pass and one re-check after Tess strengthens (`references/adversarial-test-prompt.md` § Outcomes). Commit the strengthened tests as test(<scope>): strengthen <feature> before the second Devon dispatch. See `references/adversarial-test-prompt.md` § Procedure for how Devon runs, and the file's prompt template section for what it receives. Devon prompts must satisfy the **Subagent Dispatch Budget**. Devon's prompt is filled by hand, so measure it and open his row in one call — `record_dispatch.py start --kind devon --task <task-id> --prompt-file <the written prompt>` prints the byte count that **is** his Subagent Dispatch Budget measurement, then the id — before the Agent call, and hold the id for the `end` call (§ Subagent Dispatch Budget and Watchdog, Telemetry).
 
 ### 2.95. Red-check — watch the tests fail
 
@@ -369,7 +369,7 @@ Never chain these with `&&` in a single Bash call. Commit message rules: convent
 
 Before committing a `feat`/`fix` (or breaking) change, verify CHANGELOG.md is staged in the same commit per rules/changelog.md — repos with a declared no-changelog exception (e.g. the buvis home repo) skip this check.
 
-**If a commit (or its `git add`) is rejected** — `aegis`'s `validate_commit_msg.py` blocks a non-conventional message (boilerplate trailer, HEREDOC, bad format — `rules/development-workflow.md`), or warden denies the `git add`/`git commit` command: read the deny reason from the blocked tool result (aegis names the format violation; warden's reason usually names the preferred command form), fix the message or the command accordingly, and **retry the commit ONCE**. Still rejected after the one repair → ESCALATE: append an attempt-log entry (`outcome: "aborted"`, `cause: "commit_rejected"`), then report to the user (interactive) or take the loop-mode stall path (`run-autopilot/references/recovery.md`, `site: "sub_skill_fail"`, `detail` = the deny reason) — never leave the task's work uncommitted-and-unrecorded, and never reach for `--no-verify` to bypass the hook. This branch applies to every commit this skill makes (step 2.9 tests, step 5 implementation, the step-5.5/5.7 re-commits, the step-5.6 deslop commit).
+**If a commit (or its `git add`) is rejected** — `aegis`'s `validate_commit_msg.py` blocks a non-conventional message (boilerplate trailer, HEREDOC, bad format — `rules/development-workflow.md`), or warden denies the `git add`/`git commit` command: read the deny reason from the blocked tool result (aegis names the format violation; warden's reason usually names the preferred command form), fix the message or the command accordingly, and **retry the commit ONCE**. Still rejected after the one repair → ESCALATE: append an attempt-log entry (`outcome: "aborted"`, `cause: "commit_rejected"`), then report to the user (interactive) or take the loop-mode stall path (`run-autopilot/references/recovery.md`, `site: "sub_skill_fail"`, `detail` = the deny reason) — never leave the task's work uncommitted-and-unrecorded, and never reach for `--no-verify` to bypass the hook. This branch applies to every commit this skill makes (step 2.85 tests and the step-2.9 strengthen commit, step 5 implementation, the step-5.5/5.7 re-commits, the step-5.6 deslop commit).
 
 ### 5.5. Verify THIS task's tests pass
 

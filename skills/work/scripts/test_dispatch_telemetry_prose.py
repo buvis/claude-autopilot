@@ -66,14 +66,14 @@ def test_every_render_block_in_the_body_carries_both_flags_for_its_persona() -> 
 
 
 def test_the_hand_built_dispatches_open_their_rows_with_start() -> None:
-    # Devon (2.85) and the self-deslop pass (5.6) fill their templates by
+    # Devon (2.9) and the self-deslop pass (5.6) fill their templates by
     # hand — the PRD's premise that every dispatch renders was false for both
     # — so without this call those two lanes are holes in every task's timeline.
     text = _SKILL_MD.read_text()
 
-    devon = _section(text, "### 2.85.", "### 2.9.")
+    devon = _section(text, "### 2.9.", "### 2.95.")
     assert f"{_START_CALL} --kind devon" in devon, (
-        f"{_SKILL_MD}: step 2.85 never opens Devon's row with "
+        f"{_SKILL_MD}: step 2.9 never opens Devon's row with "
         "`record_dispatch.py start --kind devon`; no render does it for him."
     )
     deslop = _section(text, "### 5.6.", "### 5.65.")
@@ -300,7 +300,7 @@ def test_the_hand_built_lanes_measure_and_open_in_one_call() -> None:
     # `--prompt-file` is what keeps the PRD's one-extra-call metric true for
     # Devon and the deslop pass: the measurement call opens the row.
     text = _SKILL_MD.read_text()
-    for start, end in (("### 2.85.", "### 2.9."), ("### 5.6.", "### 5.65.")):
+    for start, end in (("### 2.9.", "### 2.95."), ("### 5.6.", "### 5.65.")):
         assert "--prompt-file" in _section(text, start, end), (
             f"{_SKILL_MD}: step {start} opens its row with a byte count it has "
             "to measure separately, which is the second extra call the PRD's "

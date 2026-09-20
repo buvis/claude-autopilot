@@ -45,7 +45,7 @@ stop and escalate with `stall_reason: subagent_infra_failure`.
 
 ## Why the pipeline is tier-gated (PRD 00044)
 
-Devon (adversarial test validation, step 2.85) is the most expensive
+Devon (adversarial test validation, step 2.9) is the most expensive
 quality-gate dispatch and pays off on the hardest tasks — so only `opus`-tier
 tasks run it. Per-task code review (step 5.7) is skipped only on `haiku`-tier
 tasks: cheap mechanical tasks rely on per-task test verification plus the

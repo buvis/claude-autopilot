@@ -1,6 +1,6 @@
 # Gate-failure flow (step 5.5 default path)
 
-Extracted verbatim from SKILL.md steps 2.9, 4, 4.2 and 5.5 (situational: read it before the first gate or infrastructure failure of a batch; SKILL.md keeps the scope note, the never-weaken-tests rule, and the one-line rule of each branch below).
+Extracted verbatim from SKILL.md steps 2.85, 4, 4.2 and 5.5 (situational: read it before the first gate or infrastructure failure of a batch; SKILL.md keeps the scope note, the never-weaken-tests rule, and the one-line rule of each branch below).
 
 ### 5.5. Verify THIS task's tests pass
 
@@ -62,7 +62,8 @@ ESCALATE (solid_spec, OR spec_gap with repair unavailable/already used, OR any q
        <candidate_head>` (the third arg is git's old-value guard — the CAS; `<current-branch>` from
        `git rev-parse --abbrev-ref HEAD`). Then `git reset --hard` (the ref already points at the test
        commit, so this only cleans the worktree). `<test_commit_sha>` is this task's own test commit,
-       captured in-session right after step 2.9 — never a prior task's commit.
+       captured in-session right after step 2.85 (or the step-2.9 strengthen commit, whichever
+       is the last test commit) — never a prior task's commit.
      - the CAS fails (HEAD moved — a foreign commit raced in), OR either guard failed (foreign
        uncommitted files, or a foreign commit already in `<test_commit_sha>..<candidate_head>`) → do
        NOT reset; escalate fix-forward instead (dispatch the higher rung against the current tree +
@@ -119,7 +120,7 @@ ESCALATE (solid_spec, OR spec_gap with repair unavailable/already used, OR any q
 
 For codex attribution, `attempts[].model` records the task's own tier (for example, `"sonnet"`) while `implementor: "codex"` carries the backend identity. This is the same split as qwen, whose attempt records `model: "sonnet"` with `implementor: "qwen"`. On a codex capability failure, stamp the codex entry `outcome: "escalated"` and `diagnosis: <verdict>`; the Claude entry it escalates into receives `escalation_reason: "gate_failure"` and `escalated_from: "codex"`.
 
-**Pipeline stamping on escalation.** An in-loop escalation re-dispatches the implementor at the higher rung and re-runs the tier-appropriate post-implementor gates (step 5.7 reviewer for sonnet+, and this step-5.5 gate) — it does NOT re-run Devon (2.85; the tests are already committed). Stamp the escalated-into entry `pipeline:"lean"` (implementor + reviewer), never `"full"` — `"full"` stays reserved for a from-scratch opus task/rework that actually ran Devon.
+**Pipeline stamping on escalation.** An in-loop escalation re-dispatches the implementor at the higher rung and re-runs the tier-appropriate post-implementor gates (step 5.7 reviewer for sonnet+, and this step-5.5 gate) — it does NOT re-run Devon (2.9; the tests are already committed). Stamp the escalated-into entry `pipeline:"lean"` (implementor + reviewer), never `"full"` — `"full"` stays reserved for a from-scratch opus task/rework that actually ran Devon.
 
 **qwen capability breaker counter (this gate).** Guarded by `_AUTOPILOT_ESCALATION != "legacy"`, same as the routing consult in step 3. On an `implementor:"qwen"` attempt only: gate pass → reset `qwen_gate_failures_consecutive = 0`; gate fail → stamp that attempt `qwen_gate_failed:true` and increment `qwen_gate_failures_consecutive`; at 2 consecutive → latch `qwen_breaker = {tripped:true, after_task:<this task id>, failed_tasks:[<the two ids>], batch_id:<effective batch id>}` (batch-scope check as in step 3). Keys off the stored `qwen_gate_failed` field, not `outcome` (an escalated-away qwen entry reads `outcome:"escalated"`), keeping the increment jq-expressible. Rework attempts never touch the breaker — rework never routes qwen. A non-qwen task between two qwen failures leaves the counter unchanged (`run-autopilot/references/state-schema.md` `qwen_gate_failures_consecutive`).
 
@@ -254,13 +255,16 @@ Moved verbatim out of SKILL.md step 5.5 (PRD 00119-v2). Target the narrowest sco
 
 Every one of these is a **lint and narrow tests** command: pass `timeout: 300000` on the Bash call (`references/subagent-dispatch.md` § Foreground command budgets), and run it alone — never combined with an inspection in the same call. A command that hits the budget re-runs once at 600000 ms; a second timeout stamps `verification: "timeout:<command>"` on the attempt, names the command and its budget in the phase report, and the task proceeds rather than looping on it.
 
-## Test-commit SHA (step 2.9)
+## Test-commit SHA (step 2.85)
 
-Moved verbatim out of SKILL.md step 2.9 (PRD 00119-v2). The ESCALATE reset in
-the flow above resets to exactly this commit.
+Moved verbatim out of SKILL.md step 2.9 (PRD 00119-v2; the commit step is 2.85
+since PRD 00202 moved it ahead of Devon). The ESCALATE reset in the flow above
+resets to exactly this commit — the LAST test commit, so when step 2.9's
+strengthen round committed `test(<scope>): strengthen <feature>`, that commit is
+`<test_commit_sha>`.
 
 Step 5.7's `BASE_SHA` is **not** derived from it: `BASE_SHA` is `<task_base_sha>`,
-captured by step 2 right after `task-start`. The two coincide whenever step 2.9
+captured by step 2 right after `task-start`. The two coincide whenever step 2.85
 committed tests, but `<task_base_sha>` is also defined for the tasks that commit
 none — test-only, docs-only, config-only and micro-lane — where the old
 parent-of-the-test-commit rule had nothing to point at. The ESCALATE reset is

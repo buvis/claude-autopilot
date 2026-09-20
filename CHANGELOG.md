@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: the build session's model is decoupled from the task floor: `session_model: opus` in the PRD frontmatter (a new Phase 0 key, default `sonnet`) promotes the orchestrator, and `default_model: opus` no longer does. Backlog PRDs that pin `default_model: opus` now run a sonnet orchestrator unless they add `session_model: opus`; the `create-prd` skill in the agent-skills repo needs the new key in its frontmatter list (follow-up)
 - **work**: Tess is told the 50-line function and 800-line file limits up front (rule 12), and the step-2.8 quality gate runs the style script over the test files, so an oversized test file is fixed by a Tess retry instead of an Ivan split after implementation
 - **work**: Tess is told the limits up front (rule 12: test functions under 50 lines, test files under 800 lines), and the step-2.8 quality gate runs the style script over the test files, so an oversized test file is fixed by a Tess retry instead of an Ivan split after implementation
+- **work**: Tess's tests are committed as soon as they pass the step-2.8 quality gate, before Devon (steps renumbered: 2.85 commit tests, 2.9 Devon, 2.95 red-check), strengthened tests are committed again before Devon's re-check, a context-cap rotation commits every dirty allowlisted file as `chore(<scope>): wip - rotated mid-task`, and the next session resumes from that commit's body instead of re-dispatching Tess
 
 ### Fixed
 

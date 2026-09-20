@@ -14,8 +14,8 @@ Dispatch Devon to try to write a **wrong** implementation that passes all of Tes
 
 | Devon result | Action |
 |----------------|--------|
-| Cannot break tests (tests catch all exploits) | Tests are strong. Proceed to 2.9. |
-| Breaks tests with wrong impl that passes | Send Devon's exploit back to Tess: "These tests can be passed by: {wrong impl}. Strengthen them." Then re-run Devon once against the strengthened tests. Max 1 Tess/Devon round (2 Devon dispatches, 1 strengthen-side Tess dispatch per task). |
+| Cannot break tests (tests catch all exploits) | Tests are strong. Proceed to 2.95 (the tests were committed at step 2.85, before Devon ran). |
+| Breaks tests with wrong impl that passes | Send Devon's exploit back to Tess: "These tests can be passed by: {wrong impl}. Strengthen them." Commit the strengthened tests as `test(<scope>): strengthen <feature>` (the step 2.85 commit shape; this commit is now `<test_commit_sha>`) before the second Devon dispatch, then re-run Devon once against the strengthened tests. Max 1 Tess/Devon round (2 Devon dispatches, 1 strengthen-side Tess dispatch per task). |
 | 1 round exhausted (Devon still breaks the strengthened tests) | Flag weakness in task output, proceed anyway. |
 
 ## Prompt Template
