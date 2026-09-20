@@ -46,25 +46,72 @@ class TurnTripwireTests(unittest.TestCase):
         self.assertFalse(hasattr(self.module, "_soft_limit"))
         self.assertLess(self.module.FIRST_TASK_USAGE_ESTIMATE, self.module.USAGE_CAP)
 
-    def _seed_counter(self, session_id: str, count: int) -> None:
-        (self.fx.autopilot_dir / ".turn-counts.json").write_text(
-            json.dumps({"counts": {session_id: count}, "fired": []}),
-        )
-
-    def test_tripwire_fires_at_450(self) -> None:
-        """A session at 449 counted calls that takes its 450th (with usage well
-        under the cap) is force-handed-off via the rotation path."""
+    def test_tripwire_fires_at_450_and_not_at_the_old_300(self) -> None:
+        """The 300th call (the old tripwire) rotates nothing; a session at 449
+        counted calls that takes its 450th (with usage well under the cap) is
+        force-handed-off via the rotation path."""
         self.fx.write_state(
             phase="build",
             tasks=[{"id": "task-x", "name": "y", "status": "in_progress"}],
         )
         self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=40_000)])
-        self._seed_counter("test-session", 449)
+        self.fx.seed_counter("test-session", 299)
+        result = self.fx.run_hook()
+        self.assertEqual(result.returncode, 0)
+        self.assertFalse((self.fx.autopilot_dir / ".cap-fired").exists())
+        state = json.loads((self.fx.autopilot_dir / "state.json").read_text())
+        self.assertEqual(state["cap_rotations"], [])
+
+        self.fx.seed_counter("test-session", 449)
         result = self.fx.run_hook()
         self.assertEqual(result.returncode, 0)
         self.assertTrue((self.fx.autopilot_dir / ".cap-fired").exists())
         state = json.loads((self.fx.autopilot_dir / "state.json").read_text())
         self.assertEqual(state["cap_rotations"][-1]["task_id"], "task-x")
+
+    def test_blocked_fire_still_refreshes_the_last_record(self) -> None:
+        """After a rotation the `.cap-fired` marker survives into the
+        relaunched session until `/work` step 2 clears it, so its fires are
+        de-duplicated. They still count the call and rewrite `last` with THIS
+        session's values (without arming the tripwire), or the gate-edge
+        headroom check would read the dead session's exhausted `last` and
+        hand off forever (review 1 of PRD 00200)."""
+        self.fx.write_state(
+            phase="build",
+            cap_rotations=[{"task_id": "unknown", "cycle": 1}],
+            tasks=[{"id": "1", "name": "t", "status": "pending"}],
+        )
+        (self.fx.autopilot_dir / ".cap-fired").write_text("unknown")
+        (self.fx.autopilot_dir / ".turn-counts.json").write_text(
+            json.dumps(
+                {
+                    "counts": {"dead-session": 450, "test-session": 5},
+                    "fired": ["dead-session"],
+                    "last": {"session": "dead-session", "count": 450, "usage": 510_000},
+                },
+            ),
+        )
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=100_000)])
+        result = self.fx.run_hook()
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), "")
+        data = json.loads((self.fx.autopilot_dir / ".turn-counts.json").read_text())
+        self.assertEqual(
+            data["last"],
+            {"session": "test-session", "count": 6, "usage": 100_000},
+        )
+        self.assertEqual(data["counts"]["test-session"], 6)
+        self.assertEqual(data["fired"], ["dead-session"])
+        state = json.loads((self.fx.autopilot_dir / "state.json").read_text())
+        self.assertEqual(len(state["cap_rotations"]), 1)
+        # Blocked fires never arm the tripwire, even past its threshold.
+        self.fx.seed_counter("test-session", 460)
+        (self.fx.autopilot_dir / ".cap-fired").write_text("unknown")
+        result = self.fx.run_hook()
+        self.assertEqual(result.returncode, 0)
+        data = json.loads((self.fx.autopilot_dir / ".turn-counts.json").read_text())
+        self.assertEqual(data["fired"], [])
+        self.assertEqual(data["last"]["count"], 461)
 
     def test_tripwire_does_not_fire_at_449(self) -> None:
         """At the 449th call (seeded 448), no forced hand-off; usage is under
@@ -75,7 +122,7 @@ class TurnTripwireTests(unittest.TestCase):
             tasks=[{"id": "task-x", "name": "y", "status": "in_progress"}],
         )
         self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=40_000)])
-        self._seed_counter("test-session", 448)
+        self.fx.seed_counter("test-session", 448)
         result = self.fx.run_hook()
         self.assertEqual(result.returncode, 0)
         self.assertFalse((self.fx.autopilot_dir / ".cap-fired").exists())
@@ -88,19 +135,22 @@ class TurnTripwireTests(unittest.TestCase):
         design->plan and plan->work edges where no task is in progress."""
         self.fx.write_state(phase="build")
         self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=210_000)])
-        self._seed_counter("test-session", 41)
+        self.fx.seed_counter("test-session", 41)
         result = self.fx.run_hook()
         self.assertEqual(result.returncode, 0)
         data = json.loads((self.fx.autopilot_dir / ".turn-counts.json").read_text())
         self.assertEqual(
-            data["last"], {"session": "test-session", "count": 42, "usage": 210_000}
+            data["last"],
+            {"session": "test-session", "count": 42, "usage": 210_000},
         )
         # No usage line yet: the count is still recorded, usage is null.
         self.fx.transcript.write_text("")
         result = self.fx.run_hook()
         self.assertEqual(result.returncode, 0)
         data = json.loads((self.fx.autopilot_dir / ".turn-counts.json").read_text())
-        self.assertEqual(data["last"], {"session": "test-session", "count": 43, "usage": None})
+        self.assertEqual(
+            data["last"], {"session": "test-session", "count": 43, "usage": None}
+        )
 
     def test_tripwire_counter_corruption_resets_without_crashing(self) -> None:
         """A corrupt counter file resets to 0 and the hook still exits 0."""
@@ -142,7 +192,7 @@ class TurnTripwireTests(unittest.TestCase):
             tasks=[{"id": "task-x", "name": "y", "status": "in_progress"}],
         )
         self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=40_000)])
-        self._seed_counter("test-session", 449)
+        self.fx.seed_counter("test-session", 449)
         result = self.fx.run_hook(in_loop=False)
         self.assertEqual(result.returncode, 0)
         self.assertFalse((self.fx.autopilot_dir / ".cap-fired").exists())
@@ -321,7 +371,6 @@ class MarkerStateAtomicityTests(unittest.TestCase):
             "",
             "no stall envelope may be emitted when the state write fails",
         )
-
 
 
 class DurabilityBeforePublishTests(unittest.TestCase):

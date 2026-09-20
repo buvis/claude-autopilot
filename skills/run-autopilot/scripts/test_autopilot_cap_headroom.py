@@ -56,11 +56,6 @@ class HeadroomHandoffTests(unittest.TestCase):
         self.fx = HookFixture()
         self.addCleanup(self.fx.cleanup)
 
-    def _seed_counter(self, session_id: str, count: int) -> None:
-        (self.fx.autopilot_dir / ".turn-counts.json").write_text(
-            json.dumps({"counts": {session_id: count}, "fired": []}),
-        )
-
     def _handoff_payload(self) -> dict:
         return json.loads((self.fx.autopilot_dir / ".handoff-requested").read_text())
 
@@ -87,7 +82,7 @@ class HeadroomHandoffTests(unittest.TestCase):
             tasks=[*tasks, {"id": "t2", "name": "next", "status": "in_progress"}],
         )
         self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=total)])
-        self._seed_counter("test-session", count - 1)
+        self.fx.seed_counter("test-session", count - 1)
         result = self.fx.run_hook()
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout.strip(), "")
@@ -155,14 +150,21 @@ class HeadroomHandoffTests(unittest.TestCase):
         estimates = (module.FIRST_TASK_USAGE_ESTIMATE, module.FIRST_TASK_CALLS_ESTIMATE)
         good = _completed("a", usage=(100_000, 220_000), calls=(20, 170))
         later = _completed("b", usage=(220_000, 300_000), calls=(170, 260))
-        no_done = {"id": "c", "status": "completed", "usage_at_start": 1, "calls_at_start": 1}
+        no_done = {
+            "id": "c",
+            "status": "completed",
+            "usage_at_start": 1,
+            "calls_at_start": 1,
+        }
         bad_int = _completed("d", usage=(1, 2), calls=(1, 2))
         bad_int["calls_at_done"] = "2"
         pending = {"id": "e", "status": "pending"}
         self.assertEqual(module._last_task_cost({"tasks": []}), estimates)
         self.assertEqual(module._last_task_cost({"tasks": [good]}), (120_000, 150))
         self.assertEqual(module._last_task_cost({"tasks": [good, later]}), (80_000, 90))
-        self.assertEqual(module._last_task_cost({"tasks": [good, later, pending]}), (80_000, 90))
+        self.assertEqual(
+            module._last_task_cost({"tasks": [good, later, pending]}), (80_000, 90)
+        )
         self.assertEqual(module._last_task_cost({"tasks": [good, no_done]}), estimates)
         self.assertEqual(module._last_task_cost({"tasks": [good, bad_int]}), estimates)
         self.assertEqual(module._last_task_cost({"tasks": "nope"}), estimates)
@@ -184,9 +186,11 @@ class HeadroomHandoffTests(unittest.TestCase):
         self.assertTrue(self._marker_written())
 
     def test_headroom_with_no_task_in_progress_writes_no_handoff_marker(self) -> None:
-        """Headroom exhausted with no in-progress task: there is no task
-        boundary to hand off at, so the hook writes nothing. A marker written
-        here (as `unknown`) made the next session hand off after one task."""
+        """Headroom exhausted with no in-progress task and no task crossing
+        its boundary on this fire (the completed task carries no record):
+        there is no task boundary to hand off at, so the hook writes nothing.
+        A marker written here (as `unknown`) made the next session hand off
+        after one task."""
         self.fx.write_state(
             phase="build",
             tasks=[{"id": "1", "name": "t", "status": "completed"}],
@@ -197,6 +201,118 @@ class HeadroomHandoffTests(unittest.TestCase):
         self.assertEqual(result.stdout.strip(), "")
         self.assertFalse(self._marker_written())
         self.assertFalse((self.fx.autopilot_dir / ".cap-fired").exists())
+
+    def test_completion_fire_applies_the_completed_tasks_own_cost(self) -> None:
+        """The first fire after task-done (no task in progress) stamps the
+        done pair and judges the boundary by that task's own measured cost,
+        writing the marker under its id for step 6.5 to read next. A 220K
+        task ending at 320K leaves 180K, less than it cost: marker. The next
+        fire, with the record already stamped and still no task in progress,
+        is a wind-down fire and writes nothing (review 1 of PRD 00200)."""
+        self.fx.write_state(
+            phase="build",
+            tasks=[
+                {
+                    "id": "t1",
+                    "name": "big",
+                    "status": "completed",
+                    "usage_at_start": 100_000,
+                    "calls_at_start": 20,
+                },
+                {"id": "t2", "name": "next", "status": "pending"},
+            ],
+        )
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=320_000)])
+        self.fx.seed_counter("test-session", 219)
+        result = self.fx.run_hook()
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), "")
+        self.assertTrue(self._marker_written())
+        self._assert_handoff_payload(
+            self._handoff_payload(),
+            task_id="t1",
+            session="test-session",
+        )
+        state = json.loads((self.fx.autopilot_dir / "state.json").read_text())
+        self.assertEqual(state["tasks"][0]["usage_at_done"], 320_000)
+        self.assertEqual(state["tasks"][0]["calls_at_done"], 220)
+
+        (self.fx.autopilot_dir / ".handoff-requested").unlink()
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=330_000)])
+        result = self.fx.run_hook()
+        self.assertEqual(result.returncode, 0)
+        self.assertFalse(self._marker_written())
+
+    def test_stale_start_from_an_earlier_session_is_restamped(self) -> None:
+        """A start pair above this session's own total and count was stamped
+        by an earlier session (a rotated or died task keeps its stamp; within
+        a session both only grow), so it is replaced rather than kept as the
+        base of an understated cost."""
+        self.fx.write_state(
+            phase="build",
+            tasks=[
+                {
+                    "id": "t1",
+                    "name": "y",
+                    "status": "in_progress",
+                    "usage_at_start": 300_000,
+                    "calls_at_start": 400,
+                },
+            ],
+        )
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=120_000)])
+        self.fx.seed_counter("test-session", 41)
+        result = self.fx.run_hook()
+        self.assertEqual(result.returncode, 0)
+        task = json.loads((self.fx.autopilot_dir / "state.json").read_text())["tasks"][
+            0
+        ]
+        self.assertEqual(task["usage_at_start"], 120_000)
+        self.assertEqual(task["calls_at_start"], 42)
+
+    def test_missing_usage_line_still_checks_the_call_headroom(self) -> None:
+        """A transcript with no usage line yet leaves the calls half of the
+        rule in force: 261 calls of 450 leave 189, under the 200-call
+        estimate, so the marker is written."""
+        self.fx.write_state(
+            phase="build",
+            tasks=[{"id": "t1", "name": "y", "status": "in_progress"}],
+        )
+        self.fx.write_transcript_lines([{"type": "user", "message": {"content": "hi"}}])
+        self.fx.seed_counter("test-session", 260)
+        result = self.fx.run_hook()
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), "")
+        self.assertTrue(self._marker_written())
+        self.assertFalse((self.fx.autopilot_dir / ".cap-fired").exists())
+
+    def test_non_int_bound_on_the_last_completed_task_is_named_once(self) -> None:
+        """A completed record with a non-int START bound is unusable for the
+        rule (the estimates apply) and is named on exactly one stderr line,
+        the same diagnostic the record's own writer gives."""
+        self.fx.write_state(
+            phase="build",
+            tasks=[
+                {
+                    "id": "t1",
+                    "name": "y",
+                    "status": "completed",
+                    "usage_at_start": "lots",
+                    "calls_at_start": 20,
+                    "usage_at_done": 250_000,
+                    "calls_at_done": 220,
+                },
+                {"id": "t2", "name": "next", "status": "in_progress"},
+            ],
+        )
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=340_000)])
+        self.fx.seed_counter("test-session", 120)
+        result = self.fx.run_hook()
+        self.assertEqual(result.returncode, 0)
+        self.assertFalse(self._marker_written())
+        lines = [line for line in result.stderr.splitlines() if "not an int" in line]
+        self.assertEqual(len(lines), 1, result.stderr)
+        self.assertIn("usage_at_start", lines[0])
 
     def test_headroom_exhausted_is_a_pure_predicate(self) -> None:
         module = _load_hook_module()
@@ -210,8 +326,9 @@ class HeadroomHandoffTests(unittest.TestCase):
     # The marker ------------------------------------------------------------
 
     def test_exhausted_headroom_writes_handoff_marker(self) -> None:
-        """Usage at 400K with no completed task leaves 100K under the 500K
-        cap, less than the 150K first-task estimate: the rule writes
+        """Usage at 300K and 261 calls with no completed task: 189 calls left
+        of 450, under the 200-call first-task estimate (the old 320K soft cap
+        would have stayed silent at 300K), so the rule writes
         `.handoff-requested` as a JSON payload naming the phase, the hook's
         session id, a UTC ISO-8601 stamp and the in-progress task id. The path
         is non-destructive — no `.cap-fired`, no rotation, no state mutation.
@@ -223,7 +340,8 @@ class HeadroomHandoffTests(unittest.TestCase):
             phase="build",
             tasks=[{"id": "task-x", "name": "y", "status": "in_progress"}],
         )
-        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=400_000)])
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=300_000)])
+        self.fx.seed_counter("sess-9f3a2c", 260)
         before = datetime.now(timezone.utc) - timedelta(seconds=1)
         result = self.fx.run_hook(
             stdin_payload={
@@ -249,11 +367,13 @@ class HeadroomHandoffTests(unittest.TestCase):
         self.assertGreaterEqual(stamped, before)
         self.assertLessEqual(stamped, after)
 
-        # Non-destructive: hard-cap artifacts must NOT appear.
+        # Non-destructive: hard-cap artifacts must NOT appear, and the record
+        # stamp is the only state change.
         self.assertFalse((self.fx.autopilot_dir / ".cap-fired").exists())
         state = json.loads((self.fx.autopilot_dir / "state.json").read_text())
         self.assertEqual(state["cap_rotations"], [])
         self.assertNotIn("stall_reason", state)
+        self.assertEqual(state["tasks"][0]["status"], "in_progress")
 
     def test_headroom_left_writes_no_marker(self) -> None:
         """Usage at 80K leaves far more than the estimate: neither marker."""

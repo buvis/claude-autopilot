@@ -51,9 +51,11 @@ between PostToolUse fires, the hook clears the stale marker itself rather
 than relying on the `/work` step-2 Bash clear (which is a backstop). This
 keeps the cap functional even if the model skips step 2 on a subsequent task.
 
-Stdlib only. The standalone path is self-contained: `_common` is imported only
-inside `run()`, the dispatcher entry point (this script lives outside
-~/.claude/hooks/).
+Stdlib only. The standalone path is self-contained apart from its sibling
+modules in this directory (`_walk_up`, `_cap_state_write`, `_cap_task_record`,
+`_cap_turn_counts`, resolved from the script's own directory); `_common` is
+imported only inside `run()`, the dispatcher entry point (this script lives
+outside ~/.claude/hooks/).
 """
 
 from __future__ import annotations
@@ -61,12 +63,17 @@ from __future__ import annotations
 import json
 import os
 import sys
-import tempfile
-from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from _cap_state_write import (
+    import_cli_state,
+    write_state_write_failed_marker,
+    write_via_transaction as _write_via_transaction,
+)
+from _cap_task_record import last_task_cost, record_task_bounds
+from _cap_turn_counts import bump_and_check_tripwire
 from _walk_up import find_autopilot_dir
 
 # Per-task context cap as a single hard ceiling, applied regardless of the
@@ -163,60 +170,41 @@ def _load_state(autopilot_dir: Path) -> dict[str, Any] | None:
         return None
 
 
+def _write_state_write_failed_marker(autopilot_dir: Path, detail: str) -> None:
+    """The halt marker, bound here so the hook's halt guarantee stays testable
+    on the hook itself (`_cap_state_write` holds the implementation)."""
+    write_state_write_failed_marker(autopilot_dir, detail)
+
+
+def _import_cli_state(caller: str, autopilot_dir: Path) -> Any | None:
+    """The guarded cli.state import, bound here for the same reason."""
+    return import_cli_state(caller, autopilot_dir)
+
+
 def _usage_limit() -> int:
     """Return the single hard usage cap (a pure cost ceiling)."""
     return USAGE_CAP
 
 
 def _headroom_exhausted(
-    total: int, count: int | None, last_usage: int, last_calls: int
+    total: int | None,
+    count: int | None,
+    last_usage: int,
+    last_calls: int,
 ) -> bool:
     """The headroom rule (PRD 00200): the next task would not fit in the
     context left under USAGE_CAP or in the calls left under TURN_TRIPWIRE,
-    judged by what the last task cost. A None count (no session id on
-    stdin) leaves only the usage half."""
-    if USAGE_CAP - total < last_usage:
+    judged by what the last task cost. A None total (no usage line in the
+    transcript yet) leaves only the calls half; a None count (no session id
+    on stdin) leaves only the usage half."""
+    if total is not None and USAGE_CAP - total < last_usage:
         return True
     return count is not None and TURN_TRIPWIRE - count < last_calls
 
 
-def _int_field(task: dict[str, Any], key: str) -> int | None:
-    value = task.get(key)
-    if isinstance(value, bool) or not isinstance(value, int):
-        return None
-    return value
-
-
 def _last_task_cost(state: dict[str, Any]) -> tuple[int, int]:
-    """The (usage, calls) the most recently completed task cost, from its
-    recorded bounds, or the fixed first-task estimates when there is no
-    completed task or its record is unusable.
-
-    "Most recent" is the last completed entry in `state.tasks` order (tasks
-    complete in plan order and rework tasks are appended). Its record is
-    usable only when all four bounds are ints and neither difference is
-    negative: a start stamped in an earlier session (a rotated task keeps
-    its first stamp) can exceed this session's done value, and a negative
-    cost must never lower the bar.
-    """
-    tasks = state.get("tasks")
-    if not isinstance(tasks, list):
-        return FIRST_TASK_USAGE_ESTIMATE, FIRST_TASK_CALLS_ESTIMATE
-    for task in reversed(tasks):
-        if not isinstance(task, dict) or task.get("status") != "completed":
-            continue
-        bounds = [
-            _int_field(task, key)
-            for key in ("usage_at_start", "usage_at_done", "calls_at_start", "calls_at_done")
-        ]
-        if any(value is None for value in bounds):
-            break
-        usage = bounds[1] - bounds[0]
-        calls = bounds[3] - bounds[2]
-        if usage < 0 or calls < 0:
-            break
-        return usage, calls
-    return FIRST_TASK_USAGE_ESTIMATE, FIRST_TASK_CALLS_ESTIMATE
+    """`_cap_task_record.last_task_cost` with this hook's first-task estimates."""
+    return last_task_cost(state, (FIRST_TASK_USAGE_ESTIMATE, FIRST_TASK_CALLS_ESTIMATE))
 
 
 def _usage_total_from_line(line: str) -> int | None:
@@ -314,97 +302,6 @@ def _last_rotation_task(state: dict[str, Any]) -> str | None:
             if isinstance(task_id, str) and task_id:
                 return task_id
     return None
-
-
-def _write_state_write_failed_marker(autopilot_dir: Path, detail: str) -> None:
-    """Write the state-write-failed halt marker: one line of JSON, no cli
-    import, no lock, no schema validation — the recovery path must not
-    depend on the state boundary that just failed. Best-effort: a failure
-    writing the marker itself only warns on stderr, since this hook must
-    never raise into the harness.
-    """
-    marker_path = autopilot_dir / "state-write-failed"
-    line = json.dumps({"site": "statectl_fail", "detail": detail}) + "\n"
-    try:
-        autopilot_dir.mkdir(parents=True, exist_ok=True)
-        fd, tmp_name = tempfile.mkstemp(dir=str(autopilot_dir), suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                fh.write(line)
-                fh.flush()
-                os.fsync(fh.fileno())
-            os.replace(tmp_name, marker_path)
-        except OSError:
-            try:
-                os.unlink(tmp_name)
-            except OSError:
-                pass
-            raise
-    except OSError as exc:
-        print(
-            f"autopilot_context_cap_hook: failed to write state-write-failed marker ({exc})",
-            file=sys.stderr,
-        )
-
-
-def _import_cli_state(caller: str, autopilot_dir: Path) -> Any | None:
-    """Import cli.state, inserting the skill root onto sys.path first.
-
-    The hook lives in scripts/, one level below the skill root that owns the
-    cli/ package (mirrors cli/__main__.py's own bootstrap). Returns the
-    module, or None if cli/ cannot be imported at all (broken package) — the
-    hook must never raise into the harness on that path, only warn and fail
-    the write.
-    """
-    try:
-        skill_root = Path(__file__).resolve().parent.parent
-        if str(skill_root) not in sys.path:
-            sys.path.insert(0, str(skill_root))
-        from cli import state as cli_state
-    except Exception as exc:
-        detail = (
-            f"autopilot_context_cap_hook: cli package unavailable ({exc}); "
-            f"skipping {caller} to avoid a handoff with no record"
-        )
-        print(detail, file=sys.stderr)
-        _write_state_write_failed_marker(autopilot_dir, detail)
-        return None
-    return cli_state
-
-
-def _write_via_transaction(
-    autopilot_dir: Path,
-    caller: str,
-    mutate: Callable[[dict[str, Any]], dict[str, Any]],
-    validate: Callable[[dict[str, Any]], None],
-    op_desc: str | None = None,
-) -> bool:
-    """Import the cli boundary and run one locked cli.state.transaction,
-    upholding the hook's halt guarantee: ANY failure — cli/ unimportable, or
-    the transaction itself raising — writes the state-write-failed marker and
-    a stderr warning naming `op_desc`, then returns False. Never raises into
-    the harness. `op_desc` defaults to `caller` when not given. Shared by
-    `_append_rotation_to_state` and `_set_oversized_stall`, whose only
-    differences are `caller` (passed to `_import_cli_state`), `op_desc`, and
-    the mutate/validate closures.
-    """
-    op_desc = op_desc if op_desc is not None else caller
-    cli_state = _import_cli_state(caller, autopilot_dir)
-    if cli_state is None:
-        return False
-
-    state_path = autopilot_dir / "state.json"
-    try:
-        cli_state.transaction(state_path, mutate, validator=validate)
-    except Exception as exc:
-        detail = (
-            f"autopilot_context_cap_hook: state.json write failed ({exc}); "
-            f"skipping {op_desc} to avoid a handoff with no record"
-        )
-        print(detail, file=sys.stderr)
-        _write_state_write_failed_marker(autopilot_dir, detail)
-        return False
-    return True
 
 
 def _append_rotation_to_state(autopilot_dir: Path, task_id: str) -> bool:
@@ -561,154 +458,15 @@ def _emit_envelope(context: str) -> None:
     print(json.dumps(payload))
 
 
-TURN_COUNTS_FILE = ".turn-counts.json"
-
-
 def _bump_and_check_tripwire(
-    autopilot_dir: Path, session_id: str, total: int | None = None
+    autopilot_dir: Path,
+    session_id: str,
+    total: int | None = None,
+    arm: bool = True,
 ) -> tuple[int, bool]:
-    """Increment this session's tool-call counter and return `(count, fires)`:
-    the count after this call, and True exactly once, the call on which it
-    reaches TURN_TRIPWIRE. Fires at most once per session (the session id is
-    recorded under "fired"). A missing or corrupt counter file resets to zero
-    and logs; it never raises. Interactive sessions never reach here — main()'s
-    $_AUTOPILOT_LOOP + phase guards run first. The count is also the calls
-    half of the task record (PRD 00200), so it is returned even when the
-    counter could not be persisted (then `fires` is False).
-
-    The same write records this fire as `last`: `{"session", "count",
-    "usage"}` (`usage` is `total`, null when the transcript had no usage line
-    yet). The build gate reads it at the design->plan and plan->work edges to
-    apply the headroom rule where no task is in progress (PRD 00200).
-    """
-    counts_file = autopilot_dir / TURN_COUNTS_FILE
-    data: dict[str, Any] = {"counts": {}, "fired": []}
-    if counts_file.exists():
-        reset_reason: str | None = None
-        try:
-            loaded: Any = json.loads(counts_file.read_text())
-        except (OSError, ValueError):
-            loaded = None
-            reset_reason = "unreadable"
-        if isinstance(loaded, dict) and isinstance(loaded.get("counts"), dict):
-            data = {
-                "counts": dict(loaded["counts"]),
-                "fired": list(loaded.get("fired", [])),
-            }
-        elif loaded is not None:
-            reset_reason = "wrong shape"
-        # A present-but-broken file is corruption and logs; a missing file is
-        # the normal first-call state and must stay silent (else every session
-        # logs on its first tool call).
-        if reset_reason:
-            print(
-                f"autopilot_context_cap_hook: turn-counts reset ({reset_reason})",
-                file=sys.stderr,
-            )
-    # Coerce this session's prior count defensively: a valid-JSON file with a
-    # non-int value (null, "x") must reset that entry, never raise (the hook's
-    # never-crash contract; PRD error case).
-    try:
-        prior = int(data["counts"].get(session_id, 0))
-    except (TypeError, ValueError):
-        prior = 0
-        print(
-            "autopilot_context_cap_hook: turn-counts reset (bad count value)",
-            file=sys.stderr,
-        )
-    count = prior + 1
-    data["counts"][session_id] = count
-    already_fired = session_id in data["fired"]
-    fires = count >= TURN_TRIPWIRE and not already_fired
-    if fires:
-        data["fired"].append(session_id)
-    data["last"] = {"session": session_id, "count": count, "usage": total}
-    try:
-        tmp = counts_file.with_suffix(".json.tmp")
-        # Explicit handle rather than write_text: the counter must be on disk
-        # before the rename publishes it, or a power loss resurrects an old
-        # count and the tripwire re-fires (or never fires) for that session.
-        with open(tmp, "w", encoding="utf-8") as fh:
-            fh.write(json.dumps(data))
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(tmp, counts_file)
-    except OSError:
-        # A counter we cannot persist must not fire (it would re-fire forever).
-        return count, False
-    return count, fires
-
-
-_START_FIELDS = ("usage_at_start", "calls_at_start")
-_DONE_FIELDS = ("usage_at_done", "calls_at_done")
-
-
-def _record_pair(
-    task: dict[str, Any],
-    fields: tuple[str, str],
-    values: tuple[int, int | None],
-    warn: bool,
-) -> bool:
-    """Write the missing half of one usage/calls pair onto `task`.
-
-    A field already holding an int is never rewritten; a field holding a
-    non-int (a string, a bool, null) is treated as absent, named on ONE stderr
-    line per task (when `warn`), and overwritten. A None value (the session
-    count when stdin carried no session id) writes nothing for that field.
-    Returns whether the task changed.
-    """
-    bad = [
-        key
-        for key in fields
-        if key in task
-        and (isinstance(task[key], bool) or not isinstance(task[key], int))
-    ]
-    if bad and warn:
-        print(
-            f"autopilot_context_cap_hook: tasks[{task.get('id')!r}] {', '.join(bad)} "
-            "not an int; treating as absent",
-            file=sys.stderr,
-        )
-    changed = False
-    for key, value in zip(fields, values):
-        if value is None or (key in task and key not in bad):
-            continue
-        task[key] = value
-        changed = True
-    return changed
-
-
-def _record_task_bounds(
-    state: dict[str, Any],
-    task_id: str,
-    total: int,
-    count: int | None,
-    warn: bool = True,
-) -> bool:
-    """Stamp the task usage and call record (PRD 00200) onto `state.tasks`.
-
-    The in-progress task gets `usage_at_start`/`calls_at_start` on the first
-    fire after it turned in_progress; every completed task gets
-    `usage_at_done`/`calls_at_done` on the first fire after it turned
-    completed. Each field is written once (`_record_pair`). Mutates `state`
-    in place and returns whether anything changed, so the caller can decide
-    on the hook's initial read whether a locked write is needed at all, then
-    re-apply the same mutation on the transaction's fresh read (with
-    `warn=False`, so a non-int field is named once, not per pass).
-    """
-    tasks = state.get("tasks")
-    if not isinstance(tasks, list):
-        return False
-    changed = False
-    for task in tasks:
-        if not isinstance(task, dict):
-            continue
-        status = task.get("status")
-        if status == "in_progress" and task.get("id") == task_id:
-            changed |= _record_pair(task, _START_FIELDS, (total, count), warn)
-        elif status == "completed":
-            changed |= _record_pair(task, _DONE_FIELDS, (total, count), warn)
-    return changed
+    """`_cap_turn_counts.bump_and_check_tripwire` at this hook's TURN_TRIPWIRE:
+    `(count, fires)` for this session, with `last` recorded (see that module)."""
+    return bump_and_check_tripwire(autopilot_dir, session_id, TURN_TRIPWIRE, total, arm)
 
 
 def _write_task_bounds(
@@ -717,10 +475,10 @@ def _write_task_bounds(
     total: int,
     count: int | None,
 ) -> bool:
-    """Persist `_record_task_bounds` through cli.state.transaction."""
+    """Persist `record_task_bounds` through cli.state.transaction."""
 
     def _mutate(fresh: dict[str, Any]) -> dict[str, Any]:
-        _record_task_bounds(fresh, task_id, total, count, warn=False)
+        record_task_bounds(fresh, task_id, total, count, warn=False)
         return fresh
 
     def _validate(new_state: dict[str, Any]) -> None:
@@ -794,18 +552,21 @@ def _marker_dedup_blocks(
 def _handle_below_cap(
     autopilot_dir: Path,
     state: dict[str, Any],
-    task_id: str,
-    total: int,
+    task_id: str | None,
+    total: int | None,
     count: int | None,
     session_id: str,
 ) -> None:
     # Below the hard cap. When the next task would not fit (headroom rule),
     # request a clean task-boundary handoff (lossless) instead of waiting for
-    # the hard-cap rotation. No task in progress means nothing to hand off at
-    # a task boundary: the fire is a design/plan step or the wind-down after a
-    # task's commit, and a marker written then (as `unknown`) made the NEXT
+    # the hard-cap rotation. `task_id` is the in-progress task, or the task
+    # whose done pair this very fire stamped (the boundary the rule exists
+    # for, judged by that task's own measured cost). None means no task is in
+    # progress and none just completed: a design/plan step or the wind-down
+    # after a task's commit, where there is nothing to hand off at a task
+    # boundary, and a marker written then (as `unknown`) made the NEXT
     # session hand off after its first task (2026-09-14, 00190/00191/00194).
-    if task_id == "unknown":
+    if task_id is None:
         return
     last_usage, last_calls = _last_task_cost(state)
     if _headroom_exhausted(total, count, last_usage, last_calls):
@@ -905,18 +666,28 @@ def _check_caps(
             )
             return
 
-    if total is None:
-        return
-    # Task usage and call record (PRD 00200): decided on the hook's own read
-    # so a fire with nothing to stamp costs no locked write.
-    if _record_task_bounds(state, task_id, total, count):
-        _write_task_bounds(autopilot_dir, task_id, total, count)
-    if total <= limit:
-        _handle_below_cap(autopilot_dir, state, task_id, total, count, session_id)
-        return
-
-    # Hard-cap breach: livelock-stall if this task already rotated, else rotate.
-    _fire_breach(autopilot_dir, marker_file, task_id, last_rotation_task, limit, total)
+    done_task: str | None = None
+    if total is not None:
+        # Task usage and call record (PRD 00200): decided on the hook's own
+        # read so a fire with nothing to stamp costs no locked write.
+        changed, done_task = record_task_bounds(state, task_id, total, count)
+        if changed:
+            _write_task_bounds(autopilot_dir, task_id, total, count)
+        if total > limit:
+            # Hard-cap breach: livelock-stall if this task already rotated,
+            # else rotate.
+            _fire_breach(
+                autopilot_dir,
+                marker_file,
+                task_id,
+                last_rotation_task,
+                limit,
+                total,
+            )
+            return
+    # No usage line yet leaves the calls half of the headroom rule in force.
+    boundary_task = task_id if task_id != "unknown" else done_task
+    _handle_below_cap(autopilot_dir, state, boundary_task, total, count, session_id)
 
 
 def main() -> None:
@@ -942,7 +713,9 @@ def main() -> None:
     task_id = _in_progress_task_id(state)
     last_rotation_task = _last_rotation_task(state)
     marker_file = autopilot_dir / ".cap-fired"
+    transcript_path = Path(transcript_path_str)
     if _marker_dedup_blocks(marker_file, task_id, last_rotation_task):
+        _record_blocked_fire(stdin, autopilot_dir, transcript_path)
         return
 
     _check_caps(
@@ -952,8 +725,24 @@ def main() -> None:
         state,
         task_id,
         last_rotation_task,
-        Path(transcript_path_str),
+        transcript_path,
     )
+
+
+def _record_blocked_fire(
+    stdin: dict[str, Any],
+    autopilot_dir: Path,
+    transcript_path: Path,
+) -> None:
+    """A fire the `.cap-fired` marker de-duplicates still counts the call and
+    refreshes `last`, without arming the tripwire. After a rotation the
+    marker survives into the relaunched session until `/work` step 2 clears
+    it; if the blocked fires wrote nothing, the gate-edge headroom check
+    would read the dead session's exhausted `last` and hand off forever."""
+    raw_session_id = stdin.get("session_id")
+    if isinstance(raw_session_id, str) and raw_session_id:
+        total = _latest_usage_total(transcript_path)
+        _bump_and_check_tripwire(autopilot_dir, raw_session_id, total, arm=False)
 
 
 def run(payload):

@@ -45,7 +45,9 @@ def test_build_gate_hands_off_at_design_and_plan_edges() -> None:
     # applies the rule itself at both pre-task edges, naming both estimates.
     text = _PHASE_BUILD.read_text()
     design_exit = _section(text, "After design completes", "## Phase 2: Planning")
-    plan_exit = _section(text, "After completion, `state.tasks` is already current", "## Phase 3: Work")
+    plan_exit = _section(
+        text, "After completion, `state.tasks` is already current", "## Phase 3: Work"
+    )
     for where, edge in (("Phase 1.5 exit", design_exit), ("Phase 2 exit", plan_exit)):
         for needle in (
             "TURN_TRIPWIRE - count < FIRST_TASK_CALLS_ESTIMATE",
@@ -53,5 +55,19 @@ def test_build_gate_hands_off_at_design_and_plan_edges() -> None:
             "fresh build session",
         ):
             assert needle in edge, f"{_PHASE_BUILD}: the {where} lacks {needle!r}"
-    for needle in (".turn-counts.json", "`last.count`", "`last.usage`", "450 - count < 200"):
-        assert needle in design_exit, f"{_PHASE_BUILD}: the gate-edge check lacks {needle!r}"
+    for needle in (
+        ".turn-counts.json",
+        "`last.count`",
+        "`last.usage`",
+        "450 - count < 200",
+        "always describes the running session",
+    ):
+        assert needle in design_exit, (
+            f"{_PHASE_BUILD}: the gate-edge check lacks {needle!r}"
+        )
+    # After a rotation the fresh session clears the dead session's marker at
+    # Phase 0, so the hook is not blind during its prologue.
+    abort = _section(text, "### Handle Work-phase abort", "### Handle pending custody")
+    assert "_walk_up.py --clear-cap" in abort, (
+        f"{_PHASE_BUILD}: the cap-rotation handler never clears `.cap-fired`"
+    )

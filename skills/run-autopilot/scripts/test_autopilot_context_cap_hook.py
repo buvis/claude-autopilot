@@ -73,6 +73,13 @@ class HookFixture:
         default.update(fields)
         (self.autopilot_dir / "state.json").write_text(json.dumps(default))
 
+    def seed_counter(self, session_id: str, count: int) -> None:
+        """Seed the hook's per-session tool-call counter so the next fire is
+        call `count + 1`."""
+        (self.autopilot_dir / ".turn-counts.json").write_text(
+            json.dumps({"counts": {session_id: count}, "fired": []}),
+        )
+
     def write_transcript_lines(self, lines: list[dict]) -> None:
         with self.transcript.open("w") as f:
             for entry in lines:
@@ -248,11 +255,6 @@ class ContextCapHookTests(unittest.TestCase):
 
     # Task usage and call record (PRD 00200) --------------------------------
 
-    def _seed_counter(self, session_id: str, count: int) -> None:
-        (self.fx.autopilot_dir / ".turn-counts.json").write_text(
-            json.dumps({"counts": {session_id: count}, "fired": []}),
-        )
-
     def _tasks(self) -> list[dict]:
         return json.loads((self.fx.autopilot_dir / "state.json").read_text())["tasks"]
 
@@ -265,7 +267,7 @@ class ContextCapHookTests(unittest.TestCase):
             tasks=[{"id": "t1", "name": "y", "status": "in_progress"}],
         )
         self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=120_000)])
-        self._seed_counter("test-session", 41)
+        self.fx.seed_counter("test-session", 41)
         result = self.fx.run_hook()
         self.assertEqual(result.returncode, 0)
         task = self._tasks()[0]
@@ -307,7 +309,7 @@ class ContextCapHookTests(unittest.TestCase):
             ],
         )
         self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=250_000)])
-        self._seed_counter("test-session", 209)
+        self.fx.seed_counter("test-session", 209)
         result = self.fx.run_hook()
         self.assertEqual(result.returncode, 0)
         done, earlier, pending = self._tasks()
@@ -336,7 +338,7 @@ class ContextCapHookTests(unittest.TestCase):
             ],
         )
         self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=120_000)])
-        self._seed_counter("test-session", 41)
+        self.fx.seed_counter("test-session", 41)
         result = self.fx.run_hook()
         self.assertEqual(result.returncode, 0)
         task = self._tasks()[0]
