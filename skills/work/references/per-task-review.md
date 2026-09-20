@@ -42,6 +42,15 @@ Dispatch via the sonnet runner (helper-script dispatch — the **Subagent Watchd
 bash ${CLAUDE_PLUGIN_ROOT}/skills/use-sonnet/scripts/sonnet-run.sh -t "" -S "<pat_session_id>" -f dev/local/tmp/review-task-<id>-prompt.md -o dev/local/tmp/review-task-<id>.md
 ```
 
+Run it as a plain foreground Bash call (the Bash tool's `timeout`, 600000 ms,
+the tool's maximum, bounds it), never with `run_in_background`. A headless loop session that ends
+its turn while a background job is still running is torn down together with
+the job: the output file reads `[killed]`, Pat's dispatch row reads `lost`, and
+the wrapper relaunches a session that re-orients and re-runs him (2026-09-14,
+00191 T1 and agent-skills 00052 T2, one session lost each). If a run was
+backgrounded anyway, the next call is `Monitor` on its output file, never a
+bare end of turn.
+
 `-t ""` grants the child no tools at all: Pat judges the diff, the task text and
 the recorded verification, and nothing else. No `-a`/`-y` either — the reviewer
 needs no write access, and a read-only dispatch must never run with bypassed

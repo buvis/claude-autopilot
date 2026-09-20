@@ -42,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: a headless session only stands down for a peer whose session name starts with this repository's directory basename; the other repo's loop is no longer evidence of a live owner, and Phase 0 asks that peer (one `SendMessage`, 120 s) and requires writer evidence (a dirty tracked tree, or a state write after the batch's last `leave` handoff row) before it pauses, so a session that merely reads state never stands a batch down
 - **run-autopilot**: the context-cap hook no longer requests a task-boundary handoff when no task is in progress (the `unknown` marker that made the next session hand off after its first task), and a second `unknown` rotation in one PRD rotates again instead of parking the PRD as an oversized task
 - **run-autopilot**: the context-cap hook now guards review-phase rework sessions (a review session with `rework_task_ids` queued ran unbounded to 448K and 427 calls until the wall cap killed it mid-task); a rotation there returns to the review gate, which resumes the rework dispatch from this cycle's review file instead of re-reviewing
+- **work**: Pat's per-task review is dispatched as a foreground Bash call, never backgrounded, so a session cannot end its turn and be torn down with the review still running
 
 ## [0.5.2] - 2026-09-13
 

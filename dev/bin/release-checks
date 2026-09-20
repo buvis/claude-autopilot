@@ -83,4 +83,5 @@ uv run --no-project --with pytest python -m pytest -q \
 echo "[checks] loop blockers prose"
 uv run --no-project --with pytest python -m pytest -q \
   skills/work/scripts/test_tess_size_limits_prose.py \
-  skills/work/scripts/test_step_order_prose.py
+  skills/work/scripts/test_step_order_prose.py \
+  skills/work/scripts/test_loop_blockers_prose.py
