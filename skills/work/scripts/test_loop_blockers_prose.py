@@ -36,3 +36,16 @@ def test_pat_dispatch_is_foreground_never_backgrounded() -> None:
             f"{_PER_TASK_REVIEW}: § Dispatch lacks {needle!r}, so nothing stops "
             "the orchestrator from backgrounding Pat and ending the turn."
         )
+
+
+def test_devon_skips_prose_pin_tasks() -> None:
+    # A substring pin cannot see negation, inversion or past-tense narration,
+    # so every Devon round on a prose-pin task ends `round exhausted` at that
+    # ceiling (four of four on 2026-09-14/15, about 55 minutes of Opus time,
+    # nothing kept). Devon is step 2.9 since PRD 00202.
+    step_2_9 = _section(_WORK_SKILL.read_text(), _WORK_SKILL, "### 2.9.", "### 2.95.")
+    for needle in ("ends in `_prose.py`", "skip Devon", "devon: skipped:prose"):
+        assert needle in step_2_9, (
+            f"{_WORK_SKILL}: step 2.9 lacks {needle!r}, so a prose-pin task "
+            "still pays for a Devon round that cannot keep anything."
+        )

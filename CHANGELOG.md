@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **work**: Tess is told the 50-line function and 800-line file limits up front (rule 12), and the step-2.8 quality gate runs the style script over the test files, so an oversized test file is fixed by a Tess retry instead of an Ivan split after implementation
 - **work**: Tess is told the limits up front (rule 12: test functions under 50 lines, test files under 800 lines), and the step-2.8 quality gate runs the style script over the test files, so an oversized test file is fixed by a Tess retry instead of an Ivan split after implementation
 - **work**: Tess's tests are committed as soon as they pass the step-2.8 quality gate, before Devon (steps renumbered: 2.85 commit tests, 2.9 Devon, 2.95 red-check), strengthened tests are committed again before Devon's re-check, a context-cap rotation commits every dirty allowlisted file as `chore(<scope>): wip - rotated mid-task`, and the next session resumes from that commit's body instead of re-dispatching Tess
+- **work**: Devon is skipped on a task whose tests are all prose pins (`*_prose.py`), recorded as `devon: skipped:prose`; every such round ended at the substring-pin ceiling with nothing kept
 
 ### Fixed
 
