@@ -94,7 +94,9 @@ def test_step_6_5_writes_the_leave_row_before_the_stop() -> None:
     )
 
     handoff = (_REFS / "task-boundary-handoff.md").read_text()
-    command = f"{_HANDOFF_CALL} --site build --edge leave"
+    # The row carries the marker's own phase since PRD 00191, not a literal
+    # build (a review-phase handoff was misfiled as build work before that).
+    command = f"{_HANDOFF_CALL} --site <marker phase> --edge leave"
     assert command in handoff, (
         "references/task-boundary-handoff.md never writes the `leave` row for "
         "the task-boundary handoff."
@@ -197,12 +199,14 @@ def test_attempt_logging_points_at_the_ledger_and_keeps_timing_out_of_the_record
 
 def test_every_handoff_site_writes_its_edge() -> None:
     # A `leave` with no matching `resume` (or the reverse) measures nothing.
-    # Counts per file: build and done each hand off once and resume once;
-    # review resumes once and hands off twice (review → review, review → done).
+    # Counts per file: build resumes once and hands off twice (build → review,
+    # and the gate-edge headroom handoff to a fresh build session, PRD 00200);
+    # done hands off once and resumes once; review resumes once and hands off
+    # twice (review → review, review → done).
     expectations = {
         "phase-build.md": {
             "--site build --edge resume": 1,
-            "--site build --edge leave": 1,
+            "--site build --edge leave": 2,
         },
         "phase-review.md": {
             "--site review --edge resume": 1,

@@ -263,10 +263,12 @@ def test_zero_tasks_is_delivered_where_tasks_are_actually_created() -> None:
         "so it creates the task Phase 5 then declines to create - and step 7 "
         "runs first, so the task wins."
     )
-    assert "CRITICAL or HIGH is not skipped" in review, (
-        "review-work-completion/SKILL.md step 7 no longer exempts CRITICAL and "
-        "HIGH from the skip. They are never routed, so they must keep getting "
-        "their task."
+    # Since PRD 00194 a CRITICAL gets its task from Phase 6 (after the rework
+    # design), so step 7 exempts HIGH alone; it is still never routed.
+    assert "A queued **HIGH is not skipped**" in review, (
+        "review-work-completion/SKILL.md step 7 no longer exempts a queued "
+        "HIGH from the skip. It is never routed, so it must keep getting its "
+        "task."
     )
 
 
