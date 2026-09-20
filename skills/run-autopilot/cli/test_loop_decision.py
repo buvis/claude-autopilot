@@ -442,6 +442,58 @@ def test_no_yield_kill_switch(tmp_path):
     assert "yielding" not in lp._test["out"].getvalue()
 
 
+def _yield_probe(tmp_path, monkeypatch, *, oldest, env=None):
+    """Drive `_yield_at_warning` directly with a live warning on disk and a
+    pinned oldest-loop answer, returning (result, decision). Each negative
+    branch is asserted on its own early return, not only on a missing
+    side effect, so an inverted comparison cannot pass."""
+    clock = FakeClock(start=time.time())
+    lp = make_loop(tmp_path, [], clock=clock, env=env)
+    ap = lp._test["ap_dir"]
+    write_log(ap, _warning_event(int(clock.now) + 600))
+    monkeypatch.setattr(lp, "_oldest_live_loop_pid", lambda: oldest)
+    decision = {"signal": "continue", "detail": "", "limit_wait": None}
+    return lp._yield_at_warning(decision, ap / "last-session.log"), decision
+
+
+def test_yield_at_warning_returns_false_when_this_loop_is_the_oldest(
+    tmp_path, monkeypatch
+):
+    lp_pid = make_loop(tmp_path / "probe", []).loop_pid
+    result, decision = _yield_probe(tmp_path, monkeypatch, oldest=lp_pid)
+    assert result is False
+    assert decision == {"signal": "continue", "detail": "", "limit_wait": None}
+
+
+def test_yield_at_warning_returns_false_with_no_other_live_loop(tmp_path, monkeypatch):
+    result, decision = _yield_probe(tmp_path, monkeypatch, oldest=None)
+    assert result is False
+    assert decision["limit_wait"] is None
+
+
+def test_yield_at_warning_kill_switch_short_circuits_before_reading_the_log(
+    tmp_path, monkeypatch
+):
+    from cli import loop_decision
+
+    def must_not_read(path):
+        raise AssertionError("the kill switch must return before the log is read")
+
+    monkeypatch.setattr(loop_decision.usage_limit, "detect_warning_from_log", must_not_read)
+    result, decision = _yield_probe(
+        tmp_path, monkeypatch, oldest=1, env={"_AUTOPILOT_NO_YIELD": "1"}
+    )
+    assert result is False
+    assert decision["limit_wait"] is None
+
+
+def test_yield_at_warning_yields_to_an_older_live_loop(tmp_path, monkeypatch):
+    result, decision = _yield_probe(tmp_path, monkeypatch, oldest=1)
+    assert result is True
+    assert decision["limit_wait"] >= 600
+    assert decision["detail"].startswith("yielding the window to loop 1 until ~")
+
+
 def test_a_registry_entry_without_started_at_is_ignored_loudly_and_never_yields(
     tmp_path,
 ):

@@ -113,6 +113,19 @@ def _probe_api() -> bool:
         return False
 
 
+def _stood_down_fields(decision: dict) -> dict:
+    """The paused row's stand-down fields (PRD 00199): why the session
+    stood down and on what evidence, so a false stand-down (a reader
+    mistaken for a writer) is visible in the ledger, not only in the
+    notification. Empty for every other row."""
+    if not decision.get("stood_down"):
+        return {}
+    return {
+        "stood_down": decision["stood_down"],
+        "stood_down_condition": decision.get("stood_down_condition", "unknown"),
+    }
+
+
 class Loop(GatesMixin, DecisionMixin, ActMixin):
     """One `autopilot loop` invocation: drives sessions until drain,
     pause, halt, or an operator signal. Collaborators are injectable so
@@ -260,14 +273,7 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
                 "model": model,
                 "effort": effort,
             }
-            if decision.get("stood_down"):
-                # PRD 00199: the paused row names why and on what evidence,
-                # so a false stand-down (a reader mistaken for a writer) is
-                # visible in the ledger, not only in the notification.
-                line["stood_down"] = decision["stood_down"]
-                line["stood_down_condition"] = decision.get(
-                    "stood_down_condition", "unknown"
-                )
+            line.update(_stood_down_fields(decision))
             cost = last_result_field(ap_dir / "last-session.log", "total_cost_usd")
             if isinstance(cost, (int, float)) and not isinstance(cost, bool):
                 line["cost_usd"] = cost
