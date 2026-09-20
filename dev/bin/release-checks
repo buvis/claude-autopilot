@@ -85,3 +85,7 @@ uv run --no-project --with pytest python -m pytest -q \
   skills/work/scripts/test_tess_size_limits_prose.py \
   skills/work/scripts/test_step_order_prose.py \
   skills/work/scripts/test_loop_blockers_prose.py
+echo "[checks] l4"
+uv run --no-project --with pytest python -m pytest -q \
+  skills/review-work-completion/scripts/test_consolidate_findings.py \
+  skills/review-work-completion/scripts/test_citation_format_prose.py

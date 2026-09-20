@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: the context-cap hook no longer requests a task-boundary handoff when no task is in progress (the `unknown` marker that made the next session hand off after its first task), and a second `unknown` rotation in one PRD rotates again instead of parking the PRD as an oversized task
 - **run-autopilot**: the context-cap hook now guards review-phase rework sessions (a review session with `rework_task_ids` queued ran unbounded to 448K and 427 calls until the wall cap killed it mid-task); a rotation there returns to the review gate, which resumes the rework dispatch from this cycle's review file instead of re-reviewing
 - **work**: Pat's per-task review is dispatched as a foreground Bash call, never backgrounded, so a session cannot end its turn and be torn down with the review still running
+- **review-work-completion**: consensus matching now treats `path (lines a-b)`, `path (lines 18-22, 423)`, `path#L12-L20` and `N/A (a.py:77, b.py:91)` citations as the file they name, so a reviewer's citation format no longer splits one agreement into two `[1/N]` rows; the personas now ask for repo-relative `path:line` citations, and the consolidator notes on stderr when a row merged only after suffix stripping
 
 ## [0.5.2] - 2026-09-13
 
