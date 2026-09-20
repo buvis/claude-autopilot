@@ -262,10 +262,10 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
         model: str,
         effort: str,
     ) -> None:
-        """One JSONL line per session, after the decision and before any
-        exit path, plus the review_converged row when a review exits to done.
-        Observation only - the append can never block or fail the loop (the
-        one sanctioned silent failure, scoped to itself)."""
+        """One JSONL line per session, after the decision and before any exit
+        path, plus the review_converged row when a review exits to done. Observation
+        only: the append can never block or fail the loop (the one sanctioned
+        silent failure, scoped to itself)."""
         try:
             line = {
                 "ts_start": int(ts_start),

@@ -94,7 +94,7 @@ def _pending_ids(tasks) -> list:
 def _lane_line(state: dict) -> str:
     # PRD 00205: the effective lane beside its classification, `none` on a
     # state written before the lane fields existed.
-    if not isinstance(state.get("lane_effective"), str):
+    if _text(state.get("lane_effective")) == "none":
         return "- lane: none"
     return (
         f"- lane: {_text(state.get('lane_effective'))} (classified "
