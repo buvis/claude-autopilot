@@ -106,6 +106,7 @@ def test_step_2_resumes_from_a_wip_commit() -> None:
         "continues at step 2.9",
         "parent of the earliest",
         "newest `test(` commit",
+        "stopping at the first commit that is not this task's",
     ):
         assert needle in step_2, (
             f"{_SKILL_MD}: step 2 lacks {needle!r}, so a session after a "
