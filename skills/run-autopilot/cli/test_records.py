@@ -434,6 +434,7 @@ class SchemaResetParityTest(unittest.TestCase):
             "rework_cap",
             "doubt_reviewer",
             "consensus_engine",
+            "session_model",
             "qwen_gate_failures_consecutive",
             "qwen_breaker",
             "codex_probe",
