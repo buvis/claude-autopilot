@@ -10,6 +10,7 @@ rule passes while a dropped rule fails.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 _SKILL = Path(__file__).resolve().parent.parent / "SKILL.md"
@@ -101,6 +102,31 @@ def test_stand_down_names_the_three_conditions_in_the_marker() -> None:
             '"condition": "<peer_claimed | dirty_tree | state_after_leave>"',
             "`stood_down_condition`",
         ),
+    )
+
+
+def _handoff_procedure() -> str:
+    start = _TEXT.index("### Session handoff procedure")
+    return _TEXT[start : _TEXT.index("\n### ", start + 1)]
+
+
+def test_every_handoff_site_writes_the_brief() -> None:
+    # PRD 00201: the run-autopilot site. The work task-boundary handoff and
+    # the review-work-completion cycle transition are outside lane L3; their
+    # lines are named in the 00201 T4 commit's Integrator trailer, and this
+    # test grows to cover them once they land.
+    procedure = _handoff_procedure()
+    match = re.search(r"statectl\.py \S+ write-brief dev/local/autopilot/session-brief\.md", procedure)
+    assert match, f"{_SKILL}: the handoff procedure has no write-brief line"
+    _assert_all(
+        procedure,
+        "the handoff procedure",
+        ("after the contract card", "A failed write is one stderr line, never a phase failure"),
+    )
+    # The brief is rendered from the committed transition and before the
+    # leave row: transition (step 1) < write-brief < record_dispatch.
+    assert procedure.index("phase-done --outcome") < match.start() < procedure.index(
+        "record_dispatch.py handoff"
     )
 
 

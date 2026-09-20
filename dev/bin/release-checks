@@ -63,4 +63,6 @@ uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_loop_prose.py \
   skills/run-autopilot/cli/test_pause.py \
   skills/run-autopilot/cli/test_usage_limit.py \
-  skills/run-autopilot/cli/test_loop_decision.py
+  skills/run-autopilot/cli/test_loop_decision.py \
+  skills/run-autopilot/cli/test_brief.py \
+  skills/run-autopilot/cli/test_runner.py
