@@ -36,3 +36,23 @@ def test_review_gate_resumes_rework_from_the_review_file() -> None:
     )
     for needle in ("PRD 00196", "every listed task is `completed`", "does not fire"):
         assert needle in window, f"{_PHASE_REVIEW}: the third skip lacks {needle!r}"
+
+
+def test_resume_drops_completed_ids_and_keeps_a_sweep_on_its_finalize_path() -> None:
+    # Review 1 of PRD 00196: rework mode re-runs every listed id whatever its
+    # status, and a rotated Tail sweep must not re-enter a rework cycle.
+    text = _PHASE_REVIEW.read_text()
+    window = text[text.index(_CYCLE_SKIP) : text.index(_INVOKE)]
+    for needle in (
+        "drop every id whose task is already `completed` from `state.rework_task_ids`",
+        "must not be implemented twice",
+        "[D{cycle}] Tail sweep",
+        "resume at Tail sweep step 3",
+        "reopen a converged cycle",
+    ):
+        assert needle in window, f"{_PHASE_REVIEW}: the third skip lacks {needle!r}"
+    sweep = text[text.index("### Tail sweep") : text.index("**3. Dispatch.**")]
+    assert "[D{cycle}] Tail sweep: <theme>" in sweep, (
+        f"{_PHASE_REVIEW}: Tail sweep step 2 no longer names its task with the "
+        "`Tail sweep` prefix the resume rule reads."
+    )

@@ -452,11 +452,12 @@ class HeadroomHandoffTests(unittest.TestCase):
         on every fire for any task with a purely numeric id. Several ids, so a
         reader that special-cases one literal cannot pass; a bracketed number
         is JSON that names no task and stays empty."""
-        module = _load_hook_module()
+        from _cap_handoff_marker import marker_task_id
+
         for task_id in ("0", "7", "42", "123456"):
             with self.subTest(marker=task_id):
-                self.assertEqual(module._marker_task_id(task_id), task_id)
-        self.assertEqual(module._marker_task_id("[42]"), "")
+                self.assertEqual(marker_task_id(task_id), task_id)
+        self.assertEqual(marker_task_id("[42]"), "")
 
     def test_handoff_marker_numeric_legacy_same_task_not_rewritten(self) -> None:
         """The same-task no-op holds for a numeric id: a legacy plain `19` for

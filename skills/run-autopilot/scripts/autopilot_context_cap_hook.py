@@ -22,16 +22,13 @@ thresholds against a single cost ceiling:
 - **Headroom rule** (below the hard cap, PRD 00200) — writes a
   `.handoff-requested` marker when the next task would not fit: the usage
   left under `USAGE_CAP`, or the calls left under `TURN_TRIPWIRE`, is less
-  than what the last task completed in this session cost (its recorded
-  `usage_at_*`/`calls_at_*` bounds), or than the fixed first-task estimates
-  when no task has completed yet. This is non-destructive: state.json is
-  untouched and no envelope is emitted. `/work` reads the marker only at
-  step 6.5, after the task-done write, and hands off to a fresh session,
-  which resumes the phase with the remaining pending tasks. With no task in
-  progress (a design or plan step) there is no task boundary to hand off at,
-  so the rule never fires then; the build gate checks the same rule itself at
-  the design->plan and plan->work edges from the `last` record in
-  `.turn-counts.json`.
+  than what the last completed task cost (its recorded `usage_at_*` /
+  `calls_at_*` bounds), or than the fixed first-task estimates before any
+  has. Non-destructive: state.json is untouched and no envelope is emitted;
+  `/work` reads the marker at step 6.5, after the task-done write. With no
+  task in progress there is no boundary to hand off at, so the rule never
+  fires then; the build gate applies it itself at the design->plan and
+  plan->work edges from the `last` record in `.turn-counts.json`.
 
 The cost ceiling is a single constant (`USAGE_CAP`), not a window-tiered
 pair: cost scales linearly with context (every turn re-sends the whole window
@@ -39,21 +36,16 @@ as input), so the cap bounds per-task spend rather than tracking the model's
 window. There is no window classification.
 
 Active only inside the autopilot shell loop (`$_AUTOPILOT_LOOP`, same guard
-as review_coverage_hook.py) AND when `dev/local/autopilot/state.json` exists
-with `phase == "build"`, or `phase == "review"` with a non-empty
-`rework_task_ids` (cycle-1 rework runs `/work` inside the review session,
-PRD 00196; a review session with no rework is unguarded). The env guard is
-load-bearing: parked batch state
-lingers in dev/local/autopilot/ between relaunches, and without the guard a
-long INTERACTIVE session sharing the cwd tree gets treated as a build session
-at the cap and writes rotations/stalls into the parked batch's state
-(observed 2026-07-19). The autopilot directory is located by walking up from
-cwd (the agent may have cd'd into a subdirectory during build; same fix as
-a0c5b8e09 for the stop hook). One-shot per task via `.cap-fired` marker,
-which carries the in-progress task id; when the in-progress task changes
-between PostToolUse fires, the hook clears the stale marker itself rather
-than relying on the `/work` step-2 Bash clear (which is a backstop). This
-keeps the cap functional even if the model skips step 2 on a subsequent task.
+as review_coverage_hook.py) AND in a guarded phase (`_guarded_phase`: build,
+or review with rework queued, PRD 00196). The env guard is load-bearing:
+parked batch state lingers in dev/local/autopilot/ between relaunches, and
+without it a long INTERACTIVE session sharing the cwd tree wrote rotations
+and stalls into the parked batch's state (observed 2026-07-19). The autopilot
+directory is located by walking up from cwd (the agent may have cd'd into a
+subdirectory; same fix as a0c5b8e09 for the stop hook). One-shot per task via
+the `.cap-fired` marker, which carries the in-progress task id; when that
+task changes between fires the hook clears the stale marker itself rather
+than relying on the `/work` step-2 Bash clear (a backstop).
 
 Stdlib only. The standalone path is self-contained apart from its sibling
 modules in this directory (`_walk_up`, `_cap_state_write`, `_cap_task_record`,
@@ -67,10 +59,10 @@ from __future__ import annotations
 import json
 import os
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from _cap_handoff_marker import request_handoff
 from _cap_state_write import (
     import_cli_state,
     write_state_write_failed_marker,
@@ -346,6 +338,15 @@ def _last_rotation_task(state: dict[str, Any]) -> str | None:
     return None
 
 
+def _last_rotation_phase(state: dict[str, Any]) -> str:
+    """The phase the most recent cap_rotations entry was recorded in; entries
+    written before PRD 00196 carry no phase and were all build rotations."""
+    rotations = state.get("cap_rotations")
+    if isinstance(rotations, list) and rotations and isinstance(rotations[-1], dict):
+        return "review" if rotations[-1].get("phase") == "review" else "build"
+    return "build"
+
+
 def _append_rotation_to_state(autopilot_dir: Path, task_id: str) -> bool:
     """Append one cap_rotations entry, reset the in-flight task to pending,
     write through cli.state.transaction (the advisory-locked read-modify-
@@ -368,7 +369,9 @@ def _append_rotation_to_state(autopilot_dir: Path, task_id: str) -> bool:
         rotations = fresh.get("cap_rotations")
         if not isinstance(rotations, list):
             rotations = []
-        rotations.append({"task_id": task_id, "cycle": fresh.get("cycle")})
+        rotations.append(
+            {"task_id": task_id, "cycle": fresh.get("cycle"), "phase": _phase_of(fresh)},
+        )
         fresh["cap_rotations"] = rotations
         # Reset the in-flight task to pending so the rotated /work re-attempts
         # it. The sentinel "unknown" (no in_progress task) matches nothing ->
@@ -413,6 +416,8 @@ def _set_oversized_stall(autopilot_dir: Path, task_id: str, total: int) -> bool:
             "task": task_id,
             "total_input_tokens": total,
         }
+        # The stall recovery re-enters the phase it left (PRD 00196).
+        fresh["next_phase"] = _phase_of(fresh)
         return fresh
 
     def _validate(new_state: dict[str, Any]) -> None:
@@ -430,69 +435,6 @@ def _set_oversized_stall(autopilot_dir: Path, task_id: str, total: int) -> bool:
         _mutate,
         _validate,
     )
-
-
-def _marker_task_id(text: str) -> str:
-    """Return the task id a `.handoff-requested` marker names, or "".
-
-    Reads both the JSON object this hook writes and the legacy bare task id
-    earlier versions wrote. Task ids are integer strings, so a bare number is
-    a legacy task id even though it parses as JSON. Anything else — empty,
-    whitespace, a JSON list or null — names no task, so the marker gets
-    replaced.
-    """
-    text = text.strip()
-    if not text:
-        return ""
-    try:
-        payload = json.loads(text)
-    except json.JSONDecodeError:
-        return text
-    if isinstance(payload, dict):
-        task_id = payload.get("task_id")
-        return task_id if isinstance(task_id, str) else ""
-    return text if isinstance(payload, int) else ""
-
-
-def _request_handoff(
-    autopilot_dir: Path, task_id: str, session_id: str, phase: str
-) -> None:
-    """Write the `.handoff-requested` marker (one-shot per task).
-
-    Unlike the hard-cap rotation, this is non-destructive: state.json is left
-    untouched and no envelope is emitted. `/work` checks the marker at a task
-    boundary (after a task commits) and hands off cleanly to a fresh session,
-    which resumes the phase with the remaining pending tasks.
-
-    The marker is a JSON object with exactly four fields: the phase the hook
-    fired in (`build`, or `review` during rework, PRD 00196: step 6.5 honours
-    a marker only in its own phase), the requesting session's id, a UTC
-    stamp, and the in-progress task id.
-    When an existing marker (JSON or legacy bare task id) already names the
-    current task this is a redundant PostToolUse fire and the function is a
-    no-op, leaving the file byte-identical; when it names an earlier task (the
-    session advanced without `/work` honoring the marker) it is overwritten so
-    the request stays current. Best-effort: an unwritable autopilot dir is
-    swallowed, same contract as the marker write on the rotation path.
-    """
-    marker = autopilot_dir / ".handoff-requested"
-    if marker.exists():
-        try:
-            existing = marker.read_text()
-        except OSError:
-            return
-        if _marker_task_id(existing) == task_id:
-            return
-    payload = {
-        "phase": phase,
-        "session": session_id,
-        "at": datetime.now(timezone.utc).isoformat(),
-        "task_id": task_id,
-    }
-    try:
-        marker.write_text(json.dumps(payload))
-    except OSError:
-        pass
 
 
 def _emit_envelope(context: str) -> None:
@@ -544,6 +486,7 @@ def _fire_breach(
     limit: int,
     total: int,
     phase: str,
+    last_rotation_phase: str = "build",
 ) -> None:
     """Shared hard-breach action for both the context cap and the turn
     tripwire: livelock-stall when this task already rotated once, else rotate.
@@ -552,9 +495,17 @@ def _fire_breach(
     that failed to fit twice: two such rotations in one PRD are two long
     pre-task steps, and the artifacts they wrote survive, so rotate again
     rather than park the PRD as an oversized task that does not exist
-    (observed 2026-09-13, PRD 00200).
+    (observed 2026-09-13, PRD 00200). The last rotation must also be from
+    this phase: a task that rotated during build, completed, and was
+    review-flagged is a fresh attempt in review, not the same overrun twice
+    (PRD 00196).
     """
-    if last_rotation_task == task_id and task_id != "unknown":
+    livelock = (
+        last_rotation_task == task_id
+        and task_id != "unknown"
+        and last_rotation_phase == phase
+    )
+    if livelock:
         _handle_livelock(autopilot_dir, marker_file, task_id, total)
     else:
         _handle_rotation(autopilot_dir, marker_file, task_id, limit, phase)
@@ -618,7 +569,7 @@ def _handle_below_cap(
         return
     last_usage, last_calls = _last_task_cost(state)
     if _headroom_exhausted(total, count, last_usage, last_calls):
-        _request_handoff(autopilot_dir, task_id, session_id, _phase_of(state))
+        request_handoff(autopilot_dir, task_id, session_id, _phase_of(state))
 
 
 def _handle_livelock(
@@ -713,6 +664,7 @@ def _check_caps(
                 limit,
                 total if total is not None else limit,
                 _phase_of(state),
+                _last_rotation_phase(state),
             )
             return
 
@@ -756,6 +708,7 @@ def _record_and_breach(
             _usage_limit(),
             total,
             _phase_of(state),
+            _last_rotation_phase(state),
         )
         return ""
     return done_task

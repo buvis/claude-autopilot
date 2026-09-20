@@ -108,7 +108,7 @@ breaker could never reach 2.
 
 ## Cap rotation
 
-Reached from **Phase 0** when `state.cap_rotations` gained an entry but no `stall_reason` is set. A Work turn during `build` exceeded the context cap; `autopilot_context_cap_hook.py` appended `{task_id, cycle}` to `state.cap_rotations`, reset the in-flight task's status to `pending`, and set `next_phase: "build"` — a ROTATION, not a replan. The session then ends its turn and the loop wrapper relaunches on the non-empty `next_phase`. There is nothing to do here: the rotation is lossless and needs no handler.
+Reached from **Phase 0** when `state.cap_rotations` gained an entry but no `stall_reason` is set. A Work turn during `build` exceeded the context cap; `autopilot_context_cap_hook.py` appended `{task_id, cycle, phase}` to `state.cap_rotations`, reset the in-flight task's status to `pending`, and set `next_phase` to the phase it left (`build` here; a review-phase rework rotation sets `review` and lands on the review gate's Phase 4 third skip instead, PRD 00196) — a ROTATION, not a replan. The session then ends its turn and the loop wrapper relaunches on the non-empty `next_phase`. There is nothing to do here: the rotation is lossless and needs no handler.
 
 The fresh session resumes `build` by artifact: capsule fresh → skip catchup; `state.tasks` non-empty → skip planning; `/autopilot:work` continues at the first non-completed task. Because the in-flight task was reset to `pending`, it is that first non-completed task: its uncommitted partial attempt is discarded and re-attempted. Only the in-flight task's status changes (`in_progress → pending`); other `state.tasks` and `phases_completed` are untouched; `replan_count` is unchanged; no `replan-context.md` is written.
 

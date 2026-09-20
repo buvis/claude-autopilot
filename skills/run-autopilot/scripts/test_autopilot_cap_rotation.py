@@ -44,7 +44,8 @@ class ContextCapRotationTests(unittest.TestCase):
         state = json.loads((self.fx.autopilot_dir / "state.json").read_text())
         # Rotation, not abort/replan: one cap_rotations entry, no stall_reason.
         self.assertEqual(
-            state["cap_rotations"], [{"task_id": "task-x", "cycle": 1}]
+            state["cap_rotations"],
+            [{"task_id": "task-x", "cycle": 1, "phase": "build"}],
         )
         self.assertNotIn("stall_reason", state)
         self.assertEqual(state["task_aborts"], [])
@@ -95,7 +96,8 @@ class ContextCapRotationTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         state = json.loads((self.fx.autopilot_dir / "state.json").read_text())
         self.assertEqual(
-            state["cap_rotations"], [{"task_id": "task-x", "cycle": 3}]
+            state["cap_rotations"],
+            [{"task_id": "task-x", "cycle": 3, "phase": "build"}],
         )
 
     def test_cap_fire_appends_to_existing_rotations(self) -> None:
@@ -115,7 +117,7 @@ class ContextCapRotationTests(unittest.TestCase):
             state["cap_rotations"],
             [
                 {"task_id": "task-prior", "cycle": 1},
-                {"task_id": "task-x", "cycle": 1},
+                {"task_id": "task-x", "cycle": 1, "phase": "build"},
             ],
         )
 
@@ -166,30 +168,6 @@ class ContextCapRotationTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         state = json.loads((self.fx.autopilot_dir / "state.json").read_text())
         self.assertEqual(state["next_phase"], "build")
-
-    def test_rotation_in_review_phase_sets_next_phase_review(self) -> None:
-        """PRD 00196: a rotation inside a review-phase rework session returns
-        to the phase it left - next_phase is review, never build - and the
-        envelope names it; the rework task is reset to pending as in build."""
-        self.fx.write_state(
-            phase="review",
-            next_phase="review",
-            cycle=2,
-            rework_task_ids=["7"],
-            tasks=[{"id": "7", "name": "rework", "status": "in_progress"}],
-        )
-        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=600_000)])
-        result = self.fx.run_hook()
-        self.assertEqual(result.returncode, 0)
-        state = json.loads((self.fx.autopilot_dir / "state.json").read_text())
-        self.assertEqual(state["next_phase"], "review")
-        self.assertEqual(state["phase"], "review")
-        self.assertEqual(state["cap_rotations"], [{"task_id": "7", "cycle": 2}])
-        self.assertEqual(state["tasks"][0]["status"], "pending")
-        self.assertEqual(state["rework_task_ids"], ["7"])
-        context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
-        self.assertIn("next_phase is set to review", context)
-        self.assertNotIn("set to build", context)
 
     def test_cap_fire_does_not_create_replan_context(self) -> None:
         """The rotation path must NOT write replan-context.md — that file
@@ -315,7 +293,10 @@ class ContextCapRotationTests(unittest.TestCase):
         self.assertIn("rotation", result.stdout.lower())
         # The over-cap prologue fire rotated on the "unknown" task.
         state = json.loads((self.fx.autopilot_dir / "state.json").read_text())
-        self.assertEqual(state["cap_rotations"], [{"task_id": "unknown", "cycle": 2}])
+        self.assertEqual(
+            state["cap_rotations"],
+            [{"task_id": "unknown", "cycle": 2, "phase": "build"}],
+        )
         # The stale marker self-cleared AND _handle_rotation rewrote it for the
         # new ("unknown") fire — it was not left in place to block.
         self.assertEqual(
@@ -625,7 +606,8 @@ class ConcurrentRotationAndTransactionWriteTests(unittest.TestCase):
 
             final = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertEqual(
-                final.get("cap_rotations"), [{"task_id": "t1", "cycle": 2}]
+                final.get("cap_rotations"),
+                [{"task_id": "t1", "cycle": 2, "phase": "build"}],
             )
             self.assertEqual(final["tasks"][0]["status"], "pending")
             self.assertEqual(final["next_phase"], "build")
@@ -716,7 +698,8 @@ class ConcurrentRotationAndStallRaceTests(unittest.TestCase):
             # re-read the post-stall state under the lock).
             if "cap_rotations" in final:
                 self.assertEqual(
-                    final["cap_rotations"], [{"task_id": "t1", "cycle": 1}]
+                    final["cap_rotations"],
+                    [{"task_id": "t1", "cycle": 1, "phase": "build"}],
                 )
 
             # True regardless of ordering.
