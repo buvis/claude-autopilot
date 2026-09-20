@@ -370,6 +370,21 @@ def test_step_4_7_marks_the_contract_exclusion_unreachable_on_new_plans() -> Non
     )
 
 
+def test_step_4_7_says_default_model_floors_tasks_never_the_session() -> None:
+    # PRD 00200 decoupled the orchestrator model from the task floor. A
+    # planner reading only this step must learn that `default_model: opus`
+    # buys no opus session and that `session_model` is the key that does.
+    assert "session_model" in _STEP_4_7_PROSE, (
+        f"{_SKILL_MD}: step 4.7 never names `session_model`, so a PRD author "
+        "reading the floor rule still expects `default_model: opus` to pick "
+        "the build session's model."
+    )
+    assert _clause(_STEP_4_7_PROSE, "default_model: opus", "never picks the orchestrator"), (
+        f"{_SKILL_MD}: step 4.7 no longer says, in one sentence, that "
+        "`default_model: opus` never picks the orchestrator."
+    )
+
+
 def test_step_4_7_keeps_its_keepers_when_the_rules_table_retires() -> None:
     # The rewrite deletes the classification table. The three mechanisms
     # around it are NOT part of that deletion, and a rewrite that takes them

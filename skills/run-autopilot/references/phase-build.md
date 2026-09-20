@@ -113,7 +113,8 @@ recognized, what values they accept, and what each defaults to.
 
 Fields it recognizes and their state targets: `catchup`→`catchup_mode`,
 `rework_cap`, `design`→`design_mode`, `design_gate`, `doubt_reviewer`,
-`consensus_engine`, `pause_on_ambiguity`. Three dispositions, and the
+`consensus_engine`, `pause_on_ambiguity`, `session_model` (the build
+session's model, `sonnet` by default; PRD 00200). Three dispositions, and the
 difference between them matters when reading the output: an **invalid** value
 takes the default and warns naming the field; an **absent** field takes the
 default silently; a **malformed or missing block** takes every default and
@@ -122,7 +123,9 @@ warns exactly once. It never crashes Phase 0 on a frontmatter problem.
 Frontmatter is the source of truth; once Phase 0 has applied it, do not
 re-parse it after Phase 0. (Exception by design: `default_model` belongs to
 `/autopilot:plan-tasks` and is re-read from the PRD at Phase 6 rework dispatch — Phase 0
-never touches it, and `frontmatter.py` deliberately does not recognize it.)
+never touches it, and `frontmatter.py` deliberately does not recognize it. It
+floors the per-task tier only; the session's model is `session_model`, which
+`cli/routing.build_model` re-reads from the PRD at every launch.)
 
 `eligibility:` is likewise not recognized here, and deliberately so: it is not
 a state field. `cli/eligibility.py` reads it at **pick time** (step 2), one

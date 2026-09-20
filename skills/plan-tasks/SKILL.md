@@ -291,7 +291,7 @@ PRD frontmatter accepts an optional `default_model: haiku|sonnet|opus` field tha
 
 - **Absent frontmatter or unset `default_model:`** → no override (silent; omit `--default-model` and the classifier's tier passes through unchanged). This is what keeps `haiku` reachable without requiring every PRD to opt in explicitly — and matches `/autopilot:run-autopilot` Phase 6's `[D]` follow-up behavior.
 - **Malformed frontmatter or invalid `default_model:` value** → no override AND log a one-line warning. The classifier output passes through. `fable` is deliberately not in the accepted set: it is human-gated — use the rescue flow (PRD 00076, `run-autopilot/references/model-ladder.md` § Fable rescue), never a frontmatter floor. Warn with that reason rather than a bare "invalid value" so the omission reads as policy.
-- **Valid value (`haiku`/`sonnet`/`opus`)** → pass it as `--default-model` and the floor below applies.
+- **Valid value (`haiku`/`sonnet`/`opus`)** → pass it as `--default-model` and the floor below applies. The floor is all this key does: `default_model: opus` never picks the orchestrator, a PRD that wants an opus build session declares `session_model: opus` beside it (PRD 00200; `run-autopilot/references/state-schema.md` § Build-Session Model Promotion Signals).
 
 `classify_tier.py` applies the floor itself, after its own rules have produced a tier, by taking the maximum across the precedence `haiku < sonnet < opus` (only when `default_model` is a valid value):
 

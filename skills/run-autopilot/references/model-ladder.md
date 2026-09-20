@@ -300,7 +300,7 @@ happens, they do not add a second mechanism.
 
 | Signal | Class | Clears when |
 |--------|-------|-------------|
-| 1. frontmatter `default_model: opus` | sticky | Never automatically. Declared author intent; only editing the PRD removes it. |
+| 1. frontmatter `session_model: opus` | sticky | Never automatically. Declared author intent; only editing the PRD removes it. (`default_model: opus` floors the task tier and drives no session since PRD 00200.) |
 | 2. `replan_count > 0` | live | Phase 9 step 10 resets it to 0 at PRD completion. Within a PRD it is monotonic, so the promotion holds for that PRD's remaining sessions. |
 | 3a. `stall_reason != null` | live | `/autopilot:run-autopilot` clears the field once it handles the stall. This is the one signal that already decayed before this PRD. |
 | 3b. durable stall in the deferred logs | live | The stall ages out of the 2-newest-file window as later batches write their own logs. |
