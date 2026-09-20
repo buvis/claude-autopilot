@@ -129,9 +129,37 @@ class StatectlCompletePrdTest(unittest.TestCase):
                 "escalated_decisions": 1,
                 "tasks_completed": 5,
                 "tasks_total": 7,
+                "lane": None,
+                "lane_reason": None,
+                "lane_effective": None,
+                "lane_escalated": None,
             },
         )
         self.assertEqual(state["batch"]["parks_consecutive"], 0)
+
+    def test_completed_prd_record_carries_lane_fields(self) -> None:
+        # Present values are copied verbatim (PRD 00204); the exact-equality
+        # test above pins that an absent one renders null, never a default.
+        self.write_state(
+            {
+                "phase": "done",
+                "prd": "0000X-example.md",
+                "lane": "solo",
+                "lane_reason": "no_production_code",
+                "lane_effective": "full",
+                "lane_escalated": {"from": "solo", "signal": "unnamed_path"},
+                "batch": {"parks_consecutive": 0},
+            },
+        )
+        result = self.run_cli("complete-prd", "0000X-example.md")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        record = self.load_state()["batch"]["completed_prds"][-1]
+        self.assertEqual(record["lane"], "solo")
+        self.assertEqual(record["lane_reason"], "no_production_code")
+        self.assertEqual(record["lane_effective"], "full")
+        self.assertEqual(
+            record["lane_escalated"], {"from": "solo", "signal": "unnamed_path"}
+        )
 
     # Regression: escalated_decisions is an EXCLUSION rule (anything other than
     # pending/deferred counts), not an allowlist of the single word "resolved" -

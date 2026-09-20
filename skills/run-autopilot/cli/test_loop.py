@@ -263,6 +263,35 @@ def test_a_conditionless_stand_down_row_reads_unknown_and_other_rows_carry_neith
     assert "stood_down_condition" not in done_row
 
 
+def test_session_row_carries_lane_fields(tmp_path):
+    lane_build = _state_step(
+        prd="00204-x-v1.md",
+        next_phase="review",
+        batch={"id": "b"},
+        lane="solo",
+        lane_reason="no_production_code",
+        lane_effective="full",
+    )
+    lp = make_loop(tmp_path, [lane_build, terminal_step()])
+    ap = lp._test["ap_dir"]
+    write_state(ap, prd="00204-x-v1.md", next_phase="build", batch={"id": "b"})
+    assert lp.run() == 0
+    row = _metrics_rows(ap)[0]  # the mirror is byte-identical
+    assert row["phase_launched"] == "build"
+    assert row["lane"] == "solo"
+    assert row["lane_effective"] == "full"
+
+
+def test_session_row_lane_is_null_without_state_fields(tmp_path):
+    lp = make_loop(tmp_path, [terminal_step(batch="b")])
+    ap = lp._test["ap_dir"]
+    write_state(ap, prd="00204-x-v1.md", next_phase="build", batch={"id": "b"})
+    assert lp.run() == 0
+    (row,) = _metrics_rows(ap)
+    assert row["lane"] is None
+    assert row["lane_effective"] is None
+
+
 def _state_step(**state):
     """A session that writes ``state`` and a bare result log."""
 

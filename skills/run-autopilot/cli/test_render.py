@@ -82,6 +82,75 @@ class GoldenRenderTests(unittest.TestCase):
         self.assertEqual(text, (EXPECTED / "status.txt").read_text(encoding="utf-8"))
 
 
+class LaneLineTests(unittest.TestCase):
+    """The `- Lane:` section line and the `- PRDs by lane:` summary line
+    (PRD 00204): state first, the closing record after the per-PRD reset,
+    loud when neither carries a lane."""
+
+    def test_lane_line_reads_from_the_record_after_reset(self) -> None:
+        state = _state()
+        for key in ("lane", "lane_reason", "lane_effective"):
+            del state[key]
+        state["batch"]["completed_prds"].append(
+            {
+                "filename": state["prd"],
+                "cycles": 2,
+                "lane": "solo",
+                "lane_reason": "no_production_code",
+                "lane_effective": "full",
+                "lane_escalated": None,
+            },
+        )
+        text = render_report.prd_section(state, _rows(), NOW)
+        self.assertIn("- Lane: full (classified solo, no_production_code)\n", text)
+
+    def test_lane_line_names_the_escalation(self) -> None:
+        state = _state()
+        state.update(
+            lane="solo",
+            lane_reason="no_production_code",
+            lane_effective="full",
+            lane_escalated={"from": "solo", "signal": "security_diff"},
+        )
+        text = render_report.prd_section(state, _rows(), NOW)
+        self.assertIn(
+            "- Lane: full (classified solo, no_production_code), "
+            "escalated from solo: security_diff\n",
+            text,
+        )
+
+    def test_unclassified_lane_renders_loud(self) -> None:
+        state = _state()
+        for key in ("lane", "lane_reason", "lane_effective"):
+            del state[key]
+        text = render_report.prd_section(state, _rows(), NOW)
+        self.assertIn("- Run conditions: no review_converged row\n- Lane: unclassified\n", text)
+
+    def test_batch_summary_counts_prds_by_lane(self) -> None:
+        state = _state()
+        state["batch"]["completed_prds"] = [
+            {"filename": "a.md", "lane": "full", "lane_effective": "full"},
+            {"filename": "b.md", "lane": "full", "lane_effective": "full"},
+            {"filename": "c.md", "lane": "solo", "lane_effective": "solo"},
+            {
+                "filename": "d.md",
+                "lane": "solo",
+                "lane_effective": "full",
+                "lane_escalated": {"from": "solo", "signal": "unnamed_path"},
+            },
+            "00001-legacy-string-entry-v1.md",
+        ]
+        text = render_report.batch_summary(state, _rows())
+        self.assertIn(
+            "- PRDs skipped: 0\n"
+            "- PRDs by lane: solo 1, fast-track 0, full 3; escalated 1; unclassified 1\n",
+            text,
+        )
+        state["batch"]["completed_prds"] = state["batch"]["completed_prds"][:4]
+        text = render_report.batch_summary(state, _rows())
+        self.assertIn("- PRDs by lane: solo 1, fast-track 0, full 3; escalated 1\n", text)
+
+
 class MetricsFilterTests(unittest.TestCase):
     def test_matching_rows_excludes_other_prd_and_other_batch(self) -> None:
         state = _state()

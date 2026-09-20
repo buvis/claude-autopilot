@@ -167,6 +167,8 @@ class DecisionMixin:
             "prd": "",
             "batch": "",
             "limit_wait": None,
+            "lane": None,
+            "lane_effective": None,
         }
         state_path = ap_dir / "state.json"
         marker = ap_dir / "state-write-failed"
@@ -203,6 +205,8 @@ class DecisionMixin:
         decision["batch"] = (state.get("batch") or {}).get("id") or ""
         decision["phase_end"] = state.get("next_phase") or ""
         decision["next"] = decision["phase_end"]
+        decision["lane"] = state.get("lane")
+        decision["lane_effective"] = state.get("lane_effective")
         detail = pause_detail(state)
         stalled = None
         stall = state.get("stall_reason")

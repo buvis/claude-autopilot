@@ -768,6 +768,8 @@ def test_metrics_effort_follows_model_and_displaces_no_other_field(tmp_path):
         "signal",
         "model",
         "effort",
+        "lane",
+        "lane_effective",
     ]
     assert row["ts_start"] == 1_700_000_000
     assert row["ts_end"] == 1_700_000_123

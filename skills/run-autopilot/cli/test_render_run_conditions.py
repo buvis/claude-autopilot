@@ -181,7 +181,9 @@ class RunConditionsTests(unittest.TestCase):
 
     def test_missing_event_row_renders_loud(self) -> None:
         text = render_report.prd_section(_state(), _rows(), NOW)
-        self.assertIn("3/3\n- Run conditions: no review_converged row\n\n", text)
+        self.assertIn(
+            "3/3\n- Run conditions: no review_converged row\n- Lane: full", text
+        )
 
     def test_legacy_five_positional_call_still_renders_the_section(self) -> None:
         text = render_report.prd_section(_state(), _rows(), NOW, [], None)

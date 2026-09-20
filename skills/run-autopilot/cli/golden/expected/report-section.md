@@ -4,6 +4,7 @@
 - Cycles: 2
 - Tasks: 3/3
 - Run conditions: cap 2 · 2 cycles, converged · c1 alice,blake,bob 0/1/1/0 · c2 alice,blake,bob 0/0/0/0 (crit/high/med/low) · build claude-sonnet-5 · tiers sonnet,opus · tasks 3 planned, 3 in PRD
+- Lane: full (classified full, design)
 
 ### Assumptions Made
 

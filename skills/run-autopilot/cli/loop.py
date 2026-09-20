@@ -276,6 +276,8 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
                 "signal": decision["signal"],
                 "model": model,
                 "effort": effort,
+                "lane": decision.get("lane"),
+                "lane_effective": decision.get("lane_effective"),
             }
             line.update(_decision_fields(decision))
             cost = last_result_field(ap_dir / "last-session.log", "total_cost_usd")

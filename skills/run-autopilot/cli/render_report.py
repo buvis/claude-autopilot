@@ -566,6 +566,25 @@ def run_conditions_line(row: dict) -> str:
     return " · ".join(segments)
 
 
+def lane_line(state: dict, record: dict | None) -> str:
+    """The `- Lane:` line (PRD 00204): `<lane_effective> (classified <lane>,
+    <reason>)` from the state while Phase 0 has not overwritten the fields,
+    else from the closing batch record, plus `, escalated from <lane>:
+    <signal>` when the source carries `lane_escalated`. Neither carrying
+    `lane` renders `unclassified`, loud rather than blank."""
+    source = state if "lane" in state else (record or {})
+    lane = source.get("lane")
+    if not lane:
+        return "- Lane: unclassified"
+    effective = source.get("lane_effective") or "?"
+    reason = source.get("lane_reason") or "?"
+    text = f"- Lane: {effective} (classified {lane}, {reason})"
+    escalated = source.get("lane_escalated")
+    if isinstance(escalated, dict):
+        text += f", escalated from {escalated.get('from')}: {escalated.get('signal')}"
+    return text
+
+
 def prd_section(
     state: dict,
     metrics_rows: list[dict],
@@ -604,6 +623,7 @@ def prd_section(
         f"- Cycles: {cycles}",
         f"- Tasks: {_tasks_line(state, record, convergence)}",
         f"- Run conditions: {conditions}",
+        lane_line(state, record),
         "",
     ]
     lines += _assumptions(autonomous)
@@ -644,6 +664,29 @@ def batch_started(state: dict, metrics_rows: list[dict]) -> str:
     return _started_iso(batch_id, _batch_rows(batch_id, metrics_rows))
 
 
+def lanes_line(completed: list) -> str:
+    """`- PRDs by lane: solo N, fast-track N, full N; escalated N` over the
+    batch's records, counted by `lane_effective` (the lane that ran); a
+    record carrying `lane_escalated` counts under its escalated-to lane AND
+    under `escalated`. Records without a recognised `lane_effective` (bare
+    strings, pre-lane dicts) add `; unclassified N`, only when N > 0."""
+    counts = {"solo": 0, "fast-track": 0, "full": 0}
+    escalated = unclassified = 0
+    for entry in completed:
+        lane = entry.get("lane_effective") if isinstance(entry, dict) else None
+        if lane not in counts:
+            unclassified += 1
+            continue
+        counts[lane] += 1
+        if isinstance(entry.get("lane_escalated"), dict):
+            escalated += 1
+    text = "- PRDs by lane: " + ", ".join(f"{k} {v}" for k, v in counts.items())
+    text += f"; escalated {escalated}"
+    if unclassified:
+        text += f"; unclassified {unclassified}"
+    return text
+
+
 def batch_summary(
     state: dict,
     metrics_rows: list[dict],
@@ -668,6 +711,7 @@ def batch_summary(
         # Always rendered, zero included: a drain that skipped everything must
         # read as "N skipped", never as a silent 0-done batch.
         f"- PRDs skipped: {len(skips)}",
+        lanes_line(completed),
         f"- Total cycles: {_sum('cycles')}",
         f"- Autonomous decisions: {_sum('autonomous_decisions')}",
         f"- Escalated decisions: {_sum('escalated_decisions')}",

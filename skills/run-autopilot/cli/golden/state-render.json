@@ -7,6 +7,9 @@
   "rework_cap": 3,
   "tasks_total": 3,
   "tasks_completed": 3,
+  "lane": "full",
+  "lane_reason": "design",
+  "lane_effective": "full",
   "schema_version": 1,
   "batch": {
     "id": "202607202320",

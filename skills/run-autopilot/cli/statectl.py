@@ -362,7 +362,10 @@ def _completed_prd_record(data: dict[str, Any]) -> dict[str, Any]:
     `tasks_completed` and `tasks_total` may also be absent - the transition
     table leaves them unset on a PRD that never rewrites them - so they fall
     back to their own writers' defaults (1 for `cycle`, matching
-    `transitions._rework`; 0 for the task counts).
+    `transitions._rework`; 0 for the task counts). The lane fields (PRD
+    00204) are copied verbatim, `null` when absent, so the report's `Lane:`
+    line can fall back to the record; `lane_reason` rides along so that
+    fallback names the rule too.
     """
     autonomous = data.get("autonomous_decisions") or []
     deferred = data.get("deferred_decisions") or []
@@ -376,6 +379,10 @@ def _completed_prd_record(data: dict[str, Any]) -> dict[str, Any]:
         "escalated_decisions": escalated,
         "tasks_completed": data.get("tasks_completed", 0),
         "tasks_total": data.get("tasks_total", 0),
+        "lane": data.get("lane"),
+        "lane_reason": data.get("lane_reason"),
+        "lane_effective": data.get("lane_effective"),
+        "lane_escalated": data.get("lane_escalated"),
     }
 
 
