@@ -38,7 +38,9 @@ Subcommands:
         list and in state.batch.skips[] when a state file exists. Decides
         only - the verified backlog->wip move stays with the caller.
     frontmatter --state --prd
-        frontmatter.parse(), applied to state in ONE transaction and echoed
+        frontmatter.parse(), plus lane.classify() over the same text
+        (`lane`, `lane_reason`, `lane_effective`; the one reader of
+        _AUTOPILOT_LANES), applied to state in ONE transaction and echoed
         as JSON; warnings go to stderr.
     phase-done --state --outcome
         transitions.apply(): the next phase AND every field effect the
@@ -139,6 +141,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -155,6 +158,7 @@ from cli import (
     frontmatter,
     gate,
     handoff,
+    lane,
     policy,
     records,
     render_audit,
@@ -598,6 +602,26 @@ def _add_frontmatter(subparsers) -> None:
     p.add_argument("--prd", required=True)
 
 
+def _lane_fields(text: str) -> tuple[dict, list[str]]:
+    """The three lane fields `cli/lane.py` decides for this PRD, and the one
+    warning an invalid `lane:` value earns (silence when the key is absent).
+    This verb is the one reader of `_AUTOPILOT_LANES`; `off` forces full."""
+    declared = frontmatter.declared(text)
+    verdict = lane.classify(text, declared)
+    warnings: list[str] = []
+    if "lane" in declared and declared["lane"] not in lane.LANES:
+        warnings.append(
+            f"autopilot: PRD frontmatter lane={declared['lane']!r} is not one of "
+            f"solo/fast-track/full; defaulting to {verdict.lane}",
+        )
+    fields = {
+        "lane": verdict.lane,
+        "lane_reason": verdict.reason,
+        "lane_effective": lane.effective(verdict.lane, os.environ.get("_AUTOPILOT_LANES")),
+    }
+    return fields, warnings
+
+
 def _run_frontmatter(args: argparse.Namespace) -> int:
     prd_path = Path(args.prd)
     try:
@@ -606,7 +630,9 @@ def _run_frontmatter(args: argparse.Namespace) -> int:
         print(f"autopilot: cannot read PRD {prd_path}: {err}", file=sys.stderr)
         return 1
     fields, warnings = frontmatter.parse(text)
-    for line in warnings:
+    lane_fields, lane_warnings = _lane_fields(text)
+    fields.update(lane_fields)
+    for line in warnings + lane_warnings:
         print(line, file=sys.stderr)
 
     state_path = _resolve_state_path(args.state)

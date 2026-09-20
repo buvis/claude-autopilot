@@ -149,6 +149,20 @@ class ValidateEnumFieldsTest(unittest.TestCase):
         self.assertIn("consensus_engine", msg)
         self.assertIn("hybrid", msg)
 
+    def test_lane_enums_are_validated(self) -> None:
+        for field in ("lane", "lane_effective"):
+            for value in ("solo", "fast-track", "full"):
+                state = valid_state()
+                state[field] = value
+                schema.validate(state)
+            state = valid_state()
+            state[field] = "fast"
+            with self.assertRaises(schema.SchemaError) as ctx:
+                schema.validate(state)
+            msg = str(ctx.exception)
+            self.assertIn(field, msg)
+            self.assertIn("fast", msg)
+
 
 class ValidateLegacyPhaseToleranceTest(unittest.TestCase):
     """Regression guard: legacy phase values must never be rejected."""

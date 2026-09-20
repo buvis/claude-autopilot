@@ -47,6 +47,8 @@ _ENUMS: dict[str, set[str]] = {
     "doubt_reviewer": {"codex", "fable"},
     "consensus_engine": {"legacy", "shadow", "workflow"},
     "session_model": {"sonnet", "opus"},
+    "lane": {"solo", "fast-track", "full"},
+    "lane_effective": {"solo", "fast-track", "full"},
 }
 
 # The severity vocabulary an appended `autonomous_decisions` entry may use.
