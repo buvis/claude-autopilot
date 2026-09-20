@@ -61,6 +61,15 @@ HOST_MARKERS = (
 
 DEFAULT_PROMPT = "/autopilot:run-autopilot"
 DEFAULT_GRACE_SECS = 60
+BRIEF_NAME = "session-brief.md"
+BRIEF_SUFFIX = " Read dev/local/autopilot/session-brief.md first."
+
+
+def prompt_for(autopilot_dir: Path, prompt: str = DEFAULT_PROMPT) -> str:
+    """The launch prompt: `prompt`, plus the brief sentence when the previous
+    session's hand-off left `session-brief.md` beside state.json (PRD 00201).
+    A missing brief leaves the prompt as it was."""
+    return prompt + BRIEF_SUFFIX if (autopilot_dir / BRIEF_NAME).is_file() else prompt
 
 
 def child_env(env: dict) -> tuple[dict, list[str]]:
@@ -239,7 +248,13 @@ def spawn(
     if env is None:
         env = dict(os.environ)
     fallback = env.get("_AUTOPILOT_FALLBACK_MODEL", "claude-sonnet-5[1m]")
-    argv = build_argv(model, effort, fallback, runner_bin=runner_bin, prompt=prompt)
+    argv = build_argv(
+        model,
+        effort,
+        fallback,
+        runner_bin=runner_bin,
+        prompt=prompt_for(autopilot_dir, prompt),
+    )
     log_path = autopilot_dir / "last-session.log"
     if presenter is None:
         presenter = make_presenter(env)

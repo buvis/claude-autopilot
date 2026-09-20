@@ -20,6 +20,7 @@ from cli.runner import (
     build_argv,
     child_env,
     make_presenter,
+    prompt_for,
     spawn,
 )
 
@@ -102,6 +103,50 @@ def test_spawn_tees_raw_output_and_feeds_the_presenter(tmp_path):
     assert b"second line\n" in raw
     assert b"".join(collector.lines) == raw
     assert collector.closed is True
+
+
+def _argv_stub(tmp_path: Path) -> str:
+    return _stub_runner(tmp_path, "import json\nprint(json.dumps(sys.argv[1:]))")
+
+
+def _launch_argv(tmp_path: Path, ap: Path) -> list[str]:
+    """The argv the stub runner received, i.e. what build_argv produced."""
+    result = spawn(
+        "m",
+        "low",
+        cap_secs=30,
+        autopilot_dir=ap,
+        env={},
+        runner_bin=_argv_stub(tmp_path),
+        presenter=_Collector(),
+    )
+    return json.loads(result.log_path.read_text())
+
+
+def test_prompt_names_the_brief_when_present(tmp_path):
+    # PRD 00201: a hand-off left session-brief.md beside state.json, so the
+    # next launch tells the session to read it first. Asserted on the argv
+    # build_argv produced, whose last element is the prompt.
+    ap = _ap_dir(tmp_path)
+    (ap / "session-brief.md").write_text("# Session brief\n")
+    argv = _launch_argv(tmp_path, ap)
+    assert argv[-1] == (
+        "/autopilot:run-autopilot Read dev/local/autopilot/session-brief.md first."
+    )
+    assert argv[:-1] == build_argv("m", "low", "claude-sonnet-5[1m]")[1:-1]
+
+
+def test_prompt_is_unchanged_without_a_brief(tmp_path):
+    ap = _ap_dir(tmp_path)
+    argv = _launch_argv(tmp_path, ap)
+    assert argv[-1] == "/autopilot:run-autopilot"
+    assert argv == build_argv("m", "low", "claude-sonnet-5[1m]")[1:]
+
+
+def test_a_brief_that_is_a_directory_does_not_count(tmp_path):
+    ap = _ap_dir(tmp_path)
+    (ap / "session-brief.md").mkdir()
+    assert prompt_for(ap) == "/autopilot:run-autopilot"
 
 
 def test_spawn_sets_the_command_scoped_unattended_env(tmp_path):
