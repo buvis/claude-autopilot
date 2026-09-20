@@ -110,7 +110,34 @@ def test_twenty_five_paths_exit_two_naming_cards(tmp_path: Path) -> None:
     proc = _run(FIXTURES / "twenty-five-paths.md", out)
     assert proc.returncode == 2
     assert proc.stderr.startswith("cards_from_prd.py: cards:")
-    assert not out.exists() or list(out.glob("*")) == []
+    # render_cards raises before it creates --out, so nothing is left behind.
+    assert not out.exists()
+
+
+def test_invalid_utf8_prd_exits_two_naming_prd(tmp_path: Path) -> None:
+    prd = tmp_path / "latin1.md"
+    prd.write_bytes(b"---\ndesign: skip\n---\n\n# Caf\xe9\n")
+    proc = _run(prd, tmp_path / "cards")
+    assert proc.returncode == 2
+    assert proc.stderr.startswith("cards_from_prd.py: prd:")
+    assert "Traceback" not in proc.stderr
+
+
+def test_write_failure_on_a_later_card_rolls_back_the_first(tmp_path: Path, monkeypatch) -> None:
+    written: list[Path] = []
+    real_write = Path.write_text
+
+    def flaky(self: Path, *args, **kwargs):
+        if self.name.endswith("-c2.md"):
+            raise OSError(28, "No space left on device")
+        written.append(self)
+        return real_write(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", flaky)
+    with pytest.raises(cards.RenderError) as caught:
+        cards.render_cards(FIXTURES / "00188-repaired.md", tmp_path, REPO)
+    assert caught.value.field == "out"
+    assert written and not any(p.exists() for p in written), "card 1 was rolled back"
 
 
 def test_item_slugs_match_card_py() -> None:
@@ -151,7 +178,9 @@ def test_model_follows_default_model_else_sonnet() -> None:
 
 def test_changelog_field_is_the_task_that_names_it(tmp_path: Path) -> None:
     first, second = cards.render_cards(FIXTURES / "00188-repaired.md", tmp_path, REPO)
-    assert _fields(first)["changelog"] == ""
+    # `none`, the literal fast-track § Card skips the CHANGELOG edit on, not
+    # the PRD's "empty": an empty value would request an empty entry.
+    assert _fields(first)["changelog"] == "none"
     changelog = _fields(second)["changelog"]
     assert changelog.startswith("- [ ] Document the row in")
     assert "CHANGELOG" in changelog

@@ -218,7 +218,9 @@ def _render(
         f"item: {_item(stem, n)}",
         f"model: {_model(declared)}",
         f"suite: {'batch' if n == total else 'per-item'}",
-        f"changelog: {changelog_task}",
+        # `none` is the literal fast-track § Card skips the CHANGELOG edit on;
+        # an empty value would ask the implementor for an empty entry.
+        f"changelog: {changelog_task or 'none'}",
     ]
     if not shipped:
         head.append(f"framework: {_framework(text)}")
@@ -241,8 +243,12 @@ def _render(
 
 def render_cards(prd_path: Path, out_dir: Path, root: Path) -> list[Path]:
     """Write one card per CardPlan under `out_dir` and return their paths;
-    on the first refusal remove every written card and raise."""
-    text = prd_path.read_text(encoding="utf-8")
+    on the first refusal (a field, a card the lane refuses, a failed write)
+    remove every written card and raise."""
+    try:
+        text = prd_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise RenderError("prd", str(exc)) from exc
     plans = lane.plan_cards(text)
     if not plans:
         raise RenderError(
@@ -256,7 +262,10 @@ def render_cards(prd_path: Path, out_dir: Path, root: Path) -> list[Path]:
         for n, plan in enumerate(plans, start=1):
             rendered = _render(plan, n, len(plans), text, declared, stem, root)
             path = out_dir / f"{_item(stem, n)}.md"
-            path.write_text(rendered, encoding="utf-8")
+            try:
+                path.write_text(rendered, encoding="utf-8")
+            except OSError as exc:
+                raise RenderError("out", str(exc)) from exc
             written.append(path)
             card.load_card(path)
     except (RenderError, card.CardError):
@@ -279,7 +288,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"cards_from_prd.py: {exc}", file=sys.stderr)
         return 2
     except OSError as exc:
-        print(f"cards_from_prd.py: prd: {exc}", file=sys.stderr)
+        # `out_dir.mkdir` is the one write outside render_cards' rollback.
+        print(f"cards_from_prd.py: out: {exc}", file=sys.stderr)
         return 2
     for path in paths:
         print(path)

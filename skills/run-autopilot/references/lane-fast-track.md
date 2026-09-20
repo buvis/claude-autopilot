@@ -32,8 +32,18 @@ uncardable)`).
 
 ## 2. Mirror
 
-Mirror one `state.tasks` entry per card, in card order, so tracon and the
-task counts stay live:
+Capture `work_start_sha` and `repo_root` (and `git_dir` for a bare-repo
+root) first, on every entry, exactly per the Phase 3 invariants (core
+`SKILL.md` § Phase 3 invariants): once per PRD, only when unset. A re-entry
+(a context-cap rotation, a died-retry relaunch) that finds them set leaves
+them alone; one that finds them unset captures them now, before any card
+runs.
+
+Then mirror the cards idempotently: `task-add` does not deduplicate, so a
+re-entry must not double the task list. Mirror one `state.tasks` entry per
+card, in card order, for every card whose `item` is not already the `name`
+of a task in `state.tasks`, so tracon and the task counts stay live; a first
+entry mirrors them all, a re-entry mirrors only the cards still missing.
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json task-add <task-json-file>
@@ -41,15 +51,14 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local
 
 Each `<task-json-file>` (written with the Write tool) is `{"name": "<item>"}`
 where `<item>` is the card's `item` field (`<prd-stem>-c<n>`); no `model`
-key. Capture the printed id per card.
-
-Then capture `work_start_sha` and `repo_root` (and `git_dir` for a bare-repo
-root) exactly per the Phase 3 invariants (core `SKILL.md` § Phase 3
-invariants): once per PRD, only when unset.
+key. Capture the printed id per card (an already-mirrored card keeps the id
+its task carries).
 
 ## 3. Run
 
-For each card in order:
+Run from the first card whose task's `status` is not `completed`: a
+re-entry after a crash skips the cards already committed instead of
+re-implementing them over their own commits. For each such card in order:
 
 1. `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json task-start <id>`.
 2. Invoke `/autopilot:fast-track <card path>` through the Skill tool, one
@@ -67,15 +76,25 @@ For each card in order:
    red gate, a green-before-implementation suite, a failed branch or reset):
    also stop the runbook with the same stall, its detail naming the
    `stopped:` reason.
+4. After the last card, read the batch-suite line of its report (the
+   `suite: batch` run fast-track makes at the end of the run). Fast-track
+   uses that result only to condition a push, which this lane never asks
+   for, so the runbook decides it: any failure stops the runbook with the
+   same stall, detail `suite red: <counts>`, before anything is
+   consolidated. A red repo suite never reaches `lane_reviewed`.
 
 ### Stall
 
-A card whose exit rule prints `branch` stops the runbook. Run the Loop-mode
-stall procedure (`references/recovery.md`) with the site `fast_track_blocked`:
+A card whose exit rule prints `branch` stops the runbook, as does a card
+that stopped or a red batch suite. Run the Loop-mode stall procedure
+(`references/recovery.md`) with the site `fast_track_blocked`:
 
 ```bash
 autopilot stall --prd <state.prd> --site fast_track_blocked --detail "fast-track/<item>: <surviving findings>"
 ```
+
+(`fast-track/<item>: stopped: <reason>` for a stopped card,
+`fast-track/<item>: suite red: <counts>` for the batch suite.)
 
 Every earlier card's commits stay on the working branch, since each passed
 its roster; the parked card's commits sit under the `fast-track/<item>`
@@ -99,10 +118,10 @@ reviewers: <the union of the lenses that ran across the cards: alice or fanout, 
 
 ## Alice
 
-### <item 1>
+**<item 1>**
 <that card's rows from this lens, or its one-line all-clear>
 
-### <item 2>
+**<item 2>**
 ...
 
 ## Blake
@@ -113,10 +132,14 @@ Tests: N passed, M failed, K skipped (fast-track batch suite)
 codex_rung_guard: not fired
 ```
 
-`reviewers:` names the lanes that ran (`alice` when the consensus lane ran
-as the subagent, `fanout` when the workflow ran it; `blake`, `eve`, `bob`,
-`carl` when they reported), one `## <Name>` section per reviewer holding
-each card's rows from that lens (or its one-line all-clear), `Verdict:
+The per-card labels are bold lines, never `###` sub-headings: the gate's
+`reviewer_section_nonempty` ends a reviewer's section at the first `#` line
+after its heading, so a sub-heading would make every section read as empty
+and the close would be rejected. `reviewers:` names the lanes that ran
+(`alice` when the consensus lane ran as the subagent, `fanout` when the
+workflow ran it; `blake`, `eve`, `bob`, `carl` when they reported), one
+`## <Name>` section per reviewer holding each card's rows from that lens
+(or its one-line all-clear), `Verdict:
 converged` when no row survived any card else `Verdict: N findings` (N =
 the surviving rows across the cards), the `Tests:` counts from the last
 card's `suite: batch` run, and `codex_rung_guard: not fired` always (no

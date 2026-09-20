@@ -9,6 +9,7 @@ Stdlib only; pytest collects the module-level tests with no config.
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 _REFERENCES = Path(__file__).resolve().parents[1] / "references"
@@ -200,6 +201,45 @@ def test_fast_track_runbook_never_pushes() -> None:
     carrying = [s for s in _sentences(_fast_track()) if "--push" in s]
     assert carrying, "the runbook must say what it does with --push"
     assert all("never passed" in s for s in carrying), carrying
+
+
+def test_fast_track_runbook_guards_resume_and_stalls_a_red_suite() -> None:
+    mirror = " ".join(_section(_fast_track(), "## 2. Mirror").split())
+    assert mirror.index("Capture `work_start_sha`") < mirror.index("Then mirror")
+    assert "whose `item` is not already the `name` of a task in `state.tasks`" in mirror
+    run = " ".join(_section(_fast_track(), "## 3. Run").split())
+    assert "Run from the first card whose task's `status` is not `completed`" in run
+    assert "A red repo suite never reaches `lane_reviewed`" in run
+    assert "detail `suite red: <counts>`" in run
+
+
+def test_fast_track_review_template_passes_the_gate(tmp_path: Path) -> None:
+    # The consolidated file's per-card labels are bold lines: a `###`
+    # sub-heading would end every reviewer's section at its first line and
+    # the gate would reject the close (00206 review 1).
+    consolidate = _section(_fast_track(), "## 4. Consolidate")
+    fence = re.search(r"```\n(.*?)```", consolidate, re.DOTALL)
+    assert fence is not None
+    template = fence.group(1)
+    assert "### <item" not in template and "**<item 1>**" in template
+    rendered = (
+        template.replace("<git rev-parse HEAD>", "abc123")
+        .replace(
+            "<the union of the lenses that ran across the cards: alice or fanout, blake, eve, bob, carl>",
+            "alice,blake",
+        )
+        .replace("<item 1>", "00206-c1")
+        .replace("<item 2>", "00206-c2")
+        .replace("<that card's rows from this lens, or its one-line all-clear>", "No findings.")
+        .replace("...", "No findings.")
+        .replace("N passed, M failed, K skipped", "12 passed, 0 failed, 0 skipped")
+    )
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from cli import gate
+
+    path = tmp_path / "x-review-1.md"
+    path.write_text(rendered, encoding="utf-8")
+    assert gate.run_gate(path, None, require_codex_guard=True) == 0, rendered
 
 
 def test_fast_track_review_file_names_the_lanes_that_ran() -> None:
