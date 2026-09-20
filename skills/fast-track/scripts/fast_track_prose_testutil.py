@@ -307,6 +307,7 @@ _SECTION_STEM = {
     "Roster": r"\broster",
     "Rework": r"\brework",
     "Exit": r"\bexit",
+    "Report": r"\breport",
 }
 
 # The whole documented running order. A reader works down the page, so a

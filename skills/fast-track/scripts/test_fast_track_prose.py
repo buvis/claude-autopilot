@@ -435,6 +435,22 @@ def test_exit_rule_branches_and_resets_with_keep() -> None:
     )
 
 
+def test_report_carries_the_batch_suite_line() -> None:
+    # The fast-track lane runbook (run-autopilot, PRD 00206) reads the batch
+    # suite's result off the item report and stalls on red or on silence; a
+    # report that never promises the line lets a red suite pass as green.
+    report = " ".join(passage.text for passage in _section("Report"))
+    assert "batch suite: N passed, M failed, K skipped, exit <code>" in report, (
+        f"{_SKILL_MD}: § Report no longer promises the batch-suite line, so the "
+        "lane runbook has nothing to read and a red repo suite closes as "
+        "reviewed."
+    )
+    assert "batch suite: not run" in report, (
+        f"{_SKILL_MD}: § Report must spell the not-run form too; the consumer "
+        "stalls on it rather than inferring green from a missing line."
+    )
+
+
 def test_headless_sessions_dispatch_the_watcher() -> None:
     # Headless sessions kill background Bash, which is where two of the five
     # review lanes live. Since PRD 00206 the lane runs inside the loop: the
@@ -455,11 +471,18 @@ def test_headless_sessions_dispatch_the_watcher() -> None:
         ),
     )
     text = " ".join(passage.text for passage in named)
-    for token in ("Watcher", "await_reviewer_outputs.py", "TaskStop"):
-        assert token in text, (
-            f"{_SKILL_MD}: the `_AUTOPILOT_LOOP` bullet never names `{token}`, so "
-            "a loop session has no keep-alive for the codex and gemini lanes, or "
-            "never stops it."
+    # The bullet quotes the Watcher prompt as a block of its own, so the
+    # keep-alive tokens are read over the whole section.
+    section_text = " ".join(passage.text for passage in preconditions)
+    assert "Watcher" in text, (
+        f"{_SKILL_MD}: the `_AUTOPILOT_LOOP` bullet never names the Watcher, so "
+        "a loop session has no keep-alive for the codex and gemini lanes."
+    )
+    for token in ("await_reviewer_outputs.py", "TaskStop", "quoted here verbatim"):
+        assert token in section_text, (
+            f"{_SKILL_MD}: the preconditions never say `{token}`, so the Watcher "
+            "has no prompt to run, is never stopped, or is paraphrased instead of "
+            "quoted from review-work-completion step 5."
         )
     assert "SAME message as the roster" in text, (
         f"{_SKILL_MD}: the Watcher must go out in the roster's own message; a "

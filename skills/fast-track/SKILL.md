@@ -30,15 +30,16 @@ stops the item says so.
   background Bash. When `_AUTOPILOT_LOOP` is set, dispatch the Watcher
   subagent (`general-purpose`) in the SAME message as the roster, with the
   exact prompt `${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/SKILL.md`
-  step 5 gives it: run
-  `python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/await_reviewer_outputs.py --budget 100 <the absolute -o output path of codex and of gemini for this item>`
-  as a foreground Bash call, re-run it while the last stdout line is
-  `WAITING` (up to 30 times total), and return the script's final output
-  verbatim, nothing else. The Watcher is scaffolding, not a reviewer: its
-  return is never saved or consolidated, and once every lane has reported
-  (or reached its terminal failure) `TaskStop` it if it is still running.
-  A `WAITING` return after 30 runs means a stalled CLI lane; count that lane
-  as failed after its one retry, as the Roster says.
+  step 5 gives it, quoted here verbatim (its placeholder is this item's two
+  `-o` paths, the codex and the gemini output files):
+
+  > Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/await_reviewer_outputs.py --budget 100 <absolute -o output path of each CLI reviewer dispatched>` as a foreground Bash call. If the last stdout line is `WAITING`, run the same command again — up to 30 times total. Return the script's final output verbatim (`DONE`, or `WAITING` plus the pending files after 30 runs). Do nothing else: no reading the output files, no review commentary.
+
+  The Watcher is scaffolding, not a reviewer: its return is never saved or
+  consolidated, and once every lane has reported (or reached its terminal
+  failure) `TaskStop` it if it is still running. A `WAITING` return after 30
+  runs means a stalled CLI lane; count that lane as failed after its one
+  retry, as the Roster says.
 - **A worktree you know.** Run `git status --porcelain` and account for every
   dirty path. A dirty path inside the card's `## Files` stops the item before
   any dispatch: the lane cannot tell that work from the implementor's, and it
@@ -647,6 +648,11 @@ order:
   Verify, confirmed or refuted, with the evidence that settled it;
 - the exit line: the outcome (`committed`, `branched` or `stopped`), the branch
   name when the item is parked, and the findings that survived to put it there;
+- for a card carrying `suite: batch`, the result of the repo-wide suite that
+  runs once, after the last item: `batch suite: N passed, M failed, K skipped, exit <code>`,
+  or `batch suite: not run` with the reason. A consumer of the report (the
+  fast-track lane runbook of `/autopilot:run-autopilot`) reads this line and
+  never infers green from its absence;
 - the dispatch counts per kind, as `fast_track_plan.py count` printed them.
 
 The file is where the numbers stay after the session ends; the chat summary is

@@ -128,16 +128,19 @@ def test_write_failure_on_a_later_card_rolls_back_the_first(tmp_path: Path, monk
     real_write = Path.write_text
 
     def flaky(self: Path, *args, **kwargs):
-        if self.name.endswith("-c2.md"):
-            raise OSError(28, "No space left on device")
         written.append(self)
+        if self.name.endswith("-c2.md"):
+            # A disk-full write truncates the file before it fails.
+            self.write_bytes(b"---\nitem: partial")
+            raise OSError(28, "No space left on device")
         return real_write(self, *args, **kwargs)
 
     monkeypatch.setattr(Path, "write_text", flaky)
     with pytest.raises(cards.RenderError) as caught:
         cards.render_cards(FIXTURES / "00188-repaired.md", tmp_path, REPO)
     assert caught.value.field == "out"
-    assert written and not any(p.exists() for p in written), "card 1 was rolled back"
+    assert len(written) == 2
+    assert not any(p.exists() for p in written), "card 1 and the partial card 2 are gone"
 
 
 def test_item_slugs_match_card_py() -> None:

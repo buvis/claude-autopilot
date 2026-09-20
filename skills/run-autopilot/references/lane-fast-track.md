@@ -76,12 +76,16 @@ re-implementing them over their own commits. For each such card in order:
    red gate, a green-before-implementation suite, a failed branch or reset):
    also stop the runbook with the same stall, its detail naming the
    `stopped:` reason.
-4. After the last card, read the batch-suite line of its report (the
-   `suite: batch` run fast-track makes at the end of the run). Fast-track
-   uses that result only to condition a push, which this lane never asks
-   for, so the runbook decides it: any failure stops the runbook with the
-   same stall, detail `suite red: <counts>`, before anything is
-   consolidated. A red repo suite never reaches `lane_reviewed`.
+4. After the last card, read the batch-suite line its report carries for a
+   `suite: batch` card (fast-track § Report:
+   `batch suite: N passed, M failed, K skipped, exit <code>`, or
+   `batch suite: not run` with the reason). Fast-track uses that result only
+   to condition a push, which this lane never asks for, so the runbook
+   decides it: a non-zero exit or `M failed` above 0 stops the runbook with
+   the same stall, detail `suite red: <counts>`; a `batch suite: not run`
+   line, or no batch-suite line at all, stops it the same way with detail
+   `suite red: not run`. Silence is never green. A red repo suite never
+   reaches `lane_reviewed`.
 
 ### Stall
 

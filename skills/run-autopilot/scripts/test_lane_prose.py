@@ -211,6 +211,15 @@ def test_fast_track_runbook_guards_resume_and_stalls_a_red_suite() -> None:
     assert "Run from the first card whose task's `status` is not `completed`" in run
     assert "A red repo suite never reaches `lane_reviewed`" in run
     assert "detail `suite red: <counts>`" in run
+    # The line the runbook reads is the one fast-track § Report promises,
+    # and its absence is a stall, never a pass.
+    assert "`batch suite: N passed, M failed, K skipped, exit <code>`" in run
+    assert "no batch-suite line at all, stops it the same way" in run
+    assert "Silence is never green" in run
+    fast_track_skill = _REFERENCES.parents[1] / "fast-track" / "SKILL.md"
+    assert "batch suite: N passed, M failed, K skipped, exit <code>" in (
+        fast_track_skill.read_text(encoding="utf-8")
+    )
 
 
 def test_fast_track_review_template_passes_the_gate(tmp_path: Path) -> None:

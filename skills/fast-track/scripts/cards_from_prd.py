@@ -262,11 +262,13 @@ def render_cards(prd_path: Path, out_dir: Path, root: Path) -> list[Path]:
         for n, plan in enumerate(plans, start=1):
             rendered = _render(plan, n, len(plans), text, declared, stem, root)
             path = out_dir / f"{_item(stem, n)}.md"
+            # Listed before the write: a write that fails mid-file leaves a
+            # truncated card, and the rollback must take that one too.
+            written.append(path)
             try:
                 path.write_text(rendered, encoding="utf-8")
             except OSError as exc:
                 raise RenderError("out", str(exc)) from exc
-            written.append(path)
             card.load_card(path)
     except (RenderError, card.CardError):
         for path in written:
