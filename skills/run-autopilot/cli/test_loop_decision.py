@@ -23,6 +23,7 @@ from cli.loop_testutil import (
     FakeClock,
     _notified,
     make_loop,
+    metrics_rows,
     noop_step,
     terminal_step,
     write_log,
@@ -338,15 +339,9 @@ def test_rejected_with_overage_allowed_still_sleeps(tmp_path):
     assert "usage limit hit; waiting" in lp._test["out"].getvalue()
     assert _notified(lp, "Usage limit")
     assert len(lp._test["spawn"].launches) == 2
-    rows = _metrics_rows(lp._test["ap_dir"])
+    rows = metrics_rows(lp._test["ap_dir"])
     assert rows[0]["signal"] == "continue" and rows[0]["limit_wait"] >= 300
     assert "limit_wait" not in rows[1]
-
-
-def _metrics_rows(ap: Path) -> list[dict]:
-    text = (ap / "loop-metrics.jsonl").read_text()
-    assert text == (ap / "ledger" / "loop-metrics.jsonl").read_text()
-    return [json.loads(line) for line in text.strip().splitlines()]
 
 
 def test_rejected_beyond_cap_still_dies(tmp_path):
@@ -440,7 +435,7 @@ def test_younger_loop_yields_at_allowed_warning(tmp_path):
     assert _notified(lp, "Usage limit")
     assert len(lp._test["spawn"].launches) == 2
     assert (
-        _metrics_rows(lp._test["ap_dir"])[0]["limit_wait"] >= 600
+        metrics_rows(lp._test["ap_dir"])[0]["limit_wait"] >= 600
     )  # the ledger shows it
 
 
@@ -511,6 +506,57 @@ def test_yield_at_warning_kill_switch_short_circuits_before_reading_the_log(
     )
     assert result is False
     assert decision["limit_wait"] is None
+
+
+def test_yield_at_warning_beyond_the_wait_cap_relaunches_and_says_so(
+    tmp_path, monkeypatch
+):
+    # Review 00199: with a lowered cap the younger loop relaunches rather
+    # than yielding; the stderr line names it so the ledger's bare continue
+    # row is explained.
+    result, decision = _yield_probe(
+        tmp_path, monkeypatch, oldest=1, env={"_AUTOPILOT_LIMIT_WAIT_MAX": "60"}
+    )
+    assert result is False
+    assert decision["limit_wait"] is None
+
+
+def test_beyond_cap_warning_line_names_the_loop_it_did_not_yield_to(
+    tmp_path, monkeypatch
+):
+    clock = FakeClock(start=time.time())
+    lp = make_loop(tmp_path, [], clock=clock, env={"_AUTOPILOT_LIMIT_WAIT_MAX": "60"})
+    ap = lp._test["ap_dir"]
+    write_log(ap, _warning_event(int(clock.now) + 600))
+    monkeypatch.setattr(lp, "_oldest_live_loop_pid", lambda: 1)
+    lp._yield_at_warning({"signal": "continue", "limit_wait": None}, ap / "last-session.log")
+    err = lp._test["err"].getvalue()
+    assert "beyond _AUTOPILOT_LIMIT_WAIT_MAX; not yielding the window to loop 1" in err
+
+
+def test_a_wait_the_fingerprint_bound_overrides_never_reaches_the_row(tmp_path):
+    # Review 00199: _fingerprint_bound can turn a continue-with-wait into a
+    # park; _act_continue then never sleeps, so the park row carries no
+    # limit_wait it did not spend.
+    clock = FakeClock(start=time.time())
+    reset = int(clock.now) + 300
+
+    def same_state_then_operator_pause(ap_dir: Path) -> None:
+        _progress_then_rejected(reset)(ap_dir)
+        (ap_dir / "pause-requested").touch()  # stops the park relaunch
+
+    lp = make_loop(
+        tmp_path,
+        [_progress_then_rejected(reset), same_state_then_operator_pause],
+        clock=clock,
+        env={"_AUTOPILOT_PHASE_REPEATS_MAX": "1"},
+    )
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b"})
+    assert lp.run() == 0
+    rows = metrics_rows(lp._test["ap_dir"])
+    assert [row["signal"] for row in rows] == ["continue", "park"]
+    assert rows[0]["limit_wait"] >= 300
+    assert "limit_wait" not in rows[1]
 
 
 def test_yield_at_warning_yields_to_an_older_live_loop(tmp_path, monkeypatch):

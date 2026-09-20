@@ -150,6 +150,14 @@ def make_loop(tmp_path: Path, steps, env: dict | None = None, **kwargs):
     return lp
 
 
+def metrics_rows(ap: Path) -> list[dict]:
+    """Parsed rows of the primary metrics file, after checking the ledger
+    mirror is byte-identical to it."""
+    primary = (ap / "loop-metrics.jsonl").read_bytes()
+    assert primary == (ap / "ledger" / "loop-metrics.jsonl").read_bytes()
+    return [json.loads(line) for line in primary.decode().strip().splitlines()]
+
+
 def _notified(lp, fragment: str) -> bool:
     return any(
         fragment in args[0] or fragment in args[1]

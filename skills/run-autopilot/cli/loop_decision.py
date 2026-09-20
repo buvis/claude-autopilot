@@ -285,9 +285,18 @@ class DecisionMixin:
             now=self._clock(),
             max_wait_secs=self._int("_AUTOPILOT_LIMIT_WAIT_MAX", 21600),
         )
-        if wait is None:
-            return False
         stamp = _dt.datetime.fromtimestamp(reset).strftime("%H:%M")
+        if wait is None:
+            # Unreachable at the default cap (a five-hour reset is at most
+            # 5 h out, the cap 6 h); with a lowered cap the younger loop
+            # relaunches and the ledger explains why.
+            print(
+                f"\nautoclaude: allowed_warning reset ~{stamp} is beyond "
+                "_AUTOPILOT_LIMIT_WAIT_MAX; not yielding the window to loop "
+                f"{oldest}.",
+                file=self.err,
+            )
+            return False
         decision["signal"] = "continue"
         decision["detail"] = f"yielding the window to loop {oldest} until ~{stamp}"
         decision["limit_wait"] = wait

@@ -113,17 +113,21 @@ def _probe_api() -> bool:
         return False
 
 
-def _stood_down_fields(decision: dict) -> dict:
-    """The paused row's stand-down fields (PRD 00199): why the session
-    stood down and on what evidence, so a false stand-down (a reader
-    mistaken for a writer) is visible in the ledger, not only in the
-    notification. Empty for every other row."""
-    if not decision.get("stood_down"):
-        return {}
-    return {
-        "stood_down": decision["stood_down"],
-        "stood_down_condition": decision.get("stood_down_condition", "unknown"),
-    }
+def _decision_fields(decision: dict) -> dict:
+    """The PRD 00199 fields of a session row. A stand-down's paused row
+    names why the session stood down and on what evidence, so a false
+    stand-down (a reader mistaken for a writer) is visible in the ledger,
+    not only in the notification. A continue row that sleeps first (a
+    rejected wait or a window yield) carries `limit_wait`; a wait the
+    fingerprint bound overrode into park/paused never happens, so those
+    rows carry none. Empty for every other row."""
+    fields: dict = {}
+    if decision.get("stood_down"):
+        fields["stood_down"] = decision["stood_down"]
+        fields["stood_down_condition"] = decision.get("stood_down_condition", "unknown")
+    if decision["signal"] == "continue" and decision.get("limit_wait") is not None:
+        fields["limit_wait"] = decision["limit_wait"]
+    return fields
 
 
 class Loop(GatesMixin, DecisionMixin, ActMixin):
@@ -273,11 +277,7 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
                 "model": model,
                 "effort": effort,
             }
-            line.update(_stood_down_fields(decision))
-            if decision.get("limit_wait") is not None:
-                # A rejected wait or a window yield (PRD 00199): the ledger
-                # shows the sleep, not a bare continue.
-                line["limit_wait"] = decision["limit_wait"]
+            line.update(_decision_fields(decision))
             cost = last_result_field(ap_dir / "last-session.log", "total_cost_usd")
             if isinstance(cost, (int, float)) and not isinstance(cost, bool):
                 line["cost_usd"] = cost

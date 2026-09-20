@@ -37,6 +37,7 @@ from cli.loop_testutil import (
     Recorder,
     _notified,
     make_loop,
+    metrics_rows,
     noop_step,
     terminal_step,
     write_log,
@@ -234,7 +235,7 @@ def test_paused_row_carries_the_stand_down_reason_and_condition(tmp_path):
     ap = lp._test["ap_dir"]
     write_state(ap, prd="00010-x-v1.md", next_phase="build", batch={"id": "b"})
     assert lp.run() == 0
-    rows = _metrics_rows(ap)
+    rows = metrics_rows(ap)
     assert len(rows) == 1
     assert rows[0]["signal"] == "paused"
     assert rows[0]["stood_down"] == "peer repo-x-7 owns 00010-x-v1.md"
@@ -251,23 +252,15 @@ def test_a_conditionless_stand_down_row_reads_unknown_and_other_rows_carry_neith
     ap = lp._test["ap_dir"]
     write_state(ap, prd="00010-x-v1.md", next_phase="build", batch={"id": "b"})
     assert lp.run() == 0
-    row = _metrics_rows(ap)[0]
+    row = metrics_rows(ap)[0]
     assert row["stood_down_condition"] == "unknown"
 
     lp2 = make_loop(tmp_path / "other", [terminal_step()])
     write_state(lp2._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b"})
     assert lp2.run() == 0
-    done_row = _metrics_rows(lp2._test["ap_dir"])[0]
+    done_row = metrics_rows(lp2._test["ap_dir"])[0]
     assert "stood_down" not in done_row
     assert "stood_down_condition" not in done_row
-
-
-def _metrics_rows(ap: Path) -> list[dict]:
-    """Parsed rows of the primary metrics file, after checking the ledger
-    mirror is byte-identical to it."""
-    primary = (ap / "loop-metrics.jsonl").read_bytes()
-    assert primary == (ap / "ledger" / "loop-metrics.jsonl").read_bytes()
-    return [json.loads(line) for line in primary.decode().strip().splitlines()]
 
 
 def _state_step(**state):
@@ -325,7 +318,7 @@ def test_review_exit_to_done_writes_the_convergence_row(tmp_path):
     )
     write_state(ap, prd="00188-x-v1.md", next_phase="review", batch={"id": "b"})
     assert lp.run() == 0
-    rows = _metrics_rows(ap)
+    rows = metrics_rows(ap)
     assert len(rows) == 3
     assert "event" not in rows[0] and rows[0]["phase_launched"] == "review"
     assert "event" not in rows[2] and rows[2]["phase_launched"] == "done"
@@ -387,7 +380,7 @@ def test_review_exit_to_done_without_batch_writes_the_session_row_and_no_event(
     ap = lp._test["ap_dir"]
     write_state(ap, prd="00188-x-v1.md", next_phase="review", batch={"id": "b"})
     assert lp.run() == 0
-    rows = _metrics_rows(ap)
+    rows = metrics_rows(ap)
     assert [row.get("phase_launched") for row in rows] == ["review", "done"]
     assert all("event" not in row for row in rows)
 
@@ -426,7 +419,7 @@ def test_review_exit_to_done_with_a_non_dict_deferral_still_writes_the_event(
     ap = lp._test["ap_dir"]
     write_state(ap, prd="00188-x-v1.md", next_phase="review", batch={"id": "b"})
     assert lp.run() == 0
-    rows = _metrics_rows(ap)
+    rows = metrics_rows(ap)
     assert [row.get("phase_launched") for row in rows] == ["review", None, "done"]
     assert [("event" in row) for row in rows] == [False, True, False]
     assert rows[1]["event"] == "review_converged"
@@ -459,7 +452,7 @@ def test_convergence_row_fields_come_from_state_and_review_files(tmp_path):
     )
     write_state(ap, prd="00190-y-v1.md", next_phase="build", batch={"id": "b2"})
     assert lp.run() == 0
-    rows = _metrics_rows(ap)
+    rows = metrics_rows(ap)
     phases = [row.get("phase_launched") for row in rows]
     assert phases == ["build", "review", None, "done"]
     event = rows[2]
@@ -499,7 +492,7 @@ def test_review_exit_to_review_writes_no_convergence_row(tmp_path):
         batch={"id": "b"},
     )
     assert lp.run() == 0
-    rows = _metrics_rows(ap)
+    rows = metrics_rows(ap)
     assert [row["phase_launched"] for row in rows] == ["review", "review"]
     assert all("event" not in row for row in rows)
 
@@ -512,7 +505,7 @@ def test_build_exit_writes_no_convergence_row(tmp_path):
     ap = lp._test["ap_dir"]
     write_state(ap, prd="00188-x-v1.md", next_phase="build", batch={"id": "b"})
     assert lp.run() == 0
-    rows = _metrics_rows(ap)
+    rows = metrics_rows(ap)
     assert [row["phase_launched"] for row in rows] == ["build", "done"]
     assert all("event" not in row for row in rows)
 
@@ -530,7 +523,7 @@ def test_review_exit_to_paused_writes_no_convergence_row(tmp_path):
     ap = lp._test["ap_dir"]
     write_state(ap, prd="00188-x-v1.md", next_phase="review", batch={"id": "b"})
     assert lp.run() == 1
-    rows = _metrics_rows(ap)
+    rows = metrics_rows(ap)
     assert [row.get("phase_launched") for row in rows] == ["review"]
     assert all("event" not in row for row in rows)
 
