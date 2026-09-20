@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-09-20
+
 ### Added
 
 - **run-autopilot**: Phase 0 now classifies every PRD into an effort lane (`solo`, `fast-track` or `full`) from its named paths and frontmatter, in shadow: the lane, its reason and the effective lane are written to state, carried on every session row and the closing batch record, and rendered as `- Lane:` per PRD and `- PRDs by lane:` in the batch summary, while every PRD still runs the full loop; a `lane:` frontmatter key overrides the classifier and `_AUTOPILOT_LANES=off` forces `full` for a whole batch. Follow-up: the `create-prd` and `review-prd-backlog` skills (agent-skills repo) need to learn the `lane:` key
