@@ -59,14 +59,16 @@ def test_step_5_5_names_three_lanes_and_the_shadow_sentence() -> None:
 # ── the solo runbook (PRD 00205) ─────────────────────────────────────────────
 
 _LANE_SOLO = _REFERENCES / "lane-solo.md"
-_SOLO_SIGNALS = (
-    "unnamed_path",
-    "security_diff",
-    "check_failed",
-    "critical_finding",
-    "high_unresolved",
-    "suite_red",
-)
+# Signal -> the section that raises it and the exact form the runbook uses.
+_SOLO_SIGNALS = {
+    "unnamed_path": ("## 4. Escalation checks", "- `unnamed_path`"),
+    "security_diff": ("## 4. Escalation checks", "- `security_diff`"),
+    "check_failed": ("## 4. Escalation checks", "- `check_failed`"),
+    "critical_finding": ("## 5. Review", "--signal critical_finding"),
+    "high_unresolved": ("## 5. Review", "--signal high_unresolved"),
+    "suite_red": ("## 5. Review", "--signal suite_red"),
+    "review_failed": ("## 5. Review", "--signal review_failed"),
+}
 
 
 def _solo() -> str:
@@ -93,14 +95,29 @@ def test_solo_runbook_orders_mirror_implement_suite_check_review_close() -> None
 
 def test_solo_runbook_names_six_signals_and_their_outcomes() -> None:
     text = _solo()
-    for signal in _SOLO_SIGNALS:
-        assert f"`{signal}`" in text or f"--signal {signal}" in text, signal
+    for signal, (heading, form) in _SOLO_SIGNALS.items():
+        assert form in _section(text, heading), signal
     close = _section(text, "## 6. Close")
-    assert "--outcome tasks_done" in close
-    assert "--outcome lane_reviewed" in close
+    assert "**Escalation**" in close and "--outcome tasks_done" in close
+    assert "**Close**" in close and "--outcome lane_reviewed" in close
+    assert close.index("--outcome tasks_done") < close.index("--outcome lane_reviewed")
     check = _section(text, "## 4. Escalation checks")
     assert "autopilot lane-check" in check
     assert "`lane: escalate <signal>`" in check
+
+
+def test_solo_runbook_guards_resume_reruns_the_check_and_gates_the_review() -> None:
+    text = " ".join(_solo().split())
+    mirror = " ".join(_section(_solo(), "## 1. Mirror").split())
+    assert "when `state.tasks` is already non-empty" in mirror
+    assert "mirror nothing" in mirror
+    review = " ".join(_section(_solo(), "## 5. Review").split())
+    assert "run `autopilot lane-check` again without `--signal`" in review
+    assert "at least one `[ALICE]` line and all twelve `R{n}: pass|fail`" in review
+    assert "never converges on an empty table" in review
+    close = " ".join(_section(_solo(), "## 6. Close").split())
+    assert "first write `dev/local/reviews/<prd-stem>-review-1.md`" in close
+    assert "`-review-1.md` is written only on the close exit of step 6" in text
 
 
 def test_solo_runbook_never_reads_the_handoff_marker() -> None:

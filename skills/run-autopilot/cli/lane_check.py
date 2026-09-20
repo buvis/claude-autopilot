@@ -25,9 +25,12 @@ from pathlib import Path
 
 from . import custody, lane, schema, state
 
-SESSION_SIGNALS = ("critical_finding", "high_unresolved", "suite_red")
-DIFF_SIGNALS = ("unnamed_path", "security_diff", "check_failed")
+SESSION_SIGNALS = ("critical_finding", "high_unresolved", "suite_red", "review_failed")
 CHECK_FAILED = "check_failed"
+# Rename detection would list only a rename's destination and show no
+# changed lines, so a production file renamed into a doc path would pass
+# both checks. Both diffs read every path as an add plus a delete instead.
+_NO_RENAMES = "--no-renames"
 
 
 def _git_output(argv: list[str]) -> str | None:
@@ -45,13 +48,13 @@ def diff_signal(work_start_sha: str, repo_root: str, git_dir: str | None) -> str
     or None when the diff stays inside the solo lane's contract."""
     argv = custody.git_argv(repo_root, git_dir)
     span = f"{work_start_sha}..HEAD"
-    names = _git_output([*argv, "diff", "--name-only", span])
+    names = _git_output([*argv, "diff", _NO_RENAMES, "--name-only", span])
     if names is None:
         return CHECK_FAILED
     changed = [line.strip() for line in names.splitlines() if line.strip()]
     if any(lane.is_hook_path(p) or lane.is_production_path(p) for p in changed):
         return "unnamed_path"
-    diff = _git_output([*argv, "diff", span])
+    diff = _git_output([*argv, "diff", _NO_RENAMES, span])
     if diff is None:
         return CHECK_FAILED
     if lane.security_triggered(diff, changed):

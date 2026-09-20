@@ -277,8 +277,26 @@ def test_lane_check_rejects_an_unknown_signal(tmp_path: Path) -> None:
     # _ArgumentParser maps every usage error to exit 1; 2 is reserved for
     # state errors (the exit-code table in __main__.py's docstring).
     assert proc.returncode == 1
-    assert "invalid choice" in proc.stderr
+    assert "--signal" in proc.stderr and "'sideways'" in proc.stderr
+    assert "review_failed" in proc.stderr, "the usage line lists the four signals"
     assert "lane_escalated" not in state
+
+
+def test_lane_check_sees_a_production_file_renamed_into_docs(tmp_path: Path) -> None:
+    # With rename detection the diff would list only notes/mod.md and carry
+    # no changed lines; --no-renames reads the rename as a delete plus an
+    # add, so the vanished production file still escalates.
+    repo, state_path = _solo_repo(tmp_path)
+    _commit(repo, "pkg/mod.py", "x = 1\n")
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["work_start_sha"] = _git(repo, "rev-parse", "HEAD")
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    (repo / "notes").mkdir()
+    _git(repo, "mv", "pkg/mod.py", "notes/mod.md")
+    _git(repo, "commit", "-q", "-m", "rename")
+    proc, state = _lane_check(state_path)
+    assert proc.returncode == 3, proc.stderr
+    assert proc.stdout.strip() == "lane: escalate unnamed_path"
 
 
 def test_phase_done_lane_reviewed_from_build(tmp_path: Path) -> None:

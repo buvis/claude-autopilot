@@ -534,9 +534,22 @@ class GateBlocksDecisionTests(unittest.TestCase):
         self.assertFalse(blocks)
         self.assertEqual(msg, "")
 
+    @staticmethod
+    def _solo_close() -> dict:
+        """The state a solo close leaves: the REAL `lane_reviewed` transition
+        applied to a build-phase state (PRD 00205), not a hand-written
+        `phases_completed`."""
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from cli import transitions
+
+        return transitions.apply(
+            {"phase": "build", "next_phase": "build", "prd": "S.md",
+             "phases_completed": [], "lane": "solo", "lane_effective": "solo"},
+            "lane_reviewed",
+        )
+
     def test_gate_accepts_a_solo_lane_review_file(self) -> None:
-        # PRD 00205: a solo close lands phase done + ["review"] through
-        # `lane_reviewed`, and its one-reviewer file passes the REAL gate
+        # The one-reviewer file the solo runbook writes passes the REAL gate
         # (reviewer section, verdict, tests, codex guard), no mock.
         (self._reviews_dir() / "S-review-1.md").write_text(
             "---\nhead_sha: abc123\nreviewers: alice\n---\n\n"
@@ -545,19 +558,15 @@ class GateBlocksDecisionTests(unittest.TestCase):
             "Tests: none (docs-only)\n"
             "codex_rung_guard: not fired\n",
         )
-        blocks, msg = hook.gate_blocks(
-            self.autopilot_dir,
-            {"phase": "done", "prd": "S.md", "phases_completed": ["review"]},
-        )
+        state = self._solo_close()
+        self.assertEqual(state["phases_completed"], ["review"])
+        blocks, msg = hook.gate_blocks(self.autopilot_dir, state)
         self.assertFalse(blocks, msg)
         self.assertEqual(msg, "")
 
     def test_gate_blocks_a_solo_close_without_a_review_file(self) -> None:
         self._reviews_dir()  # empty: the solo pass wrote nothing
-        blocks, msg = hook.gate_blocks(
-            self.autopilot_dir,
-            {"phase": "done", "prd": "S.md", "phases_completed": ["review"]},
-        )
+        blocks, msg = hook.gate_blocks(self.autopilot_dir, self._solo_close())
         self.assertTrue(blocks)
         self.assertIn("no work-completion review file found for S", msg)
 

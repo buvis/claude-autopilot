@@ -78,6 +78,8 @@ __all__ = [
 ]
 
 _API_PROBE_URL = "https://api.anthropic.com"
+# The lanes whose build session converges from `build` (PRD 00205).
+_LANES = ("solo", "fast-track")
 
 
 class _Terminated(Exception):
@@ -294,13 +296,10 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
             ledger_dir.mkdir(parents=True, exist_ok=True)
             with open(ledger_dir / "loop-metrics.jsonl", "a", encoding="utf-8") as fh:
                 fh.write(encoded + "\n")
-            # Session row first, so build_row sees this session's batch. A
-            # lane-routed build (solo, fast-track; PRD 00205) converges from
-            # `build`, so its build-to-done exit writes the row too.
-            lane_routed = decision.get("lane_effective") in ("solo", "fast-track")
-            if decision.get("phase_end") == "done" and (
-                phase_launched == "review" or lane_routed
-            ):
+            # Session row first, so build_row sees this session's batch; a
+            # lane-routed build converges from `build` (PRD 00205).
+            converged = phase_launched == "review" or line["lane_effective"] in _LANES
+            if decision.get("phase_end") == "done" and converged:
                 self._append_convergence(ap_dir, ledger_dir, ts_end)
         except (OSError, ValueError, TypeError):
             pass

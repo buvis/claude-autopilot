@@ -42,7 +42,7 @@ Subcommands:
         (`lane`, `lane_reason`, `lane_effective`; the one reader of
         _AUTOPILOT_LANES), applied to state in ONE transaction and echoed
         as JSON; warnings go to stderr.
-    lane-check --state [--signal critical_finding|high_unresolved|suite_red]
+    lane-check --state [--signal critical_finding|high_unresolved|suite_red|review_failed]
         lane_check.diff_signal() over state.work_start_sha..HEAD (PRD 00205):
         exit 0 and `lane: ok` when no escalation signal fires; exit 3 and
         `lane: escalate <signal>` after one transaction writing
@@ -684,12 +684,14 @@ def _add_lane_check(subparsers) -> None:
 
 def _run_lane_check(args: argparse.Namespace) -> int:
     state_path = _resolve_state_path(args.state)
-    refuse = _schema_version_preflight(state_path)
-    if refuse is not None:
-        return refuse
     try:
+        refuse = _schema_version_preflight(state_path)
+        if refuse is not None:
+            return refuse
         data, _status = state.load(state_path)
-    except state.StateError as err:
+    except (state.StateError, OSError) as err:
+        # A permission-denied or directory path is as unreadable as a
+        # missing file: exit 2, never a traceback.
         print(f"autopilot: lane-check: {err}", file=sys.stderr)
         return 2
     signal = args.signal

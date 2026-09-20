@@ -310,7 +310,7 @@ def test_plan_cards_goal_limit_is_forty_lines() -> None:
     assert lane.plan_cards(_prd("cli/", "└── loop.py", problem=forty_one)) == []
 
 
-def test_released_lanes_hold_solo(monkeypatch) -> None:
+def test_released_lanes_hold_solo() -> None:
     assert "solo" in lane.RELEASED_LANES
     assert lane.effective("solo", None) == "solo"
 

@@ -15,8 +15,14 @@ The session runs at `session_model` (default sonnet) or a promotion signal
 
 ## 1. Mirror
 
-Mirror every `- [ ]` line of the PRD into `state.tasks`, one `task-add` per
-line, so tracon and the task counts stay live:
+Resume guard first: when `state.tasks` is already non-empty, this session is
+a re-entry (a context-cap rotation, a died-retry relaunch), so mirror
+nothing and go to step 2 at the first task whose `status` is not
+`completed`; `task-add` does not deduplicate, and a second mirror would
+double the task list.
+
+Otherwise mirror every `- [ ]` line of the PRD into `state.tasks`, one
+`task-add` per line, so tracon and the task counts stay live:
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json task-add <task-json-file>
@@ -114,8 +120,13 @@ Phase 3 invariants and re-run the check; never skip it.
 
 `autopilot lane-check --state <path> --signal <slug>` records a signal the
 session determined from the review table or the suite instead of the diff:
-`critical_finding`, `high_unresolved` or `suite_red` (step 5). It writes the
-same two fields and exits 3.
+`critical_finding`, `high_unresolved`, `suite_red` or `review_failed`
+(step 5). It writes the same two fields and exits 3.
+
+The check runs again, without `--signal`, after every commit step 5's
+disposition lands: a fix commit moves HEAD, and a fix that touches a
+production path or adds a security-ish line must escalate exactly as the
+build would have.
 
 ## 5. Review
 
@@ -131,16 +142,30 @@ and `references/output-formats.md` § Agent Output Format. Render Alice's
 prompt from `${CLAUDE_PLUGIN_ROOT}/agents/alice.md` the way fast-track
 renders its consensus lane; on the workflow backend the `Workflow` tool call
 takes the same args fast-track passes. Save the returned text to
-`dev/local/tmp/solo-output-<prd-stem>.txt`, then build the table:
+`dev/local/tmp/solo-output-<prd-stem>.txt`.
+
+The review must have happened before its table means anything:
+`consolidate_findings.py` reads a missing, empty or malformed output file
+as `No issues found`, so check the saved text first. Alice's output holds at
+least one `[ALICE]` line and all twelve `R{n}: pass|fail` verdict lines (the
+workflow backend: its consolidated table with a `Verdict:` line). When it
+does not, dispatch the same reviewer once more; when the retry does not
+either, the sole review failed and the PRD escalates with
+`--signal review_failed` (step 4), never converges on an empty table. Only
+then build the table:
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/consolidate_findings.py alice:$PWD/dev/local/tmp/solo-output-<prd-stem>.txt
 ```
 
 (the workflow's own consolidated table stands in for it on that backend).
+Save the table to `dev/local/tmp/<prd-stem>-solo-table.md` with the Write
+tool and run the disposition below over it. The review file itself is
+written in step 6, after the disposition, so an escalated pass never leaves
+a `-review-1.md` behind for the full lane's cycle 1 to mistake for its own.
 
-Write `dev/local/reviews/<prd-stem>-review-1.md` with the Write tool, in
-the shape `cli/gate.py` checks
+The review file, `dev/local/reviews/<prd-stem>-review-1.md`, written with
+the Write tool in the shape `cli/gate.py` checks
 (`review-work-completion/references/review-coverage-format.md`):
 
 ```
@@ -179,9 +204,11 @@ What the session does with each severity in the table, in this order:
   same reviewer over `<fix-base>..HEAD` in fast-track's Delta shape
   (`skills/fast-track/SKILL.md` § Delta: capture `<fix-base>` as
   `git rev-parse HEAD` before the fix, then one Alice dispatch over that
-  range with the confirmed findings listed). A HIGH still confirmed after
-  the delta escalates with `--signal high_unresolved`; a suite that is red
-  after the fix escalates with `--signal suite_red`.
+  range with the confirmed findings listed). After the fix commit, run
+  `autopilot lane-check` again without `--signal` (step 4): the fix moved
+  HEAD. A HIGH still confirmed after the delta escalates with
+  `--signal high_unresolved`; a suite that is red after the fix escalates
+  with `--signal suite_red`.
 - A HIGH outside the PRD's named paths escalates with
   `--signal high_unresolved` without a fix.
 - A MEDIUM outside the PRD's named paths, and every LOW, is recorded in the
@@ -192,7 +219,8 @@ On any escalation after the pass ran, write the table to
 never matches the gate's `-review-*` glob in
 `scripts/review_coverage_hook.py`, nor the convergence reader's
 `-review-<n>`), never to `-review-1.md`, so the full lane's cycle 1 finds
-no file and runs.
+no file and runs. `-review-1.md` is written only on the close exit of
+step 6.
 
 ## 6. Close
 
@@ -204,7 +232,9 @@ Two exits, both through `autopilot phase-done`:
   review gate takes the finished build with every lens and its rework
   cycles; no commit is lost. The report's `Lane:` line reads
   `full (classified solo, <reason>), escalated from solo: <signal>`.
-- **Close** (`lane: ok` and no escalating finding):
+- **Close** (`lane: ok` from the last `lane-check` and no escalating
+  finding): first write `dev/local/reviews/<prd-stem>-review-1.md` from the
+  saved table in the shape step 5 gives, then
   `autopilot phase-done --outcome lane_reviewed`, the `("build",
   "lane_reviewed")` row of `cli/transitions.py`, whose effect is
   convergence's: `phase`/`next_phase: "done"` and `"review"` appended once
