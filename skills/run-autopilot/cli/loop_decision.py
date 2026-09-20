@@ -262,33 +262,41 @@ class DecisionMixin:
                 f"({self._int('_AUTOPILOT_LIMIT_WAIT_MAX', 21600)}s)"
             )
 
+    @staticmethod
+    def _probe_budget(net_max: int) -> int:
+        """Probes per retry: one every 30 s across `_AUTOPILOT_NET_WAIT_MAX`,
+        never fewer than one."""
+        return max(1, net_max // 30)
+
     def _decide_network_outage(self, decision: dict, api_fail: str) -> None:
-        """A connection failure: poll connectivity inside the retry budget, else die."""
+        """A connection failure: poll connectivity inside the retry budget, else die.
+
+        The budget counts probes, not wall-clock (PRD 00199): a machine that
+        sleeps between two probes spends nothing, where a deadline against
+        `self._clock()` read a lid-close as three exhausted outage windows."""
         retries_max = self._int("_AUTOPILOT_NET_RETRIES_MAX", 3)
         if self._net_retries < retries_max:
             self._net_retries += 1
-            net_max = self._int("_AUTOPILOT_NET_WAIT_MAX", 1800)
-            deadline = self._clock() + net_max
+            probes = self._probe_budget(self._int("_AUTOPILOT_NET_WAIT_MAX", 1800))
             print(
                 f"\nautoclaude: API unreachable ({api_fail}). Polling "
-                f"connectivity, max {net_max}s (retry {self._net_retries}"
+                f"connectivity, max {probes} probes (retry {self._net_retries}"
                 f"/{retries_max})…",
                 file=self.err,
             )
             ok = False
-            while True:
+            for attempt in range(probes):
                 if self._probe():
                     ok = True
                     break
-                if self._clock() >= deadline:
-                    break
-                self._sleep(30)
+                if attempt + 1 < probes:
+                    self._sleep(30)
             if ok:
                 decision["signal"] = "continue"
                 decision["detail"] = f"network restored (retry {self._net_retries})"
             else:
                 decision["signal"] = "died"
-                decision["detail"] = f"API unreachable for {net_max}s"
+                decision["detail"] = f"API unreachable for {probes} probes"
         else:
             decision["signal"] = "died"
             decision["detail"] = (

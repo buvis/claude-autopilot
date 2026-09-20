@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from cli import loop_testutil
 from cli.loop_decision import (
     died_next,
     fingerprint,
@@ -16,7 +17,6 @@ from cli.loop_decision import (
     pause_detail,
     plugin_drift,
 )
-from cli import loop_testutil
 from cli.loop_testutil import (
     FakeClock,
     _notified,
@@ -309,7 +309,7 @@ def test_network_outage_polls_and_resumes(tmp_path):
     assert lp.run() == 0
     # The poll message lands on stderr during the decision; the act
     # branch then prints the plain continue line (bash parity).
-    assert "Polling connectivity, max 1800s (retry 1/3)" in lp._test["err"].getvalue()
+    assert "Polling connectivity, max 60 probes (retry 1/3)" in lp._test["err"].getvalue()
     assert "Backlog drained" in lp._test["out"].getvalue()
 
 
@@ -328,7 +328,56 @@ def test_network_outage_that_never_clears_dies(tmp_path):
     )
     write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b"})
     assert lp.run() == 1
-    assert "API unreachable for 60s" in lp._test["err"].getvalue()
+    assert "API unreachable for 2 probes" in lp._test["err"].getvalue()
+
+
+def test_outage_poll_survives_a_two_hour_clock_jump(tmp_path):
+    # PRD 00199: the budget counts probes, not wall-clock. A lid-close sleep
+    # between two probes moves the clock two hours; the loop still relaunches
+    # on the third probe's success instead of reading the sleep as outage.
+    clock = FakeClock()
+    probes: list[float] = []
+
+    def probe() -> bool:
+        probes.append(clock.now)
+        if len(probes) == 2:
+            clock.now += 7200  # the machine slept between probes 2 and 3
+        return len(probes) >= 3
+
+    lp = make_loop(
+        tmp_path,
+        [_netfail_step("fetch failed"), terminal_step()],
+        clock=clock,
+        probe_fn=probe,
+    )
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b"})
+    assert lp.run() == 0
+    assert len(probes) == 3
+    assert "Backlog drained" in lp._test["out"].getvalue()
+
+
+def test_outage_poll_dies_after_the_probe_budget(tmp_path):
+    # net_max 1800 -> 60 probes 30 s apart, then died; never a 61st probe
+    # and never a wall-clock comparison.
+    probes: list[int] = []
+
+    def probe() -> bool:
+        probes.append(1)
+        return False
+
+    lp = make_loop(tmp_path, [_netfail_step("ECONNRESET")], probe_fn=probe)
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b"})
+    assert lp.run() == 1
+    assert len(probes) == 60
+    assert lp._test["sleeps"].count(30) == 59  # between probes, not after the last
+    assert "API unreachable for 60 probes" in lp._test["err"].getvalue()
+
+
+def _netfail_step(text: str):
+    def step(ap_dir: Path) -> None:
+        write_log(ap_dir, {"type": "result", "is_error": True, "result": text})
+
+    return step
 
 
 def test_repeated_network_failures_exhaust_the_retry_cap(tmp_path):
