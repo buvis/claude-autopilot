@@ -39,7 +39,10 @@ window. There is no window classification.
 
 Active only inside the autopilot shell loop (`$_AUTOPILOT_LOOP`, same guard
 as review_coverage_hook.py) AND when `dev/local/autopilot/state.json` exists
-with `phase == "build"`. The env guard is load-bearing: parked batch state
+with `phase == "build"`, or `phase == "review"` with a non-empty
+`rework_task_ids` (cycle-1 rework runs `/work` inside the review session,
+PRD 00196; a review session with no rework is unguarded). The env guard is
+load-bearing: parked batch state
 lingers in dev/local/autopilot/ between relaunches, and without the guard a
 long INTERACTIVE session sharing the cwd tree gets treated as a build session
 at the cap and writes rotations/stalls into the parked batch's state
@@ -281,6 +284,36 @@ def _latest_usage_total(transcript_path: Path) -> int | None:
     return None
 
 
+def _phase_of(state: dict[str, Any]) -> str:
+    """The guarded phase this fire runs in (`build` unless the state says
+    `review`); main() admits nothing else."""
+    return "review" if state.get("phase") == "review" else "build"
+
+
+def _guarded_phase(state: dict[str, Any]) -> bool:
+    """True when this session's phase runs `/work` tasks the caps must bound:
+    `build`, or `review` with a non-empty `rework_task_ids` (cycle-1 rework
+    runs inside the review session, PRD 00196). A review session with no
+    rework (Phases 4 and 5 only) stays unguarded. A `rework_task_ids` that is
+    not a list is treated as empty, with one stderr line."""
+    phase = state.get("phase")
+    if phase == "build":
+        return True
+    if phase != "review":
+        return False
+    rework = state.get("rework_task_ids")
+    if rework is None:
+        return False
+    if not isinstance(rework, list):
+        print(
+            f"autopilot_context_cap_hook: rework_task_ids is not a list "
+            f"({rework!r}); treating as empty",
+            file=sys.stderr,
+        )
+        return False
+    return bool(rework)
+
+
 def _in_progress_task_id(state: dict[str, Any]) -> str:
     tasks = state.get("tasks")
     if isinstance(tasks, list):
@@ -411,16 +444,20 @@ def _marker_task_id(text: str) -> str:
     return text if isinstance(payload, int) else ""
 
 
-def _request_handoff(autopilot_dir: Path, task_id: str, session_id: str) -> None:
+def _request_handoff(
+    autopilot_dir: Path, task_id: str, session_id: str, phase: str
+) -> None:
     """Write the `.handoff-requested` marker (one-shot per task).
 
     Unlike the hard-cap rotation, this is non-destructive: state.json is left
     untouched and no envelope is emitted. `/work` checks the marker at a task
     boundary (after a task commits) and hands off cleanly to a fresh session,
-    which resumes build with the remaining pending tasks.
+    which resumes the phase with the remaining pending tasks.
 
-    The marker is a JSON object with exactly four fields: the `build` phase,
-    the requesting session's id, a UTC stamp, and the in-progress task id.
+    The marker is a JSON object with exactly four fields: the phase the hook
+    fired in (`build`, or `review` during rework, PRD 00196: step 6.5 honours
+    a marker only in its own phase), the requesting session's id, a UTC
+    stamp, and the in-progress task id.
     When an existing marker (JSON or legacy bare task id) already names the
     current task this is a redundant PostToolUse fire and the function is a
     no-op, leaving the file byte-identical; when it names an earlier task (the
@@ -437,7 +474,7 @@ def _request_handoff(autopilot_dir: Path, task_id: str, session_id: str) -> None
         if _marker_task_id(existing) == task_id:
             return
     payload = {
-        "phase": "build",
+        "phase": phase,
         "session": session_id,
         "at": datetime.now(timezone.utc).isoformat(),
         "task_id": task_id,
@@ -570,7 +607,7 @@ def _handle_below_cap(
         return
     last_usage, last_calls = _last_task_cost(state)
     if _headroom_exhausted(total, count, last_usage, last_calls):
-        _request_handoff(autopilot_dir, task_id, session_id)
+        _request_handoff(autopilot_dir, task_id, session_id, _phase_of(state))
 
 
 def _handle_livelock(
@@ -722,7 +759,7 @@ def main() -> None:
         return
 
     state = _load_state(autopilot_dir)
-    if not state or state.get("phase") != "build":
+    if not state or not _guarded_phase(state):
         return
 
     task_id = _in_progress_task_id(state)

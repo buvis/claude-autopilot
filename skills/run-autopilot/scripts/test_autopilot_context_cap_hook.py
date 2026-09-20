@@ -143,15 +143,28 @@ class ContextCapHookTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout.strip(), "")
 
-    def test_phase_not_build_is_noop(self) -> None:
-        """The gate is the `build` phase. Over the cap on any other gate
-        (here `review`) is a no-op — only `build` runs /work tasks."""
-        self.fx.write_state(phase="review")
-        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=600_000)])
-        result = self.fx.run_hook()
-        self.assertEqual(result.returncode, 0)
-        self.assertEqual(result.stdout.strip(), "")
-        self.assertFalse((self.fx.autopilot_dir / ".cap-fired").exists())
+    def test_review_without_rework_is_noop(self) -> None:
+        """A review session with no rework (`rework_task_ids` absent or
+        empty; Phases 4 and 5 only) stays unguarded: over the cap it neither
+        rotates nor, with headroom exhausted, requests a handoff (PRD 00196;
+        the 00191 no-write case folded in)."""
+        for label, fields in (
+            ("absent", {}),
+            ("empty", {"rework_task_ids": []}),
+        ):
+            with self.subTest(rework_task_ids=label):
+                self.fx.write_state(
+                    phase="review",
+                    tasks=[{"id": "task-x", "name": "y", "status": "in_progress"}],
+                    **fields,
+                )
+                for total in (600_000, 400_000):
+                    self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=total)])
+                    result = self.fx.run_hook()
+                    self.assertEqual(result.returncode, 0)
+                    self.assertEqual(result.stdout.strip(), "")
+                    self.assertFalse((self.fx.autopilot_dir / ".cap-fired").exists())
+                    self.assertFalse((self.fx.autopilot_dir / ".handoff-requested").exists())
 
     def test_noops_on_work_phase(self) -> None:
         """`work` is the now-dead pre-collapse phase name (folded into
@@ -641,18 +654,45 @@ class ContextCapHookTests(unittest.TestCase):
         # Bounded read should still complete fast — well under 500ms.
         self.assertLess(elapsed_ms, 500, f"hook took {elapsed_ms:.0f}ms")
 
-    def test_review_phase_writes_no_handoff_marker(self) -> None:
-        """The build-only guard sits ahead of the headroom check: headroom
-        exhausted in `review` requests no handoff — only `build` runs /work tasks."""
+    def test_review_with_rework_ids_is_guarded(self) -> None:
+        """PRD 00196: a review session running rework (`rework_task_ids`
+        non-empty) is guarded like build. At USAGE_CAP - 1 with headroom
+        exhausted, the marker is written and names the review phase, so step
+        6.5 honours it within review; no rotation fires below the cap."""
         self.fx.write_state(
             phase="review",
-            tasks=[{"id": "task-x", "name": "y", "status": "in_progress"}],
+            rework_task_ids=["7"],
+            tasks=[{"id": "7", "name": "rework", "status": "in_progress"}],
         )
-        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=400_000)])
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=499_999)])
         result = self.fx.run_hook()
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout.strip(), "")
+        handoff = self.fx.autopilot_dir / ".handoff-requested"
+        self.assertTrue(handoff.exists())
+        payload = json.loads(handoff.read_text())
+        self.assertEqual(payload["phase"], "review")
+        self.assertEqual(payload["task_id"], "7")
+        self.assertFalse((self.fx.autopilot_dir / ".cap-fired").exists())
+
+    def test_review_with_non_list_rework_ids_is_noop_with_one_stderr_line(
+        self,
+    ) -> None:
+        """`rework_task_ids` that is not a list is treated as empty: no guard,
+        no crash, exactly one stderr line naming it."""
+        self.fx.write_state(
+            phase="review",
+            rework_task_ids="7",
+            tasks=[{"id": "7", "name": "rework", "status": "in_progress"}],
+        )
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=600_000)])
+        result = self.fx.run_hook()
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), "")
+        self.assertFalse((self.fx.autopilot_dir / ".cap-fired").exists())
         self.assertFalse((self.fx.autopilot_dir / ".handoff-requested").exists())
+        lines = [line for line in result.stderr.splitlines() if "rework_task_ids" in line]
+        self.assertEqual(len(lines), 1, result.stderr)
 
     def test_missing_or_unreadable_state_writes_no_handoff_marker(self) -> None:
         """The state-read guard also sits ahead of the headroom check. With
