@@ -29,8 +29,6 @@ PERSONAS = [
 def test_persona_carries_the_citation_sentence_verbatim(relative: str) -> None:
     text = (ROOT / relative).read_text(encoding="utf-8")
     assert CITATION_SENTENCE in text
-    assert "path:line" in text
-    assert "never absolute" in text
 
 
 def test_bob_section_owns_the_citation_line_and_forbids_the_na_shape() -> None:

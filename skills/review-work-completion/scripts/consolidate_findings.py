@@ -25,8 +25,11 @@ Two findings merge when their files match (line-number suffix stripped,
 segment-aligned path-tail comparison) AND the token-set Jaccard of their
 descriptions is at least MERGE_THRESHOLD. They also merge when their files
 match and the two descriptions share at least two distinct all-digit
-tokens. Merging is transitive inside a file group. `match()` is
-importable; the ledger filter reuses it.
+tokens, or when both descriptions carry at least OVERLAP_MIN_TOKENS tokens
+and the shorter one's containment in the longer (the overlap coefficient)
+reaches OVERLAP_THRESHOLD - the signal that catches a terse reviewer
+restating a verbose one (PRD 00198, review 00186). Merging is transitive
+inside a file group. `match()` is importable; the ledger filter reuses it.
 """
 
 from __future__ import annotations
@@ -48,6 +51,21 @@ from pathlib import Path
 # under-merging only undercounts consensus (the status quo this replaces)
 # while over-merging would hide a distinct defect inside another's row.
 MERGE_THRESHOLD = 0.25
+
+# Second description signal (PRD 00198): Jaccard punishes a length mismatch,
+# so Bob's one-line restatement of Alice's four-line finding scores 0.115 to
+# 0.161 while the pair is one defect. The overlap coefficient
+# |A & B| / min(|A|, |B|) asks instead how much of the terse wording the
+# verbose one contains. Measured on the frozen review-00186 outputs
+# (fixtures/review-00186, 32 findings): the four real Alice/Bob agreements
+# score 0.353 to 0.471 and the closest distinct same-file pair 0.294, so the
+# usable band is (0.294, 0.353]; both edges are pinned by
+# test_consolidate_findings.py. Under OVERLAP_MIN_TOKENS the coefficient is
+# too coarse to trust: a third of nine tokens is three shared words, which
+# two distinct findings on one file share routinely (the transitive-spectrum
+# fixture's extreme wordings are the pinned example).
+OVERLAP_THRESHOLD = 1 / 3
+OVERLAP_MIN_TOKENS = 10
 
 SEVERITY_ORDER = {"🔴": 1, "🟠": 2, "🟡": 3, "⚪": 4}
 UNKNOWN_SEVERITY_RANK = 5
@@ -173,15 +191,18 @@ def normalize_file(path: str) -> tuple[str, ...]:
     return tuple(s.lower() for s in segments)
 
 
+def _tails_match(a: tuple[str, ...], b: tuple[str, ...]) -> bool:
+    if not a or not b:
+        return a == b
+    short, long_ = (a, b) if len(a) <= len(b) else (b, a)
+    return long_[-len(short) :] == short
+
+
 def files_match(a: str, b: str) -> bool:
     """True when one path is a segment-aligned tail of the other, so
     `src/db/query.ts` and `query.ts` are the same file but `a/x.py` and
     `b/x.py` are not."""
-    sa, sb = normalize_file(a), normalize_file(b)
-    if not sa or not sb:
-        return sa == sb
-    short, long_ = (sa, sb) if len(sa) <= len(sb) else (sb, sa)
-    return long_[-len(short) :] == short
+    return _tails_match(normalize_file(a), normalize_file(b))
 
 
 def _raw_tokens(desc: str) -> list[str]:
@@ -203,11 +224,23 @@ def jaccard(a: frozenset[str], b: frozenset[str]) -> float:
     return len(a & b) / len(a | b)
 
 
+def overlap(a: frozenset[str], b: frozenset[str]) -> float:
+    """The shorter set's containment in the longer, 0.0 when either is
+    shorter than OVERLAP_MIN_TOKENS (too few tokens to mean anything)."""
+    shorter = min(len(a), len(b))
+    if shorter < OVERLAP_MIN_TOKENS:
+        return 0.0
+    return len(a & b) / shorter
+
+
 def match(finding_a: Finding, finding_b: Finding) -> bool:
     """Do these two findings describe the same defect?"""
     if not files_match(finding_a.file, finding_b.file):
         return False
-    if jaccard(tokens(finding_a.desc), tokens(finding_b.desc)) >= MERGE_THRESHOLD:
+    tokens_a, tokens_b = tokens(finding_a.desc), tokens(finding_b.desc)
+    if jaccard(tokens_a, tokens_b) >= MERGE_THRESHOLD:
+        return True
+    if overlap(tokens_a, tokens_b) >= OVERLAP_THRESHOLD:
         return True
     shared_nums = numeric_tokens(finding_a.desc) & numeric_tokens(finding_b.desc)
     return len(shared_nums) >= 2
@@ -347,15 +380,24 @@ def split_ledger_dismissed(
     return kept, dismissed
 
 
+def _raw_segments(citation: str) -> tuple[str, ...]:
+    """normalize_file without the suffix stripping: what the path gate
+    would have seen before PRD 00198."""
+    cleaned = citation.strip().replace("\\", "/")
+    return tuple(s.lower() for s in cleaned.split("/") if s not in ("", "."))
+
+
 def suffix_stripped_citations(row: Finding) -> list[str]:
-    """The row's raw citations that matched its siblings only after a line
-    suffix came off: distinct raw strings, at least one of which changed
-    under stripping. Empty when the citations agreed as written."""
-    if len(set(row.files)) < 2:
-        return []
-    if all(strip_citation_suffixes(f) == f.strip() for f in row.files):
-        return []
-    return list(row.files)
+    """The row's raw citations when at least one pair of them would NOT have
+    matched as written and only did once a line suffix came off. Empty when
+    every pair already agreed by path tail (`src/cli.py:4` beside
+    `/repo/src/cli.py:4` is not drift, both carry the same suffix)."""
+    raw = [_raw_segments(f) for f in row.files]
+    for i, a in enumerate(raw):
+        for b in raw[i + 1 :]:
+            if not _tails_match(a, b):
+                return list(row.files)
+    return []
 
 
 def render(merged: list[Finding], total_agents: int) -> str:

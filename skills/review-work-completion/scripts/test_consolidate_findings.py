@@ -577,25 +577,70 @@ def test_review_00186_citations_resolve_to_the_same_file() -> None:
         assert cf.files_match(alice.file, bob.file), (alice.file, bob.file)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "PRD 00198's success criterion is not met by citation normalization "
-        "alone: with files matching, the four pairs' description Jaccard "
-        "measures 0.115 / 0.138 / 0.161 / 0.154 against MERGE_THRESHOLD 0.25 "
-        "and they share no two numeric tokens, so the description gate "
-        "still keeps them apart. Merging them needs a new description "
-        "signal, a design decision outside this PRD."
-    ),
-)
-def test_review_00186_agreements_merge() -> None:
+def test_review_00186_pairs_need_the_overlap_signal_not_jaccard() -> None:
+    """Why the overlap coefficient exists: with the file gate fixed, the
+    four pairs' Jaccard still sits under MERGE_THRESHOLD (measured 0.115 /
+    0.138 / 0.161 / 0.154) and they share no two numeric tokens."""
+    found = _load_00186()
+    for alice_idx, bob_idx in REVIEW_00186_AGREEMENTS:
+        alice, bob = found["ALICE"][alice_idx], found["BOB"][bob_idx]
+        assert cf.jaccard(cf.tokens(alice.desc), cf.tokens(bob.desc)) < cf.MERGE_THRESHOLD
+        assert len(cf.numeric_tokens(alice.desc) & cf.numeric_tokens(bob.desc)) < 2
+        assert cf.overlap(cf.tokens(alice.desc), cf.tokens(bob.desc)) >= cf.OVERLAP_THRESHOLD
+
+
+def test_the_overlap_threshold_sits_inside_the_measured_band() -> None:
+    """Every same-file pair of the 32 real findings: the weakest of the four
+    true agreements must clear the threshold and the strongest distinct pair
+    must not. Stated as an assertion so a threshold edit that passes the
+    replay by luck still fails here."""
     found = _load_00186()
     findings = [f for agent in ("ALICE", "BLAKE", "BOB", "CARL") for f in found[agent]]
-    table = cf.render(cf.consolidate(findings), total_agents=4)
+    true_pairs = {
+        (id(found["ALICE"][a]), id(found["BOB"][b])) for a, b in REVIEW_00186_AGREEMENTS
+    }
+    agreed, distinct = [], []
+    for i, x in enumerate(findings):
+        for y in findings[i + 1 :]:
+            if not cf.files_match(x.file, y.file):
+                continue
+            score = cf.overlap(cf.tokens(x.desc), cf.tokens(y.desc))
+            is_true = (id(x), id(y)) in true_pairs or (id(y), id(x)) in true_pairs
+            (agreed if is_true else distinct).append(score)
+    assert len(agreed) == 4
+    assert max(distinct) < cf.OVERLAP_THRESHOLD <= min(agreed)
+    assert 0.29 < max(distinct) and min(agreed) < 0.36  # the measured edges
+
+
+def test_overlap_ignores_pairs_shorter_than_the_token_floor() -> None:
+    """The transitive-spectrum extremes share three of nine tokens (exactly
+    a third): too few tokens for the coefficient to mean anything, so they
+    must still not match each other (see the transitive test below)."""
+    extreme_a = cf.tokens(SYS_EXIT_WORDINGS[0])
+    extreme_b = cf.tokens(
+        "exception handling absent: library calls exit rather than raising it"
+    )
+    assert len(extreme_a & extreme_b) / min(len(extreme_a), len(extreme_b)) >= 1 / 3
+    assert min(len(extreme_a), len(extreme_b)) < cf.OVERLAP_MIN_TOKENS
+    assert cf.overlap(extreme_a, extreme_b) == 0.0
+
+
+def test_review_00186_agreements_merge() -> None:
+    """PRD 00198's success criterion: replaying the four reviewer outputs
+    yields exactly the four `[2/4]` rows the review file lists under "Real
+    consensus", and nothing else merges (28 rows from 32 findings)."""
+    found = _load_00186()
+    findings = [f for agent in ("ALICE", "BLAKE", "BOB", "CARL") for f in found[agent]]
+    merged = cf.consolidate(findings)
+    assert len(merged) == 28
+    table = cf.render(merged, total_agents=4)
     rows = [ln for ln in table.splitlines() if ln.startswith("| [2/4]")]
     assert len(rows) == 4, table
-    for alice_idx, _ in REVIEW_00186_AGREEMENTS:
-        assert any(found["ALICE"][alice_idx].desc in row for row in rows)
+    assert not [ln for ln in table.splitlines() if ln.startswith("| [3/4]")]
+    for alice_idx, bob_idx in REVIEW_00186_AGREEMENTS:
+        row = next(r for r in rows if found["ALICE"][alice_idx].desc in r)
+        assert row.endswith("| ALICE, BOB |")
+        assert found["BOB"][bob_idx].desc not in table  # folded into Alice's wording
 
 
 def test_render_notes_a_row_that_merged_only_after_suffix_stripping(
@@ -612,6 +657,21 @@ def test_render_notes_a_row_that_merged_only_after_suffix_stripping(
     assert err.count("\n") == 1
     assert "row 1 merged citations that matched only after suffix stripping" in err
     assert "src/cli.py (lines 3-9) ~ src/cli.py:4" in err
+
+
+def test_render_is_silent_when_both_citations_carry_a_line_suffix(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`src/cli.py:4` beside `/repo/src/cli.py:4` already match by path tail
+    with the suffixes intact, so stripping enabled nothing: no note."""
+    rows = cf.consolidate(
+        [
+            cf.Finding("ALICE", "🟠", SYS_EXIT_WORDINGS[0], "/repo/src/cli.py:4", "4"),
+            cf.Finding("BOB", "🟠", SYS_EXIT_WORDINGS[1], "src/cli.py:4", "4"),
+        ]
+    )
+    cf.render(rows, total_agents=2)
+    assert capsys.readouterr().err == ""
 
 
 def test_render_is_silent_when_citations_agree_as_written(
