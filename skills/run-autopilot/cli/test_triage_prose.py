@@ -37,6 +37,9 @@ _PHASE_DONE = _REFERENCES / "phase-done.md"
 _DONE_TEXT = _PHASE_DONE.read_text()
 _STATE_SCHEMA = _REFERENCES / "state-schema.md"
 _SCHEMA_TEXT = _STATE_SCHEMA.read_text()
+_REPO_ROOT = _SKILL_DIR.parent.parent
+_RELEASE_CHECKS = _REPO_ROOT / "dev" / "bin" / "release-checks"
+_CHANGELOG = _REPO_ROOT / "CHANGELOG.md"
 
 _MINT = "autopilot mint-stubs --batch"
 _CAP_OUT_LEAD = "- **Loop mode (`$_AUTOPILOT_LOOP` set) — cap-out defers, never pauses.**"
@@ -226,4 +229,47 @@ def test_state_schema_documents_batch_minted_stubs_and_its_three_sites() -> None
     idx = _SCHEMA_TEXT.index(lead)
     assert _SCHEMA_TEXT.rfind("| `batch.critical_on_master` |", 0, idx) != -1, (
         f"{_STATE_SCHEMA}: expected {where} after the `batch.critical_on_master` row."
+    )
+
+
+def test_release_checks_l4_block_runs_both_triage_test_files() -> None:
+    text = _RELEASE_CHECKS.read_text()
+    assert text.count('echo "[checks] l4"') == 1, (
+        f"{_RELEASE_CHECKS}: expected exactly one `[checks] l4` block."
+    )
+    block = text[text.index('echo "[checks] l4"') :]
+    block = block.split("\necho ", 1)[0]
+    _assert_present(
+        block,
+        _RELEASE_CHECKS,
+        "the `[checks] l4` block",
+        (
+            "uv run --no-project --with pytest python -m pytest -q",
+            "skills/run-autopilot/cli/test_triage.py",
+            "skills/run-autopilot/cli/test_triage_prose.py",
+        ),
+    )
+
+
+def test_changelog_unreleased_added_carries_the_stub_minting_entry() -> None:
+    text = _CHANGELOG.read_text()
+    unreleased = _section(text, _CHANGELOG, "## [Unreleased]", "\n## [")
+    added = _section(unreleased, _CHANGELOG, "### Added", "### Changed")
+    _assert_present(
+        added,
+        _CHANGELOG,
+        "the [Unreleased] Added section",
+        (
+            "- **run-autopilot**: `autopilot mint-stubs --batch <id>` mints one "
+            "`dev/local/prds/hold/<NNNNN>-triage-<slug>-v1.md` triage stub",
+            "`{s} stubs`",
+            "never drains or promotes",
+        ),
+    )
+    # Preserves its neighbours: the earlier Added entries are still there.
+    _assert_present(
+        added,
+        _CHANGELOG,
+        "the [Unreleased] Added section",
+        ("- **design-solution**: `--rework <review-file>`", "- **hooks**: deny a Bash `git push`"),
     )

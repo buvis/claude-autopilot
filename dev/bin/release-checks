@@ -89,4 +89,6 @@ uv run --no-project --with pytest python -m pytest -q \
 echo "[checks] l4"
 uv run --no-project --with pytest python -m pytest -q \
   skills/review-work-completion/scripts/test_consolidate_findings.py \
-  skills/review-work-completion/scripts/test_citation_format_prose.py
+  skills/review-work-completion/scripts/test_citation_format_prose.py \
+  skills/run-autopilot/cli/test_triage.py \
+  skills/run-autopilot/cli/test_triage_prose.py
