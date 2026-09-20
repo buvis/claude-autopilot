@@ -41,6 +41,22 @@ def stand_down_reason(autopilot_dir: Path, since: float) -> str | None:
     return "no reason given"
 
 
+def stand_down_condition(autopilot_dir: Path) -> str:
+    """The `condition` a stand-down marker names (PRD 00199: `peer_claimed`,
+    `dirty_tree` or `state_after_leave`), or `"unknown"` when the marker is
+    missing, unreadable, not JSON, or carries no string condition. Read
+    beside `stand_down_reason`, which already decided the marker is this
+    session's stand-down."""
+    try:
+        data = json.loads((autopilot_dir / MARKER).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "unknown"
+    condition = data.get("condition") if isinstance(data, dict) else None
+    if isinstance(condition, str) and condition.strip():
+        return condition.strip()
+    return "unknown"
+
+
 def consume_pause(autopilot_dir: Path) -> bool:
     """True when the pause marker existed; it is removed either way."""
     try:
