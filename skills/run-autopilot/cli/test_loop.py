@@ -220,6 +220,48 @@ def test_one_metrics_line_per_session(tmp_path):
     assert [json.loads(row)["signal"] for row in rows] == ["continue", "done"]
 
 
+def test_paused_row_carries_the_stand_down_reason_and_condition(tmp_path):
+    # PRD 00199: a stand-down's paused row records the marker's reason and
+    # its condition, so a false stand-down is visible in the ledger.
+    def stand_down(ap_dir: Path) -> None:
+        (ap_dir / "pause-requested").write_text(
+            json.dumps(
+                {"reason": "peer repo-x-7 owns 00010-x-v1.md", "condition": "dirty_tree"},
+            ),
+        )
+
+    lp = make_loop(tmp_path, [stand_down])
+    ap = lp._test["ap_dir"]
+    write_state(ap, prd="00010-x-v1.md", next_phase="build", batch={"id": "b"})
+    assert lp.run() == 0
+    rows = _metrics_rows(ap)
+    assert len(rows) == 1
+    assert rows[0]["signal"] == "paused"
+    assert rows[0]["stood_down"] == "peer repo-x-7 owns 00010-x-v1.md"
+    assert rows[0]["stood_down_condition"] == "dirty_tree"
+
+
+def test_a_conditionless_stand_down_row_reads_unknown_and_other_rows_carry_neither(
+    tmp_path,
+):
+    def stand_down(ap_dir: Path) -> None:
+        (ap_dir / "pause-requested").write_text(json.dumps({"reason": "peer owns it"}))
+
+    lp = make_loop(tmp_path, [stand_down])
+    ap = lp._test["ap_dir"]
+    write_state(ap, prd="00010-x-v1.md", next_phase="build", batch={"id": "b"})
+    assert lp.run() == 0
+    row = _metrics_rows(ap)[0]
+    assert row["stood_down_condition"] == "unknown"
+
+    lp2 = make_loop(tmp_path / "other", [terminal_step()])
+    write_state(lp2._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b"})
+    assert lp2.run() == 0
+    done_row = _metrics_rows(lp2._test["ap_dir"])[0]
+    assert "stood_down" not in done_row
+    assert "stood_down_condition" not in done_row
+
+
 def _metrics_rows(ap: Path) -> list[dict]:
     """Parsed rows of the primary metrics file, after checking the ledger
     mirror is byte-identical to it."""

@@ -229,6 +229,7 @@ class DecisionMixin:
             decision["signal"] = "paused"
             decision["detail"] = f"session stood down: {reason}"
             decision["stood_down"] = reason
+            decision["stood_down_condition"] = pause.stand_down_condition(ap_dir)
             return
 
         if self._limit_wait_for(ap_dir, decision):
