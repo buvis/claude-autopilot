@@ -15,14 +15,22 @@ The session runs at `session_model` (default sonnet) or a promotion signal
 
 ## 1. Mirror
 
-Resume guard first: when `state.tasks` is already non-empty, this session is
-a re-entry (a context-cap rotation, a died-retry relaunch), so mirror
-nothing and go to step 2 at the first task whose `status` is not
-`completed`; `task-add` does not deduplicate, and a second mirror would
-double the task list.
+Capture `work_start_sha` and `repo_root` (and `git_dir` for a bare-repo
+root) first, on every entry, exactly per the Phase 3 invariants (core
+`SKILL.md` § Phase 3 invariants; `references/phase-build.md` § Phase 3):
+once per PRD, only when unset, with the empty-tree sentinel when
+`git rev-parse HEAD` fails. A re-entry (a context-cap rotation, a died-retry
+relaunch) that finds them set leaves them alone; one that finds them unset
+captures them now, before any task runs.
 
-Otherwise mirror every `- [ ]` line of the PRD into `state.tasks`, one
-`task-add` per line, so tracon and the task counts stay live:
+Then mirror the PRD's task lines idempotently: `task-add` does not
+deduplicate, so a re-entry must not double the task list. Mirror every
+`- [ ]` line of the PRD whose text is not already the `name` of a task in
+`state.tasks`, one `task-add` per such line, so tracon and the task counts
+stay live; a first entry mirrors them all, a re-entry after a crash between
+two `task-add` calls mirrors only the lines still missing, and a re-entry
+with a complete mirror mirrors nothing and goes to step 2 at the first task
+whose `status` is not `completed`.
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json task-add <task-json-file>
@@ -32,11 +40,6 @@ Write each `<task-json-file>` with the Write tool as `{"name": "<the task
 text>"}` and nothing else: no `model` key, so `tasks[i].model` is
 legacy-absent (`skills/plan-tasks/SKILL.md` step 4 is the payload contract).
 Capture the printed id per task.
-
-Then capture `work_start_sha` and `repo_root` (and `git_dir` for a bare-repo
-root) exactly per the Phase 3 invariants (core `SKILL.md` § Phase 3
-invariants; `references/phase-build.md` § Phase 3): once per PRD, only when
-unset, with the empty-tree sentinel when `git rev-parse HEAD` fails.
 
 ## 2. Implement
 
@@ -148,11 +151,16 @@ The review must have happened before its table means anything:
 `consolidate_findings.py` reads a missing, empty or malformed output file
 as `No issues found`, so check the saved text first. Alice's output holds at
 least one `[ALICE]` line and all twelve `R{n}: pass|fail` verdict lines (the
-workflow backend: its consolidated table with a `Verdict:` line). When it
-does not, dispatch the same reviewer once more; when the retry does not
-either, the sole review failed and the PRD escalates with
-`--signal review_failed` (step 4), never converges on an empty table. Only
-then build the table:
+workflow backend: its consolidated table with a `Verdict:` line), and every
+`[ALICE]` line is either the exact all-clear `[ALICE] ✅ No issues found`
+or a finding line carrying `| File:` and `| Task:` (the consolidator's own
+`_LINE_RE`; a line it cannot parse is dropped without a word, which is how
+`[ALICE] 🟠 broken check` would converge a PRD). When the text fails any of
+that, dispatch the same reviewer once more; when the retry fails it too, the
+sole review failed and the PRD escalates with `--signal review_failed`
+(step 4), never converges on an empty table. Only then build the table, and
+check that its row count equals the number of finding lines (the all-clear
+line counts zero):
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/consolidate_findings.py alice:$PWD/dev/local/tmp/solo-output-<prd-stem>.txt
@@ -208,7 +216,10 @@ What the session does with each severity in the table, in this order:
   `autopilot lane-check` again without `--signal` (step 4): the fix moved
   HEAD. A HIGH still confirmed after the delta escalates with
   `--signal high_unresolved`; a suite that is red after the fix escalates
-  with `--signal suite_red`.
+  with `--signal suite_red`. After the delta, rewrite the saved table so it
+  reflects the delta's outcome: rows the delta confirmed fixed are removed,
+  rows it raised on the fix are added; that updated table is what step 6
+  writes.
 - A HIGH outside the PRD's named paths escalates with
   `--signal high_unresolved` without a fix.
 - A MEDIUM outside the PRD's named paths, and every LOW, is recorded in the
@@ -234,7 +245,8 @@ Two exits, both through `autopilot phase-done`:
   `full (classified solo, <reason>), escalated from solo: <signal>`.
 - **Close** (`lane: ok` from the last `lane-check` and no escalating
   finding): first write `dev/local/reviews/<prd-stem>-review-1.md` from the
-  saved table in the shape step 5 gives, then
+  saved table (updated with the delta's outcome when a fix ran) in the shape
+  step 5 gives, then
   `autopilot phase-done --outcome lane_reviewed`, the `("build",
   "lane_reviewed")` row of `cli/transitions.py`, whose effect is
   convergence's: `phase`/`next_phase: "done"` and `"review"` appended once

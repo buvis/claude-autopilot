@@ -15,6 +15,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from cli import frontmatter
 
 CLI_MAIN = Path(__file__).resolve().parent / "__main__.py"
@@ -238,13 +240,26 @@ def test_lane_check_passes_a_docs_only_diff(tmp_path: Path) -> None:
     assert state_path.read_bytes() == before, "a passing check writes nothing"
 
 
-def test_lane_check_records_an_explicit_signal(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "signal", ["critical_finding", "high_unresolved", "suite_red", "review_failed"]
+)
+def test_lane_check_records_an_explicit_signal(tmp_path: Path, signal: str) -> None:
     _repo, state_path = _solo_repo(tmp_path)
-    proc, state = _lane_check(state_path, "--signal", "critical_finding")
+    proc, state = _lane_check(state_path, "--signal", signal)
     assert proc.returncode == 3, proc.stderr
-    assert proc.stdout.strip() == "lane: escalate critical_finding"
+    assert proc.stdout.strip() == f"lane: escalate {signal}"
     assert state["lane_effective"] == "full"
-    assert state["lane_escalated"] == {"from": "solo", "signal": "critical_finding"}
+    assert state["lane_escalated"] == {"from": "solo", "signal": signal}
+
+
+def test_lane_check_refuses_an_unreadable_state_path(tmp_path: Path) -> None:
+    # A directory (or a permission-denied file) is as unreadable as a
+    # missing file: exit 2 with the reason, never a traceback.
+    _repo, state_path = _solo_repo(tmp_path)
+    proc = _run(["lane-check", "--state", str(state_path.parent)], cwd=tmp_path)
+    assert proc.returncode == 2
+    assert "lane-check:" in proc.stderr
+    assert "Traceback" not in proc.stderr
 
 
 def test_lane_check_escalates_when_git_fails(tmp_path: Path) -> None:

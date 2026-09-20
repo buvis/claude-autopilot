@@ -296,8 +296,7 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
             ledger_dir.mkdir(parents=True, exist_ok=True)
             with open(ledger_dir / "loop-metrics.jsonl", "a", encoding="utf-8") as fh:
                 fh.write(encoded + "\n")
-            # Session row first, so build_row sees this session's batch; a
-            # lane-routed build converges from `build` (PRD 00205).
+            # Session row first, so build_row sees this session's batch.
             converged = phase_launched == "review" or line["lane_effective"] in _LANES
             if decision.get("phase_end") == "done" and converged:
                 self._append_convergence(ap_dir, ledger_dir, ts_end)

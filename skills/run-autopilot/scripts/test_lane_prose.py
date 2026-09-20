@@ -94,6 +94,9 @@ def test_solo_runbook_orders_mirror_implement_suite_check_review_close() -> None
 
 
 def test_solo_runbook_names_six_signals_and_their_outcomes() -> None:
+    # The PRD's six signals plus `review_failed`, added by the 00205 review
+    # (a failed sole review pass must escalate, never converge); the name is
+    # the one the PRD's acceptance criteria list.
     text = _solo()
     for signal, (heading, form) in _SOLO_SIGNALS.items():
         assert form in _section(text, heading), signal
@@ -109,14 +112,20 @@ def test_solo_runbook_names_six_signals_and_their_outcomes() -> None:
 def test_solo_runbook_guards_resume_reruns_the_check_and_gates_the_review() -> None:
     text = " ".join(_solo().split())
     mirror = " ".join(_section(_solo(), "## 1. Mirror").split())
-    assert "when `state.tasks` is already non-empty" in mirror
-    assert "mirror nothing" in mirror
+    assert mirror.index("Capture `work_start_sha`") < mirror.index("Then mirror")
+    assert "whose text is not already the `name` of a task in `state.tasks`" in mirror
+    assert "mirrors only the lines still missing" in mirror
+    assert "mirrors nothing and goes to step 2" in mirror
     review = " ".join(_section(_solo(), "## 5. Review").split())
     assert "run `autopilot lane-check` again without `--signal`" in review
     assert "at least one `[ALICE]` line and all twelve `R{n}: pass|fail`" in review
+    assert "`[ALICE] ✅ No issues found` or a finding line carrying `| File:` and `| Task:`" in review
+    assert "row count equals the number of finding lines" in review
     assert "never converges on an empty table" in review
+    assert "rows the delta confirmed fixed are removed, rows it raised on the fix are added" in review
     close = " ".join(_section(_solo(), "## 6. Close").split())
     assert "first write `dev/local/reviews/<prd-stem>-review-1.md`" in close
+    assert "updated with the delta's outcome" in close
     assert "`-review-1.md` is written only on the close exit of step 6" in text
 
 
