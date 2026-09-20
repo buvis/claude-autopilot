@@ -47,6 +47,8 @@ Critical finding, not a reason to stop.
 OUTPUT FORMAT IS MANDATORY. Follow exactly:
 {OUTPUT_FORMAT}
 
+Cite files repo-relative as path:line (for example skills/work/SKILL.md:166), never absolute and never with a "(lines a-b)" suffix.
+
 PER-RULE VERDICTS ARE MANDATORY. For every rule in The Rubric above, emit one line:
 B{n}: pass   or   B{n}: fail
 (one rule per line, no other text on the line, no rationale; a rule you

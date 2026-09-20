@@ -28,6 +28,8 @@ Run codex as a **direct background Bash command - do NOT wrap it in a Task subag
 
 Write the prompt to a temp file, then dispatch (**absolute paths** - relative `dev/local/` paths get misresolved).
 
+**Citation line.** Bob's assembled prompt (SKILL.md step 4's persona plus appendices) ends with the sentence every consensus persona carries, so the consolidator's file gate sees one citation shape from every lens: `Cite files repo-relative as path:line (for example skills/work/SKILL.md:166), never absolute and never with a "(lines a-b)" suffix.` A finding that spans files cites the first file as its `File:` value, never `N/A (a.py:77, b.py:91)`: `consolidate_findings.py` reads the first path out of that shape, but a bare `N/A` matches nothing.
+
 **Full review (cycle 1)** - capture Bob's codex session thread id so later cycles can resume it:
 
 ```
