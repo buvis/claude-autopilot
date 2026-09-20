@@ -274,3 +274,18 @@ def test_changelog_unreleased_added_carries_the_stub_minting_entry() -> None:
         "the [Unreleased] Added section",
         ("- **design-solution**: `--rework <review-file>`", "- **hooks**: deny a Bash `git push`"),
     )
+
+
+def test_batch_identity_rollover_clears_minted_stubs() -> None:
+    # Review-2 packet 5: a closed-batch rollover must reset the stub list so
+    # the next batch's `{s} stubs` count starts empty.
+    skill = (_SKILL_DIR / "SKILL.md").read_text()
+    rollover = skill[skill.index("On that closed-batch rollover, delete") :]
+    rollover = rollover[: rollover.index("\n\n")]
+    _assert_present(
+        rollover,
+        _SKILL_DIR / "SKILL.md",
+        "the batch-identity rollover paragraph",
+        ("`batch.minted_stubs`", "count starts empty"),
+    )
+

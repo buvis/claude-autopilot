@@ -245,8 +245,10 @@ Idempotent, safe on every invocation. `mkdir` before any move is mandatory: a mo
 
 **Batch-identity rollover.** When `state.batch` already exists at selection, mint a fresh `batch.id` (new `<yyyymmddHHMM>` timestamp, reset `completed_prds: []`) ONLY for a *genuinely closed* surviving batch: `phase == "done"` AND `next_phase == ""` (empty). Both conditions are required — only the batch-end "No more PRDs" branch writes the empty `next_phase`, while Phase 9 step 2 sets a transient `phase: "done"` (with `next_phase: "done"`) BEFORE the verified wip→done move, so a failed move or mid-Phase-9 crash leaves that shape and must NOT roll over (rolling over there would wipe the in-progress batch's `completed_prds` and mint a spurious id). Every normal in-progress resume preserves `batch.id` unchanged. (Forensics: `references/design-rationale.md` § Batch-identity rollover.)
 
-On that closed-batch rollover, delete `batch.unavailable_reviewers` and
-`batch.unavailable_reviewer_details` in the same state update as the new id.
+On that closed-batch rollover, delete `batch.unavailable_reviewers`,
+`batch.unavailable_reviewer_details` and `batch.minted_stubs` (so the next
+batch's `{s} stubs` count starts empty, PRD 00195) in the same state update as
+the new id.
 Interactive batch end retains `state.json`, so expiry cannot depend on file
 deletion. Every in-progress resume preserves both fields, including transitions
 to another PRD in the same batch; only a new batch tries a rejected Carl again.
