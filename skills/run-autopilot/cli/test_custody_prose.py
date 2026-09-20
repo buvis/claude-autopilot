@@ -286,7 +286,9 @@ def test_every_exit_table_9_row_covers_the_custody_write_failure() -> None:
 
 
 def test_no_manual_range_flag_or_later_feature_leaks_into_the_skill_prose() -> None:
-    md_files = sorted(_SKILL_DIR.rglob("*.md"))
+    # `cli/golden/lanes/` holds frozen PRD texts (the lane classifier's
+    # fixture, PRD 00204), which are data, not the skill's prose.
+    md_files = sorted(p for p in _SKILL_DIR.rglob("*.md") if "golden" not in p.parts)
     assert md_files, f"{_SKILL_DIR}: expected at least one .md file to sweep."
 
     # Absence checks stay whole-tree: scoping them would let the old flag or
