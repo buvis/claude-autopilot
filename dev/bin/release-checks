@@ -66,3 +66,9 @@ uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_loop_decision.py \
   skills/run-autopilot/cli/test_brief.py \
   skills/run-autopilot/cli/test_runner.py
+echo "[checks] cap hook"
+uv run --no-project --with pytest python -m pytest -q \
+  skills/run-autopilot/scripts/test_autopilot_context_cap_hook.py \
+  skills/run-autopilot/scripts/test_autopilot_cap_headroom.py \
+  skills/run-autopilot/scripts/test_autopilot_cap_breach.py \
+  skills/run-autopilot/scripts/test_autopilot_cap_rotation.py

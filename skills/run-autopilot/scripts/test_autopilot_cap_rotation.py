@@ -206,6 +206,28 @@ class ContextCapRotationTests(unittest.TestCase):
         self.assertEqual(state["stall_reason"]["stalled"], "oversized_task")
         self.assertEqual(state["stall_reason"]["task"], "task-x")
 
+    def test_unknown_task_breach_never_livelocks(self) -> None:
+        """`unknown` means no task is in progress (a design or plan step), so
+        a second hard-cap fire with `unknown` as the last rotation is a second
+        long pre-task step, not an oversized task: two consecutive breaches
+        with no in-progress task give two rotation entries and no stall_reason
+        (PRD 00200; observed 2026-09-13, two long design phases in a row)."""
+        self.fx.write_state(
+            phase="build",
+            tasks=[{"id": "1", "name": "t", "status": "pending"}],
+            cap_rotations=[{"task_id": "unknown", "cycle": 1}],
+        )
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=600_000)])
+        result = self.fx.run_hook()
+        self.assertEqual(result.returncode, 0)
+        state = json.loads((self.fx.autopilot_dir / "state.json").read_text())
+        self.assertEqual(
+            [r["task_id"] for r in state["cap_rotations"]], ["unknown", "unknown"]
+        )
+        self.assertNotIn("stall_reason", state)
+        self.assertTrue((self.fx.autopilot_dir / ".cap-fired").exists())
+        self.assertIn("rotation", result.stdout.lower())
+
     def test_post_reset_refire_does_not_spuriously_rotate(self) -> None:
         """A rotation already fired for task "4" earlier this turn and reset
         task 4 to pending. The model is now winding down (committing, writing

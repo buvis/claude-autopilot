@@ -18,12 +18,19 @@ thresholds against a single cost ceiling:
   instead it records the oversized-task stall (`stall_reason.stalled ==
   "oversized_task"`) and instructs the oversized-task stall recovery (move
   the PRD to `dev/local/prds/hold/`, advance to the next PRD).
-- **Soft cap** (below the hard cap) — writes a `.handoff-requested` marker.
-  This is non-destructive: state.json is untouched and no envelope is
-  emitted. `/work` checks the marker at a task boundary (after a task
-  commits) and hands off to a fresh session, which resumes build with the
-  remaining pending tasks. The soft cap keeps a multi-task build from
-  ballooning into the hard-cap rotation.
+- **Headroom rule** (below the hard cap, PRD 00200) — writes a
+  `.handoff-requested` marker when the next task would not fit: the usage
+  left under `USAGE_CAP`, or the calls left under `TURN_TRIPWIRE`, is less
+  than what the last task completed in this session cost (its recorded
+  `usage_at_*`/`calls_at_*` bounds), or than the fixed first-task estimates
+  when no task has completed yet. This is non-destructive: state.json is
+  untouched and no envelope is emitted. `/work` reads the marker only at
+  step 6.5, after the task-done write, and hands off to a fresh session,
+  which resumes the phase with the remaining pending tasks. With no task in
+  progress (a design or plan step) there is no task boundary to hand off at,
+  so the rule never fires then; the build gate checks the same rule itself at
+  the design->plan and plan->work edges from the `last` record in
+  `.turn-counts.json`.
 
 The cost ceiling is a single constant (`USAGE_CAP`), not a window-tiered
 pair: cost scales linearly with context (every turn re-sends the whole window
@@ -76,19 +83,18 @@ from _walk_up import find_autopilot_dir
 # restored the `[1m]` default on 2026-07-20, so the pin was reverted to keep
 # the pairing safe — re-pin only together with a sub-200K-window default.)
 USAGE_CAP = 500_000
-# The soft cap sits below the hard cap. Crossing it writes the
-# `.handoff-requested` marker so `/work` hands off at the next task boundary
-# — a lossless alternative to the hard-cap rotation. The gap to the hard cap
-# is sized to cover roughly one more build task. A task that still overruns
-# the hard cap before `/work` reaches its boundary falls through to the
-# rotation path.
-SOFT_CAP = 320_000
 # Session-level tool-call tripwire (PRD 00073). Independent of context size:
 # the hook counts its own PostToolUse invocations per session id and forces
 # the same hand-off as a hard-cap breach at this many calls, bounding the fat
-# tail of long low-context sessions. Deliberately above the healthy-session
-# norm — it only clips runaways.
-TURN_TRIPWIRE = 300
+# tail of long low-context sessions. 450 is orientation (~100 calls) plus two
+# measured opus tasks (~200 each) minus the margin the headroom rule provides
+# (PRD 00200); at 300 the second task of every opus session died mid-flight.
+TURN_TRIPWIRE = 450
+# First-task estimates for the headroom rule (PRD 00200), used until a task
+# has completed in this session and recorded its own bounds. Measured opus
+# tasks: 118K and 187K of context, ~200 calls; the estimates err high.
+FIRST_TASK_USAGE_ESTIMATE = 150_000
+FIRST_TASK_CALLS_ESTIMATE = 200
 # Walk the transcript backwards in 64KB chunks until a `message.usage`
 # line is found or MAX_TAIL_BYTES is read. A fixed 64KB tail risked
 # missing the latest usage line when a single large tool result (Bash
@@ -162,9 +168,55 @@ def _usage_limit() -> int:
     return USAGE_CAP
 
 
-def _soft_limit() -> int:
-    """Return the single soft handoff threshold."""
-    return SOFT_CAP
+def _headroom_exhausted(
+    total: int, count: int | None, last_usage: int, last_calls: int
+) -> bool:
+    """The headroom rule (PRD 00200): the next task would not fit in the
+    context left under USAGE_CAP or in the calls left under TURN_TRIPWIRE,
+    judged by what the last task cost. A None count (no session id on
+    stdin) leaves only the usage half."""
+    if USAGE_CAP - total < last_usage:
+        return True
+    return count is not None and TURN_TRIPWIRE - count < last_calls
+
+
+def _int_field(task: dict[str, Any], key: str) -> int | None:
+    value = task.get(key)
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value
+
+
+def _last_task_cost(state: dict[str, Any]) -> tuple[int, int]:
+    """The (usage, calls) the most recently completed task cost, from its
+    recorded bounds, or the fixed first-task estimates when there is no
+    completed task or its record is unusable.
+
+    "Most recent" is the last completed entry in `state.tasks` order (tasks
+    complete in plan order and rework tasks are appended). Its record is
+    usable only when all four bounds are ints and neither difference is
+    negative: a start stamped in an earlier session (a rotated task keeps
+    its first stamp) can exceed this session's done value, and a negative
+    cost must never lower the bar.
+    """
+    tasks = state.get("tasks")
+    if not isinstance(tasks, list):
+        return FIRST_TASK_USAGE_ESTIMATE, FIRST_TASK_CALLS_ESTIMATE
+    for task in reversed(tasks):
+        if not isinstance(task, dict) or task.get("status") != "completed":
+            continue
+        bounds = [
+            _int_field(task, key)
+            for key in ("usage_at_start", "usage_at_done", "calls_at_start", "calls_at_done")
+        ]
+        if any(value is None for value in bounds):
+            break
+        usage = bounds[1] - bounds[0]
+        calls = bounds[3] - bounds[2]
+        if usage < 0 or calls < 0:
+            break
+        return usage, calls
+    return FIRST_TASK_USAGE_ESTIMATE, FIRST_TASK_CALLS_ESTIMATE
 
 
 def _usage_total_from_line(line: str) -> int | None:
@@ -512,7 +564,9 @@ def _emit_envelope(context: str) -> None:
 TURN_COUNTS_FILE = ".turn-counts.json"
 
 
-def _bump_and_check_tripwire(autopilot_dir: Path, session_id: str) -> tuple[int, bool]:
+def _bump_and_check_tripwire(
+    autopilot_dir: Path, session_id: str, total: int | None = None
+) -> tuple[int, bool]:
     """Increment this session's tool-call counter and return `(count, fires)`:
     the count after this call, and True exactly once, the call on which it
     reaches TURN_TRIPWIRE. Fires at most once per session (the session id is
@@ -521,6 +575,11 @@ def _bump_and_check_tripwire(autopilot_dir: Path, session_id: str) -> tuple[int,
     $_AUTOPILOT_LOOP + phase guards run first. The count is also the calls
     half of the task record (PRD 00200), so it is returned even when the
     counter could not be persisted (then `fires` is False).
+
+    The same write records this fire as `last`: `{"session", "count",
+    "usage"}` (`usage` is `total`, null when the transcript had no usage line
+    yet). The build gate reads it at the design->plan and plan->work edges to
+    apply the headroom rule where no task is in progress (PRD 00200).
     """
     counts_file = autopilot_dir / TURN_COUNTS_FILE
     data: dict[str, Any] = {"counts": {}, "fired": []}
@@ -563,6 +622,7 @@ def _bump_and_check_tripwire(autopilot_dir: Path, session_id: str) -> tuple[int,
     fires = count >= TURN_TRIPWIRE and not already_fired
     if fires:
         data["fired"].append(session_id)
+    data["last"] = {"session": session_id, "count": count, "usage": total}
     try:
         tmp = counts_file.with_suffix(".json.tmp")
         # Explicit handle rather than write_text: the counter must be on disk
@@ -681,8 +741,14 @@ def _fire_breach(
 ) -> None:
     """Shared hard-breach action for both the context cap and the turn
     tripwire: livelock-stall when this task already rotated once, else rotate.
+
+    `unknown` is "no task in progress" (a design or plan step), not a task
+    that failed to fit twice: two such rotations in one PRD are two long
+    pre-task steps, and the artifacts they wrote survive, so rotate again
+    rather than park the PRD as an oversized task that does not exist
+    (observed 2026-09-13, PRD 00200).
     """
-    if last_rotation_task == task_id:
+    if last_rotation_task == task_id and task_id != "unknown":
         _handle_livelock(autopilot_dir, marker_file, task_id, total)
     else:
         _handle_rotation(autopilot_dir, marker_file, task_id, limit)
@@ -726,11 +792,23 @@ def _marker_dedup_blocks(
 
 
 def _handle_below_cap(
-    autopilot_dir: Path, task_id: str, total: int, session_id: str
+    autopilot_dir: Path,
+    state: dict[str, Any],
+    task_id: str,
+    total: int,
+    count: int | None,
+    session_id: str,
 ) -> None:
-    # Below the hard cap. Above the soft cap, request a clean
-    # task-boundary handoff (lossless) instead of the hard-cap rotation.
-    if total > _soft_limit():
+    # Below the hard cap. When the next task would not fit (headroom rule),
+    # request a clean task-boundary handoff (lossless) instead of waiting for
+    # the hard-cap rotation. No task in progress means nothing to hand off at
+    # a task boundary: the fire is a design/plan step or the wind-down after a
+    # task's commit, and a marker written then (as `unknown`) made the NEXT
+    # session hand off after its first task (2026-09-14, 00190/00191/00194).
+    if task_id == "unknown":
+        return
+    last_usage, last_calls = _last_task_cost(state)
+    if _headroom_exhausted(total, count, last_usage, last_calls):
         _request_handoff(autopilot_dir, task_id, session_id)
 
 
@@ -815,7 +893,7 @@ def _check_caps(
     session_id = raw_session_id if isinstance(raw_session_id, str) else ""
     count: int | None = None
     if session_id:
-        count, fires = _bump_and_check_tripwire(autopilot_dir, session_id)
+        count, fires = _bump_and_check_tripwire(autopilot_dir, session_id, total)
         if fires:
             _fire_breach(
                 autopilot_dir,
@@ -834,7 +912,7 @@ def _check_caps(
     if _record_task_bounds(state, task_id, total, count):
         _write_task_bounds(autopilot_dir, task_id, total, count)
     if total <= limit:
-        _handle_below_cap(autopilot_dir, task_id, total, session_id)
+        _handle_below_cap(autopilot_dir, state, task_id, total, count, session_id)
         return
 
     # Hard-cap breach: livelock-stall if this task already rotated, else rotate.
