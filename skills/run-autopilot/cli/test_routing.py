@@ -193,25 +193,31 @@ def test_session_model_sonnet_is_explicit_sonnet(tmp_path):
 
 def test_signal1_body_mention_is_not_frontmatter(tmp_path):
     # The BODY quotes "session_model: opus" (PRDs about model routing
-    # really do); only the frontmatter block counts.
+    # really do); only the frontmatter block counts. The control first: the
+    # same key IN the block promotes, so a router that ignores the key
+    # altogether cannot pass on the rejection alone.
     box = _box(tmp_path)
     prd = "00082-tune-the-echo-stopwords-v1.md"
     path = box / "prds/wip" / prd
+    _write_prd(path, "opus")
+    _state(box, prd)
+    assert _model(box) == OPUS
     _write_prd(path, "sonnet")
     path.write_text(path.read_text() + "\n## Notes\n\n    session_model: opus\n")
-    _state(box, prd)
     assert _model(box) == SONNET
 
 
 def test_signal1_no_frontmatter_at_all_ignores_body(tmp_path):
     # No block to find: taking the FIRST session_model: line anywhere in
-    # the file wrongly promotes here.
+    # the file wrongly promotes here. Control first, as above.
     box = _box(tmp_path)
     prd = "00019-widen-the-qwen-gate-v1.md"
     path = box / "prds/wip" / prd
+    _write_prd(path, "opus")
+    _state(box, prd)
+    assert _model(box) == OPUS
     _write_prd(path)
     path.write_text(path.read_text() + "\nBody prose:\n\n    session_model: opus\n")
-    _state(box, prd)
     assert _model(box) == SONNET
 
 
@@ -282,8 +288,12 @@ def test_signal1_no_frontmatter_at_all_ignores_body(tmp_path):
 def test_signal1_frontmatter_edge_grammar(tmp_path, label, want, body):
     box = _box(tmp_path)
     prd = "00001-sigfm-edge-case-v1.md"
-    _write_prd_fm(box / "prds/wip" / prd, body)
     _state(box, prd)
+    # Control: the plain key promotes, so every rejection row below proves
+    # the grammar rejected it rather than the key being ignored.
+    _write_prd(box / "prds/wip" / prd, "opus")
+    assert _model(box) == OPUS
+    _write_prd_fm(box / "prds/wip" / prd, body)
     assert _model(box) == want, label
 
 
