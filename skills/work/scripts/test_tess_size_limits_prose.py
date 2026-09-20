@@ -16,6 +16,7 @@ _WORK_DIR = Path(__file__).resolve().parent.parent
 _SKILL_MD = _WORK_DIR / "SKILL.md"
 _TESS_PROMPT = _WORK_DIR / "references" / "tess-prompt.md"
 _TESS_RETRY = _WORK_DIR / "references" / "tess-retry-prompt.md"
+_TEST_AUTHOR = _WORK_DIR / "references" / "test-author-prompt.md"
 
 
 def _rule(text: str, path: Path, number: str) -> str:
@@ -42,4 +43,35 @@ def test_tess_retry_prompt_treats_style_lines_as_issues() -> None:
         assert needle in rule_8, (
             f"{_TESS_RETRY}: rule 8 lacks {needle!r}, so a style-gate line in "
             "the retry feedback is not something the retry is told to fix."
+        )
+
+
+def test_quality_gate_runs_the_style_script_on_test_files() -> None:
+    # SKILL.md step 2.8 keeps the rule and a read-first pointer (the body is
+    # at its 500-line ceiling); test-author-prompt.md § Quality gate carries
+    # the invocation. Both halves are pinned: a pointer to a missing section
+    # is a gate nobody runs, and a section nothing points at is the same.
+    text = _SKILL_MD.read_text()
+    start = text.index("### 2.8.")
+    step_2_8 = text[start : text.index("### 2.85.", start)]
+    for needle in (
+        "over the test files only",
+        "Style limits on the test files",
+        "Exit 1 is a quality-gate failure",
+        "counts toward the two quality-gate retries",
+    ):
+        assert needle in step_2_8, f"{_SKILL_MD}: step 2.8 lacks {needle!r}"
+
+    reference = _TEST_AUTHOR.read_text()
+    section_start = reference.index("### Style limits on the test files")
+    section = reference[section_start : reference.index("\n## ", section_start)]
+    for needle in (
+        "check_style_limits.py --diff dev/local/tmp/test-diff-<task-id>.txt",
+        "git diff --no-index -- /dev/null",
+        "git diff <task_base_sha> -- <tracked test files>",
+        "Exit 1 is a quality-gate failure",
+        "counts toward the two quality-gate retries",
+    ):
+        assert needle in section, (
+            f"{_TEST_AUTHOR}: § Style limits on the test files lacks {needle!r}"
         )

@@ -80,3 +80,6 @@ echo "[checks] design rework prose"
 uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/scripts/test_design_review_contract.py \
   skills/run-autopilot/cli/test_design_rework_prose.py
+echo "[checks] loop blockers prose"
+uv run --no-project --with pytest python -m pytest -q \
+  skills/work/scripts/test_tess_size_limits_prose.py

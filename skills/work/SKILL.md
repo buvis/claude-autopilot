@@ -237,7 +237,7 @@ Tess prompts must satisfy the **Subagent Dispatch Budget**.
 
 ### 2.8. Test quality gate (main session)
 
-Before committing Tess's tests, run the computed shape check and review them in the main session against the four-check rubric in `references/test-author-prompt.md` § Quality gate (behavior names, real assertions, edge cases, no tautologies); **read that section before running the gate.** If any check fails, dispatch Tess again with specific feedback about what's weak, rendered from `tess-retry-prompt.md` — never author the retry by hand. Max 2 quality gate retries.
+Before committing Tess's tests, run the computed shape check and review them in the main session against the four-check rubric in `references/test-author-prompt.md` § Quality gate (behavior names, real assertions, edge cases, no tautologies); **read that section before running the gate.** If any check fails, dispatch Tess again with specific feedback about what's weak, rendered from `tess-retry-prompt.md` — never author the retry by hand. Max 2 quality gate retries. Then run the step-5.65 style gate over the test files only — the invocation is in that same file's § Style limits on the test files; **read it before the first gate run of a batch**. Exit 1 is a quality-gate failure: feed the violation lines to the Tess retry. It counts toward the two quality-gate retries.
 
 **Total Tess budget:** max 4 dispatches across the entire test authoring phase (1 initial + 2 quality-gate retries + 1 adversarial strengthen). If exhausted, flag weakness in task output and proceed. Don't block the pipeline forever.
 

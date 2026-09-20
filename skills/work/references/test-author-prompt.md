@@ -44,7 +44,7 @@ dispatch of a batch.**
 - "How to build this" context
 - Access to modify non-test files
 
-The stdout integer from step 2.7's render call **is** the Subagent Dispatch Budget measurement — no separate `wc -c`. `tess-prompt.md` bakes in the read-only-scope instruction, the dispatch prologue, and the Assumptions footer permanently (mirroring `ivan.md`), so nothing further needs adding to the prompt by hand — open-ended discovery is where subagents burn turns and stall, and keeping Tess scoped to the listed files/symbols is the template's job now. Dispatch the Agent tool with the file at `dev/local/tmp/dispatch-tess-<task-id>.txt` as the prompt source. The template also embeds Simplicity/Think-Before-Coding/Surgical rules to prevent Tess from writing speculative tests or silently assuming input shape.
+The stdout integer from step 2.7's render call **is** the Subagent Dispatch Budget measurement — no separate `wc -c`. `tess-prompt.md` bakes in the read-only-scope instruction, the dispatch prologue, the Assumptions footer and the size limits (rule 12: functions under 50 lines, files under 800) permanently (mirroring `ivan.md`), so nothing further needs adding to the prompt by hand — open-ended discovery is where subagents burn turns and stall, and keeping Tess scoped to the listed files/symbols is the template's job now. Dispatch the Agent tool with the file at `dev/local/tmp/dispatch-tess-<task-id>.txt` as the prompt source. The template also embeds Simplicity/Think-Before-Coding/Surgical rules to prevent Tess from writing speculative tests or silently assuming input shape.
 
 ## Quality gate (step 2.8)
 
@@ -78,6 +78,16 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUG
 ```
 
 Write the gate findings (one per line) to the `QUALITY_FEEDBACK` scratch file with the Write tool. Max 2 quality gate retries.
+
+### Style limits on the test files
+
+Once the four checks pass, run the step-5.65 gate over the test files only, so an oversized test file is split by a Tess retry now (cheap, tests-only) instead of an Ivan style-fix dispatch after implementation (PRD 00197; `tess-prompt.md` rule 12 already tells her the limits). Build the diff the way `references/style-gate.md` § Diff construction does, over this task's test files alone: `git diff <task_base_sha> -- <tracked test files> --output=${TMPDIR:-/tmp}/test-diff-<task-id>.txt`, then `git diff --no-index -- /dev/null <file> >> ${TMPDIR:-/tmp}/test-diff-<task-id>.txt` per untracked test file (exit 1 is the normal case; only exit ≥2 is a failure), then `mv ${TMPDIR:-/tmp}/test-diff-<task-id>.txt dev/local/tmp/test-diff-<task-id>.txt`. Then:
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_style_limits.py --diff dev/local/tmp/test-diff-<task-id>.txt <each new or changed test file as an absolute path>
+```
+
+Exit 0 is clean. Exit 1 is a quality-gate failure: write the violation lines to the `QUALITY_FEEDBACK` scratch file and render the retry above; it counts toward the two quality-gate retries. Exit 2 (the script could not run) is not a Tess failure: name it in the task output and proceed, step 5.65 measures the same files again after implementation.
 
 ## Retry Prompt (after quality gate failure)
 
