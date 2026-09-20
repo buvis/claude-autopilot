@@ -92,6 +92,9 @@ PER_PRD_RESET_FIELDS = (
     "review_lenses",
     "contract_card",
     "needs_attention",
+    # Per-PRD work product (PRD 00205): the solo lane's escalation record,
+    # not re-derived at Phase 0 like its lane siblings below.
+    "lane_escalated",
 )
 
 # NOT reset here, deliberately:

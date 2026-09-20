@@ -88,6 +88,10 @@ TRANSITIONS = {
     ("build", "tasks_done"): _to_review,
     ("review", "rework"): _rework,
     ("review", "converged"): _converged,
+    # A lane-routed build (solo, fast-track; PRD 00205) closes from `build`
+    # with its one review pass done: convergence's effect, so the review
+    # coverage hook gates the lane's review file exactly as a full cycle's.
+    ("build", "lane_reviewed"): _converged,
     ("done", "more_prds"): _more_prds,
     ("done", "drained"): _drained,
     # A batch can also drain at Phase 0 selection rather than at Phase 9: the

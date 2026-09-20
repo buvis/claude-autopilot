@@ -109,6 +109,28 @@ class ConvergedTests(unittest.TestCase):
         )
 
 
+class LaneReviewedTests(unittest.TestCase):
+    """A lane-routed build (PRD 00205) closes from `build` with convergence's
+    own effect set, so the review-coverage hook gates its review file."""
+
+    def test_lane_reviewed_appends_the_review_marker(self) -> None:
+        new = transitions.apply(
+            {"phase": "build", "next_phase": "build", "phases_completed": []},
+            "lane_reviewed",
+        )
+        self.assertEqual(new["phase"], "done")
+        self.assertEqual(new["next_phase"], "done")
+        self.assertEqual(new["phases_completed"], ["review"])
+
+    def test_lane_reviewed_appends_the_marker_once(self) -> None:
+        once = transitions.apply({"phase": "build", "phases_completed": []}, "lane_reviewed")
+        twice = transitions.apply({**once, "phase": "build"}, "lane_reviewed")
+        self.assertEqual(twice["phases_completed"], ["review"])
+
+    def test_lane_reviewed_is_a_phase_done_outcome(self) -> None:
+        self.assertIn("lane_reviewed", transitions.OUTCOMES)
+
+
 class MorePrdsTests(unittest.TestCase):
     def test_applies_the_per_prd_reset(self) -> None:
         state = _review_state(phase="done", next_phase="done", tasks=[{"id": "1"}])
@@ -181,6 +203,7 @@ class TableTests(unittest.TestCase):
             sorted(transitions.TRANSITIONS),
             [
                 ("build", "drained"),
+                ("build", "lane_reviewed"),
                 ("build", "tasks_done"),
                 ("done", "drained"),
                 ("done", "more_prds"),

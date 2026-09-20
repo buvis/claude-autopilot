@@ -178,6 +178,7 @@ class PerPrdResetFieldsTest(unittest.TestCase):
             "review_lenses",
             "contract_card",
             "needs_attention",
+            "lane_escalated",
         }
         self.assertEqual(set(records.PER_PRD_RESET_FIELDS), expected)
         self.assertEqual(
@@ -239,6 +240,21 @@ class ResetPrdFieldsTest(unittest.TestCase):
     def test_does_not_mutate_the_input_dict(self) -> None:
         records.reset_prd_fields(self.input_state)
         self.assertEqual(self.input_state, self.input_snapshot)
+
+    def test_lane_escalated_is_reset_per_prd(self) -> None:
+        # The solo lane's escalation record is per-PRD work product (PRD
+        # 00205); carried forward it would render on the next PRD's Lane line.
+        # Its lane siblings are re-derived at Phase 0 and stay.
+        state = {
+            **self.input_state,
+            "lane": "solo",
+            "lane_effective": "full",
+            "lane_escalated": {"from": "solo", "signal": "unnamed_path"},
+        }
+        result = records.reset_prd_fields(state)
+        self.assertNotIn("lane_escalated", result)
+        self.assertEqual(result["lane"], "solo")
+        self.assertEqual(result["lane_effective"], "full")
 
     def test_field_listed_in_reset_but_absent_from_input_is_not_an_error(self) -> None:
         minimal = {"phase": "review", "batch": {"id": "b1"}}
