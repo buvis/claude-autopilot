@@ -338,13 +338,18 @@ def _last_rotation_task(state: dict[str, Any]) -> str | None:
     return None
 
 
-def _last_rotation_phase(state: dict[str, Any]) -> str:
-    """The phase the most recent cap_rotations entry was recorded in; entries
-    written before PRD 00196 carry no phase and were all build rotations."""
+def _repeat_rotation(state: dict[str, Any]) -> bool:
+    """True when the most recent cap_rotations entry was recorded in THIS
+    phase and cycle, so a breach of the same task is its second in one
+    attempt (the livelock). An entry written before PRD 00196 carries no
+    phase and was a build rotation; a task that rotated in an earlier cycle
+    or phase, completed, and was re-flagged is a fresh attempt."""
     rotations = state.get("cap_rotations")
-    if isinstance(rotations, list) and rotations and isinstance(rotations[-1], dict):
-        return "review" if rotations[-1].get("phase") == "review" else "build"
-    return "build"
+    if not (isinstance(rotations, list) and rotations and isinstance(rotations[-1], dict)):
+        return False
+    last = rotations[-1]
+    phase = "review" if last.get("phase") == "review" else "build"
+    return phase == _phase_of(state) and last.get("cycle") == state.get("cycle")
 
 
 def _append_rotation_to_state(autopilot_dir: Path, task_id: str) -> bool:
@@ -352,11 +357,9 @@ def _append_rotation_to_state(autopilot_dir: Path, task_id: str) -> bool:
     write through cli.state.transaction (the advisory-locked read-modify-
     write boundary).
 
-    The transaction holds its lock across its own read, so it replaces the
-    hook's former pre-write re-read: the mutation runs on that locked read.
-    The model writes fields like tasks[].status and tasks_completed that this
-    transaction must not overwrite; mutating the locked read rather than the
-    hook's earlier phase/task-check read captures those concurrent updates.
+    The transaction holds its lock across its own read, so the mutation runs
+    on that locked read and cannot overwrite the model's concurrent writes
+    (tasks[].status, tasks_completed) with the hook's earlier read.
 
     A rotation touches cap_rotations, next_phase, and the in-flight task's
     status. The rotated-into /work iterates pending tasks, so the in-flight
@@ -486,7 +489,7 @@ def _fire_breach(
     limit: int,
     total: int,
     phase: str,
-    last_rotation_phase: str = "build",
+    repeat: bool,
 ) -> None:
     """Shared hard-breach action for both the context cap and the turn
     tripwire: livelock-stall when this task already rotated once, else rotate.
@@ -495,17 +498,12 @@ def _fire_breach(
     that failed to fit twice: two such rotations in one PRD are two long
     pre-task steps, and the artifacts they wrote survive, so rotate again
     rather than park the PRD as an oversized task that does not exist
-    (observed 2026-09-13, PRD 00200). The last rotation must also be from
-    this phase: a task that rotated during build, completed, and was
-    review-flagged is a fresh attempt in review, not the same overrun twice
-    (PRD 00196).
+    (observed 2026-09-13, PRD 00200). `repeat` says the last rotation was
+    recorded in this phase and cycle (`_repeat_rotation`): a task that
+    rotated in build or an earlier cycle, completed, and was review-flagged
+    is a fresh attempt, not the same overrun twice (PRD 00196).
     """
-    livelock = (
-        last_rotation_task == task_id
-        and task_id != "unknown"
-        and last_rotation_phase == phase
-    )
-    if livelock:
+    if last_rotation_task == task_id and task_id != "unknown" and repeat:
         _handle_livelock(autopilot_dir, marker_file, task_id, total)
     else:
         _handle_rotation(autopilot_dir, marker_file, task_id, limit, phase)
@@ -664,7 +662,7 @@ def _check_caps(
                 limit,
                 total if total is not None else limit,
                 _phase_of(state),
-                _last_rotation_phase(state),
+                _repeat_rotation(state),
             )
             return
 
@@ -708,7 +706,7 @@ def _record_and_breach(
             _usage_limit(),
             total,
             _phase_of(state),
-            _last_rotation_phase(state),
+            _repeat_rotation(state),
         )
         return ""
     return done_task

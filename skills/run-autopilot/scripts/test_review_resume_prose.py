@@ -56,3 +56,18 @@ def test_resume_drops_completed_ids_and_keeps_a_sweep_on_its_finalize_path() -> 
         f"{_PHASE_REVIEW}: Tail sweep step 2 no longer names its task with the "
         "`Tail sweep` prefix the resume rule reads."
     )
+
+
+def test_escalation_resets_the_status_before_appending_the_rework_id() -> None:
+    # Review 2 of PRD 00196: the resume rule drops listed ids whose task is
+    # still `completed`, so the status reset must land before the append.
+    text = _PHASE_REVIEW.read_text()
+    steps = text[text.index("4. Otherwise (chain not exhausted)") : text.index('The "no prior attempt" case')]
+    reset = steps.index("task-set-status <task-id> pending")
+    append = steps.index("5. Append the task ID to `state.rework_task_ids`")
+    assert reset < append, (
+        f"{_PHASE_REVIEW}: Phase 6 escalation appends the rework id before "
+        "resetting the task to pending; a rotation between the writes would "
+        "drop the task on resume."
+    )
+    assert "**after** the status reset, never before" in steps

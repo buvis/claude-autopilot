@@ -77,10 +77,11 @@ class ReviewPhaseRotationTests(unittest.TestCase):
     def test_second_review_rotation_of_the_same_task_livelocks_in_review(self) -> None:
         """Two consecutive review-phase rotations of one rework task are the
         real livelock: the oversized-task stall is recorded and next_phase
-        stays on review (PRD 00196: the stall writes next_phase = phase)."""
+        is set to review (PRD 00196: the stall writes next_phase = phase; the
+        fixture seeds a stale build target so the write itself is pinned)."""
         self.fx.write_state(
             phase="review",
-            next_phase="review",
+            next_phase="build",
             cycle=1,
             rework_task_ids=["task-x"],
             cap_rotations=[{"task_id": "task-x", "cycle": 1, "phase": "review"}],
@@ -94,6 +95,29 @@ class ReviewPhaseRotationTests(unittest.TestCase):
         self.assertEqual(len(state["cap_rotations"]), 1)
         self.assertEqual(state["next_phase"], "review")
         self.assertIn("oversized", result.stdout.lower())
+
+    def test_rotation_from_an_earlier_review_cycle_does_not_livelock(self) -> None:
+        """A task that rotated in review cycle 1, completed, and was re-flagged
+        in cycle 2 keeps that entry as the latest; its first cycle-2 breach is
+        a fresh attempt and rotates again (review 2 of PRD 00196)."""
+        self.fx.write_state(
+            phase="review",
+            next_phase="review",
+            cycle=2,
+            rework_task_ids=["task-x"],
+            cap_rotations=[{"task_id": "task-x", "cycle": 1, "phase": "review"}],
+            tasks=[{"id": "task-x", "name": "flagged", "status": "in_progress"}],
+        )
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=600_000)])
+        result = self.fx.run_hook()
+        self.assertEqual(result.returncode, 0)
+        state = json.loads((self.fx.autopilot_dir / "state.json").read_text())
+        self.assertNotIn("stall_reason", state)
+        self.assertEqual(
+            state["cap_rotations"][-1],
+            {"task_id": "task-x", "cycle": 2, "phase": "review"},
+        )
+        self.assertIn("rotation", result.stdout.lower())
 
     def test_legacy_rotation_entry_without_phase_counts_as_build(self) -> None:
         """Entries written before PRD 00196 carry no phase and were all build
