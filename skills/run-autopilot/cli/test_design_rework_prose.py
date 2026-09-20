@@ -28,9 +28,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from cli.custody_prose_testutil import (
     _PHASE_REVIEW,
+    _RECOVERY,
+    _RECOVERY_TEXT,
     _REVIEW_TEXT,
     _ROSTER_SENTENCE,
     _SKILL_DIR,
+    _STATE_SCHEMA,
     _assert_absent,
     _assert_bound,
     _assert_in_order,
@@ -38,6 +41,8 @@ from cli.custody_prose_testutil import (
     _assert_no_match,
     _assert_no_negation,
     _assert_present,
+    _bullet,
+    _deferred_log_section,
     _paragraph,
     _prose,
     _section,
@@ -506,6 +511,29 @@ def test_rework_design_failure_stalls_in_loop_and_pauses_interactively() -> None
             "stalling is unnecessary|never stall"
         ),
         allow=_FAILURE_ALLOW,
+    )
+
+
+def test_recovery_and_schema_list_the_design_rework_slug() -> None:
+    slugs = _section(
+        _RECOVERY_TEXT,
+        _RECOVERY,
+        "### Stall `site` slugs",
+        "### Systemic-park breaker interaction",
+    )
+    bullet = _bullet(slugs, _RECOVERY, "design_rework")
+    _assert_present(
+        bullet,
+        _RECOVERY,
+        "the `design_rework` slug bullet",
+        ("Phase 6", "--rework", "detail"),
+    )
+    stall = _bullet(_deferred_log_section(), _STATE_SCHEMA, "stall")
+    _assert_present(
+        stall,
+        _STATE_SCHEMA,
+        "the deferred-log `stall` bullet",
+        ("`design_rework`",),
     )
 
 

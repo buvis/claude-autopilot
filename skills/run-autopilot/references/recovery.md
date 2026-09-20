@@ -52,6 +52,12 @@ carries `clarification`, `reviewer_fail`, `sub_skill_fail`, and the others):
   cannot ask a human; records the design doc path in the deferred `detail`.
 - `blocking_escalation` — a loop-mode Phase 5 blocking escalation; records the
   blocking issue(s) in the deferred `detail`.
+- `design_rework` — a loop-mode Phase 6 rework design (`/autopilot:design-solution
+  --rework`, PRD 00194) that ended with open cardinal sins / blockers after its
+  three dispatches, a missing doc, or an empty `## Review log`; records the
+  rework design doc path and the open finding titles in the deferred `detail`.
+  No fix task was created. On un-park the PRD re-enters the build gate; read
+  the rework doc's open findings before moving it back.
 - `statectl_fail` — a loop-mode `statectl` state-write that failed twice (lock
   contention, python error, unreadable state); the model no longer hand-edits
   `state.json` to record this. A failure that survives retry + `autopilot
