@@ -587,3 +587,34 @@ def test_roster_sentence_and_escalation_caveat_survive() -> None:
         f"{_PHASE_REVIEW}: expected the paragraph lead {_ESCALATION_CAVEAT!r} "
         f"exactly once — found {_REVIEW_TEXT.count(_ESCALATION_CAVEAT)}."
     )
+
+
+def test_loop_mode_hands_off_after_task_add_before_work() -> None:
+    # PRD 00208: in loop mode the session that designed the rework and created
+    # the tasks ends before any fix runs; the fresh session resumes the
+    # dispatch through Phase 4's existing skip.
+    _assert_in_order(
+        _DISPATCH,
+        _PHASE_REVIEW,
+        _DISPATCH_WHERE,
+        (
+            "`task-add <task-json-file>`",
+            "**Loop mode (`$_AUTOPILOT_LOOP` set): hand off here, before any fix runs (PRD 00208).**",
+            "rework designed, handing off",
+            "END TURN",
+            "**Interactive (no `$_AUTOPILOT_LOOP`):** invoke `/autopilot:work` now",
+        ),
+    )
+    _assert_present(
+        _DISPATCH,
+        _PHASE_REVIEW,
+        _DISPATCH_WHERE,
+        ("no `phase-done`, the cycle is not over", "cli/routing.rework_resume"),
+    )
+    _assert_absent(
+        _DISPATCH,
+        _PHASE_REVIEW,
+        _DISPATCH_WHERE,
+        ("invoke `/autopilot:work` in this session", "hand-off is optional"),
+    )
+
