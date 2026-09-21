@@ -8,11 +8,14 @@ test_autoclaude_build_model.sh, re-expressed in cli/test_routing.py).
 Build routes per-PRD (PRD 00076): Sonnet unless a promotion signal
 fires. The absent phase is a BUILD launch (a fresh batch has no
 state.json and resumes at the build gate). A genuinely unknown non-empty
-phase falls to Opus xhigh: fail expensive, never fail dumb. Review stays
-on Opus on every cycle, at effort xhigh on cycle 1 and high on cycle 2
-and later; `_AUTOPILOT_EFFORT_REVIEW` forces one effort on every cycle
-and `_AUTOPILOT_EFFORT_REVIEW_RERUN` sets the rerun value; finalize
-(done) is mechanical rendering - Sonnet at medium.
+phase falls to Opus xhigh: fail expensive, never fail dumb. A fresh
+review runs on Opus, at effort xhigh on cycle 1 and high on cycle 2 and
+later; a rework resume (the cycle's review file on disk and unfinished
+`rework_task_ids`, PRD 00207) takes the queued tasks' highest tier
+instead, Sonnet unless one is opus or fable; `_AUTOPILOT_EFFORT_REVIEW`
+forces one effort on every cycle and `_AUTOPILOT_EFFORT_REVIEW_RERUN`
+sets the rerun value; finalize (done) is mechanical rendering - Sonnet at
+medium.
 
 The `[1m]` suffix is load-bearing: autopilot_context_cap_hook.USAGE_CAP
 (500K) is sized for a 1M window, so every launch model here must carry
@@ -220,7 +223,9 @@ def _unfinished_rework_tasks(state: dict) -> list[dict]:
     tasks = state.get("tasks")
     if not isinstance(ids, list) or not ids or not isinstance(tasks, list):
         return []
-    wanted = {str(i) for i in ids if isinstance(i, (str, int)) and not isinstance(i, bool)}
+    wanted = {
+        str(i) for i in ids if isinstance(i, (str, int)) and not isinstance(i, bool)
+    }
     return [
         t
         for t in tasks
@@ -235,7 +240,7 @@ def _cycle_review_file(autopilot_dir: Path, prd: object, cycle: int) -> Path | N
     accepts; None when absent or the state names no PRD."""
     if not isinstance(prd, str) or not prd:
         return None
-    stem = prd[:-3] if prd.endswith(".md") else prd
+    stem = prd.removesuffix(".md")
     reviews = autopilot_dir.parent / "reviews"
     for name in (f"{stem}-review-{cycle}.md", f"{stem}-review-{cycle:02d}.md"):
         candidate = reviews / name
@@ -247,14 +252,15 @@ def _cycle_review_file(autopilot_dir: Path, prd: object, cycle: int) -> Path | N
     return None
 
 
-def rework_resume(autopilot_dir: Path) -> list[dict]:
-    """PRD 00207: the unfinished rework tasks of a review launch whose
-    Phases 4 and 5 already ran, else an empty list.
+def _rework_tasks(autopilot_dir: Path) -> list[dict]:
+    """The unfinished rework tasks of a rework-resume launch (PRD 00207),
+    else an empty list.
 
     A launch is a rework resume when `state.rework_task_ids` names at least
     one task that is not `completed` AND this cycle's review file is on
     disk (the same artifact `references/phase-review.md` Phase 4 skips on).
-    Anything missing or malformed reads as a fresh review.
+    Anything missing or malformed reads as a fresh review; a missing or
+    non-int `cycle` reads as 1, exactly as `review_cycle` reads it.
     """
     state = _load_json(autopilot_dir / "state.json")
     if not isinstance(state, dict):
@@ -262,27 +268,32 @@ def rework_resume(autopilot_dir: Path) -> list[dict]:
     pending = _unfinished_rework_tasks(state)
     if not pending:
         return []
-    if _cycle_review_file(autopilot_dir, state.get("prd"), review_cycle(autopilot_dir)) is None:
+    cycle = state.get("cycle")
+    if not isinstance(cycle, int) or isinstance(cycle, bool):
+        cycle = 1
+    if _cycle_review_file(autopilot_dir, state.get("prd"), cycle) is None:
         return []
     return pending
 
 
-def _rework_model(pending: list[dict]) -> str:
-    """OPUS when any queued task carries an opus (or fable, the rescue rung)
-    tier, else SONNET; a task without `model` is the legacy sonnet."""
-    if any(t.get("model") in ("opus", "fable") for t in pending):
-        return OPUS
-    return SONNET
+def rework_resume(autopilot_dir: Path) -> bool:
+    """PRD 00207: True when the next review launch resumes queued rework
+    (Phases 4 and 5 already ran for this cycle), False for a fresh review."""
+    return bool(_rework_tasks(autopilot_dir))
 
 
 def _review_model(autopilot_dir: Path) -> str:
     """OPUS for a fresh review; on a rework resume (PRD 00207) Phases 4-5
     already ran and the orchestrator only dispatches /work for the queued
-    fixes, so it takes their tier. One stderr line names the route."""
-    pending = rework_resume(autopilot_dir)
+    fixes, so it takes their highest tier: OPUS when one carries an opus or
+    fable (the rescue rung) model, else SONNET (a task without `model` is
+    the legacy sonnet). One stderr line names the route."""
+    pending = _rework_tasks(autopilot_dir)
     if not pending:
         return OPUS
-    model = _rework_model(pending)
+    model = SONNET
+    if any(t.get("model") in ("opus", "fable") for t in pending):
+        model = OPUS
     print(
         f"review: rework resume, {len(pending)} task(s) left, routing {model}",
         file=sys.stderr,
