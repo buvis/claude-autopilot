@@ -599,7 +599,7 @@ def test_loop_mode_hands_off_after_task_add_before_work() -> None:
         _DISPATCH_WHERE,
         (
             "`task-add <task-json-file>`",
-            "in the session that ran Phases 4-5 and created the tasks above: hand off here",
+            "in a session that ran Phases 4-5 of this cycle (it did not enter through the Phase 4 skip): hand off here",
             "write the contract card",
             "write the brief",
             "write the `leave` row",
@@ -617,7 +617,9 @@ def test_loop_mode_hands_off_after_task_add_before_work() -> None:
         (
             "step 1 of that procedure (`phase-done`) is skipped on purpose",
             "`state.phase` and `state.next_phase` stay `review` and `state.cycle` is unchanged",
-            "the hand-off belongs to the task-creating session only",
+            "the hand-off belongs to the session that ran Phases 4-5 only",
+            "only review-flagged `[C{cycle}]` tasks re-queued in Phase 5 step 4",
+            "the test is how the session entered, not what it created",
             "cli/routing.rework_resume",
         ),
     )
