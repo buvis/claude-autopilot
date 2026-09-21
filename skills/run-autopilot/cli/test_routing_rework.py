@@ -84,6 +84,30 @@ def test_rework_resume_with_all_tasks_completed_routes_opus(tmp_path):
     assert route("review", ap_dir, env={}).model == OPUS
 
 
+def test_rework_resume_is_a_bool_true_only_on_a_resume(tmp_path):
+    # PRD 00207: the public predicate, not the task list.
+    tasks = [{"id": "5", "status": "pending", "model": "sonnet"}]
+    assert rework_resume(_rework_box(tmp_path, tasks, ["5"])) is True
+    stale = _rework_box(tmp_path / "stale", tasks, ["5"], review_file=False)
+    assert rework_resume(stale) is False
+
+
+def test_rework_resume_with_a_fable_task_routes_opus(tmp_path, capsys):
+    tasks = [{"id": "5", "status": "pending", "model": "fable"}]
+    ap_dir = _rework_box(tmp_path, tasks, ["5"])
+    assert route("review", ap_dir, env={}).model == OPUS
+    assert "rework resume, 1 task(s) left, routing claude-opus-5[1m]" in capsys.readouterr().err
+
+
+def test_rework_resume_accepts_the_zero_padded_review_filename(tmp_path):
+    tasks = [{"id": "5", "status": "pending", "model": "sonnet"}]
+    ap_dir = _rework_box(tmp_path, tasks, ["5"], review_file=False)
+    reviews = tmp_path / "dev/local/reviews"
+    reviews.mkdir(parents=True, exist_ok=True)
+    (reviews / "00052-example-v1-review-01.md").write_text("Verdict: 1 findings\n")
+    assert route("review", ap_dir, env={}).model == SONNET
+
+
 def test_rework_resume_env_model_override_still_wins(tmp_path):
     tasks = [{"id": "5", "status": "pending", "model": "sonnet"}]
     ap_dir = _rework_box(tmp_path, tasks, ["5"])
@@ -96,9 +120,7 @@ def test_docs_name_the_rework_resume_rule():
     skill_dir = Path(__file__).resolve().parent.parent
     ladder = (skill_dir / "references" / "model-ladder.md").read_text()
     core = (skill_dir / "SKILL.md").read_text()
-    assert (
-        "## Review sessions" in ladder or "**Review sessions (PRD 00207).**" in ladder
-    )
+    assert "**Review sessions (PRD 00207).**" in ladder
     for text, where in ((ladder, "model-ladder.md"), (core, "SKILL.md")):
         assert "rework resume" in text, f"{where} does not name the rework resume rule"
     assert "cli/routing.rework_resume" in ladder
