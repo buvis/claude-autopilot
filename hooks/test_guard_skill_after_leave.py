@@ -101,6 +101,13 @@ def test_other_bash_commands_write_nothing(tmp_path: Path) -> None:
     assert not _marker(repo).exists()
 
 
+def test_leave_row_without_an_autopilot_dir_writes_nothing(tmp_path: Path) -> None:
+    # No dev/local/autopilot above cwd: the hook neither writes nor creates it.
+    result = _run(NOTE, _bash_payload(tmp_path, LEAVE_CMD), loop=True)
+    assert result.returncode == 0
+    assert not (tmp_path / "dev").exists()
+
+
 # ── guard_skill_after_leave.py ───────────────────────────────────────────────
 
 
@@ -123,6 +130,15 @@ def test_catchup_after_leave_is_denied_too(tmp_path: Path) -> None:
     _leave(repo)
     result = _run(GUARD, _skill_payload(repo, "git-ferry:catchup"), loop=True)
     assert result.returncode == 2
+    # A missing script would also be non-zero: the reason text is the proof.
+    assert "do not invoke git-ferry:catchup" in result.stderr
+
+
+def test_guard_without_an_autopilot_dir_passes(tmp_path: Path) -> None:
+    # No dev/local/autopilot above cwd: nothing to consult, never a denial.
+    result = _run(GUARD, _skill_payload(tmp_path, "autopilot:run-autopilot"), loop=True)
+    assert result.returncode == 0
+    assert result.stderr == ""
 
 
 def test_other_session_marker_never_denies(tmp_path: Path) -> None:

@@ -38,7 +38,11 @@ def is_leave_row(command: object) -> bool:
 
 
 def tool_failed(response: object) -> bool:
-    """True when the Bash tool reports the command failed or was cut short."""
+    """True when the Bash tool reports the command failed or was cut short.
+
+    No exit code is read: a non-zero exit fires `PostToolUseFailure`, never
+    this PostToolUse hook, so `is_error` and `interrupted` are all that remain.
+    """
     if not isinstance(response, dict):
         return False
     return bool(response.get("is_error")) or bool(response.get("interrupted"))

@@ -43,7 +43,14 @@ def test_guard_skill_after_leave_runs_before_every_skill_call() -> None:
 
 def test_both_registrations_point_at_pack_relative_files_that_exist() -> None:
     pack = HOOKS_JSON.parent.parent
-    for command in _commands("PostToolUse", "Bash") + _commands("PreToolUse", "Skill"):
+    names = ("/hooks/note_session_leave.py", "/hooks/guard_skill_after_leave.py")
+    commands = [
+        c
+        for c in _commands("PostToolUse", "Bash") + _commands("PreToolUse", "Skill")
+        if c.endswith(names)
+    ]
+    assert len(commands) == 2, commands  # both new hooks, never vacuously green
+    for command in commands:
         target = command.split()[-1]
         assert target.startswith("${CLAUDE_PLUGIN_ROOT}/"), command
         assert (pack / target.removeprefix("${CLAUDE_PLUGIN_ROOT}/")).is_file(), command
@@ -62,4 +69,4 @@ def test_each_guard_hook_has_a_short_timeout() -> None:
             if hook["command"].endswith(name)
         ]
         assert len(hooks) == 1, (event, matcher, name)
-        assert hooks[0].get("timeout", 0) <= 5, hooks[0]
+        assert "timeout" in hooks[0] and hooks[0]["timeout"] <= 5, hooks[0]
