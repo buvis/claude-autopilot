@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **run-autopilot**: a review launch that resumes queued rework (the cycle's review file exists and `rework_task_ids` names an unfinished task) runs on the queued tasks' own tier - sonnet unless one is opus or fable - instead of always opus; fresh reviews, the cycle effort rule and `_AUTOPILOT_MODEL_REVIEW` are unchanged
 - **run-autopilot**: `catchup: force` defeats the batch cache at the PRD's first entry only; a same-PRD resume (tasks already planned, the brief already read) treats it as `run`, so a task-boundary hand-off no longer re-runs the full catchup (~180K tokens) before its first task
+- **run-autopilot**: in loop mode the review session hands off right after the rework design and task-add, so the fix tasks run in a fresh session on their own tier instead of in the review session that already holds the consolidation and three design dispatches (measured: 464K at the first fix's start, then a mid-task rotation)
 
 ### Fixed
 

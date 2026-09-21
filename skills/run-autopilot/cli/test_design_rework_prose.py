@@ -618,3 +618,18 @@ def test_loop_mode_hands_off_after_task_add_before_work() -> None:
         ("invoke `/autopilot:work` in this session", "hand-off is optional"),
     )
 
+def test_phase_4_skip_is_the_rework_handoff_entry() -> None:
+    skip = _paragraph(
+        _REVIEW_TEXT,
+        _PHASE_REVIEW,
+        "**Skip Phases 4 and 5 and resume at Phase 6 \"Dispatch rework\"**",
+    )
+    _assert_present(
+        skip,
+        _PHASE_REVIEW,
+        "the Phase 4 skip paragraph",
+        ("after a rework hand-off", "PRD 00208"),
+    )
+    row = _single_row(_STATE_SCHEMA.read_text(), _STATE_SCHEMA, "the state schema", "| `rework_task_ids` |")
+    assert "dispatch pending" in row, f"{_STATE_SCHEMA}: the rework_task_ids row lacks the resume note"
+
