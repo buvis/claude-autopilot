@@ -359,3 +359,27 @@ def test_changelog_added_carries_both_custody_entries() -> None:
             f"### Added heading mentioning {needle!r} — found {len(bullets)} {lead!r} "
             "bullet(s), none of which does."
         )
+
+
+def test_forced_catchup_is_spent_once_the_prd_has_tasks() -> None:
+    # PRD 00209: `catchup: force` defeats the batch cache at PRD entry only;
+    # a same-PRD resume (tasks already planned) treats it as `run`.
+    cache = _section(
+        _BUILD_TEXT,
+        _PHASE_BUILD,
+        "### Batch cache check",
+        "## Phase 1.5: Design",
+    )
+    _assert_present(
+        cache,
+        _PHASE_BUILD,
+        "the Batch cache check",
+        ("force already spent", "`state.tasks` is a non-empty list", "same-PRD resume"),
+    )
+    _assert_absent(
+        _BUILD_TEXT,
+        _PHASE_BUILD,
+        "the frontmatter semantics",
+        ("re-runs full catchup regardless of recency",),
+    )
+

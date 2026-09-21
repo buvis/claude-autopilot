@@ -140,7 +140,7 @@ records under `batch.skips[]`.
 
 Semantics the table cannot carry:
 
-- `catchup`: `run` honors the Phase 1 batch cache; `skip` bypasses catchup entirely; `force` ignores the cache and re-runs full catchup regardless of recency.
+- `catchup`: `run` honors the Phase 1 batch cache; `skip` bypasses catchup entirely; `force` ignores the cache at the PRD's first entry (no `state.tasks` yet) and reads as `run` on a same-PRD resume (PRD 00209).
 - `rework_cap` is consumed by the review gate's cap check (`references/phase-review.md` § Cap check).
 - `doubt_reviewer`: `fable` adds Eve to the review batch as a fifth lens; `codex` runs the standard roster.
 - `consensus_engine`: selects the engine behind Alice's consensus leg (`review-work-completion` step 1). `legacy` is today's single subagent; `workflow` makes the `review-fanout` workflow her leg; `shadow` runs both, with legacy gating and the workflow recorded as a non-gating observation.
@@ -178,7 +178,7 @@ The capsule (`dev/local/meta/project-capsule.md`) is the persisted output of cat
 
 `state.batch.catchup_completed_at` (ISO 8601) and `state.batch.catchup_head_sha` (current branch HEAD when last full catchup completed) record the cache. **Skip the full catchup and run a delta refresh** when ALL of the following hold:
 
-1. `state.catchup_mode != "force"` — PRD frontmatter `catchup: force` overrides the cache.
+1. `state.catchup_mode != "force"`, OR `state.tasks` is a non-empty list — PRD frontmatter `catchup: force` overrides the cache at the PRD's first entry only. Once planning has run for this PRD, this entry is a same-PRD resume (a task-boundary hand-off or a rotation, with the brief already read) and `force` is spent (PRD 00209): print `── AUTOPILOT ── catchup: force already spent on this PRD (tasks present) ──` and evaluate conditions 2 and 3 as for `run`. Measured 2026-09-20: a forced re-run on a resume cost ~180K tokens and five minutes before the first task started. A `state.tasks` that is not a list reads as absent (full catchup, the safe side).
 2. `state.batch.catchup_completed_at` is present AND less than 4 hours old.
 3. `state.batch.catchup_head_sha` matches the current `git rev-parse HEAD` on the active branch.
 
