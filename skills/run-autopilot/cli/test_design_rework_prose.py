@@ -599,9 +599,14 @@ def test_loop_mode_hands_off_after_task_add_before_work() -> None:
         _DISPATCH_WHERE,
         (
             "`task-add <task-json-file>`",
-            "**Loop mode (`$_AUTOPILOT_LOOP` set): hand off here, before any fix runs (PRD 00208).**",
+            "in the session that ran Phases 4-5 and created the tasks above: hand off here",
+            "write the contract card",
+            "write the brief",
+            "write the `leave` row",
+            "print the banner",
             "rework designed, handing off",
             "END TURN",
+            "never hands off again",
             "**Interactive (no `$_AUTOPILOT_LOOP`):** invoke `/autopilot:work` now",
         ),
     )
@@ -609,14 +614,20 @@ def test_loop_mode_hands_off_after_task_add_before_work() -> None:
         _DISPATCH,
         _PHASE_REVIEW,
         _DISPATCH_WHERE,
-        ("no `phase-done`, the cycle is not over", "cli/routing.rework_resume"),
+        (
+            "step 1 of that procedure (`phase-done`) is skipped on purpose",
+            "`state.phase` and `state.next_phase` stay `review` and `state.cycle` is unchanged",
+            "the hand-off belongs to the task-creating session only",
+            "cli/routing.rework_resume",
+        ),
     )
     _assert_absent(
         _DISPATCH,
         _PHASE_REVIEW,
         _DISPATCH_WHERE,
-        ("invoke `/autopilot:work` in this session", "hand-off is optional"),
+        ("invoke `/autopilot:work` in this session", "hand-off is optional", "hands off again on resume"),
     )
+
 
 def test_phase_4_skip_is_the_rework_handoff_entry() -> None:
     skip = _paragraph(
@@ -628,7 +639,7 @@ def test_phase_4_skip_is_the_rework_handoff_entry() -> None:
         skip,
         _PHASE_REVIEW,
         "the Phase 4 skip paragraph",
-        ("after a rework hand-off", "PRD 00208"),
+        ("after a rework hand-off", "PRD 00208", "does not hand off again"),
     )
     row = _single_row(_STATE_SCHEMA.read_text(), _STATE_SCHEMA, "the state schema", "| `rework_task_ids` |")
     assert "dispatch pending" in row, f"{_STATE_SCHEMA}: the rework_task_ids row lacks the resume note"
