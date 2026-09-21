@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: a review launch that resumes queued rework (the cycle's review file exists and `rework_task_ids` names an unfinished task) runs on the queued tasks' own tier - sonnet unless one is opus or fable - instead of always opus; fresh reviews, the cycle effort rule and `_AUTOPILOT_MODEL_REVIEW` are unchanged
 - **run-autopilot**: `catchup: force` defeats the batch cache at the PRD's first entry only; a same-PRD resume (tasks already planned, the brief already read) treats it as `run`, so a task-boundary hand-off no longer re-runs the full catchup (~180K tokens) before its first task
 
+### Fixed
+
+- **run-autopilot**: Phase 0 removes any `.handoff-requested` or `.cap-fired` marker left by an earlier session before the abort handlers run (`_walk_up.py --clear-markers`), so a stale marker no longer makes the first task boundary hand off with work pending
+
 ## [0.5.4] - 2026-09-20
 
 ### Added

@@ -67,11 +67,11 @@ def test_build_gate_hands_off_at_design_and_plan_edges() -> None:
         assert needle in design_exit, (
             f"{_PHASE_BUILD}: the gate-edge check lacks {needle!r}"
         )
-    # After a rotation the fresh session clears the dead session's marker at
-    # Phase 0, so the hook is not blind during its prologue.
-    abort = _section(text, "### Handle Work-phase abort", "### Handle pending custody")
-    assert "_walk_up.py --clear-cap" in abort, (
-        f"{_PHASE_BUILD}: the cap-rotation handler never clears `.cap-fired`"
+    # Every fresh session clears the dead session's markers at Phase 0 (PRD
+    # 00210), so the hook is not blind during its prologue.
+    prologue = _section(text, "### Clear inherited hand-off markers", "### Handle park request")
+    assert "_walk_up.py --clear-markers" in prologue, (
+        f"{_PHASE_BUILD}: Phase 0 never clears the inherited markers"
     )
 
 

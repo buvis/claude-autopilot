@@ -17,6 +17,20 @@ Before anything else — before the abort handlers and before PRD selection — 
 the lifecycle `mkdir -p` block from core `SKILL.md` § "Phase 0 invariants" as
 its own Bash call (idempotent; mandatory before any move can run).
 
+### Clear inherited hand-off markers
+
+Then, still before the abort handlers, run
+`python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/_walk_up.py --clear-markers`
+(one Bash call; always exits 0). It removes any `.handoff-requested` and
+`.cap-fired` beside `state.json` and names each on stderr with its write time.
+A marker present when a session starts was written by an earlier session for a
+boundary that session never reached (a wall-cap kill, a crash, a plugin upgrade
+between sessions); it is never this session's to act on, and left in place it
+makes step 6.5 hand off after the first task (PRD 00210: a 1-byte marker from
+2026-09-14 did exactly that on 2026-09-20). Markers this session's own hook
+writes later are untouched: this is the session's first Bash call after the
+`mkdir`.
+
 ### Handle park request (FIRST abort-handler check)
 
 The wrapper parks a sick PRD by writing `dev/local/autopilot/park-requested` (a
@@ -54,7 +68,7 @@ Before anything else, read `dev/local/autopilot/state.json` and check `stall_rea
 - `stall_reason.stalled` is `"subagent_prompt_overrun"` — the previous session's work aborted from a hook. The PRD is not broken; one task was scoped too big. **Follow `references/recovery.md` → "Work-phase abort: replan procedure"**, then STOP (the next session re-enters `build` at planning). This is the one surviving replan path.
 - `stall_reason.stalled` is `"escalation_exhausted"` — Phase 6 owns this inline; seeing it at Phase 0 means a crash landed mid-stall-move. **Follow `references/recovery.md` → "Crash recovery: escalation_exhausted seen at Phase 0"**, then fall through to Normal PRD selection.
 - `state.phase == "paused"` AND `state.cap_pause_reason` is set (the previous session's review-gate cap-pause behavior fired). The capped PRD is still in `dev/local/prds/wip/`; do NOT treat it as fresh PRD selection. **Follow `references/recovery.md` → "Cap-Pause Resume Handler"** — it presents the recorded unresolved findings and cycle count via the `AskUserQuestion` tool and branches on resume/abandon.
-- `state.cap_rotations` has a new entry but none of the above holds — the previous session hit the Work-turn context cap and the cap hook rotated to a fresh session. The cap hook recorded the rotation (appended `cap_rotations`, reset the in-flight task to `pending`, set `next_phase: "build"`); that session then ended its turn and the loop wrapper relaunched on the non-empty `next_phase`. NOT a replan. A `cap_rotations` entry is **informational only** and needs no special handling here beyond one clear: run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/_walk_up.py --clear-cap` (one Bash call; always exits 0) so the dead session's `.cap-fired` marker stops de-duplicating this session's hook fires before `/autopilot:work` step 2 would clear it anyway. Then fall through to Normal PRD selection, which resumes `build` by artifact (capsule fresh → skip catchup; tasks exist → skip planning; `/autopilot:work` continues at the first non-completed task — the rotated task, now reset to `pending`).
+- `state.cap_rotations` has a new entry but none of the above holds — the previous session hit the Work-turn context cap and the cap hook rotated to a fresh session. The cap hook recorded the rotation (appended `cap_rotations`, reset the in-flight task to `pending`, set `next_phase: "build"`); that session then ended its turn and the loop wrapper relaunched on the non-empty `next_phase`. NOT a replan. A `cap_rotations` entry is **informational only** and needs no special handling here: the dead session's `.cap-fired` marker was already removed by § Clear inherited hand-off markers above, so it no longer de-duplicates this session's hook fires. Fall through to Normal PRD selection, which resumes `build` by artifact (capsule fresh → skip catchup; tasks exist → skip planning; `/autopilot:work` continues at the first non-completed task — the rotated task, now reset to `pending`).
 - None of the above (neither a recognised `stall_reason` value nor the cap-pause condition `phase == "paused"` + `cap_pause_reason`) — continue with Normal PRD selection below.
 
 Before acting on whichever branch matched, run `autopilot resume-target` (one Bash call) and compare its line to the handler you picked. It is the executable form of this same contract (`cli/resume.py`), so a disagreement means the prose and the encoding have drifted — follow the encoding and say so. It also runs the schema-version preflight, refusing with exit 6 on a future-schema `state.json` rather than resuming it blindly. Exit 2 means there is no state file yet, which is a normal fresh start, not an error.

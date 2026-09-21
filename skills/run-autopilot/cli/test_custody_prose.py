@@ -383,3 +383,28 @@ def test_forced_catchup_is_spent_once_the_prd_has_tasks() -> None:
         ("re-runs full catchup regardless of recency",),
     )
 
+
+def test_phase_0_clears_inherited_markers_before_the_abort_handlers() -> None:
+    # PRD 00210: the clear is the session's first Bash call after the
+    # lifecycle mkdir and before any abort handler reads state.json.
+    prologue = _section(
+        _BUILD_TEXT,
+        _PHASE_BUILD,
+        "### Ensure lifecycle directories exist",
+        "### Handle park request",
+    )
+    _assert_in_order(
+        prologue,
+        _PHASE_BUILD,
+        "the Phase 0 prologue",
+        (
+            "lifecycle `mkdir -p` block",
+            "### Clear inherited hand-off markers",
+            "_walk_up.py --clear-markers",
+            "never this session's to act on",
+        ),
+    )
+    assert "--clear-cap" not in _BUILD_TEXT, (
+        f"{_PHASE_BUILD}: still calls --clear-cap; the Phase 0 clear covers both markers"
+    )
+
