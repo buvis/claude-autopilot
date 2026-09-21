@@ -330,3 +330,15 @@ never changes the tier any other task dispatches at (`work` SKILL.md
 **Reverting decay** needs no new knob: `_AUTOPILOT_MODEL_BUILD=claude-opus-5[1m]`
 pins every build launch to Opus immediately, which is strictly stronger than
 restoring any single signal.
+
+**Review sessions (PRD 00207).** A fresh review launch (no review file for
+`state.cycle` yet) runs on Opus: xhigh on cycle 1, high on reruns. A
+**rework resume** (the cycle's review file on disk and `state.rework_task_ids`
+naming an unfinished task, so Phases 4 and 5 already ran and the session only
+dispatches `/autopilot:work` for the queued fixes) takes the highest tier
+among those tasks: Opus when one carries `model: opus` (or `fable`), else
+Sonnet, at the same effort. `cli/routing.rework_resume` decides it from state
+on every launch (no latch); `_AUTOPILOT_MODEL_REVIEW` still pins every review
+launch. The lenses themselves never run on the orchestrator's model, so the
+cheaper resume drops no lens (measured 2026-09-21: five of ten review sessions
+in one batch were resumes at $10-$60 each on Opus for sonnet-tier fixes).

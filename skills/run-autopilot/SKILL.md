@@ -41,7 +41,7 @@ Makes autonomous decisions backed by research (dependencies, recurring issues, A
 
 **Run all phases in sequence without stopping.** After each phase completes, immediately update state and proceed to the next phase. Do not pause between phases, do not summarize progress, do not wait for user input - unless the phase explicitly says PAUSE or STOP. Completing a sub-skill invocation (`/git-ferry:catchup`, `/autopilot:plan-tasks`, `/autopilot:work`, `/autopilot:review-work-completion`, etc.) is NOT a stopping point. It is an intermediate step. Continue.
 
-Review sessions run on opus at xhigh in cycle 1 and at high on cycle 2 and later; _AUTOPILOT_EFFORT_REVIEW forces one effort for every cycle and _AUTOPILOT_EFFORT_REVIEW_RERUN sets the rerun value.
+Review sessions run on opus at xhigh in cycle 1 and at high on cycle 2 and later; _AUTOPILOT_EFFORT_REVIEW forces one effort for every cycle and _AUTOPILOT_EFFORT_REVIEW_RERUN sets the rerun value. A rework resume (the cycle's review file exists and `rework_task_ids` names an unfinished task) runs on the queued tasks' own tier instead, sonnet unless one is opus (`references/model-ladder.md` § Review sessions, PRD 00207).
 
 ## Entry Points
 

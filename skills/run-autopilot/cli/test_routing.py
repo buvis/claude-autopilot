@@ -876,3 +876,15 @@ def test_metrics_append_with_effort_still_never_raises(tmp_path):
     missing = tmp_path / "never-created"
     lp._append_metrics(missing, 1.0, 2.0, _decision(), "build", SONNET, "xhigh")
     assert not missing.exists()
+
+
+def test_docs_name_the_rework_resume_rule():
+    # PRD 00207: the ladder and the core skill both state the route.
+    skill_dir = Path(__file__).resolve().parent.parent
+    ladder = (skill_dir / "references" / "model-ladder.md").read_text()
+    core = (skill_dir / "SKILL.md").read_text()
+    assert "## Review sessions" in ladder or "**Review sessions (PRD 00207).**" in ladder
+    for text, where in ((ladder, "model-ladder.md"), (core, "SKILL.md")):
+        assert "rework resume" in text, f"{where} does not name the rework resume rule"
+    assert "cli/routing.rework_resume" in ladder
+
