@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -96,8 +97,37 @@ def test_clear_markers_removes_both_inherited_markers(tmp_path: Path) -> None:
 
     assert result.returncode == 0
     assert not handoff.exists() and not cap.exists()
-    assert result.stderr.count("cleared inherited") == 2
-    assert ".handoff-requested" in result.stderr and ".cap-fired" in result.stderr
+    lines = result.stderr.splitlines()
+    assert len(lines) == 2
+    assert re.fullmatch(
+        r"autopilot: cleared inherited \.handoff-requested written \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z",
+        lines[0],
+    )
+    assert re.fullmatch(
+        r"autopilot: cleared inherited \.cap-fired written \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z",
+        lines[1],
+    )
+
+
+def test_clear_markers_removes_a_lone_cap_fired(tmp_path: Path) -> None:
+    # A missing first marker must not stop the second from being removed.
+    autopilot = _make_autopilot_dir(tmp_path)
+    cap = autopilot / ".cap-fired"
+    cap.write_text("3")
+    result = _run(["--clear-markers"], cwd=autopilot)
+    assert result.returncode == 0
+    assert not cap.exists()
+    assert result.stderr.count("cleared inherited") == 1
+    assert ".handoff-requested" not in result.stderr
+
+
+def test_clear_markers_reports_a_marker_it_could_not_remove(tmp_path: Path) -> None:
+    autopilot = _make_autopilot_dir(tmp_path)
+    stuck = autopilot / ".cap-fired"
+    stuck.mkdir()  # unlink() on a directory raises, the marker survives
+    result = _run(["--clear-markers"], cwd=autopilot)
+    assert result.returncode == 0
+    assert "could not clear inherited .cap-fired" in result.stderr
 
 
 def test_clear_markers_is_a_noop_without_markers(tmp_path: Path) -> None:

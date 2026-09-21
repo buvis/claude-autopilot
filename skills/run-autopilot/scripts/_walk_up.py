@@ -111,12 +111,17 @@ def _main_clear_markers() -> int:
         return 0
     for name in INHERITED_MARKERS:
         marker = autopilot_dir / name
+        if not marker.exists():
+            continue
         try:
             written = _dt.datetime.fromtimestamp(
                 marker.stat().st_mtime, tz=_dt.timezone.utc
             ).strftime("%Y-%m-%dT%H:%M:%SZ")
             marker.unlink()
-        except OSError:
+        except OSError as exc:
+            # Still exit 0 (best-effort), but a marker that survives is the
+            # bug this flag exists to remove, so say so.
+            sys.stderr.write(f"autopilot: could not clear inherited {name}: {exc}\n")
             continue
         sys.stderr.write(f"autopilot: cleared inherited {name} written {written}\n")
     return 0
