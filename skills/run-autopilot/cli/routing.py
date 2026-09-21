@@ -36,6 +36,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -211,6 +212,84 @@ def review_cycle(autopilot_dir: Path) -> int:
     return 1
 
 
+def _unfinished_rework_tasks(state: dict) -> list[dict]:
+    """The `state.tasks` entries `rework_task_ids` names whose status is
+    not `completed`. Empty when the list is missing, not a list, or names
+    only finished tasks (a stale list is a fresh review, not a resume)."""
+    ids = state.get("rework_task_ids")
+    tasks = state.get("tasks")
+    if not isinstance(ids, list) or not ids or not isinstance(tasks, list):
+        return []
+    wanted = {str(i) for i in ids if isinstance(i, (str, int)) and not isinstance(i, bool)}
+    return [
+        t
+        for t in tasks
+        if isinstance(t, dict)
+        and str(t.get("id")) in wanted
+        and t.get("status") != "completed"
+    ]
+
+
+def _cycle_review_file(autopilot_dir: Path, prd: object, cycle: int) -> Path | None:
+    """This cycle's review file, in either spelling `cli/convergence`
+    accepts; None when absent or the state names no PRD."""
+    if not isinstance(prd, str) or not prd:
+        return None
+    stem = prd[:-3] if prd.endswith(".md") else prd
+    reviews = autopilot_dir.parent / "reviews"
+    for name in (f"{stem}-review-{cycle}.md", f"{stem}-review-{cycle:02d}.md"):
+        candidate = reviews / name
+        try:
+            if candidate.is_file():
+                return candidate
+        except OSError:
+            continue
+    return None
+
+
+def rework_resume(autopilot_dir: Path) -> list[dict]:
+    """PRD 00207: the unfinished rework tasks of a review launch whose
+    Phases 4 and 5 already ran, else an empty list.
+
+    A launch is a rework resume when `state.rework_task_ids` names at least
+    one task that is not `completed` AND this cycle's review file is on
+    disk (the same artifact `references/phase-review.md` Phase 4 skips on).
+    Anything missing or malformed reads as a fresh review.
+    """
+    state = _load_json(autopilot_dir / "state.json")
+    if not isinstance(state, dict):
+        return []
+    pending = _unfinished_rework_tasks(state)
+    if not pending:
+        return []
+    if _cycle_review_file(autopilot_dir, state.get("prd"), review_cycle(autopilot_dir)) is None:
+        return []
+    return pending
+
+
+def _rework_model(pending: list[dict]) -> str:
+    """OPUS when any queued task carries an opus (or fable, the rescue rung)
+    tier, else SONNET; a task without `model` is the legacy sonnet."""
+    if any(t.get("model") in ("opus", "fable") for t in pending):
+        return OPUS
+    return SONNET
+
+
+def _review_model(autopilot_dir: Path) -> str:
+    """OPUS for a fresh review; on a rework resume (PRD 00207) Phases 4-5
+    already ran and the orchestrator only dispatches /work for the queued
+    fixes, so it takes their tier. One stderr line names the route."""
+    pending = rework_resume(autopilot_dir)
+    if not pending:
+        return OPUS
+    model = _rework_model(pending)
+    print(
+        f"review: rework resume, {len(pending)} task(s) left, routing {model}",
+        file=sys.stderr,
+    )
+    return model
+
+
 def route(phase: str, autopilot_dir: Path, env: dict | None = None) -> Route:
     """Model, effort and wall-clock cap for the next spawn.
 
@@ -241,7 +320,7 @@ def route(phase: str, autopilot_dir: Path, env: dict | None = None) -> Route:
         if "_AUTOPILOT_EFFORT_REVIEW" in env:
             effort = env["_AUTOPILOT_EFFORT_REVIEW"]
         return Route(
-            model=env.get("_AUTOPILOT_MODEL_REVIEW") or OPUS,
+            model=env.get("_AUTOPILOT_MODEL_REVIEW") or _review_model(autopilot_dir),
             effort=effort,
             cap_secs=_env_int(env, "_AUTOPILOT_SESSION_MAX_REVIEW", 10800),
         )
