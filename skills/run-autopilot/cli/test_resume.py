@@ -116,10 +116,6 @@ class PurityTests(unittest.TestCase):
         self.assertEqual(json.dumps(state, sort_keys=True), before)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class NonListTasksTests(unittest.TestCase):
     def test_build_with_a_non_list_tasks_reads_as_no_tasks(self) -> None:
         # PRD 00209 review: a hand-edited state whose tasks is not a list must
@@ -128,4 +124,8 @@ class NonListTasksTests(unittest.TestCase):
             with self.subTest(tasks=bad):
                 state = {"phase": "build", "tasks": bad}
                 self.assertEqual(resume.resume_target(state), "build: catchup then planning")
+
+
+if __name__ == "__main__":
+    unittest.main()
 

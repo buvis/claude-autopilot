@@ -382,14 +382,14 @@ def test_forced_catchup_is_spent_once_the_prd_has_tasks() -> None:
         ),
     )
     # The resume-target line never bypasses the cache check (review-1 HIGH).
-    selection = _section(
+    abort_handler = _section(
         _BUILD_TEXT,
         _PHASE_BUILD,
         "### Handle Work-phase abort",
         "### Handle pending custody",
     )
     _assert_present(
-        selection,
+        abort_handler,
         _PHASE_BUILD,
         "the resume-target sentence",
         ("adjudicates the abort handlers and the resume point only", "still runs § Batch cache check"),

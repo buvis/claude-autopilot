@@ -90,8 +90,9 @@ def resume_target(state: dict) -> str:
 
 
 def _build_resume_target(state: dict) -> str:
-    """Build re-entry by artifact: tasks exist -> /work (or the review gate
-    when all are done), else catchup then planning."""
+    """Build re-entry by artifact, the resume point AFTER Phase 1's Batch
+    cache check has run: tasks exist -> /work (or the review gate when all
+    are done), else catchup then planning."""
     tasks = state.get("tasks")
     if not isinstance(tasks, list):
         # The schema rejects a non-list at write time; a hand-edited one
