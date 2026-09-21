@@ -80,3 +80,51 @@ def test_unknown_arg_exits_2(tmp_path: Path) -> None:
     result = _run(["--bogus"], cwd=tmp_path)
     assert result.returncode == 2
     assert "usage:" in result.stderr
+
+
+# ── --clear-markers (PRD 00210): inherited markers at session start ──────────
+
+
+def test_clear_markers_removes_both_inherited_markers(tmp_path: Path) -> None:
+    autopilot = _make_autopilot_dir(tmp_path)
+    handoff = autopilot / ".handoff-requested"
+    cap = autopilot / ".cap-fired"
+    handoff.write_text('{"phase": "build", "task_id": "3"}')
+    cap.write_text("3")
+
+    result = _run(["--clear-markers"], cwd=autopilot)
+
+    assert result.returncode == 0
+    assert not handoff.exists() and not cap.exists()
+    assert result.stderr.count("cleared inherited") == 2
+    assert ".handoff-requested" in result.stderr and ".cap-fired" in result.stderr
+
+
+def test_clear_markers_is_a_noop_without_markers(tmp_path: Path) -> None:
+    autopilot = _make_autopilot_dir(tmp_path)
+    result = _run(["--clear-markers"], cwd=autopilot)
+    assert result.returncode == 0
+    assert result.stderr == ""
+    result = _run(["--clear-markers"], cwd=tmp_path)  # no autopilot dir above
+    assert result.returncode == 0
+    assert result.stderr == ""
+
+
+def test_clear_cap_still_leaves_handoff_requested(tmp_path: Path) -> None:
+    autopilot = _make_autopilot_dir(tmp_path)
+    handoff = autopilot / ".handoff-requested"
+    handoff.write_text("x")
+    (autopilot / ".cap-fired").write_text("x")
+    result = _run(["--clear-cap"], cwd=autopilot)
+    assert result.returncode == 0
+    assert handoff.exists() and not (autopilot / ".cap-fired").exists()
+
+
+def test_inherited_markers_match_handoff_markers() -> None:
+    sys.path.insert(0, str(SCRIPT.parent))
+    sys.path.insert(0, str(SCRIPT.parent.parent))
+    import _walk_up
+    from cli import handoff
+
+    assert tuple(_walk_up.INHERITED_MARKERS) == tuple(handoff.MARKERS)
+

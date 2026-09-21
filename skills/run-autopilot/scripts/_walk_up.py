@@ -27,14 +27,27 @@ Bash entry:
     # walks up, removes <autopilot_dir>/.cap-fired; always exits 0.
     # A single-binary alternative to `d=$(... --bash) && rm "$d/.cap-fired"`:
     # no shell variable, so permission matchers can resolve the command.
+
+    python3 .../scripts/_walk_up.py --clear-markers
+    # walks up, removes <autopilot_dir>/.handoff-requested AND .cap-fired
+    # (PRD 00210): Phase 0's first call. A marker present when a session
+    # starts was written by an earlier session for a boundary it never
+    # reached; it is never this session's to act on. One stderr line per
+    # marker removed; always exits 0.
 """
 
 from __future__ import annotations
 
+import datetime as _dt
 import sys
 from pathlib import Path
 
 AUTOPILOT_REL_PATH = Path("dev") / "local" / "autopilot"
+
+# The two hand-off markers, in the same order as `cli/handoff.MARKERS` (the
+# source of truth; this bare-binary helper must not import the package, and
+# test_walk_up pins the two tuples equal).
+INHERITED_MARKERS = (".handoff-requested", ".cap-fired")
 
 
 def find_autopilot_dir(start: Path) -> Path | None:
@@ -89,14 +102,37 @@ def _main_clear_cap() -> int:
     return 0
 
 
+def _main_clear_markers() -> int:
+    """Remove every inherited hand-off marker beside the autopilot dir
+    (PRD 00210), naming each on stderr with its mtime. Best-effort like
+    `--clear-cap`; always exits 0."""
+    autopilot_dir = find_autopilot_dir(Path.cwd())
+    if autopilot_dir is None:
+        return 0
+    for name in INHERITED_MARKERS:
+        marker = autopilot_dir / name
+        try:
+            written = _dt.datetime.fromtimestamp(
+                marker.stat().st_mtime, tz=_dt.timezone.utc
+            ).strftime("%Y-%m-%dT%H:%M:%SZ")
+            marker.unlink()
+        except OSError:
+            continue
+        sys.stderr.write(f"autopilot: cleared inherited {name} written {written}\n")
+    return 0
+
+
 if __name__ == "__main__":
     if len(sys.argv) >= 2 and sys.argv[1] == "--bash":
         sys.exit(_main_bash())
     if len(sys.argv) >= 2 and sys.argv[1] == "--clear-cap":
         sys.exit(_main_clear_cap())
+    if len(sys.argv) >= 2 and sys.argv[1] == "--clear-markers":
+        sys.exit(_main_clear_markers())
     sys.stderr.write(
         "usage: _walk_up.py --bash [start_dir]\n"
         "       _walk_up.py --clear-cap\n"
+        "       _walk_up.py --clear-markers\n"
         "       (or import find_autopilot_dir from Python)\n"
     )
     sys.exit(2)
