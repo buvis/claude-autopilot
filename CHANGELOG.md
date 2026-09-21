@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-09-21
+
 ### Added
 
 - **hooks**: a loop session that wrote its `leave` handoff row can no longer re-enter a gate: `note_session_leave.py` records the session and `guard_skill_after_leave.py` denies its later `autopilot:*` and `git-ferry:catchup` skill calls with the reason, so a printed hand-off banner ends the session by construction
