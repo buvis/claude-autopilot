@@ -27,7 +27,8 @@ uv run --no-project --with pytest python -m pytest -q \
 
 echo "[checks] hook registration"
 uv run --no-project --with pytest python -m pytest -q \
-  skills/run-autopilot/scripts/test_review_coverage_hook_registration.py
+  skills/run-autopilot/scripts/test_review_coverage_hook_registration.py \
+  hooks/test_guard_skill_after_leave.py
 
 echo "[checks] custody push guard"
 uv run --no-project --with pytest python -m pytest -q hooks/test_guard_push_on_critical.py

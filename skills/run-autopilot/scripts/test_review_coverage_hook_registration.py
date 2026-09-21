@@ -37,6 +37,8 @@ _EXPECTED_REGISTRATIONS = {
     "enforce_prd_location.py": "PreToolUse",
     "autopilot_context_cap_hook.py": "PostToolUse",
     "validate_state_json_hook.py": "PostToolUse",
+    "note_session_leave.py": "PostToolUse",
+    "guard_skill_after_leave.py": "PreToolUse",
     _COVERAGE_HOOK_NAME: "Stop",
 }
 

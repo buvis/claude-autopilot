@@ -85,6 +85,20 @@ commits. It never pushed — the user re-reviewed and pushed manually anyway —
 it was pure risk (conflict aborts, backup branches) for no shipped benefit.
 Autopilot now leaves history alone; the user squashes manually before pushing.
 
+## The hand-off is a hook, not a sentence (PRD 00211)
+
+Every hand-off site ends "print the banner and end the turn", and the core
+Execution Model says "run all phases in sequence without stopping". On
+2026-09-20 a sonnet build session honoured the second sentence over the first:
+card, brief, `leave` row, banner, and then `Skill autopilot:run-autopilot` in
+the same message, so the review cycle ran inside the build session at 503K
+with the cap hook unguarded. Prose that two paragraphs can contradict is not a
+boundary. The `leave` row is the one write every site shares and the last one
+before the stop (PRD 00199), so `note_session_leave.py` records its session
+and `guard_skill_after_leave.py` denies the re-entry; the prose stays as the
+reason, the hook is the fence, the same split as the cap hook and the push
+guard.
+
 ## Rotation scars are not release notes (PRD 00202)
 
 A `chore(<scope>): wip - rotated mid-task` subject is a rotation scar, not a

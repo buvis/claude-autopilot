@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **hooks**: a loop session that wrote its `leave` handoff row can no longer re-enter a gate: `note_session_leave.py` records the session and `guard_skill_after_leave.py` denies its later `autopilot:*` and `git-ferry:catchup` skill calls with the reason, so a printed hand-off banner ends the session by construction
+
 ### Changed
 
 - **run-autopilot**: a review launch that resumes queued rework (the cycle's review file exists and `rework_task_ids` names an unfinished task) runs on the queued tasks' own tier - sonnet unless one is opus or fable - instead of always opus; fresh reviews, the cycle effort rule and `_AUTOPILOT_MODEL_REVIEW` are unchanged

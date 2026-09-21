@@ -177,3 +177,21 @@ def test_operator_runbook_points_at_the_ask_first_rule() -> None:
         "the operator runbook's Pause bullet",
         ("`condition`", "after asking the peer first", "stand-down procedure"),
     )
+
+
+def test_handoff_names_the_skill_guard() -> None:
+    # PRD 00211: the leave row is the point of no return, enforced by a hook.
+    procedure = _handoff_procedure()
+    _assert_all(
+        procedure,
+        "the handoff procedure",
+        (
+            "hooks/note_session_leave.py",
+            "hooks/guard_skill_after_leave.py",
+            "point of no return",
+        ),
+    )
+    assert procedure.index("record_dispatch.py handoff") < procedure.index(
+        "guard_skill_after_leave.py"
+    )
+
