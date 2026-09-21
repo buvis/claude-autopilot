@@ -374,7 +374,25 @@ def test_forced_catchup_is_spent_once_the_prd_has_tasks() -> None:
         cache,
         _PHASE_BUILD,
         "the Batch cache check",
-        ("force already spent", "`state.tasks` is a non-empty list", "same-PRD resume"),
+        (
+            '`state.catchup_mode != "force"`, OR `state.tasks` is a non-empty list',
+            "── AUTOPILOT ── catchup: force already spent on this PRD (tasks present) ──",
+            "same-PRD resume",
+            "A `state.tasks` that is not a list reads as absent",
+        ),
+    )
+    # The resume-target line never bypasses the cache check (review-1 HIGH).
+    selection = _section(
+        _BUILD_TEXT,
+        _PHASE_BUILD,
+        "### Handle Work-phase abort",
+        "### Handle pending custody",
+    )
+    _assert_present(
+        selection,
+        _PHASE_BUILD,
+        "the resume-target sentence",
+        ("adjudicates the abort handlers and the resume point only", "still runs § Batch cache check"),
     )
     _assert_absent(
         _BUILD_TEXT,

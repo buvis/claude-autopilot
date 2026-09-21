@@ -43,18 +43,11 @@ def _review_resume_target(state: dict) -> str:
 def resume_target(state: dict) -> str:
     """Return a string describing the next action for a parked state.
 
-    Resolution order encodes the SKILL contract:
-
-    1. A durable stall_op intent (do_stall's protocol) wins first — a stall
-       interrupted mid-flight must be reconciled before any other resume
-       branch runs.
-    2. Crash-recovery and replan stalls run next (stall_reason).
-    3. Cap-pause (phase=="paused" + cap_pause_reason) gets its own handler.
-    4. Review resume is driven by phases_completed; legacy `blind`/`doubt`
-       phases (pre-00015 state files) run one full review cycle instead —
-       the lenses that replaced those legs must not be skipped.
-    5. Build re-entry is by ARTIFACT (capsule freshness, tasks-exist,
-       all-done) — never a granular catchup/planning/work cascade.
+    Resolution order encodes the SKILL contract: a durable stall_op intent
+    first (reconcile before any other branch), then crash-recovery / replan
+    stalls, then cap-pause, then the review resume (phases_completed; legacy
+    blind/doubt run one full cycle), then build re-entry by ARTIFACT
+    (`_build_resume_target`), never a granular catchup/planning/work cascade.
     """
     stall_op = state.get("stall_op")
     if stall_op:
@@ -91,18 +84,29 @@ def resume_target(state: dict) -> str:
         return _review_resume_target(state)
 
     if phase == "build":
-        tasks = state.get("tasks", [])
-        if tasks:
-            pending = _first_non_completed_task(tasks)
-            if pending is None:
-                return "all tasks done -> review gate"
-            return f"/work continues at first non-completed task {pending.get('id')}"
-        # No tasks yet: planning has not produced a list.
-        if state.get("capsule_fresh"):
-            return "skip catchup -> planning"
-        return "build: catchup then planning"
+        return _build_resume_target(state)
 
     return f"unknown phase: {phase}"
+
+
+def _build_resume_target(state: dict) -> str:
+    """Build re-entry by artifact: tasks exist -> /work (or the review gate
+    when all are done), else catchup then planning."""
+    tasks = state.get("tasks")
+    if not isinstance(tasks, list):
+        # The schema rejects a non-list at write time; a hand-edited one
+        # reads as "no tasks yet" here, the same side the catchup cache
+        # check takes (PRD 00209), never a crash before the fallback.
+        tasks = []
+    if tasks:
+        pending = _first_non_completed_task(tasks)
+        if pending is None:
+            return "all tasks done -> review gate"
+        return f"/work continues at first non-completed task {pending.get('id')}"
+    # No tasks yet: planning has not produced a list.
+    if state.get("capsule_fresh"):
+        return "skip catchup -> planning"
+    return "build: catchup then planning"
 
 
 def park_decision(
