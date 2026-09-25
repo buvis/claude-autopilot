@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -313,25 +314,55 @@ def _section(text: str, heading: str, stops: tuple[str, ...]) -> str:
     return "\n".join(lines[start:end])
 
 
+def _bullet(section: str, marker: str) -> str:
+    """The list item starting with `marker`, through its continuation lines."""
+    lines = section.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith(marker))
+    end = next(
+        (
+            i
+            for i in range(start + 1, len(lines))
+            if lines[i].startswith(("- **", "#")) or not lines[i].strip()
+        ),
+        len(lines),
+    )
+    return "\n".join(lines[start:end])
+
+
+def _sentences_with(text: str, needle: str) -> list[str]:
+    flat = " ".join(text.split())
+    return [s for s in re.split(r"(?<=\.)\s+", flat) if needle in s]
+
+
 def test_docs_name_the_guard() -> None:
     # read_text raises on a missing document: a failure, never a skip.
     review = (PACK / "skills/review-work-completion/SKILL.md").read_text()
     fast = (PACK / "skills/fast-track/SKILL.md").read_text()
     autopilot = (PACK / "skills/run-autopilot/SKILL.md").read_text()
+    guard = "guard_stop_on_live_lanes.py"
     anchor = "The Watcher is scaffolding, not a reviewer"
     paragraphs = [p for p in review.split("\n\n") if anchor in p]
     assert len(paragraphs) == 1, "review-work-completion lost its Watcher paragraph"
-    assert "guard_stop_on_live_lanes.py" in paragraphs[0], (
-        "review-work-completion/SKILL.md step 5 Watcher paragraph "
-        "no longer names guard_stop_on_live_lanes.py"
+    assert any(
+        "holds the session open" in s and "PRD 00213" in s
+        for s in _sentences_with(paragraphs[0], guard)
+    ), (
+        "review-work-completion/SKILL.md step 5 Watcher paragraph no longer "
+        f"says {guard} (PRD 00213) holds the session open"
     )
-    preconditions = _section(fast, "## Preconditions", ("## ",))
-    assert "guard_stop_on_live_lanes.py" in preconditions, (
-        "fast-track/SKILL.md ## Preconditions no longer names "
-        "guard_stop_on_live_lanes.py"
+    preconditions = re.sub(
+        r"<!--.*?-->", "", _section(fast, "## Preconditions", ("## ",)), flags=re.S
+    )
+    loop = _bullet(preconditions, "- **Loop session.**")
+    assert any("holds the session open" in s for s in _sentences_with(loop, guard)), (
+        "fast-track/SKILL.md ## Preconditions **Loop session.** bullet no "
+        f"longer says {guard} holds the session open"
     )
     retention = _section(autopilot, "### Retention", ("## ", "### "))
-    assert "dev/local/autopilot/lanes/" in retention, (
-        "run-autopilot/SKILL.md ### Retention no longer lists "
-        "dev/local/autopilot/lanes/"
+    lanes = "dev/local/autopilot/lanes/"
+    assert lanes in _bullet(retention, "- **Disposable**"), (
+        f"run-autopilot/SKILL.md ### Retention **Disposable** no longer lists {lanes}"
+    )
+    assert lanes not in _bullet(retention, "- **Durable**"), (
+        f"run-autopilot/SKILL.md ### Retention lists {lanes} as **Durable**"
     )
