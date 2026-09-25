@@ -40,6 +40,7 @@ _EXPECTED_REGISTRATIONS = {
     "note_session_leave.py": "PostToolUse",
     "guard_skill_after_leave.py": "PreToolUse",
     _COVERAGE_HOOK_NAME: "Stop",
+    "guard_stop_on_live_lanes.py": "Stop",
 }
 
 
