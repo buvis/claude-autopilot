@@ -17,6 +17,8 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
+
 HOOKS = Path(__file__).resolve().parent
 PACK = HOOKS.parent
 GUARD = HOOKS / "guard_stop_on_live_lanes.py"
@@ -268,15 +270,42 @@ def test_all_lanes_without_output_files_never_ask_for_a_fileless_awaiter(
     assert f"codex (pid {child.pid}) -> (no -o file)" in err
     assert "--budget 100" not in err
     assert "await_reviewer_outputs.py" not in err
-    assert "Do not end the turn before then." in err
+    # Dropping the awaiter must not drop the guidance with it: the session is
+    # held open, so the reason still has to say what to wait for.
+    kills = "Headless claude kills them when this turn ends."
+    assert kills in err
+    guidance = err.split(kills, 1)[1]
+    assert str(child.pid) in guidance, guidance
+    assert "Do not end the turn before then." in guidance
     assert _counter(repo).read_text().strip() == "1"
 
 
-def test_unwritable_block_counter_does_not_cancel_the_block(tmp_path: Path) -> None:
-    # `.lane-guard-blocks` is a directory here, so every write to it raises
-    # OSError. Failing open would end the turn with a live reviewer attached.
+@pytest.mark.parametrize(
+    "flavour",
+    [
+        "directory",
+        pytest.param(
+            "read-only file",
+            marks=pytest.mark.skipif(
+                os.geteuid() == 0, reason="mode bits do not bite as root"
+            ),
+        ),
+    ],
+)
+def test_unwritable_block_counter_does_not_cancel_the_block(
+    tmp_path: Path, flavour: str
+) -> None:
+    # Every write to `.lane-guard-blocks` raises OSError here, in two flavours:
+    # the path is a directory (IsADirectoryError, and reading it fails too) or
+    # a read-only file (PermissionError, reading it succeeds). Failing open
+    # would end the turn with a live reviewer attached.
     repo = _repo(tmp_path)
-    _counter(repo).mkdir()
+    counter = _counter(repo)
+    if flavour == "directory":
+        counter.mkdir()
+    else:
+        counter.write_text("7\n")
+        counter.chmod(0o444)
     codex_out = str(tmp_path / "review-codex.md")
     child = _live()
     try:
@@ -284,23 +313,62 @@ def test_unwritable_block_counter_does_not_cancel_the_block(tmp_path: Path) -> N
         result = _run(repo, loop=True)
     finally:
         _kill(child)
+        if flavour == "read-only file":
+            counter.chmod(0o644)
     assert result.returncode == 2
     err = result.stderr
     assert "autopilot: 1 CLI reviewer lane(s) still running:" in err
     assert f"codex (pid {child.pid}) -> {codex_out}" in err
     assert f"{AWAITER} --budget 100 {codex_out} in the foreground" in err
     assert "Do not end the turn before then." in err
-    assert _counter(repo).is_dir()
+    if flavour == "directory":
+        assert counter.is_dir()
+    else:
+        # Unchanged, so the run really did hit a failing write.
+        assert counter.read_text().strip() == "7"
 
 
-def test_internal_failure_fails_open_but_says_so(tmp_path: Path) -> None:
-    # Provoked failure: malformed JSON on stdin, so reading the payload raises.
+@pytest.mark.parametrize(
+    ("flavour", "exc_name"),
+    [
+        pytest.param(
+            "unreadable lanes dir",
+            "PermissionError",
+            marks=pytest.mark.skipif(
+                os.geteuid() == 0, reason="mode bits do not bite as root"
+            ),
+        ),
+        ("non-string cwd", "TypeError"),
+    ],
+)
+def test_internal_failure_fails_open_but_says_so(
+    tmp_path: Path, flavour: str, exc_name: str
+) -> None:
+    # Two genuine failures in different code paths: listing the lane markers
+    # raises PermissionError out of `live_lanes` (the dir is mode 0o000 while
+    # `lanes/` still stats as a directory), and a non-string payload `cwd`
+    # raises TypeError out of `Path(...)` before the walk-up. A malformed JSON
+    # payload is deliberately not used: `_common.read_input` returns `{}` for
+    # it, which is the ordinary allow path, not a failure.
     repo = _repo(tmp_path)
-    result = _run_stdin("{not json", repo)
+    lanes = _lanes(repo)
+    cwd: object = str(repo)
+    if flavour == "unreadable lanes dir":
+        lanes.chmod(0o000)
+    else:
+        cwd = 42
+    stdin = json.dumps({"session_id": SESSION, "cwd": cwd, "hook_event_name": "Stop"})
+    try:
+        result = _run_stdin(stdin, repo)
+    finally:
+        lanes.chmod(0o755)
     assert result.returncode == 0
     marked = [line for line in result.stderr.splitlines() if "lane_guard" in line]
     assert marked, result.stderr
     assert any("internal error" in line.lower() for line in marked), marked
+    # The failure has to be reported, not recited: only a real `except` knows
+    # which exception it caught.
+    assert any(exc_name in line for line in marked), marked
     assert "Do not end the turn before then." not in result.stderr
 
 
