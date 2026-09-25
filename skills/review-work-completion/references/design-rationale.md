@@ -67,6 +67,22 @@ misconfigured besides. The local model keeps its `/autopilot:work` implementor r
 sonnet helper script remains for manual `/autopilot:use-sonnet`. No autopilot review
 surface dispatches either.
 
+## The keep-alive is a hook, not a sentence (PRD 00213)
+
+The Watcher prose alone did not keep a loop session alive. On the 00211 review
+(opus, `_AUTOPILOT_LOOP=1`) the session dispatched Alice and Blake, started Bob
+and Carl in the background, never dispatched the Watcher, and ended its turn
+with "Waiting on Bob and Carl." Both CLI reviewers died with the session, no
+review file was written, and $6.50 and seven minutes were lost before the
+review was relaunched. The 00209 and 00210 sessions of the same batch did
+dispatch it, so the instruction was right and still skipped.
+
+The keep-alive is now `hooks/guard_stop_on_live_lanes.py`, a Stop hook that
+refuses the turn's end while a lane marker names a live process, the same shape
+as `review_coverage_hook.py` at an incomplete review file. The Watcher stays as
+the normal path; the hook is the floor under it. Do not trade the hook back for
+a stronger sentence.
+
 ## Dynamic Agent Count
 
 Consolidation accepts any number of NAME:FILE pairs. Consensus scales with active agent count (Full = N/N, Majority = >50%, Minority = <=50%). Adding, removing, or disabling agents requires no script changes. Carl (Gemini) is the clearest case: he runs as a fourth agent when the Gemini CLI is available and is simply omitted from the pair list when it is not.
