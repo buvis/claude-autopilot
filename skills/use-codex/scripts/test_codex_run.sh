@@ -440,6 +440,49 @@ else
 fi
 
 # =============================================================================
+# End to end, no fabricated marker: a loop run of the wrapper against the stub
+# backend, with the repo's own Stop hook run twice against the same repo --
+# once from inside the stub, while the wrapper's marker is live, and once after
+# the wrapper exited. The stub's snapshot hook point is the only window in
+# which the marker exists, so the guard runs from there (STUB_LANE_GUARD).
+# =============================================================================
+GUARD_HOOK="$(cd "$(dirname "$0")/../../.." && pwd)/hooks/guard_stop_on_live_lanes.py"
+E2E_REPO=$(mktemp -d)
+_DIRS+=("$E2E_REPO")
+E2E_REPO=$(cd "$E2E_REPO" && pwd -P)
+mkdir -p "$E2E_REPO/dev/local/autopilot"
+E2E_LANES="$E2E_REPO/dev/local/autopilot/lanes"
+E2E_SNAP="$E2E_REPO/.snap-guard"
+E2E_OUT="$E2E_REPO/e2e-review.out"
+E2E_AFTER_ERR="$E2E_REPO/.guard-after.err"
+
+# 49. Loop set: while the wrapper runs, the guard blocks the stop (exit 2) and
+#     names this run's -o path and the awaiter script; once the wrapper has
+#     exited its marker is gone, the lanes dir is empty and the same guard call
+#     allows the stop (exit 0).
+E2E_PYTHON=$(command -v python3)
+LANE_LANES_DIR="$E2E_LANES"  # run_lane_case exports it as the stub's STUB_LANES_DIR
+export STUB_LANE_GUARD="$GUARD_HOOK" STUB_LANE_GUARD_CWD="$E2E_REPO" \
+       STUB_LANE_GUARD_PYTHON="$E2E_PYTHON"
+run_lane_case "$E2E_SNAP" 1 "$E2E_REPO" -f "$LANE_PROMPT_FILE" -o "$E2E_OUT"
+E2E_RC=$?
+unset STUB_LANE_GUARD STUB_LANE_GUARD_CWD STUB_LANE_GUARD_PYTHON
+E2E_GUARD_RC=$(cat "$E2E_SNAP/.guard.rc" 2>/dev/null)
+E2E_AFTER_RC=0
+printf '{"cwd":"%s"}' "$E2E_REPO" \
+    | _AUTOPILOT_LOOP=1 "$E2E_PYTHON" "$GUARD_HOOK" > /dev/null 2> "$E2E_AFTER_ERR" \
+    || E2E_AFTER_RC=$?
+if [ "$E2E_RC" -eq 0 ] && [ "$E2E_GUARD_RC" = "2" ] && \
+   grep -qF "$E2E_OUT" "$E2E_SNAP/.guard.err" 2>/dev/null && \
+   grep -qF "await_reviewer_outputs.py" "$E2E_SNAP/.guard.err" 2>/dev/null && \
+   [ "$E2E_AFTER_RC" -eq 0 ] && [ -z "$(ls -A "$E2E_LANES" 2>/dev/null)" ]; then
+    PASS "_AUTOPILOT_LOOP=1 end to end: the Stop hook blocks with exit 2 naming the -o path and the awaiter while the wrapper runs, and allows with exit 0 once its marker is gone"
+else
+    FAIL "_AUTOPILOT_LOOP=1 end to end: the Stop hook blocks with exit 2 naming the -o path and the awaiter while the wrapper runs, and allows with exit 0 once its marker is gone" \
+         "wrapper rc=$E2E_RC; during-run guard rc='$E2E_GUARD_RC' (want 2) stderr: $(cat "$E2E_SNAP/.guard.err" 2>/dev/null | tr '\n' ' ')(want $E2E_OUT and await_reviewer_outputs.py); after-run guard rc=$E2E_AFTER_RC (want 0) stderr: $(cat "$E2E_AFTER_ERR" 2>/dev/null | tr '\n' ' '); lanes after: $(ls -A "$E2E_LANES" 2>&1 | tr '\n' ' ')(want empty)"
+fi
+
+# =============================================================================
 echo ""
 echo "SUMMARY: $PASS_COUNT passed, $FAIL_COUNT failed"
 

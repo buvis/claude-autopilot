@@ -27,14 +27,14 @@ stops the item says so.
 - **Loop session.** Check `_AUTOPILOT_LOOP` first: a set value means a
   headless loop session, where `claude -p` kills background Bash about five
   seconds after the turn ends, and two of the five review lenses live in
-  background Bash. When the Watcher is skipped, the Stop hook
-  `hooks/guard_stop_on_live_lanes.py` (PRD 00213) holds the session open
-  while either background lane is alive and names the `-o` files to await.
-  When `_AUTOPILOT_LOOP` is set, dispatch the Watcher
-  subagent (`general-purpose`) in the SAME message as the roster, with the
-  exact prompt `${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/SKILL.md`
-  step 5 gives it, quoted here verbatim (its placeholder is this item's two
-  `-o` paths, the codex and the gemini output files):
+  background Bash. When `_AUTOPILOT_LOOP` is set, dispatch the Watcher
+  subagent (`general-purpose`) in the SAME message as the roster. When the
+  Watcher is skipped, the Stop hook `hooks/guard_stop_on_live_lanes.py`
+  (PRD 00213) holds the session open while either background lane is alive
+  and names the `-o` files to await. The Watcher's prompt is the exact one
+  `${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/SKILL.md` step 5
+  gives it, quoted here verbatim (its placeholder is this item's two `-o`
+  paths, the codex and the gemini output files):
 
   > Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/await_reviewer_outputs.py --budget 100 <absolute -o output path of each CLI reviewer dispatched>` as a foreground Bash call. If the last stdout line is `WAITING`, run the same command again — up to 30 times total. Return the script's final output verbatim (`DONE`, or `WAITING` plus the pending files after 30 runs). Do nothing else: no reading the output files, no review commentary.
 
