@@ -350,7 +350,7 @@ fi
 LANE_REPO=$(mktemp -d)
 _DIRS+=("$LANE_REPO")
 LANE_REPO=$(cd "$LANE_REPO" && pwd -P)
-mkdir -p "$LANE_REPO/dev/local/autopilot" "$LANE_REPO/sub/deeper"
+mkdir -p "$LANE_REPO/dev/local/autopilot" "$LANE_REPO/a/b/c/d/e"
 LANE_LANES_DIR="$LANE_REPO/dev/local/autopilot/lanes"
 LANE_PROMPT_FILE="$LANE_REPO/prompt.txt"
 printf '%s\n' "review the lane case" > "$LANE_PROMPT_FILE"
@@ -369,25 +369,34 @@ run_lane_case() {
     )
 }
 
-# 45. Loop set, cwd below a dev/local/autopilot: one integer-named marker
-#     during the run, line 1 'codex', line 2 the -o path; lanes empty after.
+# 45. Loop set, cwd five levels below a dev/local/autopilot, a foreign marker
+#     (999999, another lane) already present: during the run the lanes dir
+#     holds the foreign marker plus one marker named by the wrapper's own pid
+#     (a live process running codex-run.sh), line 1 'codex', line 2 the -o
+#     path; after the run only the foreign marker remains, unchanged.
 LANE_SNAP="$LANE_REPO/.snap-loop"
 LANE_OUT="$LANE_REPO/lane-review.out"
-run_lane_case "$LANE_SNAP" 1 "$LANE_REPO/sub/deeper" -f "$LANE_PROMPT_FILE" -o "$LANE_OUT"
+LANE_FOREIGN="$LANE_REPO/.foreign-marker"
+printf 'codex\n/somewhere/else.out\n' > "$LANE_FOREIGN"
+mkdir -p "$LANE_LANES_DIR"
+cp "$LANE_FOREIGN" "$LANE_LANES_DIR/999999"
+run_lane_case "$LANE_SNAP" 1 "$LANE_REPO/a/b/c/d/e" -f "$LANE_PROMPT_FILE" -o "$LANE_OUT"
 LANE_RC=$?
-LANE_NAMES=$(ls "$LANE_SNAP" 2>/dev/null)
 LANE_COUNT=$(ls "$LANE_SNAP" 2>/dev/null | wc -l | tr -d ' ')
+LANE_NAMES=$(ls "$LANE_SNAP" 2>/dev/null | grep -vx 999999)
 LANE_LINE1=$(sed -n 1p "$LANE_SNAP/$LANE_NAMES" 2>/dev/null)
 LANE_LINE2=$(sed -n 2p "$LANE_SNAP/$LANE_NAMES" 2>/dev/null)
 LANE_EXTRA=$(sed -n '3,$p' "$LANE_SNAP/$LANE_NAMES" 2>/dev/null)
-if [ "$LANE_RC" -eq 0 ] && [ "$LANE_COUNT" = "1" ] && \
-   printf '%s' "$LANE_NAMES" | grep -qxE '[0-9]+' && \
+LANE_CMD=$(cat "$LANE_SNAP/.cmd.$LANE_NAMES" 2>/dev/null)
+if [ "$LANE_RC" -eq 0 ] && [ "$LANE_COUNT" = "2" ] && \
+   [ -f "$LANE_SNAP/999999" ] && printf '%s' "$LANE_NAMES" | grep -qxE '[0-9]+' && \
+   case "$LANE_CMD" in *codex-run.sh*) true ;; *) false ;; esac && \
    [ "$LANE_LINE1" = "codex" ] && [ "$LANE_LINE2" = "$LANE_OUT" ] && [ -z "$LANE_EXTRA" ] && \
-   [ -d "$LANE_LANES_DIR" ] && [ -z "$(ls -A "$LANE_LANES_DIR")" ]; then
-    PASS "_AUTOPILOT_LOOP=1 under dev/local/autopilot: one <pid> marker during the run holding 'codex' and the -o path, lanes dir empty after"
+   [ "$(ls -A "$LANE_LANES_DIR")" = "999999" ] && cmp -s "$LANE_FOREIGN" "$LANE_LANES_DIR/999999"; then
+    PASS "_AUTOPILOT_LOOP=1 five levels under dev/local/autopilot: a marker named by the wrapper's pid holding 'codex' and the -o path during the run, removed after, foreign marker untouched"
 else
-    FAIL "_AUTOPILOT_LOOP=1 under dev/local/autopilot: one <pid> marker during the run holding 'codex' and the -o path, lanes dir empty after" \
-         "rc=$LANE_RC; during-run entries: '$(printf '%s' "$LANE_NAMES" | tr '\n' ' ')' (count $LANE_COUNT); line1='$LANE_LINE1' line2='$LANE_LINE2' extra lines='$LANE_EXTRA' (want codex / $LANE_OUT / none); lanes after: $(ls -A "$LANE_LANES_DIR" 2>&1 | tr '\n' ' ')"
+    FAIL "_AUTOPILOT_LOOP=1 five levels under dev/local/autopilot: a marker named by the wrapper's pid holding 'codex' and the -o path during the run, removed after, foreign marker untouched" \
+         "rc=$LANE_RC; during-run entries: $(ls "$LANE_SNAP" 2>/dev/null | tr '\n' ' ')(count $LANE_COUNT, want 999999 + own pid); own='$LANE_NAMES' cmd='$LANE_CMD' (want codex-run.sh); line1='$LANE_LINE1' line2='$LANE_LINE2' extra lines='$LANE_EXTRA' (want codex / $LANE_OUT / none); lanes after: $(ls -A "$LANE_LANES_DIR" 2>&1 | tr '\n' ' ')(want 999999 unchanged)"
 fi
 
 # 46. Loop set, no -o: the marker's second line is empty.

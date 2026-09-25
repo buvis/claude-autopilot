@@ -57,7 +57,7 @@ if [ -n "${LIVE_STDERR_FILE:-}" ]; then
     done
 fi
 cat > "${COPILOT_STDIN_FILE:?}"
-[ -z "${STUB_LANES_DIR:-}" ] || { ls "$STUB_LANES_DIR" > "$STUB_LANES_SNAPSHOT_DIR/.list" 2>/dev/null; cp "$STUB_LANES_DIR"/* "$STUB_LANES_SNAPSHOT_DIR/" 2>/dev/null; }
+[ -z "${STUB_LANES_DIR:-}" ] || { ls "$STUB_LANES_DIR" > "$STUB_LANES_SNAPSHOT_DIR/.list" 2>/dev/null; cp "$STUB_LANES_DIR"/* "$STUB_LANES_SNAPSHOT_DIR/" 2>/dev/null; for _p in $(ls "$STUB_LANES_DIR" 2>/dev/null); do ps -o command= -p "$_p" > "$STUB_LANES_SNAPSHOT_DIR/.cmd.$_p" 2>/dev/null; done; }
 echo "stub-copilot-ran"
 [ -z "${COPILOT_STDOUT:-}" ] || printf '%s\n' "$COPILOT_STDOUT"
 [ -z "${COPILOT_STDERR:-}" ] || printf '%s\n' "$COPILOT_STDERR" >&2
@@ -69,7 +69,7 @@ cat > "$STUBDIR/gemini" <<'STUB'
 #!/bin/bash
 printf '%s\n' "$@" > "${GEMINI_ARGV_FILE:?}"
 cat > "${GEMINI_STDIN_FILE:?}"
-[ -z "${STUB_LANES_DIR:-}" ] || { ls "$STUB_LANES_DIR" > "$STUB_LANES_SNAPSHOT_DIR/.list" 2>/dev/null; cp "$STUB_LANES_DIR"/* "$STUB_LANES_SNAPSHOT_DIR/" 2>/dev/null; }
+[ -z "${STUB_LANES_DIR:-}" ] || { ls "$STUB_LANES_DIR" > "$STUB_LANES_SNAPSHOT_DIR/.list" 2>/dev/null; cp "$STUB_LANES_DIR"/* "$STUB_LANES_SNAPSHOT_DIR/" 2>/dev/null; for _p in $(ls "$STUB_LANES_DIR" 2>/dev/null); do ps -o command= -p "$_p" > "$STUB_LANES_SNAPSHOT_DIR/.cmd.$_p" 2>/dev/null; done; }
 echo "stub-gemini-ran"
 [ -z "${GEMINI_STDERR:-}" ] || printf '%s\n' "$GEMINI_STDERR" >&2
 exit "${GEMINI_EXIT_CODE:-${STUB_EXIT_CODE:-0}}"
@@ -436,7 +436,7 @@ unset COPILOT_STDOUT COPILOT_EXIT_CODE
 # for its lifetime. The stubs copy the lanes dir out mid-run (STUB_LANES_DIR),
 # since the marker is gone once the wrapper exits.
 LANE_REPO="$WORK/lane-repo"
-mkdir -p "$LANE_REPO/dev/local/autopilot" "$LANE_REPO/sub/deeper"
+mkdir -p "$LANE_REPO/dev/local/autopilot" "$LANE_REPO/a/b/c/d/e"
 LANE_REPO=$(cd "$LANE_REPO" && pwd -P)
 LANE_LANES_DIR="$LANE_REPO/dev/local/autopilot/lanes"
 
@@ -457,25 +457,34 @@ run_lane_case() {
     ) || RC=$?
 }
 
-# T23. Loop set, cwd below dev/local/autopilot, copilot backend: one
-#      integer-named marker during the run, line 1 'gemini', line 2 the -o
-#      path; lanes dir empty after.
+# T23. Loop set, cwd five levels below dev/local/autopilot, copilot backend,
+#      a foreign marker (999999, another lane) already present: during the run
+#      the lanes dir holds the foreign marker plus one marker named by the
+#      wrapper's own pid (a live process running gemini-run.sh), line 1
+#      'gemini', line 2 the -o path; after the run only the foreign marker
+#      remains, unchanged.
 T23_OUT="$WORK/t23.out"
-run_lane_case t23 1 "$LANE_REPO/sub/deeper" -f "$PROMPT_FILE_T" -o "$T23_OUT"
+T23_FOREIGN="$WORK/t23.foreign"
+printf 'codex\n/somewhere/else.out\n' > "$T23_FOREIGN"
+mkdir -p "$LANE_LANES_DIR"
+cp "$T23_FOREIGN" "$LANE_LANES_DIR/999999"
+run_lane_case t23 1 "$LANE_REPO/a/b/c/d/e" -f "$PROMPT_FILE_T" -o "$T23_OUT"
 T23_SNAP="$WORK/t23.snap"
-T23_NAME=$(ls "$T23_SNAP" 2>/dev/null)
 T23_COUNT=$(ls "$T23_SNAP" 2>/dev/null | wc -l | tr -d ' ')
+T23_NAME=$(ls "$T23_SNAP" 2>/dev/null | grep -vx 999999)
 T23_L1=$(sed -n 1p "$T23_SNAP/$T23_NAME" 2>/dev/null)
 T23_L2=$(sed -n 2p "$T23_SNAP/$T23_NAME" 2>/dev/null)
 T23_EXTRA=$(sed -n '3,$p' "$T23_SNAP/$T23_NAME" 2>/dev/null)
-if [ "$RC" -eq 0 ] && [ -f "$WORK/t23.copilot.argv" ] && [ "$T23_COUNT" = "1" ] &&
-   printf '%s' "$T23_NAME" | grep -qxE '[0-9]+' &&
+T23_CMD=$(cat "$T23_SNAP/.cmd.$T23_NAME" 2>/dev/null)
+if [ "$RC" -eq 0 ] && [ -f "$WORK/t23.copilot.argv" ] && [ "$T23_COUNT" = "2" ] &&
+   [ -f "$T23_SNAP/999999" ] && printf '%s' "$T23_NAME" | grep -qxE '[0-9]+' &&
+   case "$T23_CMD" in *gemini-run.sh*) true ;; *) false ;; esac &&
    [ "$T23_L1" = "gemini" ] && [ "$T23_L2" = "$T23_OUT" ] && [ -z "$T23_EXTRA" ] &&
-   [ -d "$LANE_LANES_DIR" ] && [ -z "$(ls -A "$LANE_LANES_DIR")" ]; then
-    PASS "_AUTOPILOT_LOOP=1 under dev/local/autopilot: one <pid> marker during the run holding 'gemini' (copilot backend) and the -o path, lanes dir empty after"
+   [ "$(ls -A "$LANE_LANES_DIR")" = "999999" ] && cmp -s "$T23_FOREIGN" "$LANE_LANES_DIR/999999"; then
+    PASS "_AUTOPILOT_LOOP=1 five levels under dev/local/autopilot: a marker named by the wrapper's pid holding 'gemini' (copilot backend) and the -o path during the run, removed after, foreign marker untouched"
 else
     FAIL "_AUTOPILOT_LOOP=1 lane marker" \
-         "rc=$RC; entries: '$(printf '%s' "$T23_NAME" | tr '\n' ' ')' (count $T23_COUNT); line1='$T23_L1' line2='$T23_L2' extra='$T23_EXTRA' (want gemini / $T23_OUT / none); lanes after: $(ls -A "$LANE_LANES_DIR" 2>&1 | tr '\n' ' ')"
+         "rc=$RC; entries: $(ls "$T23_SNAP" 2>/dev/null | tr '\n' ' ')(count $T23_COUNT, want 999999 + own pid); own='$T23_NAME' cmd='$T23_CMD' (want gemini-run.sh); line1='$T23_L1' line2='$T23_L2' extra='$T23_EXTRA' (want gemini / $T23_OUT / none); lanes after: $(ls -A "$LANE_LANES_DIR" 2>&1 | tr '\n' ' ')(want 999999 unchanged)"
 fi
 
 # T24. Loop set, no -o: marker line 1 'gemini', line 2 empty.

@@ -68,8 +68,9 @@ printf '%s\n' "$@" > "$STUB_ARGV_FILE"
 cat > "$STUB_STDIN_FILE"
 
 # Lane snapshot (opt-in: only when the caller sets STUB_LANES_DIR). The lane
-# marker lives only while the wrapper runs, so copy it out from inside the stub.
-[ -z "${STUB_LANES_DIR:-}" ] || { ls "$STUB_LANES_DIR" > "$STUB_LANES_SNAPSHOT_DIR/.list" 2>/dev/null; cp "$STUB_LANES_DIR"/* "$STUB_LANES_SNAPSHOT_DIR/" 2>/dev/null; }
+# marker lives only while the wrapper runs, so copy it out from inside the stub,
+# plus each entry's live process command line (as .cmd.<name>).
+[ -z "${STUB_LANES_DIR:-}" ] || { ls "$STUB_LANES_DIR" > "$STUB_LANES_SNAPSHOT_DIR/.list" 2>/dev/null; cp "$STUB_LANES_DIR"/* "$STUB_LANES_SNAPSHOT_DIR/" 2>/dev/null; for _p in $(ls "$STUB_LANES_DIR" 2>/dev/null); do ps -o command= -p "$_p" > "$STUB_LANES_SNAPSHOT_DIR/.cmd.$_p" 2>/dev/null; done; }
 
 # Multi-invocation bookkeeping (opt-in: only when the caller sets
 # STUB_ALL_ARGV_FILE). Appends this call's argv to a cumulative log with a
