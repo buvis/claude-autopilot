@@ -76,12 +76,22 @@ def reason(lanes: list[Lane], awaiter: Path) -> str:
         for lane in lanes
     )
     outputs = " ".join(lane.output for lane in lanes if lane.output)
+    if outputs:
+        wait = (
+            f"Run python3 {awaiter} --budget 100 {outputs} in the foreground; "
+            "while its last line is WAITING run it again; on DONE continue the review."
+        )
+    else:
+        pids = " ".join(str(lane.pid) for lane in lanes)
+        wait = (
+            "No lane declared an output file, so wait on the processes themselves: "
+            f"run ps -p {pids} in the foreground; while it still lists a pid run it "
+            "again; once none are left continue the review."
+        )
     return (
         f"autopilot: {len(lanes)} CLI reviewer lane(s) still running: {named}. "
         "Headless claude kills them when this turn ends. "
-        f"Run python3 {awaiter} --budget 100 {outputs} in the foreground; "
-        "while its last line is WAITING run it again; on DONE continue the review. "
-        "Do not end the turn before then."
+        f"{wait} Do not end the turn before then."
     )
 
 
@@ -108,14 +118,24 @@ def _guard() -> None:
         )
         counter.unlink(missing_ok=True)
         allow()
-    counter.write_text(f"{count}\n")
+    try:
+        counter.write_text(f"{count}\n")
+    except OSError as exc:
+        sys.stderr.write(
+            f"autopilot: lane_guard: could not persist the block count to "
+            f"{counter} ({type(exc).__name__}: {exc}); blocking anyway\n"
+        )
     block(reason(lanes, AWAITER))
 
 
 def main() -> None:
     try:
         _guard()
-    except Exception:
+    except Exception as exc:
+        sys.stderr.write(
+            f"autopilot: lane_guard: internal error, failing open "
+            f"({type(exc).__name__}: {exc})\n"
+        )
         sys.exit(0)
 
 
