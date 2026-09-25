@@ -343,6 +343,94 @@ else
 fi
 
 # =============================================================================
+# Live lane marker: inside an autopilot loop (_AUTOPILOT_LOOP non-empty) the
+# wrapper leaves <autopilot dir>/lanes/<pid> for its lifetime. The stub copies
+# the lanes dir out mid-run (STUB_LANES_DIR), since the marker is gone after.
+# =============================================================================
+LANE_REPO=$(mktemp -d)
+_DIRS+=("$LANE_REPO")
+LANE_REPO=$(cd "$LANE_REPO" && pwd -P)
+mkdir -p "$LANE_REPO/dev/local/autopilot" "$LANE_REPO/sub/deeper"
+LANE_LANES_DIR="$LANE_REPO/dev/local/autopilot/lanes"
+LANE_PROMPT_FILE="$LANE_REPO/prompt.txt"
+printf '%s\n' "review the lane case" > "$LANE_PROMPT_FILE"
+
+# run_lane_case <snapshot dir> <loop value or empty> <cwd> [args...]
+run_lane_case() {
+    local snap="$1" loop="$2" cwd="$3"
+    shift 3
+    mkdir -p "$snap"
+    (
+        cd "$cwd" || exit 99
+        unset _AUTOPILOT_LOOP
+        [ -z "$loop" ] || export _AUTOPILOT_LOOP="$loop"
+        export STUB_LANES_DIR="$LANE_LANES_DIR" STUB_LANES_SNAPSHOT_DIR="$snap"
+        run_codex_run "$@" > /dev/null 2>&1 < /dev/null
+    )
+}
+
+# 45. Loop set, cwd below a dev/local/autopilot: one integer-named marker
+#     during the run, line 1 'codex', line 2 the -o path; lanes empty after.
+LANE_SNAP="$LANE_REPO/.snap-loop"
+LANE_OUT="$LANE_REPO/lane-review.out"
+run_lane_case "$LANE_SNAP" 1 "$LANE_REPO/sub/deeper" -f "$LANE_PROMPT_FILE" -o "$LANE_OUT"
+LANE_RC=$?
+LANE_NAMES=$(ls "$LANE_SNAP" 2>/dev/null)
+LANE_COUNT=$(ls "$LANE_SNAP" 2>/dev/null | wc -l | tr -d ' ')
+LANE_LINE1=$(sed -n 1p "$LANE_SNAP/$LANE_NAMES" 2>/dev/null)
+LANE_LINE2=$(sed -n 2p "$LANE_SNAP/$LANE_NAMES" 2>/dev/null)
+LANE_EXTRA=$(sed -n '3,$p' "$LANE_SNAP/$LANE_NAMES" 2>/dev/null)
+if [ "$LANE_RC" -eq 0 ] && [ "$LANE_COUNT" = "1" ] && \
+   printf '%s' "$LANE_NAMES" | grep -qxE '[0-9]+' && \
+   [ "$LANE_LINE1" = "codex" ] && [ "$LANE_LINE2" = "$LANE_OUT" ] && [ -z "$LANE_EXTRA" ] && \
+   [ -d "$LANE_LANES_DIR" ] && [ -z "$(ls -A "$LANE_LANES_DIR")" ]; then
+    PASS "_AUTOPILOT_LOOP=1 under dev/local/autopilot: one <pid> marker during the run holding 'codex' and the -o path, lanes dir empty after"
+else
+    FAIL "_AUTOPILOT_LOOP=1 under dev/local/autopilot: one <pid> marker during the run holding 'codex' and the -o path, lanes dir empty after" \
+         "rc=$LANE_RC; during-run entries: '$(printf '%s' "$LANE_NAMES" | tr '\n' ' ')' (count $LANE_COUNT); line1='$LANE_LINE1' line2='$LANE_LINE2' extra lines='$LANE_EXTRA' (want codex / $LANE_OUT / none); lanes after: $(ls -A "$LANE_LANES_DIR" 2>&1 | tr '\n' ' ')"
+fi
+
+# 46. Loop set, no -o: the marker's second line is empty.
+rm -rf "$LANE_LANES_DIR"
+LANE_SNAP_NOOUT="$LANE_REPO/.snap-noout"
+run_lane_case "$LANE_SNAP_NOOUT" 1 "$LANE_REPO" -f "$LANE_PROMPT_FILE"
+LANE_NOOUT_NAME=$(ls "$LANE_SNAP_NOOUT" 2>/dev/null)
+if [ "$(ls "$LANE_SNAP_NOOUT" 2>/dev/null | wc -l | tr -d ' ')" = "1" ] && \
+   [ "$(sed -n 1p "$LANE_SNAP_NOOUT/$LANE_NOOUT_NAME")" = "codex" ] && \
+   [ -z "$(sed -n '3,$p' "$LANE_SNAP_NOOUT/$LANE_NOOUT_NAME")" ] && \
+   [ -z "$(sed -n 2p "$LANE_SNAP_NOOUT/$LANE_NOOUT_NAME")" ]; then
+    PASS "_AUTOPILOT_LOOP=1 without -o: marker line 1 is 'codex', line 2 is empty"
+else
+    FAIL "_AUTOPILOT_LOOP=1 without -o: marker line 1 is 'codex', line 2 is empty" \
+         "entries: $(ls "$LANE_SNAP_NOOUT" 2>/dev/null | tr '\n' ' '); content: $(cat "$LANE_SNAP_NOOUT/$LANE_NOOUT_NAME" 2>/dev/null | tr '\n' '|')"
+fi
+
+# 47. No _AUTOPILOT_LOOP: no marker is written, no lanes dir is created.
+rm -rf "$LANE_LANES_DIR"
+LANE_SNAP_OFF="$LANE_REPO/.snap-off"
+run_lane_case "$LANE_SNAP_OFF" "" "$LANE_REPO" -f "$LANE_PROMPT_FILE" -o "$LANE_OUT"
+if [ -z "$(ls "$LANE_SNAP_OFF")" ] && [ ! -e "$LANE_LANES_DIR" ]; then
+    PASS "_AUTOPILOT_LOOP unset: no lane marker is written and no lanes dir is created"
+else
+    FAIL "_AUTOPILOT_LOOP unset: no lane marker is written and no lanes dir is created" \
+         "during-run entries: $(ls "$LANE_SNAP_OFF" | tr '\n' ' '); lanes dir: $(ls -A "$LANE_LANES_DIR" 2>&1 | tr '\n' ' ')"
+fi
+
+# 48. Loop set but no dev/local/autopilot at or above cwd: exit 0, nothing made.
+LANE_BARE=$(mktemp -d)
+_DIRS+=("$LANE_BARE")
+LANE_BARE_SNAP=$(mktemp -d)
+_DIRS+=("$LANE_BARE_SNAP")
+run_lane_case "$LANE_BARE_SNAP" 1 "$LANE_BARE" -f "$LANE_PROMPT_FILE" -o "$LANE_BARE_SNAP/review.out"
+LANE_BARE_RC=$?
+if [ "$LANE_BARE_RC" -eq 0 ] && [ -z "$(ls -A "$LANE_BARE")" ]; then
+    PASS "_AUTOPILOT_LOOP=1 with no dev/local/autopilot above cwd: exits 0 and creates nothing"
+else
+    FAIL "_AUTOPILOT_LOOP=1 with no dev/local/autopilot above cwd: exits 0 and creates nothing" \
+         "rc=$LANE_BARE_RC; cwd contents: $(ls -A "$LANE_BARE" | tr '\n' ' ')"
+fi
+
+# =============================================================================
 echo ""
 echo "SUMMARY: $PASS_COUNT passed, $FAIL_COUNT failed"
 

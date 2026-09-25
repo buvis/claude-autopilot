@@ -57,6 +57,7 @@ if [ -n "${LIVE_STDERR_FILE:-}" ]; then
     done
 fi
 cat > "${COPILOT_STDIN_FILE:?}"
+[ -z "${STUB_LANES_DIR:-}" ] || { ls "$STUB_LANES_DIR" > "$STUB_LANES_SNAPSHOT_DIR/.list" 2>/dev/null; cp "$STUB_LANES_DIR"/* "$STUB_LANES_SNAPSHOT_DIR/" 2>/dev/null; }
 echo "stub-copilot-ran"
 [ -z "${COPILOT_STDOUT:-}" ] || printf '%s\n' "$COPILOT_STDOUT"
 [ -z "${COPILOT_STDERR:-}" ] || printf '%s\n' "$COPILOT_STDERR" >&2
@@ -68,6 +69,7 @@ cat > "$STUBDIR/gemini" <<'STUB'
 #!/bin/bash
 printf '%s\n' "$@" > "${GEMINI_ARGV_FILE:?}"
 cat > "${GEMINI_STDIN_FILE:?}"
+[ -z "${STUB_LANES_DIR:-}" ] || { ls "$STUB_LANES_DIR" > "$STUB_LANES_SNAPSHOT_DIR/.list" 2>/dev/null; cp "$STUB_LANES_DIR"/* "$STUB_LANES_SNAPSHOT_DIR/" 2>/dev/null; }
 echo "stub-gemini-ran"
 [ -z "${GEMINI_STDERR:-}" ] || printf '%s\n' "$GEMINI_STDERR" >&2
 exit "${GEMINI_EXIT_CODE:-${STUB_EXIT_CODE:-0}}"
@@ -428,6 +430,103 @@ else
     FAIL "stdout rejection words" "rc=$RC"
 fi
 unset COPILOT_STDOUT COPILOT_EXIT_CODE
+
+# ══ T23-T27: live lane marker inside an autopilot loop ════════════════════════
+# With _AUTOPILOT_LOOP non-empty the wrapper leaves <autopilot dir>/lanes/<pid>
+# for its lifetime. The stubs copy the lanes dir out mid-run (STUB_LANES_DIR),
+# since the marker is gone once the wrapper exits.
+LANE_REPO="$WORK/lane-repo"
+mkdir -p "$LANE_REPO/dev/local/autopilot" "$LANE_REPO/sub/deeper"
+LANE_REPO=$(cd "$LANE_REPO" && pwd -P)
+LANE_LANES_DIR="$LANE_REPO/dev/local/autopilot/lanes"
+
+# run_lane_case <name> <loop value or empty> <cwd> [args...] -- snapshot lands
+# in $WORK/<name>.snap; RC is the wrapper's exit code.
+run_lane_case() {
+    local name="$1" loop="$2" cwd="$3"
+    shift 3
+    mkdir -p "$WORK/$name.snap"
+    RC=0
+    (
+        cd "$cwd" || exit 99
+        unset _AUTOPILOT_LOOP
+        [ -z "$loop" ] || export _AUTOPILOT_LOOP="$loop"
+        export STUB_LANES_DIR="$LANE_LANES_DIR" STUB_LANES_SNAPSHOT_DIR="$WORK/$name.snap"
+        run_gemini "$name" "$@"
+        exit "$RC"
+    ) || RC=$?
+}
+
+# T23. Loop set, cwd below dev/local/autopilot, copilot backend: one
+#      integer-named marker during the run, line 1 'gemini', line 2 the -o
+#      path; lanes dir empty after.
+T23_OUT="$WORK/t23.out"
+run_lane_case t23 1 "$LANE_REPO/sub/deeper" -f "$PROMPT_FILE_T" -o "$T23_OUT"
+T23_SNAP="$WORK/t23.snap"
+T23_NAME=$(ls "$T23_SNAP" 2>/dev/null)
+T23_COUNT=$(ls "$T23_SNAP" 2>/dev/null | wc -l | tr -d ' ')
+T23_L1=$(sed -n 1p "$T23_SNAP/$T23_NAME" 2>/dev/null)
+T23_L2=$(sed -n 2p "$T23_SNAP/$T23_NAME" 2>/dev/null)
+T23_EXTRA=$(sed -n '3,$p' "$T23_SNAP/$T23_NAME" 2>/dev/null)
+if [ "$RC" -eq 0 ] && [ -f "$WORK/t23.copilot.argv" ] && [ "$T23_COUNT" = "1" ] &&
+   printf '%s' "$T23_NAME" | grep -qxE '[0-9]+' &&
+   [ "$T23_L1" = "gemini" ] && [ "$T23_L2" = "$T23_OUT" ] && [ -z "$T23_EXTRA" ] &&
+   [ -d "$LANE_LANES_DIR" ] && [ -z "$(ls -A "$LANE_LANES_DIR")" ]; then
+    PASS "_AUTOPILOT_LOOP=1 under dev/local/autopilot: one <pid> marker during the run holding 'gemini' (copilot backend) and the -o path, lanes dir empty after"
+else
+    FAIL "_AUTOPILOT_LOOP=1 lane marker" \
+         "rc=$RC; entries: '$(printf '%s' "$T23_NAME" | tr '\n' ' ')' (count $T23_COUNT); line1='$T23_L1' line2='$T23_L2' extra='$T23_EXTRA' (want gemini / $T23_OUT / none); lanes after: $(ls -A "$LANE_LANES_DIR" 2>&1 | tr '\n' ' ')"
+fi
+
+# T24. Loop set, no -o: marker line 1 'gemini', line 2 empty.
+rm -rf "$LANE_LANES_DIR"
+run_lane_case t24 1 "$LANE_REPO" -f "$PROMPT_FILE_T"
+T24_NAME=$(ls "$WORK/t24.snap" 2>/dev/null)
+if [ "$RC" -eq 0 ] && [ "$(ls "$WORK/t24.snap" | wc -l | tr -d ' ')" = "1" ] &&
+   [ "$(sed -n 1p "$WORK/t24.snap/$T24_NAME")" = "gemini" ] &&
+   [ -z "$(sed -n '2,$p' "$WORK/t24.snap/$T24_NAME")" ]; then
+    PASS "_AUTOPILOT_LOOP=1 without -o: marker line 1 is 'gemini', line 2 is empty"
+else
+    FAIL "_AUTOPILOT_LOOP=1 without -o" \
+         "rc=$RC; entries: $(ls "$WORK/t24.snap" | tr '\n' ' '); content: $(cat "$WORK/t24.snap/$T24_NAME" 2>/dev/null | tr '\n' '|')"
+fi
+
+# T25. No _AUTOPILOT_LOOP: no marker written, no lanes dir created.
+rm -rf "$LANE_LANES_DIR"
+run_lane_case t25 "" "$LANE_REPO" -f "$PROMPT_FILE_T" -o "$WORK/t25.out"
+if [ "$RC" -eq 0 ] && [ -f "$WORK/t25.copilot.argv" ] &&
+   [ -z "$(ls "$WORK/t25.snap")" ] && [ ! -e "$LANE_LANES_DIR" ]; then
+    PASS "_AUTOPILOT_LOOP unset: no lane marker is written and no lanes dir is created"
+else
+    FAIL "_AUTOPILOT_LOOP unset: no lane marker" \
+         "rc=$RC; entries: $(ls "$WORK/t25.snap" | tr '\n' ' '); lanes dir: $(ls -A "$LANE_LANES_DIR" 2>&1 | tr '\n' ' ')"
+fi
+
+# T26. Loop set, no dev/local/autopilot at or above cwd: exit 0, nothing made.
+LANE_BARE=$(mktemp -d)
+_DIRS+=("$LANE_BARE")
+run_lane_case t26 1 "$LANE_BARE" -f "$PROMPT_FILE_T" -o "$WORK/t26.out"
+if [ "$RC" -eq 0 ] && [ -f "$WORK/t26.copilot.argv" ] && [ -z "$(ls -A "$LANE_BARE")" ]; then
+    PASS "_AUTOPILOT_LOOP=1 with no dev/local/autopilot above cwd: exits 0 and creates nothing"
+else
+    FAIL "_AUTOPILOT_LOOP=1 with no autopilot dir" \
+         "rc=$RC; cwd contents: $(ls -A "$LANE_BARE" | tr '\n' ' ')"
+fi
+
+# T27. Loop set, lane marked: the wrapper's private temp dir under TMPDIR is
+#      still removed at exit.
+LANE_TMPDIR=$(mktemp -d)
+_DIRS+=("$LANE_TMPDIR")
+rm -rf "$LANE_LANES_DIR"
+RC=0
+( export TMPDIR="$LANE_TMPDIR"; run_lane_case t27 1 "$LANE_REPO" -f "$PROMPT_FILE_T" -o "$WORK/t27.out"; exit "$RC" ) || RC=$?
+if [ "$RC" -eq 0 ] && [ "$(ls "$WORK/t27.snap" | wc -l | tr -d ' ')" = "1" ] &&
+   [ -z "$(ls -A "$LANE_TMPDIR")" ]; then
+    PASS "_AUTOPILOT_LOOP=1 with a lane marker: the private temp dir under TMPDIR is removed at exit"
+else
+    FAIL "_AUTOPILOT_LOOP=1 TMPDIR cleanup" \
+         "rc=$RC; lane entries: $(ls "$WORK/t27.snap" | tr '\n' ' '); TMPDIR leftovers: $(ls -A "$LANE_TMPDIR" | tr '\n' ' ')"
+fi
 
 # ══ summary ═══════════════════════════════════════════════════════════════════
 echo ""
