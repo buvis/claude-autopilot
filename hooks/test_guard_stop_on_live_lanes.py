@@ -20,7 +20,9 @@ HOOKS = Path(__file__).resolve().parent
 PACK = HOOKS.parent
 GUARD = HOOKS / "guard_stop_on_live_lanes.py"
 SESSION = "11111111-2222-3333-4444-555555555555"
-AWAITER = f"python3 {PACK}/skills/review-work-completion/scripts/await_reviewer_outputs.py"
+AWAITER = (
+    f"python3 {PACK}/skills/review-work-completion/scripts/await_reviewer_outputs.py"
+)
 
 
 def _repo(tmp_path: Path) -> Path:
@@ -60,7 +62,9 @@ def _kill(*children: subprocess.Popen[bytes]) -> None:
         child.wait()
 
 
-def _run(repo: Path, *, loop: bool) -> subprocess.CompletedProcess[str]:
+def _run(
+    repo: Path, *, loop: bool, process_cwd: Path | None = None
+) -> subprocess.CompletedProcess[str]:
     payload = {"session_id": SESSION, "cwd": str(repo), "hook_event_name": "Stop"}
     env = {"PATH": "/usr/bin:/bin", "HOME": str(Path.home())}
     if loop:
@@ -71,7 +75,7 @@ def _run(repo: Path, *, loop: bool) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         env=env,
-        cwd=payload["cwd"],
+        cwd=str(process_cwd) if process_cwd is not None else payload["cwd"],
     )
 
 
@@ -121,11 +125,47 @@ def test_lane_past_the_age_ceiling_does_not_hold_the_session(tmp_path: Path) -> 
     finally:
         _kill(child)
     assert result.returncode == 0
-    assert f"autopilot: lane gemini (pid {child.pid}) has run " in result.stderr
+    # 3700 s is 61 whole minutes.
     assert (
-        "past the 60 min ceiling; not holding the session for it" in result.stderr
-    )
+        f"autopilot: lane gemini (pid {child.pid}) has run 61 min, "
+        "past the 60 min ceiling; not holding the session for it"
+    ) in result.stderr.splitlines()
     assert "still running" not in result.stderr
+
+
+def test_lane_under_the_age_ceiling_still_holds_the_session(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    child = _live()
+    try:
+        marker = _mark(repo, child.pid, "gemini", str(tmp_path / "review-gemini.md"))
+        aged = time.time() - 3500
+        os.utime(marker, (aged, aged))
+        result = _run(repo, loop=True)
+    finally:
+        _kill(child)
+    assert result.returncode == 2
+    assert f"gemini (pid {child.pid}) -> " in result.stderr
+    assert "Do not end the turn before then." in result.stderr
+    assert "past the 60 min ceiling" not in result.stderr
+
+
+def test_cwd_comes_from_the_payload_and_walks_up(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    nested = repo / "a" / "b"
+    nested.mkdir(parents=True)
+    codex_out = str(tmp_path / "review-codex.md")
+    child = _live()
+    try:
+        _mark(repo, child.pid, "codex", codex_out)
+        # The process cwd has no dev/local/autopilot at or above it; only the
+        # payload's cwd (a subdirectory of the repo) leads to the lanes.
+        result = _run(nested, loop=True, process_cwd=tmp_path.parent)
+    finally:
+        _kill(child)
+    assert result.returncode == 2
+    assert f"codex (pid {child.pid}) -> {codex_out}" in result.stderr
+    assert "Do not end the turn before then." in result.stderr
+    assert _counter(repo).read_text().strip() == "1"
 
 
 def test_outside_the_loop_never_blocks(tmp_path: Path) -> None:
@@ -202,8 +242,24 @@ def test_block_cap_gives_up_loud(tmp_path: Path) -> None:
         _kill(child)
     assert result.returncode == 0
     assert (
-        "giving up after 40 blocked exits to preserve session liveness"
-        in result.stderr
+        "giving up after 40 blocked exits to preserve session liveness" in result.stderr
+    )
+    assert "Do not end the turn before then." not in result.stderr
+    assert not _counter(repo).exists()
+
+
+def test_counter_beyond_the_cap_also_gives_up(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    _counter(repo).write_text("100")
+    child = _live()
+    try:
+        _mark(repo, child.pid, "codex", str(tmp_path / "review-codex.md"))
+        result = _run(repo, loop=True)
+    finally:
+        _kill(child)
+    assert result.returncode == 0
+    assert (
+        "giving up after 40 blocked exits to preserve session liveness" in result.stderr
     )
     assert "Do not end the turn before then." not in result.stderr
     assert not _counter(repo).exists()
