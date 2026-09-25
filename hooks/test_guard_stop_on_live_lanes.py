@@ -301,3 +301,37 @@ def test_blocks_count_up_and_reset_when_lanes_finish(tmp_path: Path) -> None:
     assert "still running" not in done.stderr
     assert not _counter(repo).exists()
     assert not marker.exists()
+
+
+def _section(text: str, heading: str, stops: tuple[str, ...]) -> str:
+    lines = text.splitlines()
+    start = lines.index(heading)
+    end = next(
+        (i for i in range(start + 1, len(lines)) if lines[i].startswith(stops)),
+        len(lines),
+    )
+    return "\n".join(lines[start:end])
+
+
+def test_docs_name_the_guard() -> None:
+    # read_text raises on a missing document: a failure, never a skip.
+    review = (PACK / "skills/review-work-completion/SKILL.md").read_text()
+    fast = (PACK / "skills/fast-track/SKILL.md").read_text()
+    autopilot = (PACK / "skills/run-autopilot/SKILL.md").read_text()
+    anchor = "The Watcher is scaffolding, not a reviewer"
+    paragraphs = [p for p in review.split("\n\n") if anchor in p]
+    assert len(paragraphs) == 1, "review-work-completion lost its Watcher paragraph"
+    assert "guard_stop_on_live_lanes.py" in paragraphs[0], (
+        "review-work-completion/SKILL.md step 5 Watcher paragraph "
+        "no longer names guard_stop_on_live_lanes.py"
+    )
+    preconditions = _section(fast, "## Preconditions", ("## ",))
+    assert "guard_stop_on_live_lanes.py" in preconditions, (
+        "fast-track/SKILL.md ## Preconditions no longer names "
+        "guard_stop_on_live_lanes.py"
+    )
+    retention = _section(autopilot, "### Retention", ("## ", "### "))
+    assert "dev/local/autopilot/lanes/" in retention, (
+        "run-autopilot/SKILL.md ### Retention no longer lists "
+        "dev/local/autopilot/lanes/"
+    )
