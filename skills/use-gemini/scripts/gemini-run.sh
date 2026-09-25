@@ -179,8 +179,22 @@ fi
 
 # Keep stderr separate for classification; never classify the model's prose.
 RUN_TMP=$(mktemp -d) || exit 1
-trap 'rm -rf "$RUN_TMP"' EXIT
+LANE_MARKER=""
+trap 'rm -rf "$RUN_TMP"; [ -z "$LANE_MARKER" ] || rm -f "$LANE_MARKER"' EXIT
 mkfifo "$RUN_TMP/stderr.pipe" || exit 1
+
+# Lane marker: inside an autopilot loop, mark this wrapper alive at
+# <autopilot dir>/lanes/<pid> for its lifetime. Observation only: any failure
+# leaves LANE_MARKER empty and the run proceeds unchanged.
+if [ -n "${_AUTOPILOT_LOOP:-}" ]; then
+    LANE_DIR=$(python3 "$(dirname "$0")/../../run-autopilot/scripts/_walk_up.py" --bash 2>/dev/null) || LANE_DIR=""
+    if [ -n "$LANE_DIR" ]; then
+        LANE_OUT="$OUTPUT_FILE"
+        case "$LANE_OUT" in ""|/*) ;; *) LANE_OUT="$PWD/$LANE_OUT" ;; esac
+        LANE_MARKER="$LANE_DIR/lanes/$$"
+        { mkdir -p "$LANE_DIR/lanes" && printf 'gemini\n%s\n' "$LANE_OUT" > "$LANE_MARKER"; } 2>/dev/null || LANE_MARKER=""
+    fi
+fi
 
 permanently_unavailable() {
     grep -Eiq 'Model "[^"]+" from --model flag is not available|IneligibleTierError|reasonCode[^[:alnum:]]+UNSUPPORTED_CLIENT' "$RUN_TMP/stderr"

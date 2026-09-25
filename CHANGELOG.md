@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **hooks**: a loop session can no longer end its turn while a background codex or gemini reviewer lane is still running: `codex-run.sh` and `gemini-run.sh` mark each live lane under `dev/local/autopilot/lanes/<pid>` for the wrapper's lifetime, and the Stop hook `guard_stop_on_live_lanes.py` blocks the stop and names the `-o` files to await, bounded by a 60 min lane ceiling and 40 blocked exits
+
 ## [0.5.5] - 2026-09-21
 
 ### Added

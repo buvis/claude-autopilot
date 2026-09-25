@@ -170,6 +170,21 @@ if [ -n "${RESUME_SET:-}" ] && [ -z "${OUTPUT_FILE:-}" ]; then
     exit 1
 fi
 
+# Lane marker: inside an autopilot loop, mark this wrapper alive at
+# <autopilot dir>/lanes/<pid> for its lifetime. Observation only: any failure
+# leaves LANE_MARKER empty and the run proceeds unchanged.
+LANE_MARKER=""
+if [ -n "${_AUTOPILOT_LOOP:-}" ]; then
+    LANE_DIR=$(python3 "$(dirname "$0")/../../run-autopilot/scripts/_walk_up.py" --bash 2>/dev/null) || LANE_DIR=""
+    if [ -n "$LANE_DIR" ]; then
+        LANE_OUT="${OUTPUT_FILE:-}"
+        case "$LANE_OUT" in ""|/*) ;; *) LANE_OUT="$PWD/$LANE_OUT" ;; esac
+        LANE_MARKER="$LANE_DIR/lanes/$$"
+        { mkdir -p "$LANE_DIR/lanes" && printf 'codex\n%s\n' "$LANE_OUT" > "$LANE_MARKER"; } 2>/dev/null || LANE_MARKER=""
+    fi
+fi
+trap '[ -z "$LANE_MARKER" ] || rm -f "$LANE_MARKER"' EXIT
+
 # Build and run command
 run_cmd() {
     if [ -n "$OUTPUT_FILE" ]; then
