@@ -329,20 +329,21 @@ def test_unwritable_block_counter_does_not_cancel_the_block(
 
 
 @pytest.mark.parametrize(
-    ("flavour", "exc_name"),
+    ("flavour", "exc_name", "other_exc_name"),
     [
         pytest.param(
             "unreadable lanes dir",
             "PermissionError",
+            "TypeError",
             marks=pytest.mark.skipif(
                 os.geteuid() == 0, reason="mode bits do not bite as root"
             ),
         ),
-        ("non-string cwd", "TypeError"),
+        ("non-string cwd", "TypeError", "PermissionError"),
     ],
 )
 def test_internal_failure_fails_open_but_says_so(
-    tmp_path: Path, flavour: str, exc_name: str
+    tmp_path: Path, flavour: str, exc_name: str, other_exc_name: str
 ) -> None:
     # Two genuine failures in different code paths: listing the lane markers
     # raises PermissionError out of `live_lanes` (the dir is mode 0o000 while
@@ -367,8 +368,9 @@ def test_internal_failure_fails_open_but_says_so(
     assert marked, result.stderr
     assert any("internal error" in line.lower() for line in marked), marked
     # The failure has to be reported, not recited: only a real `except` knows
-    # which exception it caught.
+    # which exception it caught, so the sibling flavour's name must be absent.
     assert any(exc_name in line for line in marked), marked
+    assert not any(other_exc_name in line for line in marked), marked
     assert "Do not end the turn before then." not in result.stderr
 
 
