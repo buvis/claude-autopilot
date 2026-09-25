@@ -80,6 +80,23 @@ def _run(
     )
 
 
+def _run_stdin(stdin: str, cwd: Path) -> subprocess.CompletedProcess[str]:
+    """`_run` with the stdin bytes chosen by the caller, always inside the loop."""
+    env = {
+        "PATH": "/usr/bin:/bin",
+        "HOME": str(Path.home()),
+        "_AUTOPILOT_LOOP": "4242",
+    }
+    return subprocess.run(
+        [sys.executable, str(GUARD)],
+        input=stdin,
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=str(cwd),
+    )
+
+
 def test_live_lanes_block_the_stop_with_the_files_to_await(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     codex_out = str(tmp_path / "review-codex.md")
@@ -230,6 +247,61 @@ def test_lane_without_an_output_file_is_named_but_not_awaited(tmp_path: Path) ->
     assert f"codex (pid {codex.pid}) -> (no -o file)" in err
     assert f"{AWAITER} --budget 100 {gemini_out} in the foreground" in err
     assert "Do not end the turn before then." in err
+
+
+def test_all_lanes_without_output_files_never_ask_for_a_fileless_awaiter(
+    tmp_path: Path,
+) -> None:
+    # Every live marker's second line is empty, so the awaiter has nothing to
+    # await; `await_reviewer_outputs.py --budget 100` with zero files exits 2
+    # and the instruction cannot be followed.
+    repo = _repo(tmp_path)
+    child = _live()
+    try:
+        _mark(repo, child.pid, "codex", "")
+        result = _run(repo, loop=True)
+    finally:
+        _kill(child)
+    assert result.returncode == 2
+    err = result.stderr
+    assert "autopilot: 1 CLI reviewer lane(s) still running:" in err
+    assert f"codex (pid {child.pid}) -> (no -o file)" in err
+    assert "--budget 100" not in err
+    assert "await_reviewer_outputs.py" not in err
+    assert "Do not end the turn before then." in err
+    assert _counter(repo).read_text().strip() == "1"
+
+
+def test_unwritable_block_counter_does_not_cancel_the_block(tmp_path: Path) -> None:
+    # `.lane-guard-blocks` is a directory here, so every write to it raises
+    # OSError. Failing open would end the turn with a live reviewer attached.
+    repo = _repo(tmp_path)
+    _counter(repo).mkdir()
+    codex_out = str(tmp_path / "review-codex.md")
+    child = _live()
+    try:
+        _mark(repo, child.pid, "codex", codex_out)
+        result = _run(repo, loop=True)
+    finally:
+        _kill(child)
+    assert result.returncode == 2
+    err = result.stderr
+    assert "autopilot: 1 CLI reviewer lane(s) still running:" in err
+    assert f"codex (pid {child.pid}) -> {codex_out}" in err
+    assert f"{AWAITER} --budget 100 {codex_out} in the foreground" in err
+    assert "Do not end the turn before then." in err
+    assert _counter(repo).is_dir()
+
+
+def test_internal_failure_fails_open_but_says_so(tmp_path: Path) -> None:
+    # Provoked failure: malformed JSON on stdin, so reading the payload raises.
+    repo = _repo(tmp_path)
+    result = _run_stdin("{not json", repo)
+    assert result.returncode == 0
+    marked = [line for line in result.stderr.splitlines() if "lane_guard" in line]
+    assert marked, result.stderr
+    assert any("internal error" in line.lower() for line in marked), marked
+    assert "Do not end the turn before then." not in result.stderr
 
 
 def test_block_cap_gives_up_loud(tmp_path: Path) -> None:

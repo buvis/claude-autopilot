@@ -60,7 +60,7 @@ def test_guard_stop_on_live_lanes_runs_on_stop() -> None:
     assert coverage[0] < guard[0], commands
 
 
-def test_both_registrations_point_at_pack_relative_files_that_exist() -> None:
+def test_all_guard_registrations_point_at_pack_relative_files_that_exist() -> None:
     pack = HOOKS_JSON.parent.parent
     names = (
         "/hooks/note_session_leave.py",
