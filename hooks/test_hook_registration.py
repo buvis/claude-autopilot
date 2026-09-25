@@ -44,8 +44,20 @@ def test_guard_skill_after_leave_runs_before_every_skill_call() -> None:
 
 
 def test_guard_stop_on_live_lanes_runs_on_stop() -> None:
-    commands = _commands("Stop", None)
-    assert any(c.endswith("/hooks/guard_stop_on_live_lanes.py") for c in commands), commands
+    # Exact python3 command in the matcher-less Stop block, after the coverage hook.
+    blocks = [b for b in _blocks("Stop") if b.get("matcher") is None]
+    assert len(blocks) == 1, blocks
+    hooks = blocks[0].get("hooks", [])
+    commands = [hook["command"] for hook in hooks]
+    guard = [i for i, c in enumerate(commands) if "guard_stop_on_live_lanes.py" in c]
+    coverage = [i for i, c in enumerate(commands) if "review_coverage_hook.py" in c]
+    assert len(guard) == 1 and len(coverage) == 1, commands
+    entry = hooks[guard[0]]
+    assert entry["command"] == (
+        "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/guard_stop_on_live_lanes.py"
+    ), entry
+    assert entry["type"] == "command", entry
+    assert coverage[0] < guard[0], commands
 
 
 def test_both_registrations_point_at_pack_relative_files_that_exist() -> None:
@@ -83,4 +95,6 @@ def test_each_guard_hook_has_a_short_timeout() -> None:
             if hook["command"].endswith(name)
         ]
         assert len(hooks) == 1, (event, matcher, name)
-        assert "timeout" in hooks[0] and hooks[0]["timeout"] <= 5, hooks[0]
+        timeout = hooks[0].get("timeout")
+        assert isinstance(timeout, int) and not isinstance(timeout, bool), hooks[0]
+        assert 0 < timeout <= 5, hooks[0]

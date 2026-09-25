@@ -83,6 +83,23 @@ class ReviewCoverageHookRegistrationTests(unittest.TestCase):
                 f"absent entry here means it never runs",
             )
 
+    def test_every_plugin_owned_handler_is_a_python3_command(self) -> None:
+        # A registration with an unknown type, or a command that is not the
+        # plain interpreter call, never actually runs the handler script.
+        data = json.loads(_HOOKS_JSON.read_text(encoding="utf-8"))
+        for event, blocks in data.get("hooks", {}).items():
+            for block in blocks:
+                for hook in block.get("hooks", []):
+                    self.assertEqual(hook.get("type"), "command", f"{event}: {hook!r}")
+                    command = hook.get("command", "")
+                    self.assertTrue(
+                        command.startswith("python3 ${CLAUDE_PLUGIN_ROOT}/"),
+                        f"{event} command is not a python3 pack call: {command!r}",
+                    )
+                    self.assertEqual(
+                        len(command.split()), 2, f"{event}: {command!r}"
+                    )
+
     def test_registered_commands_point_at_files_that_exist(self) -> None:
         # A registration naming a moved or deleted script fails on every hook
         # firing, and the harness surfaces that as a hook error, not as ours.
