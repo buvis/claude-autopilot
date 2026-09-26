@@ -244,7 +244,10 @@ def test_abort_returns_prds_and_removes_clean_worktrees(
     assert wave_launch.abort(repo, wave_path) == 0
     for name, text in TWO_LANES.items():
         assert (_backlog(repo) / name).read_text(encoding="utf-8") == text
-    in_flight = repo / "dev/local/prds/wip/90007-wip.md"
+    # The in-flight PRD comes back to the main BACKLOG, never the main wip/: a
+    # PRD sitting in the main wip/ is re-selected as already-in-progress against
+    # a state.json that holds no task record for it.
+    in_flight = repo / "dev/local/prds/backlog/90007-wip.md"
     done = repo / "dev/local/prds/done/90008-done.md"
     held = repo / "dev/local/prds/hold/90009-held.md"
     assert in_flight.read_text(encoding="utf-8") == "wip\n"
@@ -259,6 +262,69 @@ def test_abort_returns_prds_and_removes_clean_worktrees(
     assert [
         (each["pid"], each["status"], each["abort_error"]) for each in after["lanes"]
     ] == [(None, "aborted", None), (None, "aborted", None)]
+
+
+def test_abort_returns_each_lifecycle_folder_to_its_main_counterpart(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, wave_path = _launched(tmp_path, monkeypatch, TWO_LANES)
+    worktree = Path(wave.load(wave_path)["lanes"][0]["worktree"])
+    # ONE lane holding PRDs in every lifecycle folder at once: a single abort
+    # lands them all. `wip/` is the mapping under test - an in-flight PRD comes
+    # home to the main BACKLOG, because a PRD in the main wip/ is re-selected as
+    # already-in-progress against a state.json that holds no task record for it.
+    # The main checkout only has backlog/, so each other destination is a
+    # directory abort has to create.
+    mapping = {
+        "wip/90101-in-flight.md": ("backlog", "in flight\n"),
+        "done/90102-finished.md": ("done", "finished\n"),
+        "hold/90103-parked.md": ("hold", "parked\n"),
+    }
+    for source, (_, text) in mapping.items():
+        prd = worktree / "dev/local/prds" / source
+        prd.parent.mkdir(parents=True, exist_ok=True)
+        prd.write_text(text, encoding="utf-8")
+    assert wave_launch.abort(repo, wave_path) == 0
+    for source, (folder, text) in mapping.items():
+        landed = repo / "dev/local/prds" / folder / Path(source).name
+        assert landed.read_text(encoding="utf-8") == text, source
+    assert not (repo / "dev/local/prds/wip/90101-in-flight.md").exists()
+    # the fourth mapping, lane backlog/ -> main backlog/, content and all
+    _assert_finished(repo, wave.load(wave_path)["lanes"][0], TWO_LANES)
+
+
+def test_abort_runs_every_git_call_in_the_repo_but_the_lane_probes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A regression guard, not a bug reproduction: this passes before and after
+    # the fix. Both candidate directories are valid git repos, so a dropped
+    # `cwd=` lets git answer from the wrong tree without ever complaining.
+    repo, wave_path = _launched(tmp_path, monkeypatch, TWO_LANES)
+    lanes = wave.load(wave_path)["lanes"]
+    first, second = (Path(lane["worktree"]) for lane in lanes)
+    calls: list[tuple[list[str], object]] = []
+    assert wave_launch.abort(repo, wave_path, run_git=_recording_git(calls)) == 0
+    assert calls, "abort never called run_git"
+    for args, cwd in calls:
+        assert args[0] != "git", f"the call site prepended git itself: {args}"
+        assert cwd is not None, args
+    # Exactly two calls read a LANE's own tree: its dirtiness probe, one per
+    # lane, and each in the lane being aborted rather than in a sibling's.
+    assert [(args, Path(cwd)) for args, cwd in calls if Path(cwd) != repo] == [
+        (["status", "--porcelain"], first),
+        (["status", "--porcelain"], second),
+    ], calls
+    # Every other call asks about the MAIN checkout, named one by one: the
+    # registry listing, the lane's commit count, the removal, the branch delete.
+    in_repo = [args for args, cwd in calls if Path(cwd) == repo]
+    assert ["worktree", "list", "--porcelain"] in in_repo, in_repo
+    assert any(args[:2] == ["rev-list", "--count"] for args in in_repo), in_repo
+    assert ["worktree", "remove", "--force", str(first)] in in_repo, in_repo
+    assert ["branch", "-D", lanes[0]["branch"]] in in_repo, in_repo
+    assert len(in_repo) + 2 == len(calls), calls
+    _assert_finished(repo, wave.load(wave_path)["lanes"][0], TWO_LANES)
 
 
 def test_abort_keeps_a_worktree_with_commits(
@@ -416,6 +482,36 @@ def test_abort_finishes_every_other_lane_after_one_lane_raises(
     assert any(
         lanes[0]["name"] in line and "worktree" in line for line in masked.splitlines()
     ), masked
+
+
+def test_abort_removes_wave_slots_when_only_the_worktree_cleanup_failed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, wave_path = _launched(tmp_path, monkeypatch, TWO_LANES)
+    slots = _autopilot(repo) / "wave-slots"
+    slots.mkdir()
+    (slots / "slot-1").write_text("taken\n", encoding="utf-8")
+    lanes = wave.load(wave_path)["lanes"]
+    broken = Path(lanes[0]["worktree"])
+    # The fixture cleared every pid, so no process group survived anything here:
+    # only `git worktree remove` failed. The slot dir exists for a LIVE lane to
+    # read, and no lane is live, so it goes - the failure that keeps it is a
+    # SURVIVED KILL, not any failure at all. The other side of the rule is
+    # pinned by `test_abort_leaves_a_lane_whose_group_outlived_sigkill_mid_loop`
+    # below, which restating here would cost another 70s of grace windows.
+    run_git = _breaking_git(str(broken), OSError("worktree is busy"))
+    assert wave_launch.abort(repo, wave_path, run_git=run_git) == 1
+    after = wave.load(wave_path)
+    # the exit code and the lane's own error are untouched by this: only the
+    # shared directory's fate moves
+    assert after["status"] == "abort_failed"
+    failed, finished = after["lanes"]
+    assert failed["status"] == "abort_failed"
+    assert "worktree" in (failed["abort_error"] or ""), failed["abort_error"]
+    assert broken.exists()
+    _assert_finished(repo, finished, TWO_LANES)
+    assert not slots.exists()
 
 
 def test_a_second_abort_retries_only_the_lane_that_failed(
