@@ -124,6 +124,15 @@ def test_launch_refuses_a_checkout_a_live_loop_already_owns(
         # state file at all. The `.bak` suffix also catches a check that merely
         # looks for `state.json` somewhere inside the basename.
         "dev/local/autopilot/state.json.bak",
+        # Four more wrong FILENAMES in that same directory, each one outside any
+        # suffix blacklist: the wave's OWN file, which sits right there; a suffix a
+        # blacklist of `.bak` misses; no extension at all; and the same name under a
+        # different case, which is a different file to a case-sensitive checkout.
+        # Together they leave only a positive `name == "state.json"` check passing.
+        "dev/local/autopilot/wave.json",
+        "dev/local/autopilot/state.json.tmp",
+        "dev/local/autopilot/state",
+        "dev/local/autopilot/State.json",
     ],
 )
 def test_the_cli_reports_a_non_canonical_state_path_instead_of_asserting(

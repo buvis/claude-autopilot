@@ -26,6 +26,12 @@ from cli.test_wave_launch_abort import _launched
 
 _NOTE = "uncommitted change(s), inspect before reusing this worktree"
 
+# The REASON a kept worktree git cannot speak for has to carry: the operator reads
+# a log, so the line has to say why no `git worktree list` line stands beside it.
+# The words are this suite's choice and the implementor's contract - anything that
+# merely prefixes the path leaves the path as unexplained as it is today.
+_UNLISTED = "git does not list it as a worktree"
+
 
 def _listed_line(repo: Path, worktree: Path) -> str:
     """git's own `git worktree list` line for `worktree`, asked of git directly so
@@ -118,3 +124,9 @@ def test_abort_explains_a_kept_worktree_git_does_not_list(
         printed
     )
     assert [line for line in printed if line.strip() == str(kept)] == [], printed
+    # ONE line for this lane, and it EXPLAINS: a prefix alone turns the bare path
+    # into `autopilot: <path>`, which an operator can still only guess at, and two
+    # lines about one kept worktree means the reason lives away from the path.
+    assert len(mentions) == 1, printed
+    assert mentions[0].strip() != f"autopilot: {kept}", mentions[0]
+    assert _UNLISTED in mentions[0], mentions[0]

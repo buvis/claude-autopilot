@@ -15,11 +15,20 @@ another and every wave test basename starts with `test_wave`, so a search over t
 whole script passes while the waves block names nothing; `note` likewise appears
 in the runbook's plan section and in a heading while the abort section says no
 such thing.
+
+Inside their anchor both pins ask for a CLAIM rather than for words. The gate pin
+reads the block's own `pytest` arguments, so a file the block merely talks about
+answers for nothing, and the runbook pin asks two words to share one SENTENCE and
+quotes `_NOTE`, the dirty-worktree note text the sibling suite pins against
+`abort`'s real output - prose that quotes the code cannot drift from it in silence.
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
+
+from cli.test_wave_launch_abort_keep import _NOTE
 
 _ROOT = Path(__file__).resolve().parents[3]
 _RELEASE_CHECKS = _ROOT / "dev" / "bin" / "release-checks"
@@ -56,24 +65,47 @@ def _checks_block(name: str) -> str:
     return "\n".join(body)
 
 
-def _test_paths(block: str) -> set[str]:
-    """The basenames of the test file PATHS `block` hands to pytest."""
-    return {
-        Path(token).name
-        for token in block.split()
-        if "/" in token and token.endswith(".py")
-    }
+def _pytest_paths(block: str) -> list[str]:
+    """The test file paths `block` hands to the RUNNER: the arguments of each of
+    its `-m pytest` lines, following the `\\` continuations that carry the rest of
+    the invocation. A token anywhere else in the block - an `echo`, a skip list, a
+    variable - names a file the gate talks about but does not run."""
+    args: list[str] = []
+    following = False
+    for line in block.splitlines():
+        if "-m pytest" in line:
+            args.extend(line.split("-m pytest", 1)[1].split())
+        elif following:
+            args.extend(line.split())
+        else:
+            continue
+        following = line.rstrip().endswith("\\")
+    return [token for token in args if token.endswith(".py")]
 
 
 def test_the_release_gate_runs_every_wave_test_file() -> None:
-    # Taken from the waves block alone and compared basename-to-basename against
-    # that block's own path tokens, so neither another block's pytest line nor a
-    # longer name that merely starts the same way answers for a missing file.
-    named = _test_paths(_checks_block("waves"))
+    # Taken from the waves block's own pytest invocation alone, so a file the block
+    # merely mentions - in an echo, or in a line announcing it as skipped - does not
+    # answer for a file the gate runs.
+    paths = _pytest_paths(_checks_block("waves"))
+    named = {Path(path).name for path in paths}
     for basename in _WAVE_TEST_FILES:
         assert basename in named, (
             f"{_RELEASE_CHECKS}: the `[checks] waves` block does not run {basename}"
         )
+    # EQUALITY, not containment: a stray or misspelled path in the invocation is a
+    # wave file the gate thinks it runs and does not, which is the same hole as an
+    # omitted one.
+    assert named == set(_WAVE_TEST_FILES), (
+        f"{_RELEASE_CHECKS}: the `[checks] waves` block runs "
+        f"{sorted(named - set(_WAVE_TEST_FILES))} on top of the wave test files"
+    )
+    absent = [path for path in paths if not (_ROOT / path).is_file()]
+    assert absent == [], (
+        f"{_RELEASE_CHECKS}: the `[checks] waves` block names {absent}, which is "
+        "not a file in this checkout - pytest would fail on the path, or worse, "
+        "collect nothing"
+    )
 
 
 _ABORT_HEADING = "## `autopilot wave abort`"
@@ -98,19 +130,57 @@ def _abort_keep_region() -> str:
     return section[section.index(_KEEP_ANCHOR) :]
 
 
+def _sentences(region: str) -> list[str]:
+    """`region` split on end punctuation followed by whitespace, so `wave.json` and
+    `base_sha` stay inside their sentence. Two words in one SENTENCE is a pin on one
+    claim; the same two words anywhere in the region is satisfied by a claim and its
+    opposite standing side by side."""
+    return [sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", region)]
+
+
+def _claims(sentences: list[str], anchor: str, *marks: str) -> list[str]:
+    """The sentences of `sentences` holding `anchor` together with one of `marks`."""
+    return [
+        sentence
+        for sentence in sentences
+        if anchor in sentence and any(mark in sentence for mark in marks)
+    ]
+
+
 def test_the_runbook_matches_what_abort_prints_for_a_kept_worktree() -> None:
     region = _abort_keep_region().lower()
+    sentences = _sentences(region)
     # The wrong claim this guards against, as the runbook words it today: "...or
     # the worktree has uncommitted changes. The reason is printed - those PRDs are
     # the only record of what the lane was doing." No reason is printed for a
     # worktree git lists: git's own `worktree list` line is the output there, and
     # only the dirty case adds a note on top of it.
     assert "the reason is printed" not in region, region
-    assert "worktree list" in region, (
-        f"{_WAVES}: § wave abort does not say git's own `worktree list` line is "
-        "what gets printed for a kept worktree git lists"
+    # The claim, in one sentence, that the listing is abort's OWN output: an
+    # instruction to run `git worktree list` yourself afterwards is the opposite of
+    # this requirement and reads as satisfying it word for word.
+    assert _claims(sentences, "worktree list", "print", "reports"), (
+        f"{_WAVES}: § wave abort does not say, in one sentence, that git's own "
+        "`worktree list` line is what abort PRINTS for a kept worktree git lists"
     )
-    assert "note" in region, (
-        f"{_WAVES}: § wave abort does not say that only a dirty worktree gets an "
-        "added note"
+    # ...and the note claim scoped to the dirty case, in one sentence.
+    assert _claims(sentences, "note", "uncommitted", "dirty"), (
+        f"{_WAVES}: § wave abort does not say that the added note belongs to the "
+        "dirty worktree"
+    )
+    # The inverse claims, banned outright: either would make the runbook wrong while
+    # leaving every word the pins above look for in place.
+    for lie in ("nothing is printed", "nothing at all is printed"):
+        assert lie not in region, region
+    assert _claims(sentences, "note", "clean") == [], (
+        f"{_WAVES}: § wave abort ties the added note to a CLEAN worktree - a clean "
+        "one adds no second line at all, so state the note positively: only a dirty "
+        "worktree gets one"
+    )
+    # Strongest of the lot: the note's own text, owned by the code and pinned
+    # against abort's real output by `_NOTE`'s sibling tests. Prose quoting it
+    # cannot drift from the code without this failing.
+    assert _NOTE in region, (
+        f"{_WAVES}: § wave abort does not quote the note abort really prints "
+        f"({_NOTE!r}), so the runbook can drift from the code in silence"
     )
