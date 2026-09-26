@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **run-autopilot**: `autopilot wave abort` now refuses a `wave.json` whose lane `pid` is not a real process group - `0`, `1`, any negative, or `2**31` and above - before it signals anything, so a hand-edited or corrupted control file can no longer make `os.killpg` signal the operator's own shell or the autopilot loop itself (`pid: 0`), broadcast to every signalable process (`pid: 1`), kill an unrelated process (`pid: -5`), or crash mid-abort with an uncaught `OverflowError`. `base_sha` is validated in the same table, so a hand edit that drops the key no longer raises an uncaught `KeyError` after the lane has been killed and before any cleanup runs
+
 ## [0.5.6] - 2026-09-26
 
 ### Added

@@ -277,6 +277,7 @@ _TOP_CHECKS = {
     "status": lambda v: v in WAVE_STATUSES,
     "lanes": lambda v: isinstance(v, list) and bool(v),
     "review_slots": lambda v: _is_int(v) and v > 0,
+    "base_sha": lambda v: v is None or isinstance(v, str),
 }
 _LANE_CHECKS = {
     "name": lambda v: isinstance(v, str),
@@ -286,7 +287,9 @@ _LANE_CHECKS = {
     "prds": lambda v: isinstance(v, list) and bool(v) and all(map(_is_basename, v)),
     "paths": lambda v: True,
     "status": lambda v: v in LANE_STATUSES,
-    "pid": lambda v: v is None or _is_int(v),
+    # A real pgid: 0 is the caller's own group, 1 is kill(-1)'s broadcast, and
+    # 2**31 or more raises OverflowError out of os.killpg. abort() signals this.
+    "pid": lambda v: v is None or (_is_int(v) and 1 < v < 2**31),
     "started_at": lambda v: True,
     "worktree_created": lambda v: isinstance(v, bool),
     "abort_error": lambda v: True,
