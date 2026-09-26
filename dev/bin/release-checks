@@ -100,3 +100,10 @@ uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_lane.py \
   skills/run-autopilot/cli/test_lane_cli.py \
   skills/run-autopilot/scripts/test_lane_prose.py
+
+echo "[checks] waves"
+uv run --no-project --with pytest python -m pytest -q \
+  skills/run-autopilot/cli/test_wave.py \
+  skills/run-autopilot/cli/test_wave_launch.py \
+  skills/run-autopilot/cli/test_wave_launch_status.py \
+  skills/run-autopilot/cli/test_wave_launch_abort.py

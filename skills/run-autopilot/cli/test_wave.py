@@ -691,3 +691,36 @@ def test_structural_errors_rejects_a_branch_off_the_canonical_name() -> None:
     errors = wave._structural_errors(REPO, broken)
     assert len(errors) == 1, errors
     assert errors[0].startswith("lane l1: branch"), errors
+
+
+# ── the docs ─────────────────────────────────────────────────────────────────
+
+_SKILL = Path(__file__).resolve().parent.parent / "SKILL.md"
+
+
+def _skill_section(heading: str) -> str:
+    """SKILL.md's text under `heading`, up to the next heading of any level."""
+    text = _SKILL.read_text(encoding="utf-8")
+    body = text[text.index(f"\n{heading}\n") + len(heading) + 2 :]
+    end = body.find("\n#")
+    return body if end == -1 else body[:end]
+
+
+def test_docs_name_the_wave_files() -> None:
+    # Anchored on the headings that must carry them: the same strings elsewhere
+    # in SKILL.md do not satisfy these pins.
+    retention = _skill_section("### Retention")
+    (disposable,) = [
+        line for line in retention.splitlines() if line.startswith("- **Disposable**")
+    ]
+    for path in (
+        "`dev/local/autopilot/wave.json`",
+        "`dev/local/autopilot/wave-slots/`",
+    ):
+        assert path in disposable, (
+            f"{_SKILL}: the § Retention Disposable list does not name {path}"
+        )
+    references = _skill_section("## Reference Files")
+    assert any(
+        line.startswith("- `references/waves.md`") for line in references.splitlines()
+    ), f"{_SKILL}: § Reference Files does not point at `references/waves.md`"
