@@ -13,6 +13,11 @@ wave was planned and launched for real (a recording spawn, no loop started):
 each lane commits into its own worktree, then its pid is swapped for a dead
 one and its state.json says drained or unfinished. Only `release-checks` is
 faked, through the `run_checks` seam.
+
+What `assemble` does after the merge - `migrate_lane`, a merged lane's
+worktree removal and the written report - is proved in the sibling
+cli/test_wave_assemble_migrate.py, which reuses the fixtures below: run both
+files.
 """
 
 from __future__ import annotations
@@ -178,6 +183,97 @@ def test_summary_shows_none_when_no_integrator_notes() -> None:
     text = wave_assemble.summary(wave, [], [])
     heading_index = text.index("## Integrator notes")
     assert "(none)" in text[heading_index:]
+
+
+# ── summary: the report header ───────────────────────────────────────────
+
+
+def test_summary_opens_with_the_base_and_the_assembled_head() -> None:
+    wave = {
+        **_wave(lanes=[_lane("l1", ["00215-foo-v1.md"])]),
+        "base_branch": "wip/waves",
+        "base_sha": "abcdef0",
+        "assembly": {
+            "worktree": "/tmp/proj-wave-202609261200",
+            "branch": "wave/202609261200/assembly",
+            "head_sha": "fedcba9",
+            "merged": ["l1"],
+            "kept": [],
+        },
+    }
+    text = wave_assemble.summary(wave, [], [])
+    header = text[: text.index("## PRDs")]
+    for token in (
+        "202609261200",
+        "wip/waves",
+        "abcdef0",
+        "wave/202609261200/assembly",
+        "fedcba9",
+    ):
+        assert token in header, header
+
+
+# ── summary: the lane table ──────────────────────────────────────────────
+
+
+def test_summary_tables_each_lane_with_its_branch_status_and_batch() -> None:
+    # Neither branch name carries its own lane's name, so a missing lane-name
+    # column cannot pass on the branch column's coat-tails.
+    wave = _wave(
+        lanes=[
+            _lane(
+                "l1",
+                ["00215-foo-v1.md"],
+                branch="wave/202609261200/alpha",
+                paths=["cli/foo.py"],
+                files=["cli/foo.py", "cli/test_foo.py"],
+                batch_id="202609260900",
+            ),
+            _lane(
+                "l2",
+                ["00216-bar-v1.md"],
+                status="conflict",
+                branch="wave/202609261200/beta",
+                paths=["cli/bar.py"],
+                files=["cli/bar.py"],
+                batch_id="202609261000",
+            ),
+        ],
+    )
+    text = wave_assemble.summary(wave, [], [])
+
+    def row(branch: str) -> str:
+        """The single table line that is this lane's row."""
+        matching = [line for line in text.splitlines() if branch in line]
+        assert len(matching) == 1, matching
+        return matching[0]
+
+    first = row("wave/202609261200/alpha")
+    second = row("wave/202609261200/beta")
+    for token in ("l1", "00215-foo-v1.md", "cli/foo.py", "assembled", "202609260900"):
+        assert token in first, first
+    for token in ("l2", "00216-bar-v1.md", "cli/bar.py", "conflict", "202609261000"):
+        assert token in second, second
+
+
+# ── summary: the totals ──────────────────────────────────────────────────
+
+
+def test_summary_totals_the_sessions_wall_hours_and_captured_cost() -> None:
+    wave = _wave(lanes=[_lane("l1", ["00215-foo-v1.md"])])
+    # Four sessions, 9000 wall seconds (2.5 hours), one captured cost (1.5):
+    # a row may carry no cost at all, and a row may carry no wall time either.
+    rows = [
+        {"prd": "00215-foo-v1.md", "wall_secs": 5400, "cost_usd": 1.5},
+        {"prd": "00215-foo-v1.md", "wall_secs": 3600, "cost_usd": None},
+        {"prd": "00215-foo-v1.md", "wall_secs": 0},
+        {"prd": "00215-foo-v1.md"},
+    ]
+    text = wave_assemble.summary(wave, rows, [])
+    # Nothing else this report renders carries these digit runs.
+    assert "2.5" in text, text
+    assert "1.5" in text, text
+    assert "4" in text, text
 
 
 # ── assemble: fixtures ───────────────────────────────────────────────────
