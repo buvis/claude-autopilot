@@ -51,5 +51,9 @@ def run(args: argparse.Namespace, repo: Path, wave_path: Path) -> int:
         except subprocess.CalledProcessError as err:
             print(f"autopilot: {err}", file=sys.stderr)
             return 1
-    # `status` and `abort` are wired by the next task, here in this function.
-    return 0
+    if args.verb == "status":
+        print(wave_launch.status(repo, loaded))
+        return 0
+    # `abort` is the last verb the parser accepts, and it reloads wave.json under
+    # its own lock too.
+    return wave_launch.abort(repo, wave_path)

@@ -8,10 +8,13 @@ every lane's paths from the backlog as it stands NOW, before anything is created
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
+import time
 from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
@@ -262,3 +265,273 @@ def lane_status(lane: dict) -> str:
     if isinstance(state, dict) and state.get("next_phase") == "":
         return "drained"
     return "unfinished"
+
+
+# ── status ───────────────────────────────────────────────────────────────────
+
+_STATUS_HEADERS = (
+    "lane",
+    "pid",
+    "prd",
+    "phase",
+    "next_phase",
+    "backlog",
+    "wip",
+    "done",
+    "hold",
+    "phase_end",
+    "signal",
+    "status",
+    "abort_error",
+)
+_LIFECYCLE = ("backlog", "wip", "done", "hold")
+
+
+def _dashed(value: object) -> str:
+    """A cell that always prints something: an empty one collapses when a reader
+    splits the row on whitespace, and then no column can be told from the next."""
+    text = "" if value is None else str(value)
+    return text or "-"
+
+
+def _last_metrics(worktree: Path) -> dict:
+    """The last PARSEABLE line of the lane's metrics ledger. A half-written final
+    line is skipped, never fatal: the loop appends to this file while we read it."""
+    ledger = worktree / "dev/local/autopilot/ledger/loop-metrics.jsonl"
+    if not ledger.exists():
+        return {}
+    last: dict = {}
+    for line in ledger.read_text(encoding="utf-8").splitlines():
+        try:
+            parsed = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(parsed, dict):
+            last = parsed
+    return last
+
+
+def _lane_row(lane: dict) -> list[str]:
+    """One lane's cells in `_STATUS_HEADERS` order. The pid, the status and the
+    abort_error come from wave.json, so they survive a worktree that is gone -
+    dashing the pid there would leave an operator nothing to kill."""
+    worktree = Path(lane["worktree"])
+    on_disk = worktree.exists()
+    state = _load_json(worktree / "dev/local/autopilot/state.json") if on_disk else None
+    state = state if isinstance(state, dict) else {}
+    metrics = _last_metrics(worktree) if on_disk else {}
+    counts = (
+        [
+            str(len(list((worktree / "dev/local/prds" / folder).glob("*.md"))))
+            for folder in _LIFECYCLE
+        ]
+        if on_disk
+        else ["-"] * len(_LIFECYCLE)
+    )
+    return [
+        lane["name"],
+        _dashed(lane["pid"]),
+        _dashed(state.get("prd")),
+        _dashed(state.get("phase")),
+        _dashed(state.get("next_phase")),
+        *counts,
+        _dashed(metrics.get("phase_end")),
+        _dashed(metrics.get("signal")),
+        lane_status(lane) if on_disk else lane["status"],
+        _dashed(lane["abort_error"]),
+    ]
+
+
+def status(repo: Path, wave: dict) -> str:
+    """The wave as a table: a header row, then one row per lane. Read-only - no
+    lock is taken, and neither the dict nor wave.json is touched."""
+    rows = [list(_STATUS_HEADERS), *(_lane_row(lane) for lane in wave["lanes"])]
+    widths = [max(len(row[index]) for row in rows) for index in range(len(rows[0]))]
+    return "\n".join(
+        "  ".join(
+            cell.ljust(width) for cell, width in zip(row, widths, strict=True)
+        ).rstrip()
+        for row in rows
+    )
+
+
+# ── abort ────────────────────────────────────────────────────────────────────
+
+
+def _pgid_alive(pgid: int) -> bool:
+    """`_pid_alive`'s convention for a process GROUP: only `ProcessLookupError`
+    means gone, any other `OSError` (EPERM) means it is there but unsignalable. A
+    group outlives its reaped leader, which a single-pid probe cannot see."""
+    try:
+        os.killpg(pgid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True
+    return True
+
+
+def _wait_for_exit(pgid: int, timeout: float) -> bool:
+    """True once the group is gone, polled once a second. POLLED, not slept out:
+    the wave lock is held here, so a dead group must not cost the full window."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not _pgid_alive(pgid):
+            return True
+        time.sleep(1)
+    return not _pgid_alive(pgid)
+
+
+def _kill_lane(lane: dict, kill_fn: Callable[[int, int], object]) -> str | None:
+    """SIGTERM the lane's group, then SIGKILL it if it outlives the 60s grace.
+    None once the group is gone; the failure to record when it is still there.
+    `lane["pid"]` IS the pgid: the loop was spawned as its own session leader."""
+    pgid = lane["pid"]
+    if pgid is None or not _pgid_alive(pgid):
+        return None
+    kill_fn(pgid, signal.SIGTERM)
+    if _wait_for_exit(pgid, 60):
+        return None
+    kill_fn(pgid, signal.SIGKILL)
+    if _wait_for_exit(pgid, 10):
+        return None
+    return f"process group {pgid} survived SIGKILL"
+
+
+def _worktree_branches(repo: Path, run_git: Callable[..., object]) -> dict[str, str]:
+    """git's own worktree registry: path -> full branch ref. A detached block has
+    no `branch` line, so it lands nowhere and can never match a lane."""
+    listing = run_git(["worktree", "list", "--porcelain"], cwd=repo).stdout
+    registry: dict[str, str] = {}
+    for block in listing.split("\n\n"):
+        fields = dict(line.split(" ", 1) for line in block.splitlines() if " " in line)
+        if "worktree" in fields and "branch" in fields:
+            registry[fields["worktree"]] = fields["branch"]
+    return registry
+
+
+def _keep_reason(
+    repo: Path,
+    wave: dict,
+    lane: dict,
+    registry: dict[str, str],
+    run_git: Callable[..., object],
+) -> str | None:
+    """Why this lane's worktree must stay, None when it is this wave's to remove.
+    Ownership takes TWO signals - the lane's own flag and git's registry - and a
+    worktree holding commits or uncommitted work is never removed."""
+    if not lane["worktree_created"]:
+        return "this wave never recorded creating it"
+    if registry.get(lane["worktree"]) != f"refs/heads/{lane['branch']}":
+        return f"git no longer has it checked out on {lane['branch']}"
+    spec = f"{wave['base_sha']}..{lane['branch']}"
+    commits = run_git(["rev-list", "--count", spec], cwd=repo).stdout.strip()
+    if commits != "0":
+        return f"{commits} commit(s) on {lane['branch']}, not merged anywhere"
+    dirty = run_git(["status", "--porcelain"], cwd=Path(lane["worktree"])).stdout
+    if dirty.strip():
+        return (
+            f"{len(dirty.splitlines())} uncommitted change(s), inspect before"
+            " reusing this worktree"
+        )
+    return None
+
+
+def _return_prds(repo: Path, worktree: Path) -> None:
+    """Every PRD the lane still holds, back into the main checkout's own lifecycle
+    folder. A wave is aborted mid-PRD, so wip/ is walked like the rest."""
+    for folder in _LIFECYCLE:
+        target = repo / "dev/local/prds" / folder
+        for prd in sorted((worktree / "dev/local/prds" / folder).glob("*.md")):
+            target.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(prd), str(target / prd.name))
+
+
+def _clean_up_lane(
+    repo: Path,
+    wave: dict,
+    lane: dict,
+    registry: dict[str, str],
+    run_git: Callable[..., object],
+) -> None:
+    """Return the lane's PRDs and drop the worktree and branch this wave cut. A
+    worktree that is not ours, or that holds work, keeps its PRDs too: they are
+    the only record of what that lane was doing."""
+    reason = _keep_reason(repo, wave, lane, registry, run_git)
+    if reason is not None:
+        worktree = Path(lane["worktree"])
+        if worktree.exists():
+            print(f"autopilot: keeping {worktree}: {reason}")
+        return
+    _return_prds(repo, Path(lane["worktree"]))
+    run_git(["worktree", "remove", "--force", lane["worktree"]], cwd=repo)
+    run_git(["branch", "-D", lane["branch"]], cwd=repo)
+
+
+def _abort_lane(
+    repo: Path,
+    wave: dict,
+    lane: dict,
+    registry: dict[str, str],
+    run_git: Callable[..., object],
+    kill_fn: Callable[[int, int], object],
+) -> bool:
+    """One lane's whole abort; True when it did not finish. A lane whose group
+    survived keeps its pid and status - it is still running - and its files are
+    left alone. Every other failure is per-lane, so the next lane still runs."""
+    survived = _kill_lane(lane, kill_fn)
+    if survived is not None:
+        lane["abort_error"] = survived
+        print(f"autopilot: lane {lane['name']}: {survived}", file=sys.stderr)
+        return True
+    lane["pid"] = None
+    try:
+        _clean_up_lane(repo, wave, lane, registry, run_git)
+    except (OSError, subprocess.CalledProcessError) as err:
+        lane["status"] = "abort_failed"
+        lane["abort_error"] = f"worktree cleanup failed: {err}"
+        print(
+            f"autopilot: lane {lane['name']}: worktree cleanup failed: {err}",
+            file=sys.stderr,
+        )
+        return True
+    lane["status"] = "aborted"
+    lane["abort_error"] = None
+    return False
+
+
+def abort(
+    repo: Path,
+    wave_path: Path,
+    *,
+    run_git: Callable[..., object] = _default_run_git,
+    kill_fn: Callable[[int, int], object] = os.killpg,
+) -> int:
+    """Kill every lane's loop, return its PRDs and remove the worktrees this wave
+    cut; 0 when every lane finished. The lock is held for the whole body, and the
+    wave is reloaded under it."""
+    with locked(wave_path):
+        wave = load(wave_path)
+        violations = _structural_errors(repo, wave)
+        if violations:
+            for violation in violations:
+                print(f"autopilot: {violation}", file=sys.stderr)
+            print("autopilot: refusing to touch this wave.json", file=sys.stderr)
+            return 1
+        registry = _worktree_branches(repo, run_git)
+        failed = False
+        for lane in sorted(wave["lanes"], key=lambda each: each["order"]):
+            failed = _abort_lane(repo, wave, lane, registry, run_git, kill_fn) or failed
+            save(wave_path, wave)
+        # A lane that survived its kill still reads this directory, so it goes
+        # only once every lane has finished - and only if a loop ever made it.
+        slots = repo / "dev/local/autopilot/wave-slots"
+        if not failed and slots.exists():
+            try:
+                shutil.rmtree(slots)
+            except OSError as err:
+                print(f"autopilot: could not remove {slots}: {err}", file=sys.stderr)
+                failed = True
+        wave["status"] = "abort_failed" if failed else "aborted"
+        save(wave_path, wave)
+        return 1 if failed else 0
