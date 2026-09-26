@@ -16,7 +16,6 @@ from cli import wave, wave_launch
 
 
 def add(subparsers) -> None:
-    """Register `wave` and its verbs; every verb takes an optional `--state`."""
     p = subparsers.add_parser("wave")
     verbs = p.add_subparsers(dest="verb", required=True)
     plan = verbs.add_parser("plan")
@@ -27,7 +26,6 @@ def add(subparsers) -> None:
 
 
 def run(args: argparse.Namespace, repo: Path, wave_path: Path) -> int:
-    """Dispatch one wave verb against `wave_path`."""
     if args.verb == "plan":
         return wave.plan(repo, wave_path, args.max_lanes)
     # Read once for the two friendly early messages only: `launch` reloads

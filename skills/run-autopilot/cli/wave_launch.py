@@ -33,11 +33,6 @@ CLI_MAIN_PATH = Path(__file__).resolve().parent / "__main__.py"
 _SPAWN_CMD = 'export _AUTOPILOT_LOOP=$$; exec python3 "$0" loop'
 
 
-def _default_spawn(cmd: list[str], **kwargs: object) -> subprocess.Popen:
-    """Start a lane loop detached; the handle only has to expose `.pid`."""
-    return subprocess.Popen(cmd, **kwargs)
-
-
 def _default_run_git(
     args: list[str],
     cwd: Path | None = None,
@@ -185,7 +180,6 @@ def _spawn_lane(
     review_slots: int,
     spawn_fn: Callable[..., object],
 ) -> object:
-    """Start the lane's loop, its output appended to the lane's wrapper.log."""
     env = {k: v for k, v in os.environ.items() if k != "_AUTOPILOT_LOOP"}
     env["_AUTOPILOT_REVIEW_SLOTS_DIR"] = str(repo / "dev/local/autopilot/wave-slots")
     env["_AUTOPILOT_REVIEW_SLOTS"] = str(review_slots)
@@ -232,7 +226,7 @@ def launch(
     repo: Path,
     wave_path: Path,
     *,
-    spawn_fn: Callable[..., object] = _default_spawn,
+    spawn_fn: Callable[..., object] = subprocess.Popen,
     run_git: Callable[..., object] = _default_run_git,
 ) -> int:
     """Launch every lane of the planned wave; 0 when all of them started. The
