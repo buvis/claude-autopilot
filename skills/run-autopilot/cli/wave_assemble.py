@@ -9,17 +9,19 @@ are pure - no disk, no git.
 
 from __future__ import annotations
 
+import re
+
+WAVE_ASSEMBLY_BRANCH_FMT = "wave/{wave_id}/assembly"
+WAVE_ASSEMBLY_WORKTREE_FMT = "{repo_parent}/{repo_name}-wave-{wave_id}"
+_CONFLICT_MARKERS = re.compile(r"^(<{7}(?: .*)?|={7}|>{7}(?: .*)?)$", re.MULTILINE)
+
 
 def keep_both(text: str) -> str:
     """Strip git's conflict marker lines, keeping both sides of every hunk."""
     return "".join(
         line
         for line in text.splitlines(keepends=True)
-        if not (
-            line.startswith("<<<<<<<")
-            or line.startswith("=======")
-            or line.startswith(">>>>>>>")
-        )
+        if not _CONFLICT_MARKERS.match(line.rstrip("\n"))
     )
 
 
