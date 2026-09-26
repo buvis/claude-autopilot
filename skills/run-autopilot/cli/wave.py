@@ -35,7 +35,7 @@ LANE_STATUSES = (
     "checks_failed",
     "unfinished",
 )
-WAVE_STATUSES = (*LANE_STATUSES, "done")
+WAVE_STATUSES = (*LANE_STATUSES, "done", "assembled_partial")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -211,7 +211,7 @@ def _reject_existing_wave(repo: Path, wave_path: Path) -> bool:
             file=sys.stderr,
         )
         return True
-    if existing["status"] not in ("done", "aborted"):
+    if existing["status"] not in ("done", "aborted", "assembled", "assembled_partial"):
         print(
             f"autopilot: wave {existing['id']} is still {existing['status']};"
             " abort it before planning a new one",
@@ -303,6 +303,26 @@ _LANE_CHECKS = {
     "worktree_created": lambda v: isinstance(v, bool),
     "abort_error": lambda v: True,
 }
+# Optional: validated only when the field is present (assembly writes them).
+_LANE_OPTIONAL_CHECKS = {
+    "files": lambda v: v is None
+    or (isinstance(v, list) and all(isinstance(p, str) for p in v)),
+    "integrator_notes": lambda v: v is None
+    or (
+        isinstance(v, list)
+        and all(
+            isinstance(n, dict)
+            and isinstance(n.get("sha"), str)
+            and isinstance(n.get("text"), str)
+            for n in v
+        )
+    ),
+    "migrated_at": lambda v: v is None or isinstance(v, str),
+    "conflict_detail": lambda v: v is None or isinstance(v, str),
+    "conflict_paths": lambda v: v is None
+    or (isinstance(v, list) and all(isinstance(p, str) for p in v)),
+    "worktree_removed": lambda v: v is None or isinstance(v, bool),
+}
 
 
 def _collect_shape_errors(repo: Path, wave: dict) -> list[str]:
@@ -328,6 +348,11 @@ def _collect_shape_errors(repo: Path, wave: dict) -> list[str]:
             f"lane {label}: malformed field {field}"
             for field, ok in _LANE_CHECKS.items()
             if field not in each or not ok(each[field])
+        ]
+        errors += [
+            f"lane {label}: malformed field {field}"
+            for field, ok in _LANE_OPTIONAL_CHECKS.items()
+            if field in each and not ok(each[field])
         ]
     return errors
 
