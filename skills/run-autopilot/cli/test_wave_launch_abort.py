@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Tests for cli/wave_launch.py's status/abort and their wave verbs (PRD 00214).
+"""Tests for cli/wave_launch.py's `_pgid_alive`/`abort` and the `wave abort` verb
+(PRD 00214).
 
 Every proof runs against a throwaway `git init` repo under `tmp_path`, never this
 checkout's own backlog or `dev/local/autopilot/wave.json`. No real loop is ever
@@ -8,36 +9,32 @@ cleared, except the tests that need a live process group of their own, each of
 which reaps that group in a `finally`.
 
 The launch-side helpers live in the sibling `test_wave_launch` module; this file
-imports them rather than restating them.
-
-`status` renders a table, and these tests read it one cell at a time: each field
-the contract lists (lane name, pid, state.prd, phase, next_phase, one count per
-lifecycle dir, phase_end, signal, lane_status, abort_error) is its own cell,
-separated by whitespace or a "|", and every row is the same width.
+imports them rather than restating them. `status`'s own tests live in the sibling
+`test_wave_launch_status` module, which imports `_launched` from here.
 """
 
 from __future__ import annotations
 
 import contextlib
-import copy
 import os
 import signal
 import subprocess
 import sys
+import threading
+import time
 from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
-from cli import wave, wave_cli, wave_launch
+from cli import loop_gates, wave, wave_cli, wave_launch
 from cli.test_wave_launch import (
-    ONE_LANE,
     TWO_LANES,
     _autopilot,
     _backlog,
-    _dead_pid,
     _FakeSpawn,
     _git,
+    _lock_is_held,
     _parse,
     _planned,
     _recording_git,
@@ -60,18 +57,6 @@ _LEADER_SRC = (
 )
 
 
-def _cells(line: str) -> list[str]:
-    """One rendered table line split into its cells."""
-    return line.replace("|", " ").split()
-
-
-def _row(rendered: str, name: str) -> list[str]:
-    """The cells of the one rendered row that names lane `name`."""
-    rows = [cells for line in rendered.splitlines() if name in (cells := _cells(line))]
-    assert len(rows) == 1, rendered
-    return rows[0]
-
-
 def _group_alive(pgid: int) -> bool:
     """The `os.killpg(pgid, 0)` probe itself - never the leader pid, never pgrep."""
     try:
@@ -79,6 +64,16 @@ def _group_alive(pgid: int) -> bool:
     except ProcessLookupError:
         return False
     return True
+
+
+def _group_gone(pgid: int, timeout: float = 30) -> bool:
+    """True once the last member of the group has exited and been reaped."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not _group_alive(pgid):
+            return True
+        time.sleep(0.05)
+    return False
 
 
 def _launched(
@@ -98,22 +93,14 @@ def _launched(
     return repo, wave_path
 
 
-def _lane_state(worktree: Path, state: str, metrics: list[str]) -> None:
-    """A lane worktree's own loop state and metrics ledger."""
-    _autopilot(worktree).mkdir(parents=True, exist_ok=True)
-    (_autopilot(worktree) / "state.json").write_text(state, encoding="utf-8")
-    ledger = _autopilot(worktree) / "ledger"
-    ledger.mkdir(parents=True, exist_ok=True)
-    (ledger / "loop-metrics.jsonl").write_text("".join(metrics), encoding="utf-8")
-
-
-def _lane_prds(worktree: Path, counts: dict[str, int]) -> None:
-    """`counts[folder]` PRD files in each of a worktree's lifecycle dirs."""
-    for folder, count in counts.items():
-        lifecycle = worktree / "dev" / "local" / "prds" / folder
-        lifecycle.mkdir(parents=True, exist_ok=True)
-        for index in range(count):
-            (lifecycle / f"9000{index}-{folder}.md").write_text("x\n", encoding="utf-8")
+def _assert_finished(repo: Path, lane: dict, prds: dict[str, str]) -> None:
+    """Every fact that makes ONE lane's abort complete: no pid, no worktree, no
+    branch, and its PRDs back in the main backlog byte-for-byte."""
+    assert (lane["pid"], lane["status"], lane["abort_error"]) == (None, "aborted", None)
+    assert not Path(lane["worktree"]).exists()
+    assert _git(repo, "branch", "--list", lane["branch"]).stdout.strip() == ""
+    for prd in lane["prds"]:
+        assert (_backlog(repo) / prd).read_text(encoding="utf-8") == prds[prd]
 
 
 def _breaking_git(needle: str, boom: Exception) -> Callable[..., object]:
@@ -137,108 +124,26 @@ def _breaking_git(needle: str, boom: Exception) -> Callable[..., object]:
 # ── _pgid_alive ──────────────────────────────────────────────────────────────
 
 
-def test_pgid_alive_probes_the_group_not_a_single_pid() -> None:
-    live = subprocess.Popen(
-        [sys.executable, "-c", "import time; time.sleep(120)"],
+def test_pgid_alive_probes_the_group_not_a_single_pid(tmp_path: Path) -> None:
+    marker = tmp_path / "child.json"
+    leader = subprocess.Popen(
+        [sys.executable, "-c", _LEADER_SRC, _CHILD_SRC, str(marker)],
         start_new_session=True,
     )
     try:
-        # start_new_session made it its own group leader, so pid == pgid.
-        assert wave_launch._pgid_alive(live.pid) is True
+        assert leader.wait(30) == 0
+        child = _spawned_record(marker)["pid"]
+        assert child != leader.pid
+        # The leader has exited and been reaped, so its pid is gone - but the
+        # group it led still holds the child. Only a GROUP probe can see that:
+        # a single-pid probe on the same number says the opposite.
+        assert loop_gates._pid_alive(leader.pid) is False
+        assert wave_launch._pgid_alive(leader.pid) is True
     finally:
-        live.kill()
-        live.wait(30)
-    assert wave_launch._pgid_alive(live.pid) is False
-
-
-# ── status ───────────────────────────────────────────────────────────────────
-
-
-def test_status_derives_drained_from_a_dead_pid_and_empty_next_phase(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    repo, wave_path = _planned(tmp_path, monkeypatch, ONE_LANE, max_lanes=1)
-    loaded = wave.load(wave_path)
-    lane = loaded["lanes"][0]
-    lane["pid"] = _dead_pid()
-    lane["status"] = "running"
-    _lane_state(
-        Path(lane["worktree"]),
-        '{"prd": "00001-a.md", "phase": "work", "next_phase": ""}',
-        [
-            '{"phase_end": "plan", "signal": "stale-amber"}\n',
-            '{"phase_end": "review", "signal": "fresh-green"}\n',
-            "{not json\n",
-        ],
-    )
-    _lane_prds(Path(lane["worktree"]), {"backlog": 2, "wip": 1, "done": 3, "hold": 0})
-    rendered = wave_launch.status(repo, loaded)
-    cells = _row(rendered, lane["name"])
-    assert str(lane["pid"]) in cells
-    assert "00001-a.md" in cells
-    assert "work" in cells
-    # the LAST PARSEABLE metrics line wins: not the unparseable final line, and
-    # not the first line either
-    assert {"review", "fresh-green"} <= set(cells)
-    assert "stale-amber" not in rendered
-    assert {"2", "1", "3", "0"} <= set(cells)
-    assert "drained" in cells
-
-
-def test_status_prints_dashes_for_a_lane_whose_worktree_is_gone(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    repo, wave_path = _planned(tmp_path, monkeypatch, TWO_LANES)
-    loaded = wave.load(wave_path)
-    live, gone = loaded["lanes"]
-    live["pid"] = _dead_pid()
-    live["status"] = "running"
-    _lane_state(
-        Path(live["worktree"]),
-        '{"prd": "00001-a.md", "phase": "work", "next_phase": "review"}',
-        ['{"phase_end": "work", "signal": "green"}\n'],
-    )
-    _lane_prds(Path(live["worktree"]), {"backlog": 1, "wip": 1, "done": 1, "hold": 1})
-    gone["pid"] = None
-    gone["status"] = "aborted"
-    assert not Path(gone["worktree"]).exists()
-    rendered = wave_launch.status(repo, loaded)
-    dashes = _row(rendered, gone["name"])
-    # nothing is left on disk to read, so every worktree-backed field is "-",
-    # and the row is still as wide as the lane that does have a worktree
-    assert set(dashes) == {gone["name"], "aborted", "-"}
-    assert len(dashes) == len(_row(rendered, live["name"]))
-
-
-def test_status_shows_a_lanes_abort_error_as_an_extra_column(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    repo, wave_path = _planned(tmp_path, monkeypatch, ONE_LANE, max_lanes=1)
-    loaded = wave.load(wave_path)
-    lane = loaded["lanes"][0]
-    lane["status"] = "abort_failed"
-    lane["abort_error"] = "process group 4242 survived SIGKILL"
-    rendered = wave_launch.status(repo, loaded)
-    assert "process group 4242 survived SIGKILL" in rendered
-    assert "abort_failed" in _row(rendered, lane["name"])
-    # the column comes from the lane, not from boilerplate: a clean lane has none
-    assert "survived SIGKILL" not in wave_launch.status(repo, wave.load(wave_path))
-
-
-def test_status_mutates_neither_the_wave_dict_nor_wave_json(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    repo, wave_path = _launched(tmp_path, monkeypatch, TWO_LANES)
-    loaded = wave.load(wave_path)
-    before_dict = copy.deepcopy(loaded)
-    before_bytes = wave_path.read_bytes()
-    assert wave_launch.status(repo, loaded).strip() != ""
-    assert loaded == before_dict
-    assert wave_path.read_bytes() == before_bytes
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(leader.pid, signal.SIGKILL)
+    assert _group_gone(leader.pid), "the child outlived the group kill"
+    assert wave_launch._pgid_alive(leader.pid) is False
 
 
 # ── abort ────────────────────────────────────────────────────────────────────
@@ -345,7 +250,11 @@ def test_abort_keeps_a_dirty_worktree_with_no_commits(
     saved = wave.load(wave_path)
     lane = saved["lanes"][0]
     kept = Path(lane["worktree"])
+    # TWO changes, one untracked and one a tracked edit: the reported count is
+    # counted, never the literal "1" a single-file fixture would let through.
     (kept / "NOTES.md").write_text("half-finished work\n", encoding="utf-8")
+    (kept / "README.md").write_text("an uncommitted edit\n", encoding="utf-8")
+    assert len(_git(kept, "status", "--porcelain").stdout.splitlines()) == 2
     spec = f"{saved['base_sha']}..{lane['branch']}"
     assert _git(repo, "rev-list", "--count", spec).stdout.strip() == "0"
     assert wave_launch.abort(repo, wave_path) == 0
@@ -354,7 +263,7 @@ def test_abort_keeps_a_dirty_worktree_with_no_commits(
     assert not (_backlog(repo) / lane["prds"][0]).exists()
     assert _git(repo, "branch", "--list", lane["branch"]).stdout.strip() != ""
     out = capsys.readouterr().out
-    assert "1 uncommitted change(s), inspect before reusing this worktree" in out
+    assert "2 uncommitted change(s), inspect before reusing this worktree" in out
     after = wave.load(wave_path)
     assert after["status"] == "aborted"
     assert (after["lanes"][0]["status"], after["lanes"][0]["pid"]) == ("aborted", None)
@@ -373,10 +282,20 @@ def test_abort_leaves_a_worktree_whose_branch_belongs_to_another_wave(
     _git(repo, "worktree", "add", "-q", "-b", squatter, lane["worktree"], base)
     stranger = Path(lane["worktree"]) / "keep.txt"
     stranger.write_text("another wave's work\n", encoding="utf-8")
+    # COMMITTED, so the tree is clean: only the branch mismatch can hold abort
+    # back here, never the dirty-keep branch.
+    _git(Path(lane["worktree"]), "add", "keep.txt")
+    _git(Path(lane["worktree"]), "commit", "-qm", "another wave's work")
+    assert _git(Path(lane["worktree"]), "status", "--porcelain").stdout == ""
     assert wave_launch.abort(repo, wave_path) == 0
     assert stranger.read_text(encoding="utf-8") == "another wave's work\n"
     assert _git(repo, "branch", "--list", squatter).stdout.strip() != ""
     assert _git(repo, "branch", "--list", lane["branch"]).stdout.strip() != ""
+    # the stranger's commit is still on its own branch, not force-deleted with it
+    count = _git(repo, "rev-list", "--count", f"{base}..{squatter}").stdout.strip()
+    assert count == "1"
+    subject = _git(repo, "log", "-1", "--format=%s", squatter).stdout.strip()
+    assert subject == "another wave's work"
     after = wave.load(wave_path)
     assert after["status"] == "aborted"
     assert (after["lanes"][0]["status"], after["lanes"][0]["pid"]) == ("aborted", None)
@@ -447,6 +366,12 @@ def test_a_second_abort_retries_only_the_lane_that_failed(
     first = _breaking_git(str(broken), OSError("worktree is busy"))
     assert wave_launch.abort(repo, wave_path, run_git=first) == 1
     assert wave.load(wave_path)["status"] == "abort_failed"
+    # A hand edit puts the lane that DID finish back to "running": what makes it
+    # skippable is that git no longer registers its worktree, never the status
+    # word in wave.json.
+    mid = wave.load(wave_path)
+    mid["lanes"][1]["status"] = "running"
+    wave.save(wave_path, mid)
     calls: list[tuple[list[str], object]] = []
     assert wave_launch.abort(repo, wave_path, run_git=_recording_git(calls)) == 0
     after = wave.load(wave_path)
@@ -520,27 +445,35 @@ def test_abort_leaves_a_lane_whose_group_outlived_sigkill_mid_loop(
 ) -> None:
     repo, wave_path = _launched(tmp_path, monkeypatch, TWO_LANES)
     saved = wave.load(wave_path)
+    slots = _autopilot(repo) / "wave-slots"
+    slots.mkdir()
+    (slots / "slot-1").write_text("taken\n", encoding="utf-8")
     # A group that never dies: `kill_fn` only records, so the real 60s and 10s
     # poll windows both run out and the lane's kill genuinely fails.
     immovable = subprocess.Popen(
         [sys.executable, "-c", "import time; time.sleep(600)"],
         start_new_session=True,
     )
-    kills: list[tuple[int, int]] = []
+    kills: list[tuple[int, int, float]] = []
     try:
         saved["lanes"][0].update(pid=immovable.pid, status="running")
         wave.save(wave_path, saved)
         exit_code = wave_launch.abort(
             repo,
             wave_path,
-            kill_fn=lambda pgid, sig: kills.append((pgid, sig)),
+            kill_fn=lambda pgid, sig: kills.append((pgid, sig, time.monotonic())),
         )
     finally:
         with contextlib.suppress(ProcessLookupError):
             os.killpg(immovable.pid, signal.SIGKILL)
         immovable.wait(30)
     assert exit_code == 1
-    assert kills == [(immovable.pid, signal.SIGTERM), (immovable.pid, signal.SIGKILL)]
+    assert [each[:2] for each in kills] == [
+        (immovable.pid, signal.SIGTERM),
+        (immovable.pid, signal.SIGKILL),
+    ]
+    # the whole 60s SIGTERM grace ran before escalating, not a fraction of it
+    assert kills[1][2] - kills[0][2] >= 59
     after = wave.load(wave_path)
     assert after["status"] == "abort_failed"
     alive, finished = after["lanes"]
@@ -548,20 +481,49 @@ def test_abort_leaves_a_lane_whose_group_outlived_sigkill_mid_loop(
     assert (alive["pid"], alive["status"]) == (immovable.pid, "running")
     assert str(immovable.pid) in (alive["abort_error"] or "")
     assert "survived SIGKILL" in (alive["abort_error"] or "")
-    # killing failed, so its files were left alone entirely
+    # killing failed, so its files were left alone - and the slot dir its loop
+    # still holds is not destroyed under it either
     assert Path(alive["worktree"]).exists()
     assert (_backlog(Path(alive["worktree"])) / alive["prds"][0]).exists()
     assert not (_backlog(repo) / alive["prds"][0]).exists()
-    # the healthy lane is still finished in the same call
-    assert (finished["pid"], finished["status"], finished["abort_error"]) == (
-        None,
-        "aborted",
-        None,
-    )
-    assert not Path(finished["worktree"]).exists()
-    assert _git(repo, "branch", "--list", finished["branch"]).stdout.strip() == ""
-    restored = _backlog(repo) / finished["prds"][0]
-    assert restored.read_text(encoding="utf-8") == TWO_LANES[finished["prds"][0]]
+    assert (slots / "slot-1").read_text(encoding="utf-8") == "taken\n"
+    _assert_finished(repo, finished, TWO_LANES)
+
+
+def test_abort_serializes_on_the_wave_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, wave_path = _launched(tmp_path, monkeypatch, TWO_LANES)
+    worktrees = [Path(lane["worktree"]) for lane in wave.load(wave_path)["lanes"]]
+    calls: list[tuple[list[str], object]] = []
+    frozen = wave_path.read_bytes()
+    still_held: list[bool] = []
+    outcome: list[object] = []
+
+    def recording_git(args: list[str], cwd: object = None) -> object:
+        still_held.append(_lock_is_held(wave_path))  # deep inside abort's body
+        return _recording_git(calls)(args, cwd)
+
+    def run_abort() -> None:
+        try:
+            outcome.append(wave_launch.abort(repo, wave_path, run_git=recording_git))
+        except BaseException as err:  # reported by the assertion on `outcome`
+            outcome.append(err)
+
+    waiter = threading.Thread(target=run_abort)
+    with wave.locked(wave_path):
+        waiter.start()
+        time.sleep(0.25)
+        assert calls == [], "abort ran git while another holder had the lock"
+        assert wave_path.read_bytes() == frozen, "abort wrote wave.json unlocked"
+        assert [each for each in worktrees if not each.exists()] == []
+    waiter.join(60)
+    assert not waiter.is_alive(), "abort never finished once the lock was free"
+    assert outcome == [0], outcome
+    assert set(still_held) == {True}, "abort dropped the lock mid-cleanup"
+    assert wave.load(wave_path)["status"] == "aborted"
+    assert [each for each in worktrees if each.exists()] == []
 
 
 @pytest.mark.parametrize("status", ["running", "abort_failed"])
@@ -583,20 +545,7 @@ def test_plan_refuses_an_abort_failed_wave_like_a_planned_one(
     assert wave_path.read_bytes() == frozen
 
 
-# ── the status and abort verbs ───────────────────────────────────────────────
-
-
-def test_run_status_prints_the_rendered_table(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    repo, wave_path = _planned(tmp_path, monkeypatch, TWO_LANES)
-    assert wave_cli.run(_parse(["wave", "status"]), repo, wave_path) == 0
-    printed = capsys.readouterr().out
-    assert printed.strip() == wave_launch.status(repo, wave.load(wave_path)).strip()
-    for lane in wave.load(wave_path)["lanes"]:
-        assert lane["name"] in _row(printed, lane["name"])
+# ── the abort verb ───────────────────────────────────────────────────────────
 
 
 def test_run_abort_aborts_the_wave_at_the_path_it_was_given(
