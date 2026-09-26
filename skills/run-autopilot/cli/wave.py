@@ -125,7 +125,9 @@ def _format_worktree(repo: Path, order: int) -> str:
 
 def _count_core_paths(each: Lane) -> int:
     return sum(
-        1 for path in each.paths if path in WAVE_FORCE_SHARED or path.startswith(_CORE_DIRS)
+        1
+        for path in each.paths
+        if path in WAVE_FORCE_SHARED or path.startswith(_CORE_DIRS)
     )
 
 
@@ -177,54 +179,73 @@ def locked(wave_path: Path):
         yield
 
 
+def _reject_existing_wave(repo: Path, wave_path: Path) -> bool:
+    """True (reasons on stderr) when the current wave.json forbids a new plan."""
+    try:
+        existing = load(wave_path)
+    except WaveCorruptError as err:
+        print(
+            f"autopilot: wave.json is corrupt ({err}); fix or remove it by hand"
+            " before planning",
+            file=sys.stderr,
+        )
+        return True
+    if existing is None:
+        return False
+    errors = _structural_errors(repo, existing)
+    for error in errors:
+        print(f"autopilot: {error}", file=sys.stderr)
+    if errors:
+        print(
+            "autopilot: wave.json is structurally invalid; fix or remove it"
+            " by hand before planning",
+            file=sys.stderr,
+        )
+        return True
+    if existing["status"] not in ("done", "aborted"):
+        print(
+            f"autopilot: wave {existing['id']} is still {existing['status']};"
+            " abort it before planning a new one",
+            file=sys.stderr,
+        )
+        return True
+    return False
+
+
+def _print_plan(lanes: list[Lane], held_back: list[dict]) -> None:
+    for each in lanes:
+        print(f"{each.name}  {each.branch}")
+        print(f"    prds:  {', '.join(each.prds)}")
+        print(f"    paths: {', '.join(each.paths)}")
+    print("held back:" if held_back else "held back: none")
+    for entry in held_back:
+        print(f"    {entry['prd']}: {entry['reason']}")
+
+
 def plan(repo: Path, wave_path: Path, max_lanes: int = 3) -> int:
     """Cut the backlog into lanes and save them as a planned wave."""
     with locked(wave_path):
-        try:
-            existing = load(wave_path)
-        except WaveCorruptError as err:
+        if _reject_existing_wave(repo, wave_path):
+            return 1
+        if max_lanes < 1:
             print(
-                f"autopilot: wave.json is corrupt ({err}); fix or remove it by hand"
-                " before planning",
+                f"autopilot: max lanes must be at least 1, got {max_lanes}",
                 file=sys.stderr,
             )
             return 1
-        if existing is not None:
-            errors = _structural_errors(repo, existing)
-            for error in errors:
-                print(f"autopilot: {error}", file=sys.stderr)
-            if errors:
-                print(
-                    "autopilot: wave.json is structurally invalid; fix or remove it"
-                    " by hand before planning",
-                    file=sys.stderr,
-                )
-                return 1
-            if existing["status"] not in ("done", "aborted"):
-                print(
-                    f"autopilot: wave {existing['id']} is still {existing['status']};"
-                    " abort it before planning a new one",
-                    file=sys.stderr,
-                )
-                return 1
-        if max_lanes < 1:
-            print(f"autopilot: max lanes must be at least 1, got {max_lanes}", file=sys.stderr)
-            return 1
         backlog = sorted((repo / "dev/local/prds/backlog").glob("*.md"))
-        lanes, held_back = cut({p.name: p.read_text(encoding="utf-8") for p in backlog}, max_lanes)
+        lanes, held_back = cut(
+            {p.name: p.read_text(encoding="utf-8") for p in backlog}, max_lanes
+        )
         if not lanes:
-            print("autopilot: no lanes to plan - every PRD is held back", file=sys.stderr)
+            print(
+                "autopilot: no lanes to plan - every PRD is held back", file=sys.stderr
+            )
             return 1
         now = datetime.now(timezone.utc)
         wave_id = now.strftime("%Y%m%d%H%M")
         lanes = _order_lanes(lanes, wave_id, repo)
-        for each in lanes:
-            print(f"{each.name}  {each.branch}")
-            print(f"    prds:  {', '.join(each.prds)}")
-            print(f"    paths: {', '.join(each.paths)}")
-        print("held back:" if held_back else "held back: none")
-        for entry in held_back:
-            print(f"    {entry['prd']}: {entry['reason']}")
+        _print_plan(lanes, held_back)
         save(
             wave_path,
             {
@@ -272,8 +293,8 @@ _LANE_CHECKS = {
 }
 
 
-def _structural_errors(repo: Path, wave: dict) -> list[str]:
-    """One violation string per structural problem in `wave`; [] when sound."""
+def _collect_shape_errors(repo: Path, wave: dict) -> list[str]:
+    """Missing or mistyped fields, stopping at the first level that fails."""
     if not isinstance(wave, dict):
         return ["wave.json: top level is not an object"]
     errors = [
@@ -285,8 +306,7 @@ def _structural_errors(repo: Path, wave: dict) -> list[str]:
         return errors
     if wave["repo"] != str(repo):
         return ["wave.json was planned for a different repo"]
-    lanes = wave["lanes"]
-    for index, each in enumerate(lanes):
+    for index, each in enumerate(wave["lanes"]):
         if not isinstance(each, dict):
             errors.append(f"lane {index}: not an object")
             continue
@@ -297,15 +317,19 @@ def _structural_errors(repo: Path, wave: dict) -> list[str]:
             for field, ok in _LANE_CHECKS.items()
             if field not in each or not ok(each[field])
         ]
-    if errors:
-        return errors
+    return errors
+
+
+def _collect_duplicate_errors(lanes: list[dict]) -> list[str]:
+    """Lane fields two lanes share, and PRDs listed twice or in two lanes."""
+    errors: list[str] = []
     for field in ("order", "name", "branch", "worktree"):
         first: dict = {}
         for each in lanes:
             value = each[field]
             if value in first:
                 errors.append(
-                    f"lane {first[value]} and lane {each['name']} both use {field} {value}"
+                    f"lane {first[value]} and lane {each['name']} both use {field} {value}",
                 )
             else:
                 first[value] = each["name"]
@@ -318,16 +342,33 @@ def _structural_errors(repo: Path, wave: dict) -> list[str]:
                 errors.append(f"{prd} is listed in more than one lane")
             else:
                 owner[prd] = index
-    for each in lanes:
+    return errors
+
+
+def _collect_canonical_errors(repo: Path, wave: dict) -> list[str]:
+    """Lanes whose worktree or branch is not the one their order implies."""
+    errors: list[str] = []
+    for each in wave["lanes"]:
         order = each["order"]
         if each["worktree"] != _format_worktree(repo, order):
             errors.append(
                 f"lane {each['name']}: worktree does not match the canonical path"
-                f" for order {order}"
+                f" for order {order}",
             )
         if each["branch"] != _format_branch(wave["id"], order):
             errors.append(
                 f"lane {each['name']}: branch does not match the canonical name"
-                f" for order {order}"
+                f" for order {order}",
             )
     return errors
+
+
+def _structural_errors(repo: Path, wave: dict) -> list[str]:
+    """One violation string per structural problem in `wave`; [] when sound."""
+    errors = _collect_shape_errors(repo, wave)
+    if errors:
+        return errors
+    return [
+        *_collect_duplicate_errors(wave["lanes"]),
+        *_collect_canonical_errors(repo, wave),
+    ]
