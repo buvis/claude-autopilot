@@ -295,6 +295,12 @@ def test_assemble_merges_drained_lanes_in_order(
     repo, wave_path = _launched(tmp_path, monkeypatch, 3)
     for name, rel in (("l1", "x/a.py"), ("l2", "y/b.py"), ("l3", "z/c.py")):
         _commit(_finish(wave_path, name, ""), {rel: f"# {name}\n"}, f"{name} change")
+    # Stored out of order: the merge follows each lane's `order`, not the list.
+    stored = wave.load(wave_path)
+    by_name = {each["name"]: each for each in stored["lanes"]}
+    shuffled = [by_name[name] for name in ("l2", "l3", "l1")]
+    wave.save(wave_path, {**stored, "lanes": shuffled})
+    assert [each["order"] for each in wave.load(wave_path)["lanes"]] == [2, 3, 1]
     checked: list[tuple[Path, str]] = []
 
     def run_checks(cwd: Path) -> subprocess.CompletedProcess:
@@ -440,13 +446,17 @@ def test_checks_failure_undoes_the_lane_merge_and_keeps_it(
     ]
 
 
+@pytest.mark.parametrize("next_phase", ["work", "review"])
 def test_unfinished_lane_is_skipped_not_merged(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    next_phase: str,
 ) -> None:
     repo, wave_path = _launched(tmp_path, monkeypatch, 2)
     # The unfinished lane comes first, so skipping it must not end the pass.
-    tip = _commit(_finish(wave_path, "l1", "work"), {"x/a.py": "# l1\n"}, "l1 change")
+    # Any phase still pending makes a lane unfinished, not one phase name.
+    unfinished = _finish(wave_path, "l1", next_phase)
+    tip = _commit(unfinished, {"x/a.py": "# l1\n"}, "l1 change")
     _commit(_finish(wave_path, "l2", ""), {"y/b.py": "# l2\n"}, "l2 change")
     wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass)
     saved, lanes = _saved(repo, wave_path)
@@ -457,23 +467,29 @@ def test_unfinished_lane_is_skipped_not_merged(
     assert _git(repo, "rev-parse", lanes["l1"]["branch"]).stdout.strip() == tip
 
 
+@pytest.mark.parametrize("live_name", ["l1", "l2", "l3"])
 def test_live_lane_refuses_assembly(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    live_name: str,
 ) -> None:
-    repo, wave_path = _launched(tmp_path, monkeypatch, 2)
-    _commit(_finish(wave_path, "l1", ""), {"x/a.py": "# l1\n"}, "l1 change")
+    repo, wave_path = _launched(tmp_path, monkeypatch, 3)
+    for name, rel in (("l1", "x/a.py"), ("l2", "y/b.py"), ("l3", "z/c.py")):
+        if name == live_name:
+            continue
+        _commit(_finish(wave_path, name, ""), {rel: f"# {name}\n"}, f"{name} change")
     live = _spawn_tagged_incumbent()
     try:
-        # The live lane is not the first one: the refusal must name it.
-        _set_pid(wave_path, "l2", live.pid)
+        # Every lane is checked - first, middle or last - and the refusal names it.
+        _set_pid(wave_path, live_name, live.pid)
         before = wave_path.read_text(encoding="utf-8")
         assert wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass) == 1
     finally:
         live.kill()
         live.wait(10)
-    assert "lane l2 is still running - wait or abort" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert f"lane {live_name} is still running - wait or abort" in err
     assert wave_path.read_text(encoding="utf-8") == before
     wave_id = wave.load(wave_path)["id"]
     assert _git(repo, "branch", "--list", f"wave/{wave_id}/assembly").stdout == ""
@@ -495,6 +511,8 @@ def test_assemble_records_each_lanes_files_and_integrator_trailers(
         "l2 second",
         "Integrator: kept l2's value over the seed",
     )
+    # The trailer sits mid-range: l2's tip commit after it carries none.
+    _commit(worktree, {"y/b.py": "# l2 tip\n"}, "l2 third")
     # l3 edits the line l2 already changed: it conflicts and is kept.
     kept_files = {"src/shared.py": "v = 3\n", "z/c.py": "# l3\n"}
     kept = _commit(
@@ -516,9 +534,11 @@ def test_assemble_records_each_lanes_files_and_integrator_trailers(
     ]
     # The rebase onto l1 rewrote l2's commits; the note names the one l2 wrote.
     ref = f"wave/{saved['id']}/assembly"
-    rebased = _git(repo, "log", "-1", "--format=%H%n%s", ref).stdout.splitlines()
-    assert rebased[1] == "l2 second"
-    assert rebased[0] != noted
+    assert _git(repo, "log", "-1", "--format=%s", ref).stdout.strip() == "l2 third"
+    grep = ["log", "--format=%H", "--grep=^l2 second$", ref]
+    rewritten = _git(repo, *grep).stdout.split()
+    assert len(rewritten) == 1
+    assert rewritten[0] != noted
     assert lanes["l3"]["files"] == ["src/shared.py", "z/c.py"]
     assert lanes["l3"]["integrator_notes"] == [
         {"sha": kept[:7], "text": "l3 wanted value 3"},
