@@ -1,8 +1,8 @@
 """The wave: cut the backlog into parallel lanes and keep `wave.json` (PRD 00214).
 
 `wave.json` (dev/local/autopilot/wave.json) is a one-shot planning record for
-the wave launcher, not PRD-lifecycle state: only `wave` and `wave_launch` read
-or write it.
+the wave launcher, not PRD-lifecycle state: only `wave`, `wave_launch` and
+`wave_assemble` read or write it.
 """
 
 from __future__ import annotations
@@ -25,7 +25,16 @@ WAVE_FORCE_SHARED: tuple[str, ...] = (
     "skills/run-autopilot/cli/records.py",
 )
 _CORE_DIRS = ("skills/run-autopilot/cli/", "skills/run-autopilot/references/")
-LANE_STATUSES = ("planned", "running", "aborted", "abort_failed")
+LANE_STATUSES = (
+    "planned",
+    "running",
+    "aborted",
+    "abort_failed",
+    "assembled",
+    "conflict",
+    "checks_failed",
+    "unfinished",
+)
 WAVE_STATUSES = (*LANE_STATUSES, "done")
 
 
