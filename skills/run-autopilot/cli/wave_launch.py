@@ -317,9 +317,9 @@ def _lane_row(lane: dict) -> list[str]:
     dashing the pid there would leave an operator nothing to kill."""
     worktree = Path(lane["worktree"])
     on_disk = worktree.exists()
-    state = _load_json(worktree / "dev/local/autopilot/state.json") if on_disk else None
+    state = _load_json(worktree / "dev/local/autopilot/state.json")
     state = state if isinstance(state, dict) else {}
-    metrics = _last_metrics(worktree) if on_disk else {}
+    metrics = _last_metrics(worktree)
     counts = (
         [
             str(len(list((worktree / "dev/local/prds" / folder).glob("*.md"))))
@@ -490,10 +490,7 @@ def _abort_lane(
     except (OSError, subprocess.CalledProcessError) as err:
         lane["status"] = "abort_failed"
         lane["abort_error"] = f"worktree cleanup failed: {err}"
-        print(
-            f"autopilot: lane {lane['name']}: worktree cleanup failed: {err}",
-            file=sys.stderr,
-        )
+        print(f"autopilot: lane {lane['name']}: {lane['abort_error']}", file=sys.stderr)
         return True
     lane["status"] = "aborted"
     lane["abort_error"] = None
