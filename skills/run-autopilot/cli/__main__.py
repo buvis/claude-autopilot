@@ -180,6 +180,7 @@ from cli import (
     status,
     transitions,
     triage,
+    wave_cli,
 )
 
 # Explicit guarded insert (mirrors records.py's own): no longer relies on
@@ -1146,6 +1147,15 @@ def _run_custody(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_wave(args: argparse.Namespace) -> int:
+    state_path = _resolve_state_path(args.state)
+    # dev/local/autopilot/state.json -> repo is FOUR parents up, not three.
+    assert state_path.parts[-4:-1] == ("dev", "local", "autopilot"), state_path
+    repo = state_path.parents[3]
+    wave_path = state_path.parent / "wave.json"
+    return wave_cli.run(args, repo, wave_path)
+
+
 def _add_mint_stubs(subparsers) -> None:
     p = subparsers.add_parser("mint-stubs")
     p.add_argument("--state")
@@ -1212,6 +1222,7 @@ _SUBCOMMANDS: dict[str, tuple] = {
     "review-once": (_add_review_once, _run_review_once),
     "custody": (_add_custody, _run_custody),
     "mint-stubs": (_add_mint_stubs, _run_mint_stubs),
+    "wave": (wave_cli.add, _run_wave),
 }
 
 
