@@ -86,3 +86,35 @@ def test_abort_adds_the_dirty_note_as_its_own_line(
     assert notes[0] != expected, printed
     assert str(kept) not in notes[0], notes[0]
     assert notes[0].strip().startswith("autopilot: 2 "), notes[0]
+
+
+def test_abort_explains_a_kept_worktree_git_does_not_list(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo, wave_path = _launched(tmp_path, monkeypatch, TWO_LANES)
+    saved = wave.load(wave_path)
+    kept = Path(saved["lanes"][0]["worktree"])
+    # This wave never recorded creating that worktree, so abort must leave it
+    # completely alone - and what sits at the path now is a plain directory git
+    # knows nothing about, so git's own listing cannot speak for it.
+    saved["lanes"][0]["worktree_created"] = False
+    wave.save(wave_path, saved)
+    _git(repo, "worktree", "remove", "--force", str(kept))
+    kept.mkdir()
+    (kept / "NOTES.md").write_text("somebody else's directory\n", encoding="utf-8")
+    with pytest.raises(AssertionError):
+        _listed_line(repo, kept)  # git does not list it: the branch under test
+    capsys.readouterr()  # the fixture's plan listing, not abort's output
+    assert wave_launch.abort(repo, wave_path) == 0
+    printed = capsys.readouterr().out.splitlines()
+    mentions = [line for line in printed if str(kept) in line]
+    # Prefixed and explained, never a bare path among lines that all carry the
+    # prefix: today's output IS that bare path, so "some line holds the path" is
+    # green against the gap this pins.
+    assert mentions, printed
+    assert [line for line in mentions if not line.startswith("autopilot:")] == [], (
+        printed
+    )
+    assert [line for line in printed if line.strip() == str(kept)] == [], printed

@@ -119,6 +119,11 @@ def test_launch_refuses_a_checkout_a_live_loop_already_owns(
         # checking the parent's name alone waves it through and derives a repo
         # root a directory off - the same silent wrong-root failure.
         "work/autopilot/state.json",
+        # The canonical DIRECTORY under the wrong FILENAME: checking the directory
+        # alone accepts it and derives a repo root from a file that is not the
+        # state file at all. The `.bak` suffix also catches a check that merely
+        # looks for `state.json` somewhere inside the basename.
+        "dev/local/autopilot/state.json.bak",
     ],
 )
 def test_the_cli_reports_a_non_canonical_state_path_instead_of_asserting(
