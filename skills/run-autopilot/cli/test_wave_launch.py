@@ -10,10 +10,12 @@ needs a live process, which puts a stub `python3` on PATH.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
@@ -38,6 +40,7 @@ def _prd(*paths: str) -> str:
 
 ONE_LANE = {"00001-a.md": _prd("x/a.py")}
 TWO_LANES = {"00001-a.md": _prd("x/a.py"), "00002-b.md": _prd("y/b.py")}
+THREE_LANES = {**TWO_LANES, "00003-c.md": _prd("z/c.py")}
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
@@ -87,6 +90,11 @@ def _planned(
     monkeypatch.chdir(tmp_path)
     assert wave.plan(repo, wave_path, max_lanes=max_lanes) == 0
     return repo, wave_path
+
+
+def _lane_of(loaded: dict, prd: str) -> str:
+    """The name of the lane that lists `prd`, as the saved plan names it."""
+    return next(each["name"] for each in loaded["lanes"] if prd in each["prds"])
 
 
 def _utc_dates() -> set[str]:
@@ -161,6 +169,18 @@ def _spawned_record(record: Path) -> dict:
     raise AssertionError(f"the lane process never wrote {record}")
 
 
+def _lock_is_held(wave_path: Path) -> bool:
+    """True when someone else holds the wave lock: a non-blocking grab of the
+    sibling `<wave_path>.lock` on a fresh descriptor fails."""
+    with open(f"{wave_path}.lock", "a") as probe:
+        try:
+            fcntl.flock(probe.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return True
+        fcntl.flock(probe.fileno(), fcntl.LOCK_UN)
+        return False
+
+
 def _dead_pid() -> int:
     """The pid of a process that has exited and been reaped."""
     proc = subprocess.Popen([sys.executable, "-c", ""])
@@ -179,27 +199,44 @@ def test_validate_passes_the_backlog_it_was_planned_from(
     assert wave_launch.validate(repo, wave.load(wave_path), TWO_LANES) == []
 
 
+# Two lanes and three, so the flagged lane is not always the fixtures' l2 and
+# the violation has to name the lane the plan actually put the PRD in.
+_DRIFT_CASES = [(TWO_LANES, "00002-b.md", "l2"), (THREE_LANES, "00003-c.md", "l3")]
+
+
+@pytest.mark.parametrize(("prds", "gone", "label"), _DRIFT_CASES)
 def test_validate_flags_a_prd_that_left_the_backlog(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    prds: dict[str, str],
+    gone: str,
+    label: str,
 ) -> None:
-    repo, wave_path = _planned(tmp_path, monkeypatch, TWO_LANES)
-    left = {"00001-a.md": TWO_LANES["00001-a.md"]}
-    assert wave_launch.validate(repo, wave.load(wave_path), left) == [
-        "lane l2: 00002-b.md is no longer in backlog/",
+    repo, wave_path = _planned(tmp_path, monkeypatch, prds, max_lanes=len(prds))
+    loaded = wave.load(wave_path)
+    assert _lane_of(loaded, gone) == label, loaded["lanes"]
+    left = {name: text for name, text in prds.items() if name != gone}
+    assert wave_launch.validate(repo, loaded, left) == [
+        f"lane {label}: {gone} is no longer in backlog/",
     ]
 
 
+@pytest.mark.parametrize(("prds", "drifted_prd", "label"), _DRIFT_CASES)
 def test_validate_flags_a_prd_that_now_names_no_paths(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    prds: dict[str, str],
+    drifted_prd: str,
+    label: str,
 ) -> None:
-    repo, wave_path = _planned(tmp_path, monkeypatch, TWO_LANES)
-    drifted = {**TWO_LANES, "00002-b.md": "# Prose only\n"}
-    assert wave_launch.validate(repo, wave.load(wave_path), drifted) == [
+    repo, wave_path = _planned(tmp_path, monkeypatch, prds, max_lanes=len(prds))
+    loaded = wave.load(wave_path)
+    assert _lane_of(loaded, drifted_prd) == label, loaded["lanes"]
+    drifted = {**prds, drifted_prd: "# Prose only\n"}
+    assert wave_launch.validate(repo, loaded, drifted) == [
         (
-            "lane l2: 00002-b.md now names no paths - move it to held_back by"
-            " hand before launching"
+            f"lane {label}: {drifted_prd} now names no paths - move it to"
+            " held_back by hand before launching"
         ),
     ]
 
@@ -208,10 +245,11 @@ def test_validate_flags_two_lanes_that_now_share_a_path(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # l1's PRD is the one that drifted, and the shared file is l2's own.
     repo, wave_path = _planned(tmp_path, monkeypatch, TWO_LANES)
-    drifted = {**TWO_LANES, "00002-b.md": _prd("y/b.py", "x/a.py")}
+    drifted = {**TWO_LANES, "00001-a.md": _prd("x/a.py", "y/b.py")}
     assert wave_launch.validate(repo, wave.load(wave_path), drifted) == [
-        "lane l1 and lane l2 share x/a.py",
+        "lane l1 and lane l2 share y/b.py",
     ]
 
 
@@ -220,28 +258,40 @@ def test_validate_flags_two_lanes_that_both_touch_force_shared_files(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repo, wave_path = _planned(tmp_path, monkeypatch, TWO_LANES)
+    # Which lane holds which force-shared file is part of the message.
     drifted = {
-        "00001-a.md": _prd("x/a.py", SKILL_MD),
-        "00002-b.md": _prd("y/b.py", RECORDS_PY),
+        "00001-a.md": _prd("x/a.py", RECORDS_PY),
+        "00002-b.md": _prd("y/b.py", SKILL_MD),
     }
     assert wave_launch.validate(repo, wave.load(wave_path), drifted) == [
         (
             "lane l1 and lane l2 both touch force-shared files"
-            f" ({SKILL_MD} in l1, {RECORDS_PY} in l2)"
+            f" ({RECORDS_PY} in l1, {SKILL_MD} in l2)"
         ),
     ]
 
 
+@pytest.mark.parametrize(
+    ("break_field", "expected"),
+    [
+        # No "lanes" key at all: re-deriving paths first would raise KeyError.
+        (lambda w: {k: v for k, v in w.items() if k != "lanes"}, "lanes"),
+        # A sound shape everywhere but review_slots: still shape first, and the
+        # backlog drift below it (every PRD gone) must stay unreported.
+        (lambda w: {**w, "review_slots": 0}, "review_slots"),
+    ],
+    ids=["lanes", "review_slots"],
+)
 def test_validate_reports_a_shape_problem_before_re_deriving_paths(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    break_field: Callable[[dict], dict],
+    expected: str,
 ) -> None:
-    # No "lanes" key at all: re-deriving paths first would raise KeyError.
     repo, wave_path = _planned(tmp_path, monkeypatch, TWO_LANES)
-    loaded = wave.load(wave_path)
-    broken = {key: value for key, value in loaded.items() if key != "lanes"}
+    broken = break_field(wave.load(wave_path))
     assert wave_launch.validate(repo, broken, {}) == [
-        "wave.json: malformed top-level field lanes",
+        f"wave.json: malformed top-level field {expected}",
     ]
 
 
@@ -253,14 +303,18 @@ def test_launch_adds_a_worktree_per_lane_at_base_sha(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repo, wave_path = _planned(tmp_path, monkeypatch, TWO_LANES)
+    # Launched from a branch the fixture did not start on: the base branch is
+    # whatever the repo is on, never a default name.
+    _git(repo, "checkout", "-q", "-b", "wip/x")
     head = _git(repo, "rev-parse", "HEAD").stdout.strip()
+    branch = _git(repo, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
     spawn = _FakeSpawn()
     assert wave_launch.launch(repo, wave_path, spawn_fn=spawn) == 0
     saved = wave.load(wave_path)
     assert (saved["status"], saved["base_sha"], saved["base_branch"]) == (
         "running",
         head,
-        "master",
+        branch,
     )
     assert [each["order"] for each in saved["lanes"]] == [1, 2]
     dates = _utc_dates()
@@ -296,6 +350,22 @@ def test_launch_moves_lane_prds_out_of_the_main_backlog(
             assert (_backlog(worktree).parent / folder).is_dir()
         assert _autopilot(worktree).is_dir()
         assert not (worktree / "dev" / "local" / "meta").exists()
+
+
+def test_launch_leaves_a_held_back_prd_in_the_main_backlog(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # `plan` held the prose-only PRD back, so no lane lists it: it belongs to
+    # the main checkout still, and only the lane's own PRDs move.
+    prds = {**ONE_LANE, "00002-prose.md": "# Prose only\n"}
+    repo, wave_path = _planned(tmp_path, monkeypatch, prds, max_lanes=1)
+    assert wave_launch.launch(repo, wave_path, spawn_fn=_FakeSpawn()) == 0
+    assert [path.name for path in _backlog(repo).iterdir()] == ["00002-prose.md"]
+    lane = wave.load(wave_path)["lanes"][0]
+    assert lane["prds"] == ["00001-a.md"]
+    worktree_backlog = _backlog(Path(lane["worktree"]))
+    assert [path.name for path in worktree_backlog.iterdir()] == ["00001-a.md"]
 
 
 def test_launch_copies_meta_when_present(
@@ -411,13 +481,18 @@ def test_launch_spawns_the_loop_with_its_own_pid_tag(
     assert "the lane loop ran" in log.read_text(encoding="utf-8")
 
 
+@pytest.mark.parametrize(("slots", "count"), [(None, "3"), (2, "2"), (5, "5")])
 def test_launch_env_carries_the_slot_dir_and_count(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    slots: int | None,
+    count: str,
 ) -> None:
     repo, wave_path = _planned(tmp_path, monkeypatch, ONE_LANE, max_lanes=1)
-    # review_slots is a hand-edit surface: the count comes from wave.json.
-    wave.save(wave_path, {**wave.load(wave_path), "review_slots": 5})
+    # review_slots is a hand-edit surface: the count comes from wave.json,
+    # whatever it says - `None` here leaves the count `plan` wrote.
+    if slots is not None:
+        wave.save(wave_path, {**wave.load(wave_path), "review_slots": slots})
     monkeypatch.setenv("_AUTOPILOT_LOOP", "4242")
     monkeypatch.setenv("WAVE_TEST_SENTINEL", "carried")
     spawn = _FakeSpawn()
@@ -425,7 +500,7 @@ def test_launch_env_carries_the_slot_dir_and_count(
     call = spawn.calls[0]
     env = call["env"]
     assert env["_AUTOPILOT_REVIEW_SLOTS_DIR"] == str(_autopilot(repo) / "wave-slots")
-    assert env["_AUTOPILOT_REVIEW_SLOTS"] == "5"
+    assert env["_AUTOPILOT_REVIEW_SLOTS"] == count
     assert env["_AUTOPILOT_TRACON_CHILD"] == "1"
     assert "_AUTOPILOT_LOOP" not in env
     assert env["WAVE_TEST_SENTINEL"] == "carried"
@@ -454,8 +529,53 @@ def test_launch_runs_every_git_call_in_the_repo(
     for args, cwd in calls:
         assert args[0] != "git", f"the call site prepended git itself: {args}"
         assert cwd is not None and Path(cwd) == repo, (args, cwd)
-    assert ["status", "--porcelain"] in [args for args, _ in calls]
-    assert any(args[:2] == ["worktree", "add"] for args, _ in calls)
+    recorded = [args for args, _ in calls]
+    assert ["status", "--porcelain"] in recorded, recorded
+    # The base sha and branch are read through run_git too, not around it.
+    assert ["rev-parse", "HEAD"] in recorded, recorded
+    assert ["rev-parse", "--abbrev-ref", "HEAD"] in recorded, recorded
+    assert any(args[:2] == ["worktree", "add"] for args in recorded), recorded
+
+
+def test_launch_serializes_on_the_wave_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, wave_path = _planned(tmp_path, monkeypatch, ONE_LANE, max_lanes=1)
+    calls: list[tuple[list[str], object]] = []
+    spawn = _FakeSpawn()
+    still_held: list[bool] = []
+    outcome: list[object] = []
+
+    def probing_spawn(cmd: list[str], **kwargs: object) -> _Handle:
+        still_held.append(_lock_is_held(wave_path))  # deep inside launch's body
+        return spawn(cmd, **kwargs)
+
+    def launch() -> None:
+        try:
+            outcome.append(
+                wave_launch.launch(
+                    repo,
+                    wave_path,
+                    spawn_fn=probing_spawn,
+                    run_git=_recording_git(calls),
+                ),
+            )
+        except BaseException as err:  # reported by the assertion on `outcome`
+            outcome.append(err)
+
+    waiter = threading.Thread(target=launch)
+    with wave.locked(wave_path):
+        waiter.start()
+        time.sleep(0.25)
+        assert calls == [], "launch ran git while another holder had the lock"
+        assert spawn.calls == [], "launch spawned a lane while the lock was held"
+        assert wave.load(wave_path)["status"] == "planned"
+    waiter.join(60)
+    assert not waiter.is_alive(), "launch never finished once the lock was free"
+    assert outcome == [0], outcome
+    assert still_held == [True], "launch dropped the lock before spawning its lane"
+    assert wave.load(wave_path)["status"] == "running"
 
 
 def test_a_failed_lane_leaves_the_earlier_lane_running_and_recorded(
@@ -522,13 +642,20 @@ def test_lane_status_reports_the_stored_status_without_a_pid(tmp_path: Path) -> 
 
 
 def test_lane_status_reports_running_while_the_pid_is_alive(tmp_path: Path) -> None:
-    # The stored status goes stale the moment a lane runs; liveness wins.
-    lane = {
-        "pid": os.getpid(),
-        "status": "planned",
-        "worktree": str(tmp_path / "proj-l1"),
-    }
-    assert wave_launch.lane_status(lane) == "running"
+    # The stored status goes stale the moment a lane runs; liveness wins. A
+    # lane's pid is always some other process, never the one asking.
+    live = _spawn_tagged_incumbent()
+    try:
+        assert live.pid != os.getpid()
+        lane = {
+            "pid": live.pid,
+            "status": "planned",
+            "worktree": str(tmp_path / "proj-l1"),
+        }
+        assert wave_launch.lane_status(lane) == "running"
+    finally:
+        live.kill()
+        live.wait(10)
 
 
 @pytest.mark.parametrize(
