@@ -9,12 +9,13 @@ under `tmp_path`.
 from __future__ import annotations
 
 import builtins
+import errno
 import io
 import json
 import os
 import re
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -78,6 +79,12 @@ def _set(target: dict, field: str, value: object) -> None:
         target[field] = value
 
 
+def _as_utc(stamp: str) -> datetime:
+    """`stamp` parsed as ISO 8601; a naive stamp reads as UTC."""
+    parsed = datetime.fromisoformat(stamp)
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
 def _repo(tmp_path: Path, prds: dict[str, str]) -> tuple[Path, Path]:
     """A repo with `prds` in its backlog; returns (repo, wave.json path)."""
     repo = tmp_path / "proj"
@@ -100,15 +107,22 @@ def test_cut_joins_prds_that_share_a_path() -> None:
             "00002-b.md": _prd("y/b.py"),
             "00003-c.md": _prd("z/c.py", "x/shared.py"),
             "00004-d.md": _prd("z/c.py", "w/d.py"),  # joins a only through c
-        }
+        },
     )
     assert held_back == []
-    assert _groups(lanes) == [("00001-a.md", "00003-c.md", "00004-d.md"), ("00002-b.md",)]
+    assert _groups(lanes) == [
+        ("00001-a.md", "00003-c.md", "00004-d.md"),
+        ("00002-b.md",),
+    ]
     assert set(lanes[0].paths) == {"x/a.py", "x/shared.py", "z/c.py", "w/d.py"}
     assert set(lanes[1].paths) == {"y/b.py"}
     for each in lanes:
         assert (each.name, each.order, each.branch, each.worktree) == ("", 0, "", "")
-        assert (each.status, each.pid, each.worktree_created) == ("planned", None, False)
+        assert (each.status, each.pid, each.worktree_created) == (
+            "planned",
+            None,
+            False,
+        )
 
 
 def test_cut_treats_a_directory_prefix_as_shared() -> None:
@@ -117,7 +131,7 @@ def test_cut_treats_a_directory_prefix_as_shared() -> None:
             "00001-dir.md": _prd("docs/guide"),
             "00002-file.md": _prd("docs/guide/intro.md"),
             "00003-sibling.md": _prd("docs/guidebook.md"),
-        }
+        },
     )
     assert _groups(lanes) == [("00001-dir.md", "00002-file.md"), ("00003-sibling.md",)]
     assert wave.shares(frozenset({"docs/guide"}), frozenset({"docs/guide/intro.md"}))
@@ -134,7 +148,7 @@ def test_append_only_files_never_join_lanes() -> None:
             "00001-a.md": text,
             "00002-b.md": _prd("CHANGELOG.md", "dev/bin/release-checks", "y/b.py"),
             "00003-log.md": _prd("CHANGELOG.md"),
-        }
+        },
     )
     assert _groups(lanes) == [("00001-a.md",), ("00002-b.md",)]
     owned = {path for each in lanes for path in each.paths}
@@ -149,7 +163,7 @@ def test_force_shared_paths_pull_prds_into_one_lane() -> None:
             "00002-other.md": _prd("x/b.py"),
             "00003-records.md": _prd("skills/run-autopilot/cli/records.py", "y/c.py"),
             "00004-schema.md": _prd("skills/run-autopilot/references/state-schema.md"),
-        }
+        },
     )
     assert _groups(lanes) == [
         ("00001-skill.md", "00003-records.md", "00004-schema.md"),
@@ -183,9 +197,26 @@ def test_cut_packs_components_into_max_lanes() -> None:
             "00002-q.md": _prd("q/shared.py"),
             "00003-q.md": _prd("q/shared.py"),
             "00004-p.md": _prd("p/shared.py"),
-        }
+        },
     )
     assert _groups(ties) == [("00001-p.md", "00004-p.md"), ("00002-q.md", "00003-q.md")]
+
+
+def test_cut_gives_each_component_to_the_lane_with_fewest_prds() -> None:
+    first = ("00001-a.md", "00002-a.md", "00003-a.md")
+    second = ("00004-b.md", "00005-b.md", "00006-b.md")
+    prds = {name: _prd("a/shared.py") for name in first}
+    prds.update({name: _prd("b/shared.py") for name in second})
+    prds.update({"00007-c.md": _prd("c/c.py"), "00008-d.md": _prd("d/d.py")})
+    prds["00009-e.md"] = _prd("e/e.py")
+    # Sizes 3, 3, 1, 1, 1 into two lanes: always feeding the lighter lane
+    # splits 4/5; piling every overflow component onto one lane gives 3/6.
+    lanes, held_back = wave.cut(prds, max_lanes=2)
+    assert held_back == []
+    assert sorted(len(each.prds) for each in lanes) == [4, 5]
+    assert set(first) <= set(lanes[0].prds)
+    assert set(second) <= set(lanes[1].prds)
+    assert sorted(prd for each in lanes for prd in each.prds) == sorted(prds)
 
 
 def test_prd_without_named_paths_is_held_back() -> None:
@@ -194,7 +225,7 @@ def test_prd_without_named_paths_is_held_back() -> None:
             "00001-prose.md": "# Prose\n\nSee `cli/loop.py` in passing.\n",
             "00002-a.md": _prd("x/a.py"),
             "00003-empty.md": "",
-        }
+        },
     )
     assert held_back == [
         {"prd": "00001-prose.md", "reason": "no named paths"},
@@ -222,7 +253,12 @@ def test_cut_reads_nothing_from_disk(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_lane_order_puts_core_lanes_first() -> None:
-    core_two = ("skills/run-autopilot/SKILL.md", "skills/run-autopilot/references/phase-build.md")
+    # The core paths sit behind a non-core one: every path counts, not the first.
+    core_two = (
+        "docs/z.md",
+        "skills/run-autopilot/SKILL.md",
+        "skills/run-autopilot/references/phase-build.md",
+    )
     packed = [
         _unstamped("00006-big.md", "00007-big.md", paths=("y/c.py",)),
         _unstamped("00001-docs.md", paths=("docs/a.md",)),
@@ -283,9 +319,56 @@ def test_wave_json_round_trips(tmp_path: Path) -> None:
     assert [each.name for each in tmp_path.iterdir()] == ["wave.json"]
 
 
+class _DiskFull:
+    """A writable file handle that writes half its first chunk, then fails."""
+
+    def __init__(self, handle: io.IOBase) -> None:
+        self._handle = handle
+
+    def __enter__(self) -> _DiskFull:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self._handle.close()
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._handle, name)
+
+    def write(self, data: str | bytes) -> int:
+        self._handle.write(data[: len(data) // 2])
+        self._handle.flush()
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+
+def test_save_failing_mid_write_leaves_the_old_wave_json_intact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "wave.json"
+    old = _wave(REPO)
+    wave.save(path, old)
+    before = path.read_bytes()
+    real_open = io.open
+
+    def _open(file: object, mode: str = "r", *args: object, **kwargs: object) -> object:
+        handle = real_open(file, mode, *args, **kwargs)
+        return _DiskFull(handle) if set(mode) & set("wxa+") else handle
+
+    with monkeypatch.context() as patch:
+        patch.setattr(builtins, "open", _open)
+        patch.setattr(io, "open", _open)
+        with pytest.raises(OSError, match="No space left on device"):
+            wave.save(path, {**old, "status": "aborted"})
+    assert path.read_bytes() == before, "a failed save truncated or rewrote wave.json"
+    assert wave.load(path) == old
+
+
 def test_locked_blocks_a_second_holder_until_the_first_releases(tmp_path: Path) -> None:
     wave_path = tmp_path / "wave.json"
-    first_in, release, second_in = threading.Event(), threading.Event(), threading.Event()
+    first_in, release, second_in = (
+        threading.Event(),
+        threading.Event(),
+        threading.Event(),
+    )
     events: list[str] = []
 
     def first() -> None:
@@ -301,12 +384,17 @@ def test_locked_blocks_a_second_holder_until_the_first_releases(tmp_path: Path) 
             events.append("second in")
             second_in.set()
 
-    threads = [threading.Thread(target=first, daemon=True), threading.Thread(target=second, daemon=True)]
+    threads = [
+        threading.Thread(target=first, daemon=True),
+        threading.Thread(target=second, daemon=True),
+    ]
     for thread in threads:
         thread.start()
     try:
         assert first_in.wait(5)
-        assert not second_in.wait(0.3), "a second holder entered while the first held the lock"
+        assert not second_in.wait(0.3), (
+            "a second holder entered while the first held the lock"
+        )
     finally:
         release.set()
         for thread in threads:
@@ -314,10 +402,47 @@ def test_locked_blocks_a_second_holder_until_the_first_releases(tmp_path: Path) 
     assert events == ["first in", "first out", "second in"]
 
 
+def test_locked_on_one_wave_json_never_blocks_another(tmp_path: Path) -> None:
+    one, two = tmp_path / "one" / "wave.json", tmp_path / "two" / "wave.json"
+    one.parent.mkdir()
+    two.parent.mkdir()
+    first_in, release, second_in = (
+        threading.Event(),
+        threading.Event(),
+        threading.Event(),
+    )
+
+    def first() -> None:
+        with wave.locked(one):
+            first_in.set()
+            release.wait(30)  # outlasts the check below; the finally frees it
+
+    def second() -> None:
+        first_in.wait(5)
+        with wave.locked(two):
+            second_in.set()
+
+    threads = [
+        threading.Thread(target=first, daemon=True),
+        threading.Thread(target=second, daemon=True),
+    ]
+    for thread in threads:
+        thread.start()
+    try:
+        assert first_in.wait(5)
+        assert second_in.wait(5), "holding one wave.json's lock blocked a different one"
+    finally:
+        release.set()
+        for thread in threads:
+            thread.join(5)
+
+
 # ── plan ─────────────────────────────────────────────────────────────────────
 
 
-def test_plan_writes_the_cut_as_a_planned_wave(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_plan_writes_the_cut_as_a_planned_wave(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     repo, wave_path = _repo(
         tmp_path,
         {
@@ -328,12 +453,22 @@ def test_plan_writes_the_cut_as_a_planned_wave(tmp_path: Path, capsys: pytest.Ca
         },
     )
     wave_path.write_text(json.dumps(_wave(repo, "aborted")), encoding="utf-8")
+    before = datetime.now(timezone.utc)
     assert wave.plan(repo, wave_path, max_lanes=3) == 0
+    after = datetime.now(timezone.utc)
     saved = json.loads(wave_path.read_text(encoding="utf-8"))
-    assert re.fullmatch(r"\d{12}", saved["id"])
-    top = (saved["status"], saved["repo"], saved["base_branch"], saved["base_sha"], saved["review_slots"])
+    # id is the UTC minute of planning; created_at the UTC moment of planning.
+    assert saved["id"] in {each.strftime("%Y%m%d%H%M") for each in (before, after)}
+    created = _as_utc(saved["created_at"])
+    assert before - timedelta(seconds=1) <= created <= after, saved["created_at"]
+    top = (
+        saved["status"],
+        saved["repo"],
+        saved["base_branch"],
+        saved["base_sha"],
+        saved["review_slots"],
+    )
     assert top == ("planned", str(repo), None, None, 3)
-    datetime.fromisoformat(saved["created_at"])
     assert saved["held_back"] == [{"prd": "00004-prose.md", "reason": "no named paths"}]
     assert [(each["name"], each["prds"]) for each in saved["lanes"]] == [
         ("l1", ["00001-a.md", "00003-c.md"]),
@@ -342,7 +477,11 @@ def test_plan_writes_the_cut_as_a_planned_wave(tmp_path: Path, capsys: pytest.Ca
     first = saved["lanes"][0]
     assert first["branch"] == f"wave/{saved['id']}/l1"
     assert first["worktree"] == f"{repo.parent}/{repo.name}-l1"
-    assert (first["status"], first["pid"], first["worktree_created"]) == ("planned", None, False)
+    assert (first["status"], first["pid"], first["worktree_created"]) == (
+        "planned",
+        None,
+        False,
+    )
     assert wave._structural_errors(repo, saved) == []
     out = capsys.readouterr().out
     assert f"wave/{saved['id']}/l1" in out
@@ -351,7 +490,9 @@ def test_plan_writes_the_cut_as_a_planned_wave(tmp_path: Path, capsys: pytest.Ca
 
 
 @pytest.mark.parametrize("status", ["planned", "running", "abort_failed"])
-def test_plan_refuses_a_live_wave(tmp_path: Path, capsys: pytest.CaptureFixture[str], status: str) -> None:
+def test_plan_refuses_a_live_wave(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], status: str
+) -> None:
     repo, wave_path = _repo(tmp_path, {"00003-c.md": _prd("x/c.py")})
     before = json.dumps(_wave(repo, status))
     wave_path.write_text(before, encoding="utf-8")
@@ -360,7 +501,9 @@ def test_plan_refuses_a_live_wave(tmp_path: Path, capsys: pytest.CaptureFixture[
     assert status in capsys.readouterr().err
 
 
-def test_plan_refuses_a_corrupt_wave_json(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_plan_refuses_a_corrupt_wave_json(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     repo, wave_path = _repo(tmp_path, {"00001-a.md": _prd("x/a.py")})
     wave_path.write_text('{"id": "2026', encoding="utf-8")
     with pytest.raises(wave.WaveCorruptError):
@@ -371,7 +514,9 @@ def test_plan_refuses_a_corrupt_wave_json(tmp_path: Path, capsys: pytest.Capture
     assert "wave.json is corrupt" in captured.out + captured.err
 
 
-def test_plan_refuses_a_structurally_invalid_wave_json(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_plan_refuses_a_structurally_invalid_wave_json(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     repo, wave_path = _repo(tmp_path, {"00001-a.md": _prd("x/a.py")})
     broken = _wave(repo)
     del broken["status"]
@@ -386,7 +531,10 @@ def test_plan_refuses_a_structurally_invalid_wave_json(tmp_path: Path, capsys: p
 
 @pytest.mark.parametrize("max_lanes", [0, -1])
 def test_plan_refuses_max_lanes_below_one_before_cutting(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, max_lanes: int
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    max_lanes: int,
 ) -> None:
     def _no_cut(*args: object, **kwargs: object) -> None:
         raise AssertionError("plan called cut")
@@ -407,6 +555,18 @@ def test_structural_errors_accepts_a_sound_wave(status: str) -> None:
     assert wave._structural_errors(REPO, _wave(REPO, status)) == []
 
 
+@pytest.mark.parametrize("status", ["running", "aborted", "abort_failed"])
+def test_structural_errors_accepts_a_launched_lane(status: str) -> None:
+    sound = _wave(REPO, "running")
+    sound["lanes"][0].update(
+        status=status,
+        pid=4242,
+        started_at="2026-09-26T12:01:00Z",
+        worktree_created=True,
+    )
+    assert wave._structural_errors(REPO, sound) == []
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [
@@ -421,13 +581,18 @@ def test_structural_errors_accepts_a_sound_wave(status: str) -> None:
         ("lanes", {"l1": {}}),
         ("review_slots", _DROP),
         ("review_slots", 0),
+        ("review_slots", -1),
         ("review_slots", "3"),
     ],
 )
-def test_structural_errors_names_a_malformed_top_level_field(field: str, value: object) -> None:
+def test_structural_errors_names_a_malformed_top_level_field(
+    field: str, value: object
+) -> None:
     broken = _wave(REPO)
     _set(broken, field, value)
-    assert f"wave.json: malformed top-level field {field}" in wave._structural_errors(REPO, broken)
+    assert f"wave.json: malformed top-level field {field}" in wave._structural_errors(
+        REPO, broken
+    )
 
 
 def test_structural_errors_rejects_a_wave_planned_for_another_repo() -> None:
@@ -442,9 +607,12 @@ def test_structural_errors_rejects_a_wave_planned_for_another_repo() -> None:
         ("order", None),
         ("order", 0),
         ("order", -1),
+        ("order", -2),
         ("order", "1"),
+        ("order", True),  # a JSON boolean is not an int
         ("pid", "4242"),
         ("pid", 1.5),
+        ("pid", True),
         ("worktree_created", _DROP),
         ("worktree_created", 0),
         ("worktree_created", None),
@@ -454,13 +622,19 @@ def test_structural_errors_rejects_a_wave_planned_for_another_repo() -> None:
         ("worktree", None),
         ("status", 3),
         ("status", "bogus"),
+        ("status", "exploded"),
+        ("status", "done"),  # legal for the wave, never for a lane
         ("prds", "00001-a.md"),
         ("prds", []),
         ("prds", [7]),
         ("prds", ["backlog/00001-a.md"]),
+        ("prds", ["../00001-a.md"]),
+        ("prds", ["00001-a.md", "wip/00003-c.md"]),
     ],
 )
-def test_structural_errors_names_a_malformed_lane_field(field: str, value: object) -> None:
+def test_structural_errors_names_a_malformed_lane_field(
+    field: str, value: object
+) -> None:
     broken = _wave(REPO)
     _set(broken["lanes"][0], field, value)
     errors = wave._structural_errors(REPO, broken)
@@ -478,11 +652,15 @@ def test_structural_errors_names_a_malformed_lane_field(field: str, value: objec
         ("worktree", "/work/proj-l1"),
     ],
 )
-def test_structural_errors_rejects_a_value_two_lanes_share(field: str, value: object) -> None:
+def test_structural_errors_rejects_a_value_two_lanes_share(
+    field: str, value: object
+) -> None:
     broken = _wave(REPO)
     broken["lanes"][1][field] = value
     errors = wave._structural_errors(REPO, broken)
-    expected = re.compile(rf"lane \S+ and lane \S+ both use {field} {re.escape(str(value))}")
+    expected = re.compile(
+        rf"lane \S+ and lane \S+ both use {field} {re.escape(str(value))}"
+    )
     assert any(expected.fullmatch(error) for error in errors), errors
 
 
