@@ -189,16 +189,20 @@ def test_abort_refuses_a_structurally_invalid_wave_before_touching_anything(
             assert not (_backlog(repo) / prd).exists()
 
 
+@pytest.mark.parametrize("pid", [0, 1, -1, -5, 2**31])
 def test_abort_refuses_an_out_of_range_pid_without_signalling_anything(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    pid: int,
 ) -> None:
     repo, wave_path = _launched(tmp_path, monkeypatch, TWO_LANES)
     saved = wave.load(wave_path)
     # ONLY the pid is broken. Every other field, `order` included, stays valid
     # and sortable, so this drives the kill loop instead of dying while sorting
     # the lanes - which is what the `order = None` sibling above cannot do.
-    saved["lanes"][0].update(pid=0, status="running")
+    # Every end of the range is covered, `-5` above all: that is the value whose
+    # `killpg(-5, sig)` is a plain kill of whatever unrelated process is pid 5.
+    saved["lanes"][0].update(pid=pid, status="running")
     wave.save(wave_path, saved)
     kills: list[tuple[int, int]] = []
     frozen = wave_path.read_bytes()

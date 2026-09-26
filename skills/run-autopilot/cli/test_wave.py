@@ -555,15 +555,36 @@ def test_structural_errors_accepts_a_sound_wave(status: str) -> None:
     assert wave._structural_errors(REPO, _wave(REPO, status)) == []
 
 
-@pytest.mark.parametrize("status", ["running", "aborted", "abort_failed"])
-def test_structural_errors_accepts_a_launched_lane(status: str) -> None:
+@pytest.mark.parametrize(
+    ("status", "pid"),
+    [
+        ("running", 4242),
+        ("aborted", 4242),
+        ("abort_failed", 4242),
+        # Both ends of the pid range a lane may carry: 2 is the smallest group a
+        # lane can be, 2**31 - 1 the largest `os.killpg` accepts. Refusing either
+        # is as wrong as accepting 1 or 2**31.
+        ("running", 2),
+        ("running", 2**31 - 1),
+    ],
+)
+def test_structural_errors_accepts_a_launched_lane(status: str, pid: int) -> None:
     sound = _wave(REPO, "running")
     sound["lanes"][0].update(
         status=status,
-        pid=4242,
+        pid=pid,
         started_at="2026-09-26T12:01:00Z",
         worktree_created=True,
     )
+    assert wave._structural_errors(REPO, sound) == []
+
+
+@pytest.mark.parametrize("base_sha", [None, "9c1f0a3b7d2e4f5a6b8c9d0e1f2a3b4c5d6e7f80"])
+def test_structural_errors_accepts_a_null_or_revision_string_base_sha(
+    base_sha: object,
+) -> None:
+    sound = _wave(REPO)
+    sound["base_sha"] = base_sha
     assert wave._structural_errors(REPO, sound) == []
 
 
@@ -585,11 +606,16 @@ def test_structural_errors_accepts_a_launched_lane(status: str) -> None:
         ("review_slots", "3"),
         # `base_sha` must be present, and either None or a revision string: it is
         # what every `<base>..<branch>` range in the abort path is built from.
+        # `0`, `False` and `3.14` are the shapes a truthiness test or a bare
+        # `value not in (...)` blacklist lets through while still refusing `7`.
         ("base_sha", _DROP),
         ("base_sha", 7),
+        ("base_sha", 0),
+        ("base_sha", 3.14),
         ("base_sha", []),
         ("base_sha", {}),
         ("base_sha", True),
+        ("base_sha", False),
     ],
 )
 def test_structural_errors_names_a_malformed_top_level_field(
@@ -623,11 +649,18 @@ def test_structural_errors_rejects_a_wave_planned_for_another_repo() -> None:
         # A lane pid is a group to signal, so the ends of the int range are not
         # pids: `killpg(0, sig)` signals our own group, `killpg(1, sig)` is a
         # broadcast, `killpg(-5, sig)` is a plain kill of pid 5, and `os.killpg`
-        # raises OverflowError at 2**31.
+        # raises OverflowError at 2**31. Both ends are refused from both sides
+        # (2 and 2**31 - 1 are accepted by the launched-lane test above), and
+        # negatives far from the boundary are refused too, so a range check is
+        # the only predicate that can satisfy the whole set.
         ("pid", 0),
         ("pid", 1),
         ("pid", -1),
+        ("pid", -2),
+        ("pid", -12345),
         ("pid", 2**31),
+        ("pid", 2**31 + 1),
+        ("pid", 2**63),
         ("worktree_created", _DROP),
         ("worktree_created", 0),
         ("worktree_created", None),
