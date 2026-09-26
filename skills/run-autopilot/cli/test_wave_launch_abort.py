@@ -189,6 +189,38 @@ def test_abort_refuses_a_structurally_invalid_wave_before_touching_anything(
             assert not (_backlog(repo) / prd).exists()
 
 
+def test_abort_refuses_an_out_of_range_pid_without_signalling_anything(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, wave_path = _launched(tmp_path, monkeypatch, TWO_LANES)
+    saved = wave.load(wave_path)
+    # ONLY the pid is broken. Every other field, `order` included, stays valid
+    # and sortable, so this drives the kill loop instead of dying while sorting
+    # the lanes - which is what the `order = None` sibling above cannot do.
+    saved["lanes"][0].update(pid=0, status="running")
+    wave.save(wave_path, saved)
+    kills: list[tuple[int, int]] = []
+    frozen = wave_path.read_bytes()
+    # No `run_git`: the refusal returns before the first git call.
+    exit_code = wave_launch.abort(
+        repo,
+        wave_path,
+        kill_fn=lambda pgid, sig: kills.append((pgid, sig)),
+    )
+    # The load-bearing pair: no signal left through the kill seam, and the file
+    # is untouched. (The liveness probe calls `os.killpg(pgid, 0)` directly, so
+    # this pins the seam, not every `killpg` in the process.)
+    assert kills == []
+    assert wave_path.read_bytes() == frozen
+    # Secondary only. `== 1` also holds BEFORE the fix, for the opposite reason:
+    # a liveness probe on group 0 is permanently true, so the kill path burns
+    # its 60s and 10s grace windows and then reports the group survived
+    # SIGKILL - which is also why this test's fail-first run takes ~70s. An
+    # `== 1`-only test would pass pre-fix and prove nothing.
+    assert exit_code == 1
+
+
 def test_abort_returns_prds_and_removes_clean_worktrees(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

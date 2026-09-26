@@ -583,6 +583,13 @@ def test_structural_errors_accepts_a_launched_lane(status: str) -> None:
         ("review_slots", 0),
         ("review_slots", -1),
         ("review_slots", "3"),
+        # `base_sha` must be present, and either None or a revision string: it is
+        # what every `<base>..<branch>` range in the abort path is built from.
+        ("base_sha", _DROP),
+        ("base_sha", 7),
+        ("base_sha", []),
+        ("base_sha", {}),
+        ("base_sha", True),
     ],
 )
 def test_structural_errors_names_a_malformed_top_level_field(
@@ -613,6 +620,14 @@ def test_structural_errors_rejects_a_wave_planned_for_another_repo() -> None:
         ("pid", "4242"),
         ("pid", 1.5),
         ("pid", True),
+        # A lane pid is a group to signal, so the ends of the int range are not
+        # pids: `killpg(0, sig)` signals our own group, `killpg(1, sig)` is a
+        # broadcast, `killpg(-5, sig)` is a plain kill of pid 5, and `os.killpg`
+        # raises OverflowError at 2**31.
+        ("pid", 0),
+        ("pid", 1),
+        ("pid", -1),
+        ("pid", 2**31),
         ("worktree_created", _DROP),
         ("worktree_created", 0),
         ("worktree_created", None),
