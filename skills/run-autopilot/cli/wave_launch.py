@@ -449,12 +449,12 @@ def _keep_verdict(
 def _worktree_line(repo: Path, worktree: str, run_git: Callable[..., object]) -> str:
     """The worktree's own `git worktree list` line, so a kept worktree is reported
     in git's words - branch and HEAD sha included - rather than as a synthesized
-    summary an operator cannot act on. Falls back to the bare path for a directory
-    git does not list."""
+    summary an operator cannot act on. A directory git does not list gets a
+    prefixed line saying so instead of a bare path an operator can only guess at."""
     for line in run_git(["worktree", "list"], cwd=repo).stdout.splitlines():
         if line.split()[:1] == [worktree]:
             return line
-    return worktree
+    return f"autopilot: {worktree}: git does not list it as a worktree"
 
 
 # Where each of a lane's lifecycle folders comes home to. An in-flight PRD

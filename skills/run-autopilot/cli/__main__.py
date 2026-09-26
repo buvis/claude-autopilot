@@ -1153,7 +1153,7 @@ def _run_wave(args: argparse.Namespace) -> int:
     # caller-supplied --state is input, so a non-canonical one is reported, never
     # asserted: under `python -O` a bare assert vanishes and the wrong repo root
     # is derived in silence.
-    if state_path.parts[-4:-1] != ("dev", "local", "autopilot"):
+    if state_path.parts[-4:] != ("dev", "local", "autopilot", "state.json"):
         print(
             "autopilot: wave needs --state at <repo>/dev/local/autopilot/state.json,"
             f" not {state_path}",

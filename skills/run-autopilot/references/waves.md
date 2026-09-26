@@ -97,8 +97,13 @@ invalid `wave.json` (exit 1). Otherwise, per lane in order:
 Steps 2 and 3 are skipped, and the lane keeps its PRDs, when the worktree is not
 this wave's to remove or holds work: this wave never recorded creating it, git no
 longer has it checked out on the lane branch, the branch carries commits past
-`base_sha`, or the worktree has uncommitted changes. The reason is printed - those
-PRDs are the only record of what the lane was doing.
+`base_sha`, or the worktree has uncommitted changes. Those PRDs are the only
+record of what the lane was doing, so abort says where they are: for a worktree
+git still has, it prints git's own `worktree list` line for it, branch and HEAD
+sha included. A kept worktree git does not list gets one `autopilot:` line
+carrying the path and the reason `git does not list it as a worktree`. A worktree
+holding uncommitted changes gets a second line on top of its listing, the note
+`autopilot: <n> uncommitted change(s), inspect before reusing this worktree`.
 
 `wave-slots/` is kept only while a lane's process group survived its kill, because
 that loop still reads it; every other outcome removes it, a worktree cleanup
