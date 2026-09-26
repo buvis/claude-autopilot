@@ -58,11 +58,19 @@ _LEADER_SRC = (
 
 
 def _group_alive(pgid: int) -> bool:
-    """The `os.killpg(pgid, 0)` probe itself - never the leader pid, never pgrep."""
+    """The `os.killpg(pgid, 0)` probe itself - never the leader pid, never pgrep.
+
+    Reads the result exactly as `loop_gates._pid_alive` does: only
+    `ProcessLookupError` means gone. Any other `OSError` (XNU answers EPERM for a
+    group that still exists but holds nothing signalable, e.g. a member awaiting
+    reaping) means it is still there, so the caller polls instead of erroring.
+    """
     try:
         os.killpg(pgid, 0)
     except ProcessLookupError:
         return False
+    except OSError:
+        return True  # EPERM etc.: it exists, we just can't signal it
     return True
 
 
@@ -188,7 +196,10 @@ def test_abort_returns_prds_and_removes_clean_worktrees(
     repo, wave_path = _launched(tmp_path, monkeypatch, TWO_LANES)
     lanes = wave.load(wave_path)["lanes"]
     first, second = (Path(lane["worktree"]) for lane in lanes)
-    # a lane that finished one PRD and parked another before it was killed
+    # A lane killed mid-wave: one PRD finished, one parked, and one still IN
+    # FLIGHT in wip/. A wave is aborted precisely while its lanes are mid-PRD, so
+    # a return that walks only backlog/done/hold deletes that wip/ PRD silently.
+    (first / "dev/local/prds/wip/90007-wip.md").write_text("wip\n", encoding="utf-8")
     (first / "dev/local/prds/done/90008-done.md").write_text("done\n", encoding="utf-8")
     (first / "dev/local/prds/hold/90009-held.md").write_text("held\n", encoding="utf-8")
     slots = _autopilot(repo) / "wave-slots"
@@ -197,8 +208,10 @@ def test_abort_returns_prds_and_removes_clean_worktrees(
     assert wave_launch.abort(repo, wave_path) == 0
     for name, text in TWO_LANES.items():
         assert (_backlog(repo) / name).read_text(encoding="utf-8") == text
+    in_flight = repo / "dev/local/prds/wip/90007-wip.md"
     done = repo / "dev/local/prds/done/90008-done.md"
     held = repo / "dev/local/prds/hold/90009-held.md"
+    assert in_flight.read_text(encoding="utf-8") == "wip\n"
     assert done.read_text(encoding="utf-8") == "done\n"
     assert held.read_text(encoding="utf-8") == "held\n"
     assert not first.exists()
@@ -324,10 +337,13 @@ def test_abort_leaves_a_worktree_this_wave_never_recorded_creating(
 
 
 @pytest.mark.parametrize(
-    "boom",
+    ("expected", "boom"),
     [
-        OSError("worktree is busy"),
-        subprocess.CalledProcessError(1, "git worktree remove"),
+        ("worktree is busy", OSError("worktree is busy")),
+        (
+            "non-zero exit status 1",
+            subprocess.CalledProcessError(1, "git worktree remove"),
+        ),
     ],
     ids=["oserror", "git-failure"],
 )
@@ -335,9 +351,11 @@ def test_abort_finishes_every_other_lane_after_one_lane_raises(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    expected: str,
     boom: Exception,
 ) -> None:
     repo, wave_path = _launched(tmp_path, monkeypatch, TWO_LANES)
+    capsys.readouterr()  # the fixture's own plan listing, not abort's output
     lanes = wave.load(wave_path)["lanes"]
     broken, healthy = (Path(lane["worktree"]) for lane in lanes)
     run_git = _breaking_git(str(broken), boom)
@@ -346,14 +364,22 @@ def test_abort_finishes_every_other_lane_after_one_lane_raises(
     assert after["status"] == "abort_failed"
     failed, finished = after["lanes"]
     assert failed["status"] == "abort_failed"
-    assert "worktree" in (failed["abort_error"] or "")
+    # the step AND this boom's own cause: one hardcoded string cannot satisfy both
+    assert "worktree" in (failed["abort_error"] or ""), failed["abort_error"]
+    assert expected in (failed["abort_error"] or ""), failed["abort_error"]
     assert failed["pid"] is None
     assert broken.exists()
     # the other lane is still finished, and the warning names the failing lane
     assert (finished["status"], finished["abort_error"]) == ("aborted", None)
     assert not healthy.exists()
     assert (_backlog(repo) / lanes[1]["prds"][0]).exists()
-    assert lanes[0]["name"] in capsys.readouterr().out
+    # The lane's own worktree path is masked first: it ends in the lane's name, so
+    # an unmasked path would satisfy "names the lane" without naming it.
+    printed = capsys.readouterr()
+    masked = (printed.out + printed.err).replace(str(broken), "<path>")
+    assert any(
+        lanes[0]["name"] in line and "worktree" in line for line in masked.splitlines()
+    ), masked
 
 
 def test_a_second_abort_retries_only_the_lane_that_failed(
@@ -424,8 +450,13 @@ def test_abort_kills_a_group_whose_leader_has_already_exited(
         assert _group_alive(leader.pid)
         saved["lanes"][0]["pid"] = leader.pid
         wave.save(wave_path, saved)
+        start = time.monotonic()
         assert wave_launch.abort(repo, wave_path) == 0
+        elapsed = time.monotonic() - start
         assert not _group_alive(leader.pid)
+        # The 60s grace is a CEILING, not a sleep: this group dies on SIGTERM, so
+        # waiting it out anyway would cost a minute per lane WITH THE LOCK HELD.
+        assert elapsed < 30, elapsed
         after = wave.load(wave_path)
         assert after["status"] == "aborted"
         lane = after["lanes"][0]

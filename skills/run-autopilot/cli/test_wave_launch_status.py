@@ -28,11 +28,13 @@ operator (and no test) could tell which column a value belongs to.
 from __future__ import annotations
 
 import copy
+import os
 from pathlib import Path
 
 import pytest
 
 from cli import wave, wave_cli, wave_launch
+from cli.loop_testutil import _spawn_tagged_incumbent
 from cli.test_wave_launch import (
     ONE_LANE,
     TWO_LANES,
@@ -142,6 +144,35 @@ def test_status_derives_drained_from_a_dead_pid_and_empty_next_phase(
     assert cells["status"] == "drained"
 
 
+def test_status_reports_running_for_a_lane_whose_loop_is_still_alive(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, wave_path = _planned(tmp_path, monkeypatch, ONE_LANE, max_lanes=1)
+    loaded = wave.load(wave_path)
+    lane = loaded["lanes"][0]
+    # The one thing an operator reads this table for: is anything still going?
+    # `state.json` says the lane drained its queue, so a status derived from that
+    # file alone renders "drained" - the live process group has to win.
+    _lane_state(
+        Path(lane["worktree"]),
+        '{"prd": "00001-a.md", "phase": "work", "next_phase": ""}',
+        ['{"phase_end": "work", "signal": "fresh-green"}\n'],
+    )
+    _lane_prds(Path(lane["worktree"]), {"backlog": 1, "wip": 1, "done": 0, "hold": 0})
+    live = _spawn_tagged_incumbent()
+    try:
+        assert live.pid != os.getpid()
+        lane["pid"] = live.pid
+        lane["status"] = "planned"  # stale the moment the loop started
+        cells = _by_name(wave_launch.status(repo, loaded), lane["name"])
+        assert cells["pid"] == str(live.pid)
+        assert cells["status"] == "running"
+    finally:
+        live.kill()
+        live.wait(10)
+
+
 def test_status_prints_dashes_for_a_lane_whose_worktree_is_gone(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -157,17 +188,27 @@ def test_status_prints_dashes_for_a_lane_whose_worktree_is_gone(
         ['{"phase_end": "work", "signal": "green"}\n'],
     )
     _lane_prds(Path(live["worktree"]), {"backlog": 1, "wip": 1, "done": 1, "hold": 1})
-    gone["pid"] = None
+    # The gone lane still carries a recorded pid - the orphan case, a worktree
+    # deleted by hand while the loop ran. The pid comes from wave.json, not from
+    # the worktree, so it must survive the worktree's removal: dashing the whole
+    # row would leave the operator nothing to kill.
+    gone["pid"] = _dead_pid()
     gone["status"] = "aborted"
     assert not Path(gone["worktree"]).exists()
     rendered = wave_launch.status(repo, loaded)
     dashes = _by_name(rendered, gone["name"])
     # nothing is left on disk to read, so every worktree-backed field is "-",
     # and the row is still as wide as the lane that does have a worktree
-    worktree_backed = set(_HEADERS) - {"lane", "status"}
+    worktree_backed = set(_HEADERS) - {"lane", "pid", "status"}
     assert {dashes[field] for field in worktree_backed} == {"-"}
+    assert dashes["pid"] == str(gone["pid"])
     assert dashes["status"] == "aborted"
-    assert set(_row(rendered, gone["name"])) == {gone["name"], "aborted", "-"}
+    assert set(_row(rendered, gone["name"])) == {
+        gone["name"],
+        str(gone["pid"]),
+        "aborted",
+        "-",
+    }
     # the lane that still has a worktree is unaffected by its neighbour's dashes
     kept = _by_name(rendered, live["name"])
     assert kept["pid"] == str(live["pid"])
