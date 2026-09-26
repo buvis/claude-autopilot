@@ -56,4 +56,8 @@ def run(args: argparse.Namespace, repo: Path, wave_path: Path) -> int:
         return 0
     # `abort` is the last verb the parser accepts, and it reloads wave.json under
     # its own lock too.
-    return wave_launch.abort(repo, wave_path)
+    try:
+        return wave_launch.abort(repo, wave_path)
+    except subprocess.CalledProcessError as err:
+        print(f"autopilot: {err}", file=sys.stderr)
+        return 1

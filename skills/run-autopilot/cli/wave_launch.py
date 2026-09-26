@@ -385,16 +385,25 @@ def _wait_for_exit(pgid: int, timeout: float) -> bool:
 def _kill_lane(lane: dict, kill_fn: Callable[[int, int], object]) -> str | None:
     """SIGTERM the lane's group, then SIGKILL it if it outlives the 60s grace.
     None once the group is gone; the failure to record when it is still there.
-    `lane["pid"]` IS the pgid: the loop was spawned as its own session leader."""
+    `lane["pid"]` IS the pgid: the loop was spawned as its own session leader.
+
+    The group can exit between the `_pgid_alive` probe and the signal - the
+    ordinary case, since it is being asked to die - so a `ProcessLookupError`
+    from the signal means gone, hence killed: no escalation, no grace window
+    spent. Only the exception TYPE says that. Any other `OSError` (EPERM) left
+    the group where it was, so it is a failure that names its reason."""
     pgid = lane["pid"]
     if pgid is None or not _pgid_alive(pgid):
         return None
-    kill_fn(pgid, signal.SIGTERM)
-    if _wait_for_exit(pgid, 60):
-        return None
-    kill_fn(pgid, signal.SIGKILL)
-    if _wait_for_exit(pgid, 10):
-        return None
+    for sig, grace in ((signal.SIGTERM, 60), (signal.SIGKILL, 10)):
+        try:
+            kill_fn(pgid, sig)
+        except ProcessLookupError:
+            return None
+        except OSError as err:
+            return f"could not signal process group {pgid}: {err}"
+        if _wait_for_exit(pgid, grace):
+            return None
     return f"process group {pgid} survived SIGKILL"
 
 
@@ -410,38 +419,56 @@ def _worktree_branches(repo: Path, run_git: Callable[..., object]) -> dict[str, 
     return registry
 
 
-def _keep_reason(
+def _keep_verdict(
     repo: Path,
     wave: dict,
     lane: dict,
     registry: dict[str, str],
     run_git: Callable[..., object],
-) -> str | None:
-    """Why this lane's worktree must stay, None when it is this wave's to remove.
-    Ownership takes TWO signals - the lane's own flag and git's registry - and a
-    worktree holding commits or uncommitted work is never removed."""
+) -> tuple[bool, str | None]:
+    """Whether this lane's worktree must stay, and the one note to add when it
+    holds uncommitted work. Ownership takes TWO signals - the lane's own flag and
+    git's registry - and a worktree holding commits or uncommitted work is never
+    removed."""
     if not lane["worktree_created"]:
-        return "this wave never recorded creating it"
+        return True, None
     if registry.get(lane["worktree"]) != f"refs/heads/{lane['branch']}":
-        return f"git no longer has it checked out on {lane['branch']}"
+        return True, None
     spec = f"{wave['base_sha']}..{lane['branch']}"
-    commits = run_git(["rev-list", "--count", spec], cwd=repo).stdout.strip()
-    if commits != "0":
-        return f"{commits} commit(s) on {lane['branch']}, not merged anywhere"
+    if run_git(["rev-list", "--count", spec], cwd=repo).stdout.strip() != "0":
+        return True, None
     dirty = run_git(["status", "--porcelain"], cwd=Path(lane["worktree"])).stdout
     if dirty.strip():
-        return (
+        return True, (
             f"{len(dirty.splitlines())} uncommitted change(s), inspect before"
             " reusing this worktree"
         )
-    return None
+    return False, None
+
+
+def _worktree_line(repo: Path, worktree: str, run_git: Callable[..., object]) -> str:
+    """The worktree's own `git worktree list` line, so a kept worktree is reported
+    in git's words - branch and HEAD sha included - rather than as a synthesized
+    summary an operator cannot act on. Falls back to the bare path for a directory
+    git does not list."""
+    for line in run_git(["worktree", "list"], cwd=repo).stdout.splitlines():
+        if line.split()[:1] == [worktree]:
+            return line
+    return worktree
+
+
+# Where each of a lane's lifecycle folders comes home to. An in-flight PRD
+# returns to the main backlog/, never the main wip/: a PRD sitting in the main
+# wip/ is re-selected as already-in-progress against a state.json that holds no
+# task record for it. Only the folder it sits in decides where a PRD lands.
+_RETURN_TO = {"backlog": "backlog", "wip": "backlog", "done": "done", "hold": "hold"}
 
 
 def _return_prds(repo: Path, worktree: Path) -> None:
-    """Every PRD the lane still holds, back into the main checkout's own lifecycle
+    """Every PRD the lane still holds, back into the main checkout's `_RETURN_TO`
     folder. A wave is aborted mid-PRD, so wip/ is walked like the rest."""
-    for folder in _LIFECYCLE:
-        target = repo / "dev/local/prds" / folder
+    for folder, home in _RETURN_TO.items():
+        target = repo / "dev/local/prds" / home
         for prd in sorted((worktree / "dev/local/prds" / folder).glob("*.md")):
             target.mkdir(parents=True, exist_ok=True)
             shutil.move(str(prd), str(target / prd.name))
@@ -457,11 +484,15 @@ def _clean_up_lane(
     """Return the lane's PRDs and drop the worktree and branch this wave cut. A
     worktree that is not ours, or that holds work, keeps its PRDs too: they are
     the only record of what that lane was doing."""
-    reason = _keep_reason(repo, wave, lane, registry, run_git)
-    if reason is not None:
-        worktree = Path(lane["worktree"])
-        if worktree.exists():
-            print(f"autopilot: keeping {worktree}: {reason}")
+    keep, note = _keep_verdict(repo, wave, lane, registry, run_git)
+    if keep:
+        # TWO distinct outputs, never one synthesized line: git's own listing line
+        # says where the work is and on which branch, and the note - only when the
+        # worktree is dirty - says what would be lost by reusing it.
+        if Path(lane["worktree"]).exists():
+            print(_worktree_line(repo, lane["worktree"], run_git))
+            if note is not None:
+                print(f"autopilot: {note}")
         return
     _return_prds(repo, Path(lane["worktree"]))
     run_git(["worktree", "remove", "--force", lane["worktree"]], cwd=repo)
@@ -475,15 +506,16 @@ def _abort_lane(
     registry: dict[str, str],
     run_git: Callable[..., object],
     kill_fn: Callable[[int, int], object],
-) -> bool:
-    """One lane's whole abort; True when it did not finish. A lane whose group
-    survived keeps its pid and status - it is still running - and its files are
-    left alone. Every other failure is per-lane, so the next lane still runs."""
+) -> tuple[bool, bool]:
+    """One lane's whole abort: (it did not finish, its group is still alive). A
+    lane whose group survived its kill keeps its pid and status - it is still
+    running - and its files are left alone. Every other failure is per-lane, so
+    the next lane still runs."""
     survived = _kill_lane(lane, kill_fn)
     if survived is not None:
         lane["abort_error"] = survived
         print(f"autopilot: lane {lane['name']}: {survived}", file=sys.stderr)
-        return True
+        return True, True
     lane["pid"] = None
     try:
         _clean_up_lane(repo, wave, lane, registry, run_git)
@@ -491,10 +523,10 @@ def _abort_lane(
         lane["status"] = "abort_failed"
         lane["abort_error"] = f"worktree cleanup failed: {err}"
         print(f"autopilot: lane {lane['name']}: {lane['abort_error']}", file=sys.stderr)
-        return True
+        return True, False
     lane["status"] = "aborted"
     lane["abort_error"] = None
-    return False
+    return False, False
 
 
 def abort(
@@ -517,13 +549,24 @@ def abort(
             return 1
         registry = _worktree_branches(repo, run_git)
         failed = False
+        alive = False
         for lane in sorted(wave["lanes"], key=lambda each: each["order"]):
-            failed = _abort_lane(repo, wave, lane, registry, run_git, kill_fn) or failed
+            lane_failed, lane_alive = _abort_lane(
+                repo,
+                wave,
+                lane,
+                registry,
+                run_git,
+                kill_fn,
+            )
+            failed = lane_failed or failed
+            alive = lane_alive or alive
             save(wave_path, wave)
-        # A lane that survived its kill still reads this directory, so it goes
-        # only once every lane has finished - and only if a loop ever made it.
+        # Kept ONLY while a lane's group is still alive: that loop still reads
+        # this directory. Every other outcome removes it - a cleanup failure with
+        # every group dead included, or the next wave starves on leaked slots.
         slots = repo / "dev/local/autopilot/wave-slots"
-        if not failed and slots.exists():
+        if not alive and slots.exists():
             try:
                 shutil.rmtree(slots)
             except OSError as err:

@@ -81,9 +81,16 @@ invalid `wave.json` (exit 1). Otherwise, per lane in order:
 1. SIGTERM the lane's process group (`pid` IS the group id - the loop was spawned
    as its own session leader), wait up to 60 s, then SIGKILL and wait 10 s more. A
    group that outlives SIGKILL keeps its pid and `running` status and its files
-   are left alone: it is still running.
-2. Move every PRD the lane still holds - `backlog/`, `wip/`, `done/`, `hold/` -
-   back into the main checkout's matching folder.
+   are left alone: it is still running. A group that exited between the liveness
+   probe and the signal counts as killed - no escalation, no grace window spent -
+   while a signal that could not be delivered at all (EPERM) leaves the lane
+   running too, with the reason in its `abort_error`.
+2. Move every PRD the lane still holds back into the main checkout: lane
+   `backlog/` and lane `wip/` both land in the main `backlog/`, lane `done/` in
+   `done/`, lane `hold/` in `hold/`. An in-flight PRD comes home to the backlog
+   because a PRD sitting in the main `wip/` is re-selected as
+   already-in-progress against a `state.json` that holds no task record for it.
+   The folder a PRD sits in is the only thing that decides where it lands.
 3. `git worktree remove --force` and `git branch -D` the lane's own worktree and
    branch.
 
@@ -93,8 +100,9 @@ longer has it checked out on the lane branch, the branch carries commits past
 `base_sha`, or the worktree has uncommitted changes. The reason is printed - those
 PRDs are the only record of what the lane was doing.
 
-`wave-slots/` is removed only once every lane finished, because a lane that
-survived its kill still reads it. The wave ends `aborted` (exit 0) or
+`wave-slots/` is kept only while a lane's process group survived its kill, because
+that loop still reads it; every other outcome removes it, a worktree cleanup
+failure with every group dead included. The wave ends `aborted` (exit 0) or
 `abort_failed` (exit 1) with each failure recorded in the lane's `abort_error`,
 where `wave status` shows it. A wave left `abort_failed` is still live, so
 `wave plan` refuses to replace it until the abort is retried.
@@ -124,7 +132,7 @@ Not part of this release:
   00215. Today a wave's output is N branches, each with its lane's commits; you
   merge them yourself, or `wave abort` keeps any branch that carries commits
   rather than deleting it.
-- **The review-slot semaphore** is PRD 00216. `launch` already points every lane
+- **The review-slot semaphore** is PRD 00217. `launch` already points every lane
   at one shared directory (`_AUTOPILOT_REVIEW_SLOTS_DIR` =
   `dev/local/autopilot/wave-slots` in the main checkout) and passes the wave's
   `review_slots` count, but nothing throttles concurrent review launches yet.

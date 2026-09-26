@@ -1149,8 +1149,17 @@ def _run_custody(args: argparse.Namespace) -> int:
 
 def _run_wave(args: argparse.Namespace) -> int:
     state_path = _resolve_state_path(args.state)
-    # dev/local/autopilot/state.json -> repo is FOUR parents up, not three.
-    assert state_path.parts[-4:-1] == ("dev", "local", "autopilot"), state_path
+    # dev/local/autopilot/state.json -> repo is FOUR parents up, not three. A
+    # caller-supplied --state is input, so a non-canonical one is reported, never
+    # asserted: under `python -O` a bare assert vanishes and the wrong repo root
+    # is derived in silence.
+    if state_path.parts[-4:-1] != ("dev", "local", "autopilot"):
+        print(
+            "autopilot: wave needs --state at <repo>/dev/local/autopilot/state.json,"
+            f" not {state_path}",
+            file=sys.stderr,
+        )
+        return 1
     repo = state_path.parents[3]
     wave_path = state_path.parent / "wave.json"
     return wave_cli.run(args, repo, wave_path)
