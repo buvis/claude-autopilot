@@ -645,6 +645,10 @@ def test_structural_errors_rejects_a_wave_planned_for_another_repo() -> None:
         ("order", True),  # a JSON boolean is not an int
         ("pid", "4242"),
         ("pid", 1.5),
+        # A float INSIDE the accepted window: 1.5 alone leaves the `_is_int`
+        # conjunct unexercised, because the range refuses it either way. A float
+        # pid reaches `os.killpg` and raises TypeError mid-abort, lock held.
+        ("pid", 2.5),
         ("pid", True),
         # A lane pid is a group to signal, so the ends of the int range are not
         # pids: `killpg(0, sig)` signals our own group, `killpg(1, sig)` is a
