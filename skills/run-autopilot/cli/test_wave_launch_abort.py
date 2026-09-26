@@ -280,9 +280,13 @@ def test_abort_returns_each_lifecycle_folder_to_its_main_counterpart(
     # The main checkout only has backlog/, so each other destination is a
     # directory abort has to create.
     mapping = {
-        "wip/90101-alpha.md": ("backlog", "alpha\n"),
-        "done/90102-beta.md": ("done", "beta\n"),
-        "hold/90103-gamma.md": ("hold", "gamma\n"),
+        # Byte-IDENTICAL bodies in three different folders landing in three
+        # different places: with the content constant, the source folder is the
+        # only signal left. Real PRDs all open `# `, so a rule keyed on the body
+        # sends every returned PRD to one folder and un-parks every held one.
+        "wip/90101-alpha.md": ("backlog", "# A PRD\n"),
+        "done/90102-beta.md": ("done", "# A PRD\n"),
+        "hold/90103-gamma.md": ("hold", "# A PRD\n"),
         # Two PRDs whose names contradict the folder holding them, so no filename
         # sniff can stand in for the folder: both land where they came FROM.
         "done/90104-wip-notes.md": ("done", "delta\n"),
@@ -590,6 +594,14 @@ def test_abort_kills_a_group_whose_leader_has_already_exited(
 ) -> None:
     repo, wave_path = _launched(tmp_path, monkeypatch, TWO_LANES)
     saved = wave.load(wave_path)
+    # A coverage guard, green before and after the fix: the one bucket the other
+    # slot tests miss is a real group that IS signalled and DOES die. Without it,
+    # "keep the slots whenever a signal was attempted" is indistinguishable from
+    # "keep them when a kill failed", and it leaks a full slot table into the next
+    # wave, whose lanes then starve on review slots.
+    slots = _autopilot(repo) / "wave-slots"
+    slots.mkdir()
+    (slots / "slot-1").write_text("taken\n", encoding="utf-8")
     marker = tmp_path / "child.json"
     leader = subprocess.Popen(
         [sys.executable, "-c", _LEADER_SRC, _CHILD_SRC, str(marker)],
@@ -609,6 +621,7 @@ def test_abort_kills_a_group_whose_leader_has_already_exited(
         # The 60s grace is a CEILING, not a sleep: this group dies on SIGTERM, so
         # waiting it out anyway would cost a minute per lane WITH THE LOCK HELD.
         assert elapsed < 30, elapsed
+        assert not slots.exists()
         after = wave.load(wave_path)
         assert after["status"] == "aborted"
         lane = after["lanes"][0]

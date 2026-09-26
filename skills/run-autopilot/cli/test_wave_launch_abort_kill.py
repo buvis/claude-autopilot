@@ -18,6 +18,7 @@ the ORDINARY case, since the group is being asked to die.
 from __future__ import annotations
 
 import contextlib
+import errno
 import os
 import signal
 import subprocess
@@ -48,27 +49,43 @@ def _vanishing_kill(
     record: list[tuple[int, int]],
     *,
     at: int,
+    error: OSError | None = None,
 ) -> Callable[[int, int], None]:
-    """A `kill_fn` that records every signal, raises `ProcessLookupError` for the
-    `at` signal, and delivers every other one for real.
+    """A `kill_fn` that records every signal, raises `error` for the `at` signal
+    (a BARE `ProcessLookupError` by default), and delivers every other one for
+    real.
 
-    The raised error carries NO message on purpose: only its TYPE says the group
-    is gone. Classifying on text ("No such process") instead reads a live lane's
-    EPERM as death and removes its worktree under it.
+    Only the exception TYPE may say the group is gone. The bare default proves a
+    message match is not what classifies it; the populated variant is what
+    `os.killpg` really raises, so a rule keyed on the error being EMPTY fails the
+    ordinary lost race and reports a dead group as a live survivor.
     """
+    gone = ProcessLookupError() if error is None else error
 
     def kill_fn(pgid: int, sig: int) -> None:
         record.append((pgid, sig))
         if sig == at:
-            raise ProcessLookupError
+            raise gone
         os.killpg(pgid, sig)
 
     return kill_fn
 
 
+@pytest.mark.parametrize(
+    "error",
+    [
+        None,
+        # Exactly what `os.killpg` raises when it loses the race. A rule that
+        # reads "gone" off the error being EMPTY passes the bare case and fails
+        # this one - the ORDINARY case this test exists for.
+        ProcessLookupError(errno.ESRCH, "No such process"),
+    ],
+    ids=["bare", "populated"],
+)
 def test_abort_finishes_a_lane_whose_group_vanishes_at_the_sigterm(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    error: OSError | None,
 ) -> None:
     repo, wave_path = _launched(tmp_path, monkeypatch, TWO_LANES)
     saved = wave.load(wave_path)
@@ -86,7 +103,7 @@ def test_abort_finishes_a_lane_whose_group_vanishes_at_the_sigterm(
         exit_code = wave_launch.abort(
             repo,
             wave_path,
-            kill_fn=_vanishing_kill(kills, at=signal.SIGTERM),
+            kill_fn=_vanishing_kill(kills, at=signal.SIGTERM, error=error),
         )
     finally:
         with contextlib.suppress(ProcessLookupError):
@@ -137,20 +154,32 @@ def test_abort_finishes_a_lane_whose_group_vanishes_at_the_sigkill(
 
 
 @pytest.mark.parametrize(
-    "reason",
+    ("error", "expected"),
     [
-        "not allowed to signal this group",
+        (
+            PermissionError(1, "not allowed to signal this group"),
+            "not allowed to signal this group",
+        ),
         # A message that READS like a vanished group behind a type that says the
         # opposite. Only the type may classify, so this lane still failed - and
         # text-matching here would delete a live lane's worktree.
-        "No such process on that host",
+        (
+            PermissionError(1, "No such process on that host"),
+            "No such process on that host",
+        ),
+        # The mirror of the bare ProcessLookupError above: an EMPTY error of the
+        # WRONG type is still a failure, so emptiness cannot stand in for the
+        # type either. No message to match, so the lane's failed state is the
+        # whole claim here.
+        (PermissionError(), ""),
     ],
-    ids=["denied", "gone-sounding"],
+    ids=["denied", "gone-sounding", "bare"],
 )
 def test_abort_records_a_lane_whose_kill_raises_anything_else_as_a_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    reason: str,
+    error: OSError,
+    expected: str,
 ) -> None:
     repo, wave_path = _launched(tmp_path, monkeypatch, TWO_LANES)
     saved = wave.load(wave_path)
@@ -165,7 +194,7 @@ def test_abort_records_a_lane_whose_kill_raises_anything_else_as_a_failure(
 
     def kill_fn(pgid: int, sig: int) -> None:
         kills.append((pgid, sig))
-        raise PermissionError(1, reason)
+        raise error
 
     try:
         saved["lanes"][0].update(pid=doomed.pid, status="running")
@@ -184,7 +213,8 @@ def test_abort_records_a_lane_whose_kill_raises_anything_else_as_a_failure(
     assert after["status"] == "abort_failed"
     failed, finished = after["lanes"]
     assert failed["status"] != "aborted", failed
-    assert reason in (failed["abort_error"] or ""), failed
+    assert failed["abort_error"], failed  # a recorded failure always says something
+    assert expected in failed["abort_error"], failed
     _assert_finished(repo, finished, TWO_LANES)  # per-lane isolation holds
     # This lane's group is genuinely ALIVE - the kill never landed - so the slot
     # directory its loop still reads has to survive the abort. A "keep it when
