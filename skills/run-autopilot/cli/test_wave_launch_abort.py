@@ -235,9 +235,12 @@ def test_abort_returns_prds_and_removes_clean_worktrees(
     # A lane killed mid-wave: one PRD finished, one parked, and one still IN
     # FLIGHT in wip/. A wave is aborted precisely while its lanes are mid-PRD, so
     # a return that walks only backlog/done/hold deletes that wip/ PRD silently.
-    (first / "dev/local/prds/wip/90007-wip.md").write_text("wip\n", encoding="utf-8")
-    (first / "dev/local/prds/done/90008-done.md").write_text("done\n", encoding="utf-8")
-    (first / "dev/local/prds/hold/90009-held.md").write_text("held\n", encoding="utf-8")
+    # Every filename and body here is folder-NEUTRAL: the folder a PRD sits in is
+    # the only thing allowed to decide where it lands.
+    lane_prds = first / "dev/local/prds"
+    (lane_prds / "wip/90007-alpha.md").write_text("alpha\n", encoding="utf-8")
+    (lane_prds / "done/90008-beta.md").write_text("beta\n", encoding="utf-8")
+    (lane_prds / "hold/90009-gamma.md").write_text("gamma\n", encoding="utf-8")
     slots = _autopilot(repo) / "wave-slots"
     slots.mkdir()
     (slots / "slot-1").write_text("taken\n", encoding="utf-8")
@@ -247,12 +250,12 @@ def test_abort_returns_prds_and_removes_clean_worktrees(
     # The in-flight PRD comes back to the main BACKLOG, never the main wip/: a
     # PRD sitting in the main wip/ is re-selected as already-in-progress against
     # a state.json that holds no task record for it.
-    in_flight = repo / "dev/local/prds/backlog/90007-wip.md"
-    done = repo / "dev/local/prds/done/90008-done.md"
-    held = repo / "dev/local/prds/hold/90009-held.md"
-    assert in_flight.read_text(encoding="utf-8") == "wip\n"
-    assert done.read_text(encoding="utf-8") == "done\n"
-    assert held.read_text(encoding="utf-8") == "held\n"
+    in_flight = repo / "dev/local/prds/backlog/90007-alpha.md"
+    done = repo / "dev/local/prds/done/90008-beta.md"
+    held = repo / "dev/local/prds/hold/90009-gamma.md"
+    assert in_flight.read_text(encoding="utf-8") == "alpha\n"
+    assert done.read_text(encoding="utf-8") == "beta\n"
+    assert held.read_text(encoding="utf-8") == "gamma\n"
     assert not first.exists()
     assert not second.exists()
     assert not slots.exists()
@@ -277,9 +280,13 @@ def test_abort_returns_each_lifecycle_folder_to_its_main_counterpart(
     # The main checkout only has backlog/, so each other destination is a
     # directory abort has to create.
     mapping = {
-        "wip/90101-in-flight.md": ("backlog", "in flight\n"),
-        "done/90102-finished.md": ("done", "finished\n"),
-        "hold/90103-parked.md": ("hold", "parked\n"),
+        "wip/90101-alpha.md": ("backlog", "alpha\n"),
+        "done/90102-beta.md": ("done", "beta\n"),
+        "hold/90103-gamma.md": ("hold", "gamma\n"),
+        # Two PRDs whose names contradict the folder holding them, so no filename
+        # sniff can stand in for the folder: both land where they came FROM.
+        "done/90104-wip-notes.md": ("done", "delta\n"),
+        "backlog/90105-done-notes.md": ("backlog", "epsilon\n"),
     }
     for source, (_, text) in mapping.items():
         prd = worktree / "dev/local/prds" / source
@@ -289,7 +296,20 @@ def test_abort_returns_each_lifecycle_folder_to_its_main_counterpart(
     for source, (folder, text) in mapping.items():
         landed = repo / "dev/local/prds" / folder / Path(source).name
         assert landed.read_text(encoding="utf-8") == text, source
-    assert not (repo / "dev/local/prds/wip/90101-in-flight.md").exists()
+    # And nowhere else: the main wip/ ends up empty, and neither misnamed PRD
+    # followed the folder word in its own filename.
+    lifecycle = {
+        folder: sorted(
+            path.name for path in (repo / "dev/local/prds" / folder).glob("*.md")
+        )
+        for folder in ("backlog", "wip", "done", "hold")
+    }
+    assert lifecycle == {
+        "backlog": sorted([*TWO_LANES, "90101-alpha.md", "90105-done-notes.md"]),
+        "wip": [],
+        "done": ["90102-beta.md", "90104-wip-notes.md"],
+        "hold": ["90103-gamma.md"],
+    }, lifecycle
     # the fourth mapping, lane backlog/ -> main backlog/, content and all
     _assert_finished(repo, wave.load(wave_path)["lanes"][0], TWO_LANES)
 

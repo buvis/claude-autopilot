@@ -105,11 +105,24 @@ def test_launch_refuses_a_checkout_a_live_loop_already_owns(
     assert wave.load(wave_path)["status"] == "planned"
 
 
+@pytest.mark.parametrize(
+    "relative",
+    [
+        # Nowhere near the canonical directory, then two NEAR-MISSES: one a level
+        # too deep inside it, one a directory whose name merely starts with it.
+        # A substring check on the path waves both near-misses through and then
+        # derives a repo root that is off by a directory, in silence.
+        "state.json",
+        "dev/local/autopilot/lanes/state.json",
+        "dev/local/autopilot-old/state.json",
+    ],
+)
 def test_the_cli_reports_a_non_canonical_state_path_instead_of_asserting(
     tmp_path: Path,
+    relative: str,
 ) -> None:
     repo, wave_path = _repo(tmp_path, ONE_LANE)
-    stray = repo / "state.json"  # not <repo>/dev/local/autopilot/state.json
+    stray = repo / relative  # not <repo>/dev/local/autopilot/state.json
     proc = subprocess.run(
         [
             sys.executable,
@@ -132,7 +145,10 @@ def test_the_cli_reports_a_non_canonical_state_path_instead_of_asserting(
     printed = proc.stdout + proc.stderr
     assert "AssertionError" not in printed, printed
     assert "Traceback" not in printed, printed
+    # Nothing was planned ANYWHERE: a near-miss path that slips the check plants
+    # its wave.json beside itself, not at the canonical `wave_path`.
     assert not wave_path.exists()
+    assert sorted(tmp_path.rglob("wave.json")) == []
 
 
 def test_run_abort_reports_a_failed_worktree_listing_instead_of_raising(
@@ -152,6 +168,13 @@ def test_run_abort_reports_a_failed_worktree_listing_instead_of_raising(
     assert exit_code == 1
     printed = capsys.readouterr()
     assert "non-zero exit status" in printed.out + printed.err, printed
+    # The FAILING CALL is named too, not just "a git call failed": one hardcoded
+    # line cannot report which of abort's calls it was. Quoting and commas vary
+    # with how the cause is rendered, so they are normalised away first.
+    flat = " ".join((printed.out + printed.err).split())
+    for noise in ("'", '"', ","):
+        flat = flat.replace(noise, "")
+    assert "worktree list" in flat, printed
     # The listing is the first git call abort makes, so nothing was cleaned up
     # behind it either.
     assert [each for each in worktrees if not each.exists()] == []

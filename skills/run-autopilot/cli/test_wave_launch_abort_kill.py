@@ -28,7 +28,7 @@ from pathlib import Path
 import pytest
 
 from cli import wave, wave_launch
-from cli.test_wave_launch import ONE_LANE, TWO_LANES, _spawned_record
+from cli.test_wave_launch import ONE_LANE, TWO_LANES, _autopilot, _spawned_record
 from cli.test_wave_launch_abort import _assert_finished, _launched
 
 # A group that sits still until it is killed. The SIGTERM-deaf variant ignores
@@ -50,12 +50,17 @@ def _vanishing_kill(
     at: int,
 ) -> Callable[[int, int], None]:
     """A `kill_fn` that records every signal, raises `ProcessLookupError` for the
-    `at` signal, and delivers every other one for real."""
+    `at` signal, and delivers every other one for real.
+
+    The raised error carries NO message on purpose: only its TYPE says the group
+    is gone. Classifying on text ("No such process") instead reads a live lane's
+    EPERM as death and removes its worktree under it.
+    """
 
     def kill_fn(pgid: int, sig: int) -> None:
         record.append((pgid, sig))
         if sig == at:
-            raise ProcessLookupError(3, "No such process")
+            raise ProcessLookupError
         os.killpg(pgid, sig)
 
     return kill_fn
@@ -131,12 +136,27 @@ def test_abort_finishes_a_lane_whose_group_vanishes_at_the_sigkill(
     _assert_finished(repo, after["lanes"][0], ONE_LANE)
 
 
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "not allowed to signal this group",
+        # A message that READS like a vanished group behind a type that says the
+        # opposite. Only the type may classify, so this lane still failed - and
+        # text-matching here would delete a live lane's worktree.
+        "No such process on that host",
+    ],
+    ids=["denied", "gone-sounding"],
+)
 def test_abort_records_a_lane_whose_kill_raises_anything_else_as_a_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    reason: str,
 ) -> None:
     repo, wave_path = _launched(tmp_path, monkeypatch, TWO_LANES)
     saved = wave.load(wave_path)
+    slots = _autopilot(repo) / "wave-slots"
+    slots.mkdir()
+    (slots / "slot-1").write_text("taken\n", encoding="utf-8")
     doomed = subprocess.Popen(
         [sys.executable, "-c", _SLEEPER_SRC],
         start_new_session=True,
@@ -145,7 +165,7 @@ def test_abort_records_a_lane_whose_kill_raises_anything_else_as_a_failure(
 
     def kill_fn(pgid: int, sig: int) -> None:
         kills.append((pgid, sig))
-        raise PermissionError(1, "not allowed to signal this group")
+        raise PermissionError(1, reason)
 
     try:
         saved["lanes"][0].update(pid=doomed.pid, status="running")
@@ -164,5 +184,10 @@ def test_abort_records_a_lane_whose_kill_raises_anything_else_as_a_failure(
     assert after["status"] == "abort_failed"
     failed, finished = after["lanes"]
     assert failed["status"] != "aborted", failed
-    assert "not allowed to signal this group" in (failed["abort_error"] or ""), failed
+    assert reason in (failed["abort_error"] or ""), failed
     _assert_finished(repo, finished, TWO_LANES)  # per-lane isolation holds
+    # This lane's group is genuinely ALIVE - the kill never landed - so the slot
+    # directory its loop still reads has to survive the abort. A "keep it when
+    # anything failed"/"keep it when the error says SIGKILL" rule gets this wrong
+    # and rmtree's the slots out from under a running loop.
+    assert (slots / "slot-1").read_text(encoding="utf-8") == "taken\n"
