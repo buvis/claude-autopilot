@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-09-26
+
 ### Added
 
 - **run-autopilot**: `autopilot wave plan` cuts the PRD backlog into up to N lanes of PRDs that share no paths, and `autopilot wave launch` gives each lane its own git worktree and branch at the current HEAD and starts one detached autopilot loop in it, moving that lane's PRDs into its worktree; a PRD naming no paths is held back for the sequential loop, and launch refuses a dirty tree, a main-root loop already running, or a hand-edited `wave.json` whose lanes overlap
