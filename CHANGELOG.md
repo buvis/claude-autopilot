@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: `autopilot wave status` prints one row per lane - its pid, the PRD it is on, its phase, its PRD counts per lifecycle folder, the last phase its loop closed and whether it is running, drained or unfinished - and `autopilot wave abort` stops a wave: it kills each lane's whole process group, returns that lane's PRDs to the main backlog and removes the worktree and branch, but keeps any worktree holding commits or uncommitted work instead of discarding it. An abort that cannot finish a lane records why and reports `abort_failed`, so a half-cleaned wave is visible in `wave status` and refuses to be replaced by a new `wave plan` until it is retried
 - **hooks**: a loop session can no longer end its turn while a background codex or gemini reviewer lane is still running: `codex-run.sh` and `gemini-run.sh` mark each live lane under `dev/local/autopilot/lanes/<pid>` for the wrapper's lifetime, and the Stop hook `guard_stop_on_live_lanes.py` blocks the stop and names the `-o` files to await (or the pids to wait on, when a lane declared no `-o` file), bounded by a 60 min lane ceiling and 40 blocked exits; a counter write it cannot persist no longer cancels the block, and an internal failure still fails open but reports what it caught
 
+### Fixed
+
+- **review-work-completion**: the reviewer dispatch now says that Alice, Blake, Eve and the Watcher are launched with `run_in_background: true`; a session that wrote `false` made the harness hold the codex and gemini lanes until the Watcher returned, and the Watcher only returns once those lanes have written, so a review cycle idled for the Watcher's whole 50-minute budget before the CLI reviewers even started (twice on 2026-09-26)
+- **run-autopilot**: the loop now requests a task-boundary hand-off 15 minutes before a session's wall-clock cap (`_AUTOPILOT_SESSION_WARN`, 0 disables) by writing the same `.handoff-requested` marker the context-cap hook writes, so a multi-task session leaves at its next task boundary instead of being SIGTERM'd mid-task with its attempt record unwritten (a two-hour opus build session died that way on 2026-09-26)
+- **run-autopilot**: the loop's launch prompt names the CLI as `python3 <pack>/skills/run-autopilot/cli/__main__.py` and says no `autopilot` binary is on PATH, so a headless session no longer spends 5-14 calls per session rediscovering it
+
 ## [0.5.5] - 2026-09-21
 
 ### Added

@@ -37,10 +37,12 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from cli.handoff_request import request_wrapper_handoff
 from cli.watchdog import Watchdog
 
 _SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
 RENDER_STREAM = _SCRIPTS_DIR / "render_stream.py"
+CLI_MAIN = Path(__file__).resolve().parent / "__main__.py"
 
 LAUNCH_ENV = {
     "WARDEN_UNATTENDED": "1",
@@ -61,15 +63,39 @@ HOST_MARKERS = (
 
 DEFAULT_PROMPT = "/autopilot:run-autopilot"
 DEFAULT_GRACE_SECS = 60
+DEFAULT_WARN_SECS = 900
 BRIEF_NAME = "session-brief.md"
 BRIEF_SUFFIX = " Read dev/local/autopilot/session-brief.md first."
+# 2026-09-26: every headless session spent 5-14 calls hunting for an
+# `autopilot` binary; the CLI is a shell function in the operator's rc file
+# that a -p session's Bash tool never sees. The prompt names the real one.
+CLI_SUFFIX = (
+    f" The `autopilot` CLI in this shell is `python3 {CLI_MAIN}`;"
+    " no `autopilot` binary or shell function is on PATH."
+)
 
 
 def prompt_for(autopilot_dir: Path, prompt: str = DEFAULT_PROMPT) -> str:
     """The launch prompt: `prompt`, plus the brief sentence when the previous
-    session's hand-off left `session-brief.md` beside state.json (PRD 00201).
-    A missing brief leaves the prompt as it was."""
-    return prompt + BRIEF_SUFFIX if (autopilot_dir / BRIEF_NAME).is_file() else prompt
+    session's hand-off left `session-brief.md` beside state.json (PRD 00201),
+    plus the CLI sentence for autopilot prompts. A missing brief drops only
+    the brief sentence."""
+    brief = BRIEF_SUFFIX if (autopilot_dir / BRIEF_NAME).is_file() else ""
+    cli = CLI_SUFFIX if prompt.startswith(DEFAULT_PROMPT) else ""
+    return prompt + brief + cli
+
+
+def warn_secs_for(env: dict) -> int:
+    """`_AUTOPILOT_SESSION_WARN`: how many seconds before the wall-clock cap
+    the wrapper requests a task-boundary hand-off. 0 disables the warning;
+    an unset or non-integer value keeps the default."""
+    raw = env.get("_AUTOPILOT_SESSION_WARN")
+    if raw is None:
+        return DEFAULT_WARN_SECS
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return DEFAULT_WARN_SECS
 
 
 def child_env(env: dict) -> tuple[dict, list[str]]:
@@ -198,9 +224,13 @@ def _run_session(
     grace_secs: float,
     presenter,
     proc_slot: list | None,
+    warn_secs: float = 0,
 ) -> tuple[int, bool]:
     """Launch the child, tee its stdout to log_path, and stream it to
-    presenter until the process exits (on its own or capped)."""
+    presenter until the process exits (on its own or capped). Within
+    `warn_secs` of the cap the watchdog writes the hand-off marker beside
+    the log, so a session at a task boundary leaves before the cap."""
+    autopilot_dir = log_path.parent
     with open(log_path, "wb") as log:
         proc = subprocess.Popen(
             argv,
@@ -211,7 +241,13 @@ def _run_session(
         )
         if proc_slot is not None:
             proc_slot[0] = proc
-        dog = Watchdog(proc, cap_secs=cap_secs, grace_secs=grace_secs).start()
+        dog = Watchdog(
+            proc,
+            cap_secs=cap_secs,
+            grace_secs=grace_secs,
+            warn_secs=warn_secs,
+            on_warn=lambda: request_wrapper_handoff(autopilot_dir),
+        ).start()
         assert proc.stdout is not None
         try:
             for line in proc.stdout:
@@ -273,5 +309,6 @@ def spawn(
         grace_secs,
         presenter,
         proc_slot,
+        warn_secs=warn_secs_for(env),
     )
     return SpawnResult(returncode=rc, log_path=log_path, cap_fired=cap_fired)

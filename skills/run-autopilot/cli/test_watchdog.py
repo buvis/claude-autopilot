@@ -108,3 +108,70 @@ def test_thread_exits_after_child_death_without_cancel():
     proc.wait(timeout=10)
     _wait_watchdog_settled(dog)
     assert dog._thread.is_alive() is False
+
+
+# The warning window (2026-09-26): a session that reaches cap minus warn is
+# told to hand off at its next task boundary; the cap itself is unchanged.
+
+
+def test_warn_callback_fires_before_the_cap_and_the_cap_still_terms():
+    proc = _spawn_sleeper(300)
+    seen: list[float] = []
+    dog = Watchdog(
+        proc, cap_secs=0.8, grace_secs=5, warn_secs=0.4, on_warn=lambda: seen.append(1)
+    ).start()
+    proc.wait(timeout=10)
+    dog.cancel()
+    assert seen == [1]
+    assert dog.warned is True
+    assert dog.fired is True
+    assert proc.returncode == -signal.SIGTERM
+
+
+def test_warn_callback_is_skipped_when_the_child_exits_first():
+    proc = _spawn_sleeper(0.1)
+    seen: list[int] = []
+    dog = Watchdog(
+        proc, cap_secs=30, grace_secs=1, warn_secs=10, on_warn=lambda: seen.append(1)
+    ).start()
+    proc.wait(timeout=10)
+    _wait_watchdog_settled(dog)
+    assert seen == []
+    assert dog.warned is False
+
+
+def test_warn_window_not_below_the_cap_disables_the_warning():
+    proc = _spawn_sleeper(300)
+    seen: list[int] = []
+    dog = Watchdog(
+        proc, cap_secs=0.2, grace_secs=5, warn_secs=5, on_warn=lambda: seen.append(1)
+    ).start()
+    proc.wait(timeout=10)
+    dog.cancel()
+    assert seen == []
+    assert dog.warned is False
+    assert dog.fired is True
+
+
+def test_warn_callback_failure_does_not_cancel_the_cap(capsys):
+    proc = _spawn_sleeper(300)
+
+    def boom() -> None:
+        raise RuntimeError("marker dir gone")
+
+    dog = Watchdog(proc, cap_secs=0.6, grace_secs=5, warn_secs=0.3, on_warn=boom).start()
+    proc.wait(timeout=10)
+    dog.cancel()
+    assert dog.fired is True
+    assert "cap warning failed: marker dir gone" in capsys.readouterr().err
+
+
+def test_warn_message_names_the_window(capsys):
+    proc = _spawn_sleeper(300)
+    dog = Watchdog(
+        proc, cap_secs=0.6, grace_secs=5, warn_secs=0.3, on_warn=lambda: None
+    ).start()
+    proc.wait(timeout=10)
+    dog.cancel()
+    err = capsys.readouterr().err
+    assert "0.3s from the 0.6s wall-clock cap; requesting a task-boundary handoff" in err

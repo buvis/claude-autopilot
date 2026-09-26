@@ -11,7 +11,8 @@ set -euo pipefail
 echo "[checks] reviewer registry"
 uv run --no-project --with pytest python -m pytest -q \
   skills/review-work-completion/scripts/test_agent_registry.py \
-  skills/review-work-completion/scripts/test_carl_skip_prose.py
+  skills/review-work-completion/scripts/test_carl_skip_prose.py \
+  skills/review-work-completion/scripts/test_reviewer_dispatch_prose.py
 
 echo "[checks] retry policy prose"
 uv run --no-project --with pytest python -m pytest -q \
@@ -68,7 +69,9 @@ uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_usage_limit.py \
   skills/run-autopilot/cli/test_loop_decision.py \
   skills/run-autopilot/cli/test_brief.py \
-  skills/run-autopilot/cli/test_runner.py
+  skills/run-autopilot/cli/test_runner.py \
+  skills/run-autopilot/cli/test_watchdog.py \
+  skills/run-autopilot/cli/test_handoff_request.py
 echo "[checks] cap hook"
 uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/scripts/test_autopilot_context_cap_hook.py \

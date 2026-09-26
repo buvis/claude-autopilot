@@ -15,6 +15,8 @@ import sys
 from pathlib import Path
 
 from cli.runner import (
+    CLI_MAIN,
+    CLI_SUFFIX,
     HOST_MARKERS,
     LAUNCH_ENV,
     build_argv,
@@ -22,6 +24,7 @@ from cli.runner import (
     make_presenter,
     prompt_for,
     spawn,
+    warn_secs_for,
 )
 
 
@@ -132,21 +135,70 @@ def test_prompt_names_the_brief_when_present(tmp_path):
     argv = _launch_argv(tmp_path, ap)
     assert argv[-1] == (
         "/autopilot:run-autopilot Read dev/local/autopilot/session-brief.md first."
+        + CLI_SUFFIX
     )
     assert argv[:-1] == build_argv("m", "low", "claude-sonnet-5[1m]")[1:-1]
 
 
-def test_prompt_is_unchanged_without_a_brief(tmp_path):
+def test_prompt_without_a_brief_still_names_the_cli(tmp_path):
     ap = _ap_dir(tmp_path)
     argv = _launch_argv(tmp_path, ap)
-    assert argv[-1] == "/autopilot:run-autopilot"
-    assert argv == build_argv("m", "low", "claude-sonnet-5[1m]")[1:]
+    assert argv[-1] == "/autopilot:run-autopilot" + CLI_SUFFIX
+    assert argv[:-1] == build_argv("m", "low", "claude-sonnet-5[1m]")[1:-1]
 
 
 def test_a_brief_that_is_a_directory_does_not_count(tmp_path):
     ap = _ap_dir(tmp_path)
     (ap / "session-brief.md").mkdir()
-    assert prompt_for(ap) == "/autopilot:run-autopilot"
+    assert prompt_for(ap) == "/autopilot:run-autopilot" + CLI_SUFFIX
+
+
+def test_prompt_names_the_cli_entry_point(tmp_path):
+    # 2026-09-26: every headless session spent 5-14 calls hunting for an
+    # `autopilot` binary that is a shell function in the operator's rc file.
+    # The launch prompt now says what the CLI is in this shell.
+    prompt = prompt_for(_ap_dir(tmp_path))
+    assert CLI_MAIN.name == "__main__.py"
+    assert CLI_MAIN.is_file()
+    assert f"`python3 {CLI_MAIN}`" in prompt
+    assert "no `autopilot` binary or shell function" in prompt
+
+
+def test_warn_window_defaults_to_fifteen_minutes():
+    assert warn_secs_for({}) == 900
+    assert warn_secs_for({"_AUTOPILOT_SESSION_WARN": "0"}) == 0
+    assert warn_secs_for({"_AUTOPILOT_SESSION_WARN": "300"}) == 300
+    assert warn_secs_for({"_AUTOPILOT_SESSION_WARN": "soon"}) == 900
+
+
+def test_spawn_requests_a_handoff_before_the_cap(tmp_path, capsys):
+    # 2026-09-26: the 7200s cap SIGTERM'd a build session mid-task with no
+    # hand-off. Within the warning window the wrapper now writes the marker
+    # /work reads at its task boundaries.
+    stub = _stub_runner(
+        tmp_path,
+        'import time\nprint("started", flush=True)\ntime.sleep(300)',
+    )
+    ap = _ap_dir(tmp_path)
+    (ap / "state.json").write_text(
+        json.dumps({"phase": "build", "tasks": [{"id": "2", "status": "in_progress"}]})
+    )
+    result = spawn(
+        "m",
+        "low",
+        cap_secs=2,
+        autopilot_dir=ap,
+        env={"_AUTOPILOT_SESSION_WARN": "1"},
+        runner_bin=stub,
+        grace_secs=5,
+        presenter=_Collector(),
+    )
+    assert result.cap_fired is True
+    marker = json.loads((ap / ".handoff-requested").read_text())
+    assert marker["phase"] == "build"
+    assert marker["task_id"] == "2"
+    assert marker["session"] == "unknown"  # the stub prints no init event
+    assert "requesting a task-boundary handoff" in capsys.readouterr().err
 
 
 def test_spawn_sets_the_command_scoped_unattended_env(tmp_path):
