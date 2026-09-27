@@ -449,29 +449,31 @@ def test_rerun_report_still_names_a_prd_outside_the_lane_roster(
     held_prd: str,
 ) -> None:
     repo, wave_path = _launched(tmp_path, monkeypatch, 2)
-    holder = _finish(wave_path, "l1", "")
-    _commit(holder, {"x/a.py": "# l1\n"}, "l1 change")
-    _to_done(holder, "00001-a.md")
-    # Nobody listed held_prd in l1's own `prds`: the lane only ever held it,
-    # parked. l2 never held it, and l2's edits clash with nothing, so both lanes
-    # merge and the first run takes both worktrees down with it - a second run
-    # can only name this PRD from what the first run recorded.
-    _write(holder, {f"{_PRDS}/hold/{held_prd}": "parked in l1\n"})
-    other = _finish(wave_path, "l2", "")
-    _commit(other, {"y/b.py": "# l2\n"}, "l2 change")
-    _to_done(other, "00002-b.md")
+    first_lane = _finish(wave_path, "l1", "")
+    _commit(first_lane, {"x/a.py": "# l1\n"}, "l1 change")
+    _to_done(first_lane, "00001-a.md")
+    holder = _finish(wave_path, "l2", "")
+    _commit(holder, {"y/b.py": "# l2\n"}, "l2 change")
+    _to_done(holder, "00002-b.md")
+    # Nobody listed held_prd in l2's own `prds`: the lane only ever held it,
+    # parked. l1 never held it, and neither lane's edits clash, so both merge and
+    # the first run takes both worktrees down with it - a second run can only
+    # name this PRD from what the first run recorded. The holder is deliberately
+    # NOT the first lane in `order`: crediting every stray PRD to lane one is a
+    # guess, not a record.
+    _write(holder, {f"{_PRDS}/hold/{held_prd}": "parked in l2\n"})
     for run in ("first", "second"):
         assert wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass) == 0
         saved, lanes = _saved(repo, wave_path)
-        assert lanes["l1"]["worktree_removed"] is True, (run, lanes["l1"])
+        assert lanes["l2"]["worktree_removed"] is True, (run, lanes["l2"])
         wave_id = saved["id"]
         report = _autopilot(repo) / "reports" / f"{wave_id}-wave.md"
         prds = report.read_text(encoding="utf-8")
         prds = prds[prds.index("## PRDs") :]
-        held = f"- {held_prd}: Wave {wave_id}, lane l1, parked"
+        held = f"- {held_prd}: Wave {wave_id}, lane l2, parked"
         assert held in prds, (run, prds)
         assert f"- 00001-a.md: Wave {wave_id}, lane l1, done" in prds, (run, prds)
         assert f"- 00002-b.md: Wave {wave_id}, lane l2, done" in prds, (run, prds)
         # Only the lane that held it may be credited with it: reading the main
         # checkout back is not remembering what each lane held.
-        assert f"- {held_prd}: Wave {wave_id}, lane l2," not in prds, (run, prds)
+        assert f"- {held_prd}: Wave {wave_id}, lane l1," not in prds, (run, prds)
