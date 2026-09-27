@@ -65,6 +65,18 @@ class WaveCorruptError(Exception):
         return f"{path}: {cause}"
 
 
+def corrupt_message(err: WaveCorruptError) -> str:
+    """The operator line for a corrupt wave.json - shared by `wave_cli` and
+    `wave_assemble` so the two call sites cannot drift."""
+    return f"{err}; refusing to touch a corrupt wave.json - fix or remove it by hand"
+
+
+def missing_message(wave_path: Path) -> str:
+    """The operator line for a missing wave.json - shared by `wave_cli` and
+    `wave_assemble` so the two call sites cannot drift."""
+    return f"no wave.json at {wave_path}; run `autopilot wave plan` first"
+
+
 def prd_paths(text: str) -> frozenset[str]:
     """The paths a PRD names, minus the append-only files every PRD touches."""
     return frozenset(lane.named_paths(text)) - frozenset(WAVE_APPEND_ONLY)

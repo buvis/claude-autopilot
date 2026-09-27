@@ -35,22 +35,18 @@ def run(args: argparse.Namespace, repo: Path, wave_path: Path) -> int:
         except subprocess.CalledProcessError as err:
             print(f"autopilot: {err}", file=sys.stderr)
             return 1
+        except wave.WaveCorruptError as err:
+            print(f"autopilot: {wave.corrupt_message(err)}", file=sys.stderr)
+            return 1
     # Read once for the two friendly early messages only: `launch` reloads
     # wave.json under its own lock and never sees this copy.
     try:
         loaded = wave.load(wave_path)
     except wave.WaveCorruptError as err:
-        print(
-            f"autopilot: {err}; refusing to touch a corrupt wave.json - fix or"
-            " remove it by hand",
-            file=sys.stderr,
-        )
+        print(f"autopilot: {wave.corrupt_message(err)}", file=sys.stderr)
         return 1
     if loaded is None:
-        print(
-            f"autopilot: no wave.json at {wave_path}; run `autopilot wave plan` first",
-            file=sys.stderr,
-        )
+        print(f"autopilot: {wave.missing_message(wave_path)}", file=sys.stderr)
         return 1
     if args.verb == "launch":
         try:

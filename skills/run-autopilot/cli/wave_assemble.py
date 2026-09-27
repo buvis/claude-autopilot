@@ -20,7 +20,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from cli import records
-from cli.wave import WAVE_APPEND_ONLY, _structural_errors, load, locked, save
+from cli.wave import (
+    WAVE_APPEND_ONLY,
+    _structural_errors,
+    load,
+    locked,
+    missing_message,
+    save,
+)
 from cli.wave_launch import lane_status
 
 WAVE_ASSEMBLY_BRANCH_FMT = "wave/{wave_id}/assembly"
@@ -548,6 +555,9 @@ def assemble(
     and recorded as deferred. The lock is held for the whole body."""
     with locked(wave_path):
         wave = load(wave_path)
+        if wave is None:
+            print(f"autopilot: {missing_message(wave_path)}", file=sys.stderr)
+            return 1
         refusals = _refusals(repo, wave, run_git=run_git)
         if refusals:
             for refusal in refusals:
