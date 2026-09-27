@@ -23,6 +23,7 @@ files.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -30,6 +31,7 @@ import pytest
 
 from cli import wave, wave_assemble, wave_launch
 from cli.loop_testutil import _spawn_tagged_incumbent
+from cli.test_wave_docs import _claims, _sentences
 from cli.test_wave_launch import (
     THREE_LANES,
     _autopilot,
@@ -722,3 +724,70 @@ def test_assemble_records_each_lanes_files_and_integrator_trailers(
     assert lanes["l3"]["integrator_notes"] == [
         {"sha": kept[:7], "text": "l3 wanted value 3"},
     ]
+
+
+# ── docs: the assembly_conflict slug and the wave summary report ────────
+
+
+_SKILL_ROOT = Path(__file__).resolve().parent.parent
+_RECOVERY = _SKILL_ROOT / "references" / "recovery.md"
+_BATCH_REPORT_FORMAT = _SKILL_ROOT / "references" / "batch-report-format.md"
+_SKILL_MD = _SKILL_ROOT / "SKILL.md"
+_WAVE_REPORT = "reports/<wave id>-wave.md"
+
+
+def _section(text: str, heading: str) -> str:
+    """`text` from `heading` (on its own line) to the next `#`-heading line."""
+    marker = f"\n{heading}\n"
+    assert marker in text, f"no {heading!r} section"
+    body = text[text.index(marker) + len(marker) :]
+    end = re.search(r"\n#{1,6} ", body)
+    return body if end is None else body[: end.start()]
+
+
+def _bullet(section: str, marker: str) -> str:
+    """The top-level bullet in `section` starting with `marker`, up to the next
+    top-level bullet or the section end."""
+    assert marker in section, f"no {marker!r} bullet"
+    body = section[section.index(marker) :]
+    end = re.search(r"\n- ", body[1:])
+    return body if end is None else body[: end.start() + 1]
+
+
+def test_docs_name_the_site_and_the_summary() -> None:
+    slugs = _section(_RECOVERY.read_text(encoding="utf-8"), "### Stall `site` slugs")
+    bullet = _bullet(slugs, "- `assembly_conflict`").lower()
+    sentences = _sentences(bullet)
+    assert _claims(sentences, "assemble", "itself", "verb", "directly", "command"), (
+        f"{_RECOVERY}: `assembly_conflict` bullet does not credit the assemble "
+        "verb itself with writing this stall site"
+    )
+    assert _claims(sentences, "session", "no ", "not ", "without ", "never "), (
+        f"{_RECOVERY}: `assembly_conflict` bullet does not say no session backs it"
+    )
+    assert _claims(sentences, "state.json", "no ", "not ", "without ", "never "), (
+        f"{_RECOVERY}: `assembly_conflict` bullet does not say no state.json backs it"
+    )
+
+    batch_text = _BATCH_REPORT_FORMAT.read_text(encoding="utf-8")
+    headings = re.findall(r"\n(## [^\n]*)\n", batch_text)
+    heading = next(
+        (h for h in headings if "wave" in h.lower() and "summar" in h.lower()), None
+    )
+    assert heading is not None, (
+        f"{_BATCH_REPORT_FORMAT}: no `## `-level heading names the wave summary"
+    )
+    wave_section = _section(batch_text, heading).lower()
+    assert _claims(_sentences(wave_section), _WAVE_REPORT, "summar"), (
+        f"{_BATCH_REPORT_FORMAT}: {heading!r} does not document {_WAVE_REPORT} as "
+        "a report type alongside the per-batch report"
+    )
+
+    retention = _section(_SKILL_MD.read_text(encoding="utf-8"), "### Retention")
+    assert _WAVE_REPORT in _bullet(retention, "- **Durable**"), (
+        f"{_SKILL_MD}: § Retention Durable bullet does not list {_WAVE_REPORT}"
+    )
+    for other in ("- **Not durable", "- **Disposable**"):
+        assert _WAVE_REPORT not in _bullet(retention, other), (
+            f"{_SKILL_MD}: § Retention lists {_WAVE_REPORT} outside the Durable bullet"
+        )

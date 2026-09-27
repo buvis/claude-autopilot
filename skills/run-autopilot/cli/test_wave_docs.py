@@ -46,6 +46,9 @@ _WAVE_TEST_FILES = (
     "test_wave_launch_abort_keep.py",
     "test_wave_launch_abort_kill.py",
     "test_wave_launch_refusals.py",
+    "test_wave_assemble.py",
+    "test_wave_assemble_migrate.py",
+    "test_wave_cli_assemble.py",
     "test_wave_docs.py",
 )
 
