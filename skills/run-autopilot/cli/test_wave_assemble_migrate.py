@@ -36,6 +36,9 @@ from cli.test_wave_launch import _autopilot, _backlog, _git
 _AP = "docs/dev/project-management/autopilot"
 _PRDS = "docs/dev/project-management/prds"
 LANE_BATCH = "202609260900"
+# A second lane's batch: no two fixtures below share one id, so a tag lifted
+# from a constant instead of the lane's own state.json fails somewhere.
+DISPATCH_BATCH = "202609261100"
 # Seeded on the base commit so two lanes editing the same lines conflict.
 CLASH_SEED = {
     "CHANGELOG.md": "# Changelog\n",
@@ -69,14 +72,16 @@ def _assert_tagged(
     source: list[dict],
     lane: str,
     wave_id: str,
+    batch: str,
 ) -> None:
     """Every row arrived once, kept its own fields, and gained the lane's tags:
-    the lane name, the wave id, and the batch id the lane's loop ran under."""
+    the lane name, the wave id, and the batch id this lane's own state.json
+    named, each under its own key."""
     assert len(migrated) == len(source)
     for row, before in zip(migrated, source, strict=True):
         assert {key: row[key] for key in before} == before, row
         assert (row["lane"], row["wave"]) == (lane, wave_id), row
-        assert LANE_BATCH in row.values(), row
+        assert row["batch"] == batch, row
 
 
 # ── migrate_lane: the lane's own records ─────────────────────────────────
@@ -95,7 +100,9 @@ def test_ledger_rows_gain_lane_and_wave_fields(
         {"prd": "00001-a.md", "event": "task_done", "task": 1},
         {"prd": "00001-a.md", "event": "task_done", "task": 2},
     ]
-    metric = {"prd": "00001-a.md", "batch": LANE_BATCH, "wall_secs": 5400}
+    # The row carries no batch of its own: the only batch it can gain is the
+    # one this lane's state.json named.
+    metric = {"prd": "00001-a.md", "wall_secs": 5400}
     _write(
         worktree,
         {
@@ -113,10 +120,11 @@ def test_ledger_rows_gain_lane_and_wave_fields(
         ledger,
         "l1",
         wave_id,
+        LANE_BATCH,
     )
     metrics = _rows(_autopilot(repo) / "loop-metrics.jsonl")
     assert metrics[0] == earlier, metrics
-    _assert_tagged(metrics[1:], [metric], "l1", wave_id)
+    _assert_tagged(metrics[1:], [metric], "l1", wave_id, LANE_BATCH)
 
 
 def test_dispatch_rows_migrate_too(
@@ -126,7 +134,8 @@ def test_dispatch_rows_migrate_too(
     repo, wave_path = _launched(tmp_path, monkeypatch, 1)
     worktree = _finish(wave_path, "l1", "")
     _commit(worktree, {"x/a.py": "# l1\n"}, "l1 change")
-    _batched(worktree, LANE_BATCH)
+    # A different batch from the ledger test's: the tag is read, not constant.
+    _batched(worktree, DISPATCH_BATCH)
     _to_done(worktree, "00001-a.md")
     dispatch = [
         {"id": "d1", "kind": "implementor", "task": "task 1", "prompt_bytes": 40},
@@ -137,7 +146,7 @@ def test_dispatch_rows_migrate_too(
     assert wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass) == 0
     wave_id = wave.load(wave_path)["id"]
     migrated = _rows(_autopilot(repo) / "dispatch-metrics.jsonl")
-    _assert_tagged(migrated, dispatch, "l1", wave_id)
+    _assert_tagged(migrated, dispatch, "l1", wave_id, DISPATCH_BATCH)
 
 
 def test_deferred_items_migrate_idempotently(
@@ -151,6 +160,11 @@ def test_deferred_items_migrate_idempotently(
         {"type": "stall", "detail": f"d{n}", "op_id": f"l1-{n}", "prd": "00001-a.md"}
         for n in (1, 2)
     ]
+    # A stall the lane filed against a PRD that is not the lane's own: the item
+    # keeps the PRD it names, never the lane's first one.
+    items.append(
+        {"type": "stall", "detail": "d3", "op_id": "l1-3", "prd": "00009-other.md"},
+    )
     metric = {"prd": "00001-a.md", "batch": LANE_BATCH, "wall_secs": 60}
     _write(
         worktree,
@@ -168,6 +182,8 @@ def test_deferred_items_migrate_idempotently(
     content = json.loads(landed.read_text(encoding="utf-8"))
     # Each item reached the main checkout through record_defer, untouched.
     assert content == {"batch_id": LANE_BATCH, "items": items}
+    foreign = next(item for item in content["items"] if item["op_id"] == "l1-3")
+    assert foreign["prd"] == "00009-other.md", foreign
     assert lane["migrated_at"], lane
     metrics = _autopilot(repo) / "loop-metrics.jsonl"
     before = (landed.read_text(encoding="utf-8"), metrics.read_text(encoding="utf-8"))
@@ -199,7 +215,7 @@ def test_prds_land_in_done_hold_or_backlog_by_lane_status(
         },
     )
     assert wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass) == 3
-    _, lanes = _saved(repo, wave_path)
+    saved, lanes = _saved(repo, wave_path)
     assert (lanes["l1"]["status"], lanes["l2"]["status"]) == ("assembled", "conflict")
     main = repo / _PRDS
     assert [path.name for path in (main / "done").iterdir()] == ["00001-a.md"]
@@ -216,6 +232,19 @@ def test_prds_land_in_done_hold_or_backlog_by_lane_status(
     # The kept lane's PRDs moved out of its own folders; they were not copied.
     assert list((kept / _PRDS / "wip").iterdir()) == []
     assert list(_backlog(kept).iterdir()) == []
+    # The report labels every PRD by the folder it actually reached, including
+    # the ones no lane listed in its own `prds`.
+    wave_id = saved["id"]
+    report = _autopilot(repo) / "reports" / f"{wave_id}-wave.md"
+    text = report.read_text(encoding="utf-8")
+    for prd, lane, label in (
+        ("00001-a.md", "l1", "done"),
+        ("00080-parked.md", "l1", "parked"),
+        ("00081-parked.md", "l2", "parked"),
+        ("00082-next.md", "l2", "backlog"),
+        ("00002-b.md", "l2", "backlog"),
+    ):
+        assert f"- {prd}: Wave {wave_id}, lane {lane}, {label}" in text, text
 
 
 def test_merged_worktrees_and_branches_are_removed(
@@ -292,6 +321,62 @@ def test_kept_lane_keeps_its_done_prds_and_worktree(
     text = report.read_text(encoding="utf-8")
     assert f"- 00002-b.md: Wave {wave_id}, lane l2, unassembled" in text, text
     assert f"- 00001-a.md: Wave {wave_id}, lane l1, done" in text, text
+    # Why l2 was kept out is in the report, not only in wave.json.
+    conflicts = text[text.index("## Assembly conflicts") :]
+    assert lanes["l2"]["conflict_detail"] in conflicts, conflicts
+
+
+# Each lane's own batch id and its own loop-metrics rows: 3 sessions, 8100 wall
+# seconds (2.25 hours) and $1.75 captured across the wave.
+_REPORT_LANES: tuple[tuple[str, str, list[dict]], ...] = (
+    (
+        "l1",
+        "202609260600",
+        [
+            {"prd": "00001-a.md", "wall_secs": 5400, "cost_usd": 1.5},
+            {"prd": "00001-a.md", "wall_secs": 1800},
+        ],
+    ),
+    (
+        "l2",
+        "202609260700",
+        [{"prd": "00002-b.md", "wall_secs": 900, "cost_usd": 0.25}],
+    ),
+)
+
+
+def test_wave_report_states_the_real_base_totals_and_lane_batches(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, wave_path = _launched(tmp_path, monkeypatch, 2, CLASH_SEED)
+    for name, batch, rows in _REPORT_LANES:
+        worktree = _finish(wave_path, name, "")
+        _commit(worktree, _clashing_edits(name), f"{name} change")
+        _batched(worktree, batch)
+        _write(worktree, {f"{_AP}/loop-metrics.jsonl": _jsonl(rows)})
+    # l2 edits the lines l1 already changed, so it is kept out on conflict.
+    assert wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass) == 3
+    saved, lanes = _saved(repo, wave_path)
+    wave_id = saved["id"]
+    report = _autopilot(repo) / "reports" / f"{wave_id}-wave.md"
+    text = report.read_text(encoding="utf-8")
+    header = text[: text.index("## ")]
+    for token in (
+        wave_id,
+        saved["base_branch"],
+        saved["base_sha"][:7],
+        saved["assembly"]["branch"],
+        saved["assembly"]["head_sha"][:7],
+    ):
+        assert token in header, header
+    assert "totals: 3 sessions, 2.25 wall hours, $1.75 captured cost" in text, text
+    for name, batch, _rows_seeded in _REPORT_LANES:
+        row = [line for line in text.splitlines() if lanes[name]["branch"] in line]
+        assert len(row) == 1, row
+        assert batch in row[0], row[0]
+    conflicts = text[text.index("## Assembly conflicts") :]
+    assert lanes["l2"]["conflict_detail"] in conflicts, conflicts
 
 
 def _snapshot(repo: Path, kept: Path) -> dict[str, str]:
@@ -340,6 +425,13 @@ def test_rerun_is_idempotent(
             },
         )
     assert wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass) == 3
+    # Each lane's per-PRD review report and findings reached the main checkout
+    # before its worktree could take them down with it.
+    for prd in ("00001-a.md", "00002-b.md"):
+        review = _autopilot(repo) / "reports" / f"{prd}-review.md"
+        findings = repo / "docs" / "dev" / "project-management" / "reviews" / f"{prd}-findings.md"
+        assert review.read_text(encoding="utf-8") == f"{prd} review\n", review
+        assert findings.read_text(encoding="utf-8") == f"{prd} findings\n", findings
     first = _snapshot(repo, kept)
     assert wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass) == 3
     assert _snapshot(repo, kept) == first

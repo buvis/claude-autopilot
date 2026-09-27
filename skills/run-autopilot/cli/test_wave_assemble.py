@@ -80,18 +80,25 @@ def test_keep_both_keeps_both_sides_in_file_order() -> None:
         "after\n"
     )
     expected = (
-        "before\n"
-        "our line one\n"
-        "our line two\n"
-        "their line one\n"
-        "their line two\n"
-        "after\n"
+        "before\nour line one\nour line two\ntheir line one\ntheir line two\nafter\n"
     )
     assert wave_assemble.keep_both(text) == expected
 
 
 def test_keep_both_leaves_a_clean_file_alone() -> None:
-    text = "one fish\ntwo fish\nred fish\nblue fish\n"
+    # Ordinary lines that start the way a marker does: a markdown underline, a
+    # comparison, a doctest prompt, an HTML tag, and a run one character longer
+    # than git's own 7-character marker. None of them is a conflict marker.
+    text = (
+        "one fish\n"
+        "======\n"
+        "if a >= b:\n"
+        "    pass\n"
+        ">>> foo()\n"
+        "<div>x</div>\n"
+        f"{'<' * 8}\n"
+        "two fish\n"
+    )
     assert wave_assemble.keep_both(text) == text
 
 
@@ -188,37 +195,75 @@ def test_summary_shows_none_when_no_integrator_notes() -> None:
 # ── summary: the report header ───────────────────────────────────────────
 
 
-def test_summary_opens_with_the_base_and_the_assembled_head() -> None:
-    wave = {
-        **_wave(lanes=[_lane("l1", ["00215-foo-v1.md"])]),
+_HEADERS = (
+    {
+        "id": "202609261200",
         "base_branch": "wip/waves",
         "base_sha": "abcdef0",
+        "branch": "wave/202609261200/assembly",
+        "head_sha": "fedcba9",
+    },
+    {
+        "id": "202610021545",
+        "base_branch": "release/2.1",
+        "base_sha": "1234567",
+        "branch": "wave/202610021545/assembly",
+        "head_sha": "7654321",
+    },
+)
+
+
+@pytest.mark.parametrize(
+    ("spec", "other"),
+    [(_HEADERS[0], _HEADERS[1]), (_HEADERS[1], _HEADERS[0])],
+    ids=["first-wave", "second-wave"],
+)
+def test_summary_opens_with_the_base_and_the_assembled_head(
+    spec: dict,
+    other: dict,
+) -> None:
+    wave = {
+        **_wave(wave_id=spec["id"], lanes=[_lane("l1", ["00215-foo-v1.md"])]),
+        "base_branch": spec["base_branch"],
+        "base_sha": spec["base_sha"],
         "assembly": {
-            "worktree": "/tmp/proj-wave-202609261200",
-            "branch": "wave/202609261200/assembly",
-            "head_sha": "fedcba9",
+            "worktree": f"/tmp/proj-wave-{spec['id']}",
+            "branch": spec["branch"],
+            "head_sha": spec["head_sha"],
             "merged": ["l1"],
             "kept": [],
         },
     }
     text = wave_assemble.summary(wave, [], [])
     header = text[: text.index("## PRDs")]
-    for token in (
-        "202609261200",
-        "wip/waves",
-        "abcdef0",
-        "wave/202609261200/assembly",
-        "fedcba9",
-    ):
-        assert token in header, header
+    # Each wave's own five values, and none of the other wave's: a header
+    # rendered from constants cannot serve both waves.
+    for key in ("id", "base_branch", "base_sha", "branch", "head_sha"):
+        assert spec[key] in header, header
+        assert other[key] not in header, header
 
 
 # ── summary: the lane table ──────────────────────────────────────────────
 
 
+def _cells(line: str) -> list[str]:
+    """A table line's cells, outer pipes and padding dropped."""
+    return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+
+def _cell(text: str, line: str, column: str) -> str:
+    """`line`'s cell under the lane table's `column` header."""
+    for each in text.splitlines():
+        headers = [cell.lower() for cell in _cells(each)]
+        if {"paths", "files"} <= set(headers):
+            return _cells(line)[headers.index(column)]
+    raise AssertionError(f"no lane table header naming paths and files:\n{text}")
+
+
 def test_summary_tables_each_lane_with_its_branch_status_and_batch() -> None:
     # Neither branch name carries its own lane's name, so a missing lane-name
-    # column cannot pass on the branch column's coat-tails.
+    # column cannot pass on the branch column's coat-tails; each lane's `paths`
+    # and `files` are disjoint, so neither column can be rendered from the other.
     wave = _wave(
         lanes=[
             _lane(
@@ -226,7 +271,7 @@ def test_summary_tables_each_lane_with_its_branch_status_and_batch() -> None:
                 ["00215-foo-v1.md"],
                 branch="wave/202609261200/alpha",
                 paths=["cli/foo.py"],
-                files=["cli/foo.py", "cli/test_foo.py"],
+                files=["cli/renamed.py"],
                 batch_id="202609260900",
             ),
             _lane(
@@ -235,7 +280,7 @@ def test_summary_tables_each_lane_with_its_branch_status_and_batch() -> None:
                 status="conflict",
                 branch="wave/202609261200/beta",
                 paths=["cli/bar.py"],
-                files=["cli/bar.py"],
+                files=["cli/moved.py"],
                 batch_id="202609261000",
             ),
         ],
@@ -250,30 +295,66 @@ def test_summary_tables_each_lane_with_its_branch_status_and_batch() -> None:
 
     first = row("wave/202609261200/alpha")
     second = row("wave/202609261200/beta")
-    for token in ("l1", "00215-foo-v1.md", "cli/foo.py", "assembled", "202609260900"):
+    for token in ("l1", "00215-foo-v1.md", "assembled", "202609260900"):
         assert token in first, first
-    for token in ("l2", "00216-bar-v1.md", "cli/bar.py", "conflict", "202609261000"):
+    for token in ("l2", "00216-bar-v1.md", "conflict", "202609261000"):
         assert token in second, second
+    for line, path, changed in (
+        (first, "cli/foo.py", "cli/renamed.py"),
+        (second, "cli/bar.py", "cli/moved.py"),
+    ):
+        assert path in _cell(text, line, "paths"), line
+        assert changed in _cell(text, line, "files"), line
+        assert path not in _cell(text, line, "files"), line
 
 
 # ── summary: the totals ──────────────────────────────────────────────────
 
 
-def test_summary_totals_the_sessions_wall_hours_and_captured_cost() -> None:
+# Four sessions, 8100 wall seconds (2.25 hours), one captured cost (1.25): a row
+# may carry no cost at all, and a row may carry no wall time either.
+_FOUR_SESSIONS = [
+    {"prd": "00215-foo-v1.md", "wall_secs": 5400, "cost_usd": 1.25},
+    {"prd": "00215-foo-v1.md", "wall_secs": 2700, "cost_usd": None},
+    {"prd": "00215-foo-v1.md", "wall_secs": 0},
+    {"prd": "00215-foo-v1.md"},
+]
+# Three sessions, 4500 wall seconds (1.25 hours), two captured costs (7.75).
+_THREE_SESSIONS = [
+    {"prd": "00215-foo-v1.md", "wall_secs": 3600, "cost_usd": 7.0},
+    {"prd": "00215-foo-v1.md", "wall_secs": 900, "cost_usd": 0.75},
+    {"prd": "00215-foo-v1.md", "wall_secs": 0, "cost_usd": None},
+]
+
+
+@pytest.mark.parametrize(
+    ("rows", "totals", "absent"),
+    [
+        (
+            _FOUR_SESSIONS,
+            "totals: 4 sessions, 2.25 wall hours, $1.25 captured cost",
+            ("3 sessions", "1.25 wall", "$7.75"),
+        ),
+        (
+            _THREE_SESSIONS,
+            "totals: 3 sessions, 1.25 wall hours, $7.75 captured cost",
+            ("4 sessions", "2.25 wall", "$1.25"),
+        ),
+    ],
+    ids=["four-sessions", "three-sessions"],
+)
+def test_summary_totals_the_sessions_wall_hours_and_captured_cost(
+    rows: list[dict],
+    totals: str,
+    absent: tuple[str, ...],
+) -> None:
     wave = _wave(lanes=[_lane("l1", ["00215-foo-v1.md"])])
-    # Four sessions, 9000 wall seconds (2.5 hours), one captured cost (1.5):
-    # a row may carry no cost at all, and a row may carry no wall time either.
-    rows = [
-        {"prd": "00215-foo-v1.md", "wall_secs": 5400, "cost_usd": 1.5},
-        {"prd": "00215-foo-v1.md", "wall_secs": 3600, "cost_usd": None},
-        {"prd": "00215-foo-v1.md", "wall_secs": 0},
-        {"prd": "00215-foo-v1.md"},
-    ]
     text = wave_assemble.summary(wave, rows, [])
-    # Nothing else this report renders carries these digit runs.
-    assert "2.5" in text, text
-    assert "1.5" in text, text
-    assert "4" in text, text
+    # The two row sets share no total, so one constant cannot render both, and
+    # neither set's numbers may leak into the other's report.
+    assert totals in text, text
+    for token in absent:
+        assert token not in text, text
 
 
 # ── assemble: fixtures ───────────────────────────────────────────────────
@@ -554,8 +635,10 @@ def test_unfinished_lane_is_skipped_not_merged(
     unfinished = _finish(wave_path, "l1", next_phase)
     tip = _commit(unfinished, {"x/a.py": "# l1\n"}, "l1 change")
     _commit(_finish(wave_path, "l2", ""), {"y/b.py": "# l2\n"}, "l2 change")
-    wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass)
+    # A lane left behind is a kept lane: the wave is partial, not green.
+    assert wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass) == 3
     saved, lanes = _saved(repo, wave_path)
+    assert saved["status"] == "assembled_partial", saved["status"]
     assert (lanes["l1"]["status"], lanes["l2"]["status"]) == ("unfinished", "assembled")
     tree = _tree(repo, f"wave/{saved['id']}/assembly")
     assert "y/b.py" in tree
