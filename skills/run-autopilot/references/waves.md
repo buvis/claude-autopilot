@@ -166,9 +166,8 @@ Not part of this release:
 
 - **Assembly** - merging the lane branches back into the base branch - shipped
   as `autopilot wave assemble` (above, PRD 00215). For any lane `assemble`
-  cannot merge on its own - kept for a conflict, a checks failure, or one
-  still live - you merge that lane's branch by hand; `wave abort` still keeps
-  any branch that carries commits rather than deleting it.
+  cannot merge on its own, you merge that lane's branch by hand; `wave abort`
+  still keeps any branch that carries commits rather than deleting it.
 - **The review-slot semaphore** is PRD 00217. `launch` already points every lane
   at one shared directory (`_AUTOPILOT_REVIEW_SLOTS_DIR` =
   `docs/dev/project-management/autopilot/wave-slots` in the main checkout) and passes the wave's
