@@ -98,6 +98,32 @@ def test_run_reports_a_git_failure_on_stderr_and_returns_1(
     assert "git" in err, err
 
 
+def test_run_reports_a_corrupt_wave_json_on_stderr_and_returns_1(
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    wave_path = tmp_path / "wave.json"
+    wave_path.write_text("{ not json")
+    ns = _parse(["wave", "assemble", "--state", "/tmp/x/state.json"])
+    result = wave_cli.run(ns, tmp_path, wave_path)
+    assert result == 1
+    err = capsys.readouterr().err
+    assert "refusing to touch a corrupt wave.json" in err, err
+
+
+def test_run_reports_a_missing_wave_json_on_stderr_and_returns_1(
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    wave_path = tmp_path / "wave.json"
+    ns = _parse(["wave", "assemble", "--state", "/tmp/x/state.json"])
+    result = wave_cli.run(ns, tmp_path, wave_path)
+    assert result == 1
+    err = capsys.readouterr().err
+    assert "run `autopilot wave plan` first" in err, err
+    assert str(wave_path) in err, err
+
+
 # ── run: the pre-existing verbs stay intact ──────────────────────────────
 
 
