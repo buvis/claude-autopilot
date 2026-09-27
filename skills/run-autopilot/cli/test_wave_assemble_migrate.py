@@ -447,14 +447,7 @@ def test_rerun_is_idempotent(
     # before its worktree could take them down with it.
     for prd in ("00001-a.md", "00002-b.md"):
         review = _autopilot(repo) / "reports" / f"{prd}-review.md"
-        findings = (
-            repo
-            / "docs"
-            / "dev"
-            / "project-management"
-            / "reviews"
-            / f"{prd}-findings.md"
-        )
+        findings = repo / "docs" / "dev" / "project-management" / "reviews" / f"{prd}-findings.md"
         assert review.read_text(encoding="utf-8") == f"{prd} review\n", review
         assert findings.read_text(encoding="utf-8") == f"{prd} findings\n", findings
     first = _snapshot(repo, kept)
