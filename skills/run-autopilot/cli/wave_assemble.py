@@ -472,7 +472,8 @@ def _write_report(
     lanes: list[dict],
     prd_names: dict[str, set[str]],
 ) -> None:
-    """Rewrite the wave's durable report whole. `prds` is built here and nowhere
+    """Rewrite the wave's durable report whole, and mirror it into `ledger/` -
+    the copy `purge-devlocal` never trims. `prds` is built here and nowhere
     else: `summary` is pure, so it cannot see which folder each PRD reached."""
     entries = [
         {"prd": prd, "lane": lane["name"], "label": label}
@@ -480,16 +481,15 @@ def _write_report(
         for prd in sorted(prd_names[lane["name"]])
         if (label := _prd_label(repo, Path(lane["worktree"]), prd))
     ]
-    report = repo / _AUTOPILOT / "reports" / f"{wave['id']}-wave.md"
-    report.parent.mkdir(parents=True, exist_ok=True)
-    report.write_text(
-        summary(
-            {**wave, "prds": entries},
-            _wave_rows(repo, wave["id"]),
-            _conflict_records(repo, wave["id"]),
-        ),
-        encoding="utf-8",
+    text = summary(
+        {**wave, "prds": entries},
+        _wave_rows(repo, wave["id"]),
+        _conflict_records(repo, wave["id"]),
     )
+    for folder in ("reports", "ledger"):
+        target = repo / _AUTOPILOT / folder / f"{wave['id']}-wave.md"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
 
 
 def _drain_lane(
