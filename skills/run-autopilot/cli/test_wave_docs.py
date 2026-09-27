@@ -187,3 +187,42 @@ def test_the_runbook_matches_what_abort_prints_for_a_kept_worktree() -> None:
         f"{_WAVES}: § wave abort does not quote the note abort really prints "
         f"({_NOTE!r}), so the runbook can drift from the code in silence"
     )
+
+
+_SKILL = Path(__file__).resolve().parent.parent / "SKILL.md"
+_RETENTION_HEADING = "### Retention"
+
+
+def _retention_region() -> str:
+    """SKILL.md's `### Retention` section: from its heading to the next `## `/
+    `### ` heading, so wording elsewhere in SKILL.md cannot satisfy the pin
+    below."""
+    text = _SKILL.read_text(encoding="utf-8")
+    heading = f"\n{_RETENTION_HEADING}\n"
+    assert heading in text, f"{_SKILL}: no `{_RETENTION_HEADING}` section"
+    section = text[text.index(heading) + len(heading) :]
+    ends = [i for i in (section.find("\n## "), section.find("\n### ")) if i != -1]
+    return section[: min(ends)] if ends else section
+
+
+def test_retention_names_the_ledger_copy_of_the_wave_report_as_durable() -> None:
+    region = _retention_region().lower()
+    sentences = _sentences(region)
+    # The corrected claim: one sentence naming the `ledger/` mirror of the wave
+    # report as the durable copy, the same shape already used for
+    # `ledger/loop-metrics.jsonl` ("the GC-exempt mirror, the durable copy to
+    # read").
+    assert _claims(sentences, "ledger/<wave id>-wave.md", "durable", "never delete"), (
+        f"{_SKILL}: § Retention does not say, in one sentence, that the `ledger/` "
+        "copy of the wave report (`ledger/<wave id>-wave.md`) is the durable one"
+    )
+    # The wrong comparison this guards against, as SKILL.md words it today: the
+    # `reports/` copy called "durable like the per-batch report it sits beside" -
+    # while the per-batch report is listed as NOT durable two lines below.
+    assert "like the per-batch report" not in region, region
+    # No sentence may claim durability for the `reports/` copy of the wave
+    # report: only the `ledger/` mirror survives cleanup.
+    assert _claims(sentences, "reports/<wave id>-wave.md", "durable", "never delete") == [], (
+        f"{_SKILL}: § Retention still calls a `reports/` copy of the wave report "
+        "durable, but only the `ledger/` mirror is"
+    )

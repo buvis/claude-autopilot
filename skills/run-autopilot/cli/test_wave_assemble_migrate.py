@@ -379,6 +379,24 @@ def test_wave_report_states_the_real_base_totals_and_lane_batches(
     assert lanes["l2"]["conflict_detail"] in conflicts, conflicts
 
 
+def test_wave_report_is_mirrored_into_the_durable_ledger(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, wave_path = _launched(tmp_path, monkeypatch, 1)
+    worktree = _finish(wave_path, "l1", "")
+    _commit(worktree, {"x/a.py": "# l1\n"}, "l1 change")
+    _to_done(worktree, "00001-a.md")
+    assert wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass) == 0
+    wave_id = wave.load(wave_path)["id"]
+    report = _autopilot(repo) / "reports" / f"{wave_id}-wave.md"
+    mirror = _autopilot(repo) / "ledger" / f"{wave_id}-wave.md"
+    report_text = report.read_text(encoding="utf-8")
+    mirror_text = mirror.read_text(encoding="utf-8")
+    assert "## PRDs" in report_text, report_text
+    assert mirror_text == report_text, (mirror_text, report_text)
+
+
 def _snapshot(repo: Path, kept: Path) -> dict[str, str]:
     """Everything a second `assemble` must leave exactly as it found it: the
     main checkout's whole docs/dev/project-management, the kept lane's PRD folders, and the
@@ -429,7 +447,14 @@ def test_rerun_is_idempotent(
     # before its worktree could take them down with it.
     for prd in ("00001-a.md", "00002-b.md"):
         review = _autopilot(repo) / "reports" / f"{prd}-review.md"
-        findings = repo / "docs" / "dev" / "project-management" / "reviews" / f"{prd}-findings.md"
+        findings = (
+            repo
+            / "docs"
+            / "dev"
+            / "project-management"
+            / "reviews"
+            / f"{prd}-findings.md"
+        )
         assert review.read_text(encoding="utf-8") == f"{prd} review\n", review
         assert findings.read_text(encoding="utf-8") == f"{prd} findings\n", findings
     first = _snapshot(repo, kept)
