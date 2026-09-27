@@ -435,3 +435,28 @@ def test_rerun_is_idempotent(
     first = _snapshot(repo, kept)
     assert wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass) == 3
     assert _snapshot(repo, kept) == first
+
+
+def test_rerun_report_still_names_a_prd_outside_the_lane_roster(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, wave_path = _launched(tmp_path, monkeypatch, 1)
+    worktree = _finish(wave_path, "l1", "")
+    _commit(worktree, {"x/a.py": "# l1\n"}, "l1 change")
+    _to_done(worktree, "00001-a.md")
+    # Nobody listed 00080 in l1's own `prds`: the lane only ever held it, parked.
+    # The first run merges l1 and takes its worktree down with it, so a second
+    # run can only name this PRD from what the first run recorded.
+    _write(worktree, {f"{_PRDS}/hold/00080-parked.md": "parked in l1\n"})
+    for run in ("first", "second"):
+        assert wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass) == 0
+        saved, lanes = _saved(repo, wave_path)
+        assert lanes["l1"]["worktree_removed"] is True, (run, lanes["l1"])
+        wave_id = saved["id"]
+        report = _autopilot(repo) / "reports" / f"{wave_id}-wave.md"
+        prds = report.read_text(encoding="utf-8")
+        prds = prds[prds.index("## PRDs") :]
+        held = f"- 00080-parked.md: Wave {wave_id}, lane l1, parked"
+        assert held in prds, (run, prds)
+        assert f"- 00001-a.md: Wave {wave_id}, lane l1, done" in prds, (run, prds)
