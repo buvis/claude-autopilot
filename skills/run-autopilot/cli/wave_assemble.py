@@ -9,11 +9,14 @@ are pure - no disk, no git. `assemble` is the merge pass itself.
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from collections.abc import Callable
+from datetime import datetime, timezone
 from pathlib import Path
 
 from cli import records
@@ -23,6 +26,15 @@ from cli.wave_launch import lane_status
 WAVE_ASSEMBLY_BRANCH_FMT = "wave/{wave_id}/assembly"
 WAVE_ASSEMBLY_WORKTREE_FMT = "{repo_parent}/{repo_name}-wave-{wave_id}"
 _CONFLICT_MARKERS = re.compile(r"^(<{7}(?: .*)?|={7}|>{7}(?: .*)?)$", re.MULTILINE)
+_AUTOPILOT = "docs/dev/project-management/autopilot"
+_PRDS = "docs/dev/project-management/prds"
+_REVIEWS = "docs/dev/project-management/reviews"
+# `wave_launch._RETURN_TO`'s mapping: where each of a lane's lifecycle folders
+# comes home to. A merged lane drains all four, a kept one all but done/ - its
+# done/ is unassembled work, and stays where the lane left it.
+_PRD_HOME = {"backlog": "backlog", "wip": "backlog", "done": "done", "hold": "hold"}
+_PRD_LABELS = (("done", "done"), ("hold", "parked"), ("backlog", "backlog"))
+_LANE_COLUMNS = ("lane", "branch", "status", "batch", "prds", "paths", "files")
 
 
 def keep_both(text: str) -> str:
@@ -34,9 +46,53 @@ def keep_both(text: str) -> str:
     )
 
 
+def _totals(rows: list[dict]) -> str:
+    """One `loop-metrics.jsonl` row is one session; a row may carry no wall time
+    and may carry no cost, and an uncaptured cost is not a zero one."""
+    hours = sum(row.get("wall_secs", 0) for row in rows) / 3600
+    cost = sum(row["cost_usd"] for row in rows if row.get("cost_usd") is not None)
+    return (
+        f"totals: {len(rows)} sessions, {hours:.2f} wall hours,"
+        f" ${cost:.2f} captured cost"
+    )
+
+
+def _lane_table(lanes: list[dict]) -> list[str]:
+    """One markdown row per lane; every element of its list fields, not the first."""
+    rows = [
+        [
+            each.get("name", ""),
+            each.get("branch", ""),
+            each.get("status", ""),
+            each.get("batch_id") or "",
+            ", ".join(each.get("prds") or []),
+            ", ".join(each.get("paths") or []),
+            ", ".join(each.get("files") or []),
+        ]
+        for each in lanes
+    ]
+    return [
+        "| " + " | ".join(_LANE_COLUMNS) + " |",
+        "|" + "|".join(["---"] * len(_LANE_COLUMNS)) + "|",
+        *("| " + " | ".join(row) + " |" for row in rows),
+    ]
+
+
 def summary(wave: dict, rows: list[dict], records: list[dict]) -> str:
     """Render a wave's markdown report from already-loaded in-memory data."""
-    lines = [f"# Wave {wave['id']} summary", "", "## PRDs"]
+    assembly = wave.get("assembly") or {}
+    lines = [
+        f"# Wave {wave['id']} summary",
+        "",
+        f"- base: {wave.get('base_branch')} @ {wave.get('base_sha')}",
+        f"- assembled head: {assembly.get('branch')} @ {assembly.get('head_sha')}",
+        f"- {_totals(rows)}",
+        "",
+        "## Lanes",
+        *_lane_table(wave["lanes"]),
+        "",
+        "## PRDs",
+    ]
     for entry in wave["prds"]:
         lines.append(
             f"- {entry['prd']}: Wave {wave['id']}, lane {entry['lane']}, "
@@ -258,6 +314,199 @@ def _assemble_lane(
     )
 
 
+# ── migrate_lane ─────────────────────────────────────────────────────────────
+
+
+def _batch_id(lane_ap: Path) -> str | None:
+    """The batch this lane's loop ran: its own state.json, else - when that file
+    is missing or unreadable - its newest final-state report. None when neither
+    names one; the records still migrate, only untagged by batch."""
+    candidates = [
+        lane_ap / "state.json",
+        *sorted(lane_ap.glob("reports/*-state-final.json"), reverse=True),
+    ]
+    for path in candidates:
+        try:
+            content = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        return (content.get("batch") or {}).get("id")
+    return None
+
+
+def _migrate_jsonl(lane_ap: Path, main_ap: Path, tags: dict) -> None:
+    """Append every jsonl record the lane logged to the same-named file under the
+    main checkout, each line re-serialized with the lane's tags merged in."""
+    sources = [
+        lane_ap / "loop-metrics.jsonl",
+        lane_ap / "dispatch-metrics.jsonl",
+        *sorted(lane_ap.glob("ledger/*.jsonl")),
+    ]
+    for source in sources:
+        if not source.exists():
+            continue
+        target = main_ap / source.relative_to(lane_ap)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with open(target, "a", encoding="utf-8") as out:
+            out.writelines(
+                json.dumps({**json.loads(line), **tags}) + "\n"
+                for line in source.read_text(encoding="utf-8").splitlines()
+            )
+
+
+def _migrate_deferred(lane_ap: Path, main_ap: Path, batch_id: str) -> None:
+    """Every item the lane deferred, through `record_defer` - whose own op_id
+    dedup is what makes a second pass a no-op. Each item keeps the PRD it names."""
+    path = lane_ap / "deferred" / f"{batch_id}-deferred.json"
+    if not path.exists():
+        return
+    content = json.loads(path.read_text(encoding="utf-8"))
+    for item in content["items"]:
+        records.record_defer(main_ap, item["prd"], batch_id, item)
+
+
+def _copy_new(source: Path, target: Path) -> None:
+    """Every file under `source` the main checkout does not already hold by that
+    name; skipping the existing ones is what makes a second pass a no-op."""
+    for path in sorted(source.glob("*")):
+        if path.is_file() and not (target / path.name).exists():
+            target.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, target / path.name)
+
+
+def _route_prds(main: Path, worktree: Path, merged: bool) -> None:
+    """Move the PRDs the lane holds RIGHT NOW into their `_PRD_HOME` folder. A
+    kept lane's done/ stays put; the re-scan is what makes a second pass a no-op,
+    and is what drains that done/ once a later pass finds the lane assembled."""
+    for folder, home in _PRD_HOME.items():
+        if folder == "done" and not merged:
+            continue
+        target = main / _PRDS / home
+        for prd in sorted((worktree / _PRDS / folder).glob("*.md")):
+            target.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(prd), str(target / prd.name))
+
+
+def migrate_lane(main: Path, wave_id: str, lane: dict) -> None:
+    """Drain one lane's own records and PRDs into the main checkout.
+
+    The jsonl append is guarded by `lane["migrated_at"]` - it would duplicate,
+    not no-op, on a second pass. Everything after it is re-evaluated on every
+    call: each step is idempotent on its own terms, and the PRD re-scan is how a
+    kept lane's done/ reaches main done/ once a later call finds it assembled.
+    Called only while the lane's worktree is still there."""
+    worktree = Path(lane["worktree"])
+    lane_ap, main_ap = worktree / _AUTOPILOT, main / _AUTOPILOT
+    batch_id = _batch_id(lane_ap)
+    lane["batch_id"] = batch_id
+    if not lane.get("migrated_at"):
+        tags = {"lane": lane["name"], "wave": wave_id}
+        if batch_id is not None:
+            tags["batch"] = batch_id
+        _migrate_jsonl(lane_ap, main_ap, tags)
+        lane["migrated_at"] = datetime.now(timezone.utc).isoformat()
+    if batch_id is not None:
+        _migrate_deferred(lane_ap, main_ap, batch_id)
+    _copy_new(lane_ap / "reports", main_ap / "reports")
+    _copy_new(worktree / _REVIEWS, main / _REVIEWS)
+    _route_prds(main, worktree, lane["status"] == "assembled")
+
+
+# ── the wave's report ────────────────────────────────────────────────────────
+
+
+def _lane_prd_names(worktree: Path) -> set[str]:
+    """Every PRD the lane still holds, including ones no lane ever listed."""
+    return {
+        path.name
+        for folder in _PRD_HOME
+        for path in (worktree / _PRDS / folder).glob("*.md")
+    }
+
+
+def _prd_label(main: Path, worktree: Path, prd: str) -> str | None:
+    """The folder this PRD actually reached, in `summary`'s words; None when it
+    reached none of them."""
+    for folder, label in _PRD_LABELS:
+        if (main / _PRDS / folder / prd).exists():
+            return label
+    if (worktree / _PRDS / "done" / prd).exists():
+        return "unassembled"
+    return None
+
+
+def _wave_rows(main: Path, wave_id: str) -> list[dict]:
+    """THIS wave's migrated loop-metrics rows - the file also holds every earlier
+    batch's, and those are not this wave's totals."""
+    path = main / _AUTOPILOT / "loop-metrics.jsonl"
+    if not path.exists():
+        return []
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    return [row for row in rows if row.get("wave") == wave_id]
+
+
+def _conflict_records(main: Path, wave_id: str) -> list[dict]:
+    """This wave's assembly_conflict deferred items, in the shape `summary`
+    renders: the record's `detail` is the reason the lane was kept out."""
+    path = main / _AUTOPILOT / "deferred" / f"{wave_id}-deferred.json"
+    if not path.exists():
+        return []
+    items = json.loads(path.read_text(encoding="utf-8"))["items"]
+    return [
+        {"prd": item["prd"], "lane": item["lane"], "reason": item["detail"]}
+        for item in items
+        if item.get("site") == "assembly_conflict"
+    ]
+
+
+def _write_report(
+    repo: Path,
+    wave: dict,
+    lanes: list[dict],
+    prd_names: dict[str, set[str]],
+) -> None:
+    """Rewrite the wave's durable report whole. `prds` is built here and nowhere
+    else: `summary` is pure, so it cannot see which folder each PRD reached."""
+    entries = [
+        {"prd": prd, "lane": lane["name"], "label": label}
+        for lane in lanes
+        for prd in sorted(prd_names[lane["name"]])
+        if (label := _prd_label(repo, Path(lane["worktree"]), prd))
+    ]
+    report = repo / _AUTOPILOT / "reports" / f"{wave['id']}-wave.md"
+    report.parent.mkdir(parents=True, exist_ok=True)
+    report.write_text(
+        summary(
+            {**wave, "prds": entries},
+            _wave_rows(repo, wave["id"]),
+            _conflict_records(repo, wave["id"]),
+        ),
+        encoding="utf-8",
+    )
+
+
+def _drain_lane(
+    repo: Path,
+    wave: dict,
+    lane: dict,
+    *,
+    run_git: Callable[..., subprocess.CompletedProcess],
+) -> set[str]:
+    """Migrate one lane, then drop a merged lane's worktree and branch; the PRDs
+    it held when the migration started. A lane whose worktree a previous call
+    already removed has nothing left to scan, so it is skipped. The removal flag
+    is set WITH the removal: a crash between the two still reads as not removed."""
+    if lane.get("worktree_removed"):
+        return set()
+    names = _lane_prd_names(Path(lane["worktree"]))
+    migrate_lane(repo, wave["id"], lane)
+    if lane["status"] == "assembled":
+        run_git(["worktree", "remove", "--force", lane["worktree"]], cwd=repo)
+        run_git(["branch", "-D", lane["branch"]], cwd=repo)
+        lane["worktree_removed"] = True
+    return names
+
+
 def assemble(
     repo: Path,
     wave_path: Path,
@@ -288,7 +537,9 @@ def assemble(
                 ["worktree", "add", str(assembly), "-b", branch, wave["base_sha"]],
                 cwd=repo,
             )
-        for lane in sorted(wave["lanes"], key=lambda each: each["order"]):
+        ordered = sorted(wave["lanes"], key=lambda each: each["order"])
+        prd_names: dict[str, set[str]] = {}
+        for lane in ordered:
             _assemble_lane(
                 wave_path,
                 wave,
@@ -297,7 +548,20 @@ def assemble(
                 run_git=run_git,
                 run_checks=run_checks,
             )
+            held = _drain_lane(repo, wave, lane, run_git=run_git)
+            prd_names[lane["name"]] = set(lane["prds"]) | held
             save(wave_path, wave)
-        wave["status"] = "assembled"
+        kept = [each["name"] for each in ordered if each["status"] != "assembled"]
+        wave["assembly"] = {
+            "worktree": str(assembly),
+            "branch": branch,
+            "head_sha": run_git(["rev-parse", "HEAD"], cwd=assembly).stdout.strip(),
+            "merged": [
+                each["name"] for each in ordered if each["status"] == "assembled"
+            ],
+            "kept": kept,
+        }
+        wave["status"] = "assembled_partial" if kept else "assembled"
+        _write_report(repo, wave, ordered, prd_names)
         save(wave_path, wave)
-        return 0
+        return 3 if kept else 0
