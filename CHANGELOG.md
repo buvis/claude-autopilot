@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **run-autopilot**: `autopilot wave assemble` merges every drained lane back into one assembly branch off the wave's `base_sha`, in each lane's `order`, running `dev/bin/release-checks` after every merge; a lane whose rebase conflicts outside `CHANGELOG.md`/`dev/bin/release-checks` or whose checks fail is kept instead of merged, its own branch and worktree left untouched, and recorded as a deferred `assembly_conflict` stall - rebase it by hand and rerun `assemble` to finish it. A still-live lane refuses the whole run (exit 1); any kept lane leaves the wave `assembled_partial` (exit 3) instead of `assembled` (exit 0)
+- **run-autopilot**: `autopilot wave assemble` merges every drained lane back into one assembly branch off the wave's `base_sha`, in each lane's `order`, running `dev/bin/release-checks` after every merge; a lane whose rebase conflicts outside `CHANGELOG.md`/`dev/bin/release-checks` or whose checks fail is kept instead of merged, its own branch and worktree left untouched, and recorded as a deferred `assembly_conflict` stall - rebase it by hand and rerun `assemble` to finish it. A still-live lane refuses the whole run (exit 1); any kept lane leaves the wave `assembled_partial` (exit 3) instead of `assembled` (exit 0). The run rewrites a per-wave report naming every PRD each lane held, including ones no lane listed in its own roster, and a rerun still names them after that lane's worktree is gone
 
 ### Changed
 

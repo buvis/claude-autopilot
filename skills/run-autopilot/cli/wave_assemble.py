@@ -494,11 +494,15 @@ def _drain_lane(
 ) -> set[str]:
     """Migrate one lane, then drop a merged lane's worktree and branch; the PRDs
     it held when the migration started. A lane whose worktree a previous call
-    already removed has nothing left to scan, so it is skipped. The removal flag
-    is set WITH the removal: a crash between the two still reads as not removed."""
+    already removed has nothing left to scan, so it is skipped - what it held is
+    read back from `lane["held_prds"]`, the only record left of PRDs no lane
+    listed in its own `prds`. The removal flag is set WITH the removal: a crash
+    between the two still reads as not removed."""
+    names = set(lane.get("held_prds") or [])
     if lane.get("worktree_removed"):
-        return set()
-    names = _lane_prd_names(Path(lane["worktree"]))
+        return names
+    names |= _lane_prd_names(Path(lane["worktree"]))
+    lane["held_prds"] = sorted(names)
     migrate_lane(repo, wave["id"], lane)
     if lane["status"] == "assembled":
         run_git(["worktree", "remove", "--force", lane["worktree"]], cwd=repo)

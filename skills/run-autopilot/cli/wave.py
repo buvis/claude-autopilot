@@ -322,6 +322,8 @@ _LANE_OPTIONAL_CHECKS = {
     "conflict_paths": lambda v: v is None
     or (isinstance(v, list) and all(isinstance(p, str) for p in v)),
     "worktree_removed": lambda v: v is None or isinstance(v, bool),
+    "held_prds": lambda v: v is None
+    or (isinstance(v, list) and all(map(_is_basename, v))),
 }
 
 
