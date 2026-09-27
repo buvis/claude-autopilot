@@ -59,13 +59,13 @@ _json_written_above = _wiring.json_written_above
 _RENDER_FLAG = re.compile(
     r'--set(?:-(cmd|file))?\s+([A-Z_][A-Z0-9_]*)=("(?:[^"\\]|\\.)*"|<[^>]*>|\S+)',
 )
-_ITEM_LEDGER = "dev/local/autopilot/dispatch-metrics.jsonl"
+_ITEM_LEDGER = "docs/dev/project-management/autopilot/dispatch-metrics.jsonl"
 _FINDING_KEYS = ("severity", "title", "file", "lane")
-_CONSTRAINTS = "dev/local/tmp/fast-track-<item>-constraints.txt"
-# The directory itself, not `dev/local/autopilot-cache`: the recorders walk up
+_CONSTRAINTS = "docs/dev/tmp/fast-track-<item>-constraints.txt"
+# The directory itself, not `docs/dev/project-management/autopilot-cache`: the recorders walk up
 # to the exact path, and `mkdir -p` of a sibling leaves them writing nothing.
-_TELEMETRY_DIR = re.compile(r"dev/local/autopilot(?![\w-])")
-_MAKES_TELEMETRY_DIR = re.compile(r"mkdir -p (?:\S+ )*dev/local/autopilot(?![\w-])")
+_TELEMETRY_DIR = re.compile(r"docs/dev/project-management/autopilot(?![\w-])")
+_MAKES_TELEMETRY_DIR = re.compile(r"mkdir -p (?:\S+ )*docs/dev/project-management/autopilot(?![\w-])")
 # The Roster dispatches the kinds the planner printed and nothing else; a
 # sentence that mentions the printed list is not one bound by it.
 _BINDS_KINDS = re.compile(
@@ -341,11 +341,11 @@ def test_the_report_counts_the_items_dispatches_out_of_the_ledger_by_kind() -> N
 
 
 def test_preconditions_create_the_telemetry_directory_before_any_dispatch() -> None:
-    # Both recorders exit 0 and write nothing when `dev/local/autopilot/` is absent.
+    # Both recorders exit 0 and write nothing when `docs/dev/project-management/autopilot/` is absent.
     live = _assert_live(
         [p for p in _section("Preconditions") if _TELEMETRY_DIR.search(p.text)],
         _TELEMETRY_DIR,
-        missing="the preconditions never name `dev/local/autopilot` itself.",
+        missing="the preconditions never name `docs/dev/project-management/autopilot` itself.",
         cancelled="the telemetry directory is named only to be waved off.",
     )
     creates = re.compile(r"\bcreat(?:e|es|ed|ing)\b")
@@ -356,7 +356,7 @@ def test_preconditions_create_the_telemetry_directory_before_any_dispatch() -> N
         or any(creates.search(s) for s in _sentences_carrying(p.text, _TELEMETRY_DIR))
     ]
     assert made, (
-        f"{_SKILL_MD}: `dev/local/autopilot` is named but nothing creates that "
+        f"{_SKILL_MD}: `docs/dev/project-management/autopilot` is named but nothing creates that "
         f"exact path: {[p.text for p in live][:2]}. Checking for it, or making a "
         "sibling of it, is not making it."
     )

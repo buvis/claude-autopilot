@@ -49,7 +49,7 @@ def _stub_runner(tmp_path: Path, body: str) -> str:
 
 
 def _ap_dir(tmp_path: Path) -> Path:
-    ap = tmp_path / "dev/local/autopilot"
+    ap = tmp_path / "docs/dev/project-management/autopilot"
     ap.mkdir(parents=True, exist_ok=True)
     return ap
 
@@ -134,7 +134,7 @@ def test_prompt_names_the_brief_when_present(tmp_path):
     (ap / "session-brief.md").write_text("# Session brief\n")
     argv = _launch_argv(tmp_path, ap)
     assert argv[-1] == (
-        "/autopilot:run-autopilot Read dev/local/autopilot/session-brief.md first."
+        "/autopilot:run-autopilot Read docs/dev/project-management/autopilot/session-brief.md first."
         + CLI_SUFFIX
     )
     assert argv[:-1] == build_argv("m", "low", "claude-sonnet-5[1m]")[1:-1]

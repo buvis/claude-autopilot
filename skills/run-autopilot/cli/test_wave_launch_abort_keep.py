@@ -5,7 +5,7 @@ Split off `test_wave_launch_abort.py` to keep that file under the 800-line style
 limit; that file still owns what a kept worktree does to the tree and the wave,
 and these own its output. Every proof runs against a throwaway `git init` repo
 under `tmp_path`, never this checkout's own backlog or
-`dev/local/autopilot/wave.json`, and no real loop is ever started.
+`docs/dev/project-management/autopilot/wave.json`, and no real loop is ever started.
 
 The design specifies TWO distinct outputs for a kept worktree: the worktree's own
 `git worktree list` line, and - only when it is dirty - one added note. One

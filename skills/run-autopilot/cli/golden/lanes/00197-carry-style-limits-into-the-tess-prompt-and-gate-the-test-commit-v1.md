@@ -7,7 +7,7 @@ model_tier_rationale: transcription - the two prose lines and the gate invocatio
 
 # Carry style limits into the Tess prompt and gate the test commit
 
-Source: `dev/local/notes/autoclaude-inefficiencies-2026-09-13.md` finding 7
+Source: `docs/dev/project-management/notes/autoclaude-inefficiencies-2026-09-13.md` finding 7
 (measured 2026-09-13). Advisory discovery gate skipped: the change
 is two prose lines and one gate call, all sourced from existing files.
 
@@ -43,7 +43,7 @@ unchanged; it still catches Ivan's own violations.
 - Work SKILL.md step 2.8 gains, after the four-check rubric sentence: `Then run
   the step-5.65 gate over the test files only - python3
   ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_style_limits.py --diff
-  dev/local/tmp/test-diff-<task-id>.txt <each new or changed test file as an
+  docs/dev/tmp/test-diff-<task-id>.txt <each new or changed test file as an
   absolute path> - where the diff is git diff --no-index /dev/null <file> per
   untracked file plus git diff <task_base_sha> -- <tracked test files>. Exit 1
   is a quality-gate failure: feed the violation lines to the Tess retry. It

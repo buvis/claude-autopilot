@@ -56,7 +56,7 @@ _SIGNAL_LABELS = {"done": "drained", "died": "died", "paused": "paused"}
 _NEXT_STEPS = {
     "drained": "backlog empty — nothing queued.",
     "paused": "needs a decision: `claude` → /autopilot:run-autopilot answers the blocker, then `autoclaude`.",
-    "died": "check dev/local/autopilot/last-session.log, then rerun `autoclaude`.",
+    "died": "check docs/dev/project-management/autopilot/last-session.log, then rerun `autoclaude`.",
     "stopped": "state intact — rerun `autoclaude` to continue the batch.",
 }
 
@@ -75,7 +75,7 @@ def _final_signal_label(root: Path | None) -> str:
     """
     if root is None:
         return "stopped"
-    state = model.read_state(root / "dev" / "local" / "autopilot" / "state.json")
+    state = model.read_state(root / "docs" / "dev" / "project-management" / "autopilot" / "state.json")
     if not state.exists:
         return "stopped"
     if state.next_phase == "":
@@ -86,7 +86,7 @@ def _final_signal_label(root: Path | None) -> str:
         or "cap_pause_reason" in state.raw
     ):
         return "paused"
-    autopilot_dir = root / "dev" / "local" / "autopilot"
+    autopilot_dir = root / "docs" / "dev" / "project-management" / "autopilot"
     rows = model.read_metrics(autopilot_dir / "loop-metrics.jsonl")
     last = model.last_row(rows)
     signal = last.signal if last is not None else ""
@@ -96,7 +96,7 @@ def _final_signal_label(root: Path | None) -> str:
 class Collector:
     def __init__(self, root: Path) -> None:
         self.root = root
-        self._autopilot = root / "dev" / "local" / "autopilot"
+        self._autopilot = root / "docs" / "dev" / "project-management" / "autopilot"
         self._tail = LogTail(self._autopilot / "last-session.log")
         self._usage = SessionUsage()
         self._tracker = AgentTracker()
@@ -327,7 +327,7 @@ def build_app(
 
     def _touch_pause_marker(app: App, root: Path) -> None:
         try:
-            (root / "dev" / "local" / "autopilot" / "pause-requested").touch()
+            (root / "docs" / "dev" / "project-management" / "autopilot" / "pause-requested").touch()
         except OSError as exc:
             app.notify(f"pause-requested write failed: {exc}", severity="error")
             return
@@ -362,7 +362,7 @@ Status legend
                  /autopilot:run-autopilot → autoclaude
   ⚠ orphaned    work queued but no autoclaude alive — run autoclaude
   ⚠ attention   needs_attention set (usually a cap-pause)
-  ■ died         session died; check dev/local/autopilot/last-session.log
+  ■ died         session died; check docs/dev/project-management/autopilot/last-session.log
   ✔ drained      backlog empty; batch archived
   ○ idle/no log  nothing running
 
@@ -430,7 +430,7 @@ esc or ? closes this help.
 
         def refresh_tasks(self) -> None:
             state = model.read_state(
-                self.root / "dev" / "local" / "autopilot" / "state.json",
+                self.root / "docs" / "dev" / "project-management" / "autopilot" / "state.json",
             )
             self.query_one("#tasks-head", Static).update(
                 panels.tasks_head(state, self.root.name),
@@ -468,7 +468,7 @@ esc or ? closes this help.
 
         def refresh_agents(self) -> None:
             state = model.read_state(
-                self.root / "dev" / "local" / "autopilot" / "state.json",
+                self.root / "docs" / "dev" / "project-management" / "autopilot" / "state.json",
             )
             self.query_one("#agents-head", Static).update(
                 panels.agents_head(state, self.root.name),

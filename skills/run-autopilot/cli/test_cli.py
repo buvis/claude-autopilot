@@ -543,7 +543,7 @@ class DefaultStatePathTests(_TempDirTestCase):
     def test_reset_prd_without_state_flag_resolves_by_walking_up_to_dev_local_autopilot(
         self,
     ) -> None:
-        autopilot_dir = self.root / "dev" / "local" / "autopilot"
+        autopilot_dir = self.root / "docs" / "dev" / "project-management" / "autopilot"
         autopilot_dir.mkdir(parents=True)
         state_path = autopilot_dir / "state.json"
         _write_json(state_path, _minimal_state())
@@ -561,7 +561,7 @@ class DefaultStatePathTests(_TempDirTestCase):
     def test_reset_prd_without_state_flag_and_no_autopilot_ancestor_exits_1(
         self,
     ) -> None:
-        # self.root is a bare tmpdir with no dev/local/autopilot anywhere
+        # self.root is a bare tmpdir with no docs/dev/project-management/autopilot anywhere
         # above it (verified: the default tempdir root has no such ancestor).
         proc = _run(["reset-prd"], cwd=self.root)
 

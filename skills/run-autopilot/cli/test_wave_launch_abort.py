@@ -3,7 +3,7 @@
 (PRD 00214).
 
 Every proof runs against a throwaway `git init` repo under `tmp_path`, never this
-checkout's own backlog or `dev/local/autopilot/wave.json`. No real loop is ever
+checkout's own backlog or `docs/dev/project-management/autopilot/wave.json`. No real loop is ever
 started: lanes launch with a recording `spawn_fn` and then have their pids
 cleared, except the tests that need a live process group of their own, each of
 which reaps that group in a `finally`.
@@ -237,7 +237,7 @@ def test_abort_returns_prds_and_removes_clean_worktrees(
     # a return that walks only backlog/done/hold deletes that wip/ PRD silently.
     # Every filename and body here is folder-NEUTRAL: the folder a PRD sits in is
     # the only thing allowed to decide where it lands.
-    lane_prds = first / "dev/local/prds"
+    lane_prds = first / "docs/dev/project-management/prds"
     (lane_prds / "wip/90007-alpha.md").write_text("alpha\n", encoding="utf-8")
     (lane_prds / "done/90008-beta.md").write_text("beta\n", encoding="utf-8")
     (lane_prds / "hold/90009-gamma.md").write_text("gamma\n", encoding="utf-8")
@@ -250,9 +250,9 @@ def test_abort_returns_prds_and_removes_clean_worktrees(
     # The in-flight PRD comes back to the main BACKLOG, never the main wip/: a
     # PRD sitting in the main wip/ is re-selected as already-in-progress against
     # a state.json that holds no task record for it.
-    in_flight = repo / "dev/local/prds/backlog/90007-alpha.md"
-    done = repo / "dev/local/prds/done/90008-beta.md"
-    held = repo / "dev/local/prds/hold/90009-gamma.md"
+    in_flight = repo / "docs/dev/project-management/prds/backlog/90007-alpha.md"
+    done = repo / "docs/dev/project-management/prds/done/90008-beta.md"
+    held = repo / "docs/dev/project-management/prds/hold/90009-gamma.md"
     assert in_flight.read_text(encoding="utf-8") == "alpha\n"
     assert done.read_text(encoding="utf-8") == "beta\n"
     assert held.read_text(encoding="utf-8") == "gamma\n"
@@ -293,18 +293,18 @@ def test_abort_returns_each_lifecycle_folder_to_its_main_counterpart(
         "backlog/90105-done-notes.md": ("backlog", "epsilon\n"),
     }
     for source, (_, text) in mapping.items():
-        prd = worktree / "dev/local/prds" / source
+        prd = worktree / "docs/dev/project-management/prds" / source
         prd.parent.mkdir(parents=True, exist_ok=True)
         prd.write_text(text, encoding="utf-8")
     assert wave_launch.abort(repo, wave_path) == 0
     for source, (folder, text) in mapping.items():
-        landed = repo / "dev/local/prds" / folder / Path(source).name
+        landed = repo / "docs/dev/project-management/prds" / folder / Path(source).name
         assert landed.read_text(encoding="utf-8") == text, source
     # And nowhere else: the main wip/ ends up empty, and neither misnamed PRD
     # followed the folder word in its own filename.
     lifecycle = {
         folder: sorted(
-            path.name for path in (repo / "dev/local/prds" / folder).glob("*.md")
+            path.name for path in (repo / "docs/dev/project-management/prds" / folder).glob("*.md")
         )
         for folder in ("backlog", "wip", "done", "hold")
     }
@@ -366,7 +366,7 @@ def test_abort_keeps_a_worktree_with_commits(
     assert wave_launch.abort(repo, wave_path) == 0
     kept_prd = lanes[0]["prds"][0]
     assert kept.exists()
-    assert (kept / "dev/local/prds/backlog" / kept_prd).exists()
+    assert (kept / "docs/dev/project-management/prds/backlog" / kept_prd).exists()
     assert not (_backlog(repo) / kept_prd).exists()
     assert _git(repo, "branch", "--list", lanes[0]["branch"]).stdout.strip() != ""
     # the lane with nothing to lose is still finished in the same call
@@ -398,7 +398,7 @@ def test_abort_keeps_a_dirty_worktree_with_no_commits(
     assert _git(repo, "rev-list", "--count", spec).stdout.strip() == "0"
     assert wave_launch.abort(repo, wave_path) == 0
     assert (kept / "NOTES.md").read_text(encoding="utf-8") == "half-finished work\n"
-    assert (kept / "dev/local/prds/backlog" / lane["prds"][0]).exists()
+    assert (kept / "docs/dev/project-management/prds/backlog" / lane["prds"][0]).exists()
     assert not (_backlog(repo) / lane["prds"][0]).exists()
     assert _git(repo, "branch", "--list", lane["branch"]).stdout.strip() != ""
     out = capsys.readouterr().out
@@ -452,7 +452,7 @@ def test_abort_leaves_a_worktree_this_wave_never_recorded_creating(
     kept = Path(lane["worktree"])
     assert wave_launch.abort(repo, wave_path) == 0
     assert kept.exists()
-    assert (kept / "dev/local/prds/backlog" / lane["prds"][0]).exists()
+    assert (kept / "docs/dev/project-management/prds/backlog" / lane["prds"][0]).exists()
     assert _git(repo, "branch", "--list", lane["branch"]).stdout.strip() != ""
     # git still registers the pair, so only the missing flag held abort back
     porcelain = _git(repo, "worktree", "list", "--porcelain").stdout

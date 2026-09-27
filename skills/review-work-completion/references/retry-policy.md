@@ -16,7 +16,7 @@ Consolidation uses partial results from available agents.
 "Send one retry" below means different things by reviewer type:
 
 - **Alice** (the native Claude Task Agent): message the running agent again in the same conversation, as written.
-- **Bob (codex), Carl (gemini)** (the bg-Bash CLI reviewers, PRD 00034): these are one-shot `run_in_background` Bash processes that have already exited by the time their output file is read, so there is no in-conversation target. A retry means re-dispatching a FRESH `run_in_background` Bash call of the same `*-run.sh` with an amended prompt file, writing the same `dev/local/tmp/{agent}-output-{id}.txt` path. The one-retry budget is unchanged.
+- **Bob (codex), Carl (gemini)** (the bg-Bash CLI reviewers, PRD 00034): these are one-shot `run_in_background` Bash processes that have already exited by the time their output file is read, so there is no in-conversation target. A retry means re-dispatching a FRESH `run_in_background` Bash call of the same `*-run.sh` with an amended prompt file, writing the same `docs/dev/tmp/{agent}-output-{id}.txt` path. The one-retry budget is unchanged.
 
 ## Lack-of-input refusal (Bob)
 
@@ -24,7 +24,7 @@ the output is a lack-of-input refusal when ALL THREE hold: `rg -c '^R[0-9]+: pas
 
 ## Inlined retry prompt (CLI reviewers)
 
-the retry prompt file is `dev/local/tmp/bob-prompt-{id}-retry.md` (retained beside the first prompt, never `/tmp`), built as: head block, the review context verbatim, mid block, the diff verbatim inside a ```diff fence, then the persona prompt body with two edits. Dispatch it with the cycle-1 `codex-run.sh -f ... -o <same bob-output path>` command, without `--resume-thread`.
+the retry prompt file is `docs/dev/tmp/bob-prompt-{id}-retry.md` (retained beside the first prompt, never `/tmp`), built as: head block, the review context verbatim, mid block, the diff verbatim inside a ```diff fence, then the persona prompt body with two edits. Dispatch it with the cycle-1 `codex-run.sh -f ... -o <same bob-output path>` command, without `--resume-thread`.
 
 Head block, verbatim:
 ```

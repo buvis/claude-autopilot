@@ -30,7 +30,7 @@ def run_hook(payload: dict) -> subprocess.CompletedProcess:
 class ValidateStateJsonHookTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
-        self.autopilot_dir = Path(self.tmp.name) / "dev" / "local" / "autopilot"
+        self.autopilot_dir = Path(self.tmp.name) / "docs" / "dev" / "project-management" / "autopilot"
         self.autopilot_dir.mkdir(parents=True)
         self.state = self.autopilot_dir / "state.json"
 

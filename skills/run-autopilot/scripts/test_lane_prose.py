@@ -125,7 +125,7 @@ def test_solo_runbook_guards_resume_reruns_the_check_and_gates_the_review() -> N
     assert "never converges on an empty table" in review
     assert "rows the delta confirmed fixed are removed, rows it raised on the fix are added" in review
     close = " ".join(_section(_solo(), "## 6. Close").split())
-    assert "first write `dev/local/reviews/<prd-stem>-review-1.md`" in close
+    assert "first write `docs/dev/project-management/reviews/<prd-stem>-review-1.md`" in close
     assert "updated with the delta's outcome" in close
     assert "`-review-1.md` is written only on the close exit of step 6" in text
 
@@ -186,7 +186,7 @@ def test_fast_track_runbook_falls_back_to_full_on_uncardable() -> None:
         if all(t in s for t in ("lane_effective", "full", "uncardable", "Phase 1"))
     ]
     assert matching, "no one sentence carries the fallback: lane_effective, full, uncardable, Phase 1"
-    assert "cards_from_prd.py" in render and "--out dev/local/tmp/<prd-stem>-cards" in render
+    assert "cards_from_prd.py" in render and "--out docs/dev/tmp/<prd-stem>-cards" in render
 
 
 def test_fast_track_runbook_stalls_a_branched_card() -> None:

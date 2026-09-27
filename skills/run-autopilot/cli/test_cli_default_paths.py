@@ -4,7 +4,7 @@ subparsers (cli/__main__.py). Complements test_cli.py, which already pins
 `--state`'s own walk-up default (DefaultStatePathTests) and the pre-existing
 --autopilot-dir-defaults-to-state-parent behavior (ParkTests). This file
 pins the NEW contract: `stall` and `park` also default `--prds` (derived as
-the walked-up autopilot dir's sibling `dev/local/prds`) by walking up from
+the walked-up autopilot dir's sibling `docs/dev/project-management/prds`) by walking up from
 the current working directory, the same `_walk_up` mechanism `--state`
 already uses -- so the documented bare invocations (`autopilot park`,
 `autopilot stall --prd <f> --site <slug> --detail <s>`) work unmodified from
@@ -13,8 +13,8 @@ anywhere inside a project tree.
 Each test runs the CLI as a real subprocess against a synthetic project
 tree rooted in a fresh tmpdir, per the task brief's pinned layout:
 
-    <project-root>/dev/local/autopilot/state.json
-    <project-root>/dev/local/prds/wip/<prd>
+    <project-root>/docs/dev/project-management/autopilot/state.json
+    <project-root>/docs/dev/project-management/prds/wip/<prd>
     (hold/ may be absent -- the CLI creates it)
 
 Library semantics (do_stall/do_park internals, exit 4/5/9/10 matrices) are
@@ -71,12 +71,12 @@ def _fresh_dir(testcase: unittest.TestCase) -> Path:
 
 def _make_project(root: Path, prd: str) -> tuple[Path, Path]:
     """Builds the pinned synthetic layout under `root`:
-    <root>/dev/local/autopilot/state.json and <root>/dev/local/prds/wip/.
+    <root>/docs/dev/project-management/autopilot/state.json and <root>/docs/dev/project-management/prds/wip/.
     Returns (autopilot_dir, prds_dir).
     """
-    autopilot_dir = root / "dev" / "local" / "autopilot"
+    autopilot_dir = root / "docs" / "dev" / "project-management" / "autopilot"
     autopilot_dir.mkdir(parents=True)
-    prds_dir = root / "dev" / "local" / "prds"
+    prds_dir = root / "docs" / "dev" / "project-management" / "prds"
     (prds_dir / "wip").mkdir(parents=True)
     _write_json(autopilot_dir / "state.json", _minimal_state(prd=prd))
     return autopilot_dir, prds_dir
@@ -215,10 +215,10 @@ class ExplicitPrdsOverridesWalkUpTests(_TempDirTestCase):
 
 
 class NoAncestorProjectTests(_TempDirTestCase):
-    """Behavior 6: no dev/local/autopilot ancestor anywhere above cwd --
+    """Behavior 6: no docs/dev/project-management/autopilot ancestor anywhere above cwd --
     bare stall/park must fail cleanly (nonzero, no traceback, no
     filesystem writes), not crash or silently do nothing successfully.
-    self.root is a bare tmpdir with no dev/local/autopilot anywhere above
+    self.root is a bare tmpdir with no docs/dev/project-management/autopilot anywhere above
     it (same guarantee test_cli.py's DefaultStatePathTests relies on)."""
 
     PRD = "00004-feature-x.md"

@@ -1,6 +1,6 @@
 # Batch Report Format
 
-File: `dev/local/autopilot/reports/{batch_id}-report.md`
+File: `docs/dev/project-management/autopilot/reports/{batch_id}-report.md`
 
 Created at first PRD completion, appended after each subsequent PRD. Never
 deleted by autopilot (the wrapper archives `state.json` beside it at drain).
@@ -63,7 +63,7 @@ counts, then only the subsections whose sources are non-empty:
   (PRD 00013/00018); missing file or no matching rows renders
   `no loop metrics (manual run)`, never a failure.
 - **Implementor Mix** — `state.tasks[]` attempts (PRD 00019) unioned with
-  this PRD's rows from `dev/local/autopilot/ledger/attempts.jsonl` and
+  this PRD's rows from `docs/dev/project-management/autopilot/ledger/attempts.jsonl` and
   deduplicated on task-and-attempt (the state copy wins), because
   `complete-prd` drains the state attempts into the ledger before this
   renders: attempt counts per implementor, qwen preflight outcomes, the

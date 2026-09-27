@@ -2,9 +2,9 @@
 """cli/convergence.py - the `review_converged` row builder (PRD 00188).
 
 The ONE definition of the event row's field set: what the review gate
-appends to `dev/local/autopilot/loop-metrics.jsonl` when a PRD's review loop
+appends to `docs/dev/project-management/autopilot/loop-metrics.jsonl` when a PRD's review loop
 ends. Pure over the state dict, the session rows already parsed from that
-file, the review files under `dev/local/reviews` and the wip PRD; no state
+file, the review files under `docs/dev/project-management/reviews` and the wip PRD; no state
 writes, no subprocesses.
 
 Absence reads as null, never as zero: a missing or unreadable review file
@@ -104,7 +104,7 @@ def _build_models(session_rows: list[dict], prd: str, batch: str) -> list[str]:
 
 def build_row(ap_dir: Path, state: dict, session_rows: list[dict], ts: int) -> dict:
     """The `review_converged` row for `state`; `ap_dir` is
-    `<repo>/dev/local/autopilot`. Key order is the contract."""
+    `<repo>/docs/dev/project-management/autopilot`. Key order is the contract."""
     prd = state["prd"]
     batch = state["batch"]["id"]
     tasks = state.get("tasks") or []

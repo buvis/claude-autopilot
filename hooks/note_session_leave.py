@@ -4,7 +4,7 @@
 PRD 00211. Every hand-off site ends with `record_dispatch.py handoff ...
 --edge leave` as the session's last write before the banner and END TURN.
 When that command succeeds under `_AUTOPILOT_LOOP`, this hook writes
-`dev/local/autopilot/.session-left` with the session id, and
+`docs/dev/project-management/autopilot/.session-left` with the session id, and
 `guard_skill_after_leave.py` then denies any `autopilot:*` skill call from
 the same session: the hand-off ended it, the loop relaunches the next phase.
 

@@ -12,7 +12,7 @@ model_tier_rationale: custody persisted across retries and batch rollover, comma
 ### Problem Statement
 A cap-out with an unresolved CRITICAL parks its PRD but leaves the commits live. `skills/run-autopilot/references/phase-review.md` stalls with site cap_critical; `cli/records.py:do_stall` moves wip to hold, appends a stall record and resets per-PRD state, dropping pending deferred decisions. Nothing records which commits carry the CRITICAL or blocks their push, and the hold PRD keeps its pre-work text.
 
-Source: ddb assessment `/Users/bob/git/src/github.com/doogat/ddb/dev/local/audit-results/refactor-assessment-2026-09-06.md`, F2 and Decision step 3; read-only ledger `/Users/bob/git/src/github.com/doogat/ddb/dev/local/autopilot/deferred/202607161128-deferred.json`. ddb 00168 stalled at cap 2 after bundle import could merge stale bundle/master data following a wildcard fetch; 25 PRD-tagged commits remained live and its hold PRD still described the old implementation. Done 00146 made stall records render; this PRD adds custody, not a second stall/report mechanism.
+Source: ddb assessment `/Users/bob/git/src/github.com/doogat/ddb/docs/dev/project-management/audit-results/refactor-assessment-2026-09-06.md`, F2 and Decision step 3; read-only ledger `/Users/bob/git/src/github.com/doogat/ddb/docs/dev/project-management/autopilot/deferred/202607161128-deferred.json`. ddb 00168 stalled at cap 2 after bundle import could merge stale bundle/master data following a wildcard fetch; 25 PRD-tagged commits remained live and its hold PRD still described the old implementation. Done 00146 made stall records render; this PRD adds custody, not a second stall/report mechanism.
 
 The approved split assigns reviewed CRITICAL rework design to backlog 00194 and deferred-finding stub minting to backlog 00195. This PRD introduces neither command nor integration calls for those later capabilities. Plan expansion (00189) and run-condition measurement (00188) remain complementary. Every review lens still runs every cycle.
 
@@ -31,7 +31,7 @@ The operator resuming after a batch and the loop, which must keep draining while
 #### Feature: Retry-stable critical record
 - **Description**: cap_critical stall captures the PRD's live commits before reset.
 - **Inputs**: state work_start_sha, repo_root (project root when absent), batch.id, deferred_decisions, stall detail and Git HEAD in that repository.
-- **Outputs**: a captured `commit_range: "<work_start_sha>..<head>"` and `commits: <git rev-list --count range>` in the durable stall_op and stall record; marker `dev/local/autopilot/critical-on-master` with JSON `{"entries":[{"prd","batch","op_id","commit_range","commits","detail"}]}`; matching batch.critical_on_master entry.
+- **Outputs**: a captured `commit_range: "<work_start_sha>..<head>"` and `commits: <git rev-list --count range>` in the durable stall_op and stall record; marker `docs/dev/project-management/autopilot/critical-on-master` with JSON `{"entries":[{"prd","batch","op_id","commit_range","commits","detail"}]}`; matching batch.critical_on_master entry.
 - **Behavior**: derive the range internally once when stamping the intent, then reuse the persisted capture on every retry, even if HEAD advances. Require valid recorded base/repository state; missing or invalid range inputs fail loudly with exit 2 before moving the PRD. There is no caller-supplied range option. Preserve the existing order: mkdir hold → stamp durable intent (including range/count) → move wip to hold → append stall/deferred records → write custody marker and hold refresh → commit per-PRD reset plus the batch mirror through extra_mutator. Migrate pending deferred_decisions into the batch JSON in Phase 9's deferred_decision shape before reset, deduping by operation and source row. A custody/deferred write error exits 9 with the PRD already in hold, intent retained and per-PRD state unreset. Reuse the existing operation ID and never recapture metadata on retry. Non-cap_critical stalls retain their existing contract. Notify once on successful custody creation, naming PRD/range; notifications remain best-effort. The file survives batch rollover; the loop continues draining.
 
 #### Feature: Hold PRD refresh
@@ -62,7 +62,7 @@ The operator resuming after a batch and the loop, which must keep draining while
 
 ### Repository Structure
 ```
-dev/local/autopilot/critical-on-master               # NEW runtime output: custody core
+docs/dev/project-management/autopilot/critical-on-master               # NEW runtime output: custody core
 skills/run-autopilot/cli/custody.py                  # NEW: custody core
 skills/run-autopilot/cli/records.py                  # intent, migration and stall integration
 skills/run-autopilot/cli/__main__.py                 # custody verb and stalled render wiring

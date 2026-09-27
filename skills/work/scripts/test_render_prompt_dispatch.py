@@ -30,8 +30,8 @@ def _persona(tmp_path: Path, content: str) -> Path:
 
 
 def _project(tmp_path: Path) -> Path:
-    """A project root holding dev/local/autopilot/; returns the autopilot dir."""
-    autopilot = tmp_path / "proj" / "dev" / "local" / "autopilot"
+    """A project root holding docs/dev/project-management/autopilot/; returns the autopilot dir."""
+    autopilot = tmp_path / "proj" / "docs" / "dev" / "project-management" / "autopilot"
     autopilot.mkdir(parents=True)
     return autopilot
 
@@ -52,7 +52,7 @@ def test_without_both_dispatch_flags_stdout_is_the_count_alone_and_nothing_is_wr
     # budget measurement, and a surprise second line would break a caller
     # that reads it as one integer.
     autopilot = _project(tmp_path)
-    monkeypatch.chdir(autopilot.parents[2])
+    monkeypatch.chdir(autopilot.parents[3])
     persona = _persona(tmp_path, "Hello {NAME}!")
     out_path = tmp_path / "out.txt"
 
@@ -75,7 +75,7 @@ def test_both_dispatch_flags_open_a_start_row_carrying_the_printed_count_and_ech
     # readers — and line two is the id the end call joins on. A multibyte
     # value keeps "bytes, not characters" honest on the row as well.
     autopilot = _project(tmp_path)
-    monkeypatch.chdir(autopilot.parents[2])
+    monkeypatch.chdir(autopilot.parents[3])
     persona = _persona(tmp_path, "Value: {V}")
     out_path = tmp_path / "out.txt"
 

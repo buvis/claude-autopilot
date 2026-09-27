@@ -488,7 +488,7 @@ def test_malformed_state_and_ledger_json_route_sonnet(tmp_path):
 
 
 def _route(phase: str, tmp_path: Path, env: dict | None = None) -> Route:
-    ap_dir = tmp_path / "dev/local/autopilot"
+    ap_dir = tmp_path / "docs/dev/project-management/autopilot"
     ap_dir.mkdir(parents=True, exist_ok=True)
     return route(phase, ap_dir, env=env or {})
 
@@ -543,9 +543,9 @@ def test_route_env_caps_and_efforts_apply(tmp_path):
 def test_route_build_reads_the_real_signal_paths(tmp_path):
     # route() wires build_model to the wrapper's exact sidecar paths:
     # ledger/fable-requests.json under the autopilot dir, prds beside it.
-    ap_dir = tmp_path / "dev/local/autopilot"
+    ap_dir = tmp_path / "docs/dev/project-management/autopilot"
     (ap_dir / "ledger").mkdir(parents=True)
-    prds = tmp_path / "dev/local/prds/wip"
+    prds = tmp_path / "docs/dev/project-management/prds/wip"
     prds.mkdir(parents=True)
     prd = "00013-route-from-the-ledger-v1.md"
     _write_prd(prds / prd)
@@ -559,7 +559,7 @@ def test_route_build_reads_the_real_signal_paths(tmp_path):
 
 
 def _ap_dir_with_cycle(tmp_path: Path, cycle: int | None) -> Path:
-    ap_dir = tmp_path / "dev/local/autopilot"
+    ap_dir = tmp_path / "docs/dev/project-management/autopilot"
     ap_dir.mkdir(parents=True, exist_ok=True)
     if cycle is not None:
         (ap_dir / "state.json").write_text(json.dumps({"cycle": cycle}))

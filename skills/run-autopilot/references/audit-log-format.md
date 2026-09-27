@@ -1,6 +1,6 @@
 # Audit Log Format
 
-File: `dev/local/reviews/<prd-base>-audit.md` (`<prd-base>` = PRD filename
+File: `docs/dev/project-management/reviews/<prd-base>-audit.md` (`<prd-base>` = PRD filename
 without `.md`). The path is derived purely from the PRD base name, so every
 session resolves the identical file with no session-specific state.
 
@@ -34,7 +34,7 @@ PAUSE site, or it never reaches the audit log.
 ## decisions.md Projection (judgment — stays with the model)
 
 Invoked by `references/phase-done.md` Phase 9 step 7b, and only when
-`dev/local/meta/decisions.md` exists (an opt-in global table; when absent, skip —
+`docs/dev/project-management/meta/decisions.md` exists (an opt-in global table; when absent, skip —
 `audit.md` is still written). `audit.md` is the **single source of truth**
 for decision narrative; `decisions.md` is a grep-friendly projection of it.
 

@@ -10,7 +10,7 @@ Human names decouple workflow from tool names. Tools change; review process does
 
 Required for context isolation. Direct invocation would pollute context. The indirection is the feature, not overhead. This applies to **Alice**, the native Claude reviewer: she has no CLI form (`claude -p` fails inside a subagent), so she stays a Task Agent.
 
-**Exception (settled, PRD 00034): the CLI reviewers Bob (codex) and Carl (gemini) do NOT use Task Agent wrapping.** They run as `run_in_background` Bash invocations of their `*-run.sh` scripts, each self-writing `dev/local/tmp/{agent}-output-{id}.txt` via `-o`. A backgrounded Bash is covered by the Stop hook's `_waiting_on_async`, which abstains until the last unconsumed launch reports, in every phase. A Task Agent is not: the hook must guess reviewer liveness from the transcript (`_pending_background_task`), and that guess stranded the review phase (jink 00025, playground 00007). Do not "fix" the CLI reviewers back to Task Agents.
+**Exception (settled, PRD 00034): the CLI reviewers Bob (codex) and Carl (gemini) do NOT use Task Agent wrapping.** They run as `run_in_background` Bash invocations of their `*-run.sh` scripts, each self-writing `docs/dev/tmp/{agent}-output-{id}.txt` via `-o`. A backgrounded Bash is covered by the Stop hook's `_waiting_on_async`, which abstains until the last unconsumed launch reports, in every phase. A Task Agent is not: the hook must guess reviewer liveness from the transcript (`_pending_background_task`), and that guess stranded the review phase (jink 00025, playground 00007). Do not "fix" the CLI reviewers back to Task Agents.
 
 ## Skill Dependencies (use-codex, use-gemini)
 
@@ -28,7 +28,7 @@ LLMs must follow format instructions. If they can't, that's a model problem, not
 
 Explicit script handles edge cases that prose instructions miss. "Diff against master" fails when master doesn't exist, remote isn't configured, or branch naming varies.
 
-## `dev/local/` Directory Structure
+## `docs/dev/project-management/` Directory Structure
 
 Prerequisite, not assumption. This skill operates within a defined workflow that guarantees the structure exists. Not meant for arbitrary projects.
 

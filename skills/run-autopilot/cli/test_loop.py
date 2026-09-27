@@ -645,7 +645,7 @@ def test_loop_drives_the_real_runner_spawn_end_to_end(tmp_path):
     # Loop to the REAL runner.spawn with a stub claude binary, so a
     # signature drift between the two fails here, not in a live batch.
     stub = tmp_path / "stub-claude"
-    ap_rel = "repo/dev/local/autopilot"
+    ap_rel = "repo/docs/dev/project-management/autopilot"
     stub.write_text(
         f"#!{sys.executable}\n"
         "import json, pathlib, sys\n"
@@ -658,7 +658,7 @@ def test_loop_drives_the_real_runner_spawn_end_to_end(tmp_path):
     stub.chmod(stub.stat().st_mode | stat.S_IXUSR)
 
     repo = tmp_path / "repo"
-    ap_dir = repo / "dev" / "local" / "autopilot"
+    ap_dir = repo / "docs" / "dev" / "project-management" / "autopilot"
     ap_dir.mkdir(parents=True)
     notify = Recorder()
     out, err = io.StringIO(), io.StringIO()

@@ -187,7 +187,7 @@ def _fenced_blocks(text: str) -> list[str]:
 
 _CHECK_PLAN_INVOCATION = (
     "python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/cli/__main__.py "
-    "check-plan --prd dev/local/prds/wip/<state.prd>"
+    "check-plan --prd docs/dev/project-management/prds/wip/<state.prd>"
 )
 
 
@@ -206,9 +206,9 @@ def test_step_5_5_passes_the_prd_to_check_plan() -> None:
         "the one that skips two of the three rules."
     )
     (invocation,) = lines
-    assert "--prd dev/local/prds/wip/<state.prd>" in invocation, (
+    assert "--prd docs/dev/project-management/prds/wip/<state.prd>" in invocation, (
         f"{_SKILL_MD}: step 5.5's gate invocation ({invocation.strip()!r}) "
-        "does not pass `--prd dev/local/prds/wip/<state.prd>`. Without the "
+        "does not pass `--prd docs/dev/project-management/prds/wip/<state.prd>`. Without the "
         "PRD the gate cannot compute the expansion ratio or the unlisted "
         "modules, and only the task ceiling is checked."
     )

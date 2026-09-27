@@ -7,7 +7,7 @@ model_tier_rationale: a new headroom predicate inside the hook that rotates sess
 
 # Hand off on usage headroom and decouple the session model
 
-Source: `dev/local/discovery/00193-cut-loop-overhead-without-thinning-review.md`
+Source: `docs/dev/project-management/discovery/00193-cut-loop-overhead-without-thinning-review.md`
 (PRD 2 of three; elicited 2026-09-07). Re-grounded 2026-09-13; at the
 2026-09-13 backlog review it absorbed the turn-headroom capability from PRD
 00196 so one predicate covers usage and calls. Lands after backlog PRD 00191

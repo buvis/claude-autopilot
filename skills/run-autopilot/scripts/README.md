@@ -73,7 +73,7 @@ Loop (act on the attached or highlighted loop):
   answers it first
 - `⚠ orphaned` - work queued, no autoclaude alive; run `autoclaude`
 - `⚠ attention` - needs_attention set (usually a cap-pause)
-- `■ died` - session died; check `dev/local/autopilot/last-session.log`
+- `■ died` - session died; check `docs/dev/project-management/autopilot/last-session.log`
 - `✔ drained` - backlog empty, batch archived
 - `○ idle / no log` - nothing running
 
@@ -130,7 +130,7 @@ Semantics worth remembering (they bit once, see git log):
   even their task events scrolled out. Attached-from-start (the normal
   autoclaude flow) sees everything.
 
-## On-disk sources (all under `<root>/dev/local/autopilot/`)
+## On-disk sources (all under `<root>/docs/dev/project-management/autopilot/`)
 
 - `state.json` - loop state; parsed tolerantly (`tracon/model.py`), malformed
   fields degrade instead of crashing. Contract: `references/state-schema.md`.
@@ -165,7 +165,7 @@ uv run --no-project --with rich --with "textual>=1.0,<9" --with pytest \
 ## Troubleshooting
 
 - Fleet row `⚠ orphaned` -> run `autoclaude` in that repo; it resumes.
-- `■ died` -> read `dev/local/autopilot/last-session.log`, then `autoclaude`.
+- `■ died` -> read `docs/dev/project-management/autopilot/last-session.log`, then `autoclaude`.
 - Tracon won't launch from autoclaude -> `uv` missing or preflight failed;
   the wrapper already fell back to render_stream. Check
   `uv run --no-project tracon.py --preflight`.

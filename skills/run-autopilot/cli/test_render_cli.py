@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The subprocess half of the PRD 00107 render tests: `autopilot render`
 and `autopilot status` driven as real processes against a constructed
-<repo>/dev/local/autopilot tree, plus the report header's Started: line.
+<repo>/docs/dev/project-management/autopilot tree, plus the report header's Started: line.
 
 Split out of test_render.py, which keeps the in-process render tests and
 the goldens.
@@ -40,7 +40,7 @@ def _batch_state() -> dict:
 
 class CliWiringTests(unittest.TestCase):
     """`autopilot render`/`autopilot status` as real subprocesses against a
-    constructed <repo>/dev/local/autopilot tree."""
+    constructed <repo>/docs/dev/project-management/autopilot tree."""
 
     def setUp(self) -> None:
         import tempfile
@@ -48,7 +48,7 @@ class CliWiringTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.repo = Path(tmp.name)
-        self.ap_dir = self.repo / "dev" / "local" / "autopilot"
+        self.ap_dir = self.repo / "docs" / "dev" / "project-management" / "autopilot"
         self.ap_dir.mkdir(parents=True)
         self.state_path = self.ap_dir / "state.json"
         self.state_path.write_text(
@@ -70,7 +70,7 @@ class CliWiringTests(unittest.TestCase):
     def test_render_audit_writes_the_reviews_file(self) -> None:
         proc = self._run(["render", "audit", "--now", NOW])
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        out = self.repo / "dev" / "local" / "reviews" / "00040-feature-x-v1-audit.md"
+        out = self.repo / "docs" / "dev" / "project-management" / "reviews" / "00040-feature-x-v1-audit.md"
         self.assertTrue(out.exists())
         text = out.read_text(encoding="utf-8")
         self.assertIn("# Decision Audit Log: 00040-feature-x-v1", text)
@@ -81,7 +81,7 @@ class CliWiringTests(unittest.TestCase):
         self._run(["render", "audit", "--now", STARTED])
         proc = self._run(["render", "audit", "--now", NOW])
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        out = self.repo / "dev" / "local" / "reviews" / "00040-feature-x-v1-audit.md"
+        out = self.repo / "docs" / "dev" / "project-management" / "reviews" / "00040-feature-x-v1-audit.md"
         text = out.read_text(encoding="utf-8")
         self.assertIn(f"Started: {STARTED}", text)
         self.assertIn(f"Completed: {NOW}", text)
@@ -287,8 +287,8 @@ class CliWiringTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 2)
 
     def test_render_audit_outside_a_dev_local_autopilot_tree_refuses(self) -> None:
-        """A --state outside dev/local/autopilot must exit 2, never derive a
-        repo root from an arbitrary ancestor and plant dev/local/reviews
+        """A --state outside docs/dev/project-management/autopilot must exit 2, never derive a
+        repo root from an arbitrary ancestor and plant docs/dev/project-management/reviews
         there (the committed first version did exactly that)."""
         import tempfile
 
@@ -312,9 +312,9 @@ class CliWiringTests(unittest.TestCase):
                 capture_output=True,
                 text=True,
             )
-            planted = list(Path(tmp).parents[2].glob("dev/local/reviews/*"))
+            planted = list(Path(tmp).parents[2].glob("docs/dev/project-management/reviews/*"))
         self.assertEqual(proc.returncode, 2)
-        self.assertIn("not a dev/local/autopilot dir", proc.stderr)
+        self.assertIn("not a docs/dev/project-management/autopilot dir", proc.stderr)
         self.assertNotIn("Traceback", proc.stderr)
         self.assertEqual(planted, [])
 
@@ -331,7 +331,7 @@ class HeaderStartedTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.repo = Path(tmp.name)
-        self.ap_dir = self.repo / "dev" / "local" / "autopilot"
+        self.ap_dir = self.repo / "docs" / "dev" / "project-management" / "autopilot"
         self.ap_dir.mkdir(parents=True)
         self.state_path = self.ap_dir / "state.json"
 

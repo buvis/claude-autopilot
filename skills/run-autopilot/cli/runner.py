@@ -65,7 +65,7 @@ DEFAULT_PROMPT = "/autopilot:run-autopilot"
 DEFAULT_GRACE_SECS = 60
 DEFAULT_WARN_SECS = 900
 BRIEF_NAME = "session-brief.md"
-BRIEF_SUFFIX = " Read dev/local/autopilot/session-brief.md first."
+BRIEF_SUFFIX = " Read docs/dev/project-management/autopilot/session-brief.md first."
 # 2026-09-26: every headless session spent 5-14 calls hunting for an
 # `autopilot` binary; the CLI is a shell function in the operator's rc file
 # that a -p session's Bash tool never sees. The prompt names the real one.

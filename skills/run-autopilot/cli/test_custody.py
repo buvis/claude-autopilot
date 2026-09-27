@@ -74,7 +74,7 @@ class ContractConstantsTests(unittest.TestCase):
 
     def test_project_root_strips_dev_local_autopilot_else_uses_the_parent(self) -> None:
         self.assertEqual(
-            custody.project_root(Path("/x/y/dev/local/autopilot")),
+            custody.project_root(Path("/x/y/docs/dev/project-management/autopilot")),
             Path("/x/y"),
         )
         self.assertEqual(

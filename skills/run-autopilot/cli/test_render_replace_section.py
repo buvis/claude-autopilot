@@ -123,7 +123,7 @@ class ReplaceSectionTests(unittest.TestCase):
 
 class CliWiringTests(unittest.TestCase):
     """`autopilot render report`'s duplicate-section collapse, as real
-    subprocesses against a constructed <repo>/dev/local/autopilot tree."""
+    subprocesses against a constructed <repo>/docs/dev/project-management/autopilot tree."""
 
     def setUp(self) -> None:
         import tempfile
@@ -131,7 +131,7 @@ class CliWiringTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.repo = Path(tmp.name)
-        self.ap_dir = self.repo / "dev" / "local" / "autopilot"
+        self.ap_dir = self.repo / "docs" / "dev" / "project-management" / "autopilot"
         self.ap_dir.mkdir(parents=True)
         self.state_path = self.ap_dir / "state.json"
         self.state_path.write_text(

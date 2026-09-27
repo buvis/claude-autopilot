@@ -263,7 +263,7 @@ def test_changelog_added_carries_the_stub_minting_entry() -> None:
         "the changelog's Added sections",
         (
             "- **run-autopilot**: `autopilot mint-stubs --batch <id>` mints one "
-            "`dev/local/prds/hold/<NNNNN>-triage-<slug>-v1.md` triage stub",
+            "`docs/dev/project-management/prds/hold/<NNNNN>-triage-<slug>-v1.md` triage stub",
             "`{s} stubs`",
             "never drains or promotes",
         ),

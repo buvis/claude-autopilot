@@ -63,7 +63,7 @@ Subcommands:
     render    {audit|report|metrics} --state [--stdout] [--now ISO]
               [--summary] [--stalled --site --detail] [--metrics PATH]
         The deterministic render surfaces (PRD 00107): `audit` writes
-        <repo>/dev/local/reviews/<prd-base>-audit.md from the state decision
+        <repo>/docs/dev/project-management/reviews/<prd-base>-audit.md from the state decision
         arrays (preserving an existing file's Started: stamp); `report`
         appends the per-PRD section to reports/{batch_id}-report.md
         (creating it with the header), or the batch summary under --summary,
@@ -120,7 +120,7 @@ same rule stall and defer apply without a flag at all). stall/park's
 --prds, when omitted, anchors on that same resolved autopilot dir (its
 `.parent / "prds"`) rather than walking up from cwd independently - an
 explicit --state pointed at a different tree carries --prds's default with
-it, and an unresolved --state (no dev/local/autopilot ancestor) is what
+it, and an unresolved --state (no docs/dev/project-management/autopilot ancestor) is what
 leaves a bare --prds unresolved too.
 
 Exit codes:
@@ -204,11 +204,11 @@ class _ArgumentParser(argparse.ArgumentParser):
 
 def _walk_up_or_exit(flag_name: str) -> Path:
     """Walk up from cwd via _walk_up.find_autopilot_dir(); exit 1 with a
-    flag-specific message when no dev/local/autopilot ancestor is found."""
+    flag-specific message when no docs/dev/project-management/autopilot ancestor is found."""
     autopilot_dir = _walk_up.find_autopilot_dir(Path.cwd())
     if autopilot_dir is None:
         print(
-            f"autopilot: {flag_name} not given and no dev/local/autopilot found above cwd",
+            f"autopilot: {flag_name} not given and no docs/dev/project-management/autopilot found above cwd",
             file=sys.stderr,
         )
         raise SystemExit(1)
@@ -526,16 +526,16 @@ def _prd_text(path: Path) -> str:
 
 
 def _project_root(prds_dir: Path) -> Path:
-    """The directory holding `dev/local` - where an eligibility check's
+    """The directory holding `docs/dev/project-management` - where an eligibility check's
     repo-relative paths resolve from.
 
     Falls back to the prds dir itself when the path is too shallow to be the
-    standard `<root>/dev/local/prds` shape. `--prds` accepts any path, and a
+    standard `<root>/docs/dev/project-management/prds` shape. `--prds` accepts any path, and a
     two-deep one (`/prds`) has no third parent: a misconfigured flag must cost
     a failed check, not a traceback out of a verb that never crashed before.
     """
     resolved = prds_dir.resolve()
-    return resolved.parents[2] if len(resolved.parents) > 2 else resolved
+    return resolved.parents[3] if len(resolved.parents) > 3 else resolved
 
 
 def _record_skips(state_path: Path, skipped: list[dict]) -> int:
@@ -911,18 +911,18 @@ def _render_audit_surface(
         return 2
     prd_base = prd.removesuffix(".md")
     # The reviews dir is derived by climbing to the repo root, so a
-    # --state outside a dev/local/autopilot tree must refuse rather than
-    # plant dev/local/reviews in whatever ancestor happens to be there.
-    if autopilot_dir.parts[-3:] != ("dev", "local", "autopilot"):
+    # --state outside a docs/dev/project-management/autopilot tree must refuse rather than
+    # plant docs/dev/project-management/reviews in whatever ancestor happens to be there.
+    if autopilot_dir.parts[-4:] != ("docs", "dev", "project-management", "autopilot"):
         print(
             f"autopilot: render audit: {autopilot_dir} is not a "
-            "dev/local/autopilot dir; cannot locate the repo's "
-            "dev/local/reviews",
+            "docs/dev/project-management/autopilot dir; cannot locate the repo's "
+            "docs/dev/project-management/reviews",
             file=sys.stderr,
         )
         return 2
-    repo_root = autopilot_dir.parents[2]
-    out_path = repo_root / "dev" / "local" / "reviews" / f"{prd_base}-audit.md"
+    repo_root = autopilot_dir.parents[3]
+    out_path = repo_root / "docs" / "dev" / "project-management" / "reviews" / f"{prd_base}-audit.md"
     started = now
     if out_path.exists():
         try:
@@ -1149,18 +1149,18 @@ def _run_custody(args: argparse.Namespace) -> int:
 
 def _run_wave(args: argparse.Namespace) -> int:
     state_path = _resolve_state_path(args.state)
-    # dev/local/autopilot/state.json -> repo is FOUR parents up, not three. A
+    # docs/dev/project-management/autopilot/state.json -> repo is FIVE parents up, not four. A
     # caller-supplied --state is input, so a non-canonical one is reported, never
     # asserted: under `python -O` a bare assert vanishes and the wrong repo root
     # is derived in silence.
-    if state_path.parts[-4:] != ("dev", "local", "autopilot", "state.json"):
+    if state_path.parts[-5:] != ("docs", "dev", "project-management", "autopilot", "state.json"):
         print(
-            "autopilot: wave needs --state at <repo>/dev/local/autopilot/state.json,"
+            "autopilot: wave needs --state at <repo>/docs/dev/project-management/autopilot/state.json,"
             f" not {state_path}",
             file=sys.stderr,
         )
         return 1
-    repo = state_path.parents[3]
+    repo = state_path.parents[4]
     wave_path = state_path.parent / "wave.json"
     return wave_cli.run(args, repo, wave_path)
 

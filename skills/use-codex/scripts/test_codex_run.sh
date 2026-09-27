@@ -350,8 +350,8 @@ fi
 LANE_REPO=$(mktemp -d)
 _DIRS+=("$LANE_REPO")
 LANE_REPO=$(cd "$LANE_REPO" && pwd -P)
-mkdir -p "$LANE_REPO/dev/local/autopilot" "$LANE_REPO/a/b/c/d/e"
-LANE_LANES_DIR="$LANE_REPO/dev/local/autopilot/lanes"
+mkdir -p "$LANE_REPO/docs/dev/project-management/autopilot" "$LANE_REPO/a/b/c/d/e"
+LANE_LANES_DIR="$LANE_REPO/docs/dev/project-management/autopilot/lanes"
 LANE_PROMPT_FILE="$LANE_REPO/prompt.txt"
 printf '%s\n' "review the lane case" > "$LANE_PROMPT_FILE"
 
@@ -369,7 +369,7 @@ run_lane_case() {
     )
 }
 
-# 45. Loop set, cwd five levels below a dev/local/autopilot, a foreign marker
+# 45. Loop set, cwd five levels below a docs/dev/project-management/autopilot, a foreign marker
 #     (999999, another lane) already present: during the run the lanes dir
 #     holds the foreign marker plus one marker named by the wrapper's own pid
 #     (a live process running codex-run.sh), line 1 'codex', line 2 the -o
@@ -393,9 +393,9 @@ if [ "$LANE_RC" -eq 0 ] && [ "$LANE_COUNT" = "2" ] && \
    case "$LANE_CMD" in *codex-run.sh*) true ;; *) false ;; esac && \
    [ "$LANE_LINE1" = "codex" ] && [ "$LANE_LINE2" = "$LANE_OUT" ] && [ -z "$LANE_EXTRA" ] && \
    [ "$(ls -A "$LANE_LANES_DIR")" = "999999" ] && cmp -s "$LANE_FOREIGN" "$LANE_LANES_DIR/999999"; then
-    PASS "_AUTOPILOT_LOOP=1 five levels under dev/local/autopilot: a marker named by the wrapper's pid holding 'codex' and the -o path during the run, removed after, foreign marker untouched"
+    PASS "_AUTOPILOT_LOOP=1 five levels under docs/dev/project-management/autopilot: a marker named by the wrapper's pid holding 'codex' and the -o path during the run, removed after, foreign marker untouched"
 else
-    FAIL "_AUTOPILOT_LOOP=1 five levels under dev/local/autopilot: a marker named by the wrapper's pid holding 'codex' and the -o path during the run, removed after, foreign marker untouched" \
+    FAIL "_AUTOPILOT_LOOP=1 five levels under docs/dev/project-management/autopilot: a marker named by the wrapper's pid holding 'codex' and the -o path during the run, removed after, foreign marker untouched" \
          "rc=$LANE_RC; during-run entries: $(ls "$LANE_SNAP" 2>/dev/null | tr '\n' ' ')(count $LANE_COUNT, want 999999 + own pid); own='$LANE_NAMES' cmd='$LANE_CMD' (want codex-run.sh); line1='$LANE_LINE1' line2='$LANE_LINE2' extra lines='$LANE_EXTRA' (want codex / $LANE_OUT / none); lanes after: $(ls -A "$LANE_LANES_DIR" 2>&1 | tr '\n' ' ')(want 999999 unchanged)"
 fi
 
@@ -425,7 +425,7 @@ else
          "during-run entries: $(ls "$LANE_SNAP_OFF" | tr '\n' ' '); lanes dir: $(ls -A "$LANE_LANES_DIR" 2>&1 | tr '\n' ' ')"
 fi
 
-# 48. Loop set but no dev/local/autopilot at or above cwd: exit 0, nothing made.
+# 48. Loop set but no docs/dev/project-management/autopilot at or above cwd: exit 0, nothing made.
 LANE_BARE=$(mktemp -d)
 _DIRS+=("$LANE_BARE")
 LANE_BARE_SNAP=$(mktemp -d)
@@ -433,9 +433,9 @@ _DIRS+=("$LANE_BARE_SNAP")
 run_lane_case "$LANE_BARE_SNAP" 1 "$LANE_BARE" -f "$LANE_PROMPT_FILE" -o "$LANE_BARE_SNAP/review.out"
 LANE_BARE_RC=$?
 if [ "$LANE_BARE_RC" -eq 0 ] && [ -z "$(ls -A "$LANE_BARE")" ]; then
-    PASS "_AUTOPILOT_LOOP=1 with no dev/local/autopilot above cwd: exits 0 and creates nothing"
+    PASS "_AUTOPILOT_LOOP=1 with no docs/dev/project-management/autopilot above cwd: exits 0 and creates nothing"
 else
-    FAIL "_AUTOPILOT_LOOP=1 with no dev/local/autopilot above cwd: exits 0 and creates nothing" \
+    FAIL "_AUTOPILOT_LOOP=1 with no docs/dev/project-management/autopilot above cwd: exits 0 and creates nothing" \
          "rc=$LANE_BARE_RC; cwd contents: $(ls -A "$LANE_BARE" | tr '\n' ' ')"
 fi
 
@@ -450,8 +450,8 @@ GUARD_HOOK="$(cd "$(dirname "$0")/../../.." && pwd)/hooks/guard_stop_on_live_lan
 E2E_REPO=$(mktemp -d)
 _DIRS+=("$E2E_REPO")
 E2E_REPO=$(cd "$E2E_REPO" && pwd -P)
-mkdir -p "$E2E_REPO/dev/local/autopilot"
-E2E_LANES="$E2E_REPO/dev/local/autopilot/lanes"
+mkdir -p "$E2E_REPO/docs/dev/project-management/autopilot"
+E2E_LANES="$E2E_REPO/docs/dev/project-management/autopilot/lanes"
 E2E_SNAP="$E2E_REPO/.snap-guard"
 E2E_OUT="$E2E_REPO/e2e-review.out"
 E2E_AFTER_ERR="$E2E_REPO/.guard-after.err"

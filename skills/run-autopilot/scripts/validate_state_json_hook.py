@@ -9,7 +9,7 @@ loop. The wrapper can only detect this after the session (and its context) is
 gone; this hook detects it at the write, while the model can still fix it:
 exit 2 feeds the parse error straight back to the session.
 
-Fires only when the edited path ends with dev/local/autopilot/state.json.
+Fires only when the edited path ends with docs/dev/project-management/autopilot/state.json.
 Stdlib only. The standalone path is self-contained: `_common` is imported only
 inside `run()`, the dispatcher entry point (this script lives outside
 ~/.claude/hooks/). A failure of the hook itself never blocks writes to
@@ -29,7 +29,7 @@ def main() -> int:
     except Exception:
         return 0
     path = (payload.get("tool_input") or {}).get("file_path") or ""
-    if not path.endswith("dev/local/autopilot/state.json"):
+    if not path.endswith("docs/dev/project-management/autopilot/state.json"):
         return 0
     try:
         with open(path, encoding="utf-8") as fh:

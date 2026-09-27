@@ -17,7 +17,7 @@ INIT = f'{{"type":"system","subtype":"init","session_id":"{SESSION}","model":"m"
 
 
 def _autopilot_dir(tmp_path: Path, state: dict | None, log: str | None) -> Path:
-    ap = tmp_path / "dev/local/autopilot"
+    ap = tmp_path / "docs/dev/project-management/autopilot"
     ap.mkdir(parents=True)
     if state is not None:
         (ap / "state.json").write_text(json.dumps(state))

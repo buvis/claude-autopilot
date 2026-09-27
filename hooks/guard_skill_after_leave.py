@@ -10,7 +10,7 @@ prose ("print the banner and end the turn") did not hold; this guard does.
 
 Denies (exit 2, reason on stderr) iff `_AUTOPILOT_LOOP` is set, the tool is
 `Skill`, the requested skill is `autopilot:*` or `git-ferry:catchup`, and
-`dev/local/autopilot/.session-left` names THIS session (written by
+`docs/dev/project-management/autopilot/.session-left` names THIS session (written by
 `note_session_leave.py`). A marker from another session never denies; a
 malformed marker passes (the guard is a backstop, the prose still says STOP).
 """

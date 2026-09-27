@@ -5,7 +5,7 @@ the bad input a CLI must report instead of traceback (PRD 00214).
 Split off `test_wave_launch.py` to keep that file under the 800-line style limit;
 launch's own proofs stayed there. Every proof runs against a throwaway
 `git init` repo under `tmp_path`, never this checkout's own backlog or
-`dev/local/autopilot/wave.json`, and no real loop is ever started: the incumbent
+`docs/dev/project-management/autopilot/wave.json`, and no real loop is ever started: the incumbent
 is a tagged stand-in process, and `live_wrapper_pid` is patched to report it.
 
 The git failure is injected the only way the CLI entry point allows - a `git` on
@@ -113,8 +113,8 @@ def test_launch_refuses_a_checkout_a_live_loop_already_owns(
         # A substring check on the path waves both near-misses through and then
         # derives a repo root that is off by a directory, in silence.
         "state.json",
-        "dev/local/autopilot/lanes/state.json",
-        "dev/local/autopilot-old/state.json",
+        "docs/dev/project-management/autopilot/lanes/state.json",
+        "docs/dev/project-management/autopilot-old/state.json",
         # Parent directory NAMED `autopilot` but at the wrong depth entirely, so
         # checking the parent's name alone waves it through and derives a repo
         # root a directory off - the same silent wrong-root failure.
@@ -123,16 +123,16 @@ def test_launch_refuses_a_checkout_a_live_loop_already_owns(
         # alone accepts it and derives a repo root from a file that is not the
         # state file at all. The `.bak` suffix also catches a check that merely
         # looks for `state.json` somewhere inside the basename.
-        "dev/local/autopilot/state.json.bak",
+        "docs/dev/project-management/autopilot/state.json.bak",
         # Four more wrong FILENAMES in that same directory, each one outside any
         # suffix blacklist: the wave's OWN file, which sits right there; a suffix a
         # blacklist of `.bak` misses; no extension at all; and the same name under a
         # different case, which is a different file to a case-sensitive checkout.
         # Together they leave only a positive `name == "state.json"` check passing.
-        "dev/local/autopilot/wave.json",
-        "dev/local/autopilot/state.json.tmp",
-        "dev/local/autopilot/state",
-        "dev/local/autopilot/State.json",
+        "docs/dev/project-management/autopilot/wave.json",
+        "docs/dev/project-management/autopilot/state.json.tmp",
+        "docs/dev/project-management/autopilot/state",
+        "docs/dev/project-management/autopilot/State.json",
     ],
 )
 def test_the_cli_reports_a_non_canonical_state_path_instead_of_asserting(
@@ -140,7 +140,7 @@ def test_the_cli_reports_a_non_canonical_state_path_instead_of_asserting(
     relative: str,
 ) -> None:
     repo, wave_path = _repo(tmp_path, ONE_LANE)
-    stray = repo / relative  # not <repo>/dev/local/autopilot/state.json
+    stray = repo / relative  # not <repo>/docs/dev/project-management/autopilot/state.json
     proc = subprocess.run(
         [
             sys.executable,

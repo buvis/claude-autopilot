@@ -2,9 +2,9 @@
 cap_critical custody.
 
 When an autopilot batch caps out with an unresolved CRITICAL, custody.py
-records the affected commit range in `<repo>/dev/local/autopilot/
+records the affected commit range in `<repo>/docs/dev/project-management/autopilot/
 critical-on-master` (the marker), appends a `recorded` row to
-`<repo>/dev/local/autopilot/ledger/custody.jsonl` (the journal) and sets
+`<repo>/docs/dev/project-management/autopilot/ledger/custody.jsonl` (the journal) and sets
 `git config --local autopilot.custodyMarker` (the locator). Until
 `autopilot custody resolve` lands, nothing may push that range. This hook
 inspects the Bash command text, resolves which repository each `git push`
@@ -46,7 +46,7 @@ GitCall = namedtuple("GitCall", "subcommand c_dirs git_dir work_tree unresolved"
 
 _HEADER = "BLOCKED: git push targets a repository with pending cap_critical custody."
 _DEGRADED = "policy hook degraded: guard_push_on_critical"
-_AUTOPILOT_DIR = os.path.join("dev", "local", "autopilot")
+_AUTOPILOT_DIR = os.path.join("docs", "dev", "project-management", "autopilot")
 _MARKER_NAME = "critical-on-master"
 _JOURNAL_NAME = os.path.join("ledger", "custody.jsonl")
 _MAX_CANDIDATES = 8
@@ -376,7 +376,7 @@ def _rooted_at(entry: dict, toplevel: str) -> bool:
 def pending_entries(
     toplevel: str | None, start_cwd: str, locator: str | None,
 ) -> list[dict]:
-    """Pending custody from `<toplevel>/dev/local/autopilot`, the nearest
+    """Pending custody from `<toplevel>/docs/dev/project-management/autopilot`, the nearest
     such dir above `start_cwd` (all of it when `toplevel` is None, else only
     entries rooted at `toplevel`) and the locator's dir. Raises
     CustodyStateError when present state cannot be read."""

@@ -8,7 +8,7 @@ rework_cap: 3
 
 # Bind the codex-run tests and dedupe their split
 
-Source: PRD 00180 hit the rework cap in cycle 2 with nine findings open (batch 202609061630 deferred ledger, `dev/local/reviews/00180-route-codex-prompt-through-stdin-v1-review-2.md`); walked 2026-09-07 in the config-audit closure walkthrough (`~/.claude/dev/local/audit-results/2026-09-05.md`). Filed with PRD 00182's release-checks gap, which touches the same gate.
+Source: PRD 00180 hit the rework cap in cycle 2 with nine findings open (batch 202609061630 deferred ledger, `docs/dev/project-management/reviews/00180-route-codex-prompt-through-stdin-v1-review-2.md`); walked 2026-09-07 in the config-audit closure walkthrough (`~/.claude/docs/dev/project-management/audit-results/2026-09-05.md`). Filed with PRD 00182's release-checks gap, which touches the same gate.
 
 ## Overview
 

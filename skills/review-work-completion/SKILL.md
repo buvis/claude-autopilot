@@ -58,11 +58,11 @@ are prompt disciplines carried by the roster, not separate phases:
 Check these exist:
 
 1. `${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex-run.sh` - executable
-2. `dev/local/prds/wip/` contains at least one `.txt` or `.md` file
+2. `docs/dev/project-management/prds/wip/` contains at least one `.txt` or `.md` file
 
 (Alice is a native Claude subagent - no CLI prerequisite.)
 
-**Ambiguous-target guard (standalone runs).** This skill reviews **one** PRD's work per run. When NO autopilot state names the PRD — `dev/local/autopilot/state.json` is absent or carries no `prd` field (a manual/standalone `/autopilot:review-work-completion`) — AND `dev/local/prds/wip/` holds **2+** PRDs, the target is ambiguous. Do NOT merge them into one review:
+**Ambiguous-target guard (standalone runs).** This skill reviews **one** PRD's work per run. When NO autopilot state names the PRD — `docs/dev/project-management/autopilot/state.json` is absent or carries no `prd` field (a manual/standalone `/autopilot:review-work-completion`) — AND `docs/dev/project-management/prds/wip/` holds **2+** PRDs, the target is ambiguous. Do NOT merge them into one review:
 
 - **Interactive:** name every wip PRD and ask which to review via `AskUserQuestion`; scope the run to the chosen one (its path is the "review-target PRD" step 3 reads).
 - **Unattended (`CLAUDE_UNATTENDED` set, or otherwise no human to ask):** STOP and report the ambiguity, naming all wip PRDs — never guess which one (`rules/communication.md` unattended rule).
@@ -80,11 +80,11 @@ create state; fall through to the binary check below.
 
 **Carl binary check (only when not batch-skipped):** check `${CLAUDE_PLUGIN_ROOT}/skills/use-gemini/scripts/gemini-run.sh` is executable AND a backend CLI resolves - `copilot` (preferred; pin owned by the helper) OR native `gemini` (`mise which`/`command -v` succeeds for either). If both pass, Carl is active; binary presence alone does not establish model availability. If neither CLI resolves, skip Carl and record `Carl: unavailable (no backend CLI)` in the final review file. Do not run a live probe here; the opt-in operator probe lives in `use-gemini/SKILL.md`. Step 5 classifies dispatch results: exit 4 records `Carl: permanently unavailable` with the stderr reason; a quota or other runtime failure records a one-off failure. Carl on copilot spends Copilot AI credits.
 
-Create if missing: `dev/local/tmp/`, `dev/local/reviews/`
+Create if missing: `docs/dev/tmp/`, `docs/dev/project-management/reviews/`
 
-**Path convention:** All `dev/local/` paths in this skill are relative to the project root. When passing file paths to subagents or external scripts, always use absolute paths (e.g. `$PWD/dev/local/tmp/...`) so they resolve correctly regardless of the subagent's working directory.
+**Path convention:** All `docs/dev/project-management/` paths in this skill are relative to the project root. When passing file paths to subagents or external scripts, always use absolute paths (e.g. `$PWD/docs/dev/tmp/...`) so they resolve correctly regardless of the subagent's working directory.
 
-**Resolve the consensus engine.** Alice's leg runs on one of three engines. Read `state.consensus_engine` from `dev/local/autopilot/state.json` (autopilot parses the PRD frontmatter once, at Phase 0); on a standalone run with no state file, read `consensus_engine` straight from the wip PRD's frontmatter.
+**Resolve the consensus engine.** Alice's leg runs on one of three engines. Read `state.consensus_engine` from `docs/dev/project-management/autopilot/state.json` (autopilot parses the PRD frontmatter once, at Phase 0); on a standalone run with no state file, read `consensus_engine` straight from the wip PRD's frontmatter.
 
 | value | Alice's leg |
 |-------|-------------|
@@ -94,9 +94,9 @@ Create if missing: `dev/local/tmp/`, `dev/local/reviews/`
 
 An invalid value falls back to `legacy` with one logged warning line (same rule as `rework_cap` / `doubt_reviewer`). Hold the resolved value as `CONSENSUS_ENGINE` for steps 5 and 8.
 
-**Resolve the doubt reviewer.** Read `state.doubt_reviewer` from `dev/local/autopilot/state.json`; on a standalone run with no state file, read `doubt_reviewer` straight from the wip PRD's frontmatter. An invalid value falls back to `codex` with one logged warning line. Hold the resolved value for the later roster and consolidation steps. Eve joins the batch when the resolved value is `fable`.
+**Resolve the doubt reviewer.** Read `state.doubt_reviewer` from `docs/dev/project-management/autopilot/state.json`; on a standalone run with no state file, read `doubt_reviewer` straight from the wip PRD's frontmatter. An invalid value falls back to `codex` with one logged warning line. Hold the resolved value for the later roster and consolidation steps. Eve joins the batch when the resolved value is `fable`.
 
-**Codex doubt-roster guard.** After resolving `doubt_reviewer`, when `dev/local/autopilot/state.json` exists and `any(state.tasks[]?.attempts[]?.implementor == "codex")` is true, force the resolved value to `fable` — the doubt leg must not be codex alone. This adds **Eve** as the fifth lens alongside Bob; Bob/codex still runs, so the guard adds a voice rather than removing one. This override is in-memory only: do NOT write `state.doubt_reviewer` or invoke `statectl` for it. The stored field keeps whatever Phase 0 parsed, and Phase 0 remains its single writer. Count the codex-implemented tasks for step 6's review-file record.
+**Codex doubt-roster guard.** After resolving `doubt_reviewer`, when `docs/dev/project-management/autopilot/state.json` exists and `any(state.tasks[]?.attempts[]?.implementor == "codex")` is true, force the resolved value to `fable` — the doubt leg must not be codex alone. This adds **Eve** as the fifth lens alongside Bob; Bob/codex still runs, so the guard adds a voice rather than removing one. This override is in-memory only: do NOT write `state.doubt_reviewer` or invoke `statectl` for it. The stored field keeps whatever Phase 0 parsed, and Phase 0 remains its single writer. Count the codex-implemented tasks for step 6's review-file record.
 
 `/autopilot:work` writes `attempts[].implementor` into the same `state.json` via `statectl`, whether invoked directly or under autopilot, so the guard fires on this path too whenever the file exists. The real gap: `state.json` exists only from `/autopilot:run-autopilot`'s Phase 0 (which creates it) until batch end (which deletes or archives it), so a PRD that never ran under autopilot, or whose batch has already closed, leaves the guard with no attempts record to consult.
 
@@ -108,7 +108,7 @@ Cannot proceed: {missing prerequisite}
 
 ### 2. Check task status
 
-Read `state.tasks` from `dev/local/autopilot/state.json` (walk up from cwd to find the autopilot dir) — it is the canonical, complete task store, so nothing needs hydrating first. The gates below read each entry's `status`; an empty `state.tasks`, or an absent state file (a standalone run has none), is "no tasks exist".
+Read `state.tasks` from `docs/dev/project-management/autopilot/state.json` (walk up from cwd to find the autopilot dir) — it is the canonical, complete task store, so nothing needs hydrating first. The gates below read each entry's `status`; an empty `state.tasks`, or an absent state file (a standalone run has none), is "no tasks exist".
 
 **If no tasks exist:** proceed without task context, noting the absence in the review file.
 
@@ -127,17 +127,17 @@ Cannot review: no completed tasks found. Complete tasks first.
 
 ### 3. Gather context
 
-Read the **review-target PRD** from `dev/local/prds/wip/` — `state.prd`'s PRD under autopilot, the PRD step 1's ambiguous-target guard resolved on a standalone multi-PRD run, else the single wip PRD. Extract success criteria, acceptance criteria, required features. (Only when the target is genuinely one PRD and wip legitimately holds several — an autopilot batch mid-flight — read the others for cross-PRD context, but scope the review to the target.)
+Read the **review-target PRD** from `docs/dev/project-management/prds/wip/` — `state.prd`'s PRD under autopilot, the PRD step 1's ambiguous-target guard resolved on a standalone multi-PRD run, else the single wip PRD. Extract success criteria, acceptance criteria, required features. (Only when the target is genuinely one PRD and wip legitimately holds several — an autopilot batch mid-flight — read the others for cross-PRD context, but scope the review to the target.)
 
-Load architecture docs: AGENTS.md, agent_docs/, and any `dev/local/` architecture notes. Reviewers benefit from seeing invariants and boundaries.
+Load architecture docs: AGENTS.md, agent_docs/, and any `docs/dev/project-management/` architecture notes. Reviewers benefit from seeing invariants and boundaries.
 
 Build markdown of completed tasks with descriptions. **One row per task — never merge rows.** If a task was implemented in the same commit as another task (folded), it still gets its own row; note the shared commit SHA and the companion task IDs in the row's description so the cycle-N task→commit table stays unambiguous.
 
-Write tasks markdown to `dev/local/tmp/review-tasks-{id}.md` and PRD summary to `dev/local/tmp/review-prd-{id}.md` using the **Write tool** (not bash).
+Write tasks markdown to `docs/dev/tmp/review-tasks-{id}.md` and PRD summary to `docs/dev/tmp/review-prd-{id}.md` using the **Write tool** (not bash).
 
-**Design doc context (when present).** Check `state.design_doc` in `dev/local/autopilot/state.json`; if it is unset, fall back to the glob `dev/local/designs/<prd-stem>-design.md` (`<prd-stem>` = the wip PRD filename minus `.md`). When a design doc exists, append its full content to the PRD summary file (`dev/local/tmp/review-prd-{id}.md`) under a `## Design Doc` heading. This lets reviewers distinguish "implemented as designed" from drift. The PRD remains the requirements authority — the design doc is the implementation design (the HOW), not the spec. Blind review and doubt review stay PRD-only by design (a blind reviewer must test requirements without design bias) — do **not** add the design doc to those surfaces.
+**Design doc context (when present).** Check `state.design_doc` in `docs/dev/project-management/autopilot/state.json`; if it is unset, fall back to the glob `docs/dev/project-management/designs/<prd-stem>-design.md` (`<prd-stem>` = the wip PRD filename minus `.md`). When a design doc exists, append its full content to the PRD summary file (`docs/dev/tmp/review-prd-{id}.md`) under a `## Design Doc` heading. This lets reviewers distinguish "implemented as designed" from drift. The PRD remains the requirements authority — the design doc is the implementation design (the HOW), not the spec. Blind review and doubt review stay PRD-only by design (a blind reviewer must test requirements without design bias) — do **not** add the design doc to those surfaces.
 
-**Determine review scope (full vs incremental).** List existing review files for this PRD with Bash `ls` (the native `Glob` tool is absent in this build): `dev/local/reviews/<prd-name>-review-*.md` (PRD filename without the `.md` extension).
+**Determine review scope (full vs incremental).** List existing review files for this PRD with Bash `ls` (the native `Glob` tool is absent in this build): `docs/dev/project-management/reviews/<prd-name>-review-*.md` (PRD filename without the `.md` extension).
 
 - **No prior review file** → cycle 1, a **full review**. Run `gather-context.sh` without `--since`.
 - **A prior review file exists** → this is a rework cycle, an **incremental review**. Read the highest-numbered prior file's `head_sha` frontmatter field.
@@ -147,21 +147,21 @@ Write tasks markdown to `dev/local/tmp/review-tasks-{id}.md` and PRD summary to 
 
 Capture the current HEAD now — `git rev-parse HEAD` — and hold it; step 8 stamps it into this cycle's review file as `head_sha`.
 
-Also capture the diff range for the review scope (recorded in the review file; the doubt lens reviews this range). For an **incremental review** the diff range is `<prior-cycle-head-sha>` (the same SHA passed to `gather-context.sh --since`). For a **full review**: when running under autopilot and `state.work_start_sha` is set in `dev/local/autopilot/state.json`, use `<work_start_sha>..HEAD` (the PRD's whole work range — this is the scope the doubt lens reviews); otherwise compute it via `git merge-base HEAD origin/HEAD` (fallback: `git merge-base HEAD master`, then `git merge-base HEAD develop`). Store this as `COVERAGE_DIFF_RANGE`.
+Also capture the diff range for the review scope (recorded in the review file; the doubt lens reviews this range). For an **incremental review** the diff range is `<prior-cycle-head-sha>` (the same SHA passed to `gather-context.sh --since`). For a **full review**: when running under autopilot and `state.work_start_sha` is set in `docs/dev/project-management/autopilot/state.json`, use `<work_start_sha>..HEAD` (the PRD's whole work range — this is the scope the doubt lens reviews); otherwise compute it via `git merge-base HEAD origin/HEAD` (fallback: `git merge-base HEAD master`, then `git merge-base HEAD develop`). Store this as `COVERAGE_DIFF_RANGE`.
 
 Run `gather-context.sh` (from project root). Full review:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/gather-context.sh dev/local/tmp/review-tasks-{id}.md dev/local/tmp/review-prd-{id}.md
+bash ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/gather-context.sh docs/dev/tmp/review-tasks-{id}.md docs/dev/tmp/review-prd-{id}.md
 ```
 
 Incremental review (rework cycle) — prepend `--since <prior-cycle-head-sha>`:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/gather-context.sh --since <prior-cycle-head-sha> dev/local/tmp/review-tasks-{id}.md dev/local/tmp/review-prd-{id}.md
+bash ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/gather-context.sh --since <prior-cycle-head-sha> docs/dev/tmp/review-tasks-{id}.md docs/dev/tmp/review-prd-{id}.md
 ```
 
-Both positional args are optional — omit if no tasks/PRD available. Outputs context file and diff file paths to `dev/local/tmp/`.
+Both positional args are optional — omit if no tasks/PRD available. Outputs context file and diff file paths to `docs/dev/tmp/`.
 
 **Bare-repo homes (e.g. `~/.buvis`: `git --git-dir=~/.buvis --work-tree=~`):** `gather-context.sh` assumes a normal checkout and fails here — do not fight it. Build the review inputs yourself: generate the diff with `git --git-dir=<bare-dir> --work-tree=<tree> diff <COVERAGE_DIFF_RANGE>` (the range captured above), write it plus the tasks/PRD/context files to `/tmp/` with the Write tool, and pass those absolute `/tmp` paths to the reviewer prompts. The script path stays primary for normal repos.
 
@@ -182,17 +182,17 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/replay_tests
 
 The first takes the same changed-file list as `compute_mech_facts.py` and reports test functions whose shape cannot fail (a constant or self-comparing assert, an `A or B` hedge, a swallowed exception, `raises(Exception)`, no assertion at all). The second checks the base out in a temporary worktree, overlays HEAD's changed test files, runs only the test functions the diff touched, and reports the ones that PASS against the pre-change code — a test that passes there does not pin this change. Pass `--cmd` when plain `python3 -m pytest` is not how this project runs one test file (this pack: `uv run --no-project --with pytest python -m pytest`). The replay is skipped, never failed, when the runner cannot run, when the diff changes no non-test file (a coverage backfill pins existing behavior by design), or in a **bare-repo home** (no worktree to add; the shapes check still runs there, it needs only readable paths). Both scripts always exit 0. Append both blocks' stdout to the context file with the Write tool, and hold them: they are Eve's fifth run input (step 4), and every `[MECH]` line in them is a finding step 6 absorbs.
 
-**Append the settled-decisions ledger (PRD 00095).** Read `dev/local/reviews/<prd-stem>-ledger.json` (`<prd-stem>` = the review-target PRD's filename minus `.md`; absent on cycle 1, which is normal). When it exists and parses, hold its entries for step 4 — they become the "Settled decisions — do not re-raise" section of the implementation-aware prompts — and hold the path for step 6's `--ledger` flag. A malformed ledger is logged and skipped, never fatal.
+**Append the settled-decisions ledger (PRD 00095).** Read `docs/dev/project-management/reviews/<prd-stem>-ledger.json` (`<prd-stem>` = the review-target PRD's filename minus `.md`; absent on cycle 1, which is normal). When it exists and parses, hold its entries for step 4 — they become the "Settled decisions — do not re-raise" section of the implementation-aware prompts — and hold the path for step 6's `--ledger` flag. A malformed ledger is logged and skipped, never fatal.
 
 **Generate the cycle's context pack.** After `gather-context.sh` has produced the diff, and before any prompt is assembled, run `git rev-parse --show-toplevel` from the project root with no extra flags — the pack resolves `repo_root` the same way, so a non-zero exit means the pack cannot succeed here. On non-zero: skip the command below entirely, substitute `(no pack available this cycle)` for `{PACK_FILE}` and `{PACK_FINDINGS}`, write `pack: skipped (no git worktree)` in the review file, and move to step 4. On zero exit, run this from the project root:
 
 ```bash
-engram pack --cycle {id} --prd <absolute path of the review-target PRD resolved at the top of this step> --capsule dev/local/meta/project-capsule.md
+engram pack --cycle {id} --prd <absolute path of the review-target PRD resolved at the top of this step> --capsule docs/dev/project-management/meta/project-capsule.md
 ```
 
-`engram` is an optional external tool, so check how it is installed before running this. On PATH, the command above works as written; otherwise run it out of your own checkout, `uv run --project <your engram checkout> engram pack ...`, and expect a bare `engram pack` to fail. The command prints the pack's absolute path, its estimated token total, and the pre-pack reindex stats. `{id}` is the same cycle id used for the other `dev/local/tmp/review-*-{id}.*` staging files, so the pack lands at `dev/local/tmp/engram-pack-{id}.md`.
+`engram` is an optional external tool, so check how it is installed before running this. On PATH, the command above works as written; otherwise run it out of your own checkout, `uv run --project <your engram checkout> engram pack ...`, and expect a bare `engram pack` to fail. The command prints the pack's absolute path, its estimated token total, and the pre-pack reindex stats. `{id}` is the same cycle id used for the other `docs/dev/tmp/review-*-{id}.*` staging files, so the pack lands at `docs/dev/tmp/engram-pack-{id}.md`.
 
-Hold the printed absolute path. Step 4 substitutes it for `{PACK_FILE}`, and substitutes the file's "Findings precedent" section for `{PACK_FINDINGS}`. Pass the pack path to prompts as an absolute path, like the other staged inputs. Subagents misresolve relative `dev/local/` paths as `~/dev/local/`.
+Hold the printed absolute path. Step 4 substitutes it for `{PACK_FILE}`, and substitutes the file's "Findings precedent" section for `{PACK_FINDINGS}`. Pass the pack path to prompts as an absolute path, like the other staged inputs. Subagents misresolve relative `docs/dev/project-management/` paths as `~/docs/dev/project-management/`.
 
 **Failure is non-fatal and must never block the cycle.** If the command exits non-zero or writes no pack file, retry at most once and do not fail the review. Substitute the literal text `(no pack available this cycle)` for `{PACK_FILE}` and `{PACK_FINDINGS}` in every prompt that takes them, and note the pack failure in the review file. The pack is additive retrieval context. A review without it is degraded, not invalid. The blind lens (Blake) never receives a pack, by design.
 
@@ -200,9 +200,9 @@ In a **bare-repo home** (the carve-out one paragraph above), the pre-check is wh
 
 ### 4. Prepare agent prompts
 
-Create prompt files in `dev/local/tmp/`:
+Create prompt files in `docs/dev/tmp/`:
 
-For each active agent, use the **Write tool** (not bash heredocs) to create `dev/local/tmp/{agent}-prompt-{unique-id}.md` (use timestamp or UUID). **Use absolute paths** (e.g. `/full/path/to/project/dev/local/tmp/...`) when writing and when referencing these files in agent prompts - relative `dev/local/` paths get misresolved as `~/dev/local/` by subagents.
+For each active agent, use the **Write tool** (not bash heredocs) to create `docs/dev/tmp/{agent}-prompt-{unique-id}.md` (use timestamp or UUID). **Use absolute paths** (e.g. `/full/path/to/project/docs/dev/tmp/...`) when writing and when referencing these files in agent prompts - relative `docs/dev/project-management/` paths get misresolved as `~/docs/dev/project-management/` by subagents.
 
 **Every prompt is assembled from the agent registry.** Read the persona's file
 under `${CLAUDE_PLUGIN_ROOT}/agents/`, strip its frontmatter, and substitute its
@@ -229,9 +229,9 @@ fed the review's own history is no longer blind. His re-raises are absorbed
 mechanically instead, by step 6's `--ledger-dismiss BLAKE`.
 
 **Filesystem notes — Blake only (PRD 00141).** Run one check from the project
-root: `test -L dev/local` succeeds, OR the root's basename starts with `.`.
+root: `test -L docs/dev/project-management` succeeds, OR the root's basename starts with `.`.
 When either holds, prepend a `## Filesystem notes` block to Blake's run inputs
-carrying the project root, the `dev/local` realpath, and the sentence telling
+carrying the project root, the `docs/dev/project-management` realpath, and the sentence telling
 him `rg --files` reaches neither. Paths only — no diff, no file list, no
 review history, so the blind lens stays blind. **Read
 `references/agent-invocation.md` § Blake: Filesystem notes for the verbatim
@@ -259,7 +259,7 @@ With 1M context, agent prompts can include more background — full PRD, archite
 
 ### 5. Run agent review
 
-**Stamp the lens roster (autopilot runs).** When `dev/local/autopilot/state.json` exists, REPLACE `state.review_lenses` (merge into state.json, do NOT replace sibling fields) with one key per active lens set to `"running"`: `consensus` (Alice), `blind` (Blake), `doubt` (Bob), plus `ui` (Carl) and `fable` (Eve) only when active. tracon renders these as the review phase's sub-steps; step 6 flips them to `"done"`/`"failed"`. Skip entirely on standalone (non-autopilot) runs.
+**Stamp the lens roster (autopilot runs).** When `docs/dev/project-management/autopilot/state.json` exists, REPLACE `state.review_lenses` (merge into state.json, do NOT replace sibling fields) with one key per active lens set to `"running"`: `consensus` (Alice), `blind` (Blake), `doubt` (Bob), plus `ui` (Carl) and `fable` (Eve) only when active. tracon renders these as the review phase's sub-steps; step 6 flips them to `"done"`/`"failed"`. Skip entirely on standalone (non-autopilot) runs.
 
 **Launch ALL active reviewers in a SINGLE message so they run concurrently.** Alice, Blake, and Eve (when active) are Task subagent calls (native Claude tools), dispatched as `autopilot:alice`, `autopilot:blake`, `autopilot:eve` - the bare persona name is not a registered agent type and fails the dispatch outright (`references/agent-registry.md` § Dispatch mechanism). Every one of those Agent calls, and the Watcher below, carries `run_in_background: true` - never `false`, never omitted: an Agent dispatched with `run_in_background: false` makes the harness hold the background Bash calls in the same message until that Agent returns, while the Watcher only returns once those Bash lanes have written their outputs, so one `false` idles the cycle for the Watcher's whole 30-run budget (~50 min, seen twice on 2026-09-26). Bob and Carl are parallel **background Bash** commands (`run_in_background: true`) - never wrap a CLI reviewer (codex/gemini) in a subagent, it hangs and strands the whole cycle (see `references/agent-invocation.md`). Put the Task calls, the Watcher (below, if `$_AUTOPILOT_LOOP` is set), and the background Bash calls in the one message - if any CLI reviewer is in the dispatch, the Watcher goes in the same message or nothing holds the session open to see it finish.
 
@@ -328,7 +328,7 @@ Build `args` from the context already gathered in step 3:
 
 **Why the bodies travel as args rather than `agentType`.** The workflow could name a persona and let the harness supply it as the subagent's system prompt, but that splits the prompt into system + user and can only ever emit persona-then-inputs. Victor's prompt interleaves the finding's fields *between* persona text, so that split reorders his bytes and breaks the parity the goldens pin. Passing bodies keeps every lane byte-identical to its pre-registry prompt. The cost: the `tools` pins in those seven files do not apply on this path. Both facts are recorded in `references/agent-registry.md` § Dispatch mechanism.
 
-On return, write the result's `agent_output` verbatim to `dev/local/tmp/alice-output-{id}.txt`. Step 6 consolidates it unchanged: it already speaks the `[ALICE] {emoji} … | File: … | Task: …` line format, carries the twelve `R{n}` verdict lines, and ends with the engine's `stats_line`.
+On return, write the result's `agent_output` verbatim to `docs/dev/tmp/alice-output-{id}.txt`. Step 6 consolidates it unchanged: it already speaks the `[ALICE] {emoji} … | File: … | Task: …` line format, carries the twelve `R{n}` verdict lines, and ends with the engine's `stats_line`.
 
 Three failure classes, three different answers — **only the last one may fall back to legacy**:
 
@@ -361,7 +361,7 @@ The cycle that first receives exit 4 records the failure per step 5 instead.
 
 **Close out the lens roster (autopilot runs).** When `state.review_lenses` was stamped in step 5, set each lens to `"done"`, or `"failed"` for a reviewer that failed per `references/retry-policy.md` (a lens rescued by a fallback — e.g. Bob's Claude fallback — is `"done"`). Skip on standalone runs.
 
-Save each subagent reviewer's returned text to `dev/local/tmp/` — **Alice** to `alice-output-{id}.txt`, **Blake** to `blake-output-{id}.txt`, **Eve** (when she ran) or her Claude substitute (when it ran instead) to `eve-output-{id}.txt`, and Bob's Claude fallback (when it ran) to `bob-output-{id}.txt`. Bob's and Carl's CLI outputs are already on disk - their `-o` flag wrote them straight to `bob-output-{id}.txt` / `carl-output-{id}.txt` in step 5.
+Save each subagent reviewer's returned text to `docs/dev/tmp/` — **Alice** to `alice-output-{id}.txt`, **Blake** to `blake-output-{id}.txt`, **Eve** (when she ran) or her Claude substitute (when it ran instead) to `eve-output-{id}.txt`, and Bob's Claude fallback (when it ran) to `bob-output-{id}.txt`. Bob's and Carl's CLI outputs are already on disk - their `-o` flag wrote them straight to `bob-output-{id}.txt` / `carl-output-{id}.txt` in step 5.
 
 **Close the CLI reviewer dispatch rows.** A `start` row closes when its dispatch reaches a terminal state — the background command exited — not when an output file is read: a terminal failure may publish no `-o` file at all (Carl's exit 4 publishes none), and an unclosed row makes the ledger under-report dispatches. The call is `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py end <id> <flags>`, taking the `<flags>` of the first row below that matches:
 
@@ -380,11 +380,11 @@ Then run:
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/consolidate_findings.py \
-  ALICE:$PWD/dev/local/tmp/alice-output-{id}.txt \
-  BLAKE:$PWD/dev/local/tmp/blake-output-{id}.txt \
-  BOB:$PWD/dev/local/tmp/bob-output-{id}.txt \
-  CARL:$PWD/dev/local/tmp/carl-output-{id}.txt \
-  --ledger $PWD/dev/local/reviews/<prd-stem>-ledger.json --ledger-dismiss BLAKE
+  ALICE:$PWD/docs/dev/tmp/alice-output-{id}.txt \
+  BLAKE:$PWD/docs/dev/tmp/blake-output-{id}.txt \
+  BOB:$PWD/docs/dev/tmp/bob-output-{id}.txt \
+  CARL:$PWD/docs/dev/tmp/carl-output-{id}.txt \
+  --ledger $PWD/docs/dev/project-management/reviews/<prd-stem>-ledger.json --ledger-dismiss BLAKE
 ```
 
 **Drop the two `--ledger` flags when no ledger file exists** (cycle 1). With them, Blake findings matching a settled entry are excluded from the table and from task creation, and listed instead under a trailing `### Auto-dismissed (ledger)` section naming the reason each matched — copy that section into the review file, so a wrong dismissal is visible rather than silent. The filter is **Blake-only**: an implementation-aware reviewer re-raising despite the step-4 prompt feed is signal, not noise, and stays in the table.
@@ -399,13 +399,13 @@ Pass only agents that produced output (omit the `CARL:` pair when Carl was skipp
 
 **Compose the `Verdict:` line.** Zero consolidated findings → `Verdict: converged`; otherwise `Verdict: N findings` (the consolidated count, including any findings the carry-forward above just added and the mechanical test checks absorbed). Step 8 writes it into the review file.
 
-**Write the verification-check queue.** After composing the `Verdict:` line, collect the **VERIFY** bucket of every doubt lens that emitted one — today that is **Eve, or whichever lane produced the doubt output in her place** (her Claude substitute). `agents/bob.md` mandates the `[BOB]` issue-line format plus `R{n}` verdicts and defines no FIX/VERIFY/KNOWN buckets, so `source: "bob"` applies only if his persona later gains one; do not invent buckets he did not emit. Write the entries whose text names an exact runnable command to `dev/local/reviews/<prd-stem>-checks-<state.cycle>.json` with the **Write tool** (read the existing array, append, write back). Shape, the `source` values and the not-queued rule: `references/output-formats.md` § Verification-check queue. A VERIFY item that names no exact command is **not** queued — it stays an ordinary finding and is classified as today, because rubric rule D3 already fails a vague one. Skip this entirely on standalone (non-autopilot) runs, which have no `state.cycle` and no work phase to run the checks.
+**Write the verification-check queue.** After composing the `Verdict:` line, collect the **VERIFY** bucket of every doubt lens that emitted one — today that is **Eve, or whichever lane produced the doubt output in her place** (her Claude substitute). `agents/bob.md` mandates the `[BOB]` issue-line format plus `R{n}` verdicts and defines no FIX/VERIFY/KNOWN buckets, so `source: "bob"` applies only if his persona later gains one; do not invent buckets he did not emit. Write the entries whose text names an exact runnable command to `docs/dev/project-management/reviews/<prd-stem>-checks-<state.cycle>.json` with the **Write tool** (read the existing array, append, write back). Shape, the `source` values and the not-queued rule: `references/output-formats.md` § Verification-check queue. A VERIFY item that names no exact command is **not** queued — it stays an ordinary finding and is classified as today, because rubric rule D3 already fails a vague one. Skip this entirely on standalone (non-autopilot) runs, which have no `state.cycle` and no work phase to run the checks.
 
-**Compose the `Tests:` line.** **Check docs-only first:** when the reviewed diff touches no code, the line is `Tests: none (docs-only)` — a first-class value, not a sentinel, and the one form that takes **no** suffix, because `cli/gate.py`'s `TESTS_RE` allows none there. Nothing below applies. That test comes before the record, because a docs-only diff in this pack still has a matching record from the work phase's own suite run, and reading the record first would silently replace the sentinel with counts. Otherwise write `Tests: N passed, M failed, K skipped`, and read `dev/local/autopilot/last-verification.json` first (`work/references/final-verification.md` § Recorded verification result): when its `sha` equals this cycle's reviewed HEAD **and** its three counts are non-null, compose the line from the record and **run no suite** — that record is the work phase's own mandatory run at this same HEAD. Otherwise (file absent, empty `commands`, `sha` mismatch, or null counts) run the project's test suite once in the FOREGROUND, exactly as before. **Name which path produced the counts**, as a parenthesised suffix on the `Tests:` line itself — `Tests: N passed, M failed, K skipped (reused from last-verification.json at <sha>)` or `... (suite run this cycle)`. The gate's pattern admits any suffix after the counts (`cli/gate.py` `TESTS_RE`), so this cannot fail `check_review_file.py`. Fail loud: a reused count must never read as a fresh run, and a stale record must never be reused.
+**Compose the `Tests:` line.** **Check docs-only first:** when the reviewed diff touches no code, the line is `Tests: none (docs-only)` — a first-class value, not a sentinel, and the one form that takes **no** suffix, because `cli/gate.py`'s `TESTS_RE` allows none there. Nothing below applies. That test comes before the record, because a docs-only diff in this pack still has a matching record from the work phase's own suite run, and reading the record first would silently replace the sentinel with counts. Otherwise write `Tests: N passed, M failed, K skipped`, and read `docs/dev/project-management/autopilot/last-verification.json` first (`work/references/final-verification.md` § Recorded verification result): when its `sha` equals this cycle's reviewed HEAD **and** its three counts are non-null, compose the line from the record and **run no suite** — that record is the work phase's own mandatory run at this same HEAD. Otherwise (file absent, empty `commands`, `sha` mismatch, or null counts) run the project's test suite once in the FOREGROUND, exactly as before. **Name which path produced the counts**, as a parenthesised suffix on the `Tests:` line itself — `Tests: N passed, M failed, K skipped (reused from last-verification.json at <sha>)` or `... (suite run this cycle)`. The gate's pattern admits any suffix after the counts (`cli/gate.py` `TESTS_RE`), so this cannot fail `check_review_file.py`. Fail loud: a reused count must never read as a fresh run, and a stale record must never be reused.
 
 **Record the Codex doubt-roster guard.** Emit the fired rule in the cycle's review file as `codex_rung_guard: fired (N codex-implemented task(s))`, using the count from step 1, or emit `codex_rung_guard: not fired` when the predicate is false. When the guard fired, the fired form has three possible outcomes: Eve produced usable output → the plain fired form as above, with no suffix; Eve failed after her retry budget and the Claude-subagent fallback (step 5) recovered a non-codex doubt voice in her place → append `; eve unavailable, doubt lens fell back to claude`; neither Eve nor that fallback produced output → the constraint is NOT met, so append `; constraint UNMET` instead. The line must never report plain `fired` when the constraint did not hold. Consolidation owns this line; `run-autopilot` must not write it.
 
-**Record the doubt-rubric verdicts (autopilot runs).** When `dev/local/autopilot/state.json` exists, parse the five `D{n}: pass|fail` lines from Bob's output (or his Claude fallback's) and REPLACE `state.doubts_rubric_verdicts` with the five entries `{"rule_id": "D{n}", "verdict": "pass"|"fail"}`; when Eve also ran, read her raw `D{n}:` lines too and write one entry per rule per reviewer with `source` tags (`"codex"` / `"fable"`). Verdicts are re-recorded every cycle; the final cycle's are the durable ones (the batch report renders them). Skip this entirely on standalone (non-autopilot) runs.
+**Record the doubt-rubric verdicts (autopilot runs).** When `docs/dev/project-management/autopilot/state.json` exists, parse the five `D{n}: pass|fail` lines from Bob's output (or his Claude fallback's) and REPLACE `state.doubts_rubric_verdicts` with the five entries `{"rule_id": "D{n}", "verdict": "pass"|"fail"}`; when Eve also ran, read her raw `D{n}:` lines too and write one entry per rule per reviewer with `source` tags (`"codex"` / `"fable"`). Verdicts are re-recorded every cycle; the final cycle's are the durable ones (the batch report renders them). Skip this entirely on standalone (non-autopilot) runs.
 
 Outputs consolidated issues sorted by consensus then severity. See `references/output-formats.md` for output format details.
 
@@ -415,7 +415,7 @@ Outputs consolidated issues sorted by consensus then severity. See `references/o
 
 **Skip every finding this cycle queued for verification** (the entries written in step 6). Their check runs inside the work phase's step 7; a task here would re-run the whole suite to answer what one command answers, which is the duplication PRD 00164 removed. This step is where "an all-VERIFY cycle creates zero tasks" is actually delivered — Phase 5's routing row runs later and cannot un-create a task. **Match a consolidated row to a queue entry the same way Phase 5 does** — a judgment call on issue text plus file, against the entry's `finding` and `file`, never verbatim identity: `consolidate_findings.py` folds paraphrases onto the first-seen wording, so an exact-text skip would miss precisely the multi-reviewer rows and hand them the task anyway. A queued **HIGH is not skipped**: it is never routed (`run-autopilot/references/phase-review.md` Phase 5), so it gets its task as today; a queued CRITICAL is never routed either, and its task is Phase 6's (below).
 
-**If issues found, and `dev/local/autopilot/state.json` exists (autopilot run):** Create each follow-up with `task-add`, prioritizing multi-agent consensus:
+**If issues found, and `docs/dev/project-management/autopilot/state.json` exists (autopilot run):** Create each follow-up with `task-add`, prioritizing multi-agent consensus:
 
 A 🔴 CRITICAL finding gets no task here (PRD 00194): `run-autopilot/references/phase-review.md` Phase 6 § Dispatch rework creates it after the cycle's rework design, so a CRITICAL fix never starts without a reviewed contract. Every other severity is created below as today.
 
@@ -425,30 +425,30 @@ A 🔴 CRITICAL finding gets no task here (PRD 00194): `run-autopilot/references
 - Tag complexity: `(S)` small, `(M)` medium, `(L)` large
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json task-add <task-json-file>
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py docs/dev/project-management/autopilot/state.json task-add <task-json-file>
 ```
 
 Build one JSON object per follow-up and write it to `<task-json-file>` with the Write tool — a finding body carries backticks, quotes and newlines, which break as an inline shell argument. Required key: `"name"` (the task title); the finding's full body goes in `"description"`.
 
 See `references/output-formats.md` for task description format.
 
-**If issues found, and `dev/local/autopilot/state.json` is absent (standalone run):** Do not create one — a standalone review must never fabricate autopilot state that no `/autopilot:run-autopilot` build phase wrote. Skip `task-add` entirely; report the findings in the review file's consolidated table (step 6/8) and directly to the user, and say plainly that they were reported rather than written as tasks.
+**If issues found, and `docs/dev/project-management/autopilot/state.json` is absent (standalone run):** Do not create one — a standalone review must never fabricate autopilot state that no `/autopilot:run-autopilot` build phase wrote. Skip `task-add` entirely; report the findings in the review file's consolidated table (step 6/8) and directly to the user, and say plainly that they were reported rather than written as tasks.
 
 ### 8. Save review file
 
-Create at `dev/local/reviews/`.
+Create at `docs/dev/project-management/reviews/`.
 
 See `references/output-formats.md` for filename convention, frontmatter, and content format.
 
 Stamp the `head_sha` frontmatter field with the HEAD sha captured in step 3 — the next rework cycle reads it to scope its diff via `--since`.
 
-Stamp the `codex_thread_id` frontmatter field with the thread id from `dev/local/tmp/bob-thread-{id}.txt` when that file exists and is non-empty AND Bob produced output this cycle — the next rework cycle reads it (step 3) to resume Bob's codex session via `--resume-thread`; omit the field otherwise (Bob was skipped, or thread-id capture failed).
+Stamp the `codex_thread_id` frontmatter field with the thread id from `docs/dev/tmp/bob-thread-{id}.txt` when that file exists and is non-empty AND Bob produced output this cycle — the next rework cycle reads it (step 3) to resume Bob's codex session via `--resume-thread`; omit the field otherwise (Bob was skipped, or thread-id capture failed).
 
 Stamp the `reviewers:` frontmatter field with the comma-separated lowercase names of every reviewer that actually ran (e.g. `reviewers: alice,blake,bob,carl`) — `check_review_file.py` reads it to verify each section.
 
 **Stamp `consensus_run_id`** with the `runId` the Workflow tool returned, whenever the engine ran (`workflow` or `shadow`) — same pattern as `codex_thread_id`, and the forensic handle for that cycle's run. It is deliberately not written to `state.json`: `resumeFromRunId` is same-session only, so a stored id would outlive its own usefulness.
 
-**Shadow runs (`CONSENSUS_ENGINE == "shadow"`).** The workflow's `review_markdown` carries the literal token `{{TESTS_LINE}}` (step 5 passed no `tests_line`). Substitute the `Tests:` line composed in step 6 for that token — a file still carrying the token cannot pass `check_review_file.py` — then write the result to `dev/local/tmp/<prd-base>-consensus-shadow-{cycle}.md`. **Never** to `dev/local/reviews/`: step 3's `-review-*.md` glob finds the prior cycle there, and a shadow file in that directory would be mistaken for one. Gate the shadow file with `check_review_file.py --reviewers alice`, then record in the real review file, under Alice's section, the engine's `stats_line` and any verdict divergence from legacy Alice — as an observation, never as a finding. The shadow never gates.
+**Shadow runs (`CONSENSUS_ENGINE == "shadow"`).** The workflow's `review_markdown` carries the literal token `{{TESTS_LINE}}` (step 5 passed no `tests_line`). Substitute the `Tests:` line composed in step 6 for that token — a file still carrying the token cannot pass `check_review_file.py` — then write the result to `docs/dev/tmp/<prd-base>-consensus-shadow-{cycle}.md`. **Never** to `docs/dev/project-management/reviews/`: step 3's `-review-*.md` glob finds the prior cycle there, and a shadow file in that directory would be mistaken for one. Gate the shadow file with `check_review_file.py --reviewers alice`, then record in the real review file, under Alice's section, the engine's `stats_line` and any verdict divergence from legacy Alice — as an observation, never as a finding. The shadow never gates.
 
 Include all findings even if zero issues. Give each reviewer that ran a `## <Name>` section (their findings, or a one-line all-clear; Bob's keeps his `D{n}:` verdict lines, and records `after one retry (inlined)` whenever the inlined retry was dispatched, whether or not it produced them), and end the file with the `Verdict:` and `Tests:` lines composed in step 6.
 
@@ -457,7 +457,7 @@ Place the `codex_rung_guard:` line composed in step 6 in the top matter: directl
 **Gate the saved file (PRD 00016).** Run the shape check and fix the file if it fails — do not report a completed review over a failing gate:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/check_review_file.py --review-file $PWD/dev/local/reviews/<review-file> --require-codex-guard
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/check_review_file.py --review-file $PWD/docs/dev/project-management/reviews/<review-file> --require-codex-guard
 ```
 
-**Write the contract card** at this cycle transition (run-autopilot § Contract card): the current step, the active invariants, and the next gate (rework at cycle N+1, or converge → done), so a session compacted mid-review re-anchors to where the cycle stands. Write the body to `dev/local/autopilot/contract-card.md` with the **Write tool**, then (autopilot only) load it with `statectl.py <state.json> set-contract-card dev/local/autopilot/contract-card.md` — never as an inline shell argument, which fails on the card's own quotes and newlines. Then write the session brief — `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py <state.json> write-brief dev/local/autopilot/session-brief.md` — so the next session orients from one page (PRD 00201); a failed write is one stderr line, never a phase failure.
+**Write the contract card** at this cycle transition (run-autopilot § Contract card): the current step, the active invariants, and the next gate (rework at cycle N+1, or converge → done), so a session compacted mid-review re-anchors to where the cycle stands. Write the body to `docs/dev/project-management/autopilot/contract-card.md` with the **Write tool**, then (autopilot only) load it with `statectl.py <state.json> set-contract-card docs/dev/project-management/autopilot/contract-card.md` — never as an inline shell argument, which fails on the card's own quotes and newlines. Then write the session brief — `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py <state.json> write-brief docs/dev/project-management/autopilot/session-brief.md` — so the next session orients from one page (PRD 00201); a failed write is one stderr line, never a phase failure.

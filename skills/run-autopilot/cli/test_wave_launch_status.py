@@ -4,7 +4,7 @@
 Split off `test_wave_launch_abort.py` when that file reached the 800-line style
 limit; the abort and `_pgid_alive` proofs stayed there. Every proof here runs
 against a throwaway `git init` repo under `tmp_path`, never this checkout's own
-backlog or `dev/local/autopilot/wave.json`, and no real loop is ever started.
+backlog or `docs/dev/project-management/autopilot/wave.json`, and no real loop is ever started.
 
 The launch-side helpers live in the sibling `test_wave_launch` module and the
 launched-wave fixture in `test_wave_launch_abort`; this file imports them rather
@@ -99,7 +99,7 @@ def _lane_state(worktree: Path, state: str, metrics: list[str]) -> None:
 def _lane_prds(worktree: Path, counts: dict[str, int]) -> None:
     """`counts[folder]` PRD files in each of a worktree's lifecycle dirs."""
     for folder, count in counts.items():
-        lifecycle = worktree / "dev" / "local" / "prds" / folder
+        lifecycle = worktree / "docs" / "dev" / "project-management" / "prds" / folder
         lifecycle.mkdir(parents=True, exist_ok=True)
         for index in range(count):
             (lifecycle / f"9000{index}-{folder}.md").write_text("x\n", encoding="utf-8")

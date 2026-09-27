@@ -27,7 +27,7 @@ from cli import render_report, schema
 
 # Whatever autopilot state this machine happens to carry. Skipped when absent,
 # so the suite is green on a machine that has never run a batch.
-LIVE_STATE_JSON = Path.home() / ".claude/dev/local/autopilot/state.json"
+LIVE_STATE_JSON = Path.home() / ".claude/docs/dev/project-management/autopilot/state.json"
 # Derived from this file, not from an install path: the suite runs the same
 # from the plugin cache, a checkout, or a worktree.
 _SKILL_DIR = Path(__file__).resolve().parent.parent
@@ -647,7 +647,7 @@ WIDENED_SCALAR_ACCEPT_CASES = (
         "design_doc",
         lambda s: s.__setitem__(
             "design_doc",
-            "dev/local/prds/wip/00004-feature-x/design.md",
+            "docs/dev/project-management/prds/wip/00004-feature-x/design.md",
         ),
     ),
     ("replan_count", lambda s: s.__setitem__("replan_count", 0)),

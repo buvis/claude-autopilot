@@ -22,7 +22,7 @@ The clear/preserve split is what these tests bind, row by row:
   any rejected or failed transaction        preserve
 
 Every CLI row runs `cli/__main__.py` as a real subprocess against a synthetic
-<root>/dev/local/{autopilot,prds} tree, matching test_lifecycle_cli.py. The
+<root>/docs/dev/project-management/{autopilot,prds} tree, matching test_lifecycle_cli.py. The
 preserve rows assert the marker BYTES, not just existence, so a cleanup that
 truncated or rewrote a marker could not pass as "preserved". The clear rows
 assert a sibling file survives, so a cleanup that emptied the directory could
@@ -79,7 +79,7 @@ def _state(**overrides) -> dict:
 
 
 class _MarkerTestCase(unittest.TestCase):
-    """A synthetic <root>/dev/local/{autopilot,prds} tree per test, plus the
+    """A synthetic <root>/docs/dev/project-management/{autopilot,prds} tree per test, plus the
     two handoff markers and a sibling bystander file in the autopilot dir."""
 
     PRD = "00089-example-v1.md"
@@ -90,9 +90,9 @@ class _MarkerTestCase(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name)
-        self.autopilot_dir = self.root / "dev" / "local" / "autopilot"
+        self.autopilot_dir = self.root / "docs" / "dev" / "project-management" / "autopilot"
         self.autopilot_dir.mkdir(parents=True)
-        self.prds_dir = self.root / "dev" / "local" / "prds"
+        self.prds_dir = self.root / "docs" / "dev" / "project-management" / "prds"
         for lifecycle in ("wip", "backlog", "hold"):
             (self.prds_dir / lifecycle).mkdir(parents=True)
         self.state_path = self.autopilot_dir / "state.json"

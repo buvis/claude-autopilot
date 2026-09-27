@@ -190,7 +190,7 @@ def test_registry_entry_written_and_removed_at_teardown(tmp_path):
 
 def test_registry_entry_carries_the_tracon_contract_shape(tmp_path):
     # tracon.discovery parses these entries: pid int, root/ap_dir absolute
-    # strings (root = ap_dir minus /dev/local/autopilot), started_at ISO.
+    # strings (root = ap_dir minus /docs/dev/project-management/autopilot), started_at ISO.
     lp = make_loop(tmp_path, [])
     ap_dir = lp._resolve_ap_dir()
     assert lp._register(ap_dir) is None
@@ -200,7 +200,7 @@ def test_registry_entry_carries_the_tracon_contract_shape(tmp_path):
     assert entry["pid"] == lp.loop_pid
     assert entry["ap_dir"] == str(ap_dir)
     assert Path(entry["root"]).is_absolute()
-    assert str(ap_dir) == entry["root"] + "/dev/local/autopilot"
+    assert str(ap_dir) == entry["root"] + "/docs/dev/project-management/autopilot"
     assert entries[0].name == f"{lp.loop_pid}.json"
     assert re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$", entry["started_at"])
 

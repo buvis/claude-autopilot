@@ -7,7 +7,7 @@ model_tier_rationale: the brief's shape is given verbatim below, the writer is a
 
 # Write a session brief at every gate transition
 
-Source: `dev/local/discovery/00193-cut-loop-overhead-without-thinning-review.md`
+Source: `docs/dev/project-management/discovery/00193-cut-loop-overhead-without-thinning-review.md`
 (PRD 3 of three; elicited 2026-09-07). Re-grounded 2026-09-13. Independent of
 PRDs 00199 and 00200.
 
@@ -34,7 +34,7 @@ for its first hundred tool calls.
 ### Success Metrics
 
 - A resumed session's first ten tool calls touch at most
-  `dev/local/autopilot/session-brief.md`, `state.json` and the PRD, checked
+  `docs/dev/project-management/autopilot/session-brief.md`, `state.json` and the PRD, checked
   by `scripts/test_brief_orientation_prose.py` on the Phase 0 text and, post
   release, by `.turn-counts.json` deltas before the first dispatch row.
 - `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot`
@@ -47,7 +47,7 @@ Code renders the brief from state; the model never writes it by hand.
 
 #### Feature: `statectl write-brief`
 - **Description**: A new verb `write-brief <state.json> <out.md>` renders
-  `dev/local/autopilot/session-brief.md` from `state.json` and the
+  `docs/dev/project-management/autopilot/session-brief.md` from `state.json` and the
   `contract_card` field.
 - **Inputs**: `state.json` only.
 - **Outputs**: the brief, exactly this shape:
@@ -92,7 +92,7 @@ The brief is as fresh as the state it describes.
   handoff and `/autopilot:review-work-completion`'s cycle transition do the
   same where they write their cards.
 - **Inputs**: the three prose sites.
-- **Outputs**: one `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py <state.json> write-brief dev/local/autopilot/session-brief.md`
+- **Outputs**: one `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py <state.json> write-brief docs/dev/project-management/autopilot/session-brief.md`
   line at each site.
 - **Behavior**: a failed write is one stderr line, never a phase failure.
 
@@ -101,7 +101,7 @@ The next session opens with the brief and skips what it answers.
 
 #### Feature: Launch prompt names the brief
 - **Description**: `runner.spawn` (runner.py:219, which already receives
-  `autopilot_dir`) appends ` Read dev/local/autopilot/session-brief.md
+  `autopilot_dir`) appends ` Read docs/dev/project-management/autopilot/session-brief.md
   first.` to the prompt when `autopilot_dir / "session-brief.md"` exists;
   `DEFAULT_PROMPT` (:62) is unchanged.
 - **Inputs**: `autopilot_dir`, the file's existence.
@@ -113,7 +113,7 @@ The next session opens with the brief and skips what it answers.
 #### Feature: Phase 0 opens with the brief
 - **Description**: `references/phase-build.md` § Phase 0 and
   `references/phase-review.md` gain, as their first step: `Read
-  dev/local/autopilot/session-brief.md if it exists. Its Where section
+  docs/dev/project-management/autopilot/session-brief.md if it exists. Its Where section
   replaces the state reads below; open only the files its Read next section
   lists.`
 - **Inputs**: the brief.

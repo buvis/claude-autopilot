@@ -8,7 +8,7 @@ rework_cap: 3
 
 # Clear the handoff marker at phase edges
 
-Source: batch 202609061630, PRD 00182 infra-bug row and the config-audit closure walkthrough (`~/.claude/dev/local/audit-results/2026-09-05.md`). The build's marker survived into review rework; no further task boundary happened to consume it.
+Source: batch 202609061630, PRD 00182 infra-bug row and the config-audit closure walkthrough (`~/.claude/docs/dev/project-management/audit-results/2026-09-05.md`). The build's marker survived into review rework; no further task boundary happened to consume it.
 
 ## Overview
 

@@ -1,6 +1,6 @@
 # Review File Format (PRD 00016)
 
-The consolidated review file at `dev/local/reviews/<prd-base>-review-<N>.md`
+The consolidated review file at `docs/dev/project-management/reviews/<prd-base>-review-<N>.md`
 is the review cycle's durable artifact. `check_review_file.py` validates its
 shape — three regex-checked elements, nothing else. No `---review-coverage---`
 blocks, no files/features dimensions, no aggregate merging: those conventions

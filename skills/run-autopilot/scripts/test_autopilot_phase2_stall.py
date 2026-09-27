@@ -31,9 +31,9 @@ def _setup_pre_stall_fixture(root: Path, prd_name: str) -> tuple[Path, Path]:
 
     Returns (autopilot_dir, wip_dir).
     """
-    autopilot_dir = root / "dev" / "local" / "autopilot"
+    autopilot_dir = root / "docs" / "dev" / "project-management" / "autopilot"
     autopilot_dir.mkdir(parents=True)
-    wip_dir = root / "dev" / "local" / "prds" / "wip"
+    wip_dir = root / "docs" / "dev" / "project-management" / "prds" / "wip"
     wip_dir.mkdir(parents=True)
     (wip_dir / prd_name).write_text("# PRD content")
 
@@ -93,7 +93,7 @@ def apply_stall_procedure(
     state_path = autopilot_dir / "state.json"
     state = json.loads(state_path.read_text())
 
-    hold_dir = root / "dev" / "local" / "prds" / "hold"
+    hold_dir = root / "docs" / "dev" / "project-management" / "prds" / "hold"
     hold_dir.mkdir(parents=True, exist_ok=True)
 
     src = wip_dir / prd_name
@@ -150,7 +150,7 @@ class Phase2StallPathTests(unittest.TestCase):
 
     def test_prd_moved_from_wip_to_hold(self) -> None:
         self.assertFalse((self.wip_dir / self.prd_name).exists())
-        hold_path = self.root / "dev" / "local" / "prds" / "hold" / self.prd_name
+        hold_path = self.root / "docs" / "dev" / "project-management" / "prds" / "hold" / self.prd_name
         self.assertTrue(hold_path.exists())
 
     def test_stall_reason_cleared(self) -> None:
@@ -177,7 +177,7 @@ class Phase2StallPathTests(unittest.TestCase):
         try:
             prd = "00001-new.md"
             ap_dir, wip = _setup_pre_stall_fixture(root2, prd)
-            hold = root2 / "dev" / "local" / "prds" / "hold"
+            hold = root2 / "docs" / "dev" / "project-management" / "prds" / "hold"
             self.assertFalse(hold.exists())
             apply_stall_procedure(root2, ap_dir, wip, prd)
             self.assertTrue(hold.exists())
@@ -185,7 +185,7 @@ class Phase2StallPathTests(unittest.TestCase):
             shutil.rmtree(str(root2), ignore_errors=True)
 
     def test_hold_prd_keeps_sequence_prefix(self) -> None:
-        hold_path = self.root / "dev" / "local" / "prds" / "hold" / self.prd_name
+        hold_path = self.root / "docs" / "dev" / "project-management" / "prds" / "hold" / self.prd_name
         self.assertTrue(hold_path.name.startswith("00042-"))
 
 

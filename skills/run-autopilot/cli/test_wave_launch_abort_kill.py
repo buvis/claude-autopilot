@@ -5,7 +5,7 @@ sends raises instead of landing (PRD 00214).
 Split off `test_wave_launch_abort.py` to keep that file under the 800-line style
 limit; the rest of abort's proofs stayed there. Every proof runs against a
 throwaway `git init` repo under `tmp_path`, never this checkout's own backlog or
-`dev/local/autopilot/wave.json`, and no real loop is ever started: the lane pid
+`docs/dev/project-management/autopilot/wave.json`, and no real loop is ever started: the lane pid
 is a process group of this test's own making, reaped in a `finally`.
 
 The group has to be genuinely alive, because `abort` probes liveness with

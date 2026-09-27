@@ -31,9 +31,9 @@ gate fail #1 at current rung → feedback retry: dispatch Ivan with the failure 
                                 below, per the 1-dispatch budget)
 gate fail #2 at current rung → DIAGNOSE:
   1. Write task.description (from state.tasks[i].description, already in hand from step 1's
-     pending scan) to dev/local/tmp/diagnose-task-<id>.txt and run:
+     pending scan) to docs/dev/tmp/diagnose-task-<id>.txt and run:
        python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/diagnose_task.py <task-file> --repo-root <project-root>
-     `<project-root>` = the dir containing dev/local/, resolved by walking up from cwd (same anchor
+     `<project-root>` = the dir containing docs/dev/project-management/, resolved by walking up from cwd (same anchor
      as _walk_up.py) — NOT state.repo_root, which differs under a bare-repo-backed project.
      verdict "spec_gap" (exit 0) → REPAIR path below, if repair unused this task AND current rung
      is a haiku, sonnet, or opus rung, never fable (qwen never repairs — see budgets above)
@@ -153,7 +153,7 @@ paths were exclusively task-owned throughout dispatch. With no concurrent
 writer to those paths and HEAD still at the guard snapshot, re-run:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_qwen_output.py after --snapshot dev/local/tmp/qwen-<task-id>-snapshot.json --restore-tests
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_qwen_output.py after --snapshot docs/dev/tmp/qwen-<task-id>-snapshot.json --restore-tests
 ```
 
 Exit 1 with `tests_restored: true` restores only the captured Tess paths in
@@ -179,13 +179,13 @@ step 5.7's confirmed-finding retry and step 7's regression fix.
 - **Retry prompts** (feedback retry, repair re-dispatch, or escalation dispatch) re-render `ivan.md` in full. A render fills EVERY placeholder the persona carries or it exits 1 naming the first missing one, so a retry re-passes `ARCHITECTURE_CONTEXT` and `FILE_PATHS` exactly as the step-3 dispatch did — only `FAILING_TESTS` and `RETRY_INSTRUCTION` change:
   ```bash
   python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/ivan.md \
-    --out dev/local/tmp/dispatch-ivan-<task-id>-retry-<n>.txt \
-    --set-file FAILING_TESTS=dev/local/tmp/ivan-retry-tests-<task-id>-<n>.md \
+    --out docs/dev/tmp/dispatch-ivan-<task-id>-retry-<n>.txt \
+    --set-file FAILING_TESTS=docs/dev/tmp/ivan-retry-tests-<task-id>-<n>.md \
     --set-file ARCHITECTURE_CONTEXT=<the same source step 3 used> \
-    --set-file FILE_PATHS=dev/local/tmp/ivan-<task-id>-files.txt \
+    --set-file FILE_PATHS=docs/dev/tmp/ivan-<task-id>-files.txt \
     --set RETRY_INSTRUCTION="Fix only what the failing test output points to. Do not refactor passing code, adjust unrelated files, or change style." --dispatch-kind ivan --dispatch-task <task-id>
   ```
-  The code-quality rules block is already permanent in `ivan.md`, so there is nothing to re-include. `FAILING_TESTS` comes from **one** source on a retry: write the original failing tests plus the new failure output to `dev/local/tmp/ivan-retry-tests-<task-id>-<n>.md` once per retry and pass it with `--set-file`. Do not also pass `--set-cmd FAILING_TESTS` — the last flag would silently win, and the failure output is exactly what the retry needs to carry.
+  The code-quality rules block is already permanent in `ivan.md`, so there is nothing to re-include. `FAILING_TESTS` comes from **one** source on a retry: write the original failing tests plus the new failure output to `docs/dev/tmp/ivan-retry-tests-<task-id>-<n>.md` once per retry and pass it with `--set-file`. Do not also pass `--set-cmd FAILING_TESTS` — the last flag would silently win, and the failure output is exactly what the retry needs to carry.
 
 ## Style-fix render (step 5.65)
 
@@ -199,10 +199,10 @@ creation permission a split needs. No other dispatch reads that list, and
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/ivan.md \
-  --out dev/local/tmp/dispatch-ivan-<task-id>-style.txt \
-  --set-file FAILING_TESTS=dev/local/tmp/ivan-style-violations-<task-id>.md \
+  --out docs/dev/tmp/dispatch-ivan-<task-id>-style.txt \
+  --set-file FAILING_TESTS=docs/dev/tmp/ivan-style-violations-<task-id>.md \
   --set-file ARCHITECTURE_CONTEXT=<the same source step 3 used> \
-  --set-file FILE_PATHS=dev/local/tmp/ivan-<task-id>-style-files.txt \
+  --set-file FILE_PATHS=docs/dev/tmp/ivan-<task-id>-style-files.txt \
   --set RETRY_INSTRUCTION="Fix only the listed style-limit violations. You may create new modules in the directories marked above and update imports in the listed files to use them. Do not change behavior, do not touch other code, and do not modify tests except to split a test file a violation line names." --dispatch-kind ivan --dispatch-task <task-id>
 ```
 

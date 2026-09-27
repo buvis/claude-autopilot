@@ -7,7 +7,7 @@ model_tier_rationale: timing and interleaving decide correctness (poll budget ac
 
 # Add loop guard rails for sleep, limits and stand-downs
 
-Source: `dev/local/discovery/00193-cut-loop-overhead-without-thinning-review.md`
+Source: `docs/dev/project-management/discovery/00193-cut-loop-overhead-without-thinning-review.md`
 (PRD 1 of three; elicited 2026-09-07). Re-grounded against the tree on
 2026-09-13. Lands after backlog PRD 00192 (`split cli/loop.py and
 test_loop.py under the file cap`): both edit `loop.py`, and 00192 moves the

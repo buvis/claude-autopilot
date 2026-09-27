@@ -111,7 +111,7 @@ def _init_repo(path: Path) -> Path:
 def _seed_custody(repo: Path) -> tuple[Path, Path]:
     """Marker + matching journal row + locator. Returns (marker, journal)."""
     entry = {**_ENTRY, "repo_root": str(repo)}
-    autopilot = repo / "dev" / "local" / "autopilot"
+    autopilot = repo / "docs" / "dev" / "project-management" / "autopilot"
     (autopilot / "ledger").mkdir(parents=True)
     marker = autopilot / "critical-on-master"
     marker.write_text(json.dumps({"entries": [entry]}) + "\n", encoding="utf-8")
@@ -372,7 +372,7 @@ class DecideTests(unittest.TestCase):
         self.assertIn("--prd 00169-y-v1 ", resolve_text)
 
     def test_empty_marker_allows(self) -> None:
-        autopilot = self.clean / "dev" / "local" / "autopilot"
+        autopilot = self.clean / "docs" / "dev" / "project-management" / "autopilot"
         autopilot.mkdir(parents=True)
         marker = autopilot / "critical-on-master"
         marker.write_text(json.dumps({"entries": []}), encoding="utf-8")

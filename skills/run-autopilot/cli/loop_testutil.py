@@ -110,7 +110,7 @@ def noop_step(ap_dir: Path) -> None:  # session dies: touches nothing
 
 def make_loop(tmp_path: Path, steps, env: dict | None = None, **kwargs):
     repo = tmp_path / "repo"
-    ap_dir = repo / "dev" / "local" / "autopilot"
+    ap_dir = repo / "docs" / "dev" / "project-management" / "autopilot"
     ap_dir.mkdir(parents=True, exist_ok=True)
     clock = kwargs.pop("clock", None) or FakeClock()
     spawn = ScriptedSpawn(steps, clock=clock)

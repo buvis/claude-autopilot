@@ -88,11 +88,11 @@ def _as_utc(stamp: str) -> datetime:
 def _repo(tmp_path: Path, prds: dict[str, str]) -> tuple[Path, Path]:
     """A repo with `prds` in its backlog; returns (repo, wave.json path)."""
     repo = tmp_path / "proj"
-    backlog = repo / "dev" / "local" / "prds" / "backlog"
+    backlog = repo / "docs" / "dev" / "project-management" / "prds" / "backlog"
     backlog.mkdir(parents=True)
     for name, text in prds.items():
         (backlog / name).write_text(text, encoding="utf-8")
-    wave_path = repo / "dev" / "local" / "autopilot" / "wave.json"
+    wave_path = repo / "docs" / "dev" / "project-management" / "autopilot" / "wave.json"
     wave_path.parent.mkdir(parents=True)
     return repo, wave_path
 
@@ -766,8 +766,8 @@ def test_docs_name_the_wave_files() -> None:
         line for line in retention.splitlines() if line.startswith("- **Disposable**")
     ]
     for path in (
-        "`dev/local/autopilot/wave.json`",
-        "`dev/local/autopilot/wave-slots/`",
+        "`docs/dev/project-management/autopilot/wave.json`",
+        "`docs/dev/project-management/autopilot/wave-slots/`",
     ):
         assert path in disposable, (
             f"{_SKILL}: the § Retention Disposable list does not name {path}"

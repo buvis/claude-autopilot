@@ -128,7 +128,7 @@ findings are predominantly spec-misread.
 
 `review_coverage_hook.py` exit-2-blocks a done hand-off whose review file is
 missing or malformed. Exit-2 Stop-hook blocking is proven to work in `-p` mode
-(00014 spike, probe (c) — `dev/local/tmp/00014-headless-spike.md`), so the gate
+(00014 spike, probe (c) — `docs/dev/tmp/00014-headless-spike.md`), so the gate
 survives the headless conversion as an in-session artifact-completeness check,
 not loop orchestration.
 

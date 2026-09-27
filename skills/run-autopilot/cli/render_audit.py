@@ -2,7 +2,7 @@
 """cli/render_audit.py - render audit.md from state decision arrays (PRD 00107).
 
 Pure function of state: phase-done Phase 9 step 6a renders the PRD's
-`dev/local/reviews/<prd-base>-audit.md` ONCE from `autonomous_decisions`
+`docs/dev/project-management/reviews/<prd-base>-audit.md` ONCE from `autonomous_decisions`
 (label `autonomous`), `deferred_decisions` (`deferred`), and `doubts`
 (`doubt`) - the closed label set the decisions.md projection filters on.
 Wired as `autopilot render audit`; the CLI preserves an existing file's

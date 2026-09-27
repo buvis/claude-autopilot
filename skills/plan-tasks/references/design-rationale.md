@@ -7,7 +7,7 @@ design arguments. Nothing here is normative: if a statement here contradicts
 
 ## Rule 2 signal widening was attempted and withdrawn (PRD 00075)
 
-The evidence pass (`dev/local/audit-results/00075-task-mix-evidence.md` - a
+The evidence pass (`docs/dev/project-management/audit-results/00075-task-mix-evidence.md` - a
 gitignored local working document present only on the authoring machine, not
 in the repo) proposed adding `wire`, `disable`, `permission`, `restore`,
 `complete` and `pin`. Every one was withdrawn under adversarial review, and

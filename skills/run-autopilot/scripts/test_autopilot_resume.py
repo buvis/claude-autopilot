@@ -57,12 +57,12 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 
 class CapHookFixture:
-    """A temp dev/local/autopilot/ tree + transcript for the cap hook."""
+    """A temp docs/dev/project-management/autopilot/ tree + transcript for the cap hook."""
 
     def __init__(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.cwd = Path(self.tmp.name)
-        self.autopilot_dir = self.cwd / "dev" / "local" / "autopilot"
+        self.autopilot_dir = self.cwd / "docs" / "dev" / "project-management" / "autopilot"
         self.autopilot_dir.mkdir(parents=True, exist_ok=True)
         self.transcript = self.cwd / "transcript.jsonl"
         self.transcript.touch()

@@ -13,13 +13,13 @@ steps, in this order; the section that stops the lane says so.
 Fast-track's staging precondition first, one Bash call:
 
 ```bash
-mkdir -p dev/local/autopilot dev/local/tmp
+mkdir -p docs/dev/project-management/autopilot docs/dev/tmp
 ```
 
 Then render the cards from the PRD; `<prd-stem>` is `state.prd` minus `.md`:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/fast-track/scripts/cards_from_prd.py dev/local/prds/wip/<state.prd> --out dev/local/tmp/<prd-stem>-cards
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/fast-track/scripts/cards_from_prd.py docs/dev/project-management/prds/wip/<state.prd> --out docs/dev/tmp/<prd-stem>-cards
 ```
 
 Exit 0 prints one card path per line, in card order; hold that list. Exit 2
@@ -46,7 +46,7 @@ of a task in `state.tasks`, so tracon and the task counts stay live; a first
 entry mirrors them all, a re-entry mirrors only the cards still missing.
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json task-add <task-json-file>
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py docs/dev/project-management/autopilot/state.json task-add <task-json-file>
 ```
 
 Each `<task-json-file>` (written with the Write tool) is `{"name": "<item>"}`
@@ -60,7 +60,7 @@ Run from the first card whose task's `status` is not `completed`: a
 re-entry after a crash skips the cards already committed instead of
 re-implementing them over their own commits. For each such card in order:
 
-1. `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json task-start <id>`.
+1. `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py docs/dev/project-management/autopilot/state.json task-start <id>`.
 2. Invoke `/autopilot:fast-track <card path>` through the Skill tool, one
    run per card, with no `--push`: the loop defers pushes (core `SKILL.md`
    § Loop Detection), so `--push` is never passed here. The skill runs its
@@ -110,7 +110,7 @@ Then continue the batch (end the turn; the loop relaunches on `next_phase:
 ## 4. Consolidate
 
 After the last card, consolidate every card's table into one review file the
-gate accepts, `dev/local/reviews/<prd-stem>-review-1.md`, written with the
+gate accepts, `docs/dev/project-management/reviews/<prd-stem>-review-1.md`, written with the
 Write tool in the shape of
 `review-work-completion/references/review-coverage-format.md`:
 

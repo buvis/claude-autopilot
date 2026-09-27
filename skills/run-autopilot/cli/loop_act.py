@@ -100,7 +100,7 @@ def run_agoge(
     rc = _run_agoge_process(claude_bin, prompt, log_path, cap, env)
     if rc == 0:
         print(
-            "agoge: packets written to dev/local/audit-results/; walkthrough pending.",
+            "agoge: packets written to docs/dev/project-management/audit-results/; walkthrough pending.",
             file=out,
         )
     else:

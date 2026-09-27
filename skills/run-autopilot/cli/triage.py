@@ -3,7 +3,7 @@
 
 An open CRITICAL/HIGH row in a batch's deferred JSON, or a `cap_critical`
 stall row, lives only in that JSON until someone writes a PRD for it. This
-module gives each such row a file: `dev/local/prds/hold/<NNNNN>-triage-
+module gives each such row a file: `docs/dev/project-management/prds/hold/<NNNNN>-triage-
 <slug>-v1.md`, a HOLD triage artifact whose single task is "promote to
 backlog or close". Autopilot never drains `hold/`, so nothing here is ever
 executed; the stub only makes the finding visible to the backlog reviewer.
@@ -19,7 +19,7 @@ one key, so duplicate rows (a cap-overflow record and its migrated
 deferred_decision twin) mint one stub, and a rerun mints nothing.
 
 Allocation: the next free five-digit sequence at the tail of the four PRD
-directories plus `dev/local/discovery` (discovery reserves numbers but owns no
+directories plus `docs/dev/project-management/discovery` (discovery reserves numbers but owns no
 ledger keys). The candidate is written first, then the directories are
 rescanned; when a different work item claimed the same number meanwhile,
 this attempt's OWN file is renumbered to a fresh tail number and the rescan
@@ -60,7 +60,7 @@ _REVISION_RE = re.compile(r"-v\d+\.md$")
 
 TRIAGE_TASK = (
     "- [ ] triage: promote to backlog or close - Acceptance: this file is no "
-    "longer under dev/local/prds/hold/"
+    "longer under docs/dev/project-management/prds/hold/"
 )
 
 
@@ -87,7 +87,7 @@ severity: {severity}
 
 Attended triage. A human promotes this finding into a backlog PRD through \
 normal PRD authoring and review, or closes it. Autopilot never drains \
-`dev/local/prds/hold/`, and this stub is never auto-promoted.
+`docs/dev/project-management/prds/hold/`, and this stub is never auto-promoted.
 
 ## Requirements
 
@@ -100,7 +100,7 @@ normal PRD authoring and review, or closes it. Autopilot never drains \
 ## Implementation
 
 ### Module: triage
-- **Location**: `dev/local/prds/hold/`
+- **Location**: `docs/dev/project-management/prds/hold/`
 - **Responsibility**: hold ledger key `{key}` from `{source_prd}` until a human \
 triages it
 - **Exports**: none
@@ -118,7 +118,7 @@ No implementation tasks until attended triage.
 
 ## Success Criteria
 
-- This file is no longer under `dev/local/prds/hold/`.
+- This file is no longer under `docs/dev/project-management/prds/hold/`.
 """
 
 

@@ -242,10 +242,10 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
         if ap_dir is None:
             # walk-up miss = no dir exists yet (normal on a fresh repo), not a failure
             print(
-                f"autoclaude: no existing autopilot dir found (fresh start); creating {self.cwd}/dev/local/autopilot",
+                f"autoclaude: no existing autopilot dir found (fresh start); creating {self.cwd}/docs/dev/project-management/autopilot",
                 file=self.err,
             )
-            ap_dir = self.cwd / "dev" / "local" / "autopilot"
+            ap_dir = self.cwd / "docs" / "dev" / "project-management" / "autopilot"
         try:
             ap_dir.mkdir(parents=True, exist_ok=True)
         except OSError:

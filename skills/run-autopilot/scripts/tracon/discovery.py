@@ -224,7 +224,7 @@ def pause_pending_status(status: Status, root: Path, wrapper: bool) -> Status:
     paused/orphaned indicators."""
     if not wrapper:
         return status
-    if not (root / "dev" / "local" / "autopilot" / "pause-requested").exists():
+    if not (root / "docs" / "dev" / "project-management" / "autopilot" / "pause-requested").exists():
         return status
     return Status(
         label=f"{status.label} · ⏸ pause requested",
@@ -244,7 +244,7 @@ def operator_paused_status(status: Status, root: Path, wrapper: bool) -> Status:
     already louder or terminal."""
     if wrapper or status.rank < 3:
         return status
-    stamp = root / "dev" / "local" / "autopilot" / "paused-by-operator"
+    stamp = root / "docs" / "dev" / "project-management" / "autopilot" / "paused-by-operator"
     try:
         mtime = stamp.stat().st_mtime
     except OSError:
@@ -355,7 +355,7 @@ def classify(
 def loop_status(root: Path, now: float | None = None) -> LoopRow:
     if now is None:
         now = time.time()
-    autopilot_dir = root / "dev" / "local" / "autopilot"
+    autopilot_dir = root / "docs" / "dev" / "project-management" / "autopilot"
     state = model.read_state(autopilot_dir / "state.json")
     rows = model.read_metrics(autopilot_dir / "loop-metrics.jsonl", state.batch_id)
 
@@ -443,7 +443,7 @@ def discover_loops(
     result: list[Path] = []
     seen: set[Path] = set()
     for root in candidates:
-        if not (root / "dev" / "local" / "autopilot").is_dir():
+        if not (root / "docs" / "dev" / "project-management" / "autopilot").is_dir():
             continue
         resolved = root.resolve()
         if resolved in seen:

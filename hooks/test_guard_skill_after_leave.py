@@ -25,12 +25,12 @@ LEAVE_CMD = (
 
 
 def _repo(tmp_path: Path) -> Path:
-    (tmp_path / "dev" / "local" / "autopilot").mkdir(parents=True)
+    (tmp_path / "docs" / "dev" / "project-management" / "autopilot").mkdir(parents=True)
     return tmp_path
 
 
 def _marker(repo: Path) -> Path:
-    return repo / "dev" / "local" / "autopilot" / ".session-left"
+    return repo / "docs" / "dev" / "project-management" / "autopilot" / ".session-left"
 
 
 def _run(script: Path, payload: dict, *, loop: bool) -> subprocess.CompletedProcess[str]:
@@ -102,7 +102,7 @@ def test_other_bash_commands_write_nothing(tmp_path: Path) -> None:
 
 
 def test_leave_row_without_an_autopilot_dir_writes_nothing(tmp_path: Path) -> None:
-    # No dev/local/autopilot above cwd: the hook neither writes nor creates it.
+    # No docs/dev/project-management/autopilot above cwd: the hook neither writes nor creates it.
     result = _run(NOTE, _bash_payload(tmp_path, LEAVE_CMD), loop=True)
     assert result.returncode == 0
     assert not (tmp_path / "dev").exists()
@@ -135,7 +135,7 @@ def test_catchup_after_leave_is_denied_too(tmp_path: Path) -> None:
 
 
 def test_guard_without_an_autopilot_dir_passes(tmp_path: Path) -> None:
-    # No dev/local/autopilot above cwd: nothing to consult, never a denial.
+    # No docs/dev/project-management/autopilot above cwd: nothing to consult, never a denial.
     result = _run(GUARD, _skill_payload(tmp_path, "autopilot:run-autopilot"), loop=True)
     assert result.returncode == 0
     assert result.stderr == ""

@@ -22,10 +22,10 @@ Runs only when the card's `## Tests` section is empty. It reads the card alone.
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/skills/work/references/tess-prompt.md \
-  --out dev/local/tmp/fast-track-<item>-tests.txt \
+  --out docs/dev/tmp/fast-track-<item>-tests.txt \
   --set TASK_SUBJECT=<item> \
-  --set-cmd TASK_DESCRIPTION="cat dev/local/tmp/fast-track-<item>-goal.txt dev/local/tmp/fast-track-<item>-files.txt" \
-  --set-file TASK_ACCEPTANCE_CRITERIA=dev/local/tmp/fast-track-<item>-constraints.txt \
+  --set-cmd TASK_DESCRIPTION="cat docs/dev/tmp/fast-track-<item>-goal.txt docs/dev/tmp/fast-track-<item>-files.txt" \
+  --set-file TASK_ACCEPTANCE_CRITERIA=docs/dev/tmp/fast-track-<item>-constraints.txt \
   --set-file SAMPLE_TEST_FILE=<the card's sample_test> \
   --set-cmd PUBLIC_INTERFACES="cat $(printf '%q ' <each Files entry that exists today>)" \
   --set TEST_FRAMEWORK=<the card's framework> \
@@ -33,14 +33,14 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUG
 ```
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:tess --task <item> --prompt-file dev/local/tmp/fast-track-<item>-tests.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:tess --task <item> --prompt-file docs/dev/tmp/fast-track-<item>-tests.txt
 ```
 
 ```text
 Agent tool:
   subagent_type: general-purpose
   model: <the card's model>
-  prompt: the contents of dev/local/tmp/fast-track-<item>-tests.txt
+  prompt: the contents of docs/dev/tmp/fast-track-<item>-tests.txt
 ```
 
 ## Ivan: the implementor
@@ -52,30 +52,30 @@ own reading of the fix.
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/ivan.md \
-  --out dev/local/tmp/fast-track-<item>-ivan.txt \
+  --out docs/dev/tmp/fast-track-<item>-ivan.txt \
   --set-cmd FAILING_TESTS="cat $(printf '%q ' <the test files>)" \
-  --set-cmd ARCHITECTURE_CONTEXT="cat dev/local/tmp/fast-track-<item>-constraints.txt $(printf '%q ' <absolute path of the repo's AGENTS.md>)" \
-  --set-file FILE_PATHS=dev/local/tmp/fast-track-<item>-files.txt \
+  --set-cmd ARCHITECTURE_CONTEXT="cat docs/dev/tmp/fast-track-<item>-constraints.txt $(printf '%q ' <absolute path of the repo's AGENTS.md>)" \
+  --set-file FILE_PATHS=docs/dev/tmp/fast-track-<item>-files.txt \
   --set RETRY_INSTRUCTION="" \
   --require-file <each Files entry that exists today> \
   --require-parent <each Files entry the card creates>
 ```
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:ivan --task <item> --prompt-file dev/local/tmp/fast-track-<item>-ivan.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:ivan --task <item> --prompt-file docs/dev/tmp/fast-track-<item>-ivan.txt
 ```
 
 ```text
 Task tool:
   subagent_type: autopilot:ivan
   model: <the card's model>
-  prompt: the contents of dev/local/tmp/fast-track-<item>-ivan.txt
+  prompt: the contents of docs/dev/tmp/fast-track-<item>-ivan.txt
 ```
 
 A rework opens a second `fast-track:ivan` row for a fresh implementor, at most
 once per item. Its render takes the same shape with
-`--out dev/local/tmp/fast-track-<item>-rework.txt` and
-`--set-file FAILING_TESTS=dev/local/tmp/fast-track-<item>-findings.txt`, the
+`--out docs/dev/tmp/fast-track-<item>-rework.txt` and
+`--set-file FAILING_TESTS=docs/dev/tmp/fast-track-<item>-findings.txt`, the
 confirmed findings standing in for the test files as the spec.
 
 ## The roster: five lenses in one message
@@ -90,13 +90,13 @@ persona.
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/<persona>.md \
-  --out dev/local/tmp/fast-track-<item>-<lane>.txt \
+  --out docs/dev/tmp/fast-track-<item>-<lane>.txt \
   --set CONTEXT_FILE=<absolute path of the context file> \
   --set DIFF_FILE=<absolute path of the staged diff> \
   --set PACK_FILE="(no pack available this cycle)" \
   --set-file REVIEW_CHECKLIST=${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/references/review-dimensions.md \
   --set-file RUBRIC=${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/references/rubric.md \
-  --set-file OUTPUT_FORMAT=dev/local/tmp/fast-track-output-format.md
+  --set-file OUTPUT_FORMAT=docs/dev/tmp/fast-track-output-format.md
 ```
 
 ### Consensus: fanout, or alice
@@ -106,7 +106,7 @@ The consensus lens has two backends and one row. Open
 on disk.
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:fanout --task <item> --prompt-file dev/local/tmp/fast-track-<item>-consensus.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:fanout --task <item> --prompt-file docs/dev/tmp/fast-track-<item>-consensus.txt
 ```
 
 ```text
@@ -119,13 +119,13 @@ With that file absent, the `autopilot:alice` subagent carries the lens, under
 `fast-track:alice`, and the report names the backend that ran.
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:alice --task <item> --prompt-file dev/local/tmp/fast-track-<item>-consensus.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:alice --task <item> --prompt-file docs/dev/tmp/fast-track-<item>-consensus.txt
 ```
 
 ```text
 Task tool:
   subagent_type: autopilot:alice
-  prompt: the contents of dev/local/tmp/fast-track-<item>-consensus.txt
+  prompt: the contents of docs/dev/tmp/fast-track-<item>-consensus.txt
 ```
 
 ### Blake: the blind lens
@@ -138,13 +138,13 @@ the same `--set-file OUTPUT_FORMAT=`. An unfilled placeholder exits 1, so all
 three go in.
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:blake --task <item> --prompt-file dev/local/tmp/fast-track-<item>-blake.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:blake --task <item> --prompt-file docs/dev/tmp/fast-track-<item>-blake.txt
 ```
 
 ```text
 Task tool:
   subagent_type: autopilot:blake
-  prompt: the contents of dev/local/tmp/fast-track-<item>-blake.txt
+  prompt: the contents of docs/dev/tmp/fast-track-<item>-blake.txt
 ```
 
 ### Eve: the doubt lens
@@ -158,13 +158,13 @@ That sixth input buys the consolidator its input: each FIX item comes back as
 an `[EVE] {emoji} {description} | File: {path}` line as well.
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:eve --task <item> --prompt-file dev/local/tmp/fast-track-<item>-eve.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:eve --task <item> --prompt-file docs/dev/tmp/fast-track-<item>-eve.txt
 ```
 
 ```text
 Task tool:
   subagent_type: autopilot:eve
-  prompt: the contents of dev/local/tmp/fast-track-<item>-eve.txt
+  prompt: the contents of docs/dev/tmp/fast-track-<item>-eve.txt
 ```
 
 ### Bob: codex
@@ -173,7 +173,7 @@ Bob's prompt is `agents/bob.md` plus Eve's doubt sections, composed the way
 review-work-completion composes it. Render `agents/bob.md` with the shared
 shape above, then, with the Write tool, append the `## Two lenses` and
 `## Rubric verdicts` sections of `${CLAUDE_PLUGIN_ROOT}/agents/eve.md` to
-`dev/local/tmp/fast-track-<item>-codex.txt` and replace `{PACK_FINDINGS}`
+`docs/dev/tmp/fast-track-<item>-codex.txt` and replace `{PACK_FINDINGS}`
 inside them with `(no pack available this cycle)`.
 
 Bob runs as a direct background Bash command, never inside a subagent: a
@@ -181,7 +181,7 @@ subagent cannot hold a background job, and one that shells out to a CLI hangs
 until the item stalls. Pass absolute paths.
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:bob --task <item> --prompt-file dev/local/tmp/fast-track-<item>-codex.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:bob --task <item> --prompt-file docs/dev/tmp/fast-track-<item>-codex.txt
 ```
 
 ```text
@@ -201,7 +201,7 @@ Carl runs only when `gemini-run.sh` and its backend CLI (`copilot`, or native
 never inside a subagent, absolute paths.
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:carl --task <item> --prompt-file dev/local/tmp/fast-track-<item>-gemini.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:carl --task <item> --prompt-file docs/dev/tmp/fast-track-<item>-gemini.txt
 ```
 
 ```text
@@ -216,23 +216,23 @@ One dispatch per CRITICAL or HIGH row that earns verification.
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/victor.md \
-  --out dev/local/tmp/fast-track-<item>-verify-<n>.txt \
-  --set-file FINDING_TITLE=dev/local/tmp/fast-track-<item>-finding-<n>-title.txt \
+  --out docs/dev/tmp/fast-track-<item>-verify-<n>.txt \
+  --set-file FINDING_TITLE=docs/dev/tmp/fast-track-<item>-finding-<n>-title.txt \
   --set FINDING_SEVERITY=<CRITICAL or HIGH> \
   --set FINDING_FILE=<the path the finding names> \
-  --set-file FINDING_EVIDENCE=dev/local/tmp/fast-track-<item>-finding-<n>-evidence.txt \
-  --set-file FINDING_PROOF=dev/local/tmp/fast-track-<item>-finding-<n>-proof.txt
+  --set-file FINDING_EVIDENCE=docs/dev/tmp/fast-track-<item>-finding-<n>-evidence.txt \
+  --set-file FINDING_PROOF=docs/dev/tmp/fast-track-<item>-finding-<n>-proof.txt
 ```
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:victor --task <item> --prompt-file dev/local/tmp/fast-track-<item>-verify-<n>.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:victor --task <item> --prompt-file docs/dev/tmp/fast-track-<item>-verify-<n>.txt
 ```
 
 ```text
 Task tool:
   subagent_type: general-purpose
   model: sonnet
-  prompt: the contents of dev/local/tmp/fast-track-<item>-verify-<n>.txt
+  prompt: the contents of docs/dev/tmp/fast-track-<item>-verify-<n>.txt
 ```
 
 `refuted: false` confirms the finding, and it costs a rework. Uncertainty
@@ -247,18 +247,18 @@ run inputs.
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/eve.md \
-  --out dev/local/tmp/fast-track-<item>-delta.txt \
+  --out docs/dev/tmp/fast-track-<item>-delta.txt \
   --set PACK_FINDINGS="(no pack available this cycle)"
 ```
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:delta --task <item> --prompt-file dev/local/tmp/fast-track-<item>-delta.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:delta --task <item> --prompt-file docs/dev/tmp/fast-track-<item>-delta.txt
 ```
 
 ```text
 Task tool:
   subagent_type: autopilot:eve
-  prompt: the contents of dev/local/tmp/fast-track-<item>-delta.txt
+  prompt: the contents of docs/dev/tmp/fast-track-<item>-delta.txt
 ```
 
 ## Close every row

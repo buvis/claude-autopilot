@@ -210,12 +210,12 @@ class MissingFromReportTests(unittest.TestCase):
 
 class RenderReportGuardTests(unittest.TestCase):
     """`autopilot render report` as a subprocess against a constructed
-    <repo>/dev/local/autopilot tree whose deferred JSON holds 00140's records."""
+    <repo>/docs/dev/project-management/autopilot tree whose deferred JSON holds 00140's records."""
 
     def setUp(self) -> None:
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        self.ap_dir = Path(tmp.name) / "dev" / "local" / "autopilot"
+        self.ap_dir = Path(tmp.name) / "docs" / "dev" / "project-management" / "autopilot"
         self.ap_dir.mkdir(parents=True)
         # A real repo always has the attempt ledger; without it render_report
         # warns on stderr about the missing file and the silence assertions

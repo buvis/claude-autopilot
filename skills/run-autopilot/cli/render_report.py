@@ -90,7 +90,7 @@ def stalled_section(
         f"- Stalled: {stamp}\n"
         f"- Detail: {detail}\n"
         f"{custody}"
-        f"- Resume: move back to dev/local/prds/wip/ and re-run\n"
+        f"- Resume: move back to docs/dev/project-management/prds/wip/ and re-run\n"
     )
 
 

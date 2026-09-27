@@ -26,7 +26,7 @@ def _rework_box(
     cycle: int = 1,
     review_file: bool = True,
 ) -> Path:
-    ap_dir = tmp_path / "dev/local/autopilot"
+    ap_dir = tmp_path / "docs/dev/project-management/autopilot"
     ap_dir.mkdir(parents=True, exist_ok=True)
     (ap_dir / "state.json").write_text(
         json.dumps(
@@ -39,7 +39,7 @@ def _rework_box(
         ),
     )
     if review_file:
-        reviews = tmp_path / "dev/local/reviews"
+        reviews = tmp_path / "docs/dev/project-management/reviews"
         reviews.mkdir(parents=True, exist_ok=True)
         (reviews / f"00052-example-v1-review-{cycle}.md").write_text(
             "Verdict: 3 findings\n"
@@ -102,7 +102,7 @@ def test_rework_resume_with_a_fable_task_routes_opus(tmp_path, capsys):
 def test_rework_resume_accepts_the_zero_padded_review_filename(tmp_path):
     tasks = [{"id": "5", "status": "pending", "model": "sonnet"}]
     ap_dir = _rework_box(tmp_path, tasks, ["5"], review_file=False)
-    reviews = tmp_path / "dev/local/reviews"
+    reviews = tmp_path / "docs/dev/project-management/reviews"
     reviews.mkdir(parents=True, exist_ok=True)
     (reviews / "00052-example-v1-review-01.md").write_text("Verdict: 1 findings\n")
     assert route("review", ap_dir, env={}).model == SONNET

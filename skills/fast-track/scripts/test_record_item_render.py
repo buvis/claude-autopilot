@@ -10,7 +10,7 @@ contract lives in test_record_item.py.
 Neither script is an installed package: render_metrics.py is loaded by path,
 the same idiom test_card.py uses, and record_item.py runs as a subprocess.
 Every CLI run is driven with `cwd=` inside a tmp_path tree carrying its own
-dev/local/autopilot directory, so the walk-up lands there and no test appends
+docs/dev/project-management/autopilot directory, so the walk-up lands there and no test appends
 to this repo's own ledger.
 """
 
@@ -45,7 +45,7 @@ _LEDGER_FILENAME = "loop-metrics.jsonl"
 
 def _autopilot_tree(root: Path) -> Path:
     """A tmp tree the walk-up can land in, returning its autopilot dir."""
-    autopilot_dir = root / "dev" / "local" / "autopilot"
+    autopilot_dir = root / "docs" / "dev" / "project-management" / "autopilot"
     autopilot_dir.mkdir(parents=True)
     return autopilot_dir
 

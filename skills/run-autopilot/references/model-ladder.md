@@ -276,8 +276,8 @@ chain. They are scoped to different moments.
 ## Tuning
 
 `skills/run-autopilot/scripts/tune_routing.py` reads
-`dev/local/autopilot/ledger/attempts.jsonl` and writes
-`dev/local/audit-results/routing-proposal-<date>.md` (plus a `.patch` when
+`docs/dev/project-management/autopilot/ledger/attempts.jsonl` and writes
+`docs/dev/project-management/audit-results/routing-proposal-<date>.md` (plus a `.patch` when
 the mechanical row's line budget should halve). It proposes only: every
 signal needs 12 rows before it moves, and it never edits a rule surface or
 sets a kill-switch. The operator applies a proposal by hand and reverts it

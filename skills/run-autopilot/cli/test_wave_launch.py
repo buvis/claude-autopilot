@@ -2,7 +2,7 @@
 """Tests for cli/wave_launch.py and cli/wave_cli.py - launching a wave (PRD 00214).
 
 Every proof runs against a throwaway `git init` repo under `tmp_path`, never this
-checkout's own backlog or `dev/local/autopilot/wave.json`. No real loop is ever
+checkout's own backlog or `docs/dev/project-management/autopilot/wave.json`. No real loop is ever
 started: a recording `spawn_fn` stands in for one, except in the single test that
 needs a live process, which puts a stub `python3` on PATH.
 """
@@ -54,11 +54,11 @@ def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
 
 
 def _backlog(root: Path) -> Path:
-    return root / "dev" / "local" / "prds" / "backlog"
+    return root / "docs" / "dev" / "project-management" / "prds" / "backlog"
 
 
 def _autopilot(root: Path) -> Path:
-    return root / "dev" / "local" / "autopilot"
+    return root / "docs" / "dev" / "project-management" / "autopilot"
 
 
 def _repo(tmp_path: Path, prds: dict[str, str]) -> tuple[Path, Path]:
@@ -68,7 +68,7 @@ def _repo(tmp_path: Path, prds: dict[str, str]) -> tuple[Path, Path]:
     for name, text in prds.items():
         (_backlog(repo) / name).write_text(text, encoding="utf-8")
     _autopilot(repo).mkdir(parents=True)
-    (repo / ".gitignore").write_text("dev/local/\n", encoding="utf-8")
+    (repo / ".gitignore").write_text("docs/dev/project-management/\n", encoding="utf-8")
     (repo / "README.md").write_text("seed\n", encoding="utf-8")
     _git(repo, "init", "-q", "-b", "master")
     _git(repo, "config", "user.email", "wave@example.com")
@@ -349,7 +349,7 @@ def test_launch_moves_lane_prds_out_of_the_main_backlog(
         for folder in ("wip", "done", "hold"):
             assert (_backlog(worktree).parent / folder).is_dir()
         assert _autopilot(worktree).is_dir()
-        assert not (worktree / "dev" / "local" / "meta").exists()
+        assert not (worktree / "docs" / "dev" / "project-management" / "meta").exists()
 
 
 def test_launch_leaves_a_held_back_prd_in_the_main_backlog(
@@ -373,13 +373,13 @@ def test_launch_copies_meta_when_present(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repo, wave_path = _planned(tmp_path, monkeypatch, TWO_LANES)
-    meta = repo / "dev" / "local" / "meta"
+    meta = repo / "docs" / "dev" / "project-management" / "meta"
     (meta / "sub").mkdir(parents=True)
     (meta / "capsule.md").write_text("capsule\n", encoding="utf-8")
     (meta / "sub" / "cursors.json").write_text("{}\n", encoding="utf-8")
     assert wave_launch.launch(repo, wave_path, spawn_fn=_FakeSpawn()) == 0
     for each in wave.load(wave_path)["lanes"]:
-        copied = Path(each["worktree"]) / "dev" / "local" / "meta"
+        copied = Path(each["worktree"]) / "docs" / "dev" / "project-management" / "meta"
         assert (copied / "capsule.md").read_text(encoding="utf-8") == "capsule\n"
         assert (copied / "sub" / "cursors.json").read_text(encoding="utf-8") == "{}\n"
     assert (meta / "capsule.md").exists(), "meta left the main repo"

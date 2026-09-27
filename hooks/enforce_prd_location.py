@@ -3,16 +3,16 @@
 Two layers, one gate (merged 2026-08-23):
 
 1. PRD lifecycle dirs (backlog/, wip/, hold/, done/) exist under
-   `dev/local/prds/` only, never at repo root (Edit/Write/MultiEdit + Bash).
+   `docs/dev/project-management/prds/` only, never at repo root (Edit/Write/MultiEdit + Bash).
    Replaces the old enforce-prd-location.sh / enforce-prd-location-bash.sh
    pair; branches on `tool_name`.
-2. The dev/local layout contract (aegis rules/working-documents.md) holds at
+2. The docs/dev/project-management layout contract (aegis rules/working-documents.md) holds at
    write time: root holds no files (named keepers live in meta/), new
    top-level dirs are forbidden
    (workspaces go under tmp/), .trash/ is GC-owned, and files directly in
    prds/ must sit in a lifecycle subdir. File tools only - aegis's
    block_devlocal_redirects.py funnels shell redirects into the Write tool,
-   which lands here; `mv`/`cp` into dev/local via Bash bypasses both gates
+   which lands here; `mv`/`cp` into docs/dev/project-management via Bash bypasses both gates
    (warden owns Bash; accepted gap).
 
 KEEP_NAMES and KNOWN_DIRS mirror purge_devlocal.py; the test suite asserts
@@ -30,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import allow, block, read_input, resolve_toplevel
 
 LIFECYCLE_DIRS = ("backlog", "wip", "hold", "done")
+STORE_PARTS = ("docs", "dev", "project-management")
 
 KEEP_NAMES = {
     "project-capsule.md",
@@ -65,13 +66,13 @@ def _block_path_msg(rel: str) -> str:
     return f"""\
 BLOCKED: `{rel}` looks like a PRD lifecycle path at repo root.
 
-PRDs must live under `dev/local/prds/`:
-  - dev/local/prds/backlog/    (planned, not started)
-  - dev/local/prds/wip/        (actively implementing)
-  - dev/local/prds/hold/       (parked)
-  - dev/local/prds/done/       (completed)
+PRDs must live under `docs/dev/project-management/prds/`:
+  - docs/dev/project-management/prds/backlog/    (planned, not started)
+  - docs/dev/project-management/prds/wip/        (actively implementing)
+  - docs/dev/project-management/prds/hold/       (parked)
+  - docs/dev/project-management/prds/done/       (completed)
 
-If this is a PRD, retry with `dev/local/prds/{rel}`.
+If this is a PRD, retry with `docs/dev/project-management/prds/{rel}`.
 If this is genuinely something else that must live at repo root, rename the directory to avoid clashing with PRD lifecycle folders."""
 
 
@@ -80,55 +81,55 @@ def _block_bash_msg(matches: list[str]) -> str:
     return f"""\
 BLOCKED: command references a repo-root `backlog/`, `wip/`, `hold/`, or `done/` directory.
 
-PRDs must live under `dev/local/prds/`:
-  - dev/local/prds/backlog/    (planned, not started)
-  - dev/local/prds/wip/        (actively implementing)
-  - dev/local/prds/hold/       (parked)
-  - dev/local/prds/done/       (completed)
+PRDs must live under `docs/dev/project-management/prds/`:
+  - docs/dev/project-management/prds/backlog/    (planned, not started)
+  - docs/dev/project-management/prds/wip/        (actively implementing)
+  - docs/dev/project-management/prds/hold/       (parked)
+  - docs/dev/project-management/prds/done/       (completed)
 
 Offending references in the command:
 {formatted}
 
-If this is a PRD move, retry with `dev/local/prds/<lifecycle>/` paths on both sides.
+If this is a PRD move, retry with `docs/dev/project-management/prds/<lifecycle>/` paths on both sides.
 If this is genuinely an unrelated directory, rename it to avoid clashing with PRD lifecycle folders."""
 
 
 def _root_msg(name: str) -> str:
     if name in KEEP_NAMES:
         return f"""\
-BLOCKED: `{name}` would land in dev/local ROOT. It is a named keeper, and its
-canonical home is `dev/local/meta/{name}` - write it there."""
+BLOCKED: `{name}` would land in docs/dev/project-management ROOT. It is a named keeper, and its
+canonical home is `docs/dev/project-management/meta/{name}` - write it there."""
     keepers = ", ".join(sorted(KEEP_NAMES))
     return f"""\
-BLOCKED: `{name}` would land in dev/local ROOT. Root holds no files: the named
-keepers ({keepers}) live in `dev/local/meta/`, everything else in a dir below.
+BLOCKED: `{name}` would land in docs/dev/project-management ROOT. Root holds no files: the named
+keepers ({keepers}) live in `docs/dev/project-management/meta/`, everything else in a dir below.
 
-- Throwaway output -> `dev/local/tmp/{name}` (prefix the 5-digit PRD number
+- Throwaway output -> `docs/dev/tmp/{name}` (prefix the 5-digit PRD number
   when one applies, so it dies with the PRD).
 - Durable artifact -> a curated dir (discovery/, notes/, audit-results/, ...).
 - Genuinely a new keeper -> add it to KEEP_NAMES in BOTH
   ~/.claude/hooks/enforce_prd_location.py and
   ~/.claude/skills/purge-devlocal/scripts/purge_devlocal.py, then write it
-  under `dev/local/meta/`.
-- Editing an existing stray? `mv` it under dev/local/tmp/ first, then edit."""
+  under `docs/dev/project-management/meta/`.
+- Editing an existing stray? `mv` it under docs/dev/tmp/ first, then edit."""
 
 
 def _meta_msg(name: str) -> str:
     return f"""\
-BLOCKED: `meta/{name}` - dev/local/meta/ holds ONLY the named keepers
+BLOCKED: `meta/{name}` - docs/dev/project-management/meta/ holds ONLY the named keepers
 ({", ".join(sorted(KEEP_NAMES))}).
 
-Throwaway output goes to `dev/local/tmp/`, durable artifacts to a curated
+Throwaway output goes to `docs/dev/tmp/`, durable artifacts to a curated
 dir. A genuinely new keeper gets added to KEEP_NAMES (hook + GC) first."""
 
 
 def _foreign_msg(top: str) -> str:
     return f"""\
-BLOCKED: `{top}/` is not a dev/local top-level dir. New top-level dirs are
+BLOCKED: `{top}/` is not a docs/dev/project-management top-level dir. New top-level dirs are
 forbidden (they become GC blind spots); the vocabulary is:
 {", ".join(sorted(KNOWN_DIRS))}.
 
-One-off workspaces belong under `dev/local/tmp/{top}/` (PRD-numbered when one
+One-off workspaces belong under `docs/dev/tmp/{top}/` (PRD-numbered when one
 applies). Curated content goes in an existing curated dir."""
 
 
@@ -141,26 +142,26 @@ restore it."""
 
 def _prds_root_msg(rel: str) -> str:
     return f"""\
-BLOCKED: `{rel}` sits directly in dev/local/prds/ - PRDs live in a lifecycle
+BLOCKED: `{rel}` sits directly in docs/dev/project-management/prds/ - PRDs live in a lifecycle
 subdir (prds/backlog/, prds/wip/, prds/hold/, prds/done/).
 
-Not a PRD? Plans go in dev/local/plans/ (PRD-numbered) or dev/local/tmp/."""
+Not a PRD? Plans go in docs/dev/project-management/plans/ (PRD-numbered) or docs/dev/tmp/."""
 
 
 def _rel_in_devlocal(file_path: str) -> tuple[str, ...] | None:
-    """Store-relative parts of file_path when it targets a dev/local store.
+    """Store-relative parts of file_path when it targets a docs/dev/project-management store.
 
-    Matches both spellings of a store: a literal `dev/local` path segment
-    (any repo), and the resolved symlink target of ~/.claude/dev/local -
+    Matches both spellings of a store: a literal `docs/dev/project-management` path segment
+    (any repo), and the resolved symlink target of ~/.claude/docs/dev/project-management -
     sessions write through either. Deliberately does NOT resolve() the given
-    path: resolving would erase the `dev/local` segment of a symlinked store.
+    path: resolving would erase the `docs/dev/project-management` segment of a symlinked store.
     """
     norm = os.path.normpath(os.path.expanduser(file_path))
     parts = Path(norm).parts
-    for i in range(len(parts) - 1):
-        if parts[i] == "dev" and parts[i + 1] == "local":
-            return parts[i + 2 :]
-    target = os.path.realpath(str(Path.home() / ".claude" / "dev" / "local"))
+    for i in range(len(parts) - 2):
+        if parts[i : i + 3] == STORE_PARTS:
+            return parts[i + 3 :]
+    target = os.path.realpath(str(Path.home() / ".claude" / "docs" / "dev" / "project-management"))
     # realpath BOTH sides here (only here): the target is fully resolved, so
     # the candidate must be too (/var vs /private/var on macOS).
     real = os.path.realpath(norm)
@@ -194,7 +195,7 @@ def _check_file_path(file_path: str) -> str | None:
     if not file_path:
         return None
     # Lifecycle check first, on the RESOLVED path: a symlink escape
-    # (dev/local/prds/sneak -> repo-root backlog/) resolves OUT of dev/local
+    # (docs/dev/project-management/prds/sneak -> repo-root backlog/) resolves OUT of docs/dev/project-management
     # and must block with the resolved location, not the layout message.
     resolved = Path(file_path).resolve()
     root = resolve_toplevel(str(resolved))
@@ -205,12 +206,12 @@ def _check_file_path(file_path: str) -> str | None:
             rel_parts = ()
         if (
             rel_parts
-            and rel_parts[:3] != ("dev", "local", "prds")
+            and rel_parts[:4] != (*STORE_PARTS, "prds")
             and rel_parts[0] in LIFECYCLE_DIRS
         ):
             return _block_path_msg("/".join(rel_parts))
-    # Inside a dev/local store (checked on the GIVEN path - resolving would
-    # erase the symlinked store's dev/local segment), the layout contract
+    # Inside a docs/dev/project-management store (checked on the GIVEN path - resolving would
+    # erase the symlinked store's docs/dev/project-management segment), the layout contract
     # decides the rest, including the prds lifecycle-subdir requirement.
     rel = _rel_in_devlocal(file_path)
     if rel:
@@ -259,7 +260,7 @@ def _validate_bash_mode(data: dict) -> None:
             parts = PurePosixPath(candidate).parts
             if not parts:
                 continue
-            if parts[:3] == ("dev", "local", "prds"):
+            if parts[:4] == (*STORE_PARTS, "prds"):
                 continue
             if parts[0] in LIFECYCLE_DIRS and (
                 len(parts) > 1 or segment.endswith("/") or has_fs_mutator

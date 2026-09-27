@@ -125,7 +125,7 @@ def _refuse(violations: list[str]) -> int:
 
 def _backlog_texts(repo: Path) -> dict[str, str]:
     """The main checkout's backlog as it stands now: basename -> text."""
-    backlog = repo / "dev/local/prds/backlog"
+    backlog = repo / "docs/dev/project-management/prds/backlog"
     return {
         path.name: path.read_text(encoding="utf-8")
         for path in sorted(backlog.glob("*.md"))
@@ -163,18 +163,18 @@ def _refusal(repo: Path, wave: dict, run_git: Callable[..., object]) -> int | No
 
 
 def _seed_lane_worktree(repo: Path, worktree: Path, prds: list[str]) -> None:
-    """The lane's own dev/local: PRD folders, its PRDs moved in, meta copied."""
+    """The lane's own docs/dev/project-management: PRD folders, its PRDs moved in, meta copied."""
     for folder in ("backlog", "wip", "done", "hold"):
-        (worktree / "dev/local/prds" / folder).mkdir(parents=True, exist_ok=True)
-    (worktree / "dev/local/autopilot").mkdir(parents=True, exist_ok=True)
+        (worktree / "docs/dev/project-management/prds" / folder).mkdir(parents=True, exist_ok=True)
+    (worktree / "docs/dev/project-management/autopilot").mkdir(parents=True, exist_ok=True)
     for prd in prds:
         shutil.move(
-            str(repo / "dev/local/prds/backlog" / prd),
-            str(worktree / "dev/local/prds/backlog" / prd),
+            str(repo / "docs/dev/project-management/prds/backlog" / prd),
+            str(worktree / "docs/dev/project-management/prds/backlog" / prd),
         )
-    meta = repo / "dev/local/meta"
+    meta = repo / "docs/dev/project-management/meta"
     if meta.exists():
-        shutil.copytree(meta, worktree / "dev/local/meta", dirs_exist_ok=True)
+        shutil.copytree(meta, worktree / "docs/dev/project-management/meta", dirs_exist_ok=True)
 
 
 def _spawn_lane(
@@ -184,10 +184,10 @@ def _spawn_lane(
     spawn_fn: Callable[..., object],
 ) -> object:
     env = {k: v for k, v in os.environ.items() if k != "_AUTOPILOT_LOOP"}
-    env["_AUTOPILOT_REVIEW_SLOTS_DIR"] = str(repo / "dev/local/autopilot/wave-slots")
+    env["_AUTOPILOT_REVIEW_SLOTS_DIR"] = str(repo / "docs/dev/project-management/autopilot/wave-slots")
     env["_AUTOPILOT_REVIEW_SLOTS"] = str(review_slots)
     env["_AUTOPILOT_TRACON_CHILD"] = "1"
-    with open(worktree / "dev/local/autopilot/wrapper.log", "a") as log:
+    with open(worktree / "docs/dev/project-management/autopilot/wrapper.log", "a") as log:
         return spawn_fn(
             ["bash", "-c", _SPAWN_CMD, str(CLI_MAIN_PATH)],
             cwd=str(worktree),
@@ -261,7 +261,7 @@ def lane_status(lane: dict) -> str:
         return lane["status"]
     if _pid_alive(lane["pid"]):
         return "running"
-    state = _load_json(Path(lane["worktree"]) / "dev/local/autopilot/state.json")
+    state = _load_json(Path(lane["worktree"]) / "docs/dev/project-management/autopilot/state.json")
     if isinstance(state, dict) and state.get("next_phase") == "":
         return "drained"
     return "unfinished"
@@ -297,7 +297,7 @@ def _dashed(value: object) -> str:
 def _last_metrics(worktree: Path) -> dict:
     """The last PARSEABLE line of the lane's metrics ledger. A half-written final
     line is skipped, never fatal: the loop appends to this file while we read it."""
-    ledger = worktree / "dev/local/autopilot/ledger/loop-metrics.jsonl"
+    ledger = worktree / "docs/dev/project-management/autopilot/ledger/loop-metrics.jsonl"
     if not ledger.exists():
         return {}
     last: dict = {}
@@ -317,12 +317,12 @@ def _lane_row(lane: dict) -> list[str]:
     dashing the pid there would leave an operator nothing to kill."""
     worktree = Path(lane["worktree"])
     on_disk = worktree.exists()
-    state = _load_json(worktree / "dev/local/autopilot/state.json")
+    state = _load_json(worktree / "docs/dev/project-management/autopilot/state.json")
     state = state if isinstance(state, dict) else {}
     metrics = _last_metrics(worktree)
     counts = (
         [
-            str(len(list((worktree / "dev/local/prds" / folder).glob("*.md"))))
+            str(len(list((worktree / "docs/dev/project-management/prds" / folder).glob("*.md"))))
             for folder in _LIFECYCLE
         ]
         if on_disk
@@ -468,8 +468,8 @@ def _return_prds(repo: Path, worktree: Path) -> None:
     """Every PRD the lane still holds, back into the main checkout's `_RETURN_TO`
     folder. A wave is aborted mid-PRD, so wip/ is walked like the rest."""
     for folder, home in _RETURN_TO.items():
-        target = repo / "dev/local/prds" / home
-        for prd in sorted((worktree / "dev/local/prds" / folder).glob("*.md")):
+        target = repo / "docs/dev/project-management/prds" / home
+        for prd in sorted((worktree / "docs/dev/project-management/prds" / folder).glob("*.md")):
             target.mkdir(parents=True, exist_ok=True)
             shutil.move(str(prd), str(target / prd.name))
 
@@ -565,7 +565,7 @@ def abort(
         # Kept ONLY while a lane's group is still alive: that loop still reads
         # this directory. Every other outcome removes it - a cleanup failure with
         # every group dead included, or the next wave starves on leaked slots.
-        slots = repo / "dev/local/autopilot/wave-slots"
+        slots = repo / "docs/dev/project-management/autopilot/wave-slots"
         if not alive and slots.exists():
             try:
                 shutil.rmtree(slots)

@@ -93,7 +93,7 @@ ANGLE = re.compile(r"<[^<>]*>")
 # only one where a read can outrun its write. A render reading the pack's own
 # `references/rubric.md` reads a file the plugin ships, and a card's `## Files`
 # entry is the operator's to have on disk; neither is this lane's to stage.
-TMP_PATH = re.compile(r"(?:\$PWD/)?dev/local/tmp/[^\s'\"`)]+")
+TMP_PATH = re.compile(r"(?:\$PWD/)?docs/dev/tmp/[^\s'\"`)]+")
 
 # What a step has to claim before it counts as the thing that puts a file there.
 # Deliberately narrow: `read`, `hand` and `name` are all things the document
@@ -228,7 +228,7 @@ class Prose(NamedTuple):
 def bare(path: str) -> str:
     """A path as the document writes it elsewhere, so two spellings compare.
 
-    One block writes `$PWD/dev/local/tmp/x.txt` and the paragraph above it
+    One block writes `$PWD/docs/dev/tmp/x.txt` and the paragraph above it
     writes the same file without the prefix; a sentence ends in a full stop that
     is not part of the filename. Neither difference is a different file.
     """
@@ -486,7 +486,7 @@ def read_paths(render: Render) -> tuple[tuple[Flag, str], ...]:
     """The staged files a render opens, one entry per path, with its flag.
 
     `--set-file` hands `render_prompt.py` a path to read and `--set-cmd` hands
-    it a command that reads one, so a `dev/local/tmp` path under either is a
+    it a command that reads one, so a `docs/dev/tmp` path under either is a
     file that has to be there already. `--out` is the block's own write and
     `--set` is a literal, so neither is here.
     """

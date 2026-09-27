@@ -174,8 +174,8 @@ def capture_range(
 
 
 def project_root(autopilot_dir: Path) -> Path:
-    if autopilot_dir.parts[-3:] == ("dev", "local", "autopilot"):
-        return autopilot_dir.parents[2]
+    if autopilot_dir.parts[-4:] == ("docs", "dev", "project-management", "autopilot"):
+        return autopilot_dir.parents[3]
     return autopilot_dir.parent
 
 

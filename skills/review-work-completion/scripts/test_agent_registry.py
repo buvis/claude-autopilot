@@ -442,7 +442,7 @@ def test_eve_dispatch_section_names_pack_findings_and_drops_three_input_claim() 
 def test_blake_row_names_the_filesystem_notes_block_and_both_triggers() -> None:
     """Blake sweeps with `rg --files`, which neither descends into a
     dot-directory nor follows a symlink, so on a project like `~/.claude` he
-    reports existing `dev/local` files as missing (PRD 00141). A
+    reports existing `docs/dev/project-management` files as missing (PRD 00141). A
     `## Filesystem notes` block of paths fixes that without un-blinding him;
     both trigger halves must be stated, or it fires on the wrong projects."""
     text = _skill_text()
@@ -452,7 +452,7 @@ def test_blake_row_names_the_filesystem_notes_block_and_both_triggers() -> None:
         "block; Blake's run inputs would carry no realpath and the blind lens "
         "keeps filing refuted 'file does not exist' findings"
     )
-    for trigger in ("test -L dev/local", "starts with `.`"):
+    for trigger in ("test -L docs/dev/project-management", "starts with `.`"):
         assert trigger in text, (
             f"review-work-completion/SKILL.md does not state the trigger "
             f"{trigger!r}; without both halves the block fires on the wrong "

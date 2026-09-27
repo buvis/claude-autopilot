@@ -198,7 +198,7 @@ class GatesMixin:
             pass
         prune_registry(loops_dir, self.loop_pid)
         root_str = str(ap_dir)
-        suffix = "/dev/local/autopilot"
+        suffix = "/docs/dev/project-management/autopilot"
         root = Path(root_str[: -len(suffix)]) if root_str.endswith(suffix) else ap_dir
         incumbent = live_wrapper_pid(root, loops_dir)
         # An incumbent carrying OUR OWN pid is this shell's earlier loop

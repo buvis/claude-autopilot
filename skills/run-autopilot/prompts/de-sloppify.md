@@ -351,8 +351,8 @@ Reason: the original docstring's prose paraphrased the function name and restate
 
 Append a `### De-sloppify` subsection to the batch report.
 
-Find the report from `AUTOPILOT_REPORT` if set; otherwise use the most recent `dev/local/autopilot/reports/*-report.md`.
-Find the PRD section from `dev/local/autopilot/state.json` `prd` field; if unavailable, append under the last PRD section.
+Find the report from `AUTOPILOT_REPORT` if set; otherwise use the most recent `docs/dev/project-management/autopilot/reports/*-report.md`.
+Find the PRD section from `docs/dev/project-management/autopilot/state.json` `prd` field; if unavailable, append under the last PRD section.
 
 Format:
 

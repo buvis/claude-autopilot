@@ -328,7 +328,7 @@ def test_rank_orders_attention_above_died_even_when_name_sorts_earlier() -> None
 def test_loop_status_end_to_end_populates_row_cells_from_current_batch(
     tmp_path: Path,
 ) -> None:
-    autopilot_dir = tmp_path / "dev" / "local" / "autopilot"
+    autopilot_dir = tmp_path / "docs" / "dev" / "project-management" / "autopilot"
     autopilot_dir.mkdir(parents=True)
     _write_json(
         autopilot_dir / "state.json",
@@ -368,7 +368,7 @@ def test_loop_status_end_to_end_populates_row_cells_from_current_batch(
 def test_loop_status_phase_falls_back_to_next_phase_when_phase_empty(
     tmp_path: Path,
 ) -> None:
-    autopilot_dir = tmp_path / "dev" / "local" / "autopilot"
+    autopilot_dir = tmp_path / "docs" / "dev" / "project-management" / "autopilot"
     autopilot_dir.mkdir(parents=True)
     _write_json(
         autopilot_dir / "state.json",
@@ -381,7 +381,7 @@ def test_loop_status_phase_falls_back_to_next_phase_when_phase_empty(
 def test_loop_status_phase_falls_back_to_em_dash_when_both_empty(
     tmp_path: Path,
 ) -> None:
-    autopilot_dir = tmp_path / "dev" / "local" / "autopilot"
+    autopilot_dir = tmp_path / "docs" / "dev" / "project-management" / "autopilot"
     autopilot_dir.mkdir(parents=True)
     _write_json(
         autopilot_dir / "state.json",
@@ -392,10 +392,10 @@ def test_loop_status_phase_falls_back_to_em_dash_when_both_empty(
 
 
 def test_loop_status_populates_prd_backlog_wip_done_counts(tmp_path: Path) -> None:
-    autopilot_dir = tmp_path / "dev" / "local" / "autopilot"
+    autopilot_dir = tmp_path / "docs" / "dev" / "project-management" / "autopilot"
     autopilot_dir.mkdir(parents=True)
     _write_json(autopilot_dir / "state.json", {"prd": "x.md", "phase": "build"})
-    prds = tmp_path / "dev" / "local" / "prds"
+    prds = tmp_path / "docs" / "dev" / "project-management" / "prds"
     (prds / "backlog").mkdir(parents=True)
     (prds / "wip").mkdir(parents=True)
     (prds / "done").mkdir(parents=True)
@@ -414,7 +414,7 @@ def test_loop_status_populates_prd_backlog_wip_done_counts(tmp_path: Path) -> No
 
 
 def test_loop_status_live_cost_populated_only_when_in_flight(tmp_path: Path) -> None:
-    autopilot_dir = tmp_path / "dev" / "local" / "autopilot"
+    autopilot_dir = tmp_path / "docs" / "dev" / "project-management" / "autopilot"
     autopilot_dir.mkdir(parents=True)
     _write_json(
         autopilot_dir / "state.json",
@@ -447,7 +447,7 @@ def test_missing_registry_returns_empty_when_home_claude_lacks_autopilot_dir(
 ) -> None:
     """The degrade path is filtered too: a missing registry falls back to
     ~/.claude as the sole candidate, but that candidate still has to clear
-    the same dev/local/autopilot filter as every other root."""
+    the same docs/dev/project-management/autopilot filter as every other root."""
     fake_home = tmp_path / "home-bare"
     (fake_home / ".claude").mkdir(parents=True)
     monkeypatch.setattr(discovery.Path, "home", classmethod(lambda cls: fake_home))
@@ -462,7 +462,7 @@ def test_missing_registry_returns_home_claude_when_autopilot_dir_present(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_home = tmp_path / "home-active"
-    autopilot_dir = fake_home / ".claude" / "dev" / "local" / "autopilot"
+    autopilot_dir = fake_home / ".claude" / "docs" / "dev" / "project-management" / "autopilot"
     autopilot_dir.mkdir(parents=True)
     monkeypatch.setattr(discovery.Path, "home", classmethod(lambda cls: fake_home))
 
@@ -475,7 +475,7 @@ def test_discover_loops_skips_blank_and_relative_column_one_rows(
     tmp_path: Path,
 ) -> None:
     root_valid = tmp_path / "validrepo"
-    (root_valid / "dev" / "local" / "autopilot").mkdir(parents=True)
+    (root_valid / "docs" / "dev" / "project-management" / "autopilot").mkdir(parents=True)
     registry = tmp_path / "repos.csv"
     registry.write_text(
         f"\nrelative/path,badname,,\n{root_valid},validrepo,,\n",
@@ -505,7 +505,7 @@ def test_registry_row_with_quoted_comma_path_is_parsed_via_csv_module(
     column containing a comma must yield the full path, not a truncated
     prefix up to the first comma."""
     root_with_comma = tmp_path / "my,repo"
-    (root_with_comma / "dev" / "local" / "autopilot").mkdir(parents=True)
+    (root_with_comma / "docs" / "dev" / "project-management" / "autopilot").mkdir(parents=True)
     registry = tmp_path / "repos.csv"
     registry.write_text(f'"{root_with_comma}",name,flags\n')
 
@@ -552,7 +552,7 @@ def test_loop_status_with_no_state_ignores_foreign_batch_cost_and_signal(
     A foreign, already-finished batch's non-zero cost must not surface on
     a stateless loop, and its `done` signal must not render `drained`
     instead of `no state`."""
-    autopilot_dir = tmp_path / "dev" / "local" / "autopilot"
+    autopilot_dir = tmp_path / "docs" / "dev" / "project-management" / "autopilot"
     autopilot_dir.mkdir(parents=True)
     _write_lines(
         autopilot_dir / "loop-metrics.jsonl",
@@ -576,7 +576,7 @@ def test_loop_status_with_no_state_and_in_flight_log_is_never_drained_or_no_stat
     establishes in-flight from the log alone. An in-flight session outranks
     a missing state file, and the foreign batch's `done` signal must not
     outrank it either."""
-    autopilot_dir = tmp_path / "dev" / "local" / "autopilot"
+    autopilot_dir = tmp_path / "docs" / "dev" / "project-management" / "autopilot"
     autopilot_dir.mkdir(parents=True)
     _write_lines(
         autopilot_dir / "loop-metrics.jsonl",
@@ -684,7 +684,7 @@ def test_read_registry_parses_valid_entry_into_wrapper(tmp_path: Path) -> None:
         {
             "pid": 12345,
             "root": str(root),
-            "ap_dir": str(root / "dev/local/autopilot"),
+            "ap_dir": str(root / "docs/dev/project-management/autopilot"),
             "started_at": "2026-07-14T00:00:00Z",
         },
     )
@@ -843,7 +843,7 @@ def test_loop_status_wrapper_true_when_registry_entry_alive_for_root(
     monkeypatch: pytest.MonkeyPatch,
     stub_tagged: None,
 ) -> None:
-    autopilot_dir = tmp_path / "dev" / "local" / "autopilot"
+    autopilot_dir = tmp_path / "docs" / "dev" / "project-management" / "autopilot"
     autopilot_dir.mkdir(parents=True)
     loops_dir = tmp_path / "loops"
     loops_dir.mkdir()
@@ -871,7 +871,7 @@ def test_loop_status_wrapper_false_when_registry_entry_pid_is_dead(
     stub that always returns False would pass just as easily, but so would
     one that never calls wrapper_alive at all; pairing this with the
     true-case test above rules out both."""
-    autopilot_dir = tmp_path / "dev" / "local" / "autopilot"
+    autopilot_dir = tmp_path / "docs" / "dev" / "project-management" / "autopilot"
     autopilot_dir.mkdir(parents=True)
     loops_dir = tmp_path / "loops"
     loops_dir.mkdir()
@@ -1002,7 +1002,7 @@ def test_loop_status_shows_limit_wait_instead_of_died_while_wrapper_sleeps(
     sleeps until the reset, appending no metrics row. classify() alone reads
     that gap as died/idle — a live wrapper plus a future reset must render
     the loop as waiting, not dead."""
-    autopilot_dir = tmp_path / "dev" / "local" / "autopilot"
+    autopilot_dir = tmp_path / "docs" / "dev" / "project-management" / "autopilot"
     autopilot_dir.mkdir(parents=True)
     _write_json(
         autopilot_dir / "state.json",
@@ -1124,7 +1124,7 @@ def test_loop_status_marks_orphaned_when_wrapper_died_mid_batch(
     """A wrapper killed mid-batch (closed terminal, crash) leaves next_phase
     set and the last metrics signal non-terminal; without the warning that
     renders as a dim idle row that reads as fine."""
-    autopilot_dir = tmp_path / "dev" / "local" / "autopilot"
+    autopilot_dir = tmp_path / "docs" / "dev" / "project-management" / "autopilot"
     autopilot_dir.mkdir(parents=True)
     _write_json(
         autopilot_dir / "state.json",
@@ -1232,7 +1232,7 @@ def test_pid_tagged_matches_a_tag_ending_a_non_final_ps_line_not_a_longer_pid(
 def test_pause_pending_status_suffixes_the_label_while_marker_exists(
     tmp_path: Path,
 ) -> None:
-    autopilot_dir = tmp_path / "dev" / "local" / "autopilot"
+    autopilot_dir = tmp_path / "docs" / "dev" / "project-management" / "autopilot"
     autopilot_dir.mkdir(parents=True)
     (autopilot_dir / "pause-requested").touch()
     idle = _idle_status()
@@ -1257,7 +1257,7 @@ def test_pause_pending_status_identity_when_no_wrapper_alive(
 ) -> None:
     """With no live wrapper the marker is inert; the chip would only pile
     onto the paused/orphaned indicators."""
-    autopilot_dir = tmp_path / "dev" / "local" / "autopilot"
+    autopilot_dir = tmp_path / "docs" / "dev" / "project-management" / "autopilot"
     autopilot_dir.mkdir(parents=True)
     (autopilot_dir / "pause-requested").touch()
     idle = _idle_status()
@@ -1269,7 +1269,7 @@ def test_pause_pending_status_identity_when_no_wrapper_alive(
 
 
 def _stamp_paused(root: Path, mtime: float) -> Path:
-    autopilot_dir = root / "dev" / "local" / "autopilot"
+    autopilot_dir = root / "docs" / "dev" / "project-management" / "autopilot"
     autopilot_dir.mkdir(parents=True, exist_ok=True)
     stamp = autopilot_dir / "paused-by-operator"
     stamp.touch()
@@ -1318,7 +1318,7 @@ def test_loop_status_marks_an_operator_pause_paused_not_orphaned(
     """The pause exit runs before a session, so it appends no metrics row:
     without the stamp, queued work plus a dead wrapper reads as a dropped
     batch and the row screams "orphaned" at a deliberate stop."""
-    autopilot_dir = tmp_path / "dev" / "local" / "autopilot"
+    autopilot_dir = tmp_path / "docs" / "dev" / "project-management" / "autopilot"
     autopilot_dir.mkdir(parents=True)
     _write_json(
         autopilot_dir / "state.json",
@@ -1353,7 +1353,7 @@ def test_discover_loops_includes_live_registry_root_absent_from_gita_csv(
     monkeypatch.setattr(discovery.Path, "home", classmethod(lambda cls: fake_home))
 
     registry_root = tmp_path / "wrapper-only-repo"
-    (registry_root / "dev" / "local" / "autopilot").mkdir(parents=True)
+    (registry_root / "docs" / "dev" / "project-management" / "autopilot").mkdir(parents=True)
 
     gita_csv = tmp_path / "repos.csv"
     gita_csv.write_text("")
@@ -1383,7 +1383,7 @@ def test_discover_loops_dedups_root_present_in_both_gita_csv_and_registry(
     monkeypatch.setattr(discovery.Path, "home", classmethod(lambda cls: fake_home))
 
     shared_root = tmp_path / "shared-repo"
-    (shared_root / "dev" / "local" / "autopilot").mkdir(parents=True)
+    (shared_root / "docs" / "dev" / "project-management" / "autopilot").mkdir(parents=True)
 
     gita_csv = tmp_path / "repos.csv"
     gita_csv.write_text(f"{shared_root},sharedrepo,,\n")
@@ -1413,7 +1413,7 @@ def test_discover_loops_excludes_dead_pid_registry_root(
     monkeypatch.setattr(discovery.Path, "home", classmethod(lambda cls: fake_home))
 
     dead_root = tmp_path / "dead-wrapper-repo"
-    (dead_root / "dev" / "local" / "autopilot").mkdir(parents=True)
+    (dead_root / "docs" / "dev" / "project-management" / "autopilot").mkdir(parents=True)
 
     gita_csv = tmp_path / "repos.csv"
     gita_csv.write_text("")
@@ -1447,7 +1447,7 @@ def test_discover_loops_registry_root_survives_unreadable_gita_csv(
     monkeypatch.setattr(discovery.Path, "home", classmethod(lambda cls: fake_home))
 
     registry_root = tmp_path / "wrapper-survives-repo"
-    (registry_root / "dev" / "local" / "autopilot").mkdir(parents=True)
+    (registry_root / "docs" / "dev" / "project-management" / "autopilot").mkdir(parents=True)
 
     loops_dir = tmp_path / "loops"
     loops_dir.mkdir()
@@ -1477,7 +1477,7 @@ def test_discover_loops_registry_root_without_autopilot_dir_is_filtered(
     monkeypatch.setattr(discovery.Path, "home", classmethod(lambda cls: fake_home))
 
     bare_root = tmp_path / "bare-wrapper-repo"
-    bare_root.mkdir()  # no dev/local/autopilot
+    bare_root.mkdir()  # no docs/dev/project-management/autopilot
 
     gita_csv = tmp_path / "repos.csv"
     gita_csv.write_text("")

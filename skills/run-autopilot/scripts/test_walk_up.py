@@ -21,7 +21,7 @@ def _run(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
 
 
 def _make_autopilot_dir(root: Path) -> Path:
-    autopilot = root / "dev" / "local" / "autopilot"
+    autopilot = root / "docs" / "dev" / "project-management" / "autopilot"
     autopilot.mkdir(parents=True)
     return autopilot
 

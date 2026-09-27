@@ -613,7 +613,7 @@ def test_phase_strip_expands_build_into_sub_steps() -> None:
     # (catchup, design, …) must read as build stages.
     raw = {
         "batch": {"id": "B1", "catchup_completed_at": "2026-07-18T08:00:00Z"},
-        "design_doc": "dev/local/designs/x-design.md",
+        "design_doc": "docs/dev/project-management/designs/x-design.md",
         "tasks": [{"id": "t1", "status": "in_progress"}],
     }
     state = _state(phase="build", raw=raw, tasks_total=6, tasks_completed=2)

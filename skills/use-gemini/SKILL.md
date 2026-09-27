@@ -118,7 +118,7 @@ stdout for salvage. Diagnostics stay on stderr, outside the review text.
 | Resume recent session | `-c` |
 | Resume specific session | `-r <ID>` |
 
-Gotcha: in repos where `dev/local` is a symlink outside the workspace (buvis convention: `-> ~/.local/tmp/claude-dev`), gemini cannot read through it - pass `-d ~/.local/tmp/claude-dev` so those files resolve (verified fix).
+Gotcha: in repos where `docs/dev/project-management` is a symlink outside the workspace (buvis convention: `-> ~/.local/tmp/claude-dev`), gemini cannot read through it - pass `-d ~/.local/tmp/claude-dev` so those files resolve (verified fix).
 
 ## Helper Script
 

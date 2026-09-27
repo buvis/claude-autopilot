@@ -10,7 +10,7 @@ model_tier_rationale: cross-skill rework routing and verbatim design-contract pr
 ## Overview
 
 ### Problem Statement
-The review rework branch goes directly from a consolidated CRITICAL to an Ivan D-task. The ddb assessment `/Users/bob/git/src/github.com/doogat/ddb/dev/local/audit-results/refactor-assessment-2026-09-06.md` (F2, Decision step 3) found that 8 of 13 cycle-2 CRITICAL/HIGH findings across 00167/00168/00170 were born in cycle-1 rework. ddb 00168's cycle-2 review describes each new Critical/High as introduced by, or newly exposed by, the prior fix.
+The review rework branch goes directly from a consolidated CRITICAL to an Ivan D-task. The ddb assessment `/Users/bob/git/src/github.com/doogat/ddb/docs/dev/project-management/audit-results/refactor-assessment-2026-09-06.md` (F2, Decision step 3) found that 8 of 13 cycle-2 CRITICAL/HIGH findings across 00167/00168/00170 were born in cycle-1 rework. ddb 00168's cycle-2 review describes each new Critical/High as introduced by, or newly exposed by, the prior fix.
 
 This is the design capability split from backlog 00187. Custody remains in 00187; this PRD adds reviewed fix design before CRITICAL rework, and changes no review lens, cap or task budget.
 
@@ -29,7 +29,7 @@ The review session dispatching a severe fix, and the implementor who needs its a
 #### Feature: Design-solution rework mode
 - **Description**: `/autopilot:design-solution <prd> --rework <review-file>` designs the cycle's CRITICAL fixes.
 - **Inputs**: PRD, consolidated review CRITICAL rows, current cycle and `git diff --stat <work_start_sha>..HEAD`.
-- **Outputs**: `dev/local/designs/<prd-stem>-rework-<cycle>-design.md`, using the existing nine design sections; summary `design-solution: <prd-stem> (rework cycle <n>)`.
+- **Outputs**: `docs/dev/project-management/designs/<prd-stem>-rework-<cycle>-design.md`, using the existing nine design sections; summary `design-solution: <prd-stem> (rework cycle <n>)`.
 - **Behavior**: Architecture fit opens with what the prior fix changed and why it regressed (first rework states there was no prior rework fix). Keep the existing three-dispatch design review procedure, ceiling and exit report. The rework document's Interfaces & contracts section is the sole contract source for the subsequent CRITICAL tasks.
 
 #### Feature: Phase 6 routing and task contract

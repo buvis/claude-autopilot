@@ -93,7 +93,7 @@ def test_review_once_refuses_without_state_json(tmp_path):
 def test_review_once_dead_session_exits_one_without_retry_or_park(tmp_path):
     lp = make_loop(tmp_path, [noop_step])
     write_state(lp._test["ap_dir"], prd="p.md", next_phase="review", batch={"id": "b"})
-    wip = tmp_path / "repo" / "dev" / "local" / "prds" / "wip"
+    wip = tmp_path / "repo" / "docs" / "dev" / "project-management" / "prds" / "wip"
     wip.mkdir(parents=True)
     (wip / "00001-x.md").write_text("# x\n")
 

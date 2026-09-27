@@ -40,7 +40,7 @@ work. Re-enable by restarting `claude` without the flag once step 1 passes.
   `dispatch.log` if the consolidator has landed). A metrics hook that cannot
   write prints `<hook>: write failed (...)` to stderr.
 - Headless autopilot: the wrapper tees the whole session to
-  `dev/local/autopilot/last-session.log` — grep it for `hook error`.
+  `docs/dev/project-management/autopilot/last-session.log` — grep it for `hook error`.
 
 ## Prevention wired into autoclaude
 

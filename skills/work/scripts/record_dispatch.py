@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Dispatch timing ledger for ``/work`` (PRD 00168): one JSONL row per dispatch
 start, one per end and one per session-handoff edge, appended to
-``dev/local/autopilot/dispatch-metrics.jsonl`` and its GC-exempt ``ledger/``
+``docs/dev/project-management/autopilot/dispatch-metrics.jsonl`` and its GC-exempt ``ledger/``
 mirror. Every write is best-effort and exits 0; no gate reads these rows.
 
     record_dispatch.py start --kind KIND --task ID --prompt-file PATH

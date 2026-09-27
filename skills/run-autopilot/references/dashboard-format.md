@@ -45,14 +45,14 @@ in a root that already has a live registered loop refuses to start.
 
 ## What tracon shows
 
-- Reads `dev/local/autopilot/state.json` via the tolerant parser in
+- Reads `docs/dev/project-management/autopilot/state.json` via the tolerant parser in
   `scripts/tracon/model.py` (missing or malformed fields degrade, never crash)
 - Phase, cycle vs rework cap, task counts, guard flags (stall, cap-pause)
 - Batch progress from the `batch` field; session cost from the raw log tail
 
 ## State contract
 
-- Keep `dev/local/autopilot/state.json` updated at phase transitions.
+- Keep `docs/dev/project-management/autopilot/state.json` updated at phase transitions.
 - When writing the `tasks` snapshot, recompute `tasks_total` and
   `tasks_completed` in the same write. The retired pidash PostToolUse sync
   hook no longer does this for you.

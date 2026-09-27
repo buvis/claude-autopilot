@@ -412,7 +412,7 @@ def test_a_docs_only_diff_is_decided_before_the_record_is_read() -> None:
         "before the record read, so a docs-only review reports suite counts."
     )
     docs_only = review.index("Check docs-only first")
-    record_read = review.index("read `dev/local/autopilot/last-verification.json` first")
+    record_read = review.index("read `docs/dev/project-management/autopilot/last-verification.json` first")
     assert docs_only < record_read, (
         "review-work-completion/SKILL.md reads the verification record before "
         "deciding docs-only, so a prose-only review silently replaces "

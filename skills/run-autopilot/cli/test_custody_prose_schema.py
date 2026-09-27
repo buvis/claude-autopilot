@@ -350,7 +350,7 @@ def test_retention_durable_list_names_the_custody_journal() -> None:
         f"{_SKILL}: expected a parenthetical right after {_CUSTODY_JOURNAL_PATH!r} in "
         f"{where}, like the attempt-ledger entry — got {tail[:40]!r}."
     )
-    next_path = tail.find("`dev/local")
+    next_path = tail.find("`docs/dev/project-management")
     blurb = tail if next_path == -1 else tail[:next_path]
     blurb_where = f"the parenthetical after {_CUSTODY_JOURNAL_PATH!r} in {where}"
     _assert_present(blurb, _SKILL, blurb_where, ("custody journal",))

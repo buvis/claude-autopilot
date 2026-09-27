@@ -51,15 +51,15 @@ def _state(**overrides) -> dict:
 
 
 class _ProjectTestCase(unittest.TestCase):
-    """A synthetic <root>/dev/local/{autopilot,prds} tree per test."""
+    """A synthetic <root>/docs/dev/project-management/{autopilot,prds} tree per test."""
 
     def setUp(self) -> None:
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name)
-        self.autopilot_dir = self.root / "dev" / "local" / "autopilot"
+        self.autopilot_dir = self.root / "docs" / "dev" / "project-management" / "autopilot"
         self.autopilot_dir.mkdir(parents=True)
-        self.prds_dir = self.root / "dev" / "local" / "prds"
+        self.prds_dir = self.root / "docs" / "dev" / "project-management" / "prds"
         for lifecycle in ("wip", "backlog", "hold"):
             (self.prds_dir / lifecycle).mkdir(parents=True)
         self.state_path = self.autopilot_dir / "state.json"
@@ -260,7 +260,7 @@ class SelectEligibilityTests(_ProjectTestCase):
         self.assertEqual(json.loads(proc.stdout)["prd"], "00091-ready-v1.md")
 
     def test_a_shallow_prds_path_does_not_crash_the_pick(self) -> None:
-        # --prds takes any path; a two-deep one has no <root>/dev/local/prds
+        # --prds takes any path; a two-deep one has no <root>/docs/dev/project-management/prds
         # shape to climb out of, and must not raise out of the verb.
         proc = _run(["select", "--prds", "/prds"], cwd=self.root)
         self.assertEqual(proc.returncode, 0, proc.stderr)

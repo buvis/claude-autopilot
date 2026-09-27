@@ -768,7 +768,7 @@ class CapCriticalStallTests(_StallTestCase):
     ) -> None:
         project = self.root / "project"
         shas = _init_repo(project)
-        self.autopilot_dir = project / "dev" / "local" / "autopilot"
+        self.autopilot_dir = project / "docs" / "dev" / "project-management" / "autopilot"
         self.autopilot_dir.mkdir(parents=True)
         self.state_path = self.autopilot_dir / "state.json"
         self._put_in_wip(content=PRD_TEXT)

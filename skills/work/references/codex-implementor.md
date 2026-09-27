@@ -97,13 +97,13 @@ like a real implementor run:
 ```
 Bash (run_in_background: true):
   ${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex-run.sh -a \
-    -d <realpath of the repo's dev/local> \
+    -d <realpath of the repo's docs/dev/project-management> \
     -f <abs tmp prompt file> -o <abs tmp out file>
 then: TaskOutput(task_id, block=true, timeout=300000)
 ```
 
 `-d` is **mandatory on the probe**, not conditional: the probe artifact lives
-under `dev/local/`, which in this repo is a symlink outside the workspace.
+under `docs/dev/project-management/`, which in this repo is a symlink outside the workspace.
 Under `--sandbox workspace-write` a write there resolves outside the writable
 root and is denied, so a probe without `-d` returns `unhealthy` on every batch
 in `~/.claude` and the rung would never fire.
@@ -113,8 +113,8 @@ verbatim, followed by these three lines with `<nonce>` substituted (a fresh
 per-probe value, e.g. `<batch_id>-<uuid4>`):
 
 ```
-Create the file dev/local/tmp/codex-probe-<nonce>.txt containing exactly: <nonce>
-Then run: git status --porcelain dev/local/tmp/codex-probe-<nonce>.txt
+Create the file docs/dev/tmp/codex-probe-<nonce>.txt containing exactly: <nonce>
+Then run: git status --porcelain docs/dev/tmp/codex-probe-<nonce>.txt
 Reply with the single word: done
 ```
 
@@ -123,10 +123,10 @@ probe performs exactly the two actions the gate intercepts (first `Write` to a
 path, first `Bash` of the session).
 
 Verdict is `"healthy"` iff ALL of: the helper exited 0, the `-o` file is
-non-empty, AND `dev/local/tmp/codex-probe-<nonce>.txt` exists on disk with
+non-empty, AND `docs/dev/tmp/codex-probe-<nonce>.txt` exists on disk with
 content equal to `<nonce>`. Delete the file after the verdict is written.
 **The nonce is load-bearing:** a fixed filename would still be on disk from a
-previous batch (`dev/local/tmp/` is GC'd only at 7 days), so a fully
+previous batch (`docs/dev/tmp/` is GC'd only at 7 days), so a fully
 hook-blocked run — exit 0, a non-empty `-o` explaining the deny, and last
 batch's leftover file — would satisfy every condition and report `healthy`.
 
@@ -181,10 +181,10 @@ the departures there, not here:
 - background Bash, never Agent-wrapped (era invariant: a subagent that shells
   out to a CLI hangs);
 - `-f <prompt file>` and `-o <output file>`, absolute paths. The prompt file
-  is step 3's render, `dev/local/tmp/dispatch-ivan-<task-id>.txt` (opened with
+  is step 3's render, `docs/dev/tmp/dispatch-ivan-<task-id>.txt` (opened with
   the two telemetry flags), with § Hook interaction's TOOL-GATE NOTICE appended
   in-session — Read the rendered file, then append with the Edit tool; a shell
-  redirect into `dev/local/` is blocked — so the dispatch's row and id are the
+  redirect into `docs/dev/project-management/` is blocked — so the dispatch's row and id are the
   render's;
 - `TaskOutput(task_id, block=true, timeout=600000)` as the watchdog;
 - **No-edit probe: after-capture.** Immediately after `TaskOutput` returns,
@@ -211,8 +211,8 @@ the departures there, not here:
   explicit calling-skill grant before any unattended high-impact flag. **This
   bullet is that grant, and it covers `-a` at this rung only** — never `-y`,
   and never a reviewer dispatch.
-- **`-d <realpath of dev/local>`** whenever the task's file slice includes a
-  `dev/local/` path: that path is a symlink outside the workspace here and CLI
+- **`-d <realpath of docs/dev/project-management>`** whenever the task's file slice includes a
+  `docs/dev/project-management/` path: that path is a symlink outside the workspace here and CLI
   backends cannot follow it without `--add-dir`. Omit it otherwise, keeping the
   sandbox as narrow as the task requires.
 - **On a `TaskOutput` timeout, kill before falling back.** `TaskStop` the codex

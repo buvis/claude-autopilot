@@ -67,7 +67,7 @@ def _make_loop(
     `log_lines=[]` gives an existing but EMPTY log — an idle loop that has not
     started writing yet.
     """
-    autopilot_dir = root / "dev" / "local" / "autopilot"
+    autopilot_dir = root / "docs" / "dev" / "project-management" / "autopilot"
     autopilot_dir.mkdir(parents=True)
     state = {
         "prd": "00061-x.md",
@@ -223,7 +223,7 @@ def test_collector_poll_returns_lines_appended_since_the_last_call(
     from tracon import screens
 
     root = _make_loop(tmp_path)
-    log_path = root / "dev" / "local" / "autopilot" / "last-session.log"
+    log_path = root / "docs" / "dev" / "project-management" / "autopilot" / "last-session.log"
     collector = screens.Collector(root)
 
     first_lines, _ = collector.poll()
@@ -338,7 +338,7 @@ def test_detail_head_suppresses_orphan_warning_when_wrapper_alive(
     from tracon import discovery, screens
 
     root = _make_loop(tmp_path / "loop-a")
-    autopilot_dir = root / "dev" / "local" / "autopilot"
+    autopilot_dir = root / "docs" / "dev" / "project-management" / "autopilot"
     now = time.time()
     _write_lines(
         autopilot_dir / "loop-metrics.jsonl",
@@ -366,7 +366,7 @@ def test_detail_head_shows_limit_wait_when_wrapper_sleeps_on_a_limit(
     from tracon import discovery, screens
 
     root = _make_loop(tmp_path / "loop-a")
-    autopilot_dir = root / "dev" / "local" / "autopilot"
+    autopilot_dir = root / "docs" / "dev" / "project-management" / "autopilot"
     (autopilot_dir / "last-session.log").write_text("usage limit reached\n")
     now = time.time()
     _write_lines(
@@ -391,7 +391,7 @@ def test_detail_head_shows_orphan_warning_when_work_queued_and_no_wrapper(
     from tracon import screens
 
     root = _make_loop(tmp_path / "loop-a")
-    autopilot_dir = root / "dev" / "local" / "autopilot"
+    autopilot_dir = root / "docs" / "dev" / "project-management" / "autopilot"
     now = time.time()
     _write_lines(
         autopilot_dir / "loop-metrics.jsonl",
@@ -599,7 +599,7 @@ def test_wrapper_pid_flag_is_forwarded_to_run_app(
 
 
 def _write_autopilot_state(root: Path, **overrides: Any) -> Path:
-    autopilot_dir = root / "dev" / "local" / "autopilot"
+    autopilot_dir = root / "docs" / "dev" / "project-management" / "autopilot"
     autopilot_dir.mkdir(parents=True, exist_ok=True)
     state: dict[str, Any] = {
         "prd": "00061-x.md",
@@ -629,7 +629,7 @@ def test_final_signal_label_reports_stopped_not_stale_continue_on_markerless_exi
 
     root = tmp_path / "loop-a"
     _write_autopilot_state(root, next_phase="review")
-    metrics_path = root / "dev" / "local" / "autopilot" / "loop-metrics.jsonl"
+    metrics_path = root / "docs" / "dev" / "project-management" / "autopilot" / "loop-metrics.jsonl"
     _write_lines(metrics_path, [_metrics_line(signal="continue")])
 
     label = screens._final_signal_label(root)
@@ -648,7 +648,7 @@ def test_final_signal_label_reports_drained_when_next_phase_empty(
 
     root = tmp_path / "loop-a"
     _write_autopilot_state(root, next_phase="")
-    metrics_path = root / "dev" / "local" / "autopilot" / "loop-metrics.jsonl"
+    metrics_path = root / "docs" / "dev" / "project-management" / "autopilot" / "loop-metrics.jsonl"
     _write_lines(metrics_path, [_metrics_line(signal="continue")])
 
     label = screens._final_signal_label(root)
@@ -671,7 +671,7 @@ def test_final_signal_label_reports_paused_when_pause_reason_set(
         next_phase="review",
         pause_reason={"site": "review", "detail": "waiting on doubt"},
     )
-    metrics_path = root / "dev" / "local" / "autopilot" / "loop-metrics.jsonl"
+    metrics_path = root / "docs" / "dev" / "project-management" / "autopilot" / "loop-metrics.jsonl"
     _write_lines(metrics_path, [_metrics_line(signal="continue")])
 
     label = screens._final_signal_label(root)
@@ -856,7 +856,7 @@ def test_lines_written_after_attach_are_not_banner_ed_as_replay(
     from tracon import screens
 
     root = _make_loop(tmp_path / "idle-loop", log_lines=[])  # log exists, empty
-    log_path = root / "dev" / "local" / "autopilot" / "last-session.log"
+    log_path = root / "docs" / "dev" / "project-management" / "autopilot" / "last-session.log"
     # isolate from the real machine: DashboardScreen mounts underneath the
     # auto-pushed DetailScreen and re-discovers on every fleet tick.
     monkeypatch.setattr(screens.discovery, "discover_loops", lambda: [root])
@@ -893,7 +893,7 @@ def test_y_copies_rendered_log_tail_to_clipboard(
     from tracon import screens
 
     root = _make_loop(tmp_path / "copy-loop", log_lines=[])
-    log_path = root / "dev" / "local" / "autopilot" / "last-session.log"
+    log_path = root / "docs" / "dev" / "project-management" / "autopilot" / "last-session.log"
     monkeypatch.setattr(screens.discovery, "discover_loops", lambda: [root])
     copied: list[str] = []
     monkeypatch.setattr(
@@ -1190,7 +1190,7 @@ def test_refresh_discovers_a_loop_registered_after_boot(
 ) -> None:
     """The fleet list must come from a live discovery call on every refresh,
     not a `roots` list captured once at startup. A loop that appears after
-    boot (a repo gets registered, or gains a dev/local/autopilot dir) must
+    boot (a repo gets registered, or gains a docs/dev/project-management/autopilot dir) must
     show up on the very next refresh, without restarting the app."""
     pytest.importorskip("textual", reason=_TEXTUAL_SKIP_REASON)
     from textual.widgets import DataTable
@@ -1296,7 +1296,7 @@ def test_cursor_stays_on_the_selected_loop_when_sort_order_moves_it(
             assert table.get_row_at(table.cursor_row)[0] == "beta"
 
             # beta now needs attention -> rank 0, must sort FIRST next refresh
-            state_path = root_beta / "dev" / "local" / "autopilot" / "state.json"
+            state_path = root_beta / "docs" / "dev" / "project-management" / "autopilot" / "state.json"
             state = json.loads(state_path.read_text())
             state["needs_attention"] = True
             state_path.write_text(json.dumps(state))
@@ -1336,7 +1336,7 @@ def test_dashboard_table_sorts_rows_by_status_rank_before_name(
         screens.discovery, "discover_loops", lambda: [root_alpha, root_zeta]
     )
 
-    state_path = root_zeta / "dev" / "local" / "autopilot" / "state.json"
+    state_path = root_zeta / "docs" / "dev" / "project-management" / "autopilot" / "state.json"
     state = json.loads(state_path.read_text())
     state["needs_attention"] = True  # rank 0 -- must sort before "alpha"
     state_path.write_text(json.dumps(state))
@@ -1593,13 +1593,13 @@ def test_p_on_detail_screen_writes_only_the_pause_requested_marker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """p is tracon's ONLY write, anywhere: on the detail screen it must
-    touch <root>/dev/local/autopilot/pause-requested in the ATTACHED root,
+    touch <root>/docs/dev/project-management/autopilot/pause-requested in the ATTACHED root,
     and nothing else lands in that directory."""
     pytest.importorskip("textual", reason=_TEXTUAL_SKIP_REASON)
     from tracon import screens
 
     root = _make_loop(tmp_path / "loop-a")
-    autopilot_dir = root / "dev" / "local" / "autopilot"
+    autopilot_dir = root / "docs" / "dev" / "project-management" / "autopilot"
     before = {p.name for p in autopilot_dir.iterdir()}
     monkeypatch.setattr(screens.discovery, "discover_loops", lambda: [root])
 
@@ -1756,7 +1756,7 @@ def test_t_toggles_the_tasks_screen_with_kanban_lanes(
     from tracon import screens
 
     root = _make_loop(tmp_path / "loop-a")
-    state_path = root / "dev" / "local" / "autopilot" / "state.json"
+    state_path = root / "docs" / "dev" / "project-management" / "autopilot" / "state.json"
     state = json.loads(state_path.read_text())
     state["tasks"] = [
         {"id": "t1", "name": "Add endpoint", "status": "completed"},
@@ -1904,7 +1904,7 @@ def test_detail_head_shows_pending_chip_while_pause_marker_awaits_live_wrapper(
     from tracon import discovery, screens
 
     root = _make_loop(tmp_path / "loop-a")
-    (root / "dev" / "local" / "autopilot" / "pause-requested").touch()
+    (root / "docs" / "dev" / "project-management" / "autopilot" / "pause-requested").touch()
     registry_entry = {"pid": os.getpid(), "root": str(root.resolve())}
     (discovery.LOOPS_DIR / "wrapper.json").write_text(json.dumps(registry_entry))
 
@@ -1922,7 +1922,7 @@ def test_detail_head_hides_pending_chip_when_no_wrapper_will_honor_it(
     from tracon import screens
 
     root = _make_loop(tmp_path / "loop-a")
-    (root / "dev" / "local" / "autopilot" / "pause-requested").touch()
+    (root / "docs" / "dev" / "project-management" / "autopilot" / "pause-requested").touch()
 
     collector = screens.Collector(root)
     panel, _ = collector.head()
@@ -1961,8 +1961,8 @@ def test_p_on_dashboard_targets_the_selected_rows_root(
 
     asyncio.run(_drive())
 
-    assert (root_b / "dev" / "local" / "autopilot" / "pause-requested").is_file()
-    assert not (root_a / "dev" / "local" / "autopilot" / "pause-requested").exists()
+    assert (root_b / "docs" / "dev" / "project-management" / "autopilot" / "pause-requested").is_file()
+    assert not (root_a / "docs" / "dev" / "project-management" / "autopilot" / "pause-requested").exists()
 
 
 @pytest.mark.ui
@@ -2018,7 +2018,7 @@ def test_wrapper_pid_dead_transition_shows_banner_and_exits_three(
     from tracon import screens
 
     root = _make_loop(tmp_path / "loop-a")
-    metrics_path = root / "dev" / "local" / "autopilot" / "loop-metrics.jsonl"
+    metrics_path = root / "docs" / "dev" / "project-management" / "autopilot" / "loop-metrics.jsonl"
     _write_lines(metrics_path, [_metrics_line(signal="done")])
     monkeypatch.setattr(screens.discovery, "discover_loops", lambda: [root])
 
@@ -2065,7 +2065,7 @@ def test_poll_wrapper_survives_none_wrapper_root(
     else None): with forced=None and an empty roots list, wrapper_root is
     None. _poll_wrapper must still handle the wrapper's alive -> dead
     transition without crashing -- it must not blindly compute
-    wrapper_root / "dev" / "local" / ... on a None root."""
+    wrapper_root / "docs" / "dev" / "project-management" / ... on a None root."""
     pytest.importorskip("textual", reason=_TEXTUAL_SKIP_REASON)
     from tracon import screens
 

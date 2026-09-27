@@ -51,7 +51,7 @@ attempted at all.
 ## Queued verification checks
 
 After the suite commands above, read this cycle's verification-check queue —
-`dev/local/reviews/{prd-stem}-checks-{cycle}.json`, shape and rules in
+`docs/dev/project-management/reviews/{prd-stem}-checks-{cycle}.json`, shape and rules in
 `review-work-completion/references/output-formats.md` § Verification-check
 queue. It holds the named checks the last review cycle asked for, so that a
 "run this check" finding costs one command here instead of a whole rework task
@@ -102,7 +102,7 @@ hits its budget is handled by § Timed-out commands above and reported as
 
 ## Recorded verification result
 
-At the end of this step, write `dev/local/autopilot/last-verification.json` with
+At the end of this step, write `docs/dev/project-management/autopilot/last-verification.json` with
 the **Write tool**, replacing any prior content:
 
 ```json

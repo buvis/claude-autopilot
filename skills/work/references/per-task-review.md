@@ -26,7 +26,7 @@ One production path anywhere in the diff runs this file in full.
 ## Recorded verification
 
 Pat is dispatched with no tools, so he cannot run the tests himself. Before the
-render, write `dev/local/tmp/review-task-<id>-verification.txt` with the **Write
+render, write `docs/dev/tmp/review-task-<id>-verification.txt` with the **Write
 tool** (never a shell redirect — command output carries quotes and newlines):
 the exact command(s) step 5.5 ran, each exit code, and the runner's own summary
 line (for example `12 passed in 0.4s`). When step 5.5 could not run, write the
@@ -39,7 +39,7 @@ Pat has.
 Dispatch via the sonnet runner (helper-script dispatch — the **Subagent Watchdog** applies), after SKILL.md step 5.7's render call has written the prompt file:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/skills/use-sonnet/scripts/sonnet-run.sh -t "" -S "<pat_session_id>" -f dev/local/tmp/review-task-<id>-prompt.md -o dev/local/tmp/review-task-<id>.md
+bash ${CLAUDE_PLUGIN_ROOT}/skills/use-sonnet/scripts/sonnet-run.sh -t "" -S "<pat_session_id>" -f docs/dev/tmp/review-task-<id>-prompt.md -o docs/dev/tmp/review-task-<id>.md
 ```
 
 Run it as a plain foreground Bash call (the Bash tool's `timeout`, 600000 ms,
@@ -76,15 +76,15 @@ row below whose 3-cycle cap is what ends it.
 For cycle `<n>` (2 or 3):
 
 1. Write the findings you sent the fixer, verbatim, one per line, to
-   `dev/local/tmp/review-task-<id>-prior-<n>.txt` with the **Write tool**. A
+   `docs/dev/tmp/review-task-<id>-prior-<n>.txt` with the **Write tool**. A
    finding line carries backticks and pipes, so it never crosses the shell as a
    `--set` word.
 2. Render the re-run prompt:
 
    ```bash
    python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/skills/work/references/pat-rerun-prompt.md \
-     --out dev/local/tmp/review-task-<id>-rerun-<n>.md \
-     --set-file PRIOR_FINDINGS=dev/local/tmp/review-task-<id>-prior-<n>.txt \
+     --out docs/dev/tmp/review-task-<id>-rerun-<n>.md \
+     --set-file PRIOR_FINDINGS=docs/dev/tmp/review-task-<id>-prior-<n>.txt \
      --set-cmd DELTA_DIFF="git diff <last_reviewed_sha>..HEAD" \
      --set UNCHANGED_NOTE="You already reviewed <task_base_sha>..<last_reviewed_sha> earlier in this conversation. That range is unchanged and is not repeated here." --dispatch-kind pat --dispatch-task <id>
    ```
@@ -92,7 +92,7 @@ For cycle `<n>` (2 or 3):
 3. Dispatch it with `-R` where the first dispatch had `-S`, same output file:
 
    ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/skills/use-sonnet/scripts/sonnet-run.sh -t "" -R "<pat_session_id>" -f dev/local/tmp/review-task-<id>-rerun-<n>.md -o dev/local/tmp/review-task-<id>.md
+   bash ${CLAUDE_PLUGIN_ROOT}/skills/use-sonnet/scripts/sonnet-run.sh -t "" -R "<pat_session_id>" -f docs/dev/tmp/review-task-<id>-rerun-<n>.md -o docs/dev/tmp/review-task-<id>.md
    ```
 
 4. Advance `<last_reviewed_sha>` to the HEAD this dispatch just read, so cycle
@@ -133,15 +133,15 @@ one: a second failure takes that row's `review: failed:<cause>` path.
 re-run inside the ladder below, goes through the parser:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/parse_review.py dev/local/tmp/review-task-<id>.md
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/parse_review.py docs/dev/tmp/review-task-<id>.md
 ```
 
 - **Exit 0** — the JSON on stdout (`no_findings`, `findings`, `closures`) is what
   the ladder below reads. Do not re-parse the raw text by hand.
 - **Exit 1** — the reply broke the reporting contract. Write this text verbatim
-  to `dev/local/tmp/review-task-<id>-correction.txt` with the **Write tool**,
+  to `docs/dev/tmp/review-task-<id>-correction.txt` with the **Write tool**,
   re-render `pat.md` with every flag identical except
-  `--set-file CONTRACT_CORRECTION=dev/local/tmp/review-task-<id>-correction.txt`,
+  `--set-file CONTRACT_CORRECTION=docs/dev/tmp/review-task-<id>-correction.txt`,
   then dispatch **once** more — with `-R "<pat_session_id>"`, never `-S`. The
   session already exists by then, and re-passing `-S` with the same id exits 1
   on `Error: Session ID <id> is already in use.` (verified live 2026-08-28),

@@ -1,7 +1,7 @@
 """The Stop hook that holds a loop session open while a CLI reviewer lane runs.
 
 `guard_stop_on_live_lanes.py` reads the lane markers the codex and gemini
-wrappers leave under `dev/local/autopilot/lanes/<pid>` and refuses the turn's
+wrappers leave under `docs/dev/project-management/autopilot/lanes/<pid>` and refuses the turn's
 end (exit 2, reason on stderr) while one of those pids is alive. It runs here
 as a subprocess with a stdin payload and a `tmp_path` repo, exactly as the
 harness invokes it. A live lane is a `sleep 60` child this test starts.
@@ -29,18 +29,18 @@ AWAITER = (
 
 
 def _repo(tmp_path: Path) -> Path:
-    (tmp_path / "dev" / "local" / "autopilot").mkdir(parents=True)
+    (tmp_path / "docs" / "dev" / "project-management" / "autopilot").mkdir(parents=True)
     return tmp_path
 
 
 def _lanes(repo: Path) -> Path:
-    lanes = repo / "dev" / "local" / "autopilot" / "lanes"
+    lanes = repo / "docs" / "dev" / "project-management" / "autopilot" / "lanes"
     lanes.mkdir(parents=True, exist_ok=True)
     return lanes
 
 
 def _counter(repo: Path) -> Path:
-    return repo / "dev" / "local" / "autopilot" / ".lane-guard-blocks"
+    return repo / "docs" / "dev" / "project-management" / "autopilot" / ".lane-guard-blocks"
 
 
 def _mark(repo: Path, pid: int, kind: str, output: str) -> Path:
@@ -177,7 +177,7 @@ def test_cwd_comes_from_the_payload_and_walks_up(tmp_path: Path) -> None:
     child = _live()
     try:
         _mark(repo, child.pid, "codex", codex_out)
-        # The process cwd has no dev/local/autopilot at or above it; only the
+        # The process cwd has no docs/dev/project-management/autopilot at or above it; only the
         # payload's cwd (a subdirectory of the repo) leads to the lanes.
         result = _run(nested, loop=True, process_cwd=tmp_path.parent)
     finally:
@@ -501,7 +501,7 @@ def test_docs_name_the_guard() -> None:
         f"longer says {guard} holds the session open"
     )
     retention = _section(autopilot, "### Retention", ("## ", "### "))
-    lanes = "dev/local/autopilot/lanes/"
+    lanes = "docs/dev/project-management/autopilot/lanes/"
     assert lanes in _bullet(retention, "- **Disposable**"), (
         f"run-autopilot/SKILL.md ### Retention **Disposable** no longer lists {lanes}"
     )

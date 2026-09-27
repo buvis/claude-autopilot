@@ -42,12 +42,12 @@ def _load_hook_module():
 
 
 class HookFixture:
-    """Sets up a working directory with dev/local/autopilot/ and a transcript."""
+    """Sets up a working directory with docs/dev/project-management/autopilot/ and a transcript."""
 
     def __init__(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.cwd = Path(self.tmp.name)
-        self.autopilot_dir = self.cwd / "dev" / "local" / "autopilot"
+        self.autopilot_dir = self.cwd / "docs" / "dev" / "project-management" / "autopilot"
         self.autopilot_dir.mkdir(parents=True, exist_ok=True)
         self.transcript = self.cwd / "transcript.jsonl"
         self.transcript.touch()
@@ -363,10 +363,10 @@ class ContextCapHookTests(unittest.TestCase):
     # Walk-up cases ---------------------------------------------------------
 
     def test_finds_autopilot_dir_when_cwd_is_subdirectory(self) -> None:
-        """Hook must walk up from cwd to find dev/local/autopilot/.
+        """Hook must walk up from cwd to find docs/dev/project-management/autopilot/.
 
         Same fix pattern as a0c5b8e09 for the stop hook: agent may cd into
-        a subdirectory during work, so a relative `dev/local/autopilot`
+        a subdirectory during work, so a relative `docs/dev/project-management/autopilot`
         resolution from cwd must walk parents until found.
         """
         self.fx.write_state(
@@ -391,7 +391,7 @@ class ContextCapHookTests(unittest.TestCase):
         self.assertEqual(state["cap_rotations"][-1]["task_id"], "task-deep")
 
     def test_no_autopilot_ancestor_is_noop(self) -> None:
-        """When cwd has no dev/local/autopilot ancestor, hook is a no-op."""
+        """When cwd has no docs/dev/project-management/autopilot ancestor, hook is a no-op."""
         with tempfile.TemporaryDirectory() as plain:
             plain_path = Path(plain)
             transcript = plain_path / "transcript.jsonl"
@@ -413,14 +413,14 @@ class ContextCapHookTests(unittest.TestCase):
     # Symlink and unreadable-path edge cases ---------------------------------
 
     def test_dangling_symlink_at_autopilot_path_is_noop(self) -> None:
-        """A dangling symlink where dev/local/autopilot/ would be must not
+        """A dangling symlink where docs/dev/project-management/autopilot/ would be must not
         be returned as the autopilot dir. is_dir() returns False on dangling
         symlinks, so the walk-up skips it and returns None, making the hook
         a no-op (no valid autopilot dir found).
         """
         with tempfile.TemporaryDirectory() as plain:
             plain_path = Path(plain)
-            ap_dir = plain_path / "dev" / "local" / "autopilot"
+            ap_dir = plain_path / "docs" / "dev" / "project-management" / "autopilot"
             ap_dir.parent.mkdir(parents=True)
             os.symlink("/nonexistent/path/that/does/not/exist", str(ap_dir))
             transcript = plain_path / "t.jsonl"

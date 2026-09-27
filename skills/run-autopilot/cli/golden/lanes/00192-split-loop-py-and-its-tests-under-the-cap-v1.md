@@ -8,7 +8,7 @@ rework_cap: 3
 
 # Split cli/loop.py and test_loop.py under the file cap
 
-Source: PRD 00181 review, Alice R13, and the config-audit closure walkthrough (`~/.claude/dev/local/audit-results/2026-09-05.md`). The 800-line standing file cap was deferred because the loop split exceeded that PRD's scope.
+Source: PRD 00181 review, Alice R13, and the config-audit closure walkthrough (`~/.claude/docs/dev/project-management/audit-results/2026-09-05.md`). The 800-line standing file cap was deferred because the loop split exceeded that PRD's scope.
 
 ## Overview
 

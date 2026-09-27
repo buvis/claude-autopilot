@@ -15,7 +15,7 @@ stronger guarantee than a rule saying it must not.
 Two kinds of name are skipped rather than ordered last:
 
 - Anything not ending `.md`.
-- Anything without a `00XXX-` prefix. `dev/local/prds/FASTTRACK-PLAN-v5.md` is
+- Anything without a `00XXX-` prefix. `docs/dev/project-management/prds/FASTTRACK-PLAN-v5.md` is
   unnumbered precisely so "no PRD picker ever selects it"; honoring that is the
   documented contract, not an accident.
 

@@ -71,7 +71,7 @@ _NO_RENDERS = (
 def test_every_render_block_has_every_input_it_needs_to_run() -> None:
     # `render_prompt.py` opens its `--set-file` paths and runs its `--set-cmd`
     # commands the moment the operator pastes the block, and exits 4 when one of
-    # them is not there. Under `dev/local/tmp/` that is this document's own
+    # them is not there. Under `docs/dev/tmp/` that is this document's own
     # doing: the lane stages those files itself, so a render reading one the
     # document never writes - or writes two sections down, which to a reader
     # working top to bottom is the same thing - cannot run. The placeholder is
@@ -89,7 +89,7 @@ def test_every_render_block_has_every_input_it_needs_to_run() -> None:
 
     assert staged, (
         f"{_SKILL_MD}: no render block reads anything the lane staged under "
-        "`dev/local/tmp/`. The prompts are assembled from files this document "
+        "`docs/dev/tmp/`. The prompts are assembled from files this document "
         "writes, so a lane staging nothing sends its dispatches nothing - and a "
         "pin about writing before reading passes by having no read to check."
     )
@@ -107,7 +107,7 @@ def test_every_render_block_has_every_input_it_needs_to_run() -> None:
         f"writes them: {unwritten}. The operator pastes the block, "
         "`render_prompt.py` exits 4 on the missing file, and the item stalls "
         "with its earlier dispatches already paid for. Every path a block reads "
-        "under `dev/local/tmp/` needs a step above it that puts the file there: "
+        "under `docs/dev/tmp/` needs a step above it that puts the file there: "
         "a Write-tool staging line, or an earlier block's `--out`."
     )
     assert not unfilled, (

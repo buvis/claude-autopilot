@@ -52,13 +52,13 @@ stops the item says so.
   is executable. The gemini lane is optional: drop it when
   `${CLAUDE_PLUGIN_ROOT}/skills/use-gemini/scripts/gemini-run.sh` or its backend
   CLI (`copilot`, or native `gemini`) is absent, and say which in the report.
-- **Staging and telemetry.** Create `dev/local/tmp/` and `dev/local/autopilot/`
-  before the first dispatch: `mkdir -p dev/local/autopilot dev/local/tmp`. Both
-  recorders find `dev/local/autopilot` by walking up from the cwd, and with no
+- **Staging and telemetry.** Create `docs/dev/tmp/` and `docs/dev/project-management/autopilot/`
+  before the first dispatch: `mkdir -p docs/dev/project-management/autopilot docs/dev/tmp`. Both
+  recorders find `docs/dev/project-management/autopilot` by walking up from the cwd, and with no
   ancestor holding it they write nothing and exit 0, so a missing directory
   loses every ledger row of the item. Every path a prompt names is absolute,
-  because a subagent misresolves a relative `dev/local/` path as
-  `~/dev/local/`.
+  because a subagent misresolves a relative `docs/dev/project-management/` path as
+  `~/docs/dev/project-management/`.
 
 ## Card
 
@@ -82,11 +82,11 @@ format: the frontmatter keys, the seven sections, one worked card and the
 refusal table.
 
 Stage the card's fields now, with the Write tool, so nothing crosses the shell
-as an argument later: the goal to `dev/local/tmp/fast-track-<item>-goal.txt`,
-the constraints to `dev/local/tmp/fast-track-<item>-constraints.txt`, the
+as an argument later: the goal to `docs/dev/tmp/fast-track-<item>-goal.txt`,
+the constraints to `docs/dev/tmp/fast-track-<item>-constraints.txt`, the
 `## Files` list, one absolute path per line, to
-`dev/local/tmp/fast-track-<item>-files.txt`, and the whole card to
-`dev/local/tmp/fast-track-<item>-card.md`.
+`docs/dev/tmp/fast-track-<item>-files.txt`, and the whole card to
+`docs/dev/tmp/fast-track-<item>-card.md`.
 
 Capture the item's starting commit before any commit of its own lands:
 
@@ -121,10 +121,10 @@ files and go to Implement. An empty section means the card's `framework` and
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/skills/work/references/tess-prompt.md \
-  --out dev/local/tmp/fast-track-<item>-tests.txt \
+  --out docs/dev/tmp/fast-track-<item>-tests.txt \
   --set TASK_SUBJECT=<item> \
-  --set-cmd TASK_DESCRIPTION="cat dev/local/tmp/fast-track-<item>-goal.txt dev/local/tmp/fast-track-<item>-files.txt" \
-  --set-file TASK_ACCEPTANCE_CRITERIA=dev/local/tmp/fast-track-<item>-constraints.txt \
+  --set-cmd TASK_DESCRIPTION="cat docs/dev/tmp/fast-track-<item>-goal.txt docs/dev/tmp/fast-track-<item>-files.txt" \
+  --set-file TASK_ACCEPTANCE_CRITERIA=docs/dev/tmp/fast-track-<item>-constraints.txt \
   --set-file SAMPLE_TEST_FILE=<the card's sample_test> \
   --set-cmd PUBLIC_INTERFACES="cat $(printf '%q ' <each Files entry that exists today>)" \
   --set TEST_FRAMEWORK=<the card's framework> \
@@ -137,7 +137,7 @@ reads the paths the card creates beside the ones that exist today.
 has not written yet exits non-zero and takes the render down with it.
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:tess --task <item> --prompt-file dev/local/tmp/fast-track-<item>-tests.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:tess --task <item> --prompt-file docs/dev/tmp/fast-track-<item>-tests.txt
 ```
 
 Both calls print the prompt's byte count; the start call prints the dispatch id
@@ -147,7 +147,7 @@ under it. Hold that id for the `end` call.
 Agent tool:
   subagent_type: general-purpose
   model: <the card's model>
-  prompt: the contents of dev/local/tmp/fast-track-<item>-tests.txt
+  prompt: the contents of docs/dev/tmp/fast-track-<item>-tests.txt
 ```
 
 ```bash
@@ -172,10 +172,10 @@ git commit -m "test(<scope>): add tests for <item>"
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/ivan.md \
-  --out dev/local/tmp/fast-track-<item>-ivan.txt \
+  --out docs/dev/tmp/fast-track-<item>-ivan.txt \
   --set-cmd FAILING_TESTS="cat $(printf '%q ' <the test files>)" \
-  --set-cmd ARCHITECTURE_CONTEXT="cat dev/local/tmp/fast-track-<item>-constraints.txt $(printf '%q ' <absolute path of the repo's AGENTS.md>)" \
-  --set-file FILE_PATHS=dev/local/tmp/fast-track-<item>-files.txt \
+  --set-cmd ARCHITECTURE_CONTEXT="cat docs/dev/tmp/fast-track-<item>-constraints.txt $(printf '%q ' <absolute path of the repo's AGENTS.md>)" \
+  --set-file FILE_PATHS=docs/dev/tmp/fast-track-<item>-files.txt \
   --set RETRY_INSTRUCTION="" \
   --require-file <each Files entry that exists today> \
   --require-parent <each Files entry the card creates>
@@ -190,14 +190,14 @@ tests, that allowlist and that context. It receives no acceptance criteria and
 nothing from your own reading of the fix.
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:ivan --task <item> --prompt-file dev/local/tmp/fast-track-<item>-ivan.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:ivan --task <item> --prompt-file docs/dev/tmp/fast-track-<item>-ivan.txt
 ```
 
 ```
 Agent tool:
   subagent_type: autopilot:ivan
   model: <the card's model>
-  prompt: the contents of dev/local/tmp/fast-track-<item>-ivan.txt
+  prompt: the contents of docs/dev/tmp/fast-track-<item>-ivan.txt
 ```
 
 Close the row, stage the paths from the `FILES_TOUCHED:` footer, and commit.
@@ -244,13 +244,13 @@ a reviewer.
 every lane into its own copyable command block.
 
 Stage the review inputs first. Run `git diff <base-sha>..HEAD` and save its
-output to `dev/local/tmp/<item>-fast-track.diff` with the Write tool, then copy
+output to `docs/dev/tmp/<item>-fast-track.diff` with the Write tool, then copy
 the `## Agent Output Format` section of
 `${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/references/output-formats.md`
-to `dev/local/tmp/fast-track-output-format.md`.
+to `docs/dev/tmp/fast-track-output-format.md`.
 
 Build the context file the implementation-aware lanes read. With the Write tool,
-put the card verbatim into `dev/local/tmp/<item>-fast-track-context.md` and add
+put the card verbatim into `docs/dev/tmp/<item>-fast-track-context.md` and add
 the changed-file list under a `### Changed Files` heading, then compute the
 mechanical facts over those files:
 
@@ -280,13 +280,13 @@ codex, gemini) take one shape:
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/<persona>.md \
-  --out dev/local/tmp/fast-track-<item>-<lane>.txt \
+  --out docs/dev/tmp/fast-track-<item>-<lane>.txt \
   --set CONTEXT_FILE=<absolute path of the context file> \
   --set DIFF_FILE=<absolute path of the staged diff> \
   --set PACK_FILE="(no pack available this cycle)" \
   --set-file REVIEW_CHECKLIST=${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/references/review-dimensions.md \
   --set-file RUBRIC=${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/references/rubric.md \
-  --set-file OUTPUT_FORMAT=dev/local/tmp/fast-track-output-format.md
+  --set-file OUTPUT_FORMAT=docs/dev/tmp/fast-track-output-format.md
 ```
 
 - `agents/alice.md` for the consensus lane, `agents/bob.md` for codex,
@@ -295,16 +295,16 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUG
   review-work-completion composes it. With the Write tool, append the
   `## Two lenses` and `## Rubric verdicts` sections of
   `${CLAUDE_PLUGIN_ROOT}/agents/eve.md` to the `agents/bob.md` render,
-  `dev/local/tmp/fast-track-<item>-codex.txt`, and replace `{PACK_FINDINGS}`
+  `docs/dev/tmp/fast-track-<item>-codex.txt`, and replace `{PACK_FINDINGS}`
   inside them with `(no pack available this cycle)`.
 - `agents/blake.md` takes `--set-file PRD=<absolute path of the staged card>`,
   `--set-file RUBRIC=${CLAUDE_PLUGIN_ROOT}/skills/review-blindly/references/rubric.md`
   and the same `--set-file OUTPUT_FORMAT=`; his render call names no diff at all.
   An unfilled placeholder exits 1, so every one of the three is passed. One
-  check from the repo root decides his last run input: `test -L dev/local`
+  check from the repo root decides his last run input: `test -L docs/dev/project-management`
   succeeds, or the root's basename starts with a dot. When either holds, prepend
   a `## Filesystem notes` block to his run inputs, carrying the project root,
-  the `dev/local` realpath, and the line that `rg --files` descends into neither
+  the `docs/dev/project-management` realpath, and the line that `rg --files` descends into neither
   and so cannot see those files. Two paths and that line, nothing about the
   change: without the block he sweeps a dot-directory with `rg --files` and
   reports real files as missing.
@@ -315,11 +315,11 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUG
 Open one row per lane, one Bash call each:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:fanout --task <item> --prompt-file dev/local/tmp/fast-track-<item>-consensus.txt
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:blake --task <item> --prompt-file dev/local/tmp/fast-track-<item>-blake.txt
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:eve --task <item> --prompt-file dev/local/tmp/fast-track-<item>-eve.txt
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:bob --task <item> --prompt-file dev/local/tmp/fast-track-<item>-codex.txt
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:carl --task <item> --prompt-file dev/local/tmp/fast-track-<item>-gemini.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:fanout --task <item> --prompt-file docs/dev/tmp/fast-track-<item>-consensus.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:blake --task <item> --prompt-file docs/dev/tmp/fast-track-<item>-blake.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:eve --task <item> --prompt-file docs/dev/tmp/fast-track-<item>-eve.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:bob --task <item> --prompt-file docs/dev/tmp/fast-track-<item>-codex.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:carl --task <item> --prompt-file docs/dev/tmp/fast-track-<item>-gemini.txt
 ```
 
 Send all five lanes in one message: three Task calls and two background Bash
@@ -331,19 +331,19 @@ the session open until the two background lanes finish.
 ```
 Task tool:
   subagent_type: autopilot:alice
-  prompt: the contents of dev/local/tmp/fast-track-<item>-consensus.txt
+  prompt: the contents of docs/dev/tmp/fast-track-<item>-consensus.txt
 ```
 
 ```
 Task tool:
   subagent_type: autopilot:blake
-  prompt: the contents of dev/local/tmp/fast-track-<item>-blake.txt
+  prompt: the contents of docs/dev/tmp/fast-track-<item>-blake.txt
 ```
 
 ```
 Task tool:
   subagent_type: autopilot:eve
-  prompt: the contents of dev/local/tmp/fast-track-<item>-eve.txt
+  prompt: the contents of docs/dev/tmp/fast-track-<item>-eve.txt
 ```
 
 ```
@@ -390,18 +390,18 @@ same instruction against the `Read` tool. That substitution spends no retry; the
 one-retry budget covers every other failure.
 
 Save each subagent lane's returned text once every lane has reported, to
-`dev/local/tmp/consensus-output-<item>.txt`,
-`dev/local/tmp/blind-output-<item>.txt` and
-`dev/local/tmp/doubt-output-<item>.txt`; the CLI lanes write theirs through
+`docs/dev/tmp/consensus-output-<item>.txt`,
+`docs/dev/tmp/blind-output-<item>.txt` and
+`docs/dev/tmp/doubt-output-<item>.txt`; the CLI lanes write theirs through
 `-o`. Then consolidate the roster into one table:
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/consolidate_findings.py \
-  CONSENSUS:$PWD/dev/local/tmp/consensus-output-<item>.txt \
-  BLIND:$PWD/dev/local/tmp/blind-output-<item>.txt \
-  DOUBT:$PWD/dev/local/tmp/doubt-output-<item>.txt \
-  CODEX:$PWD/dev/local/tmp/codex-output-<item>.txt \
-  GEMINI:$PWD/dev/local/tmp/gemini-output-<item>.txt
+  CONSENSUS:$PWD/docs/dev/tmp/consensus-output-<item>.txt \
+  BLIND:$PWD/docs/dev/tmp/blind-output-<item>.txt \
+  DOUBT:$PWD/docs/dev/tmp/doubt-output-<item>.txt \
+  CODEX:$PWD/docs/dev/tmp/codex-output-<item>.txt \
+  GEMINI:$PWD/docs/dev/tmp/gemini-output-<item>.txt
 ```
 
 Pass only the lanes that reported. The script reads consensus off the number of
@@ -415,7 +415,7 @@ findings by file yourself and say in the report that the table is model-side.
 
 Every CRITICAL and HIGH finding earns one adversarial verification before it
 costs a rework. Write the table's rows to
-`dev/local/tmp/fast-track-<item>-raised.json` with the Write tool, as a JSON
+`docs/dev/tmp/fast-track-<item>-raised.json` with the Write tool, as a JSON
 array of objects with the keys `severity` (`CRITICAL`, `HIGH`, `MEDIUM` or
 `LOW`), `title`, `file` and `lane` (the kind that opened the row for the lens
 that raised it: `fast-track:fanout` for the consensus workflow,
@@ -424,7 +424,7 @@ that raised it: `fast-track:fanout` for the consensus workflow,
 which rows earn it:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/fast-track/scripts/fast_track_plan.py verify-targets dev/local/tmp/fast-track-<item>-raised.json
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/fast-track/scripts/fast_track_plan.py verify-targets docs/dev/tmp/fast-track-<item>-raised.json
 ```
 
 It prints those rows as a JSON array, in the order raised: rows the consensus
@@ -433,30 +433,30 @@ and a MEDIUM or a LOW neither reworks nor blocks the exit. It exits 2 on a file
 that is anything but that array.
 
 Number the printed rows from 1. For each one, write its
-title to `dev/local/tmp/fast-track-<item>-finding-<n>-title.txt`, the evidence
-the lane gave to `dev/local/tmp/fast-track-<item>-finding-<n>-evidence.txt` and
-the proof it claimed to `dev/local/tmp/fast-track-<item>-finding-<n>-proof.txt`
+title to `docs/dev/tmp/fast-track-<item>-finding-<n>-title.txt`, the evidence
+the lane gave to `docs/dev/tmp/fast-track-<item>-finding-<n>-evidence.txt` and
+the proof it claimed to `docs/dev/tmp/fast-track-<item>-finding-<n>-proof.txt`
 with the Write tool, then render its prompt:
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/victor.md \
-  --out dev/local/tmp/fast-track-<item>-verify-<n>.txt \
-  --set-file FINDING_TITLE=dev/local/tmp/fast-track-<item>-finding-<n>-title.txt \
+  --out docs/dev/tmp/fast-track-<item>-verify-<n>.txt \
+  --set-file FINDING_TITLE=docs/dev/tmp/fast-track-<item>-finding-<n>-title.txt \
   --set FINDING_SEVERITY=<CRITICAL or HIGH> \
   --set FINDING_FILE=<the path the finding names> \
-  --set-file FINDING_EVIDENCE=dev/local/tmp/fast-track-<item>-finding-<n>-evidence.txt \
-  --set-file FINDING_PROOF=dev/local/tmp/fast-track-<item>-finding-<n>-proof.txt
+  --set-file FINDING_EVIDENCE=docs/dev/tmp/fast-track-<item>-finding-<n>-evidence.txt \
+  --set-file FINDING_PROOF=docs/dev/tmp/fast-track-<item>-finding-<n>-proof.txt
 ```
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:victor --task <item> --prompt-file dev/local/tmp/fast-track-<item>-verify-<n>.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:victor --task <item> --prompt-file docs/dev/tmp/fast-track-<item>-verify-<n>.txt
 ```
 
 ```
 Task tool:
   subagent_type: general-purpose
   model: sonnet
-  prompt: the contents of dev/local/tmp/fast-track-<item>-verify-<n>.txt
+  prompt: the contents of docs/dev/tmp/fast-track-<item>-verify-<n>.txt
 ```
 
 Uncertainty refutes; only a shown broken path confirms. Record each refuted
@@ -481,31 +481,31 @@ git rev-parse HEAD
 Hold that as `<rework-base-sha>`, so the delta range `<rework-base-sha>..HEAD`
 is the rework commit and nothing else.
 
-Write the confirmed findings to `dev/local/tmp/fast-track-<item>-findings.txt`
+Write the confirmed findings to `docs/dev/tmp/fast-track-<item>-findings.txt`
 with the Write tool. That file is the rework's spec, as the test files are
 round one's: the fresh implementor reads the findings with no memory of the
 code they fault, so it argues with nobody.
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/ivan.md \
-  --out dev/local/tmp/fast-track-<item>-rework.txt \
-  --set-file FAILING_TESTS=dev/local/tmp/fast-track-<item>-findings.txt \
-  --set-cmd ARCHITECTURE_CONTEXT="cat dev/local/tmp/fast-track-<item>-constraints.txt $(printf '%q ' <absolute path of the repo's AGENTS.md>)" \
-  --set-file FILE_PATHS=dev/local/tmp/fast-track-<item>-files.txt \
+  --out docs/dev/tmp/fast-track-<item>-rework.txt \
+  --set-file FAILING_TESTS=docs/dev/tmp/fast-track-<item>-findings.txt \
+  --set-cmd ARCHITECTURE_CONTEXT="cat docs/dev/tmp/fast-track-<item>-constraints.txt $(printf '%q ' <absolute path of the repo's AGENTS.md>)" \
+  --set-file FILE_PATHS=docs/dev/tmp/fast-track-<item>-files.txt \
   --set RETRY_INSTRUCTION="Rework round. The suite is green; the failing tests above are the reviewers' confirmed findings. Address each one and keep the suite green." \
   --require-file <each Files entry that exists today> \
   --require-parent <each Files entry the card creates>
 ```
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:ivan --task <item> --prompt-file dev/local/tmp/fast-track-<item>-rework.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:ivan --task <item> --prompt-file docs/dev/tmp/fast-track-<item>-rework.txt
 ```
 
 ```
 Agent tool:
   subagent_type: autopilot:ivan
   model: <the card's model>
-  prompt: the contents of dev/local/tmp/fast-track-<item>-rework.txt
+  prompt: the contents of docs/dev/tmp/fast-track-<item>-rework.txt
 ```
 
 Close the row, stage the paths the `FILES_TOUCHED:` footer names, and commit
@@ -530,7 +530,7 @@ again. Render her prompt from her persona, as in Roster:
 
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/eve.md \
-  --out dev/local/tmp/fast-track-<item>-delta.txt \
+  --out docs/dev/tmp/fast-track-<item>-delta.txt \
   --set PACK_FINDINGS="(no pack available this cycle)"
 ```
 
@@ -543,13 +543,13 @@ its changed-file list and the card.
 > the scoped diff for any regression the rework introduced.
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:delta --task <item> --prompt-file dev/local/tmp/fast-track-<item>-delta.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:delta --task <item> --prompt-file docs/dev/tmp/fast-track-<item>-delta.txt
 ```
 
 ```
 Task tool:
   subagent_type: autopilot:eve
-  prompt: the contents of dev/local/tmp/fast-track-<item>-delta.txt
+  prompt: the contents of docs/dev/tmp/fast-track-<item>-delta.txt
 ```
 
 Close the row when she returns. Each confirmed finding she reports unresolved
@@ -558,13 +558,13 @@ set. The exit rule reads that set.
 
 ## Exit
 
-Write the surviving set to `dev/local/tmp/fast-track-<item>-surviving.json`
+Write the surviving set to `docs/dev/tmp/fast-track-<item>-surviving.json`
 with the Write tool, in the shape of the raised file: the confirmed findings
 still standing after Delta plus any she raised on the rework diff, or `[]` when
 nothing survived. Then run the exit rule over it:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/fast-track/scripts/fast_track_plan.py exit-action dev/local/tmp/fast-track-<item>-surviving.json
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/fast-track/scripts/fast_track_plan.py exit-action docs/dev/tmp/fast-track-<item>-surviving.json
 ```
 
 It prints `commit` or `branch`: any surviving CRITICAL or HIGH parks the item
@@ -625,13 +625,13 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/fast-track/scripts/record_item.py --item <i
 `--outcome` is `committed`, `branched` or `stopped`. Pass `--cost` when a
 measured USD figure exists; an absent `--cost` records unmeasured, which is not
 the same fact as free. The row lands in
-`dev/local/autopilot/loop-metrics.jsonl` and its `ledger/` mirror.
+`docs/dev/project-management/autopilot/loop-metrics.jsonl` and its `ledger/` mirror.
 
 Then count what the item spent, out of the rows the `start` calls above
 appended:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/fast-track/scripts/fast_track_plan.py count dev/local/autopilot/dispatch-metrics.jsonl <item>
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/fast-track/scripts/fast_track_plan.py count docs/dev/project-management/autopilot/dispatch-metrics.jsonl <item>
 ```
 
 It prints one `fast-track:<kind> <n>` line per kind the item opened, sorted by
@@ -640,7 +640,7 @@ printed; they are the item's cost per lane.
 
 ## Report
 
-Write the item's report to `dev/local/tmp/<item>-fast-track-review.md` with the
+Write the item's report to `docs/dev/tmp/<item>-fast-track-review.md` with the
 Write tool before you say anything in chat. One file per item, holding in this
 order:
 
@@ -673,4 +673,4 @@ Then close with one screen:
 
 An item stopped by a red gate or a surviving CRITICAL says so in the first line.
 A lens that never reported is reported as missing, and the ledger file
-`dev/local/autopilot/loop-metrics.jsonl` is where the numbers came from.
+`docs/dev/project-management/autopilot/loop-metrics.jsonl` is where the numbers came from.

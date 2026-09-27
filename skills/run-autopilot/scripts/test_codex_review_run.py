@@ -449,7 +449,7 @@ class ExitContractTests(unittest.TestCase):
             old_cwd = os.getcwd()
             os.environ["PATH"] = str(tmpp) + os.pathsep + old_path
             # Isolate cwd so find_autopilot_dir does not resolve to a real
-            # dev/local/autopilot up the tree (which would pollute it).
+            # docs/dev/project-management/autopilot up the tree (which would pollute it).
             os.chdir(str(cwd) if cwd else str(tmpp))
             try:
                 return dr.main(["codex_review_run.py", str(prompt)])
@@ -498,7 +498,7 @@ class ExitContractTests(unittest.TestCase):
         # <autopilot_dir>/codex-review-output.md so the doubt phase can read
         # it back as the reviewer's findings + verdicts + coverage block.
         with tempfile.TemporaryDirectory() as work:
-            ap = Path(work) / "dev" / "local" / "autopilot"
+            ap = Path(work) / "docs" / "dev" / "project-management" / "autopilot"
             ap.mkdir(parents=True)
             body = (
                 "printf '%s\\n' "
@@ -518,7 +518,7 @@ class ExitContractTests(unittest.TestCase):
         mentions "quota" must complete with exit 0 and its output on disk —
         not be misclassified as a codex-side usage-limit failure."""
         with tempfile.TemporaryDirectory() as work:
-            ap = Path(work) / "dev" / "local" / "autopilot"
+            ap = Path(work) / "docs" / "dev" / "project-management" / "autopilot"
             ap.mkdir(parents=True)
             body = (
                 "printf '%s\\n' "
@@ -564,7 +564,7 @@ class ExitContractTests(unittest.TestCase):
         on disk — a caller falling back to Claude on exit 4 must not also
         lose output codex already produced."""
         with tempfile.TemporaryDirectory() as work:
-            ap = Path(work) / "dev" / "local" / "autopilot"
+            ap = Path(work) / "docs" / "dev" / "project-management" / "autopilot"
             ap.mkdir(parents=True)
             body = (
                 "printf '%s\\n' "
@@ -584,7 +584,7 @@ class ExitContractTests(unittest.TestCase):
         genuine usage-limit event rather than a nonzero exit — the review
         text captured before it must still be kept."""
         with tempfile.TemporaryDirectory() as work:
-            ap = Path(work) / "dev" / "local" / "autopilot"
+            ap = Path(work) / "docs" / "dev" / "project-management" / "autopilot"
             ap.mkdir(parents=True)
             body = (
                 "printf '%s\\n' "
@@ -605,7 +605,7 @@ class ExitContractTests(unittest.TestCase):
         the target path and the error instead of going quiet about a lost
         review."""
         with tempfile.TemporaryDirectory() as work:
-            ap = Path(work) / "dev" / "local" / "autopilot"
+            ap = Path(work) / "docs" / "dev" / "project-management" / "autopilot"
             ap.mkdir(parents=True)
             out = ap / "codex-review-output.md"
             out.mkdir()  # write_text() -> IsADirectoryError (an OSError)
@@ -633,7 +633,7 @@ class ExitContractTests(unittest.TestCase):
         the return code must stay 4 (codex's own failure), but the write
         failure must still be surfaced, not swallowed."""
         with tempfile.TemporaryDirectory() as work:
-            ap = Path(work) / "dev" / "local" / "autopilot"
+            ap = Path(work) / "docs" / "dev" / "project-management" / "autopilot"
             ap.mkdir(parents=True)
             out = ap / "codex-review-output.md"
             out.mkdir()  # write_text() -> IsADirectoryError (an OSError)

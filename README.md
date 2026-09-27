@@ -33,7 +33,7 @@ tests, `mallory` security, `trent` rubric, `victor` adversarial verification,
 Two hooks. `enforce_prd_location.py` keeps working documents in their
 declared homes instead of scattered through the repo. It runs on `PreToolUse`
 for `Edit`, `Write`, `MultiEdit` and `Bash`: file mode blocks a PRD written
-outside a `dev/local/prds/` lifecycle directory, and Bash mode blocks a command
+outside a `docs/dev/project-management/prds/` lifecycle directory, and Bash mode blocks a command
 that references a repo-root `backlog/`, `wip/`, `hold/` or `done/`.
 `guard_push_on_critical.py` runs on `PreToolUse` for `Bash` and denies a
 `git push` into a repository with pending cap_critical custody (a capped-out
@@ -94,7 +94,7 @@ and naming the resolved root. Scripts locate their own siblings from `$0` or
 - **The `autoclaude` wrapper.** The shell front-end that relaunches headless
   sessions across a batch lives in the author's dotfiles. A plugin cannot install
   shell functions. Drive `/autopilot:run-autopilot` from your own automation instead.
-- **Run state.** Everything under `dev/local/**` — `state.json`, reports,
+- **Run state.** Everything under `docs/dev/project-management/**` — `state.json`, reports,
   transcripts — belongs to the repo being worked on, not to this pack.
 - **`notify.py`.** Desktop notification glue, host-specific, stays personal.
 - **`save-session` / `resume-session` / `restore-tasks`.** Codex storage

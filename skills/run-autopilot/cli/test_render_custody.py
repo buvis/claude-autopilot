@@ -5,7 +5,7 @@ a `- Commits:` line between Detail and Resume when that record carries a
 `commit_range`. Range-less stalls keep today's three-line body byte for byte.
 
 The CLI half drives `__main__.py` as a real process against a constructed
-<repo>/dev/local/autopilot tree (the test_render_cli.py fixture shape); the
+<repo>/docs/dev/project-management/autopilot tree (the test_render_cli.py fixture shape); the
 function half pins `render_report.stalled_section` in process.
 """
 
@@ -39,7 +39,7 @@ RANGE_LESS_BLOCK = (
     "\n"
     f"- Stalled: {NOW}\n"
     f"- Detail: {DETAIL}\n"
-    "- Resume: move back to dev/local/prds/wip/ and re-run\n"
+    "- Resume: move back to docs/dev/project-management/prds/wip/ and re-run\n"
 )
 
 
@@ -87,7 +87,7 @@ class StalledCustodyCliTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.repo = Path(tmp.name)
-        self.ap_dir = self.repo / "dev" / "local" / "autopilot"
+        self.ap_dir = self.repo / "docs" / "dev" / "project-management" / "autopilot"
         self.ap_dir.mkdir(parents=True)
         self.state_path = self.ap_dir / "state.json"
         self.state_path.write_text(

@@ -392,7 +392,7 @@ class ReportEdgeTests(unittest.TestCase):
         )
         self.assertIn("## 00040-x.md — STALLED (oversized_plan)", text)
         self.assertIn("- Detail: 34 tasks", text)
-        self.assertIn("move back to dev/local/prds/wip/", text)
+        self.assertIn("move back to docs/dev/project-management/prds/wip/", text)
 
 
 class PrdSectionTaskCountTests(unittest.TestCase):

@@ -2,7 +2,7 @@
 """Tests for cli/triage.py and the `autopilot mint-stubs` verb (PRD 00195).
 
 The pure helpers (qualification, ownership, folding, template, allocation)
-run in-process against a synthetic `<root>/dev/local/{autopilot,prds,
+run in-process against a synthetic `<root>/docs/dev/project-management/{autopilot,prds,
 discovery}` tree; the frozen ddb slice in `golden/triage-ddb-202607161128.json`
 pins the 12-then-zero contract; the CLI section runs `cli/__main__.py` as a
 subprocess and binds stdout, exit 2 / 9, path resolution and the
@@ -30,9 +30,9 @@ LIFECYCLE = ("backlog", "wip", "hold", "done")
 
 
 def _tree(root: Path) -> tuple[Path, Path]:
-    autopilot = root / "dev" / "local" / "autopilot"
+    autopilot = root / "docs" / "dev" / "project-management" / "autopilot"
     (autopilot / "deferred").mkdir(parents=True)
-    prds = root / "dev" / "local" / "prds"
+    prds = root / "docs" / "dev" / "project-management" / "prds"
     for lifecycle in LIFECYCLE:
         (prds / lifecycle).mkdir(parents=True)
     return autopilot, prds

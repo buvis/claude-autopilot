@@ -33,7 +33,7 @@ At every task exit — success in `SKILL.md` step 6, abort in step 4 (timeout / 
 }
 ```
 
-**Timing is deliberately not an attempt field.** No timestamp, duration or prompt size is stamped here: an attempt spans several dispatches — Tess, Ivan, Pat and their retries — so one pair of stamps could not say which of them took the hour. Those live in the dispatch ledger, `dev/local/autopilot/dispatch-metrics.jsonl` (a start row and one or more end rows per dispatch, joined on `id`, plus one row per session-handoff edge; `references/subagent-dispatch.md` § Dispatch telemetry), and a task's runtime is read from its rows there, keyed on `task`.
+**Timing is deliberately not an attempt field.** No timestamp, duration or prompt size is stamped here: an attempt spans several dispatches — Tess, Ivan, Pat and their retries — so one pair of stamps could not say which of them took the hour. Those live in the dispatch ledger, `docs/dev/project-management/autopilot/dispatch-metrics.jsonl` (a start row and one or more end rows per dispatch, joined on `id`, plus one row per session-handoff edge; `references/subagent-dispatch.md` § Dispatch telemetry), and a task's runtime is read from its rows there, keyed on `task`.
 
 **Cardinality (PRD 00065)**: today `/autopilot:work` appends exactly one entry per task at exit. Under in-loop escalation the rule widens to one entry per rung/dispatch-group: each rung that dispatched writes its own entry when the task escalates away from it or exits on it. `attempt` numbers stay sequential across rungs (`len(existing)+1`). This is a widening, not a break — a task that never escalates still writes exactly one entry, byte-identical to today.
 
@@ -79,12 +79,12 @@ At every task exit — success in `SKILL.md` step 6, abort in step 4 (timeout / 
 | `escalation_reason:"gate_failure"` | the rung escalated INTO (higher)'s entry |
 | `escalated_from` | the rung escalated INTO (higher)'s entry |
 
-**Append procedure**: write the entry object to `dev/local/tmp/attempt-task-<id>.json` with the **Write tool** (never a shell redirect, and never an inline shell argument — an attempt record carries quotes and newlines), then pick the call by exit path:
+**Append procedure**: write the entry object to `docs/dev/tmp/attempt-task-<id>.json` with the **Write tool** (never a shell redirect, and never an inline shell argument — an attempt record carries quotes and newlines), then pick the call by exit path:
 
 | Exit path | Call |
 |---|---|
-| **Task completed** (`SKILL.md` step 6) | `statectl.py <state.json> task-done <task-id> dev/local/tmp/attempt-task-<id>.json` |
-| **Abort or escalate-away** (step 4 timeout / context exceeded / error after debug, Subagent Dispatch Budget overrun, an `"escalated"` rung entry) | `statectl.py <state.json> append-attempt <task-id> dev/local/tmp/attempt-task-<id>.json` |
+| **Task completed** (`SKILL.md` step 6) | `statectl.py <state.json> task-done <task-id> docs/dev/tmp/attempt-task-<id>.json` |
+| **Abort or escalate-away** (step 4 timeout / context exceeded / error after debug, Subagent Dispatch Budget overrun, an `"escalated"` rung entry) | `statectl.py <state.json> append-attempt <task-id> docs/dev/tmp/attempt-task-<id>.json` |
 
 `task-done` is the **only** call the success path makes: it appends the entry, sets `tasks[i].status = "completed"`, and recomputes `tasks_completed` in one locked atomic write, resolving the task by `tasks[].id` rather than array position. Do not pair it with a separate status write or a `tasks_completed` write — the count is derived and must never be passed in.
 
@@ -108,4 +108,4 @@ Cross-reference: `run-autopilot/references/state-schema.md` `tasks[].attempts` r
 
 ## Assumption ledger (moved from SKILL.md § Assumptions footer, PRD 00119-v2)
 
-Collect the returned lines: step 6 appends non-`none` entries to `dev/local/meta/assumptions.md` under a `## <task-id>: <task subject>` heading (Write/Edit tool, never shell redirects). On the first completed task of a full-plan pass, replace the file instead of appending - the ledger is per-plan. Step 7's phase report includes the ledger so the user and the review phase can examine what the implementors guessed in a 30-second read.
+Collect the returned lines: step 6 appends non-`none` entries to `docs/dev/project-management/meta/assumptions.md` under a `## <task-id>: <task subject>` heading (Write/Edit tool, never shell redirects). On the first completed task of a full-plan pass, replace the file instead of appending - the ledger is per-plan. Step 7's phase report includes the ledger so the user and the review phase can examine what the implementors guessed in a 30-second read.

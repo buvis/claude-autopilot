@@ -340,13 +340,13 @@ def batch_completed_count(state: LoopState) -> int:
 
 
 def prd_counts(root: Path) -> tuple[int, int]:
-    backlog = root / "dev" / "local" / "prds" / "backlog"
-    wip = root / "dev" / "local" / "prds" / "wip"
+    backlog = root / "docs" / "dev" / "project-management" / "prds" / "backlog"
+    wip = root / "docs" / "dev" / "project-management" / "prds" / "wip"
     return (len(list(backlog.glob("*.md"))), len(list(wip.glob("*.md"))))
 
 
 def prd_done_count(root: Path) -> int:
-    done = root / "dev" / "local" / "prds" / "done"
+    done = root / "docs" / "dev" / "project-management" / "prds" / "done"
     return len(list(done.glob("*.md")))
 
 

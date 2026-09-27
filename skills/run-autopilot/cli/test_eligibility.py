@@ -9,7 +9,7 @@ toward not-running the PRD.
 
 The last class is the one real fixture: the command stamped on the live
 `hold/00110` PRD, proven unmet against an empty reviews tree and met against
-three synthetic ones. That PRD lives under dev/local (gitignored), so the
+three synthetic ones. That PRD lives under docs/dev/project-management (gitignored), so the
 command string is pinned HERE and the hold file mirrors it.
 """
 
@@ -24,11 +24,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from cli import eligibility
 
-# Mirrors the `eligibility:` line stamped on dev/local/prds/hold/00110-*.md,
+# Mirrors the `eligibility:` line stamped on docs/dev/project-management/prds/hold/00110-*.md,
 # which is gitignored and so cannot be read by a test on a fresh clone.
 HOLD_00110_COMMAND = (
     "test $(grep -l 'no verdict divergence' "
-    "$(grep -l '^consensus_run_id:' dev/local/reviews/*.md 2>/dev/null "
+    "$(grep -l '^consensus_run_id:' docs/dev/project-management/reviews/*.md 2>/dev/null "
     "| grep -v /00110-) /dev/null 2>/dev/null | wc -l) -ge 3"
 )
 
@@ -132,7 +132,7 @@ class Hold00110FixtureTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name)
-        self.reviews = self.root / "dev" / "local" / "reviews"
+        self.reviews = self.root / "docs" / "dev" / "project-management" / "reviews"
         self.reviews.mkdir(parents=True)
 
     def _review(self, name: str, *, stamped: bool, converged: bool) -> None:

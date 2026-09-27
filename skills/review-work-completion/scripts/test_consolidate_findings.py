@@ -9,7 +9,7 @@ The four-reviewer paraphrase fixture reconstructs the engram batch
 202608012229 cycle-2 case named in the PRD (one `sys.exit(1)` defect that
 four reviewers worded four ways and the bash consolidator scored [1/4]
 four times). The original reviewer outputs were GC'd with
-`dev/local/reviews/`, so the wordings here are reconstructed from the PRD's
+`docs/dev/project-management/reviews/`, so the wordings here are reconstructed from the PRD's
 and the batch record's descriptions, not copied from the files.
 """
 

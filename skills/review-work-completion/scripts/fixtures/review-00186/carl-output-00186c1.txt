@@ -1,59 +1,59 @@
 I will read the review context and diff files to begin the code review.
 
 ● Read review-diff-00186c1.diff
-  │ dev/local/tmp/review-diff-00186c1.diff
+  │ docs/dev/tmp/review-diff-00186c1.diff
   └ 1 line read
 
 ● Read review-context-00186c1.md
-  │ dev/local/tmp/review-context-00186c1.md
+  │ docs/dev/tmp/review-context-00186c1.md
   └ 1 line read
 
 I am inspecting the review context and diff files to understand the changes and requirements.
 
 ● Check line counts of review context and diff (shell)
   │ wc -l
-  │ /Users/bob/git/src/github.com/buvis/claude-autopilot/dev/local/tmp/review-context-00186c1.md
-  │ /Users/bob/git/src/github.com/buvis/claude-autopilot/dev/local/tmp/review-diff-00186c1.diff
+  │ /Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/tmp/review-context-00186c1.md
+  │ /Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/tmp/review-diff-00186c1.diff
   └ 4 lines…
 
 I will inspect the review context and diff to understand the changes and requirements.
 
 ● Show changed files in diff (shell)
   │ git apply --stat
-  │ /Users/bob/git/src/github.com/buvis/claude-autopilot/dev/local/tmp/review-diff-00186c1.diff
+  │ /Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/tmp/review-diff-00186c1.diff
   │ 2>/dev/null || diffstat
-  │ /Users/bob/git/src/github.com/buvis/claude-autopilot/dev/local/tmp/review-diff-00186c1.diff
+  │ /Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/tmp/review-diff-00186c1.diff
   │ 2>/dev/null || grep -E '^(diff --git|--- |\+\+\+ )' …
   └ 44 lines…
 
 ● Read top 50 lines of review context (shell)
   │ head -n 50
-  │ /Users/bob/git/src/github.com/buvis/claude-autopilot/dev/local/tmp/review-context-00186c1.md
+  │ /Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/tmp/review-context-00186c1.md
   └ 51 lines…
 
 ● Find all tasks in review context (shell)
   │ grep -n "^=== TASK"
-  │ /Users/bob/git/src/github.com/buvis/claude-autopilot/dev/local/tmp/review-context-00186c1.md
+  │ /Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/tmp/review-context-00186c1.md
   └ 7 lines…
 
 ● Read lines 170-260 of review context (shell)
   │ sed -n '170,260p'
-  │ /Users/bob/git/src/github.com/buvis/claude-autopilot/dev/local/tmp/review-context-00186c1.md
+  │ /Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/tmp/review-context-00186c1.md
   └ 92 lines…
 
 ● Read lines 261-350 of review context (shell)
   │ sed -n '261,350p'
-  │ /Users/bob/git/src/github.com/buvis/claude-autopilot/dev/local/tmp/review-context-00186c1.md
+  │ /Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/tmp/review-context-00186c1.md
   └ 90 lines…
 
 ● Read lines 351-450 of review context (shell)
   │ sed -n '351,450p'
-  │ /Users/bob/git/src/github.com/buvis/claude-autopilot/dev/local/tmp/review-context-00186c1.md
+  │ /Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/tmp/review-context-00186c1.md
   └ 101 lines…
 
 ● Read lines 451 to end of review context (shell)
   │ sed -n '451,568p'
-  │ /Users/bob/git/src/github.com/buvis/claude-autopilot/dev/local/tmp/review-context-00186c1.md
+  │ /Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/tmp/review-context-00186c1.md
   └ 119 lines…
 
 ● Run pytest on fast-track scripts and release-checks (shell)

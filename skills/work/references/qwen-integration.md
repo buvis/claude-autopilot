@@ -84,10 +84,10 @@ tree. Never classify absolute path ancestors as part of the task's write set.
 The executable output guard calls its `qwen_attempt_outcome` classifier.
 
 Before dispatch, write the exact Tess-owned test paths to
-`dev/local/tmp/qwen-<task-id>-tests.txt` (one absolute path per line), and run:
+`docs/dev/tmp/qwen-<task-id>-tests.txt` (one absolute path per line), and run:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_qwen_output.py before --repo-root <git-work-tree> --test-commit <test_commit_sha> --files-file dev/local/tmp/ivan-<task-id>-files.txt --tests-file dev/local/tmp/qwen-<task-id>-tests.txt --snapshot dev/local/tmp/qwen-<task-id>-snapshot.json
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_qwen_output.py before --repo-root <git-work-tree> --test-commit <test_commit_sha> --files-file docs/dev/tmp/ivan-<task-id>-files.txt --tests-file docs/dev/tmp/qwen-<task-id>-tests.txt --snapshot docs/dev/tmp/qwen-<task-id>-snapshot.json
 ```
 
 For a bare-backed project, also pass `--git-dir <bare-git-dir>`; the root is
@@ -102,7 +102,7 @@ Qwen may edit only its named implementation file; it must not stage or commit.
 Immediately after Qwen exits 0, **before staging, committing, or step 5.5**, run:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_qwen_output.py after --snapshot dev/local/tmp/qwen-<task-id>-snapshot.json
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_qwen_output.py after --snapshot docs/dev/tmp/qwen-<task-id>-snapshot.json
 ```
 
 Exit 0 means a task-owned implementation diff survives Git's commit normalization (clean filters and filemode rules) and all Tess-owned paths

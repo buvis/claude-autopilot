@@ -13,7 +13,7 @@ dispatch-metrics.jsonl afterwards.
 record_item.py is not an installed package, so it is loaded by path, the same
 idiom test_card.py uses. The cost column's producer-to-renderer tests live in
 test_record_item_render.py. Every CLI run is driven with `cwd=` inside a
-tmp_path tree carrying its own dev/local/autopilot directory, so the walk-up
+tmp_path tree carrying its own docs/dev/project-management/autopilot directory, so the walk-up
 lands there and no test appends to this repo's own ledger.
 """
 
@@ -54,8 +54,7 @@ _DISPATCH_FILENAME = "dispatch-metrics.jsonl"
 # starting from the script's own location instead of the cwd would land here.
 _REPO_LEDGER = (
     Path(__file__).resolve().parents[3]
-    / "dev"
-    / "local"
+    / "docs" / "dev" / "project-management"
     / "autopilot"
     / _LEDGER_FILENAME
 )
@@ -89,7 +88,7 @@ _REQUIRED_FLAGS = (
 
 def _autopilot_tree(root: Path) -> Path:
     """A tmp tree the walk-up can land in, returning its autopilot dir."""
-    autopilot_dir = root / "dev" / "local" / "autopilot"
+    autopilot_dir = root / "docs" / "dev" / "project-management" / "autopilot"
     autopilot_dir.mkdir(parents=True)
     return autopilot_dir
 

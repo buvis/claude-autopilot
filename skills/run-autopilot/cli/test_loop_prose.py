@@ -110,7 +110,7 @@ def _handoff_procedure() -> str:
     return _TEXT[start : _TEXT.index("\n### ", start + 1)]
 
 
-_WRITE_BRIEF = r"statectl\.py \S+ write-brief dev/local/autopilot/session-brief\.md"
+_WRITE_BRIEF = r"statectl\.py \S+ write-brief docs/dev/project-management/autopilot/session-brief\.md"
 _SKILLS = _SKILL.parent.parent
 _WORK_HANDOFF = _SKILLS / "work" / "references" / "task-boundary-handoff.md"
 _REVIEW_SKILL = _SKILLS / "review-work-completion" / "SKILL.md"
@@ -161,7 +161,7 @@ def test_phase_0_opens_with_the_brief() -> None:
         start = text.index(heading) + len(heading)
         opening = text[start : text.index("\n\n", start + 2)]
         for needle in (
-            "Read `dev/local/autopilot/session-brief.md` if it exists",
+            "Read `docs/dev/project-management/autopilot/session-brief.md` if it exists",
             "Where section replaces the state reads",
             "Read next section lists",
             "fall back to the state reads",

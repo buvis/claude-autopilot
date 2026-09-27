@@ -7,7 +7,7 @@ model_tier_rationale: prose reorder with the exact sentences given; every edit i
 
 # Commit subagent output before a rotation can lose it
 
-Source: `dev/local/notes/autoclaude-inefficiencies-2026-09-13.md` finding 5,
+Source: `docs/dev/project-management/notes/autoclaude-inefficiencies-2026-09-13.md` finding 5,
 split out of PRD 00196 at the 2026-09-13 backlog review. Lands after 00196
 and 00200 (the rotation envelope this PRD extends is the one they
 parameterise).

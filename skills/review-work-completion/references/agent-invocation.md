@@ -26,7 +26,7 @@ this build, and no Edit/Write ever.
 
 Run codex as a **direct background Bash command - do NOT wrap it in a Task subagent.** A subagent that shells out to a CLI hangs: the CLI spawns its own child process the subagent wrapper never gets a completion signal from, so the subagent yields "codex still running" and the reviewer never reports. That is the recurring Phase 4 review thrash-halt (playground 00007, 2026-06-30). Run codex directly and the harness tracks the background process. **In an interactive session** this re-invokes you when it finishes; **in headless/loop mode (`$_AUTOPILOT_LOOP` set) it does not** — headless `claude -p` kills background Bash ~5s after your turn ends, so ending the turn to "wait" for Bob kills him mid-review (2026-07-15 loop death, PRD 00062 cycle 3: the CLI reviewers killed with empty output). Dispatch the Watcher subagent from SKILL.md step 5 in the same message, or you will not be re-invoked.
 
-Write the prompt to a temp file, then dispatch (**absolute paths** - relative `dev/local/` paths get misresolved).
+Write the prompt to a temp file, then dispatch (**absolute paths** - relative `docs/dev/project-management/` paths get misresolved).
 
 **Citation line.** Bob's assembled prompt (SKILL.md step 4's persona plus appendices) ends with the sentence every consensus persona carries, so the consolidator's file gate sees one citation shape from every lens: `Cite files repo-relative as path:line (for example skills/work/SKILL.md:166), never absolute and never with a "(lines a-b)" suffix.` A finding that spans files cites the first file as its `File:` value, never `N/A (a.py:77, b.py:91)`: `consolidate_findings.py` reads the first path out of that shape, but a bare `N/A` matches nothing.
 
@@ -34,14 +34,14 @@ Write the prompt to a temp file, then dispatch (**absolute paths** - relative `d
 
 ```
 Bash tool (run_in_background: true):
-  ${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex-run.sh -f "{bob_prompt_file_absolute_path}" -o "{abs_repo_path}/dev/local/tmp/bob-output-{id}.txt" --emit-thread-id "{abs_repo_path}/dev/local/tmp/bob-thread-{id}.txt"
+  ${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex-run.sh -f "{bob_prompt_file_absolute_path}" -o "{abs_repo_path}/docs/dev/tmp/bob-output-{id}.txt" --emit-thread-id "{abs_repo_path}/docs/dev/tmp/bob-thread-{id}.txt"
 ```
 
 **Incremental review (rework cycle) with a prior `codex_thread_id`** (step 3 read it from the previous review file) - same command plus `--resume-thread` so Bob verifies fixes against his own cycle-1 critique instead of re-reviewing from zero:
 
 ```
 Bash tool (run_in_background: true):
-  ${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex-run.sh -f "{bob_prompt_file_absolute_path}" -o "{abs_repo_path}/dev/local/tmp/bob-output-{id}.txt" --emit-thread-id "{abs_repo_path}/dev/local/tmp/bob-thread-{id}.txt" --resume-thread "{prior_codex_thread_id}"
+  ${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex-run.sh -f "{bob_prompt_file_absolute_path}" -o "{abs_repo_path}/docs/dev/tmp/bob-output-{id}.txt" --emit-thread-id "{abs_repo_path}/docs/dev/tmp/bob-thread-{id}.txt" --resume-thread "{prior_codex_thread_id}"
 ```
 
 `--emit-thread-id` records the codex session id (from the `thread.started` event) to `bob-thread-{id}.txt`; step 8 stamps it into the review-file frontmatter as `codex_thread_id`, and the next cycle's step 3 reads it back. `--resume-thread` continues that session; an empty/expired thread degrades to a fresh run with a loud stderr note (never a blocked cycle), and it composes with `--emit-thread-id` (re-writing the same id keeps the sidecar fresh for the following cycle). **Never add `--ephemeral` to the cycle-1 dispatch - it disables resume.** `-o` writes codex's review text straight to the file step 6 consolidates - no manual save, no Agent round-trip. When the background command completes, read `bob-output-{id}.txt`. On a non-zero exit or a lack-of-input refusal, retry once per retry-policy.md § Lack-of-input refusal (Bob); only a failed retry makes Bob a failed reviewer, and a single failed CLI reviewer does not block the cycle.
@@ -56,7 +56,7 @@ Write the prompt to a temp file, then dispatch (**absolute paths**):
 
 ```
 Bash tool (run_in_background: true):
-  ${CLAUDE_PLUGIN_ROOT}/skills/use-gemini/scripts/gemini-run.sh -f "{carl_prompt_file_absolute_path}" -o "{abs_repo_path}/dev/local/tmp/carl-output-{id}.txt"
+  ${CLAUDE_PLUGIN_ROOT}/skills/use-gemini/scripts/gemini-run.sh -f "{carl_prompt_file_absolute_path}" -o "{abs_repo_path}/docs/dev/tmp/carl-output-{id}.txt"
 ```
 
 `-o` saves Carl's stdout after failure classification; capture stderr separately
@@ -76,20 +76,20 @@ file is untouched and must never be consolidated as this run's result.
 
 Blake locates the code himself, and he sweeps with `rg --files`, which does not
 descend into dot-directories and does not follow symlinks. On a project like
-`~/.claude` — a dot-directory whose `dev/local` is a symlink — that makes real
+`~/.claude` — a dot-directory whose `docs/dev/project-management` is a symlink — that makes real
 files invisible to him, and he reports them as missing (PRD 00141: a 31 KB log
 filed as "does not exist on disk", refuted at the cost of a verification
 round).
 
 **Trigger.** One deterministic check, run from the project root: `test -L
-dev/local` succeeds, **OR** the project root's basename starts with `.`. When
+docs/dev/project-management` succeeds, **OR** the project root's basename starts with `.`. When
 either holds, prepend this block to Blake's run inputs; when neither does, add
 nothing.
 
 ```
 ## Filesystem notes
 Project root: <absolute path>
-`dev/local` realpath: <absolute realpath>
+`docs/dev/project-management` realpath: <absolute realpath>
 `rg --files` does not descend into dot-directories or follow this symlink; list or Read the realpath directly.
 ```
 

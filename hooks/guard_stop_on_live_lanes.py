@@ -1,7 +1,7 @@
 """Stop hook: hold a loop session open while a CLI reviewer lane still runs (PRD 00213).
 
 Headless claude kills its children when the turn ends, so a live codex or gemini
-lane marked under `dev/local/autopilot/lanes/<pid>` refuses the stop (exit 2).
+lane marked under `docs/dev/project-management/autopilot/lanes/<pid>` refuses the stop (exit 2).
 """
 
 from __future__ import annotations

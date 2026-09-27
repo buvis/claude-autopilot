@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Per-item metrics for /fast-track: one JSONL row per finished item, appended
-to ``dev/local/autopilot/loop-metrics.jsonl`` and its GC-exempt ``ledger/``
+to ``docs/dev/project-management/autopilot/loop-metrics.jsonl`` and its GC-exempt ``ledger/``
 mirror, so an attended item renders beside the rows the autopilot loop writes.
 
     record_item.py --item ID --card PATH --model NAME --started EPOCH

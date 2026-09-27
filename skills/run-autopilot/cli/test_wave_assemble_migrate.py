@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Tests for cli/wave_assemble.py - `migrate_lane`, and what `assemble` does
-once a lane's merge is settled: draining the lane's own dev/local into the main
+once a lane's merge is settled: draining the lane's own docs/dev/project-management into the main
 checkout, removing a merged lane's worktree and branch, and writing the wave's
 durable report.
 
@@ -33,8 +33,8 @@ from cli.test_wave_assemble import (
 )
 from cli.test_wave_launch import _autopilot, _backlog, _git
 
-_AP = "dev/local/autopilot"
-_PRDS = "dev/local/prds"
+_AP = "docs/dev/project-management/autopilot"
+_PRDS = "docs/dev/project-management/prds"
 LANE_BATCH = "202609260900"
 # Seeded on the base commit so two lanes editing the same lines conflict.
 CLASH_SEED = {
@@ -296,11 +296,11 @@ def test_kept_lane_keeps_its_done_prds_and_worktree(
 
 def _snapshot(repo: Path, kept: Path) -> dict[str, str]:
     """Everything a second `assemble` must leave exactly as it found it: the
-    main checkout's whole dev/local, the kept lane's PRD folders, and the
+    main checkout's whole docs/dev/project-management, the kept lane's PRD folders, and the
     repo's refs and registered worktrees."""
     snapshot = {
         str(path.relative_to(repo)): path.read_text(encoding="utf-8")
-        for path in sorted((repo / "dev" / "local").rglob("*"))
+        for path in sorted((repo / "docs" / "dev" / "project-management").rglob("*"))
         if path.is_file()
     }
     snapshot["kept prds"] = "\n".join(
@@ -336,7 +336,7 @@ def test_rerun_is_idempotent(
                     {"batch_id": batch, "items": [{"op_id": batch, "prd": prd}]},
                 ),
                 f"{_AP}/reports/{prd}-review.md": f"{prd} review\n",
-                f"dev/local/reviews/{prd}-findings.md": f"{prd} findings\n",
+                f"docs/dev/project-management/reviews/{prd}-findings.md": f"{prd} findings\n",
             },
         )
     assert wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass) == 3

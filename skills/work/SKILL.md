@@ -18,7 +18,7 @@ Implement pending tasks one-by-one, committing after each completion.
 ## Dependencies
 
 - Personal skills: `run-autopilot` - this skill is a phase inside that loop and
-  shares its state contract, `dev/local/autopilot/state.json` (see run-autopilot's
+  shares its state contract, `docs/dev/project-management/autopilot/state.json` (see run-autopilot's
   state-schema and phase-review references).
 - Files read from other skill dirs:
   - `${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py` - the sole `state.json`
@@ -108,7 +108,7 @@ Every Tess and Ivan dispatch prompt - initial and retry, regardless of mechanism
 
 Step 5 stages exactly the reported paths - an unreported file stays uncommitted and is surfaced by step 5's foreign-path rule, so an implementor that omits the footer fails loudly, not silently.
 
-Collect the returned lines: step 6 appends non-`none` entries to `dev/local/meta/assumptions.md`, and step 7's phase report includes the ledger. **Read `references/attempt-logging.md` § Assumption ledger before the first append of a plan** — the per-plan replace-vs-append rule lives there.
+Collect the returned lines: step 6 appends non-`none` entries to `docs/dev/project-management/meta/assumptions.md`, and step 7's phase report includes the ledger. **Read `references/attempt-logging.md` § Assumption ledger before the first append of a plan** — the per-plan replace-vs-append rule lives there.
 
 ## Dispatch prologue
 
@@ -143,7 +143,7 @@ Codex (`use-codex`) is an implementor rung — activated by PRD 00077, sitting b
 
 ## Dashboard State Sync
 
-The dashboard (tracon; `render_stream.py` fallback) reads `dev/local/autopilot/state.json` directly, so `state.tasks[].status` must stay accurate — set at task start (step 2) and task end (step 6) — with `tasks_completed` matching it. The pidash sync hooks are retired (PRD 00063); nothing else maintains these.
+The dashboard (tracon; `render_stream.py` fallback) reads `docs/dev/project-management/autopilot/state.json` directly, so `state.tasks[].status` must stay accurate — set at task start (step 2) and task end (step 6) — with `tasks_completed` matching it. The pidash sync hooks are retired (PRD 00063); nothing else maintains these.
 
 Apply every such change with `statectl`, never the editing tools — the sole-writer rule in `run-autopilot` SKILL.md § State Management, which also documents the one human fallback. **Use the compound task verbs for the lifecycle transitions**, not a sequence of field writes:
 
@@ -162,7 +162,7 @@ The generic `set|append|del <json-path>` forms remain for everything that is not
 
 ### 1. Get pending tasks
 
-Read `state.tasks` from `dev/local/autopilot/state.json` — it is the canonical,
+Read `state.tasks` from `docs/dev/project-management/autopilot/state.json` — it is the canonical,
 complete task store, so nothing needs hydrating first. Filter for:
 
 - `status == "pending"`
@@ -172,7 +172,7 @@ complete task store, so nothing needs hydrating first. Filter for:
 
 ### 1.5. Rework-mode task filter
 
-Read `state.rework_task_ids` from `dev/local/autopilot/state.json` (walk up from cwd to find the autopilot dir, same pattern as the cap-marker reset in step 2). Two modes:
+Read `state.rework_task_ids` from `docs/dev/project-management/autopilot/state.json` (walk up from cwd to find the autopilot dir, same pattern as the cap-marker reset in step 2). Two modes:
 
 | `rework_task_ids` | Mode | Iteration source |
 |-------------------|------|------------------|
@@ -202,7 +202,7 @@ For the first available task:
 Before dispatching the implementor, load relevant context into the prompt:
 
 - AGENTS.md / agent_docs/ architecture docs
-- Active PRD from `dev/local/prds/wip/`
+- Active PRD from `docs/dev/project-management/prds/wip/`
 - Key module interfaces relevant to the task
 
 **Ambiguity check (Think Before Coding):** Re-read the task description. If scope, data shape, target surface, or success criteria are unclear, stop and ask the user rather than picking silently. See `references/code-quality-principles.md` §1 and `references/code-quality-examples.md` §1 for what counts as a hidden assumption worth surfacing.
@@ -220,10 +220,10 @@ Dispatch a separate agent to write tests from requirements only. This agent must
 Render: one Bash call. **Task-authored prose never crosses the shell** — write it to a scratch file with the Write tool and pass `--set-file`; see § Passing values to render_prompt.py. Every interpolated path is `shlex.quote()`-d (or bash's `printf '%q '`) before it lands inside a `--set-cmd` value:
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/skills/work/references/tess-prompt.md \
-  --out dev/local/tmp/dispatch-tess-<task-id>.txt \
-  --set-file TASK_SUBJECT=dev/local/tmp/tess-<task-id>-subject.txt \
+  --out docs/dev/tmp/dispatch-tess-<task-id>.txt \
+  --set-file TASK_SUBJECT=docs/dev/tmp/tess-<task-id>-subject.txt \
   --set-file TASK_DESCRIPTION=<scratch file: task description plus the exact file paths and symbol names to test> \
-  --set-file TASK_ACCEPTANCE_CRITERIA=dev/local/tmp/tess-<task-id>-acceptance.txt \
+  --set-file TASK_ACCEPTANCE_CRITERIA=docs/dev/tmp/tess-<task-id>-acceptance.txt \
   --set-file SAMPLE_TEST_FILE=<one representative existing test file> \
   --set-cmd PUBLIC_INTERFACES="cat $(printf '%q ' <interface files>)" \
   --set TEST_FRAMEWORK="<pytest/jest/vitest/etc>" --dispatch-kind tess --dispatch-task <task-id> \
@@ -232,13 +232,13 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUG
 ```
 `PUBLIC_INTERFACES` also carries the project's test-harness contract where one exists: for each Contract path `<dir>/<file>`, add `<dir>/tests/HARNESS_CONTRACT.md` to the `cat` list when that file is on disk (once per distinct file, still no module under test). None present adds nothing.
 
-**Read `references/test-author-prompt.md` § Context Selection before the first Tess dispatch of a batch** — it lists exactly what Tess receives and what she must not, and what `tess-prompt.md` already bakes in (read-only scope, dispatch prologue, Assumptions footer), so nothing is added to the prompt by hand. Dispatch the Agent tool with the file at `dev/local/tmp/dispatch-tess-<task-id>.txt` as the prompt source; the render call's stdout integer **is** the Subagent Dispatch Budget measurement.
+**Read `references/test-author-prompt.md` § Context Selection before the first Tess dispatch of a batch** — it lists exactly what Tess receives and what she must not, and what `tess-prompt.md` already bakes in (read-only scope, dispatch prologue, Assumptions footer), so nothing is added to the prompt by hand. Dispatch the Agent tool with the file at `docs/dev/tmp/dispatch-tess-<task-id>.txt` as the prompt source; the render call's stdout integer **is** the Subagent Dispatch Budget measurement.
 
 Tess prompts must satisfy the **Subagent Dispatch Budget**.
 
 ### 2.8. Test quality gate (main session)
 
-Before committing Tess's tests, run the computed shape check and review them in the main session against the four-check rubric in `references/test-author-prompt.md` § Quality gate (behavior names, real assertions, edge cases, no tautologies); **read that section before running the gate.** If any check fails, dispatch Tess again with specific feedback about what's weak, rendered from `tess-retry-prompt.md` — never author the retry by hand. Max 2 quality gate retries. Then run the step-5.65 gate over the test files only — `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_style_limits.py --diff dev/local/tmp/test-diff-<task-id>.txt <each new or changed test file as an absolute path>`, the diff built per that same file's § Style limits on the test files (**read it before the first gate run of a batch**). Exit 1 is a quality-gate failure: feed the violation lines to the Tess retry. It counts toward the two quality-gate retries.
+Before committing Tess's tests, run the computed shape check and review them in the main session against the four-check rubric in `references/test-author-prompt.md` § Quality gate (behavior names, real assertions, edge cases, no tautologies); **read that section before running the gate.** If any check fails, dispatch Tess again with specific feedback about what's weak, rendered from `tess-retry-prompt.md` — never author the retry by hand. Max 2 quality gate retries. Then run the step-5.65 gate over the test files only — `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_style_limits.py --diff docs/dev/tmp/test-diff-<task-id>.txt <each new or changed test file as an absolute path>`, the diff built per that same file's § Style limits on the test files (**read it before the first gate run of a batch**). Exit 1 is a quality-gate failure: feed the violation lines to the Tess retry. It counts toward the two quality-gate retries.
 
 **Total Tess budget:** max 4 dispatches across the entire test authoring phase (1 initial + 2 quality-gate retries + 1 adversarial strengthen). If exhausted, flag weakness in task output and proceed. Don't block the pipeline forever.
 
@@ -280,21 +280,21 @@ Ivan's job: make the failing tests pass. Tests ARE the spec.
 
 **Ivan receives:** failing test file paths and their content, architecture context (AGENTS.md, interfaces, relevant modules), and existing code patterns to follow. **Ivan does NOT receive:** the task's acceptance criteria prose (tests replace this) or permission to modify test files.
 
-**Test-only, docs-only and config-only tasks (Tess skipped at 2.7):** there are no failing tests, so write the task's `Verify:` line and its `Acceptance criteria` bullets to `dev/local/tmp/ivan-<task-id>-checks.txt` and pass that as `--set-file FAILING_TESTS=` instead of the `--set-cmd` below; `FILE_PATHS` is the test, doc or config files the task touches (Ivan may edit test files his allowlist names). Step 2.95 is skipped and the attempt records `red_check` as `n/a:test-only-task`, `n/a:docs-only-task` or `n/a:config-only-task`. Pat's step-5.7 review runs for a test-only task only in rework mode — outside it, step 5.7's own test-only gate skips him and stamps `review: "skipped:test-only"`; the docs-only and config-only skip there is unchanged.
+**Test-only, docs-only and config-only tasks (Tess skipped at 2.7):** there are no failing tests, so write the task's `Verify:` line and its `Acceptance criteria` bullets to `docs/dev/tmp/ivan-<task-id>-checks.txt` and pass that as `--set-file FAILING_TESTS=` instead of the `--set-cmd` below; `FILE_PATHS` is the test, doc or config files the task touches (Ivan may edit test files his allowlist names). Step 2.95 is skipped and the attempt records `red_check` as `n/a:test-only-task`, `n/a:docs-only-task` or `n/a:config-only-task`. Pat's step-5.7 review runs for a test-only task only in rework mode — outside it, step 5.7's own test-only gate skips him and stamps `review: "skipped:test-only"`; the docs-only and config-only skip there is unchanged.
 
 Render: one Bash call. **Task-authored prose never crosses the shell** — write it to a scratch file with the Write tool and pass `--set-file`; see § Passing values to render_prompt.py. Every interpolated path is `shlex.quote()`-d (or bash's `printf '%q '`) before it lands inside a `--set-cmd` value:
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/ivan.md \
-  --out dev/local/tmp/dispatch-ivan-<task-id>.txt \
+  --out docs/dev/tmp/dispatch-ivan-<task-id>.txt \
   --set-cmd FAILING_TESTS="cat $(printf '%q ' <test_file_1> [test_file_2 ...])" \
   --set-file ARCHITECTURE_CONTEXT=<a single existing file, e.g. AGENTS.md, when one file covers it> \
-  --set-file FILE_PATHS=dev/local/tmp/ivan-<task-id>-files.txt \
+  --set-file FILE_PATHS=docs/dev/tmp/ivan-<task-id>-files.txt \
   --set RETRY_INSTRUCTION="" --dispatch-kind ivan --dispatch-task <task-id> \
   --require-file <each absolute FILE_PATHS entry that exists today, one flag per path> \
   --require-parent <each absolute FILE_PATHS entry the task creates, one flag per path>
 ```
 `FILE_PATHS` is the newline-separated list from the task's Contract section, written to that scratch file — a Contract path can contain a space or a shell metacharacter, so it is never passed as a `--set` word. Every entry is absolute and every entry appears in a `--require-file`/`--require-parent` flag (§ Passing values to render_prompt.py, Dispatch-target preflight).
-When architecture context spans more than one file, use the same `--set-cmd ARCHITECTURE_CONTEXT="cat $(printf '%q ' <file_1> <file_2>)"` shape. `RETRY_INSTRUCTION` is the literal empty string on this, the initial dispatch. The stdout integer from this call **is** the Subagent Dispatch Budget measurement — no separate `wc -c`; oversize handling and what `ivan.md` already bakes in are in `references/subagent-dispatch.md`. Dispatch the Agent tool with the file at `dev/local/tmp/dispatch-ivan-<task-id>.txt` as the prompt source, watchdog per the existing Subagent Watchdog section — unchanged.
+When architecture context spans more than one file, use the same `--set-cmd ARCHITECTURE_CONTEXT="cat $(printf '%q ' <file_1> <file_2>)"` shape. `RETRY_INSTRUCTION` is the literal empty string on this, the initial dispatch. The stdout integer from this call **is** the Subagent Dispatch Budget measurement — no separate `wc -c`; oversize handling and what `ivan.md` already bakes in are in `references/subagent-dispatch.md`. Dispatch the Agent tool with the file at `docs/dev/tmp/dispatch-ivan-<task-id>.txt` as the prompt source, watchdog per the existing Subagent Watchdog section — unchanged.
 
 **If the task description is ambiguous** (multiple interpretations, unclear scope, unstated format/fields/location), stop before dispatching Ivan and surface the ambiguity to the user. See Example 1 in `references/code-quality-examples.md`. Do not dispatch with guessed-at requirements.
 
@@ -422,17 +422,17 @@ Compute `net_lines = insertions - deletions` (from `--shortstat`) and `file_coun
 
 **Test-only skip (outside rework mode).** Apply `test_only_gate` from `${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/work_routing.py` to `git diff --name-only <task_base_sha>..HEAD`: a `review` key in the result means skip this step and record `review: "skipped:test-only"` — every tier that reaches this gate takes it, `fable` included; a `haiku` task already exited at the table above and records nothing, and a rework task keeps its reviewer. Otherwise dispatch the reviewer after commit and verification — a native lane, no plugin dependency:
 
-1. Get SHAs: `BASE_SHA` = `<task_base_sha>` (step 2), `HEAD_SHA` = current HEAD (includes the step-5.6 deslop commit and the step-5.65 style-fix commit when either landed). Hold `<last_reviewed_sha>` = `HEAD_SHA`, and generate `<pat_session_id>` once per task with `python3 -c "import uuid,sys;sys.stdout.write(str(uuid.uuid4()))"` (or `uuidgen`; no id means no `-S` and today's full-diff lane) — both are in-session only, and their readers are § Dispatch's `-S` on this first dispatch and § Delta re-runs on every later one. Then write `dev/local/tmp/review-task-<id>-verification.txt` (`references/per-task-review.md` § Recorded verification) — item 2's render reads it with `--set-file` and exits non-zero when it is absent.
+1. Get SHAs: `BASE_SHA` = `<task_base_sha>` (step 2), `HEAD_SHA` = current HEAD (includes the step-5.6 deslop commit and the step-5.65 style-fix commit when either landed). Hold `<last_reviewed_sha>` = `HEAD_SHA`, and generate `<pat_session_id>` once per task with `python3 -c "import uuid,sys;sys.stdout.write(str(uuid.uuid4()))"` (or `uuidgen`; no id means no `-S` and today's full-diff lane) — both are in-session only, and their readers are § Dispatch's `-S` on this first dispatch and § Delta re-runs on every later one. Then write `docs/dev/tmp/review-task-<id>-verification.txt` (`references/per-task-review.md` § Recorded verification) — item 2's render reads it with `--set-file` and exits non-zero when it is absent.
 2. Render the review prompt with one Bash call, every interpolated path `shlex.quote()`-d (or bash's `printf '%q '`) before it lands inside a `--set-cmd` value:
    ```bash
    python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUGIN_ROOT}/agents/pat.md \
-     --out dev/local/tmp/review-task-<id>-prompt.md \
-     --set-file TASK_SUBJECT=dev/local/tmp/review-task-<id>-subject.txt \
-     --set-file TASK_DESCRIPTION=dev/local/tmp/review-task-<id>-description.txt \
-     --set-file TASK_ACCEPTANCE_CRITERIA=dev/local/tmp/review-task-<id>-acceptance.txt \
+     --out docs/dev/tmp/review-task-<id>-prompt.md \
+     --set-file TASK_SUBJECT=docs/dev/tmp/review-task-<id>-subject.txt \
+     --set-file TASK_DESCRIPTION=docs/dev/tmp/review-task-<id>-description.txt \
+     --set-file TASK_ACCEPTANCE_CRITERIA=docs/dev/tmp/review-task-<id>-acceptance.txt \
      --set-cmd DIFF="git diff BASE_SHA..HEAD_SHA" \
      --set-file SIMPLIFICATION_MANDATE=${CLAUDE_PLUGIN_ROOT}/skills/work/references/simplification-mandate.md \
-     --set-file VERIFICATION_RESULT=dev/local/tmp/review-task-<id>-verification.txt \
+     --set-file VERIFICATION_RESULT=docs/dev/tmp/review-task-<id>-verification.txt \
      --set CONTRACT_CORRECTION="" --dispatch-kind pat --dispatch-task <id>
    ```
    The **Pat persona** (`${CLAUDE_PLUGIN_ROOT}/agents/pat.md`) already carries the read-only statement and the reporting contract — one finding per line as `SEVERITY | file:line | issue | fix` (severities CRITICAL/HIGH/MEDIUM/LOW), or the literal line `NO FINDINGS` — so do not restate them here. Conventions and the placeholder table: `review-work-completion/references/agent-registry.md`. If `pat.md` is missing or its frontmatter does not parse, treat it as a runner failure (step 4.2's one re-dispatch) — never fall back to a hand-written prompt. The stdout integer from the render call **is** the Subagent Dispatch Budget measurement — no separate `wc -c`.
@@ -444,14 +444,14 @@ Skip for documentation-only or configuration-only tasks.
 ### 6. Mark complete and sync
 
 1. **Build the attempt record** per the "Attempt logging" section: `outcome: "completed"`, `model` from `state.tasks[i].model`, `pipeline` from `state.tasks[i].model` (`haiku` → `"minimal"`, `sonnet`/absent/legacy → `"lean"`, `opus` → `"full"`) plus `fable` → `"full"` (the rescue rung runs the deepest pipeline, like `opus`), `cause: null`, `review_cycle: null` on a Phase-3 first pass or the current `state.cycle` on a rework pass. When `state.tasks[i].escalation_reason` / `state.tasks[i].escalated_from` are present (set by `/autopilot:run-autopilot` Phase 6 for a review-flag escalation), **copy both onto the entry** so `escalation_reason: "review_flag"` reaches `attempts[]`; absent → omit both.
-2. **Land the whole transition in ONE `statectl` call.** Write the record from point 1 to `dev/local/tmp/attempt-task-<id>.json` with the **Write tool** (never a shell redirect — an attempt record carries quotes and newlines), then:
+2. **Land the whole transition in ONE `statectl` call.** Write the record from point 1 to `docs/dev/tmp/attempt-task-<id>.json` with the **Write tool** (never a shell redirect — an attempt record carries quotes and newlines), then:
 
    ```bash
-   python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py <state.json> task-done <task-id> dev/local/tmp/attempt-task-<id>.json
+   python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py <state.json> task-done <task-id> docs/dev/tmp/attempt-task-<id>.json
    ```
 
    Do NOT set `status`, append the attempt, or set `tasks_completed` separately here — `task-done` lands all three in one locked atomic write and derives the count (`references/attempt-logging.md` § task-done semantics). The matching call at task start (step 2) is `statectl <state.json> task-start <task-id>`.
-3. **Append `ASSUMPTIONS:` lines** from this task's Tess and Ivan reports (any entry beyond `none`) to `dev/local/meta/assumptions.md` per the **Assumptions footer** section
+3. **Append `ASSUMPTIONS:` lines** from this task's Tess and Ivan reports (any entry beyond `none`) to `docs/dev/project-management/meta/assumptions.md` per the **Assumptions footer** section
 4. Proceed to step 6.5 (task-boundary handoff check) — it routes to the next task, a clean handoff, or final verification.
 
 ### 6.5. Task-boundary handoff check
@@ -464,11 +464,11 @@ After step 6, decide whether to finish the remaining tasks in this session or ha
 
 After all tasks in the phase are marked completed, run the project's full verification suite **once**. This is the single point where the full suite runs — per-task verification (step 5.5) only ran the new tests in isolation, so this step is mandatory and must not be skipped.
 
-**What to run** (project-dependent — use the commands documented in `AGENTS.md` / `CLAUDE.md` / project README): **read `references/final-verification.md` before running the suite.** It lists the per-stack commands, the improvised-suite rule for a repo that documents none (state the improvised set in the phase report; record `verification: none (no suite found)` when nothing runs — never report the phase green on an unverified tree), and the failure-handling loop (identify the task, re-open it, one Ivan fix, re-run only the failed commands, max 3 cycles, never relax a failing test). Run each command as a separate Bash call; do not chain with `&&`. Two sections of that file run **after** the suite commands and before you report: § Queued verification checks (run this cycle's queued checks, one `verify_check: <command> -> exit <n>` report line each; a non-zero exit is evidence, not a phase failure; an absent queue file is a no-op) and § Recorded verification result (write `dev/local/autopilot/last-verification.json` — the sha, the commands with their exits, and the counts — so the review composes its `Tests:` line from the record instead of running this same suite a second time).
+**What to run** (project-dependent — use the commands documented in `AGENTS.md` / `CLAUDE.md` / project README): **read `references/final-verification.md` before running the suite.** It lists the per-stack commands, the improvised-suite rule for a repo that documents none (state the improvised set in the phase report; record `verification: none (no suite found)` when nothing runs — never report the phase green on an unverified tree), and the failure-handling loop (identify the task, re-open it, one Ivan fix, re-run only the failed commands, max 3 cycles, never relax a failing test). Run each command as a separate Bash call; do not chain with `&&`. Two sections of that file run **after** the suite commands and before you report: § Queued verification checks (run this cycle's queued checks, one `verify_check: <command> -> exit <n>` report line each; a non-zero exit is evidence, not a phase failure; an absent queue file is a no-op) and § Recorded verification result (write `docs/dev/project-management/autopilot/last-verification.json` — the sha, the commands with their exits, and the counts — so the review composes its `Tests:` line from the record instead of running this same suite a second time).
 
 Only stop the work phase once step 7's test suite is fully green — a recorded `style_gate: failed:<violations>` from a task's step 5.65 is a sanctioned way for the phase to complete, not a reason to keep looping or stall; the suite itself still has to pass.
 
-When reporting the phase result, include one `<task-id>: style_gate: <value>, split_hygiene: <value>` line per task from step 5.65 (omit `split_hygiene` on a `haiku` task — the tier gate skipped the step, so there is no value) and the contents of `dev/local/meta/assumptions.md` (if present) - the assumption ledger is input to the review phase and the user's 30-second examine pass.
+When reporting the phase result, include one `<task-id>: style_gate: <value>, split_hygiene: <value>` line per task from step 5.65 (omit `split_hygiene` on a `haiku` task — the tier gate skipped the step, so there is no value) and the contents of `docs/dev/project-management/meta/assumptions.md` (if present) - the assumption ledger is input to the review phase and the user's 30-second examine pass.
 
 ## Reference Files
 

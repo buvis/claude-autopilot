@@ -34,7 +34,7 @@ def _tool_use(name: str, input_: dict[str, object]) -> dict[str, object]:
 
 
 def _statectl(*args: str) -> dict[str, object]:
-    command = "python3 /p/statectl.py dev/local/autopilot/state.json " + " ".join(args)
+    command = "python3 /p/statectl.py docs/dev/project-management/autopilot/state.json " + " ".join(args)
     return _tool_use("Bash", {"command": command})
 
 
@@ -172,14 +172,14 @@ def test_prompt_authoring_write_calls_matched_for_both_glob_patterns(
             _tool_use(
                 "Write",
                 {
-                    "file_path": "/Users/dev/.claude/dev/local/tmp/task-prompt-3.txt",
+                    "file_path": "/Users/dev/.claude/docs/dev/tmp/task-prompt-3.txt",
                     "content": "x",
                 },
             ),
             _tool_use(
                 "Write",
                 {
-                    "file_path": "/Users/dev/.claude/dev/local/tmp/dispatch-tess-7.txt",
+                    "file_path": "/Users/dev/.claude/docs/dev/tmp/dispatch-tess-7.txt",
                     "content": "y",
                 },
             ),
@@ -197,8 +197,8 @@ def test_prompt_authoring_write_calls_matched_for_both_glob_patterns(
 @pytest.mark.parametrize(
     "file_path",
     [
-        "/Users/dev/.claude/dev/local/tmp/notes.txt",  # no "prompt", no "dispatch-" prefix
-        "/Users/dev/.claude/dev/local/other/prompt-file.txt",  # "prompt" but wrong dir
+        "/Users/dev/.claude/docs/dev/tmp/notes.txt",  # no "prompt", no "dispatch-" prefix
+        "/Users/dev/.claude/docs/dev/project-management/other/prompt-file.txt",  # "prompt" but wrong dir
         "/Users/dev/.claude/work/scripts/check_build_overhead.py",  # unrelated path
     ],
 )
@@ -228,11 +228,11 @@ def test_completed_tasks_counts_only_statectl_completion_verbs(
 ) -> None:
     lines = [
         _assistant_turn(
-            _statectl("task-done", "task-1", "dev/local/tmp/attempt-task-1.json"),
+            _statectl("task-done", "task-1", "docs/dev/tmp/attempt-task-1.json"),
         ),
         _assistant_turn(_statectl("task-start", "task-2")),
         _assistant_turn(
-            _statectl("task-done", "task-3", "dev/local/tmp/attempt-task-3.json"),
+            _statectl("task-done", "task-3", "docs/dev/tmp/attempt-task-3.json"),
         ),
     ]
     transcript = _write_transcript(tmp_path, lines)
@@ -425,7 +425,7 @@ def test_stdout_report_has_exact_line_format_in_order(
             _tool_use(
                 "Write",
                 {
-                    "file_path": "/Users/dev/.claude/dev/local/tmp/dispatch-x.txt",
+                    "file_path": "/Users/dev/.claude/docs/dev/tmp/dispatch-x.txt",
                     "content": "y",
                 },
             ),
@@ -747,7 +747,7 @@ def test_synthetic_fixture_report_matches_expected_metrics_without_machine_local
             _tool_use(
                 "Write",
                 {
-                    "file_path": "/Users/dev/.claude/dev/local/tmp/task-prompt-9.txt",
+                    "file_path": "/Users/dev/.claude/docs/dev/tmp/task-prompt-9.txt",
                     "content": "x",
                 },
             ),
@@ -756,13 +756,13 @@ def test_synthetic_fixture_report_matches_expected_metrics_without_machine_local
             _tool_use(
                 "Write",
                 {
-                    "file_path": "/Users/dev/.claude/dev/local/tmp/dispatch-tess-99.txt",
+                    "file_path": "/Users/dev/.claude/docs/dev/tmp/dispatch-tess-99.txt",
                     "content": "y",
                 },
             ),
         ),
         _assistant_turn(
-            _statectl("task-done", "task-alpha", "dev/local/tmp/attempt-alpha.json"),
+            _statectl("task-done", "task-alpha", "docs/dev/tmp/attempt-alpha.json"),
         ),
         _assistant_turn(_statectl("task-set-status", "task-beta", "completed")),
     ]

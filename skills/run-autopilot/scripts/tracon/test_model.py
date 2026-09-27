@@ -434,8 +434,8 @@ def test_guards_emit_no_standalone_cycle_guard_even_at_cap(
 
 
 def test_prd_counts_counts_md_files_in_backlog_and_wip(tmp_path: Path) -> None:
-    backlog = tmp_path / "dev" / "local" / "prds" / "backlog"
-    wip = tmp_path / "dev" / "local" / "prds" / "wip"
+    backlog = tmp_path / "docs" / "dev" / "project-management" / "prds" / "backlog"
+    wip = tmp_path / "docs" / "dev" / "project-management" / "prds" / "wip"
     backlog.mkdir(parents=True)
     wip.mkdir(parents=True)
     (backlog / "00060-a.md").write_text("a")
@@ -446,8 +446,8 @@ def test_prd_counts_counts_md_files_in_backlog_and_wip(tmp_path: Path) -> None:
 
 
 def test_prd_counts_zero_for_empty_dirs(tmp_path: Path) -> None:
-    backlog = tmp_path / "dev" / "local" / "prds" / "backlog"
-    wip = tmp_path / "dev" / "local" / "prds" / "wip"
+    backlog = tmp_path / "docs" / "dev" / "project-management" / "prds" / "backlog"
+    wip = tmp_path / "docs" / "dev" / "project-management" / "prds" / "wip"
     backlog.mkdir(parents=True)
     wip.mkdir(parents=True)
     assert model.prd_counts(tmp_path) == (0, 0)
@@ -461,7 +461,7 @@ def test_prd_counts_zero_for_missing_dirs(tmp_path: Path) -> None:
 
 
 def test_prd_done_count_counts_md_files_in_done(tmp_path: Path) -> None:
-    done = tmp_path / "dev" / "local" / "prds" / "done"
+    done = tmp_path / "docs" / "dev" / "project-management" / "prds" / "done"
     done.mkdir(parents=True)
     (done / "00050-a.md").write_text("a")
     (done / "00051-b.md").write_text("b")
@@ -626,7 +626,7 @@ def test_build_steps_done_infers_each_step_from_its_artifact(
         {
             "phase": "build",
             "batch": {"id": "B1", "catchup_completed_at": "2026-07-18T08:00:00Z"},
-            "design_doc": "dev/local/designs/x-design.md",
+            "design_doc": "docs/dev/project-management/designs/x-design.md",
             "tasks_total": 2,
             "tasks_completed": 1,
             "tasks": [

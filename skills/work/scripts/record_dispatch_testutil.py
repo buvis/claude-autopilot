@@ -28,7 +28,7 @@ HEX_ID = re.compile(r"^[0-9a-f]{8}$")
 
 def project(tmp_path: Path) -> Path:
     """A project tree with an autopilot dir and a nested cwd; returns the dir."""
-    autopilot = tmp_path / "proj" / "dev" / "local" / "autopilot"
+    autopilot = tmp_path / "proj" / "docs" / "dev" / "project-management" / "autopilot"
     autopilot.mkdir(parents=True)
     (tmp_path / "proj" / "src").mkdir()
     return autopilot

@@ -266,7 +266,7 @@ def test_the_changelog_names_the_ledger() -> None:
     changelog = _CHANGELOG.read_text()
     assert "dispatch-metrics.jsonl" in changelog, (
         "CHANGELOG.md has no entry naming "
-        "dev/local/autopilot/dispatch-metrics.jsonl; the ledger is user-visible "
+        "docs/dev/project-management/autopilot/dispatch-metrics.jsonl; the ledger is user-visible "
         "and the changelog rule is blocking."
     )
 

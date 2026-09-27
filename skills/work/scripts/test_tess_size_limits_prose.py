@@ -56,7 +56,7 @@ def test_quality_gate_runs_the_style_script_on_test_files() -> None:
     start = text.index("### 2.8.")
     step_2_8 = text[start : text.index("### 2.85.", start)]
     for needle in (
-        "check_style_limits.py --diff dev/local/tmp/test-diff-<task-id>.txt",
+        "check_style_limits.py --diff docs/dev/tmp/test-diff-<task-id>.txt",
         "over the test files only",
         "Style limits on the test files",
         "Exit 1 is a quality-gate failure",
@@ -72,10 +72,10 @@ def test_quality_gate_runs_the_style_script_on_test_files() -> None:
     # (00197 review 1, Bob), and dropping the `>>` target or the `mv` would
     # hand the script a file holding half the task or nothing.
     for needle in (
-        "check_style_limits.py --diff dev/local/tmp/test-diff-<task-id>.txt",
+        "check_style_limits.py --diff docs/dev/tmp/test-diff-<task-id>.txt",
         "git diff <task_base_sha> --output=${TMPDIR:-/tmp}/test-diff-<task-id>.txt -- <tracked test files>",
         "git diff --no-index -- /dev/null <file> >> ${TMPDIR:-/tmp}/test-diff-<task-id>.txt",
-        "mv ${TMPDIR:-/tmp}/test-diff-<task-id>.txt dev/local/tmp/test-diff-<task-id>.txt",
+        "mv ${TMPDIR:-/tmp}/test-diff-<task-id>.txt docs/dev/tmp/test-diff-<task-id>.txt",
         "Exit 1 is a quality-gate failure",
         "counts toward the two quality-gate retries",
     ):

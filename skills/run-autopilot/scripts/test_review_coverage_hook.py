@@ -83,12 +83,12 @@ def _make_autopilot_dir(
     repo_root: str | None = None,
     phases_completed: list[str] | None = None,
 ) -> Path:
-    """Build a minimal dev/local/autopilot dir tree under root.
+    """Build a minimal docs/dev/project-management/autopilot dir tree under root.
 
     Defaults phases_completed to ["review"]: every existing caller of this
     helper simulates a genuine review convergence for the current prd.
     """
-    autopilot_dir = root / "dev" / "local" / "autopilot"
+    autopilot_dir = root / "docs" / "dev" / "project-management" / "autopilot"
     autopilot_dir.mkdir(parents=True, exist_ok=True)
     state = {
         "phase": phase,
@@ -108,8 +108,8 @@ class MainTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        # repo root is tmp; autopilot dir is repo/dev/local/autopilot
-        # so repo = autopilot_dir.parents[2]
+        # repo root is tmp; autopilot dir is repo/docs/dev/project-management/autopilot
+        # so repo = autopilot_dir.parents[3]
         self.repo = Path(self.tmp.name)
         # The hook only gates inside the autopilot shell loop; mark these
         # tests as loop-wrapped so they exercise the gate logic.
@@ -118,7 +118,7 @@ class MainTests(unittest.TestCase):
         self.addCleanup(loop_env.stop)
 
     def _make_reviews_dir(self) -> Path:
-        reviews = self.repo / "dev" / "local" / "reviews"
+        reviews = self.repo / "docs" / "dev" / "project-management" / "reviews"
         reviews.mkdir(parents=True, exist_ok=True)
         return reviews
 
@@ -230,7 +230,7 @@ class BlockCapTests(unittest.TestCase):
         self.addCleanup(loop_env.stop)
 
     def _reviews_dir(self) -> Path:
-        reviews = self.repo / "dev" / "local" / "reviews"
+        reviews = self.repo / "docs" / "dev" / "project-management" / "reviews"
         reviews.mkdir(parents=True, exist_ok=True)
         return reviews
 
@@ -360,7 +360,7 @@ class MainPassesCorrectReviewFileTests(unittest.TestCase):
         self.addCleanup(loop_env.stop)
 
     def _make_reviews_dir(self) -> Path:
-        reviews = self.repo / "dev" / "local" / "reviews"
+        reviews = self.repo / "docs" / "dev" / "project-management" / "reviews"
         reviews.mkdir(parents=True, exist_ok=True)
         return reviews
 
@@ -405,7 +405,7 @@ class MainBlocksWhenReviewFileMissingTests(unittest.TestCase):
     def test_main_blocks_when_review_file_missing(self) -> None:
         autopilot_dir = _make_autopilot_dir(self.repo, phase="done", prd="Z.md")
         # reviews dir exists but no Z-review-*.md is created.
-        reviews_dir = self.repo / "dev" / "local" / "reviews"
+        reviews_dir = self.repo / "docs" / "dev" / "project-management" / "reviews"
         reviews_dir.mkdir(parents=True, exist_ok=True)
 
         def _gate_must_not_be_called(*args, **kwargs):
@@ -435,11 +435,11 @@ class GateBlocksDecisionTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.repo = Path(self.tmp.name)
-        self.autopilot_dir = self.repo / "dev" / "local" / "autopilot"
+        self.autopilot_dir = self.repo / "docs" / "dev" / "project-management" / "autopilot"
         self.autopilot_dir.mkdir(parents=True)
 
     def _reviews_dir(self) -> Path:
-        d = self.repo / "dev" / "local" / "reviews"
+        d = self.repo / "docs" / "dev" / "project-management" / "reviews"
         d.mkdir(parents=True, exist_ok=True)
         return d
 

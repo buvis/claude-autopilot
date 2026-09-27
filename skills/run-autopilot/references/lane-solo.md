@@ -33,7 +33,7 @@ with a complete mirror mirrors nothing and goes to step 2 at the first task
 whose `status` is not `completed`.
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json task-add <task-json-file>
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py docs/dev/project-management/autopilot/state.json task-add <task-json-file>
 ```
 
 Write each `<task-json-file>` with the Write tool as `{"name": "<the task
@@ -45,7 +45,7 @@ Capture the printed id per task.
 
 Per task, in order:
 
-1. `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json task-start <id>`.
+1. `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py docs/dev/project-management/autopilot/state.json task-start <id>`.
 2. Implement the task yourself with the Read, Edit and Write tools: no
    subagent, no Ivan or Tess dispatch, no shell rewrite (`sed`, heredocs).
    This is the micro lane of `work/references/rework-mode.md` generalized to
@@ -72,7 +72,7 @@ Per task, in order:
    `pipeline` vocabulary.
 
    ```bash
-   python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json task-done <id> <attempt-json-file>
+   python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py docs/dev/project-management/autopilot/state.json task-done <id> <attempt-json-file>
    ```
 
 The soft handoff marker `.handoff-requested` is not read by this runbook: a
@@ -86,7 +86,7 @@ task (Phase 0 finds `state.lane_effective == "solo"` and re-enters here).
 
 After the last task, run the repo suite once under
 `${CLAUDE_PLUGIN_ROOT}/skills/work/references/final-verification.md` and
-write `dev/local/autopilot/last-verification.json` per its § Recorded
+write `docs/dev/project-management/autopilot/last-verification.json` per its § Recorded
 verification result (`sha`, the commands, the three counts). A red suite
 here is fixed in-session as its own task-shaped commit before step 4; a suite
 that stays red is the `suite_red` signal below.
@@ -96,7 +96,7 @@ that stays red is the `suite_red` signal below.
 Code decides whether the finished build may take the single review pass:
 
 ```bash
-autopilot lane-check --state dev/local/autopilot/state.json
+autopilot lane-check --state docs/dev/project-management/autopilot/state.json
 ```
 
 It reads `state.work_start_sha`, `state.repo_root`, `state.git_dir` and
@@ -138,14 +138,14 @@ rule verbatim (`skills/fast-track/SKILL.md` § Roster): the `review-fanout`
 workflow when `~/.claude/workflows/review-fanout.workflow.js` is on disk,
 else the `autopilot:alice` subagent. Inputs: the PRD, `git diff
 <work_start_sha>..HEAD` (saved with the Write tool to
-`dev/local/tmp/<prd-stem>-solo.diff`), the changed-file list, the
+`docs/dev/tmp/<prd-stem>-solo.diff`), the changed-file list, the
 review-work-completion rubric
 (`${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/references/rubric.md`)
 and `references/output-formats.md` § Agent Output Format. Render Alice's
 prompt from `${CLAUDE_PLUGIN_ROOT}/agents/alice.md` the way fast-track
 renders its consensus lane; on the workflow backend the `Workflow` tool call
 takes the same args fast-track passes. Save the returned text to
-`dev/local/tmp/solo-output-<prd-stem>.txt`.
+`docs/dev/tmp/solo-output-<prd-stem>.txt`.
 
 The review must have happened before its table means anything:
 `consolidate_findings.py` reads a missing, empty or malformed output file
@@ -163,16 +163,16 @@ check that its row count equals the number of finding lines (the all-clear
 line counts zero):
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/consolidate_findings.py alice:$PWD/dev/local/tmp/solo-output-<prd-stem>.txt
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/consolidate_findings.py alice:$PWD/docs/dev/tmp/solo-output-<prd-stem>.txt
 ```
 
 (the workflow's own consolidated table stands in for it on that backend).
-Save the table to `dev/local/tmp/<prd-stem>-solo-table.md` with the Write
+Save the table to `docs/dev/tmp/<prd-stem>-solo-table.md` with the Write
 tool and run the disposition below over it. The review file itself is
 written in step 6, after the disposition, so an escalated pass never leaves
 a `-review-1.md` behind for the full lane's cycle 1 to mistake for its own.
 
-The review file, `dev/local/reviews/<prd-stem>-review-1.md`, written with
+The review file, `docs/dev/project-management/reviews/<prd-stem>-review-1.md`, written with
 the Write tool in the shape `cli/gate.py` checks
 (`review-work-completion/references/review-coverage-format.md`):
 
@@ -226,7 +226,7 @@ What the session does with each severity in the table, in this order:
   file and never reworked.
 
 On any escalation after the pass ran, write the table to
-`dev/local/reviews/<prd-stem>-solo-pass.md` (a durable trail whose name
+`docs/dev/project-management/reviews/<prd-stem>-solo-pass.md` (a durable trail whose name
 never matches the gate's `-review-*` glob in
 `scripts/review_coverage_hook.py`, nor the convergence reader's
 `-review-<n>`), never to `-review-1.md`, so the full lane's cycle 1 finds
@@ -244,7 +244,7 @@ Two exits, both through `autopilot phase-done`:
   cycles; no commit is lost. The report's `Lane:` line reads
   `full (classified solo, <reason>), escalated from solo: <signal>`.
 - **Close** (`lane: ok` from the last `lane-check` and no escalating
-  finding): first write `dev/local/reviews/<prd-stem>-review-1.md` from the
+  finding): first write `docs/dev/project-management/reviews/<prd-stem>-review-1.md` from the
   saved table (updated with the delta's outcome when a fix ran) in the shape
   step 5 gives, then
   `autopilot phase-done --outcome lane_reviewed`, the `("build",

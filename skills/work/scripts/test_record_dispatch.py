@@ -1,7 +1,7 @@
 """Tests for record_dispatch.py — the /work dispatch timing ledger (PRD 00168).
 
 Every case drives the real module against a temporary project tree holding
-``dev/local/autopilot/``, because the script's whole contract is where and
+``docs/dev/project-management/autopilot/``, because the script's whole contract is where and
 whether a line lands: the working file, its ``ledger/`` mirror, or nowhere at
 all when no autopilot dir resolves. Time is pinned through the module's own
 ``time`` name so the elapsed arithmetic is asserted, not eyeballed.

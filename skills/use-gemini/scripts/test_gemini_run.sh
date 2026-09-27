@@ -448,9 +448,9 @@ unset COPILOT_STDOUT COPILOT_EXIT_CODE
 # for its lifetime. The stubs copy the lanes dir out mid-run (STUB_LANES_DIR),
 # since the marker is gone once the wrapper exits.
 LANE_REPO="$WORK/lane-repo"
-mkdir -p "$LANE_REPO/dev/local/autopilot" "$LANE_REPO/a/b/c/d/e"
+mkdir -p "$LANE_REPO/docs/dev/project-management/autopilot" "$LANE_REPO/a/b/c/d/e"
 LANE_REPO=$(cd "$LANE_REPO" && pwd -P)
-LANE_LANES_DIR="$LANE_REPO/dev/local/autopilot/lanes"
+LANE_LANES_DIR="$LANE_REPO/docs/dev/project-management/autopilot/lanes"
 
 # run_lane_case <name> <loop value or empty> <cwd> [args...] -- snapshot lands
 # in $WORK/<name>.snap; RC is the wrapper's exit code.
@@ -469,7 +469,7 @@ run_lane_case() {
     ) || RC=$?
 }
 
-# T23. Loop set, cwd five levels below dev/local/autopilot, copilot backend,
+# T23. Loop set, cwd five levels below docs/dev/project-management/autopilot, copilot backend,
 #      a foreign marker (999999, another lane) already present: during the run
 #      the lanes dir holds the foreign marker plus one marker named by the
 #      wrapper's own pid (a live process running gemini-run.sh), line 1
@@ -493,7 +493,7 @@ if [ "$RC" -eq 0 ] && [ -f "$WORK/t23.copilot.argv" ] && [ "$T23_COUNT" = "2" ] 
    case "$T23_CMD" in *gemini-run.sh*) true ;; *) false ;; esac &&
    [ "$T23_L1" = "gemini" ] && [ "$T23_L2" = "$T23_OUT" ] && [ -z "$T23_EXTRA" ] &&
    [ "$(ls -A "$LANE_LANES_DIR")" = "999999" ] && cmp -s "$T23_FOREIGN" "$LANE_LANES_DIR/999999"; then
-    PASS "_AUTOPILOT_LOOP=1 five levels under dev/local/autopilot: a marker named by the wrapper's pid holding 'gemini' (copilot backend) and the -o path during the run, removed after, foreign marker untouched"
+    PASS "_AUTOPILOT_LOOP=1 five levels under docs/dev/project-management/autopilot: a marker named by the wrapper's pid holding 'gemini' (copilot backend) and the -o path during the run, removed after, foreign marker untouched"
 else
     FAIL "_AUTOPILOT_LOOP=1 lane marker" \
          "rc=$RC; entries: $(ls "$T23_SNAP" 2>/dev/null | tr '\n' ' ')(count $T23_COUNT, want 999999 + own pid); own='$T23_NAME' cmd='$T23_CMD' (want gemini-run.sh); line1='$T23_L1' line2='$T23_L2' extra='$T23_EXTRA' (want gemini / $T23_OUT / none); lanes after: $(ls -A "$LANE_LANES_DIR" 2>&1 | tr '\n' ' ')(want 999999 unchanged)"
@@ -523,12 +523,12 @@ else
          "rc=$RC; entries: $(ls "$WORK/t25.snap" | tr '\n' ' '); lanes dir: $(ls -A "$LANE_LANES_DIR" 2>&1 | tr '\n' ' ')"
 fi
 
-# T26. Loop set, no dev/local/autopilot at or above cwd: exit 0, nothing made.
+# T26. Loop set, no docs/dev/project-management/autopilot at or above cwd: exit 0, nothing made.
 LANE_BARE=$(mktemp -d)
 _DIRS+=("$LANE_BARE")
 run_lane_case t26 1 "$LANE_BARE" -f "$PROMPT_FILE_T" -o "$WORK/t26.out"
 if [ "$RC" -eq 0 ] && [ -f "$WORK/t26.copilot.argv" ] && [ -z "$(ls -A "$LANE_BARE")" ]; then
-    PASS "_AUTOPILOT_LOOP=1 with no dev/local/autopilot above cwd: exits 0 and creates nothing"
+    PASS "_AUTOPILOT_LOOP=1 with no docs/dev/project-management/autopilot above cwd: exits 0 and creates nothing"
 else
     FAIL "_AUTOPILOT_LOOP=1 with no autopilot dir" \
          "rc=$RC; cwd contents: $(ls -A "$LANE_BARE" | tr '\n' ' ')"

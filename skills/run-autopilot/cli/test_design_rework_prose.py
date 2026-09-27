@@ -79,7 +79,7 @@ _DISPATCH_WHERE = "the `### Dispatch rework` section"
 _STEP_7_WHERE = "the `### 7. Create follow-up tasks` step"
 _ESCALATION_CAVEAT = "**Escalation caveat — diagnose the failure before escalating.**"
 _PASS_GATE = "awk 'NF{last=$0} END{exit last!=\"result: ok\"}'"
-_DESIGN_LINE = "Design: dev/local/designs/<prd-stem>-rework-<cycle>-design.md"
+_DESIGN_LINE = "Design: docs/dev/project-management/designs/<prd-stem>-rework-<cycle>-design.md"
 
 _DESIGN_LEAD = "**Design CRITICAL rework before any task-add (PRD 00194).**"
 _DESIGN_WHERE = "the `Design CRITICAL rework before any task-add` paragraph"

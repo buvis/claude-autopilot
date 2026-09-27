@@ -49,7 +49,7 @@ def _ledger_row(
     implementor: str,
     preflight_outcome: str | None = None,
 ) -> dict:
-    """One dev/local/autopilot/ledger/attempts.jsonl row in the shape
+    """One docs/dev/project-management/autopilot/ledger/attempts.jsonl row in the shape
     statectl.append_attempt_rows writes it: the envelope (batch_id, prd,
     task_id as a STRING, task metadata) wrapping the nested attempt."""
     return {

@@ -4,7 +4,7 @@ event-row loader beside it (render_metrics.load_event_rows), called in
 process.
 
 Fixture trees are built under a TemporaryDirectory mirroring the live layout
-(`dev/local/autopilot`, `dev/local/reviews`, `dev/local/prds/wip`); review
+(`docs/dev/project-management/autopilot`, `docs/dev/project-management/reviews`, `docs/dev/project-management/prds/wip`); review
 files, PRD files and state dicts are written inline. The golden
 cli/golden/metrics-render.jsonl carries six session rows and exactly one
 event row (line 7).
@@ -160,12 +160,12 @@ def _write(path: Path, text: str) -> None:
 
 
 class ConvergenceFixtureCase(unittest.TestCase):
-    """Builds `<tmp>/dev/local/{autopilot,reviews,prds/wip}` per test."""
+    """Builds `<tmp>/docs/dev/project-management/{autopilot,reviews,prds/wip}` per test."""
 
     def setUp(self) -> None:
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        self.local = Path(tmp.name) / "dev" / "local"
+        self.local = Path(tmp.name) / "docs" / "dev" / "project-management"
         self.ap_dir = self.local / "autopilot"
         self.reviews = self.local / "reviews"
         self.wip = self.local / "prds" / "wip"

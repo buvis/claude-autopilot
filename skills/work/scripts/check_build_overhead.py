@@ -22,8 +22,8 @@ from collections.abc import Iterable
 from pathlib import Path
 
 _PROMPT_WRITE_GLOBS = (
-    "*/dev/local/tmp/*prompt*",
-    "*/dev/local/tmp/dispatch-*",
+    "*/docs/dev/tmp/*prompt*",
+    "*/docs/dev/tmp/dispatch-*",
 )
 _AGENT_TOOL_NAMES = ("Agent", "Task")
 _ZERO_TASKS_LINE = "completed tasks: 0 (no statectl task-done calls found)"

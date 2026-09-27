@@ -13,13 +13,13 @@
 #   2. _autopilot_fable_decide <approve-fable|reject-fable> <prd>, which resolves
 #      the autopilot dir with _walk_up.py, delegates the ledger write to
 #      fablectl.py (it never edits the ledger itself), and — for approve only —
-#      un-parks the PRD with mv dev/local/prds/hold/<prd> -> …/backlog/<prd>.
+#      un-parks the PRD with mv docs/dev/project-management/prds/hold/<prd> -> …/backlog/<prd>.
 #      Exit 0 on success, exit 2 with a one-line stderr message on an empty <prd>
 #      or a fablectl refusal.
 #
 # Technique: every scenario runs inside a throwaway mktemp sandbox laid out like
-# a repo (dev/local/autopilot/ledger, dev/local/prds/{hold,backlog}, bin/), with
-# cwd pointed at it, so the real ~/.claude dev/local tree, the real ledger and
+# a repo (docs/dev/project-management/autopilot/ledger, docs/dev/project-management/prds/{hold,backlog}, bin/), with
+# cwd pointed at it, so the real ~/.claude docs/dev/project-management tree, the real ledger and
 # the real PRD folders are never touched. python3 is stubbed for *_walk_up.py*
 # (it answers the sandbox's autopilot dir); every other python3 call falls
 # through to the real interpreter, so the REAL fablectl.py runs — ledger fixtures
@@ -169,7 +169,7 @@ python3() {
       # $_STUB_WALKUP_MODE (set by run_sandboxed from the scenario's
       # $WALKUP_MODE knob). Every scenario before 20 runs under the default
       # "ok", so this arm's behavior for them is byte-for-byte what it always
-      # was. An implementation that hardcodes a relative `dev/local/autopilot`,
+      # was. An implementation that hardcodes a relative `docs/dev/project-management/autopilot`,
       # or that lifts a path out of the environment, produces the right ledger
       # from the repo root and never lands here — so assert_walkup_called is
       # the only assertion that can tell them apart.
@@ -212,7 +212,7 @@ write_recording_claude() {
 #!/usr/bin/env bash
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 printf 'claude %s\n' "$*" >>"$DIR/claude-invocations.log"
-printf '%s\n' '{"prd":"00001-x.md","next_phase":""}' >"$DIR/dev/local/autopilot/state.json"
+printf '%s\n' '{"prd":"00001-x.md","next_phase":""}' >"$DIR/docs/dev/project-management/autopilot/state.json"
 echo '{"type":"result","subtype":"success","total_cost_usd":0.01,"usage":{"output_tokens":10}}'
 exit 0
 EOF
@@ -284,9 +284,9 @@ EOF
 make_sandbox() {
   SBOX=$(mktemp -d)
   _DIRS+=("$SBOX")
-  mkdir -p "$SBOX/dev/local/autopilot/ledger" \
-           "$SBOX/dev/local/prds/hold" \
-           "$SBOX/dev/local/prds/backlog" \
+  mkdir -p "$SBOX/docs/dev/project-management/autopilot/ledger" \
+           "$SBOX/docs/dev/project-management/prds/hold" \
+           "$SBOX/docs/dev/project-management/prds/backlog" \
            "$SBOX/bin" \
            "$SBOX/.home/.claude/hooks" \
            "$SBOX/.home/.claude/skills/purge-devlocal/scripts"
@@ -303,12 +303,12 @@ make_sandbox() {
   write_stub_pgrep "$SBOX"
   write_stub_notify "$SBOX"
   write_stub_purge "$SBOX"
-  LEDGER="$SBOX/dev/local/autopilot/ledger/fable-requests.json"
+  LEDGER="$SBOX/docs/dev/project-management/autopilot/ledger/fable-requests.json"
 }
 
 # park_prd <dir> <hold|backlog> — drop the PRD fixture in that folder.
 park_prd() {
-  printf '%s\n' "$SENTINEL" >"$1/dev/local/prds/$2/$PRD"
+  printf '%s\n' "$SENTINEL" >"$1/docs/dev/project-management/prds/$2/$PRD"
 }
 
 # seed_request <ledger> <prd> — build the ledger fixture with the REAL fablectl,
@@ -345,8 +345,8 @@ ledger_field() {
 # $RUN_RC. If the safety-kill fired, <dir>/.timeout-fired exists.
 #
 # $RUN_SUBDIR moves cwd into a SUBDIRECTORY of the sandbox, which is what makes
-# the _walk_up.py resolution load-bearing: from dev/local/prds/ a hardcoded
-# relative `dev/local/…` path resolves to nothing. $TRACON_MODE sets
+# the _walk_up.py resolution load-bearing: from docs/dev/project-management/prds/ a hardcoded
+# relative `docs/dev/project-management/…` path resolves to nothing. $TRACON_MODE sets
 # _AUTOPILOT_TRACON for this run only. Both are reset after every call, so one
 # scenario can never leak its knob into the next.
 #
@@ -362,7 +362,7 @@ run_sandboxed() {
   shift 2
   (
     cd "$_rs_dir${RUN_SUBDIR:+/$RUN_SUBDIR}" || exit 90
-    _STUB_AP_DIR="$_rs_dir/dev/local/autopilot"
+    _STUB_AP_DIR="$_rs_dir/docs/dev/project-management/autopilot"
     _STUB_WALKUP_MODE="${WALKUP_MODE:-ok}"
     export _AUTOPILOT_TRACON="$TRACON_MODE"
     # The loop body is a real python3 child, which inherits only exported
@@ -476,13 +476,13 @@ assert_bystander_untouched() {
 }
 
 assert_in_dir() {  # <label> <dir> <hold|backlog>
-  local path="$2/dev/local/prds/$3/$PRD"
+  local path="$2/docs/dev/project-management/prds/$3/$PRD"
   [ -f "$path" ] || FAIL "$1" "PRD is not in $3/ (expected $path)"
   [ "$(cat "$path")" = "$SENTINEL" ] || FAIL "$1" "the file in $3/ is not the original PRD (body changed)"
 }
 
 assert_not_in_dir() {  # <label> <dir> <hold|backlog>
-  [ -e "$2/dev/local/prds/$3/$PRD" ] && FAIL "$1" "PRD is still present in $3/"
+  [ -e "$2/docs/dev/project-management/prds/$3/$PRD" ] && FAIL "$1" "PRD is still present in $3/"
   return 0
 }
 
@@ -533,11 +533,11 @@ assert_not_matches() {
 
 # assert_walkup_called <label> <dir> — the autopilot dir was RESOLVED by running
 # _walk_up.py, not guessed. Every functional assertion in this suite is satisfied
-# by a hardcoded relative `dev/local/autopilot` as long as cwd happens to be the
+# by a hardcoded relative `docs/dev/project-management/autopilot` as long as cwd happens to be the
 # repo root, and by an environment lookup no matter where cwd is; this is the
 # only assertion that separates "derived it" from "got lucky".
 assert_walkup_called() {
-  [ -f "$2/dev/local/autopilot/walkup-invocations.log" ] \
+  [ -f "$2/docs/dev/project-management/autopilot/walkup-invocations.log" ] \
     || FAIL "$1" "_walk_up.py was never invoked — the autopilot dir was guessed, not resolved"
 }
 
@@ -547,7 +547,7 @@ assert_walkup_called() {
 # well; only this log names the writer. The contract is that the helper never
 # edits the ledger itself.
 assert_fablectl_wrote() {
-  [ -f "$2/dev/local/autopilot/fablectl-invocations.log" ] \
+  [ -f "$2/docs/dev/project-management/autopilot/fablectl-invocations.log" ] \
     || FAIL "$1" "fablectl.py decide was never invoked — the helper wrote the ledger itself"
 }
 
@@ -577,15 +577,15 @@ seed_request "$LEDGER_PF" "$PRD"
 
 run_sandboxed "$SBOX_PF" 20 _walkup_probe
 assert_no_timeout "$LPF" "$SBOX_PF"
-[ -f "$SBOX_PF/dev/local/autopilot/walkup-invocations.log" ] \
+[ -f "$SBOX_PF/docs/dev/project-management/autopilot/walkup-invocations.log" ] \
   || FAIL "$LPF: the *_walk_up.py* arm records" "no walkup-invocations.log after a direct _walk_up.py call — assert_walkup_called could never fail"
-[ "$(cat "$SBOX_PF/stdout.log")" = "$SBOX_PF/dev/local/autopilot" ] \
-  || FAIL "$LPF: the *_walk_up.py* arm still answers the sandbox" "got '$(cat "$SBOX_PF/stdout.log" 2>/dev/null)', expected '$SBOX_PF/dev/local/autopilot'"
+[ "$(cat "$SBOX_PF/stdout.log")" = "$SBOX_PF/docs/dev/project-management/autopilot" ] \
+  || FAIL "$LPF: the *_walk_up.py* arm still answers the sandbox" "got '$(cat "$SBOX_PF/stdout.log" 2>/dev/null)', expected '$SBOX_PF/docs/dev/project-management/autopilot'"
 
 run_sandboxed "$SBOX_PF" 20 _fablectl_probe "$FABLECTL" "$LEDGER_PF" "$PRD"
 assert_no_timeout "$LPF" "$SBOX_PF"
 assert_rc "$LPF: the *fablectl.py*decide* arm exits like the real fablectl" "$SBOX_PF" 0
-[ -f "$SBOX_PF/dev/local/autopilot/fablectl-invocations.log" ] \
+[ -f "$SBOX_PF/docs/dev/project-management/autopilot/fablectl-invocations.log" ] \
   || FAIL "$LPF: the *fablectl.py*decide* arm records" "no fablectl-invocations.log after a direct fablectl decide — assert_fablectl_wrote could never fail"
 assert_status "$LPF: the real fablectl still performed the write" "$LEDGER_PF" "$PRD" approved
 PASS "$LPF: both recorders fire, and fablectl decide still runs for real"
@@ -780,7 +780,7 @@ L7="scenario 7 (bare autoclaude still runs the loop)"
 
 make_sandbox; SBOX_7="$SBOX"
 printf '%s\n' '{"prd":"00001-x.md","next_phase":"build","batch":{"id":"b1"}}' \
-  >"$SBOX_7/dev/local/autopilot/state.json"
+  >"$SBOX_7/docs/dev/project-management/autopilot/state.json"
 
 run_autoclaude "$SBOX_7"
 assert_no_timeout "$L7" "$SBOX_7"
@@ -837,22 +837,22 @@ make_sandbox; SBOX_8="$SBOX"; LEDGER_8="$LEDGER"
 seed_request "$LEDGER_8" "$PRD"
 seed_request "$LEDGER_8" "$BYSTANDER"
 park_prd "$SBOX_8" hold
-chmod 500 "$SBOX_8/dev/local/prds/backlog"
+chmod 500 "$SBOX_8/docs/dev/project-management/prds/backlog"
 # Pre-flight: the scenario is only meaningful if the mode bits really do block
 # writes here (they do not for root). Prove it before running, so a permissive
 # filesystem fails loudly instead of passing for the wrong reason.
 # (stderr is redirected FIRST: a failing redirect reports through whatever stderr
 # the shell already has, so the order keeps the probe's error out of the output.)
-if : 2>/dev/null >"$SBOX_8/dev/local/prds/backlog/.write-probe"; then
-  rm -f "$SBOX_8/dev/local/prds/backlog/.write-probe"
-  chmod 700 "$SBOX_8/dev/local/prds/backlog"
+if : 2>/dev/null >"$SBOX_8/docs/dev/project-management/prds/backlog/.write-probe"; then
+  rm -f "$SBOX_8/docs/dev/project-management/prds/backlog/.write-probe"
+  chmod 700 "$SBOX_8/docs/dev/project-management/prds/backlog"
   FAIL "$L8: preflight" "cannot make backlog/ unwritable on this filesystem (running as root?) — the failed-move branch cannot be exercised"
 fi
 
 TS_BEFORE=$(utc_now)
 run_helper "$SBOX_8" approve-fable "$PRD"
 TS_AFTER=$(utc_now)
-chmod 700 "$SBOX_8/dev/local/prds/backlog"   # restore so the cleanup trap can rm -rf
+chmod 700 "$SBOX_8/docs/dev/project-management/prds/backlog"   # restore so the cleanup trap can rm -rf
 assert_no_timeout "$L8" "$SBOX_8"
 assert_rc "$L8: exits 2" "$SBOX_8" 2
 assert_status "$L8: status stays approved (the decision is not rolled back)" "$LEDGER_8" "$PRD" approved
@@ -970,10 +970,10 @@ assert_no_loop "$L11: no loop session launched" "$SBOX_11"
 
 # =============================================================================
 # Scenario 12 — the same approval, run from a SUBDIRECTORY of the repo
-# (dev/local/prds/). Everything still lands: the ledger entry flips and the PRD
+# (docs/dev/project-management/prds/). Everything still lands: the ledger entry flips and the PRD
 # is un-parked. This is the scenario that makes _walk_up.py load-bearing — from
-# here a hardcoded relative `dev/local/autopilot/ledger/...` (or
-# `dev/local/prds/hold/...`) points at nothing, so a helper that never resolves
+# here a hardcoded relative `docs/dev/project-management/autopilot/ledger/...` (or
+# `docs/dev/project-management/prds/hold/...`) points at nothing, so a helper that never resolves
 # the autopilot dir fails, while one that derives both paths from the resolver's
 # answer passes regardless of where the operator stands.
 # =============================================================================
@@ -984,12 +984,12 @@ seed_request "$LEDGER_12" "$PRD"
 seed_request "$LEDGER_12" "$BYSTANDER"
 park_prd "$SBOX_12" hold
 
-RUN_SUBDIR="dev/local/prds"
+RUN_SUBDIR="docs/dev/project-management/prds"
 TS_BEFORE=$(utc_now)
 run_autoclaude "$SBOX_12" approve-fable "$PRD"
 TS_AFTER=$(utc_now)
 assert_no_timeout "$L12" "$SBOX_12"
-assert_rc "$L12: exits 0 from dev/local/prds/" "$SBOX_12" 0
+assert_rc "$L12: exits 0 from docs/dev/project-management/prds/" "$SBOX_12" 0
 assert_status "$L12: status becomes approved" "$LEDGER_12" "$PRD" approved
 assert_decided_at_between "$L12: decided_at is stamped at decision time" "$LEDGER_12" "$PRD" "$TS_BEFORE" "$TS_AFTER"
 assert_bystander_untouched "$L12: the unrelated requested entry is untouched" "$LEDGER_12"
@@ -1017,9 +1017,9 @@ make_sandbox; SBOX_13="$SBOX"; LEDGER_13="$LEDGER"
 seed_request "$LEDGER_13" "$PRD"
 seed_request "$LEDGER_13" "$BYSTANDER"
 park_prd "$SBOX_13" hold
-mkdir -p "$SBOX_13/dev/local/prds/backlog/$PRD"
+mkdir -p "$SBOX_13/docs/dev/project-management/prds/backlog/$PRD"
 printf '%s\n' "# occupies the un-park destination name" \
-  >"$SBOX_13/dev/local/prds/backlog/$PRD/blocker.md"
+  >"$SBOX_13/docs/dev/project-management/prds/backlog/$PRD/blocker.md"
 
 # Pre-flight, loud: prove on THIS filesystem that no regular file can arrive at
 # a path held by a non-empty directory — for both spellings of the move, since
@@ -1036,7 +1036,7 @@ printf 'probe\n' >"$SBOX_13/.preflight/src/$PRD"
 if mv "$SBOX_13/.preflight/src/$PRD" "$SBOX_13/.preflight/dst/" 2>/dev/null; then
   FAIL "$L13: preflight" "on this filesystem mv into a directory whose <name> is a non-empty directory SUCCEEDS — the blocked-move branch cannot be exercised"
 fi
-[ -w "$SBOX_13/dev/local/prds/backlog" ] \
+[ -w "$SBOX_13/docs/dev/project-management/prds/backlog" ] \
   || FAIL "$L13: preflight" "backlog/ is not writable — this scenario must fail the move WITHOUT withdrawing write permission"
 
 TS_BEFORE=$(utc_now)
@@ -1047,16 +1047,16 @@ assert_rc "$L13: exits 2 (the move never landed)" "$SBOX_13" 2
 assert_status "$L13: status stays approved (the decision is not rolled back)" "$LEDGER_13" "$PRD" approved
 assert_decided_at_between "$L13: decided_at is stamped at decision time" "$LEDGER_13" "$PRD" "$TS_BEFORE" "$TS_AFTER"
 assert_bystander_untouched "$L13: the unrelated requested entry is untouched" "$LEDGER_13"
-[ -f "$SBOX_13/dev/local/prds/backlog/$PRD" ] \
+[ -f "$SBOX_13/docs/dev/project-management/prds/backlog/$PRD" ] \
   && FAIL "$L13: the un-park did not land" "backlog/$PRD is a regular file — impossible, the name is held by a directory"
-[ -d "$SBOX_13/dev/local/prds/backlog/$PRD" ] \
+[ -d "$SBOX_13/docs/dev/project-management/prds/backlog/$PRD" ] \
   || FAIL "$L13: the blocking directory survives" "backlog/$PRD is no longer a directory — the helper destroyed the thing in its way"
-[ -f "$SBOX_13/dev/local/prds/backlog/$PRD/blocker.md" ] \
+[ -f "$SBOX_13/docs/dev/project-management/prds/backlog/$PRD/blocker.md" ] \
   || FAIL "$L13: the blocking directory's content survives" "blocker.md is gone — the helper clobbered unrelated files"
 # The PRD body must still exist somewhere the operator can reach: either left in
 # hold/ (mv refused) or nested under the blocking directory (mv moved it inside).
 # Either is recoverable by hand; losing it is not.
-[ -f "$SBOX_13/dev/local/prds/hold/$PRD" ] || [ -f "$SBOX_13/dev/local/prds/backlog/$PRD/$PRD" ] \
+[ -f "$SBOX_13/docs/dev/project-management/prds/hold/$PRD" ] || [ -f "$SBOX_13/docs/dev/project-management/prds/backlog/$PRD/$PRD" ] \
   || FAIL "$L13: the PRD body survives the failed un-park" "the PRD is in neither hold/ nor backlog/$PRD/ — the failed move lost it"
 assert_mentions "$L13: message names the PRD" "$SBOX_13/stderr.log" "$PRD"
 grep -qiE 'manual|by hand|move|mv ' "$SBOX_13/stderr.log" \
@@ -1113,14 +1113,14 @@ make_sandbox; SBOX_15P="$SBOX"
 TRACON_MODE=1
 run_autoclaude "$SBOX_15P"
 assert_no_timeout "$L15: preflight" "$SBOX_15P"
-[ -f "$SBOX_15P/dev/local/autopilot/tracon-invocations.log" ] \
+[ -f "$SBOX_15P/docs/dev/project-management/autopilot/tracon-invocations.log" ] \
   || FAIL "$L15: preflight" "a bare autoclaude with _AUTOPILOT_TRACON=1 did NOT reach the tracon branch — the recorder is not wired, so the assertion below could never fail"
 
 make_sandbox; SBOX_15="$SBOX"; LEDGER_15="$LEDGER"
 seed_request "$LEDGER_15" "$PRD"
 seed_request "$LEDGER_15" "$BYSTANDER"
 park_prd "$SBOX_15" hold
-TRACON_RECORDER="$SBOX_15/dev/local/autopilot/tracon-invocations.log"
+TRACON_RECORDER="$SBOX_15/docs/dev/project-management/autopilot/tracon-invocations.log"
 [ -e "$TRACON_RECORDER" ] \
   && FAIL "$L15: fixture precondition" "the tracon recorder file already exists before the run"
 
@@ -1246,7 +1246,7 @@ make_sandbox; SBOX_18="$SBOX"; LEDGER_18="$LEDGER"
 seed_request "$LEDGER_18" "$PRD"
 seed_request "$LEDGER_18" "$BYSTANDER"
 park_prd "$SBOX_18" hold
-mkdir -p "$SBOX_18/dev/local/prds/backlog/$PRD"      # EMPTY dir on the destination name
+mkdir -p "$SBOX_18/docs/dev/project-management/prds/backlog/$PRD"      # EMPTY dir on the destination name
 
 # Pre-flight, loud: on THIS filesystem the move must really exit 0 and really
 # nest the file. If mv refused instead, the scenario would silently degrade into
@@ -1257,7 +1257,7 @@ mv "$SBOX_18/.preflight/src/$PRD" "$SBOX_18/.preflight/dst/$PRD" \
   || FAIL "$L18: preflight" "mv <file> <empty-dir> exits non-zero on this filesystem — the exit-0-but-missing branch cannot be exercised"
 [ -f "$SBOX_18/.preflight/dst/$PRD/$PRD" ] \
   || FAIL "$L18: preflight" "mv <file> <empty-dir> did not nest the file — the exit-0-but-missing branch cannot be exercised"
-[ -w "$SBOX_18/dev/local/prds/backlog" ] \
+[ -w "$SBOX_18/docs/dev/project-management/prds/backlog" ] \
   || FAIL "$L18: preflight" "backlog/ is not writable — this scenario must fail the move WITHOUT withdrawing write permission"
 
 TS_BEFORE=$(utc_now)
@@ -1268,14 +1268,14 @@ assert_rc "$L18: exits 2 (the move returned 0, the PRD did not arrive)" "$SBOX_1
 assert_status "$L18: status stays approved (the decision is not rolled back)" "$LEDGER_18" "$PRD" approved
 assert_decided_at_between "$L18: decided_at is stamped at decision time" "$LEDGER_18" "$PRD" "$TS_BEFORE" "$TS_AFTER"
 assert_bystander_untouched "$L18: the unrelated requested entry is untouched" "$LEDGER_18"
-[ -f "$SBOX_18/dev/local/prds/backlog/$PRD" ] \
+[ -f "$SBOX_18/docs/dev/project-management/prds/backlog/$PRD" ] \
   && FAIL "$L18: the un-park did not land" "backlog/$PRD is a regular file — impossible, the name is held by a directory"
-[ -d "$SBOX_18/dev/local/prds/backlog/$PRD" ] \
+[ -d "$SBOX_18/docs/dev/project-management/prds/backlog/$PRD" ] \
   || FAIL "$L18: the occupying directory survives" "backlog/$PRD is no longer a directory — the helper destroyed the thing in its way"
 # The PRD body must still be reachable: left in hold/ (mv refused) or nested
 # inside the occupying directory (mv exited 0 and put it there). Either is
 # recoverable by hand; losing it is not.
-[ -f "$SBOX_18/dev/local/prds/hold/$PRD" ] || [ -f "$SBOX_18/dev/local/prds/backlog/$PRD/$PRD" ] \
+[ -f "$SBOX_18/docs/dev/project-management/prds/hold/$PRD" ] || [ -f "$SBOX_18/docs/dev/project-management/prds/backlog/$PRD/$PRD" ] \
   || FAIL "$L18: the PRD body survives the failed un-park" "the PRD is in neither hold/ nor backlog/$PRD/ — the failed move lost it"
 assert_mentions "$L18: message names the PRD" "$SBOX_18/stderr.log" "$PRD"
 grep -qiE 'manual|by hand|move|mv ' "$SBOX_18/stderr.log" \
@@ -1360,7 +1360,7 @@ assert_matches "$L20: message names the resolver/autopilot-dir as the cause" "$S
 assert_ledger_unchanged "$L20: ledger is byte identical" "$SBOX_20" "$LEDGER_20"
 assert_in_dir "$L20: PRD is left parked in hold/" "$SBOX_20" hold
 assert_not_in_dir "$L20: PRD did not reach backlog/" "$SBOX_20" backlog
-[ -f "$SBOX_20/dev/local/autopilot/fablectl-invocations.log" ] \
+[ -f "$SBOX_20/docs/dev/project-management/autopilot/fablectl-invocations.log" ] \
   && FAIL "$L20: no write was attempted" "fablectl.py decide was invoked despite the resolver failing"
 assert_walkup_called "$L20: the resolver was actually invoked, not skipped" "$SBOX_20"
 PASS "$L20: exit 2, resolver failure named, nothing written, PRD never moved out of hold/"
@@ -1392,7 +1392,7 @@ assert_matches "$L21: message names the resolver/autopilot-dir as the cause" "$S
 assert_ledger_unchanged "$L21: ledger is byte identical" "$SBOX_21" "$LEDGER_21"
 assert_in_dir "$L21: PRD is left parked in hold/" "$SBOX_21" hold
 assert_not_in_dir "$L21: PRD did not reach backlog/" "$SBOX_21" backlog
-[ -f "$SBOX_21/dev/local/autopilot/fablectl-invocations.log" ] \
+[ -f "$SBOX_21/docs/dev/project-management/autopilot/fablectl-invocations.log" ] \
   && FAIL "$L21: no write was attempted" "fablectl.py decide was invoked despite an empty resolver answer"
 assert_walkup_called "$L21: the resolver was actually invoked, not skipped" "$SBOX_21"
 PASS "$L21: exit 2 on a zero-exit empty answer too, nothing written, PRD never moved out of hold/"
@@ -1420,7 +1420,7 @@ assert_matches "$L22: prints a usage-shaped message" "$SBOX_22/stderr.log" 'usag
   "stderr does not read as a usage message"
 assert_ledger_unchanged "$L22: ledger is byte identical" "$SBOX_22" "$LEDGER_22"
 assert_in_dir "$L22: the real PRD stays parked in hold/, untouched" "$SBOX_22" hold
-[ -f "$SBOX_22/dev/local/autopilot/fablectl-invocations.log" ] \
+[ -f "$SBOX_22/docs/dev/project-management/autopilot/fablectl-invocations.log" ] \
   && FAIL "$L22: no write was attempted" "fablectl.py decide was invoked for a traversal argument"
 PASS "$L22: exit 2, usage-shaped message, nothing written, nothing moved"
 assert_no_loop "$L22: no loop session launched" "$SBOX_22"
@@ -1446,7 +1446,7 @@ assert_matches "$L23: prints a usage-shaped message" "$SBOX_23/stderr.log" 'usag
   "stderr does not read as a usage message"
 assert_ledger_unchanged "$L23: ledger is byte identical" "$SBOX_23" "$LEDGER_23"
 assert_in_dir "$L23: the real PRD stays parked in hold/, untouched" "$SBOX_23" hold
-[ -f "$SBOX_23/dev/local/autopilot/fablectl-invocations.log" ] \
+[ -f "$SBOX_23/docs/dev/project-management/autopilot/fablectl-invocations.log" ] \
   && FAIL "$L23: no write was attempted" "fablectl.py decide was invoked for an absolute-path argument"
 PASS "$L23: exit 2, usage-shaped message, nothing written, nothing moved"
 assert_no_loop "$L23: no loop session launched" "$SBOX_23"
@@ -1471,7 +1471,7 @@ assert_matches "$L24: prints a usage-shaped message" "$SBOX_24/stderr.log" 'usag
   "stderr does not read as a usage message"
 assert_ledger_unchanged "$L24: ledger is byte identical" "$SBOX_24" "$LEDGER_24"
 assert_in_dir "$L24: the real PRD stays parked in hold/, untouched" "$SBOX_24" hold
-[ -f "$SBOX_24/dev/local/autopilot/fablectl-invocations.log" ] \
+[ -f "$SBOX_24/docs/dev/project-management/autopilot/fablectl-invocations.log" ] \
   && FAIL "$L24: no write was attempted" "fablectl.py decide was invoked for a .txt argument"
 PASS "$L24: exit 2, usage-shaped message, nothing written"
 assert_no_loop "$L24: no loop session launched" "$SBOX_24"
@@ -1496,7 +1496,7 @@ assert_matches "$L25: prints a usage-shaped message" "$SBOX_25/stderr.log" 'usag
   "stderr does not read as a usage message"
 assert_ledger_unchanged "$L25: ledger is byte identical" "$SBOX_25" "$LEDGER_25"
 assert_in_dir "$L25: the real PRD stays parked in hold/, untouched" "$SBOX_25" hold
-[ -f "$SBOX_25/dev/local/autopilot/fablectl-invocations.log" ] \
+[ -f "$SBOX_25/docs/dev/project-management/autopilot/fablectl-invocations.log" ] \
   && FAIL "$L25: no write was attempted" "fablectl.py decide was invoked for a prefix-less argument"
 PASS "$L25: exit 2, usage-shaped message, nothing written"
 assert_no_loop "$L25: no loop session launched" "$SBOX_25"
@@ -1514,7 +1514,7 @@ UNUSUAL_PRD="00076-Fix_the-Thing-v2.md"
 make_sandbox; SBOX_26="$SBOX"; LEDGER_26="$LEDGER"
 seed_request "$LEDGER_26" "$UNUSUAL_PRD"
 seed_request "$LEDGER_26" "$BYSTANDER"
-printf '%s\n' "$SENTINEL" >"$SBOX_26/dev/local/prds/hold/$UNUSUAL_PRD"
+printf '%s\n' "$SENTINEL" >"$SBOX_26/docs/dev/project-management/prds/hold/$UNUSUAL_PRD"
 
 TS_BEFORE=$(utc_now)
 run_helper "$SBOX_26" approve-fable "$UNUSUAL_PRD"
@@ -1524,11 +1524,11 @@ assert_rc "$L26: exits 0 (the naming convention allows this shape)" "$SBOX_26" 0
 assert_status "$L26: status becomes approved" "$LEDGER_26" "$UNUSUAL_PRD" approved
 assert_decided_at_between "$L26: decided_at is stamped at decision time" "$LEDGER_26" "$UNUSUAL_PRD" "$TS_BEFORE" "$TS_AFTER"
 assert_bystander_untouched "$L26: the unrelated requested entry is untouched" "$LEDGER_26"
-[ -f "$SBOX_26/dev/local/prds/backlog/$UNUSUAL_PRD" ] \
-  || FAIL "$L26: PRD is un-parked into backlog/" "expected a file at $SBOX_26/dev/local/prds/backlog/$UNUSUAL_PRD"
-[ "$(cat "$SBOX_26/dev/local/prds/backlog/$UNUSUAL_PRD")" = "$SENTINEL" ] \
+[ -f "$SBOX_26/docs/dev/project-management/prds/backlog/$UNUSUAL_PRD" ] \
+  || FAIL "$L26: PRD is un-parked into backlog/" "expected a file at $SBOX_26/docs/dev/project-management/prds/backlog/$UNUSUAL_PRD"
+[ "$(cat "$SBOX_26/docs/dev/project-management/prds/backlog/$UNUSUAL_PRD")" = "$SENTINEL" ] \
   || FAIL "$L26: the file in backlog/ is the original PRD" "body changed"
-[ -e "$SBOX_26/dev/local/prds/hold/$UNUSUAL_PRD" ] \
+[ -e "$SBOX_26/docs/dev/project-management/prds/hold/$UNUSUAL_PRD" ] \
   && FAIL "$L26: PRD no longer sits in hold/" "PRD is still present in hold/"
 assert_mentions "$L26: confirmation names the PRD" "$SBOX_26/stdout.log" "$UNUSUAL_PRD"
 assert_walkup_called "$L26: the autopilot dir came from _walk_up.py" "$SBOX_26"
@@ -1550,32 +1550,32 @@ L27="scenario 27 (the un-park move's own error text reaches stderr, not just gen
 make_sandbox; SBOX_27="$SBOX"; LEDGER_27="$LEDGER"
 seed_request "$LEDGER_27" "$PRD"
 park_prd "$SBOX_27" hold
-chmod 500 "$SBOX_27/dev/local/prds/backlog"
+chmod 500 "$SBOX_27/docs/dev/project-management/prds/backlog"
 # Pre-flight, loud: the mode bits really do block writes here (as in scenario
 # 8), and the REAL mv's own stderr on this exact failure is captured so the
 # assertion below pins the ACTUAL error text, never a guessed one.
-if : 2>/dev/null >"$SBOX_27/dev/local/prds/backlog/.write-probe"; then
-  rm -f "$SBOX_27/dev/local/prds/backlog/.write-probe"
-  chmod 700 "$SBOX_27/dev/local/prds/backlog"
+if : 2>/dev/null >"$SBOX_27/docs/dev/project-management/prds/backlog/.write-probe"; then
+  rm -f "$SBOX_27/docs/dev/project-management/prds/backlog/.write-probe"
+  chmod 700 "$SBOX_27/docs/dev/project-management/prds/backlog"
   FAIL "$L27: preflight" "cannot make backlog/ unwritable on this filesystem (running as root?) — the failed-move branch cannot be exercised"
 fi
-mv "$SBOX_27/dev/local/prds/hold/$PRD" "$SBOX_27/dev/local/prds/backlog/$PRD" 2>"$SBOX_27/mv-preflight.err"
+mv "$SBOX_27/docs/dev/project-management/prds/hold/$PRD" "$SBOX_27/docs/dev/project-management/prds/backlog/$PRD" 2>"$SBOX_27/mv-preflight.err"
 MV_PREFLIGHT_RC=$?
 if [ "$MV_PREFLIGHT_RC" -eq 0 ]; then
-  chmod 700 "$SBOX_27/dev/local/prds/backlog"
+  chmod 700 "$SBOX_27/docs/dev/project-management/prds/backlog"
   FAIL "$L27: preflight" "a direct mv into the unwritable backlog/ unexpectedly succeeded — cannot pin the real error text"
 fi
-[ -f "$SBOX_27/dev/local/prds/hold/$PRD" ] \
-  || { chmod 700 "$SBOX_27/dev/local/prds/backlog"; FAIL "$L27: preflight" "the probe mv consumed the source PRD despite failing — fixture corrupted"; }
+[ -f "$SBOX_27/docs/dev/project-management/prds/hold/$PRD" ] \
+  || { chmod 700 "$SBOX_27/docs/dev/project-management/prds/backlog"; FAIL "$L27: preflight" "the probe mv consumed the source PRD despite failing — fixture corrupted"; }
 MV_ERR_TAIL=$(command python3 -c \
   'import sys; t=sys.stdin.read().strip(); print(t.rsplit(":",1)[-1].strip())' <"$SBOX_27/mv-preflight.err")
 if [ -z "$MV_ERR_TAIL" ]; then
-  chmod 700 "$SBOX_27/dev/local/prds/backlog"
+  chmod 700 "$SBOX_27/docs/dev/project-management/prds/backlog"
   FAIL "$L27: preflight" "mv produced no parseable error text on this filesystem — cannot pin the real error"
 fi
 
 run_helper "$SBOX_27" approve-fable "$PRD"
-chmod 700 "$SBOX_27/dev/local/prds/backlog"   # restore so the cleanup trap can rm -rf
+chmod 700 "$SBOX_27/docs/dev/project-management/prds/backlog"   # restore so the cleanup trap can rm -rf
 assert_no_timeout "$L27" "$SBOX_27"
 assert_rc "$L27: exits 2" "$SBOX_27" 2
 assert_status "$L27: status stays approved (the decision is not rolled back)" "$LEDGER_27" "$PRD" approved
@@ -1595,7 +1595,7 @@ assert_no_loop "$L27: no loop session launched" "$SBOX_27"
 # and mv's own exit code is 0, so a helper that only checks "does
 # backlog/<prd> exist afterwards" (the fix scenario 18 forced) is STILL
 # fooled here: the file exists, it is just the WRONG one now, and the
-# original is gone for good (dev/local/ is gitignored, nothing to recover
+# original is gone for good (docs/dev/project-management/ is gitignored, nothing to recover
 # from). The correct behaviour refuses the un-park before ever touching the
 # destination: the decision still stands (status approved, decided_at kept),
 # the call exits 2, the pre-existing backlog/<prd> file is left byte-for-byte
@@ -1609,7 +1609,7 @@ make_sandbox; SBOX_28="$SBOX"; LEDGER_28="$LEDGER"
 seed_request "$LEDGER_28" "$PRD"
 seed_request "$LEDGER_28" "$BYSTANDER"
 park_prd "$SBOX_28" hold
-printf '%s\n' "$OCCUPANT_SENTINEL" >"$SBOX_28/dev/local/prds/backlog/$PRD"
+printf '%s\n' "$OCCUPANT_SENTINEL" >"$SBOX_28/docs/dev/project-management/prds/backlog/$PRD"
 
 TS_BEFORE=$(utc_now)
 run_helper "$SBOX_28" approve-fable "$PRD"
@@ -1619,9 +1619,9 @@ assert_rc "$L28: exits 2 (the un-park did not land)" "$SBOX_28" 2
 assert_status "$L28: status stays approved (the decision is not rolled back)" "$LEDGER_28" "$PRD" approved
 assert_decided_at_between "$L28: decided_at is stamped at decision time" "$LEDGER_28" "$PRD" "$TS_BEFORE" "$TS_AFTER"
 assert_bystander_untouched "$L28: the unrelated requested entry is untouched" "$LEDGER_28"
-[ "$(cat "$SBOX_28/dev/local/prds/backlog/$PRD")" = "$OCCUPANT_SENTINEL" ] \
+[ "$(cat "$SBOX_28/docs/dev/project-management/prds/backlog/$PRD")" = "$OCCUPANT_SENTINEL" ] \
   || FAIL "$L28: the pre-existing backlog/$PRD file is byte-for-byte unchanged" \
-          "content is now '$(cat "$SBOX_28/dev/local/prds/backlog/$PRD" 2>/dev/null)', expected the untouched occupant; the un-park overwrote it"
+          "content is now '$(cat "$SBOX_28/docs/dev/project-management/prds/backlog/$PRD" 2>/dev/null)', expected the untouched occupant; the un-park overwrote it"
 assert_in_dir "$L28: the parked PRD is still reachable in hold/" "$SBOX_28" hold
 assert_mentions "$L28: message names the PRD" "$SBOX_28/stderr.log" "$PRD"
 grep -qiE 'exist|already|manual|by hand|remove|delete|rename|resolve|conflict|occupied' "$SBOX_28/stderr.log" \
@@ -1638,7 +1638,7 @@ assert_no_loop "$L28: no loop session launched" "$SBOX_28"
 # `00076-a/../b.md` matches `[0-9][0-9][0-9][0-9][0-9]-*.md` on its own (the
 # glob's `*` matches `/` too), so this is the one shape where the case arms'
 # ORDER, not just their presence, decides the outcome: the traversal arm must
-# run first, or this string validates and walks outside dev/local/prds.
+# run first, or this string validates and walks outside docs/dev/project-management/prds.
 # =============================================================================
 L29="scenario 29 (approve is refused when <prd> has an embedded /../ inside a well-formed name)"
 EMBEDDED_TRAVERSAL_PRD="00076-a/../b.md"
@@ -1655,7 +1655,7 @@ assert_matches "$L29: prints a usage-shaped message" "$SBOX_29/stderr.log" 'usag
   "stderr does not read as a usage message"
 assert_ledger_unchanged "$L29: ledger is byte identical" "$SBOX_29" "$LEDGER_29"
 assert_in_dir "$L29: the real PRD stays parked in hold/, untouched" "$SBOX_29" hold
-[ -f "$SBOX_29/dev/local/autopilot/fablectl-invocations.log" ] \
+[ -f "$SBOX_29/docs/dev/project-management/autopilot/fablectl-invocations.log" ] \
   && FAIL "$L29: no write was attempted" "fablectl.py decide was invoked for an embedded traversal argument"
 PASS "$L29: exit 2, usage-shaped message, nothing written, nothing moved"
 assert_no_loop "$L29: no loop session launched" "$SBOX_29"

@@ -228,7 +228,7 @@ fi
 #    anymore (teardown is the CLI loop's), so after a plain drained run the
 #    invoking shell must carry no leaked `trap -p INT` and must survive to
 #    keep running assertions ────────────────────────────────────────────────
-AP6="$TMP1/s6/dev/local/autopilot"
+AP6="$TMP1/s6/docs/dev/project-management/autopilot"
 mkdir -p "$AP6"
 LOOPS6="$TMP1/s6-registry"
 export _AUTOPILOT_LOOPS_DIR="$LOOPS6"
@@ -265,7 +265,7 @@ echo "PASS: plain path hands off to autopilot loop, rc passthrough, no leaked IN
 
 # ── Scenario 7: escape hatch (_AUTOPILOT_TRACON=0) — uv is NEVER invoked,
 #    the plain hand-off runs, rc 0 ─────────────────────────────────────────
-AP7="$TMP1/s7/dev/local/autopilot"
+AP7="$TMP1/s7/docs/dev/project-management/autopilot"
 mkdir -p "$AP7"
 LOOPS7="$TMP1/s7-registry"
 export _AUTOPILOT_LOOPS_DIR="$LOOPS7"
@@ -294,7 +294,7 @@ AUTOPILOT_LOOP_STUB="_loop_stub_drained"
 #    same outcome as scenario 7 via the OTHER route to the plain hand-off.
 #    run_loop redirects autoclaude's own stdout to /dev/null, so fd 1 is
 #    never a tty here regardless of how this suite is invoked ─────────────
-AP8="$TMP1/s8/dev/local/autopilot"
+AP8="$TMP1/s8/docs/dev/project-management/autopilot"
 mkdir -p "$AP8"
 LOOPS8="$TMP1/s8-registry"
 export _AUTOPILOT_LOOPS_DIR="$LOOPS8"
@@ -315,7 +315,7 @@ UV_CALLS_FILE=""
 #    the TUI run (simulating a `q` quit) — tracon is invoked exactly ONCE
 #    for the TUI, with BOTH --root and --wrapper-pid in its argv, and
 #    --wrapper-pid is the genuinely backgrounded loop child's own pid ─────
-AP9="$TMP1/s9/dev/local/autopilot"
+AP9="$TMP1/s9/docs/dev/project-management/autopilot"
 mkdir -p "$AP9"
 LOOPS9="$TMP1/s9-registry"
 export _AUTOPILOT_LOOPS_DIR="$LOOPS9"
@@ -356,7 +356,7 @@ tui_calls=${tui_calls:-0}
 [ "$tui_calls" -eq 1 ] || fail "scenario 9: expected exactly one uv TUI invocation (--wrapper-pid), got $tui_calls (uv calls: $(cat "$UV_CALLS9" 2>/dev/null))"
 
 tui_line=$(grep -- '--wrapper-pid' "$UV_CALLS9")
-want_root="${AP9%/dev/local/autopilot}"
+want_root="${AP9%/docs/dev/project-management/autopilot}"
 got_root=$(_argv_value "$tui_line" --root)
 [ "$got_root" = "$want_root" ] || fail "scenario 9: uv TUI call --root=$got_root, expected $want_root"
 
@@ -369,7 +369,7 @@ got_wpid=$(_argv_value "$tui_line" --wrapper-pid)
 # ── Scenario 10: preflight FAILS — falls back to the plain hand-off, which
 #    actually runs; uv is called once for --preflight and NEVER again to
 #    launch a TUI it just told us is missing its deps ─────────────────────
-AP10="$TMP1/s10/dev/local/autopilot"
+AP10="$TMP1/s10/docs/dev/project-management/autopilot"
 mkdir -p "$AP10"
 LOOPS10="$TMP1/s10-registry"
 export _AUTOPILOT_LOOPS_DIR="$LOOPS10"
@@ -411,7 +411,7 @@ wpid_calls10=${wpid_calls10:-0}
 #    the tag must sit on the registered pid itself or on a direct child of
 #    it. autoclaude must refuse before spending any uv cost and before ever
 #    handing off to the loop ─────────────────────────────────────────────
-AP11="$TMP1/s11/dev/local/autopilot"
+AP11="$TMP1/s11/docs/dev/project-management/autopilot"
 mkdir -p "$AP11"
 LOOPS11="$TMP1/s11-registry"
 mkdir -p "$LOOPS11"
@@ -482,7 +482,7 @@ echo "PASS: escape hatch + auto-detect never call uv (scenarios 7-8), tracon TUI
 #    the registry dir stays empty (18; the CLI loop owns registry writes
 #    and none ran here), and the INT trap is not leaked in this shell,
 #    which keeps running (19) ────────────────────────────────────────────
-AP15="$TMP1/s15/dev/local/autopilot"
+AP15="$TMP1/s15/docs/dev/project-management/autopilot"
 mkdir -p "$AP15"
 LOOPS15="$TMP1/s15-registry"
 export _AUTOPILOT_LOOPS_DIR="$LOOPS15"
@@ -562,7 +562,7 @@ echo "PASS: Ctrl-C stop is rc 130 and fast, not deferred to the stub's slow slee
 #    CHILD bash process's own process group exactly as a tty Ctrl-C would;
 #    this lands on _autoclaude_tracon's own `trap ... INT`, not the
 #    exit-code-130 branch. Converges: loop tree stopped, no orphan, rc 130 ─
-AP20="$TMP1/s20/dev/local/autopilot"
+AP20="$TMP1/s20/docs/dev/project-management/autopilot"
 mkdir -p "$AP20"
 LOOPS20="$TMP1/s20-registry"
 STUB_PID20="$TMP1/s20-stub-pid"
@@ -597,7 +597,7 @@ echo "PASS: a real group SIGINT in the pre-raw-mode window converges on rc 130, 
 #    immediately, with no artificial wait for the loop stub to start,
 #    maximizing the race between "loop just forked" and "stop fires".
 #    Whichever way the race lands, no orphan may survive ─────────────────
-AP21="$TMP1/s21/dev/local/autopilot"
+AP21="$TMP1/s21/docs/dev/project-management/autopilot"
 mkdir -p "$AP21"
 LOOPS21="$TMP1/s21-registry"
 export _AUTOPILOT_LOOPS_DIR="$LOOPS21"
@@ -640,7 +640,7 @@ echo "PASS: fork-window Ctrl-C (stop arriving before the loop stub starts) still
 #    monitor mode explicitly OFF, so it inherits this shell's existing
 #    process group rather than leading its own. Must refuse: return 1 and
 #    never hand off to the loop ────────────────────────────────────────────
-AP22="$TMP1/s22/dev/local/autopilot"
+AP22="$TMP1/s22/docs/dev/project-management/autopilot"
 mkdir -p "$AP22"
 LOOPS22="$TMP1/s22-registry"
 export _AUTOPILOT_LOOPS_DIR="$LOOPS22"
@@ -678,7 +678,7 @@ echo "PASS: child pgrp self-guard refuses a loop that cannot be stopped — rc 1
 #    deterministically with a `functrace` DEBUG trap that recognizes the
 #    ONE fork line by its unique literal (`_AUTOPILOT_TRACON_CHILD=1`) and
 #    self-signals — via $BASHPID, not $$ — immediately before it executes ──
-AP24="$TMP1/s24/dev/local/autopilot"
+AP24="$TMP1/s24/docs/dev/project-management/autopilot"
 mkdir -p "$AP24"
 LOOPS24="$TMP1/s24-registry"
 export _AUTOPILOT_LOOPS_DIR="$LOOPS24"
@@ -729,7 +729,7 @@ echo "PASS: a pre-fork-window INT converges on rc 130 without signaling the call
 #    process) must converge on rc 143 with the loop tree stopped and no
 #    orphaned stub child. Reuses CHILD_SCRIPT_TRACON verbatim; only the
 #    signal and its target (pid, not group) differ from scenario 20 ───────
-AP25="$TMP1/s25/dev/local/autopilot"
+AP25="$TMP1/s25/docs/dev/project-management/autopilot"
 mkdir -p "$AP25"
 LOOPS25="$TMP1/s25-registry"
 STUB_PID25="$TMP1/s25-stub-pid"
@@ -779,7 +779,7 @@ echo "PASS: a real SIGTERM to the tracon parent (pid, not group) converges on rc
 #    read as a live wrapper — the front-end prune validates the
 #    _AUTOPILOT_LOOP=<pid> tag, so a live-but-unrelated pid (a plain
 #    `sleep`) is swept and never blocks a new loop ────────────────────────
-AP31="$TMP1/s31/dev/local/autopilot"
+AP31="$TMP1/s31/docs/dev/project-management/autopilot"
 mkdir -p "$AP31"
 LOOPS31="$TMP1/s31-registry"
 mkdir -p "$LOOPS31"
@@ -895,7 +895,7 @@ echo "PASS: non-zero child_rc surfaces the resume-runbook text from wrapper.log 
 #    own fd 0. A background job started under `set +m` gets /dev/null stdin
 #    per POSIX in the absence of an explicit redirection; the `<&0` on the
 #    TUI launch line is what keeps the real Textual TUI able to read keys ──
-AP37="$TMP1/s37/dev/local/autopilot"
+AP37="$TMP1/s37/docs/dev/project-management/autopilot"
 mkdir -p "$AP37"
 LOOPS37="$TMP1/s37-registry"
 export _AUTOPILOT_LOOPS_DIR="$LOOPS37"
@@ -948,7 +948,7 @@ echo "PASS: the backgrounded tracon TUI call inherits the parent shell's own std
 #    environment — set with a plain (non-exported) assignment so only a
 #    genuine `export` inside _autoclaude_tracon can make it visible to a
 #    REAL exec'd child ─────────────────────────────────────────────────────
-AP38="$TMP1/s38/dev/local/autopilot"
+AP38="$TMP1/s38/docs/dev/project-management/autopilot"
 mkdir -p "$AP38"
 
 LOOPS38="$TMP1/s38-registry"
@@ -1017,7 +1017,7 @@ echo "PASS: _AUTOPILOT_LOOPS_DIR is exported by the tracon PARENT itself before 
 #    to its stderr, which the fork redirects into wrapper.log), reach the
 #    PARENT autoclaude call's own stderr via _autoclaude_tracon_surface at
 #    its live call sites ──────────────────────────────────────────────────
-AP39="$TMP1/s39/dev/local/autopilot"
+AP39="$TMP1/s39/docs/dev/project-management/autopilot"
 mkdir -p "$AP39"
 LOOPS39="$TMP1/s39-registry"
 export _AUTOPILOT_LOOPS_DIR="$LOOPS39"
@@ -1090,7 +1090,7 @@ echo "PASS: a paused loop's resume-runbook diagnostics reach the PARENT autoclau
 #    environment, so matching the shell alone swept live loops out of the
 #    registry and left tracon reading them as dead (no pause chip, no
 #    limit-wait, q → s "nothing to stop") ──────────────────────────────────
-AP40="$TMP1/s40/dev/local/autopilot"
+AP40="$TMP1/s40/docs/dev/project-management/autopilot"
 mkdir -p "$AP40"
 LOOPS40="$TMP1/s40-registry"
 mkdir -p "$LOOPS40"

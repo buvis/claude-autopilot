@@ -4,11 +4,11 @@
 Used by autopilot hooks, scripts, and Bash callers (`--bash` entry) so the
 walk-up pattern lives in one place. The pattern: starting from `start`,
 resolve symlinks, then walk up the parent chain looking for a directory
-named `dev/local/autopilot`. Return the resolved path to that directory if
+named `docs/dev/project-management/autopilot`. Return the resolved path to that directory if
 found, None otherwise. Stop at filesystem root.
 
 Why walk up: agents may `cd` into a subdirectory (or through a symlink)
-during a session. A hard-coded relative `dev/local/autopilot/...` resolution
+during a session. A hard-coded relative `docs/dev/project-management/autopilot/...` resolution
 silently misses the dir. Hooks (and Bash one-liners that emit signal files)
 must use the resolved absolute path.
 
@@ -42,7 +42,7 @@ import datetime as _dt
 import sys
 from pathlib import Path
 
-AUTOPILOT_REL_PATH = Path("dev") / "local" / "autopilot"
+AUTOPILOT_REL_PATH = Path("docs") / "dev" / "project-management" / "autopilot"
 
 # The two hand-off markers, in the same order as `cli/handoff.MARKERS` (the
 # source of truth; this bare-binary helper must not import the package, and
@@ -51,7 +51,7 @@ INHERITED_MARKERS = (".handoff-requested", ".cap-fired")
 
 
 def find_autopilot_dir(start: Path) -> Path | None:
-    """Walk up from `start` looking for dev/local/autopilot/.
+    """Walk up from `start` looking for docs/dev/project-management/autopilot/.
 
     Returns the resolved path if found, None otherwise. Stops at filesystem
     root. Resolves symlinks via `Path.resolve()` so callers get a stable

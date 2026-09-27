@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Propose routing rule changes from recorded outcomes (PRD 00170).
 
-Reads `dev/local/autopilot/ledger/attempts.jsonl`, computes three signals
+Reads `docs/dev/project-management/autopilot/ledger/attempts.jsonl`, computes three signals
 (S1 mechanical-row escalation rate, S2 repair-budget completion rate, S3
 codex-rung failure rate) plus a report-only escalation-by-reason table, and
 writes a markdown proposal (`routing-proposal-<date>.md`) and, when S1
@@ -489,7 +489,7 @@ def _resolve_paths(args: argparse.Namespace) -> tuple[Path, Path, Path, str] | i
     autopilot_dir = find_autopilot_dir(cwd) if need_walkup else None
     if need_walkup and autopilot_dir is None:
         print(
-            f"tune_routing: no dev/local/autopilot dir above {cwd}; "
+            f"tune_routing: no docs/dev/project-management/autopilot dir above {cwd}; "
             "pass --ledger/--out-dir",
             file=sys.stderr,
         )

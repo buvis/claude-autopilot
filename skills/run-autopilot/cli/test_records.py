@@ -55,7 +55,7 @@ def _per_prd_reset_members() -> dict:
         "doubts_rubric_verdicts": [{"rule_id": "D1", "verdict": "pass"}],
         "rework_task_ids": ["t3"],
         "work_start_sha": "abc123",
-        "design_doc": "dev/local/designs/00004-x-design.md",
+        "design_doc": "docs/dev/project-management/designs/00004-x-design.md",
         "design_gate": "user",
         "design_mode": "run",
         "pause_reason": {"site": "reviewer_fail", "detail": "carl hung"},

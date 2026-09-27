@@ -59,7 +59,7 @@ _JOURNAL_HEADING = "## Custody journal"
 _STALL_OP_LEAD = "`stall_op` (PRD 00051 task 10)"
 _STALL_OP_SHAPE = "{op_id, prd, site, detail}"
 _CAPTURE_KEYS = ("commit_range", "commits", "branch", "repo_root", "git_dir")
-_CUSTODY_JOURNAL_PATH = "dev/local/autopilot/ledger/custody.jsonl"
+_CUSTODY_JOURNAL_PATH = "docs/dev/project-management/autopilot/ledger/custody.jsonl"
 _PUSH_DENIAL_SENTENCE = (
     "A push denied by hooks/guard_push_on_critical.py names a pending "
     "cap_critical custody: resolve it with autopilot custody resolve, never "

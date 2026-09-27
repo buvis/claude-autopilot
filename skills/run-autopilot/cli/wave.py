@@ -1,6 +1,6 @@
 """The wave: cut the backlog into parallel lanes and keep `wave.json` (PRD 00214).
 
-`wave.json` (dev/local/autopilot/wave.json) is a one-shot planning record for
+`wave.json` (docs/dev/project-management/autopilot/wave.json) is a one-shot planning record for
 the wave launcher, not PRD-lifecycle state: only `wave`, `wave_launch` and
 `wave_assemble` read or write it.
 """
@@ -242,7 +242,7 @@ def plan(repo: Path, wave_path: Path, max_lanes: int = 3) -> int:
                 file=sys.stderr,
             )
             return 1
-        backlog = sorted((repo / "dev/local/prds/backlog").glob("*.md"))
+        backlog = sorted((repo / "docs/dev/project-management/prds/backlog").glob("*.md"))
         lanes, held_back = cut(
             {p.name: p.read_text(encoding="utf-8") for p in backlog}, max_lanes
         )

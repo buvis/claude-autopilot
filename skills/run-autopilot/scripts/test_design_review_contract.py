@@ -95,11 +95,11 @@ class DesignReviewContractTests(unittest.TestCase):
 
     def test_rework_output_is_cycle_scoped(self) -> None:
         # One design doc per review cycle, never overwriting the first-pass doc.
-        rework_path = "dev/local/designs/<prd-stem>-rework-<cycle>-design.md"
+        rework_path = "docs/dev/project-management/designs/<prd-stem>-rework-<cycle>-design.md"
         self.assertIn(rework_path, _section(self.design, "## Rework mode"))
         output = _section(self.design, "## Output")
         self.assertIn(rework_path, output)
-        self.assertIn("dev/local/designs/<prd-stem>-design.md", output)
+        self.assertIn("docs/dev/project-management/designs/<prd-stem>-design.md", output)
 
     def test_rework_keeps_the_nine_sections(self) -> None:
         self.assertIn(

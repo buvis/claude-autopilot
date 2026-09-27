@@ -18,7 +18,7 @@ thresholds against a single cost ceiling:
   — it is genuinely oversized. The hook does NOT append another rotation;
   instead it records the oversized-task stall (`stall_reason.stalled ==
   "oversized_task"`) and instructs the oversized-task stall recovery (move
-  the PRD to `dev/local/prds/hold/`, advance to the next PRD).
+  the PRD to `docs/dev/project-management/prds/hold/`, advance to the next PRD).
 - **Headroom rule** (below the hard cap, PRD 00200) — writes a
   `.handoff-requested` marker when the next task would not fit: the usage
   left under `USAGE_CAP`, or the calls left under `TURN_TRIPWIRE`, is less
@@ -38,7 +38,7 @@ window. There is no window classification.
 Active only inside the autopilot shell loop (`$_AUTOPILOT_LOOP`, same guard
 as review_coverage_hook.py) AND in a guarded phase (`_guarded_phase`: build,
 or review with rework queued, PRD 00196). The env guard is load-bearing:
-parked batch state lingers in dev/local/autopilot/ between relaunches, and
+parked batch state lingers in docs/dev/project-management/autopilot/ between relaunches, and
 without it a long INTERACTIVE session sharing the cwd tree wrote rotations
 and stalls into the parked batch's state (observed 2026-07-19). The autopilot
 directory is located by walking up from cwd (the agent may have cd'd into a
@@ -150,7 +150,7 @@ def _oversized_stall_instructions(task_id: str) -> str:
         "rotation — the task is oversized for a single build session. The hook "
         'has set state.stall_reason to {"stalled": "oversized_task"}. '
         "Perform the oversized-task stall recovery (references/recovery.md): "
-        "move the PRD from dev/local/prds/wip/ to dev/local/prds/hold/, "
+        "move the PRD from docs/dev/project-management/prds/wip/ to docs/dev/project-management/prds/hold/, "
         "reset PRD-specific state fields, and advance to the next PRD. Then STOP. "
         "The autopilot Stop hook performs the loop handoff from next_phase."
     )
@@ -412,7 +412,7 @@ def _set_oversized_stall(autopilot_dir: Path, task_id: str, total: int) -> bool:
     The livelock path: a task rotated twice in a row without finishing, so it
     is genuinely too big for one build session. The hook records the
     oversized-task stall and the model performs the recovery (move the PRD to
-    dev/local/prds/hold/, advance to the next PRD). It does NOT append
+    docs/dev/project-management/prds/hold/, advance to the next PRD). It does NOT append
     another rotation.
     """
 

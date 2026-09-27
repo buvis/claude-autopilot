@@ -45,7 +45,7 @@ class SelectableTests(unittest.TestCase):
         )
 
     def test_skips_unnumbered_names(self) -> None:
-        # dev/local/prds/FASTTRACK-PLAN-v5.md is unnumbered precisely so no
+        # docs/dev/project-management/prds/FASTTRACK-PLAN-v5.md is unnumbered precisely so no
         # PRD picker selects it.
         self.assertEqual(
             selection.selectable(["FASTTRACK-PLAN-v5.md", "00089-a.md"]),

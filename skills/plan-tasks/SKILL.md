@@ -11,7 +11,7 @@ Create implementation tasks from PRD documents.
 ## Dependencies
 
 - Personal skills (files read at runtime): `work` - its `SKILL.md` "Gemini-first tasks" list is the single source of truth for the UI/backend split that sets `qwen_eligible`, and `references/qwen-integration.md` carries the qwen infra preflight (absent: qwen counts as unavailable and the eligibility trigger is skipped)
-- State contract with `run-autopilot`: `dev/local/autopilot/state.json`, `dev/local/autopilot/replan-context.md`
+- State contract with `run-autopilot`: `docs/dev/project-management/autopilot/state.json`, `docs/dev/project-management/autopilot/replan-context.md`
 - Optional: `pi` binary plus a reachable llama.cpp endpoint (gated by the preflight, never fatal)
 
 ## Workflow
@@ -24,8 +24,8 @@ bash ${CLAUDE_PLUGIN_ROOT}/skills/plan-tasks/scripts/list-prds.sh
 
 Or manually list PRDs (the native `Glob` tool is absent in this build; see rules/tools.md):
 ```bash
-ls dev/local/prds/wip
-ls dev/local/prds/backlog
+ls docs/dev/project-management/prds/wip
+ls docs/dev/project-management/prds/backlog
 ```
 
 If no PRDs found, inform user and stop.
@@ -38,7 +38,7 @@ If no PRDs found, inform user and stop.
 
 ### 2.5. Detect replan mode
 
-Before reading the PRD, check for `dev/local/autopilot/replan-context.md`. If present, this invocation is a **replan** triggered by `/autopilot:run-autopilot` Phase 0's abort handler — the prior Work session aborted on a too-big task and autopilot wants the remaining scope re-split into smaller chunks.
+Before reading the PRD, check for `docs/dev/project-management/autopilot/replan-context.md`. If present, this invocation is a **replan** triggered by `/autopilot:run-autopilot` Phase 0's abort handler — the prior Work session aborted on a too-big task and autopilot wants the remaining scope re-split into smaller chunks.
 
 When `replan-context.md` exists:
 
@@ -51,9 +51,9 @@ When `replan-context.md` is absent → normal first-pass planning. Use the 150K 
 
 ### 3. Analyze PRD
 
-Read the full PRD. Also load existing codebase architecture context (AGENTS.md, agent_docs/, `dev/local/` architecture notes) to cross-reference. Identify reusable existing code before creating tasks.
+Read the full PRD. Also load existing codebase architecture context (AGENTS.md, agent_docs/, `docs/dev/project-management/` architecture notes) to cross-reference. Identify reusable existing code before creating tasks.
 
-**Design doc (when present).** Check `state.design_doc` in `dev/local/autopilot/state.json`; if it is unset, fall back to the glob `dev/local/designs/<prd-stem>-design.md` (`<prd-stem>` = the selected PRD's filename minus `.md`). When a design doc exists, read it — it refines the PRD with the implementation design (the HOW): `## Interfaces & contracts` (exact signatures/types/enums), `## Module placement` (file targets), and `## Reuse inventory` (existing helpers). These seed the task `Contract`, `Location`, and `Reuse:` fields in step 4. When no design doc exists, plan from the PRD alone, as today. This detection works unchanged in replan mode.
+**Design doc (when present).** Check `state.design_doc` in `docs/dev/project-management/autopilot/state.json`; if it is unset, fall back to the glob `docs/dev/project-management/designs/<prd-stem>-design.md` (`<prd-stem>` = the selected PRD's filename minus `.md`). When a design doc exists, read it — it refines the PRD with the implementation design (the HOW): `## Interfaces & contracts` (exact signatures/types/enums), `## Module placement` (file targets), and `## Reuse inventory` (existing helpers). These seed the task `Contract`, `Location`, and `Reuse:` fields in step 4. When no design doc exists, plan from the PRD alone, as today. This detection works unchanged in replan mode.
 
 Extract:
 - Capabilities and features
@@ -69,10 +69,10 @@ Extract:
 Persist each task with statectl — the sole writer for state.json (never hand-edit with Read/Write/Edit):
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json task-add <task-json-file>
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py docs/dev/project-management/autopilot/state.json task-add <task-json-file>
 ```
 
-Build one JSON object per task and write it to `<task-json-file>` with the Write tool — a task body carries backticks, quotes and newlines, which break as an inline shell argument. Required key: `"name"` (the task title). The body composed per the "Task description format" below goes in `"description"`; every other field this skill assigns (`files` - the task's expected implementor-writable repo-relative paths, the same slice step 4.7 writes to `plan-<n>-files.txt` - persisted on every task; `blocked_by` in step 5, `estimated_tokens` and `est_context_peak` in step 4.5, `model`, `tier_reason`, `qwen_eligible` and `qwen_excluded_reason` in step 4.7) is a top-level key on the same object — flattened, never nested under a `metadata` key. `task-add` assigns the id and prints it to stdout; capture it (`id=$(python3 …/statectl.py dev/local/autopilot/state.json task-add /tmp/task-3.json)`) so later tasks in this same pass can name it in their own `blocked_by` array. Create the tasks in the PRD's dependency/phase order (earlier phases first, so every blocker exists before the tasks it blocks), which is what makes those captured ids available when step 5 builds each `blocked_by` array.
+Build one JSON object per task and write it to `<task-json-file>` with the Write tool — a task body carries backticks, quotes and newlines, which break as an inline shell argument. Required key: `"name"` (the task title). The body composed per the "Task description format" below goes in `"description"`; every other field this skill assigns (`files` - the task's expected implementor-writable repo-relative paths, the same slice step 4.7 writes to `plan-<n>-files.txt` - persisted on every task; `blocked_by` in step 5, `estimated_tokens` and `est_context_peak` in step 4.5, `model`, `tier_reason`, `qwen_eligible` and `qwen_excluded_reason` in step 4.7) is a top-level key on the same object — flattened, never nested under a `metadata` key. `task-add` assigns the id and prints it to stdout; capture it (`id=$(python3 …/statectl.py docs/dev/project-management/autopilot/state.json task-add /tmp/task-3.json)`) so later tasks in this same pass can name it in their own `blocked_by` array. Create the tasks in the PRD's dependency/phase order (earlier phases first, so every blocker exists before the tasks it blocks), which is what makes those captured ids available when step 5 builds each `blocked_by` array.
 
 To fix a task after creation (not the normal create path): `task-set-body <task-id> <body-file>` replaces `description` verbatim from a raw text file, and `task-set-meta <task-id> <meta-json-file>` merges JSON keys onto the task entry (a `null` value deletes that key).
 
@@ -145,7 +145,7 @@ conflict, the design doc wins** (it refines the PRD): use the design doc's
 contract and log the conflict in the step-6 planning summary. This rule works
 unchanged in replan mode.
 
-**If a `task-add` call fails mid-plan** (a statectl error — NOT the oversize stall handled in step 4.6): stop creating tasks and **roll back cleanly**. Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json tasks-clear`, which empties the whole task array in one write (same cleanup as the oversize stall below) so no orphan tasks survive to make the next PRD's Phase 2 skip planning. Then record the cause via statectl — `set stall_reason '{"stalled": "taskcreate_failed", "detail": "<the statectl error>"}'` — and report the failure. `/autopilot:run-autopilot` Phase 2 reads a non-`oversized_task` stall as a plan-tasks failure (PAUSE interactive; loop mode re-invokes once, then stalls the PRD `sub_skill_fail`); the rollback guarantees the retry starts from a clean tracker. Do NOT move the PRD to `hold/` — a transient `task-add` failure is not an un-splittable PRD.
+**If a `task-add` call fails mid-plan** (a statectl error — NOT the oversize stall handled in step 4.6): stop creating tasks and **roll back cleanly**. Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py docs/dev/project-management/autopilot/state.json tasks-clear`, which empties the whole task array in one write (same cleanup as the oversize stall below) so no orphan tasks survive to make the next PRD's Phase 2 skip planning. Then record the cause via statectl — `set stall_reason '{"stalled": "taskcreate_failed", "detail": "<the statectl error>"}'` — and report the failure. `/autopilot:run-autopilot` Phase 2 reads a non-`oversized_task` stall as a plan-tasks failure (PAUSE interactive; loop mode re-invokes once, then stalls the PRD `sub_skill_fail`); the rollback guarantees the retry starts from a clean tracker. Do NOT move the PRD to `hold/` — a transient `task-add` failure is not an un-splittable PRD.
 
 **On successful completion of all `task-add` calls, clear a stale failure marker:** `statectl get stall_reason` → if it reads `"taskcreate_failed"` (a prior attempt failed and this retry succeeded), `statectl del stall_reason`. Otherwise leave it untouched — an `oversized_task` marker is owned by step 4.6, and a fresh plan usually has no marker (do NOT blind-`del`; statectl errors on an absent key).
 
@@ -221,17 +221,17 @@ The existing context-budget split mechanics, the one-split-attempt rule, and the
 
 **Stall behavior:**
 
-When unable to split below the threshold (150K standard, 75K in replan mode), **merge** a `stall_reason` key into the existing `dev/local/autopilot/state.json` via statectl — the sole writer for state.json (never hand-edit with Read/Write/Edit; see `/autopilot:run-autopilot`):
+When unable to split below the threshold (150K standard, 75K in replan mode), **merge** a `stall_reason` key into the existing `docs/dev/project-management/autopilot/state.json` via statectl — the sole writer for state.json (never hand-edit with Read/Write/Edit; see `/autopilot:run-autopilot`):
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json set stall_reason '{"stalled": "oversized_task", "task": "<task-id>", "estimated_tokens": <int>}'
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py docs/dev/project-management/autopilot/state.json set stall_reason '{"stalled": "oversized_task", "task": "<task-id>", "estimated_tokens": <int>}'
 ```
 
 statectl merges the key and preserves the existing `phase`, `phases_completed`, `tasks`, `batch`, etc.
 
-**Then delete every task you already created** for this PRD with a single call: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py dev/local/autopilot/state.json tasks-clear`. `/autopilot:plan-tasks` calls `task-add` before the per-task budget check, so by the time the stall fires there are orphan tasks in the tracker. Cleaning up here makes the stall self-contained: any caller (not just `/autopilot:run-autopilot`) gets the same post-stall state. `/autopilot:run-autopilot` Phase 2 also performs this cleanup as a backstop.
+**Then delete every task you already created** for this PRD with a single call: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py docs/dev/project-management/autopilot/state.json tasks-clear`. `/autopilot:plan-tasks` calls `task-add` before the per-task budget check, so by the time the stall fires there are orphan tasks in the tracker. Cleaning up here makes the stall self-contained: any caller (not just `/autopilot:run-autopilot`) gets the same post-stall state. `/autopilot:run-autopilot` Phase 2 also performs this cleanup as a backstop.
 
-After both writes succeed, end the session's work with the stall recorded (the `stall_reason` key in state.json IS the observable stall signal — a model-followed skill has no exit code); `/autopilot:run-autopilot` Phase 2 reads it, detects the stall, moves the PRD from `dev/local/prds/wip/` to `dev/local/prds/hold/` (creating the directory if missing), clears the stall key from state, and proceeds to the next backlog item without user prompt. See `/autopilot:run-autopilot` Phase 2 for the consumer-side contract.
+After both writes succeed, end the session's work with the stall recorded (the `stall_reason` key in state.json IS the observable stall signal — a model-followed skill has no exit code); `/autopilot:run-autopilot` Phase 2 reads it, detects the stall, moves the PRD from `docs/dev/project-management/prds/wip/` to `docs/dev/project-management/prds/hold/` (creating the directory if missing), clears the stall key from state, and proceeds to the next backlog item without user prompt. See `/autopilot:run-autopilot` Phase 2 for the consumer-side contract.
 
 ### Estimator caveats
 
@@ -252,10 +252,10 @@ For each task, `classify_tier.py` decides the model tier. Persist what it prints
 - `contract_edit` is true only when the task itself changes an exported API signature, a persisted schema, a wire format or a hook registration shape. Calling or documenting a contract does not count.
 - `algorithmic_risk` is true only when the task's own `Details` name a new algorithm it implements (not one it calls), shared mutable state across threads, processes or async tasks, or a transform of persisted data (a migration). Words in the PRD body, the PRD title or the task name alone never qualify, and neither do `design`, `architect`, `introduce`, `refactor across`, file count or `estimated_tokens`.
 
-**Run the classifier, once per task.** Write the task's file slice to `dev/local/tmp/plan-<n>-files.txt` (one repo-relative path per line) and its title plus description to `dev/local/tmp/plan-<n>-text.txt`, with `<n>` the task's position in this pass, then run:
+**Run the classifier, once per task.** Write the task's file slice to `docs/dev/tmp/plan-<n>-files.txt` (one repo-relative path per line) and its title plus description to `docs/dev/tmp/plan-<n>-text.txt`, with `<n>` the task's position in this pass, then run:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/plan-tasks/scripts/classify_tier.py --files-file dev/local/tmp/plan-<n>-files.txt --text-file dev/local/tmp/plan-<n>-text.txt --lines <lines-changed> [--contract-edit] [--algorithmic-risk] [--default-model <floor>]
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/plan-tasks/scripts/classify_tier.py --files-file docs/dev/tmp/plan-<n>-files.txt --text-file docs/dev/tmp/plan-<n>-text.txt --lines <lines-changed> [--contract-edit] [--algorithmic-risk] [--default-model <floor>]
 ```
 
 Pass `--contract-edit` only when that task's `contract_edit` is true, `--algorithmic-risk` only when its `algorithmic_risk` is true, and `--default-model <floor>` only when the PRD frontmatter sets one (see the override below). Task-authored prose crosses as files, never as shell words.
@@ -364,10 +364,10 @@ Follow PRD's dependency graph:
 Once the task list is persisted, run:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/cli/__main__.py check-plan --prd dev/local/prds/wip/<state.prd>
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/cli/__main__.py check-plan --prd docs/dev/project-management/prds/wip/<state.prd>
 ```
 
-It counts `state.tasks` itself and reads the PRD's task lines, frontmatter and `### Repository Structure` tree. It stalls on three rules: planned tasks over the loop ceiling (`planned > 15`); an expansion ratio over 3.0 with more than 8 planned tasks (`expansion > 3.0`, where expansion is planned tasks divided by the PRD's `- [ ]` task lines); and 2 or more unlisted modules (directories of planned `files` the PRD's Repository Structure tree never names). On a stall it writes a split note grouped by module to `dev/local/autopilot/split-notes/<prd-stem>.md` and prints the stall instruction.
+It counts `state.tasks` itself and reads the PRD's task lines, frontmatter and `### Repository Structure` tree. It stalls on three rules: planned tasks over the loop ceiling (`planned > 15`); an expansion ratio over 3.0 with more than 8 planned tasks (`expansion > 3.0`, where expansion is planned tasks divided by the PRD's `- [ ]` task lines); and 2 or more unlisted modules (directories of planned `files` the PRD's Repository Structure tree never names). On a stall it writes a split note grouped by module to `docs/dev/project-management/autopilot/split-notes/<prd-stem>.md` and prints the stall instruction.
 
 - **Exit 0** - under every rule, continue to step 6. A `plan-expansion: unfiled=<n>; drift=checked|skipped (no Repository Structure)` stderr line is a diagnostic naming tasks without `files` or a PRD without a tree; fix the payloads, it is not a stall.
 - **Exit 3** - loop mode (`$_AUTOPILOT_LOOP` set): stall the PRD via `references/recovery.md`'s loop-mode stall procedure with `--site plan_expansion` and the printed detail (`<reasons>; note <path>`) as `--detail`; do NOT start the build; the batch continues with the next PRD. Interactive: print the warning and continue; the gate is advice here.

@@ -8,7 +8,7 @@ model_tier_rationale: the hook that rotates sessions gains a phase predicate and
 # Guard review-phase rework sessions
 
 Source: measured on batches 202609050909 (agent-skills) and 202609061630
-(claude-autopilot), 2026-09-13; report `dev/local/notes/autoclaude-inefficiencies-2026-09-13.md`
+(claude-autopilot), 2026-09-13; report `docs/dev/project-management/notes/autoclaude-inefficiencies-2026-09-13.md`
 finding 1. Reshaped at the 2026-09-13 backlog review: the turn-headroom
 capability moved to PRD 00200 (one headroom predicate over usage and calls),
 the lossless-rotation capability moved to PRD 00202. Lands after backlog PRD

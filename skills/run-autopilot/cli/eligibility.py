@@ -3,7 +3,7 @@
 
 A PRD may declare one shell command in its frontmatter:
 
-    eligibility: "test -f dev/local/reviews/00110-evidence.md"
+    eligibility: "test -f docs/dev/project-management/reviews/00110-evidence.md"
 
 `autopilot select` runs it before choosing that PRD. Exit 0 = eligible.
 Anything else - non-zero, unknown binary, timeout, an unusable cwd - is UNMET,
@@ -22,7 +22,7 @@ Two conventions the code cannot enforce, documented at the contract instead:
 - **30 seconds.** The default timeout. A check that cannot answer in 30s is
   the wrong shape for a gate that runs on every pick.
 
-`cwd` is the project root (the directory holding `dev/local/`), so a check can
+`cwd` is the project root (the directory holding `docs/dev/project-management/`), so a check can
 name repo-relative paths the way the PRD prose does.
 """
 
@@ -72,7 +72,7 @@ def evaluate(command: str, cwd: Path, timeout: float = 30.0) -> tuple[int, str]:
     """
     # shell=True IS the contract: the PRD declares one shell command and the
     # gate reports its exit code. The command comes from a PRD in this repo's
-    # own dev/local, authored by the operator, so there is no untrusted input
+    # own docs/dev/project-management, authored by the operator, so there is no untrusted input
     # to escape here - splitting it would only break the pipes and $(...) the
     # checks are written in. The real mitigations are the read-only convention
     # above, the timeout, and failure meaning skip.

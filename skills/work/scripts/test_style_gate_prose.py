@@ -62,14 +62,14 @@ def test_style_gate_wires_the_untracked_sweep_into_itself() -> None:
         f"other than {target}, the file it just wrote the committed range to, "
         "so it reads a diff missing one half of the task."
     )
-    assert f"mv {target} dev/local/tmp/task-diff-<task-id>.txt" in _TEXT, (
+    assert f"mv {target} docs/dev/tmp/task-diff-<task-id>.txt" in _TEXT, (
         f"{_STYLE_GATE_MD}: the gate never moves {target} to "
-        "dev/local/tmp/task-diff-<task-id>.txt, which is the path it hands "
+        "docs/dev/tmp/task-diff-<task-id>.txt, which is the path it hands "
         "the script."
     )
-    assert "--diff dev/local/tmp/task-diff-<task-id>.txt" in _TEXT, (
+    assert "--diff docs/dev/tmp/task-diff-<task-id>.txt" in _TEXT, (
         f"{_STYLE_GATE_MD}: the gate no longer runs the script against "
-        "dev/local/tmp/task-diff-<task-id>.txt, the file it assembled."
+        "docs/dev/tmp/task-diff-<task-id>.txt, the file it assembled."
     )
     assert "plus those untracked paths" in _TEXT, (
         f"{_STYLE_GATE_MD}: the gate never adds the untracked paths to the "

@@ -7,11 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **run-autopilot**: working documents moved from `dev/local/` to `docs/dev/project-management/` (tracked) and scratch from `dev/local/tmp/` to `docs/dev/tmp/`; hooks, the `autopilot` CLI, skills and references now read and write only the new paths, so move an existing repo's `dev/local/` tree before running this version
+
 ### Fixed
 
 - **run-autopilot**: `autopilot wave abort` now refuses a `wave.json` whose lane `pid` is not a real process group - `0`, `1`, any negative, or `2**31` and above - before it signals anything, so a hand-edited or corrupted control file can no longer make `os.killpg` signal the operator's own shell or the autopilot loop itself (`pid: 0`), broadcast to every signalable process (`pid: 1`), kill an unrelated process (`pid: -5`), or crash mid-abort with an uncaught `OverflowError`. `base_sha` is validated in the same table, so a hand edit that drops the key no longer raises an uncaught `KeyError` after the lane has been killed and before any cleanup runs
 - **run-autopilot**: `autopilot wave abort` now returns a lane's in-flight `wip/` PRDs to the main `backlog/` rather than the main `wip/`; a PRD left in the main `wip/` was re-selected as already-in-progress against a `state.json` holding no task record for it. Lane `done/` and `hold/` still come home to their own folders, and which lanes get their PRDs returned is unchanged
-- **run-autopilot**: `autopilot wave abort` now survives a lane whose process group exits between the liveness probe and the signal - the ordinary case, since the group is being asked to die - instead of propagating `ProcessLookupError` out of the call, which left the wave unsaved and every later lane unprocessed. A signal that fails for any other reason is still recorded as that lane's failure with its reason, and `dev/local/autopilot/wave-slots/` is now kept only while a lane's group actually survived its kill, so a cleanup failure with every group dead no longer leaks a full slot table into the next wave
+- **run-autopilot**: `autopilot wave abort` now survives a lane whose process group exits between the liveness probe and the signal - the ordinary case, since the group is being asked to die - instead of propagating `ProcessLookupError` out of the call, which left the wave unsaved and every later lane unprocessed. A signal that fails for any other reason is still recorded as that lane's failure with its reason, and `docs/dev/project-management/autopilot/wave-slots/` is now kept only while a lane's group actually survived its kill, so a cleanup failure with every group dead no longer leaks a full slot table into the next wave
 - **run-autopilot**: `autopilot wave abort` reports a failing `git worktree list` as an error naming the call instead of a raw traceback, `autopilot wave` reports a non-canonical `--state` path instead of asserting it (a bare `assert` vanished under `python -O` and derived the wrong repo root in silence), and a kept worktree is now reported as git's own `git worktree list` line plus, only when it is dirty, one note counting the uncommitted changes
 - **run-autopilot**: the `--state` check now also refuses a wrong filename in the canonical directory - `wave.json`, `state.json.tmp`, `state`, `State.json` and anything else that is not `state.json` were accepted, each deriving a repo root from a file that is not the state file, which matters most for `wave abort`, the verb that signals process groups and runs `git worktree remove --force` against that root. A kept worktree git does not list is now reported as one `autopilot:` line carrying the path and the reason instead of a bare path an operator could only guess at
 
@@ -21,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **run-autopilot**: `autopilot wave plan` cuts the PRD backlog into up to N lanes of PRDs that share no paths, and `autopilot wave launch` gives each lane its own git worktree and branch at the current HEAD and starts one detached autopilot loop in it, moving that lane's PRDs into its worktree; a PRD naming no paths is held back for the sequential loop, and launch refuses a dirty tree, a main-root loop already running, or a hand-edited `wave.json` whose lanes overlap
 - **run-autopilot**: `autopilot wave status` prints one row per lane - its pid, the PRD it is on, its phase, its PRD counts per lifecycle folder, the last phase its loop closed and whether it is running, drained or unfinished - and `autopilot wave abort` stops a wave: it kills each lane's whole process group, returns that lane's PRDs to the main backlog and removes the worktree and branch, but keeps any worktree holding commits or uncommitted work instead of discarding it. An abort that cannot finish a lane records why and reports `abort_failed`, so a half-cleaned wave is visible in `wave status` and refuses to be replaced by a new `wave plan` until it is retried
-- **hooks**: a loop session can no longer end its turn while a background codex or gemini reviewer lane is still running: `codex-run.sh` and `gemini-run.sh` mark each live lane under `dev/local/autopilot/lanes/<pid>` for the wrapper's lifetime, and the Stop hook `guard_stop_on_live_lanes.py` blocks the stop and names the `-o` files to await (or the pids to wait on, when a lane declared no `-o` file), bounded by a 60 min lane ceiling and 40 blocked exits; a counter write it cannot persist no longer cancels the block, and an internal failure still fails open but reports what it caught
+- **hooks**: a loop session can no longer end its turn while a background codex or gemini reviewer lane is still running: `codex-run.sh` and `gemini-run.sh` mark each live lane under `docs/dev/project-management/autopilot/lanes/<pid>` for the wrapper's lifetime, and the Stop hook `guard_stop_on_live_lanes.py` blocks the stop and names the `-o` files to await (or the pids to wait on, when a lane declared no `-o` file), bounded by a 60 min lane ceiling and 40 blocked exits; a counter write it cannot persist no longer cancels the block, and an internal failure still fails open but reports what it caught
 
 ### Fixed
 
@@ -67,14 +71,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **plan-tasks**: the plan gate now stalls a plan that outgrew its PRD - task count over the loop ceiling, expansion ratio over 3.0 with more than 8 tasks, or 2 or more modules the PRD's Repository Structure never names - writes a split note grouped by module, and every task payload persists its `files` slice; `plan_expansion: allow` in the PRD frontmatter skips the gate. Tree and task paths are normalized (`./`, `..`, `//`) before coverage is decided, a file entry's implicit parent directories count as grouping parents that grant no coverage of their own, an absolute directory in the tree no longer hangs the parse, and a malformed task entry (not an object, or `files` holding no usable path) is reported as unfiled instead of crashing or vanishing
 - **run-autopilot**: `usage_limit.detect_warning_from_log` reads the reset of a live five-hour `allowed_warning` rate-limit event out of a session log, and `detect_rejected_from_log` reads a live `rejected` event alone, never the prose banner
 - **run-autopilot**: a stand-down marker may name its `condition` (`peer_claimed`, `dirty_tree` or `state_after_leave`) beside its `reason`; `pause.stand_down_condition` reads it, `unknown` when the marker carries none
-- **run-autopilot**: `cli/brief.py` renders `dev/local/autopilot/session-brief.md` from `state.json` (where the batch stands, the contract card verbatim, the files the next gate needs, what not to re-read), so a fresh session orients from one page instead of a hundred tool calls; `statectl.py <state.json> write-brief <out.md>` writes it (read-only, exit 2 with the reason on an unreadable state or an unwritable target), and the loop's launch prompt ends in `Read dev/local/autopilot/session-brief.md first.` whenever that file exists. The run-autopilot session handoff, the work task-boundary handoff and the review cycle transition each write the brief after their contract card, and the build and review gate files open by reading it (falling back to the state reads when its phase disagrees with `state.json`)
-- **design-solution**: `--rework <review-file>` designs one review cycle's CRITICAL fixes into `dev/local/designs/<prd-stem>-rework-<cycle>-design.md`, opening with what the prior fix changed and why it regressed, under the same three-dispatch review, and ends its review log with a `result:` line
+- **run-autopilot**: `cli/brief.py` renders `docs/dev/project-management/autopilot/session-brief.md` from `state.json` (where the batch stands, the contract card verbatim, the files the next gate needs, what not to re-read), so a fresh session orients from one page instead of a hundred tool calls; `statectl.py <state.json> write-brief <out.md>` writes it (read-only, exit 2 with the reason on an unreadable state or an unwritable target), and the loop's launch prompt ends in `Read docs/dev/project-management/autopilot/session-brief.md first.` whenever that file exists. The run-autopilot session handoff, the work task-boundary handoff and the review cycle transition each write the brief after their contract card, and the build and review gate files open by reading it (falling back to the state reads when its phase disagrees with `state.json`)
+- **design-solution**: `--rework <review-file>` designs one review cycle's CRITICAL fixes into `docs/dev/project-management/designs/<prd-stem>-rework-<cycle>-design.md`, opening with what the prior fix changed and why it regressed, under the same three-dispatch review, and ends its review log with a `result:` line
 - **run-autopilot**: a review cycle with a CRITICAL below the rework cap now runs the rework design before any fix task is created (the review skill leaves CRITICAL rows to Phase 6), and each CRITICAL `[D{cycle}]` task carries the design path and its `## Interfaces & contracts` verbatim above the findings; a failed rework design stalls the PRD under site `design_rework` in loop mode and pauses interactively
-- **run-autopilot**: `autopilot mint-stubs --batch <id>` mints one `dev/local/prds/hold/<NNNNN>-triage-<slug>-v1.md` triage stub per open CRITICAL/HIGH or `cap_critical` finding in the batch deferred JSON that no PRD under backlog, wip, hold or done owns yet (ownership by `ledger_key` in a PRD's first 20 lines, identical text folded, numbers allocated past discovery and renumbered on a concurrent claim), runs after a successful `cap_critical` stall, after Phase 9's deferred migration and at the loop batch end, and the batch-end notification reports the batch-wide `{s} stubs` count from `state.batch.minted_stubs`; the stubs are HOLD artifacts that autopilot never drains or promotes
+- **run-autopilot**: `autopilot mint-stubs --batch <id>` mints one `docs/dev/project-management/prds/hold/<NNNNN>-triage-<slug>-v1.md` triage stub per open CRITICAL/HIGH or `cap_critical` finding in the batch deferred JSON that no PRD under backlog, wip, hold or done owns yet (ownership by `ledger_key` in a PRD's first 20 lines, identical text folded, numbers allocated past discovery and renumbered on a concurrent claim), runs after a successful `cap_critical` stall, after Phase 9's deferred migration and at the loop batch end, and the batch-end notification reports the batch-wide `{s} stubs` count from `state.batch.minted_stubs`; the stubs are HOLD artifacts that autopilot never drains or promotes
 
 ### Changed
 
-- **run-autopilot**: `autopilot check-plan` takes a required `--prd`, writes `dev/local/autopilot/split-notes/<prd-stem>.md` on a stall verdict, records the stall under site `plan_expansion` (`oversized_plan` is the legacy spelling on older records), exits 2 on a missing or non-UTF-8 PRD or an unwritable split note instead of crashing, and prints the `plan-expansion: unfiled=<n>; drift=...` diagnostic on a stall as well as on a pass
+- **run-autopilot**: `autopilot check-plan` takes a required `--prd`, writes `docs/dev/project-management/autopilot/split-notes/<prd-stem>.md` on a stall verdict, records the stall under site `plan_expansion` (`oversized_plan` is the legacy spelling on older records), exits 2 on a missing or non-UTF-8 PRD or an unwritable split note instead of crashing, and prints the `plan-expansion: unfiled=<n>; drift=...` diagnostic on a stall as well as on a pass
 - **run-autopilot**: after any session whose log carries a live five-hour `allowed_warning`, a loop that is not the oldest live loop in `~/.claude/autopilot-loops/` yields the window by sleeping to the reset (`yielding the window to loop <pid> until ~HH:MM`, bounded by `_AUTOPILOT_LIMIT_WAIT_MAX`) before its next launch; the oldest loop never yields, and `_AUTOPILOT_NO_YIELD=1` turns the yield off
 - **run-autopilot**: a stand-down's `paused` row in `loop-metrics.jsonl` now carries `stood_down` (the marker's reason) and `stood_down_condition` (`peer_claimed`, `dirty_tree`, `state_after_leave`, or `unknown` when the marker names none), so a false stand-down is visible in the ledger; a session row that ends in a rejected wait or a window yield carries `limit_wait` (the seconds slept before the relaunch)
 - **run-autopilot**: the context-cap hook hands off on headroom instead of a flat 320K soft cap: it records each task's usage and tool-call bounds on `state.tasks[]` and writes `.handoff-requested` only when the context left under the 500K cap, or the calls left under the tripwire, is less than the last task cost (150K and 200 calls until one has completed); the tool-call tripwire moves from 300 to 450 so a second opus task no longer dies mid-flight; the build gate applies the same rule at the design->plan and plan->work edges from the hook's `.turn-counts.json` `last` record; and `/work` reads the marker only at step 6.5 after the task-done write
@@ -85,7 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **fast-track**: the driver now creates `dev/local/autopilot` before the first dispatch so no ledger row is lost, gives Bob's codex prompt Eve's doubt sections, and runs the lane plan, the verify targets, the exit rule and the per-item dispatch count through `fast_track_plan.py` commands instead of applying those rules from memory
+- **fast-track**: the driver now creates `docs/dev/project-management/autopilot` before the first dispatch so no ledger row is lost, gives Bob's codex prompt Eve's doubt sections, and runs the lane plan, the verify targets, the exit rule and the per-item dispatch count through `fast_track_plan.py` commands instead of applying those rules from memory
 - **use-codex**: the whitespace-only-prompt guard rejects a prompt with "Prompt required" whether it arrives via `-f` or as positional input, since both paths converge on the same check before dispatch
 - **work**: step 6.5's handoff telemetry now routes a task-boundary handoff by the marker's own recorded phase instead of unconditionally stamping it `build`, so a review or finalize session that hands off mid-phase is no longer misreported as build work
 - **run-autopilot**: handoff markers are cleared at lifecycle edges instead of surviving into the next phase or PRD, and a marker that cannot be removed is now reported by its path instead of failing silently
@@ -218,7 +222,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   section appends `; hooks: <hook_doctor>` whenever the doctor-first batch
   probe recorded a stale hook copy or its own failure summary.
 - **work**: a per-dispatch timing ledger at
-  `dev/local/autopilot/dispatch-metrics.jsonl` (a start and an end row per
+  `docs/dev/project-management/autopilot/dispatch-metrics.jsonl` (a start and an end row per
   dispatch, one row per session-handoff edge), mirrored into the GC-exempt
   `ledger/` copy the way `loop-metrics.jsonl` is, so a gap between two commits
   can be split into dispatch runtime and handoff latency from the ledger alone.
@@ -302,7 +306,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   present, which is every first-pass build, nothing runs and nothing is
   reported.
 - **work**: the final verification step records what it ran to
-  `dev/local/autopilot/last-verification.json` - the HEAD sha, each command and
+  `docs/dev/project-management/autopilot/last-verification.json` - the HEAD sha, each command and
   its exit code, and the pass/fail/skip counts. A suite whose output carries no
   parseable counts records `null` for all three, and a phase that ran no suite
   writes an empty command list; either way the reader runs the suite itself
@@ -408,11 +412,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **hooks**: writing one of the named keepers (`project-capsule.md`,
   `decisions.md`, `troubleshooting.md`, `assumptions.md`, `agoge-profile.md`,
-  `ecc-cursor`, `upstream-cursor`) directly at a `dev/local` root is now
-  blocked and routed to `dev/local/meta/<name>`. The root is directories-only;
+  `ecc-cursor`, `upstream-cursor`) directly at a `docs/dev/project-management` root is now
+  blocked and routed to `docs/dev/project-management/meta/<name>`. The root is directories-only;
   the compat-symlink allowance it replaced existed only until agoge, git-ferry
   and aegis shipped meta-first paths, which they now have. A non-keeper stray
-  at root is unaffected and is still routed to `dev/local/tmp/<name>`.
+  at root is unaffected and is still routed to `docs/dev/tmp/<name>`.
 
 ## [0.2.1] - 2026-08-27
 
@@ -429,7 +433,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **run-autopilot**: `autopilot review-once` runs exactly one headless
   review or finalize session for `state.next_phase` (refusing a build phase
-  before spawning) and exits, replacing the throwaway `dev/local/tmp` review
+  before spawning) and exits, replacing the throwaway `docs/dev/tmp` review
   drivers.
 - **run-autopilot**: `autopilot render report` exits 12 and names every
   pending deferred item its rendered section does not contain, so a deferral
@@ -443,7 +447,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **work**: the always-read SKILL.md body now sits under the 500-line ceiling
   (situational mechanics moved to references/ with read-at-trigger pointers) and
   a contract test fails when it grows past it.
-- **review-work-completion**: when the project's dev/local is a symlink or the
+- **review-work-completion**: when the project's docs/dev/project-management is a symlink or the
   root is a dot-directory, Blake's run inputs carry a Filesystem notes block
   with the realpath, so the blind lens stops reporting existing files as
   missing.
@@ -452,7 +456,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   allowlist names; Tess receives <dir>/tests/HARNESS_CONTRACT.md whenever a
   touched file's directory carries one.
 - **run-autopilot**: complete-prd appends one row per task attempt to
-  dev/local/autopilot/ledger/attempts.jsonl before the per-PRD reset, so
+  docs/dev/project-management/autopilot/ledger/attempts.jsonl before the per-PRD reset, so
   attempt history outlives the batch; a failed write aborts the close with
   state untouched.
 - **work**: rework tasks with at most two findings in at most two files (none

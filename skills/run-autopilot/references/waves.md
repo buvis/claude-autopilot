@@ -1,7 +1,7 @@
 # Waves (parallel lanes over one backlog)
 
 A wave runs several autopilot loops at once, one per **lane**: a slice of the PRD
-backlog whose PRDs name no overlapping paths. `dev/local/autopilot/wave.json` is
+backlog whose PRDs name no overlapping paths. `docs/dev/project-management/autopilot/wave.json` is
 the whole control surface - `cli/wave.py` plans it, `cli/wave_launch.py` launches,
 reports and aborts it, and nothing else reads or writes it (its shape:
 `references/state-schema.md` § Marker files). It is disposable at wave end,
@@ -13,7 +13,7 @@ under it, so two operators cannot interleave.
 
 ## `autopilot wave plan [--max-lanes N]`
 
-Cuts `dev/local/prds/backlog/*.md` into at most N lanes (default 3) and writes the
+Cuts `docs/dev/project-management/prds/backlog/*.md` into at most N lanes (default 3) and writes the
 cut as a `planned` wave. Two PRDs share a lane when they name the same path, when
 one names a directory the other names a file under, or when both name a
 force-shared file (operator note 1 below). `CHANGELOG.md` and
@@ -118,14 +118,14 @@ where `wave status` shows it. A wave left `abort_failed` is still live, so
 
 - its own git checkout, created at the wave's `base_sha`, on its own branch
   `wave/<wave id>/l<n>`.
-- its own `dev/local/prds/` lifecycle dirs (`backlog/`, `wip/`, `done/`, `hold/`),
+- its own `docs/dev/project-management/prds/` lifecycle dirs (`backlog/`, `wip/`, `done/`, `hold/`),
   holding that lane's PRDs and nothing else. `launch` MOVES them out of the main
   checkout's `backlog/`, so exactly one checkout owns a PRD at any moment.
-- a copy of `dev/local/meta/` (the project capsule and its siblings), so the lane
+- a copy of `docs/dev/project-management/meta/` (the project capsule and its siblings), so the lane
   starts catchup from the same curated memory.
 - its own detached autopilot loop: spawned with the lane worktree as cwd, in its
   own session (so it survives the launching shell), logging to the lane's
-  `dev/local/autopilot/wrapper.log`, registered as the incumbent loop for that
+  `docs/dev/project-management/autopilot/wrapper.log`, registered as the incumbent loop for that
   root. The lane's `state.json`, reviews, designs and ledgers all stay inside the
   lane.
 
@@ -139,7 +139,7 @@ Not part of this release:
   rather than deleting it.
 - **The review-slot semaphore** is PRD 00217. `launch` already points every lane
   at one shared directory (`_AUTOPILOT_REVIEW_SLOTS_DIR` =
-  `dev/local/autopilot/wave-slots` in the main checkout) and passes the wave's
+  `docs/dev/project-management/autopilot/wave-slots` in the main checkout) and passes the wave's
   `review_slots` count, but nothing throttles concurrent review launches yet.
 
 ## Operator notes

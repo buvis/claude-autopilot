@@ -64,8 +64,8 @@ def _run(
 
 
 def _project(tmp_path: Path, prd_text: str) -> tuple[Path, Path]:
-    """A synthetic <root>/dev/local/{autopilot,prds/wip} tree: (state, prd)."""
-    ap_dir = tmp_path / "dev" / "local" / "autopilot"
+    """A synthetic <root>/docs/dev/project-management/{autopilot,prds/wip} tree: (state, prd)."""
+    ap_dir = tmp_path / "docs" / "dev" / "project-management" / "autopilot"
     ap_dir.mkdir(parents=True)
     state_path = ap_dir / "state.json"
     state_path.write_text(
@@ -81,7 +81,7 @@ def _project(tmp_path: Path, prd_text: str) -> tuple[Path, Path]:
         ),
         encoding="utf-8",
     )
-    wip = tmp_path / "dev" / "local" / "prds" / "wip"
+    wip = tmp_path / "docs" / "dev" / "project-management" / "prds" / "wip"
     wip.mkdir(parents=True)
     prd = wip / "00204-x-v1.md"
     prd.write_text(prd_text, encoding="utf-8")
@@ -184,7 +184,7 @@ def _solo_repo(tmp_path: Path) -> tuple[Path, Path]:
     repo.mkdir()
     _git(repo, "init", "-q")
     _commit(repo, "notes.md", "# notes\n", "base")
-    ap_dir = repo / "dev" / "local" / "autopilot"
+    ap_dir = repo / "docs" / "dev" / "project-management" / "autopilot"
     ap_dir.mkdir(parents=True)
     state_path = ap_dir / "state.json"
     state_path.write_text(

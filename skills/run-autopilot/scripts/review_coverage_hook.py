@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Stop hook: gate session exit on review-file completeness at the done hand-off.
 
-Reads dev/local/autopilot/state.json, determines whether the current phase is a
+Reads docs/dev/project-management/autopilot/state.json, determines whether the current phase is a
 review handoff, locates the saved review file, and shells out to
 cli/gate.py (PRD 00016's minimal shape check — reviewer sections, verdict
 line, tests line — absorbed into the CLI by PRD 00107). Returns 0 to allow the
@@ -126,8 +126,8 @@ def gate_blocks(autopilot_dir: Path, state: dict) -> tuple[bool, str]:
         # phases_completed also happens at prd transitions), but fail open.
         return (False, "")
     prd_base = prd.removesuffix(".md")
-    repo = autopilot_dir.parents[2]
-    reviews_dir = repo / "dev" / "local" / "reviews"
+    repo = autopilot_dir.parents[3]
+    reviews_dir = repo / "docs" / "dev" / "project-management" / "reviews"
 
     review_file = review_file_for(surface, prd_base, reviews_dir)
     if review_file is None or not review_file.exists():

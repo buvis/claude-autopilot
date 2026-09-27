@@ -584,15 +584,15 @@ class CheckPlanCliTests(unittest.TestCase):
         self.assertFalse(split_notes_exists)
 
     def _checkout_fixture(self, tmp: Path) -> tuple[Path, Path, Path]:
-        """A `<tmp>/dev/local` checkout: the 00167 state under autopilot/ and
+        """A `<tmp>/docs/dev/project-management` checkout: the 00167 state under autopilot/ and
         its PRD in prds/wip/; returns (state_path, wip_prd, note_path)."""
         state = {
             **_state_00167(),
             "prd": "00004-feature-x.md",
             "batch": {"id": "202609141200", "completed_prds": []},
         }
-        ap_dir = tmp / "dev" / "local" / "autopilot"
-        prds = tmp / "dev" / "local" / "prds"
+        ap_dir = tmp / "docs" / "dev" / "project-management" / "autopilot"
+        prds = tmp / "docs" / "dev" / "project-management" / "prds"
         ap_dir.mkdir(parents=True)
         for sub in ("backlog", "wip", "hold"):
             (prds / sub).mkdir(parents=True)

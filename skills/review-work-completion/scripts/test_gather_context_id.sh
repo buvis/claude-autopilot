@@ -15,11 +15,11 @@ trap 'rm -rf "$DIR"' EXIT
 cd "$DIR"
 git init -q .
 git commit -q --allow-empty -m init
-mkdir -p dev/local/tmp
-echo "tasks" > dev/local/tmp/review-tasks-00042c1.md
-echo "prd" > dev/local/tmp/review-prd-00042c1.md
+mkdir -p docs/dev/tmp
+echo "tasks" > docs/dev/tmp/review-tasks-00042c1.md
+echo "prd" > docs/dev/tmp/review-prd-00042c1.md
 
-OUT="$(bash "$SCRIPT" dev/local/tmp/review-tasks-00042c1.md dev/local/tmp/review-prd-00042c1.md)"
+OUT="$(bash "$SCRIPT" docs/dev/tmp/review-tasks-00042c1.md docs/dev/tmp/review-prd-00042c1.md)"
 echo "$OUT" | grep -q "review-context-00042c1\.md" \
   || FAIL "prd-linked id" "expected review-context-00042c1.md in: $OUT"
 PASS "context file reuses caller cycle id"

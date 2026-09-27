@@ -7,9 +7,9 @@ model_tier_rationale: transcription - the regex, the normalization steps and the
 
 # Normalize reviewer file citations before consensus matching
 
-Source: `dev/local/reviews/00186-add-item-grained-fast-track-lane-v1-review-1.md`
+Source: `docs/dev/project-management/reviews/00186-add-item-grained-fast-track-lane-v1-review-1.md`
 § Consolidated Findings (2026-09-07) and
-`dev/local/notes/autoclaude-inefficiencies-2026-09-13.md` finding 8. Advisory
+`docs/dev/project-management/notes/autoclaude-inefficiencies-2026-09-13.md` finding 8. Advisory
 discovery gate skipped: the defect is reproduced by a fixture the review file
 already contains.
 
@@ -37,7 +37,7 @@ citation format in the personas so the drift stops at the source.
   `re.compile(r"(?:\s*\(lines?\s+\d[\d,\s-]*\)|:\d+(?:-\d+)?)$")` (one
   anchored alternation; the parenthesised form accepts comma-separated
   ranges such as `(lines 18-22, 423)`, which is what Alice writes in
-  `dev/local/notes/00198-fixture-reviewer-outputs-00186/alice-output-00186c1.txt:5`),
+  `docs/dev/project-management/notes/00198-fixture-reviewer-outputs-00186/alice-output-00186c1.txt:5`),
   and `normalize_file` applies it in a loop until the string stops changing.
   The loop is required, not optional: a citation can carry both forms
   (`a.md:12 (lines 3-4)`), and today's single `.sub()` at
@@ -100,7 +100,7 @@ citation format in the personas so the drift stops at the source.
 - `uv run --no-project --with pytest python -m pytest -q skills/review-work-completion/scripts/test_consolidate_findings.py skills/review-work-completion/scripts/test_citation_format_prose.py`
   green.
 - Replaying the four 00186 reviewer output files (durable copies in
-  `dev/local/notes/00198-fixture-reviewer-outputs-00186/`; the implementer
+  `docs/dev/project-management/notes/00198-fixture-reviewer-outputs-00186/`; the implementer
   copies them into `skills/review-work-completion/scripts/fixtures/review-00186/`
   as part of Phase 0) through `consolidate_findings.py` yields the four rows
   the review file lists under "Real consensus" at `[2/4]`; recorded as a

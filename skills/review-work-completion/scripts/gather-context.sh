@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Gathers review context into dev/local/tmp/
+# Gathers review context into docs/dev/tmp/
 # Usage: gather-context.sh [--since <ref>] [tasks_file] [prd_summary_file]
 #   --since <ref>:    diff base for an incremental review (rework cycles);
 #                     when omitted or invalid, diffs against the branch base
@@ -35,7 +35,7 @@ PRD_SUMMARY=""
 [[ -n "$TASKS_FILE" && -f "$TASKS_FILE" ]] && TASKS_MD="$(cat "$TASKS_FILE")"
 [[ -n "$PRD_FILE" && -f "$PRD_FILE" ]] && PRD_SUMMARY="$(cat "$PRD_FILE")"
 
-TMP_DIR="$PROJECT_ROOT/dev/local/tmp"
+TMP_DIR="$PROJECT_ROOT/docs/dev/tmp"
 mkdir -p "$TMP_DIR"
 
 # Track all created files
