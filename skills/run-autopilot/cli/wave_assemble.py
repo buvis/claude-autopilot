@@ -507,6 +507,31 @@ def _drain_lane(
     return names
 
 
+def _open_assembly(
+    repo: Path,
+    wave: dict,
+    *,
+    run_git: Callable[..., subprocess.CompletedProcess],
+) -> tuple[Path, str]:
+    """The wave's assembly worktree and branch: created on the first call, and
+    reused by a rerun that still finds both the recorded assembly and the
+    worktree itself on disk."""
+    assembly = Path(
+        WAVE_ASSEMBLY_WORKTREE_FMT.format(
+            repo_parent=repo.parent,
+            repo_name=repo.name,
+            wave_id=wave["id"],
+        ),
+    )
+    branch = WAVE_ASSEMBLY_BRANCH_FMT.format(wave_id=wave["id"])
+    if not (wave.get("assembly") and assembly.exists()):
+        run_git(
+            ["worktree", "add", str(assembly), "-b", branch, wave["base_sha"]],
+            cwd=repo,
+        )
+    return assembly, branch
+
+
 def assemble(
     repo: Path,
     wave_path: Path,
@@ -524,19 +549,7 @@ def assemble(
             for refusal in refusals:
                 print(f"autopilot: {refusal}", file=sys.stderr)
             return 1
-        assembly = Path(
-            WAVE_ASSEMBLY_WORKTREE_FMT.format(
-                repo_parent=repo.parent,
-                repo_name=repo.name,
-                wave_id=wave["id"],
-            ),
-        )
-        branch = WAVE_ASSEMBLY_BRANCH_FMT.format(wave_id=wave["id"])
-        if not (wave.get("assembly") and assembly.exists()):
-            run_git(
-                ["worktree", "add", str(assembly), "-b", branch, wave["base_sha"]],
-                cwd=repo,
-            )
+        assembly, branch = _open_assembly(repo, wave, run_git=run_git)
         ordered = sorted(wave["lanes"], key=lambda each: each["order"])
         prd_names: dict[str, set[str]] = {}
         for lane in ordered:
