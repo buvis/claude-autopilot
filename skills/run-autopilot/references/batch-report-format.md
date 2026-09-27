@@ -97,3 +97,13 @@ counts, then only the subsections whose sources are non-empty:
 Absent fields never fail the render: empty arrays omit their section,
 `no implementor data` renders only when state and ledger are both empty,
 and a `codex_probe` from another batch renders `codex probe: not run`.
+
+## Wave summary report
+
+`autopilot wave assemble` writes this wave summary report to
+`docs/dev/project-management/autopilot/reports/<wave id>-wave.md`, a sibling
+report type to the per-batch report above: its own header (base branch, base
+sha, assembly branch, head sha), a lane table (branch, status, batch id,
+paths, files), one line per PRD naming its lane and outcome, the conflict
+records for any lane the merge kept out, the integrator's trailers, and the
+totals (sessions, wall hours, captured cost).

@@ -12,7 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from cli import wave, wave_launch
+from cli import wave, wave_assemble, wave_launch
 
 
 def add(subparsers) -> None:
@@ -23,11 +23,18 @@ def add(subparsers) -> None:
     plan.add_argument("--max-lanes", type=int, default=3)
     for verb in ("launch", "status", "abort"):
         verbs.add_parser(verb).add_argument("--state")
+    verbs.add_parser("assemble").add_argument("--state")
 
 
 def run(args: argparse.Namespace, repo: Path, wave_path: Path) -> int:
     if args.verb == "plan":
         return wave.plan(repo, wave_path, args.max_lanes)
+    if args.verb == "assemble":
+        try:
+            return wave_assemble.assemble(repo, wave_path)
+        except subprocess.CalledProcessError as err:
+            print(f"autopilot: {err}", file=sys.stderr)
+            return 1
     # Read once for the two friendly early messages only: `launch` reloads
     # wave.json under its own lock and never sees this copy.
     try:

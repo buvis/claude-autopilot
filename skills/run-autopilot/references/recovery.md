@@ -103,6 +103,15 @@ carries `clarification`, `reviewer_fail`, `sub_skill_fail`, and the others):
   tier-exhaustion, replan-loop exhaustion, and a loop-mode Phase 2 ambiguity
   under `pause_on_ambiguity`) documented in their own handlers (here and in
   `references/phase-build.md`) and in `references/state-schema.md`.
+- `assembly_conflict` — a lane `autopilot wave assemble` kept out of the
+  merged assembly, because its rebase conflicted outside the append-only set
+  or its release-checks failed once merged; `detail` names the reason and,
+  for a rebase conflict, the paths. The assemble verb writes this stall site
+  itself, directly, inline in its own merge pass. No session backs it:
+  assemble runs synchronously inside `autopilot wave assemble`'s own
+  process, not as a batch session task. It also carries no state.json behind
+  it, unlike every other stall site in this list, since assemble reads and
+  writes only wave.json.
 
 `scope_alarm` is NOT a stall slug: a loop-mode Phase 5 scope alarm defers the
 overflow (a deferred `scope-overflow` record) and continues; it never stalls the

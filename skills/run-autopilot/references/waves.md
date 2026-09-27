@@ -112,6 +112,37 @@ failure with every group dead included. The wave ends `aborted` (exit 0) or
 where `wave status` shows it. A wave left `abort_failed` is still live, so
 `wave plan` refuses to replace it until the abort is retried.
 
+## `autopilot wave assemble`
+
+Merges every drained lane back into one assembly branch off `base_sha`, in
+`order` - the order `wave plan` assigned each lane, not wave.json's list
+order. A lane merges only when it is drained (its `state.json`'s
+`next_phase` is empty); a lane that is still live (a signalable pid) makes
+the whole verb refuse before anything is created, and an unfinished lane (a
+dead pid whose `state.json` still names a pending phase) is skipped, not
+merged - it is kept for a later run. Each merge lands on the shared assembly
+worktree `<repo>-wave-<wave id>`, on branch `wave/<wave id>/assembly`, and
+`dev/bin/release-checks` runs there after every merge.
+
+A lane's merge is undone and the lane is kept, instead of aborting the whole
+pass, when its rebase conflicts outside the append-only files
+(`CHANGELOG.md`, `dev/bin/release-checks`) or when `release-checks` fails
+against the merged tree; either way the lane's status becomes `conflict` or
+`checks_failed` and a stall deferred record (`site: assembly_conflict`,
+`references/recovery.md`) is appended, naming the conflicting paths or the
+check's exit code and stderr tail. The lane's own branch and worktree are
+left exactly as the lane left them - only the shared assembly branch
+rewinds.
+
+Exit codes: `0` when every drained lane merged clean, `3` when at least one
+lane was kept (a conflict, a checks failure, or one still unfinished) - the
+wave ends `assembled_partial` rather than `assembled` - and `1` when the
+verb refuses outright (a live lane, a structurally invalid `wave.json`). To
+finish a kept lane, rebase it by hand inside its own worktree (`<repo>-l<n>`)
+against the assembly branch, resolve the conflict or fix whatever failed the
+checks, then rerun `autopilot wave assemble` - it re-merges every lane not
+yet `assembled`, in the same order.
+
 ## What a lane worktree holds
 
 `<repo>-l<n>`, beside the main checkout, is a full autopilot workspace of its own:
@@ -133,10 +164,11 @@ where `wave status` shows it. A wave left `abort_failed` is still live, so
 
 Not part of this release:
 
-- **Assembly** - merging the lane branches back into the base branch - is PRD
-  00215. Today a wave's output is N branches, each with its lane's commits; you
-  merge them yourself, or `wave abort` keeps any branch that carries commits
-  rather than deleting it.
+- **Assembly** - merging the lane branches back into the base branch - shipped
+  as `autopilot wave assemble` (above, PRD 00215). For any lane `assemble`
+  cannot merge on its own - kept for a conflict, a checks failure, or one
+  still live - you merge that lane's branch by hand; `wave abort` still keeps
+  any branch that carries commits rather than deleting it.
 - **The review-slot semaphore** is PRD 00217. `launch` already points every lane
   at one shared directory (`_AUTOPILOT_REVIEW_SLOTS_DIR` =
   `docs/dev/project-management/autopilot/wave-slots` in the main checkout) and passes the wave's
