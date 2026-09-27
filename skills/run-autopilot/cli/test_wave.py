@@ -593,6 +593,13 @@ def test_structural_errors_accepts_a_null_or_revision_string_base_sha(
     [
         ("id", _DROP),
         ("id", 202609261200),
+        # The id lands in the assembly worktree path, the assembly branch name and
+        # two filenames, so a separator or a parent hop escapes all four.
+        ("id", "../202609261200"),
+        ("id", "wave/202609261200"),
+        ("id", "202609261200/.."),
+        ("id", ".."),
+        ("id", ""),
         ("repo", _DROP),
         ("repo", None),
         ("status", _DROP),

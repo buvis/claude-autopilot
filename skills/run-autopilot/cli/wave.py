@@ -293,7 +293,9 @@ def _is_basename(value: object) -> bool:
 
 
 _TOP_CHECKS = {
-    "id": lambda v: isinstance(v, str),
+    # A basename, not just a string: the id names the assembly worktree, the
+    # assembly branch and two files, so a separator escapes all four.
+    "id": _is_basename,
     "repo": lambda v: isinstance(v, str),
     "status": lambda v: v in WAVE_STATUSES,
     "lanes": lambda v: isinstance(v, list) and bool(v),
