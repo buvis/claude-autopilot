@@ -903,6 +903,57 @@ def _bounded_sleep(limit: int = 20) -> Callable[[float], None]:
     return sleep_fn
 
 
+def _run_wave_one_lane(wave_path: Path) -> None:
+    """A one-lane wave.json: with a single lane, the wait loop's
+    `all(lane_status(lane) != "running" for lane in loaded["lanes"])` check
+    never short-circuits past a second lane, so a lane_status fake keyed on
+    call count maps 1:1 onto wait-loop polls."""
+    wave.save(
+        wave_path,
+        {
+            "id": "202609281200",
+            "base_sha": "1111111",
+            "status": "planned",
+            "lanes": [
+                {
+                    "name": "l1",
+                    "prds": ["00001-a.md"],
+                    "pid": 111,
+                    "status": "running",
+                    "worktree": None,
+                    "abort_error": None,
+                },
+            ],
+        },
+    )
+
+
+def _dead_after_n_polls(n: int) -> Callable[[dict], str]:
+    """wave_launch.lane_status reports "running" for the first n calls, then
+    "drained" - paired with _run_wave_one_lane so the wait loop takes exactly
+    n non-terminal polls before it exits."""
+    calls = {"n": 0}
+
+    def fake_lane_status(lane: dict) -> str:
+        calls["n"] += 1
+        return "running" if calls["n"] <= n else "drained"
+
+    return fake_lane_status
+
+
+def _stepped_clock(step: float) -> Callable[[], float]:
+    """Advances by a fixed `step` seconds on every call, so a cadence test
+    can pin exactly how many polls it takes to cross the 10-minute print
+    threshold, unlike `_rising_clock`'s fixed 700s jump."""
+    ticks = {"value": 0.0}
+
+    def clock() -> float:
+        ticks["value"] += step
+        return ticks["value"]
+
+    return clock
+
+
 def test_run_orders_plan_launch_wait_assemble_review_land(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -947,6 +998,66 @@ def test_run_orders_plan_launch_wait_assemble_review_land(
     assert "status" in calls[2:-3]
 
 
+def test_run_status_cadence_skips_the_print_under_ten_minutes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, wave_path = _repo(tmp_path, {})
+    _run_wave_one_lane(wave_path)
+    monkeypatch.setattr(wave_launch, "lane_status", _dead_after_n_polls(3))
+    monkeypatch.setattr(wave, "plan", lambda *a, **k: 0)
+    monkeypatch.setattr(wave_launch, "launch", lambda *a, **k: 0)
+    status_calls: list[str] = []
+    monkeypatch.setattr(
+        wave_launch,
+        "status",
+        lambda *a, **k: status_calls.append("status") or "lane table",
+    )
+    monkeypatch.setattr(wave_assemble, "assemble", lambda *a, **k: 0)
+    monkeypatch.setattr(wave_review, "review", lambda *a, **k: "converged")
+    monkeypatch.setattr(wave_review, "land", lambda *a, **k: 0)
+
+    exit_code = wave_run.run(
+        repo,
+        yes=True,
+        sleep_fn=_bounded_sleep(),
+        clock=_stepped_clock(100.0),
+    )
+
+    assert exit_code == 0
+    assert status_calls == []
+
+
+def test_run_status_cadence_prints_once_after_crossing_ten_minutes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, wave_path = _repo(tmp_path, {})
+    _run_wave_one_lane(wave_path)
+    monkeypatch.setattr(wave_launch, "lane_status", _dead_after_n_polls(2))
+    monkeypatch.setattr(wave, "plan", lambda *a, **k: 0)
+    monkeypatch.setattr(wave_launch, "launch", lambda *a, **k: 0)
+    status_calls: list[str] = []
+    monkeypatch.setattr(
+        wave_launch,
+        "status",
+        lambda *a, **k: status_calls.append("status") or "lane table",
+    )
+    monkeypatch.setattr(wave_assemble, "assemble", lambda *a, **k: 0)
+    monkeypatch.setattr(wave_review, "review", lambda *a, **k: "converged")
+    monkeypatch.setattr(wave_review, "land", lambda *a, **k: 0)
+
+    exit_code = wave_run.run(
+        repo,
+        yes=True,
+        sleep_fn=_bounded_sleep(),
+        clock=_stepped_clock(350.0),
+    )
+
+    assert exit_code == 0
+    assert status_calls == ["status"]
+
+
 def test_run_without_tty_needs_yes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -963,6 +1074,141 @@ def test_run_without_tty_needs_yes(
     assert plan_calls == []
     captured = capsys.readouterr()
     assert "--yes" in captured.out + captured.err
+
+
+def test_run_tty_without_yes_waits_for_confirm_before_launch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, wave_path = _repo(tmp_path, {})
+    _run_wave(wave_path)
+    _dead_after_one_pass(monkeypatch)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    calls: list[str] = []
+    monkeypatch.setattr(wave, "plan", lambda *a, **k: calls.append("plan") or 0)
+    monkeypatch.setattr(
+        wave_launch,
+        "launch",
+        lambda *a, **k: calls.append("launch") or 0,
+    )
+    monkeypatch.setattr(wave_launch, "status", lambda *a, **k: "lane table")
+    monkeypatch.setattr(wave_assemble, "assemble", lambda *a, **k: 0)
+    monkeypatch.setattr(wave_review, "review", lambda *a, **k: "converged")
+    monkeypatch.setattr(wave_review, "land", lambda *a, **k: 0)
+
+    def confirm(*args: object, **kwargs: object) -> str:
+        calls.append("confirm")
+        return ""
+
+    exit_code = wave_run.run(
+        repo,
+        yes=False,
+        confirm_fn=confirm,
+        sleep_fn=_bounded_sleep(),
+        clock=_rising_clock(),
+    )
+
+    assert exit_code == 0
+    assert calls[:3] == ["plan", "confirm", "launch"]
+
+
+def test_run_tty_without_yes_eof_at_confirm_refuses_without_launching(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, wave_path = _repo(tmp_path, {})
+    _run_wave(wave_path)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(wave, "plan", lambda *a, **k: 0)
+    launch_calls: list[str] = []
+    monkeypatch.setattr(
+        wave_launch,
+        "launch",
+        lambda *a, **k: launch_calls.append("launch") or 0,
+    )
+
+    def confirm(*args: object, **kwargs: object) -> str:
+        raise EOFError
+
+    exit_code = wave_run.run(repo, yes=False, confirm_fn=confirm)
+
+    assert exit_code == 1
+    assert launch_calls == []
+
+
+def test_run_yes_on_a_tty_skips_the_confirm_prompt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, wave_path = _repo(tmp_path, {})
+    _run_wave(wave_path)
+    _dead_after_one_pass(monkeypatch)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(wave, "plan", lambda *a, **k: 0)
+    monkeypatch.setattr(wave_launch, "launch", lambda *a, **k: 0)
+    monkeypatch.setattr(wave_launch, "status", lambda *a, **k: "lane table")
+    monkeypatch.setattr(wave_assemble, "assemble", lambda *a, **k: 0)
+    monkeypatch.setattr(wave_review, "review", lambda *a, **k: "converged")
+    monkeypatch.setattr(wave_review, "land", lambda *a, **k: 0)
+    confirm_calls: list[str] = []
+
+    def confirm(*args: object, **kwargs: object) -> str:
+        confirm_calls.append("confirm")
+        return ""
+
+    exit_code = wave_run.run(
+        repo,
+        yes=True,
+        confirm_fn=confirm,
+        sleep_fn=_bounded_sleep(),
+        clock=_rising_clock(),
+    )
+
+    assert exit_code == 0
+    assert confirm_calls == []
+
+
+@pytest.mark.parametrize("review_slots", [0, -1], ids=["zero", "negative"])
+def test_run_rejects_a_non_positive_review_slots_before_any_write(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    review_slots: int,
+) -> None:
+    repo, wave_path = _repo(tmp_path, {})
+    plan_calls: list[str] = []
+    monkeypatch.setattr(wave, "plan", lambda *a, **k: plan_calls.append("plan") or 0)
+
+    exit_code = wave_run.run(repo, review_slots=review_slots, yes=True)
+
+    assert exit_code == 1
+    assert plan_calls == []
+    assert not wave_path.exists()
+
+
+def test_run_writes_a_valid_review_slots_value_into_wave_json(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, wave_path = _repo(tmp_path, {})
+    _run_wave(wave_path)
+    _dead_after_one_pass(monkeypatch)
+    monkeypatch.setattr(wave, "plan", lambda *a, **k: 0)
+    monkeypatch.setattr(wave_launch, "launch", lambda *a, **k: 0)
+    monkeypatch.setattr(wave_launch, "status", lambda *a, **k: "lane table")
+    monkeypatch.setattr(wave_assemble, "assemble", lambda *a, **k: 0)
+    monkeypatch.setattr(wave_review, "review", lambda *a, **k: "converged")
+    monkeypatch.setattr(wave_review, "land", lambda *a, **k: 0)
+
+    exit_code = wave_run.run(
+        repo,
+        review_slots=5,
+        yes=True,
+        sleep_fn=_bounded_sleep(),
+        clock=_rising_clock(),
+    )
+
+    assert exit_code == 0
+    assert wave.load(wave_path)["review_slots"] == 5
 
 
 def test_run_exit_code_follows_the_weakest_step(
