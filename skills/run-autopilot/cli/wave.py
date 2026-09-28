@@ -35,7 +35,7 @@ LANE_STATUSES = (
     "checks_failed",
     "unfinished",
 )
-WAVE_STATUSES = (*LANE_STATUSES, "done", "assembled_partial")
+WAVE_STATUSES = (*LANE_STATUSES, "done", "assembled_partial", "converged", "review_failed")
 
 
 @dataclasses.dataclass(frozen=True)

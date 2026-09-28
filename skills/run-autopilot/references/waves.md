@@ -162,18 +162,76 @@ yet `assembled`, in the same order.
   root. The lane's `state.json`, reviews, designs and ledgers all stay inside the
   lane.
 
-## Deferred: assembly and review slots
+## Review and land
 
-Not part of this release:
+### `autopilot wave review`
 
-- **Assembly** - merging the lane branches back into the base branch - shipped
-  as `autopilot wave assemble` (above, PRD 00215). For any lane `assemble`
-  cannot merge on its own, you merge that lane's branch by hand; `wave abort`
-  still keeps any branch that carries commits rather than deleting it.
-- **The review-slot semaphore** is PRD 00217. `launch` already points every lane
-  at one shared directory (`_AUTOPILOT_REVIEW_SLOTS_DIR` =
-  `docs/dev/project-management/autopilot/wave-slots` in the main checkout) and passes the wave's
-  `review_slots` count, but nothing throttles concurrent review launches yet.
+Runs one review cycle over the wave's assembly worktree (`<repo>-wave-<wave
+id>`, on branch `wave/<wave id>/assembly`): seeds a nested autopilot loop
+there, spawns it and blocks until it converges or fails, then reloads
+`wave.json` fresh under lock and returns `"converged"` or `"review_failed"` -
+it persists that outcome to `wave.json`'s `status` field itself, so a caller
+never saves after calling it. Raises `ValueError` when the wave's state does
+not meet the precondition for a review pass, propagated rather than caught,
+like every other precondition check in this pack.
+
+**Scope note.** The review runs only over the paths the wave's assembled
+lanes actually touched: `review_paths(wave)` writes that scoped list to
+`docs/dev/project-management/autopilot/review-paths`, one repo-relative path
+per line, and the nested loop's `gather-context.sh` filters on it instead of
+gathering the whole repo.
+
+### `autopilot wave land`
+
+Fast-forwards the main checkout onto the wave's assembly branch once review
+has converged, then migrates and cleans up. Reloads `wave.json` fresh under
+its own lock - a `wave` dict passed to it is used only to match the call
+signature. Returns `4` when the wave's status is `review_failed` (no git
+write). Returns `5` when it is `converged` but the main branch has moved
+since the wave was planned (no git write - land refuses rather than force
+anything). Returns `0` once landed. Raises `ValueError` if the status is
+neither `converged` nor `review_failed`.
+
+## wave run
+
+`autopilot wave run [--max-lanes N] [--review-slots N] [--yes]` chains every
+step above into one call: `plan`, `launch`, a wait loop that reloads
+`wave.json` and polls every 30s until every lane's pid reads dead (printing
+the status table every 10 minutes of elapsed wall time), `assemble`,
+`review`, and - only once review reports `converged` - `land`. A
+`--review-slots` value other than 3 (the planned default) is written into
+`wave.json` right after `plan`, before `launch` starts any lane.
+
+It refuses before touching anything (exit `1`, a precondition refused) when
+run with no controlling tty and without `--yes` - an unattended wave needs
+the flag spelled out, same as any other one-shot destructive step. Past that
+gate, `plan`'s and `launch`'s own exit-`1` refusals surface unchanged, and
+nothing later in the chain runs.
+
+SIGINT or SIGTERM during the wait loop kill every still-running lane's
+process group directly - the same per-lane kill routine `wave abort` uses,
+not `abort` end-to-end, so an interrupted wave keeps its PRDs where they sit
+instead of handing them back - mark the wave `interrupted` in `wave.json`,
+and exit `130`. A later `autopilot wave assemble` against that same
+`wave.json` resumes from there exactly like any other assemble call; the
+interrupt needs no special handling on the resume path.
+
+Exit codes:
+
+| Exit | Meaning |
+|------|---------|
+| `0` | the wave landed |
+| `1` | a precondition refused - the `--yes` gate, or `plan`/`launch`'s own refusal |
+| `3` | assemble kept a lane (a conflict, a checks failure, or one left unfinished) - the rest of the chain still ran to completion on what did merge |
+| `4` | review failed |
+| `5` | master moved between the confirmation gate and land |
+
+The final code is the last non-zero code the chain produced, in the order
+the steps ran: a kept lane (`3`) followed by a clean review and land still
+reports `3`, but a kept lane whose review then fails reports `4` instead.
+
+An `autoclaude wave` alias exists at the operator-shell layer for this verb;
+its own docs cover the wrapper side.
 
 ## Operator notes
 

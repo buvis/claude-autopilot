@@ -12,7 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from cli import wave, wave_assemble, wave_launch
+from cli import wave, wave_assemble, wave_launch, wave_review, wave_run
 
 
 def add(subparsers) -> None:
@@ -24,6 +24,12 @@ def add(subparsers) -> None:
     for verb in ("launch", "status", "abort"):
         verbs.add_parser(verb).add_argument("--state")
     verbs.add_parser("assemble").add_argument("--state")
+    verbs.add_parser("review").add_argument("--state")
+    verbs.add_parser("land").add_argument("--state")
+    run_p = verbs.add_parser("run")
+    run_p.add_argument("--max-lanes", type=int, default=3)
+    run_p.add_argument("--review-slots", type=int, default=3)
+    run_p.add_argument("--yes", action="store_true")
 
 
 def run(args: argparse.Namespace, repo: Path, wave_path: Path) -> int:
@@ -38,6 +44,13 @@ def run(args: argparse.Namespace, repo: Path, wave_path: Path) -> int:
         except wave.WaveCorruptError as err:
             print(f"autopilot: {wave.corrupt_message(err)}", file=sys.stderr)
             return 1
+    if args.verb == "run":
+        return wave_run.run(
+            repo,
+            max_lanes=args.max_lanes,
+            review_slots=args.review_slots,
+            yes=args.yes,
+        )
     # Read once for the two friendly early messages only: `launch` reloads
     # wave.json under its own lock and never sees this copy.
     try:
@@ -57,6 +70,11 @@ def run(args: argparse.Namespace, repo: Path, wave_path: Path) -> int:
     if args.verb == "status":
         print(wave_launch.status(repo, loaded))
         return 0
+    if args.verb == "review":
+        print(wave_review.review(repo, loaded))
+        return 0
+    if args.verb == "land":
+        return wave_review.land(repo, loaded)
     # `abort` is the last verb the parser accepts, and it reloads wave.json under
     # its own lock too.
     try:
