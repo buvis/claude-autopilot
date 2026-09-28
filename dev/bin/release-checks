@@ -117,6 +117,7 @@ uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_wave_assemble_migrate.py \
   skills/run-autopilot/cli/test_wave_cli_assemble.py \
   skills/run-autopilot/cli/test_wave_docs.py \
+  skills/run-autopilot/cli/test_wave_run.py \
   skills/run-autopilot/cli/test_wave_review.py
 
 echo "[checks] gather-context paths"

@@ -50,6 +50,7 @@ _WAVE_TEST_FILES = (
     "test_wave_assemble_migrate.py",
     "test_wave_cli_assemble.py",
     "test_wave_docs.py",
+    "test_wave_run.py",
     "test_wave_review.py",
 )
 
