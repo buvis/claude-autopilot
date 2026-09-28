@@ -235,13 +235,15 @@ def _normalized(argv: list[str]) -> list[object]:
     return shown
 
 
-def _seed_argv(state_path: Path) -> list[list[object]]:
+def _seed_argv(
+    state_path: Path, wave_id: str = WAVE_ID, base_sha: str = "1111111"
+) -> list[list[object]]:
     """The six seed calls, in order, as `_normalized` shows them."""
     state = str(state_path)
-    batch = {"id": WAVE_ID, "mode": "autopilot", "completed_prds": [], "plugin_versions": PINS}
+    batch = {"id": wave_id, "mode": "autopilot", "completed_prds": [], "plugin_versions": PINS}
     return [
-        ["python3", CLI_MAIN, "init", "--state", state, "--prd", STUB],
-        ["python3", STATECTL, state, "set", "work_start_sha", "1111111"],
+        ["python3", CLI_MAIN, "init", "--state", state, "--prd", f"{wave_id}-wave-assembly-v1.md"],
+        ["python3", STATECTL, state, "set", "work_start_sha", base_sha],
         ["python3", STATECTL, state, "set", "cycle", 1],
         ["python3", STATECTL, state, "set", "rework_cap", 2],
         ["python3", STATECTL, state, "set", "batch", batch],
@@ -295,10 +297,17 @@ def _moving(worktree: Path, dest: str | None) -> Callable[[], None]:
 # ── seed_state ───────────────────────────────────────────────────────────
 
 
+@pytest.mark.parametrize(
+    ("wave_id", "base_sha"),
+    [(WAVE_ID, "1111111"), ("202610051530", "9f8e7d6")],
+    ids=["usual-wave", "other-wave"],
+)
 def test_seeded_state_is_the_tasks_done_shape(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, wave_id: str, base_sha: str
 ) -> None:
     _, _, wave_dict = _assembled(tmp_path, monkeypatch)
+    wave_dict = {**wave_dict, "id": wave_id, "base_sha": base_sha}
+    stub_name = f"{wave_id}-wave-assembly-v1.md"
     worktree = Path(wave_dict["assembly"]["worktree"])
     state_path = _autopilot(worktree) / "state.json"
     calls: list[list[str]] = []
@@ -308,29 +317,43 @@ def test_seeded_state_is_the_tasks_done_shape(
     state = json.loads(state_path.read_text(encoding="utf-8"))
     schema.validate(state)
     assert (state["phase"], state["next_phase"]) == ("review", "review")
-    assert state["prd"] == STUB
-    assert state["work_start_sha"] == "1111111"
+    assert state["prd"] == stub_name
+    assert state["work_start_sha"] == base_sha
     assert (state["cycle"], state["rework_cap"]) == (1, 2)
-    assert state["batch"]["id"] == WAVE_ID
+    assert state["batch"]["id"] == wave_id
     assert state["batch"]["plugin_versions"] == PINS
     assert not state.get("phases_completed")
     # Every step, in order: the last write is phase-done --outcome tasks_done.
-    assert [_normalized(argv) for argv in calls] == _seed_argv(state_path)
+    assert [_normalized(argv) for argv in calls] == _seed_argv(state_path, wave_id, base_sha)
     for folder in ("backlog", "wip", "done", "hold"):
         assert (_pm(worktree) / "prds" / folder).is_dir(), folder
-    stub = _pm(worktree) / "prds" / "wip" / STUB
+    stub = _pm(worktree) / "prds" / "wip" / stub_name
     assert stub.read_text(encoding="utf-8") == wave_review.stub_text(wave_dict)
-    assert [path.name for path in (_pm(worktree) / "prds").rglob("*.md")] == [STUB]
+    assert [path.name for path in (_pm(worktree) / "prds").rglob("*.md")] == [stub_name]
 
 
+@pytest.mark.parametrize(
+    ("aegis", "warden"), [("0.3.2", "1.4.0"), ("5.0.7", "2.11.3")], ids=["usual", "bumped"]
+)
 def test_seed_state_extracts_only_the_two_pinned_plugin_versions(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, aegis: str, warden: str
 ) -> None:
     _, _, wave_dict = _assembled(tmp_path, monkeypatch)
+    plugins = {
+        **INSTALLED["plugins"],
+        "aegis@buvis-plugins": _entry("aegis", aegis),
+        "warden@buvis-plugins": _entry("warden", warden),
+    }
+    _plugins_json(tmp_path).write_text(
+        json.dumps({**INSTALLED, "plugins": plugins}), encoding="utf-8"
+    )
     state_path = _autopilot(Path(wave_dict["assembly"]["worktree"])) / "state.json"
     wave_review.seed_state(state_path, wave_dict, _plugins_json(tmp_path))
     state = json.loads(state_path.read_text(encoding="utf-8"))
-    assert state["batch"]["plugin_versions"] == PINS
+    assert state["batch"]["plugin_versions"] == {
+        "aegis@buvis-plugins": aegis,
+        "warden@buvis-plugins": warden,
+    }
     installed = json.loads(_plugins_json(tmp_path).read_text(encoding="utf-8"))
     assert loop_decision.plugin_drift(state, installed) is None
 
@@ -405,6 +428,7 @@ def test_review_copies_meta_and_spawns_the_loop_in_the_assembly_worktree(
     assert call["start_new_session"] is True
     assert "_AUTOPILOT_REVIEW_SLOTS_DIR" not in call["env"]
     assert "_AUTOPILOT_REVIEW_SLOTS" not in call["env"]
+    assert call["env"]["_AUTOPILOT_TRACON_CHILD"] == "1"
     assert call["env"]["PATH"] == os.environ["PATH"]
     wrapper_log = _autopilot(worktree) / "wrapper.log"
     assert Path(call["stdout"].name).resolve() == wrapper_log.resolve()
@@ -416,8 +440,21 @@ def test_review_copies_meta_and_spawns_the_loop_in_the_assembly_worktree(
         ("assembled", "done", 0, "converged"),
         ("assembled_partial", "hold", 0, "review_failed"),
         ("assembled", None, 1, "review_failed"),
+        # The folder decides, not the exit code or the pre-review status.
+        ("assembled", "hold", 0, "review_failed"),
+        ("assembled_partial", "done", 0, "converged"),
+        ("assembled", "done", 1, "converged"),
+        ("assembled", None, 0, "review_failed"),
     ],
-    ids=["done-converges", "hold-fails", "died-in-wip-fails"],
+    ids=[
+        "done-converges",
+        "hold-fails",
+        "died-in-wip-fails",
+        "hold-after-full-assembly-fails",
+        "done-after-partial-assembly-converges",
+        "done-despite-nonzero-exit-converges",
+        "clean-exit-still-in-wip-fails",
+    ],
 )
 def test_review_outcome_reads_done_and_hold(
     tmp_path: Path,
@@ -437,7 +474,9 @@ def test_review_outcome_reads_done_and_hold(
     assert {**saved, "status": status} == before
 
 
-@pytest.mark.parametrize("gap", ["not_assembled", "worktree_gone", "repo_dirty"])
+@pytest.mark.parametrize(
+    "gap", ["not_assembled", "worktree_gone", "repo_dirty", "tracked_file_edited"]
+)
 def test_review_refuses_before_assembly(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, gap: str
 ) -> None:
@@ -452,8 +491,12 @@ def test_review_refuses_before_assembly(
         wave.save(wave_path, wave_dict)
     elif gap == "worktree_gone":
         _git(repo, "worktree", "remove", "--force", str(worktree))
-    else:
+    elif gap == "repo_dirty":
         (repo / "stray.py").write_text("x = 1\n", encoding="utf-8")
+    else:
+        # No new file: only an uncommitted edit to the tracked README.md.
+        with (repo / "README.md").open("a", encoding="utf-8") as readme:
+            readme.write("uncommitted line\n")
     before = wave_path.read_text(encoding="utf-8")
     spawn = _FakeLoop()
     with pytest.raises(ValueError):
