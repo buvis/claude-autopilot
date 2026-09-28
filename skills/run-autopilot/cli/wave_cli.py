@@ -27,6 +27,7 @@ def add(subparsers) -> None:
     verbs.add_parser("review").add_argument("--state")
     verbs.add_parser("land").add_argument("--state")
     run_p = verbs.add_parser("run")
+    run_p.add_argument("--state")
     run_p.add_argument("--max-lanes", type=int, default=3)
     run_p.add_argument("--review-slots", type=int, default=3)
     run_p.add_argument("--yes", action="store_true")
