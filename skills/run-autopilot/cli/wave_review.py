@@ -384,6 +384,40 @@ def _land_cleanup(
     wave_path.unlink()
 
 
+def _land_converged(
+    repo: Path,
+    wave_path: Path,
+    wave: dict,
+    run_git: Callable[..., subprocess.CompletedProcess],
+) -> dict | None:
+    """Fast-forward and migrate a converged assembly, returning the refreshed
+    wave dict with status "done" - or None when `repo` has moved past
+    `wave["base_sha"]` since assembly (refuses rather than merge over new
+    history)."""
+    branch = f"wave/{wave['id']}/assembly"
+    repo_head = run_git(["-C", str(repo), "rev-parse", "HEAD"]).stdout.strip()
+    assembly_tip = run_git(["-C", str(repo), "rev-parse", branch]).stdout.strip()
+    if repo_head not in (wave["base_sha"], assembly_tip):
+        return None
+
+    _land_merge(repo, assembly_tip, run_git)
+    _land_migrate(repo, wave_path, wave)
+
+    cycles = _cycle_count(Path(wave["assembly"]["worktree"]))
+    _append_summary_line(
+        repo,
+        wave["id"],
+        f"## Assembly review: converged ({cycles} cycle(s)), landed {assembly_tip}",
+    )
+
+    with locked(wave_path):
+        wave = load(wave_path)
+        wave["assembly"]["head_sha"] = assembly_tip
+        wave["status"] = "done"
+        save(wave_path, wave)
+    return wave
+
+
 def land(
     repo: Path,
     wave: dict,
@@ -418,27 +452,10 @@ def land(
         raise ValueError(f"wave status {status!r} is not landable")
 
     if status == "converged":
-        branch = f"wave/{wave['id']}/assembly"
-        repo_head = run_git(["-C", str(repo), "rev-parse", "HEAD"]).stdout.strip()
-        assembly_tip = run_git(["-C", str(repo), "rev-parse", branch]).stdout.strip()
-        if repo_head not in (wave["base_sha"], assembly_tip):
+        updated = _land_converged(repo, wave_path, wave, run_git)
+        if updated is None:
             return 5
-
-        _land_merge(repo, assembly_tip, run_git)
-        _land_migrate(repo, wave_path, wave)
-
-        cycles = _cycle_count(Path(wave["assembly"]["worktree"]))
-        _append_summary_line(
-            repo,
-            wave["id"],
-            f"## Assembly review: converged ({cycles} cycle(s)), landed {assembly_tip}",
-        )
-
-        with locked(wave_path):
-            wave = load(wave_path)
-            wave["assembly"]["head_sha"] = assembly_tip
-            wave["status"] = "done"
-            save(wave_path, wave)
+        wave = updated
 
     _land_cleanup(repo, wave_path, wave, run_git)
     return 0
