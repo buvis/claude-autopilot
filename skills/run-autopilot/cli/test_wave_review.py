@@ -26,7 +26,7 @@ from pathlib import Path
 
 import pytest
 
-from cli import frontmatter, loop_decision, schema, wave, wave_launch, wave_review
+from cli import frontmatter, loop_decision, schema, wave, wave_assemble, wave_launch, wave_review
 from cli.test_wave_launch import _autopilot, _git, _repo
 
 
@@ -533,3 +533,162 @@ def test_review_releases_the_lock_during_the_wait(
     assert saved["status"] == "converged"
     # Reloaded fresh under the lock, not saved from the caller's stale copy.
     assert saved["lanes"][1]["abort_error"] == "written mid-review"
+
+
+# ── land ─────────────────────────────────────────────────────────────────
+
+
+def _git_out(cwd: Path, *args: str) -> str:
+    """`git <args>` run inside `cwd`, stdout stripped - the existing `_git`
+    helper never returns anything, so a land() test that needs the real
+    output (a rev-parse, a commit count) shells out itself."""
+    return subprocess.run(
+        ["git", "-C", str(cwd), *args], capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+
+def _branch_exists(repo: Path, branch: str) -> bool:
+    return bool(_git_out(repo, "branch", "--list", branch))
+
+
+def _landable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, status: str = "converged"
+) -> tuple[Path, Path, dict]:
+    """`_assembled`, plus a real `base_sha` (the repo's actual HEAD, not
+    `_wave`'s placeholder "1111111") and one commit on the assembly branch
+    that both lands the stub PRD in the worktree's `prds/done/` (what a
+    converged review leaves behind) and gives the branch a real, current tip
+    ahead of the stale "2222222" `_wave` records in `assembly.head_sha` (the
+    rework-since-assemble() commit `land`'s own head-sha refresh must see)."""
+    repo, wave_path, wave_dict = _assembled(tmp_path, monkeypatch, status=status)
+    worktree = Path(wave_dict["assembly"]["worktree"])
+    base_sha = _git_out(repo, "rev-parse", "HEAD")
+    stub = _pm(worktree) / "prds" / "done" / STUB
+    stub.parent.mkdir(parents=True, exist_ok=True)
+    stub.write_text("stub prd\n", encoding="utf-8")
+    # `_assembled` already redirected HOME to a fixture dir with no
+    # .gitconfig, so a real commit here needs its own identity.
+    _git(worktree, "config", "user.email", "wave-test@example.com")
+    _git(worktree, "config", "user.name", "Wave Test")
+    # docs/dev/project-management/ is gitignored in this fixture repo (see
+    # `_check_reviewable`'s dirty-check tests), so the stub needs --force.
+    _git(worktree, "add", "--force", str(stub))
+    _git(worktree, "commit", "-m", "test: complete assembly review")
+    _autopilot(worktree).mkdir(parents=True, exist_ok=True)
+    (_autopilot(worktree) / "state.json").write_text(json.dumps({"cycle": 1}), encoding="utf-8")
+    wave_dict = {**wave_dict, "base_sha": base_sha}
+    wave.save(wave_path, wave_dict)
+    return repo, wave_path, wave_dict
+
+
+def test_land_fast_forwards_master_and_removes_the_worktree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, _, wave_dict = _landable(tmp_path, monkeypatch)
+    worktree = Path(wave_dict["assembly"]["worktree"])
+    assembly_tip = _git_out(worktree, "rev-parse", "HEAD")
+    assert wave_review.land(repo, wave_dict) == 0
+    assert _git_out(repo, "rev-parse", "HEAD") == assembly_tip
+    assert not worktree.exists()
+    assert not _branch_exists(repo, f"wave/{WAVE_ID}/assembly")
+
+
+def test_land_migrates_the_assembly_artifacts_as_lane_assembly(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, _, wave_dict = _landable(tmp_path, monkeypatch)
+    worktree = Path(wave_dict["assembly"]["worktree"])
+    (_autopilot(worktree) / "loop-metrics.jsonl").write_text(
+        json.dumps({"event": "cycle_done"}) + "\n", encoding="utf-8"
+    )
+    assert wave_review.land(repo, wave_dict) == 0
+    lines = (_autopilot(repo) / "loop-metrics.jsonl").read_text(encoding="utf-8").splitlines()
+    [row] = [json.loads(line) for line in lines]
+    assert row == {"event": "cycle_done", "lane": "assembly", "wave": WAVE_ID}
+
+
+def test_land_refuses_when_master_moved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, wave_path, wave_dict = _landable(tmp_path, monkeypatch)
+    worktree = Path(wave_dict["assembly"]["worktree"])
+    (repo / "unrelated.txt").write_text("x\n", encoding="utf-8")
+    _git(repo, "add", "unrelated.txt")
+    _git(repo, "commit", "-m", "test: land unrelated work on master meanwhile")
+    before = _git_out(repo, "rev-list", "--count", "HEAD")
+    assert wave_review.land(repo, wave_dict) == 5
+    assert _git_out(repo, "rev-list", "--count", "HEAD") == before
+    assert worktree.exists()
+    assert wave.load(wave_path)["status"] == "converged"
+
+
+def test_review_failed_keeps_master_untouched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, wave_path, wave_dict = _landable(tmp_path, monkeypatch, status="review_failed")
+    worktree = Path(wave_dict["assembly"]["worktree"])
+    before = _git_out(repo, "rev-list", "--count", "HEAD")
+    assert wave_review.land(repo, wave_dict) == 4
+    assert _git_out(repo, "rev-list", "--count", "HEAD") == before
+    assert worktree.exists()
+    assert _branch_exists(repo, f"wave/{WAVE_ID}/assembly")
+    assert wave.load(wave_path)["status"] == "review_failed"
+
+
+def test_land_precondition_rejects_assembled_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, wave_path, wave_dict = _assembled(tmp_path, monkeypatch, status="assembled")
+    with pytest.raises(ValueError):
+        wave_review.land(repo, wave_dict)
+    assert wave.load(wave_path)["status"] == "assembled"
+
+
+def test_land_resumes_after_a_migration_crash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, wave_path, wave_dict = _landable(tmp_path, monkeypatch)
+    worktree = Path(wave_dict["assembly"]["worktree"])
+    ledger = _autopilot(repo) / "loop-metrics.jsonl"
+    (_autopilot(worktree) / "loop-metrics.jsonl").write_text(
+        json.dumps({"event": "cycle_done"}) + "\n", encoding="utf-8"
+    )
+    real_migrate_lane = wave_assemble.migrate_lane
+    calls = {"n": 0}
+
+    def crashes_once(main: Path, wave_id: str, lane: dict) -> None:
+        real_migrate_lane(main, wave_id, lane)
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("simulated crash after migration")
+
+    monkeypatch.setattr(wave_assemble, "migrate_lane", crashes_once)
+    with pytest.raises(RuntimeError, match="simulated crash after migration"):
+        wave_review.land(repo, wave_dict)
+
+    saved = wave.load(wave_path)
+    assert saved["status"] == "converged"
+    assert saved["assembly"].get("migrated_at")
+    assert worktree.exists()
+    assert ledger.read_text(encoding="utf-8").count("cycle_done") == 1
+    assert (_pm(repo) / "prds" / "done" / STUB).exists()
+
+    monkeypatch.setattr(wave_assemble, "migrate_lane", real_migrate_lane)
+    assert wave_review.land(repo, wave_dict) == 0
+    assert wave.load(wave_path)["status"] == "done"
+    assert ledger.read_text(encoding="utf-8").count("cycle_done") == 1
+    assert not worktree.exists()
+
+
+def test_land_refreshes_the_archived_head_sha(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, _, wave_dict = _landable(tmp_path, monkeypatch)
+    worktree = Path(wave_dict["assembly"]["worktree"])
+    actual_tip = _git_out(worktree, "rev-parse", "HEAD")
+    assert wave_dict["assembly"]["head_sha"] != actual_tip
+    assert wave_review.land(repo, wave_dict) == 0
+    archived = json.loads(
+        (_autopilot(repo) / "reports" / f"{WAVE_ID}-wave.json").read_text(encoding="utf-8")
+    )
+    assert archived["assembly"]["head_sha"] == actual_tip
