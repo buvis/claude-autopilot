@@ -198,6 +198,8 @@ def _check_reviewable(repo: Path, wave: dict) -> Path:
     worktree is gone, or `repo` has any uncommitted change."""
     if "assembly" not in wave:
         raise ValueError("wave has no assembly - run `wave assemble` first")
+    if wave.get("status") not in ("assembled", "assembled_partial"):
+        raise ValueError(f"wave status {wave.get('status')!r} is not reviewable")
     worktree = Path(wave["assembly"]["worktree"])
     if not worktree.is_dir():
         raise ValueError(f"assembly worktree {worktree} is gone")
