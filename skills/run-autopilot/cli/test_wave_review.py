@@ -827,6 +827,165 @@ def test_land_refreshes_the_archived_head_sha(
     assert archived["assembly"]["head_sha"] == actual_tip
 
 
+def test_land_appends_the_converged_summary_line(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, _, wave_dict = _landable(tmp_path, monkeypatch)
+    worktree = Path(wave_dict["assembly"]["worktree"])
+    assembly_tip = _git_out(worktree, "rev-parse", "HEAD")
+
+    assert wave_review.land(repo, wave_dict) == 0
+
+    expected_line = f"## Assembly review: converged (1 cycle(s)), landed {assembly_tip}"
+    for folder in ("reports", "ledger"):
+        text = (_autopilot(repo) / folder / f"{WAVE_ID}-wave.md").read_text(
+            encoding="utf-8",
+        )
+        assert text.count("## Assembly review:") == 1
+        assert expected_line in text.splitlines()
+
+
+def test_review_failed_appends_the_summary_line_with_no_review_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, wave_path, wave_dict = _landable(
+        tmp_path,
+        monkeypatch,
+        status="review_failed",
+    )
+    worktree = Path(wave_dict["assembly"]["worktree"])
+    before = _git_out(repo, "rev-list", "--count", "HEAD")
+
+    assert wave_review.land(repo, wave_dict) == 4
+
+    assert _git_out(repo, "rev-list", "--count", "HEAD") == before
+    assert worktree.exists()
+    assert _branch_exists(repo, f"wave/{WAVE_ID}/assembly")
+    assert wave.load(wave_path)["status"] == "review_failed"
+    expected_line = "## Assembly review: review_failed, see no review file written"
+    for folder in ("reports", "ledger"):
+        text = (_autopilot(repo) / folder / f"{WAVE_ID}-wave.md").read_text(
+            encoding="utf-8",
+        )
+        assert text.count("## Assembly review:") == 1
+        assert expected_line in text.splitlines()
+
+
+def test_land_resumes_after_a_crash_between_save_and_cleanup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The design saves status "done" and the refreshed head_sha BEFORE the
+    destructive worktree/branch/wave-slots/wave.json cleanup, so a kill in
+    between leaves status already "done" while the worktree, branch, and
+    wave.json's own location are all still there - the retry must finish the
+    leftover cleanup without redoing the merge/migrate/save and without
+    duplicating the summary line."""
+    repo, wave_path, wave_dict = _landable(tmp_path, monkeypatch)
+    worktree = Path(wave_dict["assembly"]["worktree"])
+    assembly_tip = _git_out(worktree, "rev-parse", "HEAD")
+    real_run_git = wave_assemble._default_run_git
+
+    def crashes_on_worktree_remove(
+        argv: list[str],
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess:
+        if "worktree" in argv and "remove" in argv:
+            raise RuntimeError("simulated crash before the destructive cleanup")
+        return real_run_git(argv, **kwargs)
+
+    with pytest.raises(
+        RuntimeError,
+        match="simulated crash before the destructive cleanup",
+    ):
+        wave_review.land(repo, wave_dict, run_git=crashes_on_worktree_remove)
+
+    saved = wave.load(wave_path)
+    assert saved["status"] == "done"
+    assert saved["assembly"]["head_sha"] == assembly_tip
+    assert worktree.exists()
+    assert _branch_exists(repo, f"wave/{WAVE_ID}/assembly")
+    report = (_autopilot(repo) / "reports" / f"{WAVE_ID}-wave.md").read_text(
+        encoding="utf-8",
+    )
+    assert report.count("## Assembly review:") == 1
+
+    assert wave_review.land(repo, saved) == 0
+
+    assert not worktree.exists()
+    assert not _branch_exists(repo, f"wave/{WAVE_ID}/assembly")
+    assert not wave_path.exists()
+    report_after = (_autopilot(repo) / "reports" / f"{WAVE_ID}-wave.md").read_text(
+        encoding="utf-8",
+    )
+    assert report_after.count("## Assembly review:") == 1
+
+
+def test_land_removes_wave_slots_and_moves_wave_json_to_reports(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, wave_path, wave_dict = _landable(tmp_path, monkeypatch)
+    slots = _autopilot(repo) / "wave-slots"
+    slots.mkdir(parents=True)
+    (slots / "slot-0").write_text("held\n", encoding="utf-8")
+
+    assert wave_review.land(repo, wave_dict) == 0
+
+    assert not slots.exists()
+    assert not wave_path.exists()
+    assert (_autopilot(repo) / "reports" / f"{WAVE_ID}-wave.json").exists()
+
+
+def test_land_refuses_when_master_moved_and_worktree_is_gone(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The guard must resolve the assembly branch's tip directly (it stays
+    resolvable via the branch ref even once the worktree checkout is
+    removed), not fall back to a substitute that makes "master moved" pass
+    vacuously."""
+    repo, wave_path, wave_dict = _landable(tmp_path, monkeypatch)
+    worktree = Path(wave_dict["assembly"]["worktree"])
+    assembly_branch = f"wave/{WAVE_ID}/assembly"
+    _git(repo, "worktree", "remove", "--force", str(worktree))
+    (repo / "unrelated.txt").write_text("x\n", encoding="utf-8")
+    _git(repo, "add", "unrelated.txt")
+    _git(repo, "commit", "-m", "test: land unrelated work while the worktree is gone")
+    before = _git_out(repo, "rev-list", "--count", "HEAD")
+
+    assert wave_review.land(repo, wave_dict) == 5
+
+    assert _git_out(repo, "rev-list", "--count", "HEAD") == before
+    assert _branch_exists(repo, assembly_branch)
+    assert wave.load(wave_path)["status"] == "converged"
+
+
+def test_land_refuses_to_discard_uncommitted_changes_in_the_assembly_worktree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The pre-removal dirty-check sits right before `git worktree remove
+    --force`, after the merge and migrate have already landed and status has
+    already advanced to "done" - it protects only the worktree itself from
+    being discarded, not the earlier steps from completing."""
+    repo, wave_path, wave_dict = _landable(tmp_path, monkeypatch)
+    worktree = Path(wave_dict["assembly"]["worktree"])
+    assembly_tip = _git_out(worktree, "rev-parse", "HEAD")
+    (worktree / "dirty.txt").write_text("uncommitted rework\n", encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        wave_review.land(repo, wave_dict)
+
+    assert _git_out(repo, "rev-parse", "HEAD") == assembly_tip
+    assert worktree.exists()
+    assert (worktree / "dirty.txt").exists()
+    assert _branch_exists(repo, f"wave/{WAVE_ID}/assembly")
+    assert wave.load(wave_path)["status"] == "done"
+
+
 # ── run ──────────────────────────────────────────────────────────────────
 
 
@@ -1296,6 +1455,39 @@ def test_run_returns_1_at_once_when_assemble_refuses(
 
     assert exit_code == 1
     assert calls == []
+
+
+def test_run_calls_land_when_review_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """review_failed must still reach land() - it is the only caller of the
+    land() branch that appends the "review_failed" summary line, and the
+    run's own exit code carries land's 4 forward."""
+    repo, wave_path = _repo(tmp_path, {})
+    _run_wave(wave_path)
+    _dead_after_one_pass(monkeypatch)
+    monkeypatch.setattr(wave, "plan", lambda *a, **k: 0)
+    monkeypatch.setattr(wave_launch, "launch", lambda *a, **k: 0)
+    monkeypatch.setattr(wave_launch, "status", lambda *a, **k: "lane table")
+    monkeypatch.setattr(wave_assemble, "assemble", lambda *a, **k: 0)
+    monkeypatch.setattr(wave_review, "review", lambda *a, **k: "review_failed")
+    land_calls: list[str] = []
+    monkeypatch.setattr(
+        wave_review,
+        "land",
+        lambda *a, **k: land_calls.append("land") or 4,
+    )
+
+    exit_code = wave_run.run(
+        repo,
+        yes=True,
+        sleep_fn=_bounded_sleep(),
+        clock=_rising_clock(),
+    )
+
+    assert land_calls == ["land"]
+    assert exit_code == 4
 
 
 def test_run_interrupt_terminates_lane_groups(
