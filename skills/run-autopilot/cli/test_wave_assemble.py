@@ -347,6 +347,55 @@ def test_checks_failure_undoes_the_lane_merge_and_keeps_it(
     ]
 
 
+def test_merge_lane_clears_stale_conflict_paths_before_a_later_checks_failed(
+    tmp_path: Path,
+) -> None:
+    # A lane can conflict on one assembly attempt, get retried after the
+    # conflict is resolved by hand, and fail release-checks on the retry
+    # instead. The first attempt's conflict_paths must not survive into the
+    # second attempt's differently-failed outcome.
+    attempt = {"n": 1}
+
+    def run_git(
+        args: list[str],
+        cwd: Path | None = None,
+        check: bool = True,
+    ) -> subprocess.CompletedProcess:
+        if args[0] == "rev-parse":
+            return subprocess.CompletedProcess(args, 0, "deadbeef\n", "")
+        if args[0] == "rebase" and args[1] not in ("--abort", "--continue"):
+            # Attempt 1's rebase conflicts; attempt 2's rebase lands cleanly.
+            returncode = 1 if attempt["n"] == 1 else 0
+            return subprocess.CompletedProcess(args, returncode, "", "")
+        if args[0] == "diff":
+            return subprocess.CompletedProcess(
+                args, 0, "src/alpha.py\nsrc/zeta.py\n", "",
+            )
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    def run_checks(cwd: Path) -> subprocess.CompletedProcess:
+        return subprocess.CompletedProcess(["release-checks"], 3, "", "boom")
+
+    lane = {"branch": "wave/x/lane-l2", "worktree": str(tmp_path / "worktree")}
+    assembly = tmp_path / "assembly"
+
+    first = wave_assemble.merge_lane(
+        assembly, lane, run_git=run_git, run_checks=run_checks,
+    )
+    assert first == "conflict"
+    assert lane["conflict_paths"] == ["src/alpha.py", "src/zeta.py"]
+
+    attempt["n"] = 2
+    second = wave_assemble.merge_lane(
+        assembly, lane, run_git=run_git, run_checks=run_checks,
+    )
+    assert second == "checks_failed"
+    # Proves the checks_failed branch was actually reached, not just that
+    # conflict_paths happens to be absent for an unrelated reason.
+    assert lane["conflict_detail"].startswith("release-checks exit 3"), lane
+    assert lane.get("conflict_paths") is None, lane
+
+
 @pytest.mark.parametrize("next_phase", ["work", "review"])
 def test_unfinished_lane_is_skipped_not_merged(
     tmp_path: Path,

@@ -61,6 +61,20 @@ def test_summary_names_every_prd_with_its_lane_and_outcome() -> None:
     assert "- 00218-qux-v1.md: Wave 202609261200, lane l2, backlog" in text
 
 
+def test_summary_tolerates_a_wave_with_no_prds_key_at_all() -> None:
+    # Not "prds": [] - the key is entirely absent, as a wave dict assembled
+    # from a partial load or an older wave.json might arrive.
+    lanes = [_lane("l1", ["00215-foo-v1.md"])]
+    without_key = _wave(lanes=lanes)
+    del without_key["prds"]
+    with_empty_list = _wave(lanes=lanes, prds=[])
+    text = wave_assemble.summary(without_key, [], [])
+    # Missing key and an explicit empty list must render identically: no
+    # per-PRD lines, just the section heading with nothing under it.
+    assert text == wave_assemble.summary(with_empty_list, [], [])
+    assert "## PRDs" in text
+
+
 # ── summary: conflict records ────────────────────────────────────────────
 
 
@@ -319,3 +333,19 @@ def test_summary_totals_the_sessions_wall_hours_and_captured_cost(
     assert totals in text, text
     for token in absent:
         assert token not in text, text
+
+
+# ── _totals: edge cases ──────────────────────────────────────────────────
+
+
+def test_totals_treats_an_explicit_null_wall_secs_as_zero() -> None:
+    # An explicit `None` (as opposed to the key being absent, or 0) must
+    # contribute nothing to the wall-hours total, same as the other two.
+    rows = [
+        {"wall_secs": 3600},
+        {"wall_secs": None},
+        {"wall_secs": 0},
+        {},
+    ]
+    result = wave_assemble._totals(rows)
+    assert result == "totals: 4 sessions, 1.00 wall hours, $0.00 captured cost"

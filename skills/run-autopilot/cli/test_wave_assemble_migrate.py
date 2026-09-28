@@ -511,3 +511,50 @@ def test_rerun_report_still_names_a_prd_outside_the_lane_roster(
         # Only the lane that held it may be credited with it: reading the main
         # checkout back is not remembering what each lane held.
         assert f"- {held_prd}: Wave {wave_id}, lane l1," not in prds, (run, prds)
+
+
+# ── _migrate_jsonl and _wave_rows: a blank line in the file ──────────────
+
+
+def test_migrate_jsonl_skips_a_blank_or_whitespace_only_line(
+    tmp_path: Path,
+) -> None:
+    # A realistic artifact of an interrupted append to a file long-running
+    # loops write to: the well-formed lines around it must still land.
+    lane_ap = tmp_path / "lane_ap"
+    main_ap = tmp_path / "main_ap"
+    lane_ap.mkdir()
+    main_ap.mkdir()
+    rows = [
+        {"prd": "00001-a.md", "wall_secs": 900},
+        {"prd": "00002-b.md", "wall_secs": 60},
+    ]
+    text = "\n".join([json.dumps(rows[0]), "", "   ", json.dumps(rows[1])]) + "\n"
+    (lane_ap / "loop-metrics.jsonl").write_text(text, encoding="utf-8")
+    wave_assemble._migrate_jsonl(lane_ap, main_ap, {"lane": "l1", "wave": "w1"})
+    migrated = _rows(main_ap / "loop-metrics.jsonl")
+    assert len(migrated) == 2, migrated
+    for row, before in zip(migrated, rows, strict=True):
+        assert {key: row[key] for key in before} == before, row
+        assert (row["lane"], row["wave"]) == ("l1", "w1"), row
+
+
+def test_wave_rows_skips_a_blank_or_whitespace_only_line(tmp_path: Path) -> None:
+    main = tmp_path / "main"
+    ap_dir = main / _AP
+    ap_dir.mkdir(parents=True)
+    rows = [
+        {"wave": "w1", "wall_secs": 900},
+        {"wave": "w2", "wall_secs": 60},
+        {"wave": "w1", "wall_secs": 300},
+    ]
+    text = (
+        "\n".join(
+            [json.dumps(rows[0]), "", json.dumps(rows[1]), "   ", json.dumps(rows[2])],
+        )
+        + "\n"
+    )
+    (ap_dir / "loop-metrics.jsonl").write_text(text, encoding="utf-8")
+    # Every well-formed line is still processed and the wave-id filter still
+    # applies: only the blank/whitespace line is skipped, nothing else changes.
+    assert wave_assemble._wave_rows(main, "w1") == [rows[0], rows[2]]
