@@ -115,12 +115,12 @@ def summary(wave: dict, rows: list[dict], records: list[dict]) -> str:
         lines.append("(none)")
     lines += ["", "## Integrator notes"]
     notes = [
-        (note["sha"], note["text"])
+        (each_lane["name"], note["sha"], note["text"])
         for each_lane in wave["lanes"]
         for note in (each_lane.get("integrator_notes") or [])
     ]
     if notes:
-        lines += [f"- {sha}: {text}" for sha, text in notes]
+        lines += [f"- {lane} {sha}: {text}" for lane, sha, text in notes]
     else:
         lines.append("(none)")
     return "\n".join(lines) + "\n"

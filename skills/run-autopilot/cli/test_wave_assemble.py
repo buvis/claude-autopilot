@@ -172,14 +172,17 @@ def test_summary_lists_integrator_trailers() -> None:
     )
     text = wave_assemble.summary(wave, [], [])
     heading_index = text.index("## Integrator notes")
-    for sha, note_text in (
-        ("abc1234", "Resolved import order in foo.py"),
-        ("def5678", "Kept both docstring edits"),
-        ("aaa9999", "Dropped a duplicate test case"),
+    for lane, sha, note_text in (
+        ("l1", "abc1234", "Resolved import order in foo.py"),
+        ("l1", "def5678", "Kept both docstring edits"),
+        ("l2", "aaa9999", "Dropped a duplicate test case"),
     ):
-        assert sha in text
-        assert note_text in text
-        assert text.index(note_text) > heading_index
+        line = f"- {lane} {sha}: {note_text}"
+        assert line in text, text
+        assert text.index(line) > heading_index
+    # Would fail if the lane names were swapped between notes.
+    assert "- l2 abc1234: Resolved import order in foo.py" not in text
+    assert "- l1 aaa9999: Dropped a duplicate test case" not in text
 
 
 def test_summary_shows_none_when_no_integrator_notes() -> None:
