@@ -1,11 +1,24 @@
 """Assembly-review PRD stub: `stub_text` renders the body and `review_paths`
 computes the diff-scope path list, both from an already-assembled wave dict
 (`wave.json` after `wave_assemble.assemble` has populated `wave["assembly"]`).
+`seed_state` seeds the assembly worktree's state.json at review, and `review`
+runs one loop there and records its outcome in wave.json.
 """
 
 from __future__ import annotations
 
-from cli.wave import WAVE_APPEND_ONLY
+import json
+import os
+import shutil
+import subprocess
+from collections.abc import Callable
+from pathlib import Path
+
+from cli.wave import WAVE_APPEND_ONLY, load, locked, save
+from cli.wave_launch import _SPAWN_CMD, CLI_MAIN_PATH
+
+_STATECTL = Path(__file__).resolve().parent.parent / "scripts" / "statectl.py"
+_PINNED_PLUGINS = ("aegis@buvis-plugins", "warden@buvis-plugins")
 
 
 def review_paths(wave: dict) -> list[str]:
@@ -121,3 +134,124 @@ def stub_text(wave: dict) -> str:
         *_stub_test_strategy(merged),
     ]
     return "\n".join(lines)
+
+
+def _stub_name(wave: dict) -> str:
+    return f"{wave['id']}-wave-assembly-v1.md"
+
+
+def _run_cli(argv: list[str]) -> subprocess.CompletedProcess:
+    return subprocess.run(argv, capture_output=True, text=True, check=False)
+
+
+def seed_state(
+    state_path: Path,
+    wave: dict,
+    plugins_json: Path,
+    run_cli: Callable[[list[str]], subprocess.CompletedProcess] = _run_cli,
+) -> None:
+    """Seed `state_path` as a build whose tasks are done (next phase: review)
+    for the assembly stub PRD, written into prds/wip/. Raises RuntimeError on
+    a failed step; a retry skips init once state.json exists."""
+    pm = state_path.parent.parent
+    for folder in ("backlog", "wip", "done", "hold"):
+        (pm / "prds" / folder).mkdir(parents=True, exist_ok=True)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    stub = _stub_name(wave)
+    (pm / "prds" / "wip" / stub).write_text(stub_text(wave), encoding="utf-8")
+    installed = json.loads(plugins_json.read_text(encoding="utf-8"))
+    batch = {
+        "id": wave["id"],
+        "mode": "autopilot",
+        "completed_prds": [],
+        "plugin_versions": {
+            name: installed["plugins"][name][0]["version"] for name in _PINNED_PLUGINS
+        },
+    }
+    state = str(state_path)
+    steps = [] if state_path.exists() else [
+        ["python3", str(CLI_MAIN_PATH), "init", "--state", state, "--prd", stub]
+    ]
+    steps += [
+        ["python3", str(_STATECTL), state, "set", key, json.dumps(value)]
+        for key, value in (
+            ("work_start_sha", wave["base_sha"]),
+            ("cycle", 1),
+            ("rework_cap", 2),
+            ("batch", batch),
+        )
+    ]
+    steps.append(
+        ["python3", str(CLI_MAIN_PATH), "phase-done", "--state", state, "--outcome", "tasks_done"]
+    )
+    for argv in steps:
+        result = run_cli(argv)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"seed step `{' '.join(argv[2:])}` exited {result.returncode}:"
+                f" {result.stderr.strip()}"
+            )
+
+
+def _check_reviewable(repo: Path, wave: dict) -> Path:
+    """The assembly worktree; ValueError when the wave is not assembled, the
+    worktree is gone, or `repo` has any uncommitted change."""
+    if "assembly" not in wave:
+        raise ValueError("wave has no assembly - run `wave assemble` first")
+    worktree = Path(wave["assembly"]["worktree"])
+    if not worktree.is_dir():
+        raise ValueError(f"assembly worktree {worktree} is gone")
+    dirty = subprocess.run(
+        ["git", "-C", str(repo), "status", "--porcelain"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    if dirty:
+        raise ValueError(f"{repo} has uncommitted changes:\n{dirty}")
+    return worktree
+
+
+def review(
+    repo: Path, wave: dict, spawn_fn: Callable[..., subprocess.Popen] = subprocess.Popen
+) -> str:
+    """Review the assembly: seed its worktree at review, run one loop there to
+    exit, and record the outcome in wave.json - converged when the stub PRD
+    ends in done/, review_failed when it ends in hold/ or stays in wip/."""
+    worktree = _check_reviewable(repo, wave)
+    pm = worktree / "docs/dev/project-management"
+    seed_state(
+        pm / "autopilot/state.json",
+        wave,
+        Path.home() / ".claude/plugins/installed_plugins.json",
+    )
+    (pm / "autopilot/review-paths").write_text(
+        "".join(f"{path}\n" for path in review_paths(wave)), encoding="utf-8"
+    )
+    meta = repo / "docs/dev/project-management/meta"
+    if meta.exists():
+        shutil.copytree(meta, pm / "meta", dirs_exist_ok=True)
+
+    skip = ("_AUTOPILOT_LOOP", "_AUTOPILOT_REVIEW_SLOTS_DIR", "_AUTOPILOT_REVIEW_SLOTS")
+    env = {k: v for k, v in os.environ.items() if k not in skip}
+    env["_AUTOPILOT_TRACON_CHILD"] = "1"
+    with open(pm / "autopilot/wrapper.log", "a") as log:
+        loop = spawn_fn(
+            ["bash", "-c", _SPAWN_CMD, str(CLI_MAIN_PATH)],
+            cwd=str(worktree),
+            env=env,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    loop.wait()
+
+    done = (pm / "prds/done" / _stub_name(wave)).exists()
+    outcome = "converged" if done else "review_failed"
+    wave_path = repo / "docs/dev/project-management/autopilot/wave.json"
+    with locked(wave_path):
+        current = load(wave_path)
+        current["status"] = outcome
+        save(wave_path, current)
+    return outcome
