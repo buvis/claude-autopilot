@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **run-autopilot**: working documents moved from `dev/local/` to `docs/dev/project-management/` (tracked) and scratch from `dev/local/tmp/` to `docs/dev/tmp/`; hooks, the `autopilot` CLI, skills and references now read and write only the new paths, so move an existing repo's `dev/local/` tree before running this version
+- **run-autopilot**: `docs/dev/project-management/` is tracked and never age-purged; the drained loop's cleanup now runs `purge-devtmp`, which touches only `docs/dev/tmp/`, instead of `purge-devlocal`, and the codex probe no longer needs a `-d` grant for the store
 
 ### Fixed
 

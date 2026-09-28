@@ -91,8 +91,8 @@ def test_marker_table_names_critical_on_master_writer_consumer_and_restore() -> 
     )
     what = "name the journal as the restore source (restored from/via/by it, or it is/as the source)"
     _assert_matches(row, _STATE_SCHEMA, where, restore, what)
-    what = "warn that purge-devlocal's 14-day rule may trash the marker"
-    _assert_matches(row, _STATE_SCHEMA, where, r"purge-devlocal|\b14\b", what)
+    what = "say the marker is tracked work-management state"
+    _assert_matches(row, _STATE_SCHEMA, where, r"tracked", what)
     _assert_no_negation(
         row,
         _STATE_SCHEMA,
@@ -102,7 +102,7 @@ def test_marker_table_names_critical_on_master_writer_consumer_and_restore() -> 
     )
 
 
-def test_custody_journal_section_lists_events_compaction_gc_exemption_and_locator() -> (
+def test_custody_journal_section_lists_events_compaction_durability_and_locator() -> (
     None
 ):
     journal = _h2_section(_SCHEMA_TEXT, _STATE_SCHEMA, _JOURNAL_HEADING)
@@ -125,9 +125,9 @@ def test_custody_journal_section_lists_events_compaction_gc_exemption_and_locato
     _assert_matches(prose, _STATE_SCHEMA, prose_where, recorded, what)
     # One sentence = no `. ` in between (`custody.jsonl` stays inside one).
     within = r"(?:(?!\. )[^\n]){0,200}"
-    gc_exempt = rf"(?:GC-exempt|purge-devlocal){within}ledger/|ledger/{within}(?:GC-exempt|purge-devlocal)"
-    what = "state the GC exemption in the same sentence as `ledger/`"
-    _assert_matches(prose, _STATE_SCHEMA, prose_where, gc_exempt, what)
+    durable = rf"(?:durable|tracked){within}ledger/|ledger/{within}(?:durable|tracked)"
+    what = "state the ledger's durability in the same sentence as `ledger/`"
+    _assert_matches(prose, _STATE_SCHEMA, prose_where, durable, what)
     what = "say the journal is compacted to the still-pending rows"
     _assert_matches(
         prose, _STATE_SCHEMA, prose_where, r"(?i)compact\w*[^\n]{0,120}pending", what

@@ -23,10 +23,10 @@ _SEVEN_HOOKS = {
     "validate_commit_msg.py": ("aegis", "validate_commit_msg.py", "validate"),
     "_common.py": ("aegis", "_common.py", "common"),
     "protect_config.py": ("aegis", "protect_config.py", "protect"),
-    "block_devlocal_redirects.py": (
+    "block_working_document_redirects.py": (
         "aegis",
-        "block_devlocal_redirects.py",
-        "block_devlocal",
+        "block_working_document_redirects.py",
+        "block_working_document",
     ),
     "block-suppression-markers.py": (
         "aegis",

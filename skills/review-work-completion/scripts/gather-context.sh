@@ -41,7 +41,7 @@ mkdir -p "$TMP_DIR"
 # Track all created files
 CREATED_FILES=()
 # Reuse the caller's cycle id (review-prd-{id}.md) so review debris is
-# PRD-linked and dies with its PRD in purge-devlocal; fall back to epoch-pid.
+# PRD-linked so purge-devtmp can preserve live work; fall back to epoch-pid.
 _ID="$(date +%s)-$$"
 if [[ -n "$PRD_FILE" ]]; then
   _BASE="$(basename "$PRD_FILE" .md)"

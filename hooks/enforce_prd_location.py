@@ -6,18 +6,13 @@ Two layers, one gate (merged 2026-08-23):
    `docs/dev/project-management/prds/` only, never at repo root (Edit/Write/MultiEdit + Bash).
    Replaces the old enforce-prd-location.sh / enforce-prd-location-bash.sh
    pair; branches on `tool_name`.
-2. The docs/dev/project-management layout contract (aegis rules/working-documents.md) holds at
-   write time: root holds no files (named keepers live in meta/), new
-   top-level dirs are forbidden
-   (workspaces go under tmp/), .trash/ is GC-owned, and files directly in
-   prds/ must sit in a lifecycle subdir. File tools only - aegis's
-   block_devlocal_redirects.py funnels shell redirects into the Write tool,
-   which lands here; `mv`/`cp` into docs/dev/project-management via Bash bypasses both gates
-   (warden owns Bash; accepted gap).
-
-KEEP_NAMES and KNOWN_DIRS mirror purge_devlocal.py; the test suite asserts
-the two stay in sync rather than importing across trees. The purge-devlocal
-GC reclaims debris after the fact; this hook stops it landing.
+2. The tracked docs/dev/project-management layout contract (aegis
+   rules/working-documents.md) holds at write time: root holds no files
+   (named keepers live in meta/), new top-level dirs are forbidden, and files
+   directly in prds/ must sit in a lifecycle subdir. Temporary assets belong
+   under the globally ignored docs/dev/tmp/ tree. File tools only - aegis's
+   redirect hook funnels shell redirects into the Write tool, which lands
+   here; `mv`/`cp` via Bash is owned by warden.
 """
 
 import os
@@ -30,8 +25,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import allow, block, read_input, resolve_toplevel
 
 LIFECYCLE_DIRS = ("backlog", "wip", "hold", "done")
-STORE_PARTS = ("docs", "dev", "project-management")
-
 KEEP_NAMES = {
     "project-capsule.md",
     "decisions.md",
@@ -46,7 +39,6 @@ KNOWN_DIRS = {
     "designs",
     "reviews",
     "plans",
-    "tmp",
     "autopilot",
     "meta",
     "discovery",
@@ -107,10 +99,9 @@ keepers ({keepers}) live in `docs/dev/project-management/meta/`, everything else
 - Throwaway output -> `docs/dev/tmp/{name}` (prefix the 5-digit PRD number
   when one applies, so it dies with the PRD).
 - Durable artifact -> a curated dir (discovery/, notes/, audit-results/, ...).
-- Genuinely a new keeper -> add it to KEEP_NAMES in BOTH
-  ~/.claude/hooks/enforce_prd_location.py and
-  ~/.claude/skills/purge-devlocal/scripts/purge_devlocal.py, then write it
-  under `docs/dev/project-management/meta/`.
+- Genuinely a new keeper -> add it to KEEP_NAMES in
+  ~/.claude/hooks/enforce_prd_location.py, then write it under
+  `docs/dev/project-management/meta/`.
 - Editing an existing stray? `mv` it under docs/dev/tmp/ first, then edit."""
 
 
@@ -120,7 +111,7 @@ BLOCKED: `meta/{name}` - docs/dev/project-management/meta/ holds ONLY the named 
 ({", ".join(sorted(KEEP_NAMES))}).
 
 Throwaway output goes to `docs/dev/tmp/`, durable artifacts to a curated
-dir. A genuinely new keeper gets added to KEEP_NAMES (hook + GC) first."""
+dir. A genuinely new keeper gets added to KEEP_NAMES first."""
 
 
 def _foreign_msg(top: str) -> str:
@@ -135,9 +126,8 @@ applies). Curated content goes in an existing curated dir."""
 
 def _trash_msg() -> str:
     return """\
-BLOCKED: `.trash/` is owned by the purge-devlocal GC. Never write there by
-hand - run the purge-devlocal skill to trash files, or `mv` a file OUT to
-restore it."""
+BLOCKED: `.trash/` is temporary state and does not belong in tracked
+docs/dev/project-management/. Put disposable material under docs/dev/tmp/."""
 
 
 def _prds_root_msg(rel: str) -> str:
@@ -148,29 +138,18 @@ subdir (prds/backlog/, prds/wip/, prds/hold/, prds/done/).
 Not a PRD? Plans go in docs/dev/project-management/plans/ (PRD-numbered) or docs/dev/tmp/."""
 
 
-def _rel_in_devlocal(file_path: str) -> tuple[str, ...] | None:
-    """Store-relative parts of file_path when it targets a docs/dev/project-management store.
-
-    Matches both spellings of a store: a literal `docs/dev/project-management` path segment
-    (any repo), and the resolved symlink target of ~/.claude/docs/dev/project-management -
-    sessions write through either. Deliberately does NOT resolve() the given
-    path: resolving would erase the `docs/dev/project-management` segment of a symlinked store.
-    """
+def _rel_in_project_management(file_path: str) -> tuple[str, ...] | None:
+    """Return path parts below a docs/dev/project-management directory."""
     norm = os.path.normpath(os.path.expanduser(file_path))
     parts = Path(norm).parts
+    marker = ("docs", "dev", "project-management")
     for i in range(len(parts) - 2):
-        if parts[i : i + 3] == STORE_PARTS:
+        if parts[i : i + 3] == marker:
             return parts[i + 3 :]
-    target = os.path.realpath(str(Path.home() / ".claude" / "docs" / "dev" / "project-management"))
-    # realpath BOTH sides here (only here): the target is fully resolved, so
-    # the candidate must be too (/var vs /private/var on macOS).
-    real = os.path.realpath(norm)
-    if real.startswith(target + os.sep):
-        return Path(real[len(target) + 1 :]).parts
     return None
 
 
-def _check_devlocal_layout(rel: tuple[str, ...]) -> str | None:
+def _check_project_management_layout(rel: tuple[str, ...]) -> str | None:
     """Return a block reason if a store-relative path violates the layout."""
     top = rel[0]
     if len(rel) == 1:
@@ -206,16 +185,15 @@ def _check_file_path(file_path: str) -> str | None:
             rel_parts = ()
         if (
             rel_parts
-            and rel_parts[:4] != (*STORE_PARTS, "prds")
+            and rel_parts[:4] != ("docs", "dev", "project-management", "prds")
             and rel_parts[0] in LIFECYCLE_DIRS
         ):
             return _block_path_msg("/".join(rel_parts))
-    # Inside a docs/dev/project-management store (checked on the GIVEN path - resolving would
-    # erase the symlinked store's docs/dev/project-management segment), the layout contract
-    # decides the rest, including the prds lifecycle-subdir requirement.
-    rel = _rel_in_devlocal(file_path)
+    # Inside docs/dev/project-management, the layout contract decides the
+    # rest, including the prds lifecycle-subdir requirement.
+    rel = _rel_in_project_management(file_path)
     if rel:
-        return _check_devlocal_layout(rel)
+        return _check_project_management_layout(rel)
     return None
 
 
@@ -260,7 +238,7 @@ def _validate_bash_mode(data: dict) -> None:
             parts = PurePosixPath(candidate).parts
             if not parts:
                 continue
-            if parts[:4] == (*STORE_PARTS, "prds"):
+            if parts[:4] == ("docs", "dev", "project-management", "prds"):
                 continue
             if parts[0] in LIFECYCLE_DIRS and (
                 len(parts) > 1 or segment.endswith("/") or has_fs_mutator

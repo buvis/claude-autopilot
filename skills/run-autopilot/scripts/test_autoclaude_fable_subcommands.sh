@@ -140,7 +140,7 @@ _DIRS+=("$_STUB_LOOPS_DIR")
 
 # ── global stubs (win over external commands; defined AFTER source) ───────────
 # Never let a scenario touch the real machine: no tracon TUI here, and no real
-# sysctl/pgrep/notify.py/purge_devlocal.py either — but those four are NOT
+# sysctl/pgrep/notify.py/purge_devtmp.py either — but those four are NOT
 # interceptable from this block. The loop body is a separate python3 process, and
 # a bash function is not on a subprocess's PATH, so the stubs for them live
 # per-sandbox instead: bin/ executables for the bare-name calls, and a sandboxed
@@ -269,7 +269,7 @@ EOF
 
 write_stub_purge() {
   local dir="$1"
-  cat >"$dir/.home/.claude/skills/purge-devlocal/scripts/purge_devlocal.py" <<'EOF'
+  cat >"$dir/.home/.claude/skills/purge-devtmp/scripts/purge_devtmp.py" <<'EOF'
 import sys
 from pathlib import Path
 Path(__file__).with_name("purge-invocations.log").open("a").write(
@@ -289,12 +289,12 @@ make_sandbox() {
            "$SBOX/docs/dev/project-management/prds/backlog" \
            "$SBOX/bin" \
            "$SBOX/.home/.claude/hooks" \
-           "$SBOX/.home/.claude/skills/purge-devlocal/scripts"
+           "$SBOX/.home/.claude/skills/purge-devtmp/scripts"
   # $SBOX/.home is what run_sandboxed points $HOME at, so notify.py and
-  # purge_devlocal.py resolve onto the stubs above. autoclaude()/autopilot()
+  # purge_devtmp.py resolve onto the stubs above. autoclaude()/autopilot()
   # resolve their OWN entry point through a live $HOME too, so the one subtree
   # that must stay real is symlinked back to it — without this the loop never
-  # starts at all. It is a sibling of hooks/ and purge-devlocal/, so there is no
+  # starts at all. It is a sibling of hooks/ and purge-devtmp/, so there is no
   # collision, and `rm -rf` unlinks a symlink instead of recursing, so the
   # cleanup trap cannot reach the real skill tree.
   ln -s "$SKILL_ROOT" "$SBOX/.home/.claude/skills/run-autopilot"
@@ -375,7 +375,7 @@ run_sandboxed() {
     export _AUTOPILOT_LOOPS_DIR="$_STUB_LOOPS_DIR"
     PATH="$_rs_dir/bin:$PATH"
     # Redirects the loop's Path.home()-derived script paths (notify.py,
-    # purge_devlocal.py) onto the sandbox stubs. make_sandbox symlinks
+    # purge_devtmp.py) onto the sandbox stubs. make_sandbox symlinks
     # .claude/skills/run-autopilot back to the real tree so autoclaude() can
     # still find its own entry point through this $HOME.
     HOME="$_rs_dir/.home"
@@ -801,10 +801,10 @@ assert_mentions "$L7: pgrep stub was called with the real orphan-scan args" \
   || FAIL "$L7: notify stub was hit" "the drain notification never reached the sandbox notify stub"
 assert_mentions "$L7: notify stub was called with the real send flag" \
   "$SBOX_7/.home/.claude/hooks/notify-invocations.log" "--send"
-[ -s "$SBOX_7/.home/.claude/skills/purge-devlocal/scripts/purge-invocations.log" ] \
-  || FAIL "$L7: purge stub was hit" "run_purge never reached the sandbox purge_devlocal stub"
+[ -s "$SBOX_7/.home/.claude/skills/purge-devtmp/scripts/purge-invocations.log" ] \
+  || FAIL "$L7: purge stub was hit" "run_purge never reached the sandbox purge_devtmp stub"
 assert_mentions "$L7: purge stub was called with the real apply flag" \
-  "$SBOX_7/.home/.claude/skills/purge-devlocal/scripts/purge-invocations.log" "--apply"
+  "$SBOX_7/.home/.claude/skills/purge-devtmp/scripts/purge-invocations.log" "--apply"
 # _AUTOPILOT_LOOPS_DIR must be EXPORTED (run_sandboxed, above) so the loop
 # body — a real python3 child — inherits it; unexported, it falls back to
 # Path.home()/.claude/autopilot-loops under this scenario's sandboxed $HOME
@@ -1595,8 +1595,8 @@ assert_no_loop "$L27: no loop session launched" "$SBOX_27"
 # and mv's own exit code is 0, so a helper that only checks "does
 # backlog/<prd> exist afterwards" (the fix scenario 18 forced) is STILL
 # fooled here: the file exists, it is just the WRONG one now, and the
-# original is gone for good (docs/dev/project-management/ is gitignored, nothing to recover
-# from). The correct behaviour refuses the un-park before ever touching the
+# original is gone for good (the archived state has already been replaced).
+# The correct behaviour refuses the un-park before ever touching the
 # destination: the decision still stands (status approved, decided_at kept),
 # the call exits 2, the pre-existing backlog/<prd> file is left byte-for-byte
 # as it was, the parked PRD is still reachable in hold/, and stderr names the

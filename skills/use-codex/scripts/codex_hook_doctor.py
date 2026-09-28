@@ -21,7 +21,10 @@ KNOWN_HOOKS: dict[str, tuple[str, str]] = {
     "validate_commit_msg.py": ("aegis", "hooks/validate_commit_msg.py"),
     "_common.py": ("aegis", "hooks/_common.py"),
     "protect_config.py": ("aegis", "hooks/protect_config.py"),
-    "block_devlocal_redirects.py": ("aegis", "hooks/block_devlocal_redirects.py"),
+    "block_working_document_redirects.py": (
+        "aegis",
+        "hooks/block_working_document_redirects.py",
+    ),
     "block-suppression-markers.py": ("aegis", "hooks/block_suppression_markers.py"),
     "gateguard-fact-force.py": ("aegis", "hooks/gateguard_fact_force.py"),
     "enforce_prd_location.py": ("autopilot", "hooks/enforce_prd_location.py"),

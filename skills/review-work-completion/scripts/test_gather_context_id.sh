@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Regression: gather-context.sh reuses the caller's cycle id from
 # review-prd-{id}.md so tmp review debris is PRD-linked (and dies with its
-# PRD in purge-devlocal) instead of carrying an unlinkable epoch-pid name.
+# PRD in purge-devtmp) instead of carrying an unlinkable epoch-pid name.
 set -u
 
 PASS() { echo "PASS: $1"; }

@@ -479,7 +479,7 @@ def _write_report(
     prd_names: dict[str, set[str]],
 ) -> None:
     """Rewrite the wave's durable report whole, and mirror it into `ledger/` -
-    the copy `purge-devlocal` never trims. `prds` is built here and nowhere
+    the copy `purge-devtmp` never trims. `prds` is built here and nowhere
     else: `summary` is pure, so it cannot see which folder each PRD reached."""
     entries = [
         {"prd": prd, "lane": lane["name"], "label": label}

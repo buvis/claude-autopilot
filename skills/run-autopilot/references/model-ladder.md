@@ -165,7 +165,7 @@ and what each `fablectl` exit means — lives in `references/recovery.md`
   is a remote-API CLI with negligible resident memory, so a pressure verdict
   never reroutes away from codex.
 - **Hook coverage**: codex's `Bash` matcher (`~/.codex/hooks.json`) registers
-  four hooks — `validate_commit_msg.py`, `block_devlocal_redirects.py`,
+  four hooks — `validate_commit_msg.py`, `block_working_document_redirects.py`,
   `enforce_prd_location.py`, `gateguard-fact-force.py`. A Claude implementor's
   `Bash` calls on this host are additionally screened by aegis's
   `prefer_tools.py`, `block_poll_loops.py`, and `block_force_push.py`,

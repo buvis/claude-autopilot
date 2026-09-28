@@ -9,7 +9,7 @@ toward not-running the PRD.
 
 The last class is the one real fixture: the command stamped on the live
 `hold/00110` PRD, proven unmet against an empty reviews tree and met against
-three synthetic ones. That PRD lives under docs/dev/project-management (gitignored), so the
+three synthetic ones. That PRD lives under tracked docs/dev/project-management, so the
 command string is pinned HERE and the hold file mirrors it.
 """
 

@@ -22,9 +22,9 @@ PURGE_SCRIPT = (
     Path.home()
     / ".claude"
     / "skills"
-    / "purge-devlocal"
+    / "purge-devtmp"
     / "scripts"
-    / "purge_devlocal.py"
+    / "purge_devtmp.py"
 )
 
 
@@ -32,7 +32,7 @@ PURGE_SCRIPT = (
 
 
 def run_purge(repo: Path) -> None:
-    """`purge_devlocal.py --repo <repo> --apply || true`."""
+    """`purge_devtmp.py --repo <repo> --apply || true`."""
     try:
         subprocess.run(
             [sys.executable, str(PURGE_SCRIPT), "--repo", str(repo), "--apply"],

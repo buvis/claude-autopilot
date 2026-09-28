@@ -570,7 +570,7 @@ def _landable(
     # .gitconfig, so a real commit here needs its own identity.
     _git(worktree, "config", "user.email", "wave-test@example.com")
     _git(worktree, "config", "user.name", "Wave Test")
-    # docs/dev/project-management/ is gitignored in this fixture repo (see
+    # docs/dev/tmp/ is gitignored in this fixture repo (see
     # `_check_reviewable`'s dirty-check tests), so the stub needs --force.
     _git(worktree, "add", "--force", str(stub))
     _git(worktree, "commit", "-m", "test: complete assembly review")

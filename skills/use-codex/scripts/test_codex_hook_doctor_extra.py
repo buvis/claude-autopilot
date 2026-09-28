@@ -32,7 +32,7 @@ from test_codex_hook_doctor_repair import _run_repair_cli
 def test_check_resolves_new_aegis_rooted_known_hooks_against_aegis_root(
     tmp_path: Path,
 ) -> None:
-    # protect_config.py, block_devlocal_redirects.py,
+    # protect_config.py, block_working_document_redirects.py,
     # block-suppression-markers.py, and gateguard-fact-force.py are all
     # KNOWN_HOOKS entries that resolve against aegis_root — a
     # byte-identical canonical source under aegis_root/hooks/ must verdict
@@ -46,7 +46,7 @@ def test_check_resolves_new_aegis_rooted_known_hooks_against_aegis_root(
 
     canonical_names = {
         "protect_config.py": "protect_config.py",
-        "block_devlocal_redirects.py": "block_devlocal_redirects.py",
+        "block_working_document_redirects.py": "block_working_document_redirects.py",
         "block-suppression-markers.py": "block_suppression_markers.py",
         "gateguard-fact-force.py": "gateguard_fact_force.py",
     }
