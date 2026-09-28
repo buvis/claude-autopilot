@@ -30,6 +30,12 @@ def stub_text(wave: dict) -> str:
     def label(lane: dict) -> str:
         return f"{lane['name']} ({', '.join(lane['prds'])})"
 
+    def keep_both(lane: dict) -> str:
+        notes = lane.get("integrator_notes") or []
+        if not notes:
+            return "no keep-both resolutions recorded"
+        return ", ".join(note["text"] for note in notes)
+
     lines = [
         "---",
         "catchup: skip",
@@ -40,23 +46,45 @@ def stub_text(wave: dict) -> str:
         " interactions found by the assembly review",
         "---",
         "",
-        f"# Wave {wave['id']} assembly review",
+        f"# Wave {wave['id']} assembly",
+        "",
+        "## Overview",
+        "",
+        *[f"- {label(each)}" for each in merged],
         "",
         f"Diff range: {wave['base_sha']}..{assembly['head_sha']}",
-        "",
-        "Merged lanes:",
-        *[f"- {label(each)}" for each in merged],
         "",
         "Diff scope:",
         *[f"- {path}" for path in review_paths(wave)],
         "",
+        "## Functional Decomposition",
+        "",
+        "### Capability: Assembly",
+        "",
         "#### Feature: Lane merges",
+        "",
+        "Description:",
+        *[f"- {each['name']}: {', '.join(each['prds'])}" for each in merged],
+        "",
+        "Inputs/Outputs/Behavior:",
+        *[f"- {each['name']}: {keep_both(each)}" for each in merged],
+        "",
+        "## Implementation Phases",
         "",
         "### Phase 0: Assembly",
         "",
         *[
             f"- [x] Merge lane {label(each)} - Acceptance: release-checks green"
             for each in merged
+        ],
+        "",
+        "## Test Strategy",
+        "",
+        "- bash dev/bin/release-checks",
+        *[
+            f"- See {prd}'s own Test Strategy"
+            for each in merged
+            for prd in each["prds"]
         ],
         "",
     ]
