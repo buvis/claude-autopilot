@@ -335,7 +335,8 @@ def _cycle_count(worktree: Path) -> int:
 
 def _append_summary_line(repo: Path, wave_id: str, line: str) -> None:
     """Append `line` to the wave's report and ledger markdown files, creating
-    each (and its parent folder) on first use."""
+    each (and its parent folder) on first use. Skips a file where `line`
+    already appears verbatim, so a retry does not duplicate it."""
     for folder in ("reports", "ledger"):
         path = (
             repo
@@ -345,6 +346,8 @@ def _append_summary_line(repo: Path, wave_id: str, line: str) -> None:
         )
         path.parent.mkdir(parents=True, exist_ok=True)
         existing = path.read_text(encoding="utf-8") if path.exists() else ""
+        if line in existing.splitlines():
+            continue
         path.write_text(existing + line + "\n", encoding="utf-8")
 
 
@@ -358,21 +361,25 @@ def _land_cleanup(
     "done": drop the assembly worktree (refusing over uncommitted changes)
     and its branch, remove wave-slots, and archive wave.json into reports/."""
     worktree = Path(wave["assembly"]["worktree"])
-    migrated_stub = f"docs/dev/project-management/prds/done/{_stub_name(wave)}"
-    dirty = run_git(
-        [
-            "-C",
-            str(worktree),
-            "status",
-            "--porcelain",
-            "--",
-            f":(exclude){migrated_stub}",
-        ],
-    ).stdout
-    if dirty.strip():
-        raise ValueError(f"{worktree} has uncommitted changes:\n{dirty}")
-    run_git(["-C", str(repo), "worktree", "remove", "--force", str(worktree)])
-    run_git(["-C", str(repo), "branch", "-d", f"wave/{wave['id']}/assembly"])
+    if worktree.is_dir():
+        migrated_stub = f"docs/dev/project-management/prds/done/{_stub_name(wave)}"
+        dirty = run_git(
+            [
+                "-C",
+                str(worktree),
+                "status",
+                "--porcelain",
+                "--",
+                f":(exclude){migrated_stub}",
+            ],
+        ).stdout
+        if dirty.strip():
+            raise ValueError(f"{worktree} has uncommitted changes:\n{dirty}")
+        run_git(["-C", str(repo), "worktree", "remove", "--force", str(worktree)])
+
+    branch = f"wave/{wave['id']}/assembly"
+    if run_git(["-C", str(repo), "branch", "--list", branch]).stdout.strip():
+        run_git(["-C", str(repo), "branch", "-d", branch])
 
     slots = repo / "docs/dev/project-management/autopilot/wave-slots"
     if slots.exists():
@@ -418,6 +425,24 @@ def _land_converged(
     return wave
 
 
+def _review_file(worktree: Path, wave: dict) -> Path | None:
+    """The stub's own `<stub-stem>-review-<n>.md` file in the assembly
+    worktree's reviews/ folder: the highest-numbered one, or the most
+    recently modified when numbering can't be compared numerically; None
+    when no review file exists."""
+    stem = _stub_name(wave).removesuffix(".md")
+    prefix = f"{stem}-review-"
+    matches = list(
+        (worktree / "docs/dev/project-management/reviews").glob(f"{prefix}*.md"),
+    )
+    if not matches:
+        return None
+    suffixes = [path.name[len(prefix) : -len(".md")] for path in matches]
+    if all(suffix.isdigit() for suffix in suffixes):
+        return max(matches, key=lambda path: int(path.name[len(prefix) : -len(".md")]))
+    return max(matches, key=lambda path: path.stat().st_mtime)
+
+
 def land(
     repo: Path,
     wave: dict,
@@ -442,11 +467,13 @@ def land(
 
     status = wave.get("status")
     if status == "review_failed":
-        _append_summary_line(
-            repo,
-            wave["id"],
-            "## Assembly review: review_failed, see no review file written",
+        review_file = _review_file(Path(wave["assembly"]["worktree"]), wave)
+        line = (
+            f"## Assembly review: review_failed, see {review_file}"
+            if review_file is not None
+            else "## Assembly review: review_failed, see no review file written"
         )
+        _append_summary_line(repo, wave["id"], line)
         return 4
     if status not in ("converged", "done"):
         raise ValueError(f"wave status {status!r} is not landable")
