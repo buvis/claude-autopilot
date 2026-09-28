@@ -241,10 +241,16 @@ def test_summary_opens_with_the_base_and_the_assembled_head(
     }
     text = wave_assemble.summary(wave, [], [])
     header = text[: text.index("## PRDs")]
-    # Each wave's own five values, and none of the other wave's: a header
-    # rendered from constants cannot serve both waves.
+    # Each value pinned to its own labelled line, not just present somewhere in
+    # the header: a summary() that swapped base_sha and head_sha between the
+    # "base" and "assembled head" lines would fail these two assertions even
+    # though both values still appear in the header.
+    assert f"# Wave {spec['id']} summary" in header, header
+    assert f"- base: {spec['base_branch']} @ {spec['base_sha']}" in header, header
+    assert f"- assembled head: {spec['branch']} @ {spec['head_sha']}" in header, header
+    # None of the other wave's values either: a header rendered from constants
+    # cannot serve both waves.
     for key in ("id", "base_branch", "base_sha", "branch", "head_sha"):
-        assert spec[key] in header, header
         assert other[key] not in header, header
 
 
@@ -267,16 +273,19 @@ def _cell(text: str, line: str, column: str) -> str:
 
 def test_summary_tables_each_lane_with_its_branch_status_and_batch() -> None:
     # Neither branch name carries its own lane's name, so a missing lane-name
-    # column cannot pass on the branch column's coat-tails; each lane's `paths`
-    # and `files` are disjoint, so neither column can be rendered from the other.
+    # column cannot pass on the branch column's coat-tails; each lane's `prds`,
+    # `paths` and `files` are disjoint, so neither column can be rendered from
+    # another lane's or another column's. l1 carries two of each, pinning the
+    # ", ".join(...) separator and element order; a join dropped for the first
+    # element alone, or one that reordered the list, would fail l1's asserts.
     wave = _wave(
         lanes=[
             _lane(
                 "l1",
-                ["00215-foo-v1.md"],
+                ["00215-foo-v1.md", "00219-quux-v1.md"],
                 branch="wave/202609261200/alpha",
-                paths=["cli/foo.py"],
-                files=["cli/renamed.py"],
+                paths=["cli/foo.py", "cli/qux.py"],
+                files=["cli/renamed.py", "cli/renamed2.py"],
                 batch_id="202609260900",
             ),
             _lane(
@@ -300,17 +309,18 @@ def test_summary_tables_each_lane_with_its_branch_status_and_batch() -> None:
 
     first = row("wave/202609261200/alpha")
     second = row("wave/202609261200/beta")
-    for token in ("l1", "00215-foo-v1.md", "assembled", "202609260900"):
+    for token in ("l1", "assembled", "202609260900"):
         assert token in first, first
-    for token in ("l2", "00216-bar-v1.md", "conflict", "202609261000"):
+    for token in ("l2", "conflict", "202609261000"):
         assert token in second, second
-    for line, path, changed in (
-        (first, "cli/foo.py", "cli/renamed.py"),
-        (second, "cli/bar.py", "cli/moved.py"),
-    ):
-        assert path in _cell(text, line, "paths"), line
-        assert changed in _cell(text, line, "files"), line
-        assert path not in _cell(text, line, "files"), line
+    # Exact cell contents: the join separator and element order are pinned,
+    # not just each element's presence somewhere in the row.
+    assert _cell(text, first, "prds") == "00215-foo-v1.md, 00219-quux-v1.md", first
+    assert _cell(text, first, "paths") == "cli/foo.py, cli/qux.py", first
+    assert _cell(text, first, "files") == "cli/renamed.py, cli/renamed2.py", first
+    assert _cell(text, second, "prds") == "00216-bar-v1.md", second
+    assert _cell(text, second, "paths") == "cli/bar.py", second
+    assert _cell(text, second, "files") == "cli/moved.py", second
 
 
 # ── summary: the totals ──────────────────────────────────────────────────
@@ -330,6 +340,16 @@ _THREE_SESSIONS = [
     {"prd": "00215-foo-v1.md", "wall_secs": 900, "cost_usd": 0.75},
     {"prd": "00215-foo-v1.md", "wall_secs": 0, "cost_usd": None},
 ]
+# Five sessions, 3500 wall seconds: not a multiple of 900, so the hours total
+# (0.9722... -> "0.97") pins actual rounding, not a round quarter-hour that a
+# lookup-table formula could special-case. Three captured costs (6.66).
+_FIVE_SESSIONS = [
+    {"prd": "00215-foo-v1.md", "wall_secs": 1000, "cost_usd": 1.11},
+    {"prd": "00215-foo-v1.md", "wall_secs": 2000, "cost_usd": 2.22},
+    {"prd": "00215-foo-v1.md", "wall_secs": 500, "cost_usd": 3.33},
+    {"prd": "00215-foo-v1.md", "wall_secs": 0, "cost_usd": None},
+    {"prd": "00215-foo-v1.md"},
+]
 
 
 @pytest.mark.parametrize(
@@ -345,8 +365,13 @@ _THREE_SESSIONS = [
             "totals: 3 sessions, 1.25 wall hours, $7.75 captured cost",
             ("4 sessions", "2.25 wall", "$1.25"),
         ),
+        (
+            _FIVE_SESSIONS,
+            "totals: 5 sessions, 0.97 wall hours, $6.66 captured cost",
+            ("4 sessions", "2.25 wall", "$1.25"),
+        ),
     ],
-    ids=["four-sessions", "three-sessions"],
+    ids=["four-sessions", "three-sessions", "five-sessions"],
 )
 def test_summary_totals_the_sessions_wall_hours_and_captured_cost(
     rows: list[dict],
@@ -775,7 +800,8 @@ def test_docs_name_the_site_and_the_summary() -> None:
     batch_text = _BATCH_REPORT_FORMAT.read_text(encoding="utf-8")
     headings = re.findall(r"\n(## [^\n]*)\n", batch_text)
     heading = next(
-        (h for h in headings if "wave" in h.lower() and "summar" in h.lower()), None
+        (h for h in headings if "wave" in h.lower() and "summar" in h.lower()),
+        None,
     )
     assert heading is not None, (
         f"{_BATCH_REPORT_FORMAT}: no `## `-level heading names the wave summary"

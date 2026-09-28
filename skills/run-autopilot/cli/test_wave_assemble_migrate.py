@@ -345,11 +345,23 @@ _REPORT_LANES: tuple[tuple[str, str, list[dict]], ...] = (
 )
 
 
+# Already in the main checkout's own loop-metrics.jsonl before any lane
+# migrates into it, tagged with a wave id that is not this test's wave: a
+# `_wave_rows` that dropped or weakened its wave-id filter would fold this
+# into the totals below, whose real total is otherwise nowhere near it.
+_FOREIGN_WAVE_ROW = {
+    "wave": "some-other-wave-id",
+    "wall_secs": 999999,
+    "cost_usd": 999.99,
+}
+
+
 def test_wave_report_states_the_real_base_totals_and_lane_batches(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repo, wave_path = _launched(tmp_path, monkeypatch, 2, CLASH_SEED)
+    _write(repo, {f"{_AP}/loop-metrics.jsonl": _jsonl([_FOREIGN_WAVE_ROW])})
     for name, batch, rows in _REPORT_LANES:
         worktree = _finish(wave_path, name, "")
         _commit(worktree, _clashing_edits(name), f"{name} change")
@@ -370,6 +382,10 @@ def test_wave_report_states_the_real_base_totals_and_lane_batches(
         saved["assembly"]["head_sha"][:7],
     ):
         assert token in header, header
+    # The foreign row actually landed in the file: the exclusion below is
+    # proven, not merely assumed.
+    migrated = _rows(_autopilot(repo) / "loop-metrics.jsonl")
+    assert _FOREIGN_WAVE_ROW in migrated, migrated
     assert "totals: 3 sessions, 2.25 wall hours, $1.75 captured cost" in text, text
     for name, batch, _rows_seeded in _REPORT_LANES:
         row = [line for line in text.splitlines() if lanes[name]["branch"] in line]
