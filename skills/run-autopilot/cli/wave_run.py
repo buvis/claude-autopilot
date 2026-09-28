@@ -99,7 +99,6 @@ def run(
     if outcome == "review_failed":
         exit_code = 4
     elif outcome == "converged":
-        loaded = wave.load(wave_path)
         land_code = wave_review.land(repo, loaded)
         if land_code:
             exit_code = land_code

@@ -230,9 +230,6 @@ The final code is the last non-zero code the chain produced, in the order
 the steps ran: a kept lane (`3`) followed by a clean review and land still
 reports `3`, but a kept lane whose review then fails reports `4` instead.
 
-An `autoclaude wave` alias exists at the operator-shell layer for this verb;
-its own docs cover the wrapper side.
-
 ## Operator notes
 
 **1. `WAVE_FORCE_SHARED` is this repo's own list.** The three paths it names -
