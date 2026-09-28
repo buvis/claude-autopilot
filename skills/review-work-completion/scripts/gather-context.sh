@@ -103,16 +103,37 @@ CREATED_FILES+=("$CONTEXT_FILE")
     DIFF_SCOPE="incremental review (changes since ${SINCE_REF})"
   fi
 
+  # Scope both diff calls to the paths listed in the review-paths marker
+  # file, when present and non-empty; otherwise diff the whole repo as before.
+  REVIEW_PATHS_MARKER="$PROJECT_ROOT/docs/dev/project-management/autopilot/review-paths"
+  REVIEW_PATHS=()
+  if [[ -s "$REVIEW_PATHS_MARKER" ]]; then
+    while IFS= read -r review_path; do
+      [[ -n "$review_path" ]] && REVIEW_PATHS+=("$review_path")
+    done < "$REVIEW_PATHS_MARKER"
+  fi
+  if [[ ${#REVIEW_PATHS[@]} -gt 0 ]]; then
+    DIFF_SCOPE="path-scoped review (${#REVIEW_PATHS[@]} paths from docs/dev/project-management/autopilot/review-paths)"
+  fi
+
   if [[ -n "$DIFF_BASE" ]]; then
     echo "### Changed Files"
     echo "_Diff scope: ${DIFF_SCOPE}_"
     echo
     echo '```'
-    git -C "$PROJECT_ROOT" diff "$DIFF_BASE" --stat 2>/dev/null || echo "_No diff available_"
+    if [[ ${#REVIEW_PATHS[@]} -gt 0 ]]; then
+      git -C "$PROJECT_ROOT" diff "$DIFF_BASE" --stat -- "${REVIEW_PATHS[@]}" 2>/dev/null || echo "_No diff available_"
+    else
+      git -C "$PROJECT_ROOT" diff "$DIFF_BASE" --stat 2>/dev/null || echo "_No diff available_"
+    fi
     echo '```'
     echo
     DIFF_FILE="$TMP_DIR/review-diff-${_ID}.diff"
-    git -C "$PROJECT_ROOT" diff "$DIFF_BASE" > "$DIFF_FILE" 2>/dev/null || echo "_No diff available_" > "$DIFF_FILE"
+    if [[ ${#REVIEW_PATHS[@]} -gt 0 ]]; then
+      git -C "$PROJECT_ROOT" diff "$DIFF_BASE" -- "${REVIEW_PATHS[@]}" > "$DIFF_FILE" 2>/dev/null || echo "_No diff available_" > "$DIFF_FILE"
+    else
+      git -C "$PROJECT_ROOT" diff "$DIFF_BASE" > "$DIFF_FILE" 2>/dev/null || echo "_No diff available_" > "$DIFF_FILE"
+    fi
     CREATED_FILES+=("$DIFF_FILE")
     echo "### Diff Content"
     echo "Full diff available at: $DIFF_FILE"
