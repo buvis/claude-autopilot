@@ -145,23 +145,21 @@ def _run_cli(argv: list[str]) -> subprocess.CompletedProcess:
     return subprocess.run(argv, capture_output=True, text=True, check=False)
 
 
-def seed_state(
-    state_path: Path,
-    wave: dict,
-    plugins_json: Path,
-    run_cli: Callable[[list[str]], subprocess.CompletedProcess] = _run_cli,
-) -> None:
-    """Seed `state_path` as a build whose tasks are done (next phase: review)
-    for the assembly stub PRD, written into prds/wip/. Raises RuntimeError on
-    a failed step; a retry skips init once state.json exists."""
-    pm = state_path.parent.parent
+def _seed_prd(pm: Path, wave: dict) -> str:
+    """Create the prds/{backlog,wip,done,hold} folders and write the assembly
+    stub PRD into wip/, returning its filename."""
     for folder in ("backlog", "wip", "done", "hold"):
         (pm / "prds" / folder).mkdir(parents=True, exist_ok=True)
-    state_path.parent.mkdir(parents=True, exist_ok=True)
     stub = _stub_name(wave)
     (pm / "prds" / "wip" / stub).write_text(stub_text(wave), encoding="utf-8")
+    return stub
+
+
+def _seed_batch(plugins_json: Path, wave: dict) -> dict:
+    """The `batch` state value: wave id, empty completed_prds, and the pinned
+    plugin versions read from `plugins_json`."""
     installed = json.loads(plugins_json.read_text(encoding="utf-8"))
-    batch = {
+    return {
         "id": wave["id"],
         "mode": "autopilot",
         "completed_prds": [],
@@ -169,6 +167,16 @@ def seed_state(
             name: installed["plugins"][name][0]["version"] for name in _PINNED_PLUGINS
         },
     }
+
+
+def _seed_steps(
+    state_path: Path,
+    wave: dict,
+    stub: str,
+    batch: dict,
+) -> list[list[str]]:
+    """The CLI invocations that seed `state_path`: `init` (skipped on retry
+    once state.json exists), one `statectl set` per key, then `phase-done`."""
     state = str(state_path)
     steps = (
         []
@@ -197,7 +205,23 @@ def seed_state(
             "tasks_done",
         ],
     )
-    for argv in steps:
+    return steps
+
+
+def seed_state(
+    state_path: Path,
+    wave: dict,
+    plugins_json: Path,
+    run_cli: Callable[[list[str]], subprocess.CompletedProcess] = _run_cli,
+) -> None:
+    """Seed `state_path` as a build whose tasks are done (next phase: review)
+    for the assembly stub PRD, written into prds/wip/. Raises RuntimeError on
+    a failed step; a retry skips init once state.json exists."""
+    pm = state_path.parent.parent
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    stub = _seed_prd(pm, wave)
+    batch = _seed_batch(plugins_json, wave)
+    for argv in _seed_steps(state_path, wave, stub, batch):
         result = run_cli(argv)
         if result.returncode != 0:
             raise RuntimeError(
@@ -275,6 +299,50 @@ def review(
     return outcome
 
 
+def _land_migrate(repo: Path, wave_path: Path, wave: dict) -> None:
+    """Migrate the assembly lane's records into `repo`, recording progress in
+    wave.json even when migration raises so a retry can resume."""
+    wave["assembly"]["name"] = "assembly"
+    wave["assembly"]["status"] = "assembled"
+    try:
+        wave_assemble.migrate_lane(repo, wave["id"], wave["assembly"])
+    finally:
+        with locked(wave_path):
+            current = load(wave_path)
+            current["assembly"] = wave["assembly"]
+            save(wave_path, current)
+
+
+def _land_merge(repo: Path, worktree: Path, wave_id: str) -> str:
+    """Fast-forward `repo` to the assembly branch's tip, then drop the
+    worktree and its branch. Returns the tip sha."""
+    assembly_tip = subprocess.run(
+        ["git", "-C", str(worktree), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "-C", str(repo), "merge", "--ff-only", assembly_tip],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo), "worktree", "remove", "--force", str(worktree)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo), "branch", "-d", f"wave/{wave_id}/assembly"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return assembly_tip
+
+
 def land(repo: Path, wave: dict) -> int:
     """Land a converged assembly: migrate its worktree's records into `repo`
     as lane "assembly", fast-forward `repo`'s checked-out branch to the
@@ -299,40 +367,8 @@ def land(repo: Path, wave: dict) -> int:
     if repo_head != wave["base_sha"]:
         return 5
 
-    wave["assembly"]["name"] = "assembly"
-    wave["assembly"]["status"] = "assembled"
-    try:
-        wave_assemble.migrate_lane(repo, wave["id"], wave["assembly"])
-    finally:
-        with locked(wave_path):
-            current = load(wave_path)
-            current["assembly"] = wave["assembly"]
-            save(wave_path, current)
-
-    assembly_tip = subprocess.run(
-        ["git", "-C", str(worktree), "rev-parse", "HEAD"],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
-    subprocess.run(
-        ["git", "-C", str(repo), "merge", "--ff-only", assembly_tip],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    subprocess.run(
-        ["git", "-C", str(repo), "worktree", "remove", "--force", str(worktree)],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    subprocess.run(
-        ["git", "-C", str(repo), "branch", "-d", f"wave/{wave['id']}/assembly"],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    _land_migrate(repo, wave_path, wave)
+    assembly_tip = _land_merge(repo, worktree, wave["id"])
 
     with locked(wave_path):
         current = load(wave_path)
