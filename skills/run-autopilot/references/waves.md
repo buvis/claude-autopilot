@@ -130,9 +130,11 @@ pass, when its rebase conflicts outside the append-only files
 against the merged tree; either way the lane's status becomes `conflict` or
 `checks_failed` and a stall deferred record (`site: assembly_conflict`,
 `references/recovery.md`) is appended, naming the conflicting paths or the
-check's exit code and stderr tail. The lane's own branch and worktree are
-left exactly as the lane left them - only the shared assembly branch
-rewinds.
+check's exit code and stderr tail. For a `conflict` lane, its own branch and
+worktree are left exactly as the lane left them - the rebase itself was
+aborted. For a `checks_failed` lane, the lane's branch is retained, but it
+was already rebased onto the newer assembly base before the merge and the
+checks ran - only the shared assembly branch rewinds.
 
 Exit codes: `0` when every drained lane merged clean, `3` when at least one
 lane was kept (a conflict, a checks failure, or one still unfinished) - the
