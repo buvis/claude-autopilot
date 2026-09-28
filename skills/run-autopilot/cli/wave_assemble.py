@@ -510,7 +510,9 @@ def _drain_lane(
     already removed has nothing left to scan, so it is skipped - what it held is
     read back from `lane["held_prds"]`, the only record left of PRDs no lane
     listed in its own `prds`. The removal flag is set WITH the removal: a crash
-    between the two still reads as not removed."""
+    between the two still reads as not removed, so the git calls that follow
+    check what is actually still there rather than assume the flag's absence
+    means their target still exists."""
     names = set(lane.get("held_prds") or [])
     if lane.get("worktree_removed"):
         return names
@@ -518,8 +520,10 @@ def _drain_lane(
     lane["held_prds"] = sorted(names)
     migrate_lane(repo, wave["id"], lane)
     if lane["status"] == "assembled":
-        run_git(["worktree", "remove", "--force", lane["worktree"]], cwd=repo)
-        run_git(["branch", "-D", lane["branch"]], cwd=repo)
+        if Path(lane["worktree"]).exists():
+            run_git(["worktree", "remove", "--force", lane["worktree"]], cwd=repo)
+        if run_git(["branch", "--list", lane["branch"]], cwd=repo).stdout.strip():
+            run_git(["branch", "-D", lane["branch"]], cwd=repo)
         lane["worktree_removed"] = True
     return names
 
@@ -531,8 +535,9 @@ def _open_assembly(
     run_git: Callable[..., subprocess.CompletedProcess],
 ) -> tuple[Path, str]:
     """The wave's assembly worktree and branch: created on the first call, and
-    reused by a rerun that still finds both the recorded assembly and the
-    worktree itself on disk."""
+    adopted by a rerun that finds the worktree already on disk - whether or not
+    wave.json ever recorded it (a crash may have registered it before the
+    record was saved)."""
     assembly = Path(
         WAVE_ASSEMBLY_WORKTREE_FMT.format(
             repo_parent=repo.parent,
@@ -541,7 +546,7 @@ def _open_assembly(
         ),
     )
     branch = WAVE_ASSEMBLY_BRANCH_FMT.format(wave_id=wave["id"])
-    if not (wave.get("assembly") and assembly.exists()):
+    if not assembly.exists():
         run_git(
             ["worktree", "add", str(assembly), "-b", branch, wave["base_sha"]],
             cwd=repo,
