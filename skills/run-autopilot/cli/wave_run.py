@@ -74,12 +74,15 @@ def _check_preconditions(review_slots: int, yes: bool) -> int | None:
 def _confirm_launch(confirm_fn: Callable[..., str]) -> int | None:
     """An error exit code, or None once the operator confirms."""
     try:
-        confirm_fn("autopilot: launch this wave? [Y/n] ")
+        reply = confirm_fn("autopilot: launch this wave? [Y/n] ")
     except EOFError:
         print(
             "autopilot: no confirmation received; refusing to launch",
             file=sys.stderr,
         )
+        return 1
+    if reply.strip().lower() in ("n", "no"):
+        print("autopilot: launch declined; refusing to launch", file=sys.stderr)
         return 1
     return None
 
