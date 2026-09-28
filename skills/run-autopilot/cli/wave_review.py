@@ -14,6 +14,7 @@ import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
+from cli import wave_assemble
 from cli.wave import WAVE_APPEND_ONLY, load, locked, save
 from cli.wave_launch import _SPAWN_CMD, CLI_MAIN_PATH
 
@@ -169,9 +170,13 @@ def seed_state(
         },
     }
     state = str(state_path)
-    steps = [] if state_path.exists() else [
-        ["python3", str(CLI_MAIN_PATH), "init", "--state", state, "--prd", stub]
-    ]
+    steps = (
+        []
+        if state_path.exists()
+        else [
+            ["python3", str(CLI_MAIN_PATH), "init", "--state", state, "--prd", stub],
+        ]
+    )
     steps += [
         ["python3", str(_STATECTL), state, "set", key, json.dumps(value)]
         for key, value in (
@@ -182,14 +187,22 @@ def seed_state(
         )
     ]
     steps.append(
-        ["python3", str(CLI_MAIN_PATH), "phase-done", "--state", state, "--outcome", "tasks_done"]
+        [
+            "python3",
+            str(CLI_MAIN_PATH),
+            "phase-done",
+            "--state",
+            state,
+            "--outcome",
+            "tasks_done",
+        ],
     )
     for argv in steps:
         result = run_cli(argv)
         if result.returncode != 0:
             raise RuntimeError(
                 f"seed step `{' '.join(argv[2:])}` exited {result.returncode}:"
-                f" {result.stderr.strip()}"
+                f" {result.stderr.strip()}",
             )
 
 
@@ -215,7 +228,9 @@ def _check_reviewable(repo: Path, wave: dict) -> Path:
 
 
 def review(
-    repo: Path, wave: dict, spawn_fn: Callable[..., subprocess.Popen] = subprocess.Popen
+    repo: Path,
+    wave: dict,
+    spawn_fn: Callable[..., subprocess.Popen] = subprocess.Popen,
 ) -> str:
     """Review the assembly: seed its worktree at review, run one loop there to
     exit, and record the outcome in wave.json - converged when the stub PRD
@@ -228,7 +243,8 @@ def review(
         Path.home() / ".claude/plugins/installed_plugins.json",
     )
     (pm / "autopilot/review-paths").write_text(
-        "".join(f"{path}\n" for path in review_paths(wave)), encoding="utf-8"
+        "".join(f"{path}\n" for path in review_paths(wave)),
+        encoding="utf-8",
     )
     meta = repo / "docs/dev/project-management/meta"
     if meta.exists():
@@ -257,3 +273,75 @@ def review(
         current["status"] = outcome
         save(wave_path, current)
     return outcome
+
+
+def land(repo: Path, wave: dict) -> int:
+    """Land a converged assembly: migrate its worktree's records into `repo`
+    as lane "assembly", fast-forward `repo`'s checked-out branch to the
+    assembly branch's tip, then drop the worktree and branch. Returns 4 when
+    the wave failed review (nothing to land) and 5 when `repo` has moved past
+    `wave["base_sha"]` since assembly (refuses rather than merge over new
+    history); raises ValueError when the wave was never reviewed."""
+    status = wave.get("status")
+    if status == "review_failed":
+        return 4
+    if status != "converged":
+        raise ValueError(f"wave status {status!r} is not landable")
+
+    worktree = Path(wave["assembly"]["worktree"])
+    wave_path = repo / "docs/dev/project-management/autopilot/wave.json"
+    repo_head = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    if repo_head != wave["base_sha"]:
+        return 5
+
+    wave["assembly"]["name"] = "assembly"
+    wave["assembly"]["status"] = "assembled"
+    try:
+        wave_assemble.migrate_lane(repo, wave["id"], wave["assembly"])
+    finally:
+        with locked(wave_path):
+            current = load(wave_path)
+            current["assembly"] = wave["assembly"]
+            save(wave_path, current)
+
+    assembly_tip = subprocess.run(
+        ["git", "-C", str(worktree), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "-C", str(repo), "merge", "--ff-only", assembly_tip],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo), "worktree", "remove", "--force", str(worktree)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo), "branch", "-d", f"wave/{wave['id']}/assembly"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    with locked(wave_path):
+        current = load(wave_path)
+        current["assembly"]["head_sha"] = assembly_tip
+        current["status"] = "done"
+        save(wave_path, current)
+
+    reports_dir = repo / "docs/dev/project-management/autopilot/reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    save(reports_dir / f"{wave['id']}-wave.json", current)
+
+    return 0
