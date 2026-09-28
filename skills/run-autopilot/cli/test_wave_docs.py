@@ -189,6 +189,76 @@ def test_the_runbook_matches_what_abort_prints_for_a_kept_worktree() -> None:
     )
 
 
+_ASSEMBLE_HEADING = "## `autopilot wave assemble`"
+_KEPT_ANCHOR = "A lane's merge is undone and the lane is kept"
+
+
+def _assemble_kept_region() -> str:
+    """`waves.md` on what `assemble` does to a lane's branch once its merge is
+    undone: from the `A lane's merge is undone and the lane is kept` sentence to
+    the end of the `wave assemble` section. Anchored on that sentence rather than
+    a line number, and cut at the section end so wording elsewhere in the runbook
+    cannot satisfy the pins below."""
+    text = _WAVES.read_text(encoding="utf-8")
+    heading = f"\n{_ASSEMBLE_HEADING}\n"
+    assert heading in text, f"{_WAVES}: no `{_ASSEMBLE_HEADING}` section"
+    section = text[text.index(heading) + len(heading) :]
+    end = section.find("\n## ")
+    section = section if end == -1 else section[:end]
+    assert _KEPT_ANCHOR in section, (
+        f"{_WAVES}: § wave assemble no longer says {_KEPT_ANCHOR!r}, so this pin "
+        "lost its anchor - re-anchor it on whatever now introduces the kept lane"
+    )
+    return section[section.index(_KEPT_ANCHOR) :]
+
+
+def test_the_runbook_describes_a_checks_failed_branch_as_rebased_not_unchanged() -> None:
+    region = _assemble_kept_region().lower()
+    sentences = _sentences(region)
+    # The wrong claim this guards against, as the runbook words it today: one
+    # sentence says the lane's branch and worktree are left exactly as the lane
+    # left them, naming no case - true for `conflict` (the rebase itself was
+    # aborted) but wrong for `checks_failed` (the lane's branch was already
+    # rebased onto the assembly head before the merge and checks ran, and only
+    # the assembly branch resets when checks fail afterward).
+    unqualified = [
+        sentence
+        for sentence in sentences
+        if "left exactly as the lane left" in sentence and "conflict" not in sentence
+    ]
+    assert unqualified == [], (
+        f"{_WAVES}: § wave assemble still says the branch was left exactly as "
+        "the lane left it without naming `conflict`, so it reads as a blanket "
+        "claim covering `checks_failed` too - scope it to `conflict` alone"
+    )
+    # The `conflict` case must still say this correctly: its rebase was aborted,
+    # so its branch and worktree ARE left exactly as the lane left them.
+    assert _claims(sentences, "conflict", "left exactly as the lane left"), (
+        f"{_WAVES}: § wave assemble no longer says that a `conflict` lane's "
+        "branch and worktree are left exactly as the lane left them"
+    )
+    # No sentence may tie `checks_failed` to being left untouched.
+    assert _claims(sentences, "checks_failed", "left exactly as the lane left") == [], (
+        f"{_WAVES}: § wave assemble ties the `checks_failed` lane's branch to "
+        "being left exactly as the lane left it - it was already rebased"
+    )
+    # The corrected claim, in one sentence: `checks_failed` RETAINS the lane's
+    # branch, but that branch was ALREADY rebased onto the newer assembly base.
+    corrected = [
+        sentence
+        for sentence in sentences
+        if "checks_failed" in sentence
+        and "already" in sentence
+        and "retain" in sentence
+        and any(term in sentence for term in ("rebas", "rewritten"))
+    ]
+    assert corrected, (
+        f"{_WAVES}: § wave assemble does not say, in one sentence, that the "
+        "`checks_failed` lane's branch is RETAINED but was ALREADY rebased onto "
+        "the newer assembly base"
+    )
+
+
 _SKILL = Path(__file__).resolve().parent.parent / "SKILL.md"
 _RETENTION_HEADING = "### Retention"
 
