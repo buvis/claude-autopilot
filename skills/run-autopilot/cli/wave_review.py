@@ -16,6 +16,7 @@ from pathlib import Path
 
 from cli import wave_assemble
 from cli.wave import WAVE_APPEND_ONLY, load, locked, save
+from cli.wave_assemble import _default_run_git
 from cli.wave_launch import _SPAWN_CMD, CLI_MAIN_PATH
 
 _STATECTL = Path(__file__).resolve().parent.parent / "scripts" / "statectl.py"
@@ -301,11 +302,15 @@ def review(
 
 def _land_migrate(repo: Path, wave_path: Path, wave: dict) -> None:
     """Migrate the assembly lane's records into `repo`, recording progress in
-    wave.json even when migration raises so a retry can resume."""
+    wave.json even when migration raises so a retry can resume. Raises when
+    the stub PRD did not land in the main checkout's prds/done/."""
     wave["assembly"]["name"] = "assembly"
     wave["assembly"]["status"] = "assembled"
     try:
         wave_assemble.migrate_lane(repo, wave["id"], wave["assembly"])
+        stub = repo / "docs/dev/project-management/prds/done" / _stub_name(wave)
+        if not stub.exists():
+            raise RuntimeError(f"assembly stub {stub} did not land in prds/done/")
     finally:
         with locked(wave_path):
             current = load(wave_path)
@@ -313,43 +318,31 @@ def _land_migrate(repo: Path, wave_path: Path, wave: dict) -> None:
             save(wave_path, current)
 
 
-def _land_merge(repo: Path, worktree: Path, wave_id: str) -> str:
-    """Fast-forward `repo` to the assembly branch's tip, then drop the
-    worktree and its branch. Returns the tip sha."""
-    assembly_tip = subprocess.run(
-        ["git", "-C", str(worktree), "rev-parse", "HEAD"],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
-    subprocess.run(
-        ["git", "-C", str(repo), "merge", "--ff-only", assembly_tip],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    subprocess.run(
-        ["git", "-C", str(repo), "worktree", "remove", "--force", str(worktree)],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    subprocess.run(
-        ["git", "-C", str(repo), "branch", "-d", f"wave/{wave_id}/assembly"],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return assembly_tip
+def _land_merge(
+    repo: Path,
+    tip: str,
+    run_git: Callable[..., subprocess.CompletedProcess],
+) -> None:
+    """Fast-forward `repo` to the assembly branch's tip `tip`."""
+    run_git(["-C", str(repo), "merge", "--ff-only", tip])
 
 
-def land(repo: Path, wave: dict) -> int:
+def land(
+    repo: Path,
+    wave: dict,
+    *,
+    run_git: Callable[..., subprocess.CompletedProcess] = _default_run_git,
+) -> int:
     """Land a converged assembly: migrate its worktree's records into `repo`
     as lane "assembly", fast-forward `repo`'s checked-out branch to the
     assembly branch's tip, then drop the worktree and branch. Returns 4 when
     the wave failed review (nothing to land) and 5 when `repo` has moved past
     `wave["base_sha"]` since assembly (refuses rather than merge over new
     history); raises ValueError when the wave was never reviewed."""
+    wave_path = repo / "docs/dev/project-management/autopilot/wave.json"
+    with locked(wave_path):
+        wave = load(wave_path)
+
     status = wave.get("status")
     if status == "review_failed":
         return 4
@@ -357,22 +350,24 @@ def land(repo: Path, wave: dict) -> int:
         raise ValueError(f"wave status {status!r} is not landable")
 
     worktree = Path(wave["assembly"]["worktree"])
-    wave_path = repo / "docs/dev/project-management/autopilot/wave.json"
-    repo_head = subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", "HEAD"],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
-    if repo_head != wave["base_sha"]:
+    repo_head = run_git(["-C", str(repo), "rev-parse", "HEAD"]).stdout.strip()
+    resolved_assembly_tip = (
+        run_git(["-C", str(worktree), "rev-parse", "HEAD"]).stdout.strip()
+        if worktree.is_dir()
+        else repo_head
+    )
+    if repo_head not in (wave["base_sha"], resolved_assembly_tip):
         return 5
 
+    _land_merge(repo, resolved_assembly_tip, run_git)
     _land_migrate(repo, wave_path, wave)
-    assembly_tip = _land_merge(repo, worktree, wave["id"])
+
+    run_git(["-C", str(repo), "worktree", "remove", "--force", str(worktree)])
+    run_git(["-C", str(repo), "branch", "-d", f"wave/{wave['id']}/assembly"])
 
     with locked(wave_path):
         current = load(wave_path)
-        current["assembly"]["head_sha"] = assembly_tip
+        current["assembly"]["head_sha"] = resolved_assembly_tip
         current["status"] = "done"
         save(wave_path, current)
 
