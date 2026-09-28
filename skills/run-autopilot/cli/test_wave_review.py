@@ -237,7 +237,10 @@ def _assembled(
         lanes=[
             _full_lane(tmp_path, "l1", ["00001-a.md"], ["cli/records.py", "cli/x.py"]),
             _full_lane(
-                tmp_path, "l2", ["00002-b.md", "00003-c.md"], ["cli/records.py"]
+                tmp_path,
+                "l2",
+                ["00002-b.md", "00003-c.md"],
+                ["cli/records.py"],
             ),
         ],
     )
@@ -326,7 +329,9 @@ class _FakeLoop:
     """Stands in for subprocess.Popen: records the spawn, starts nothing."""
 
     def __init__(
-        self, effect: Callable[[], None] = lambda: None, exit_code: int = 0
+        self,
+        effect: Callable[[], None] = lambda: None,
+        exit_code: int = 0,
     ) -> None:
         self.calls: list[dict] = []
         self._effect = effect
@@ -387,7 +392,9 @@ def test_seeded_state_is_the_tasks_done_shape(
     assert not state.get("phases_completed")
     # Every step, in order: the last write is phase-done --outcome tasks_done.
     assert [_normalized(argv) for argv in calls] == _seed_argv(
-        state_path, wave_id, base_sha
+        state_path,
+        wave_id,
+        base_sha,
     )
     for folder in ("backlog", "wip", "done", "hold"):
         assert (_pm(worktree) / "prds" / folder).is_dir(), folder
@@ -502,7 +509,7 @@ def test_review_copies_meta_and_spawns_the_loop_in_the_assembly_worktree(
 
     def loop() -> None:
         state = json.loads(
-            (_autopilot(worktree) / "state.json").read_text(encoding="utf-8")
+            (_autopilot(worktree) / "state.json").read_text(encoding="utf-8"),
         )
         seen["next_phase"] = state["next_phase"]
         _moving(worktree, "done")()
@@ -510,7 +517,7 @@ def test_review_copies_meta_and_spawns_the_loop_in_the_assembly_worktree(
     spawn = _FakeLoop(loop)
     wave_review.review(repo, wave_dict, spawn_fn=spawn)
     assert (_pm(worktree) / "meta" / "goals.md").read_text(
-        encoding="utf-8"
+        encoding="utf-8",
     ) == "ship waves\n"
     assert seen["next_phase"] == "review"  # seeded before the loop started
     [call] = spawn.calls
@@ -680,7 +687,8 @@ def _landable(
     _git(worktree, "commit", "-m", "test: complete assembly review")
     _autopilot(worktree).mkdir(parents=True, exist_ok=True)
     (_autopilot(worktree) / "state.json").write_text(
-        json.dumps({"cycle": 1}), encoding="utf-8"
+        json.dumps({"cycle": 1}),
+        encoding="utf-8",
     )
     wave_dict = {**wave_dict, "base_sha": base_sha}
     wave.save(wave_path, wave_dict)
@@ -741,7 +749,9 @@ def test_review_failed_keeps_master_untouched(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repo, wave_path, wave_dict = _landable(
-        tmp_path, monkeypatch, status="review_failed"
+        tmp_path,
+        monkeypatch,
+        status="review_failed",
     )
     worktree = Path(wave_dict["assembly"]["worktree"])
     before = _git_out(repo, "rev-list", "--count", "HEAD")
@@ -811,7 +821,7 @@ def test_land_refreshes_the_archived_head_sha(
     assert wave_review.land(repo, wave_dict) == 0
     archived = json.loads(
         (_autopilot(repo) / "reports" / f"{WAVE_ID}-wave.json").read_text(
-            encoding="utf-8"
+            encoding="utf-8",
         ),
     )
     assert archived["assembly"]["head_sha"] == actual_tip
@@ -894,7 +904,8 @@ def _bounded_sleep(limit: int = 20) -> Callable[[float], None]:
 
 
 def test_run_orders_plan_launch_wait_assemble_review_land(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repo, wave_path = _repo(tmp_path, {})
     _run_wave(wave_path)
@@ -902,21 +913,32 @@ def test_run_orders_plan_launch_wait_assemble_review_land(
     calls: list[str] = []
     monkeypatch.setattr(wave, "plan", lambda *a, **k: calls.append("plan") or 0)
     monkeypatch.setattr(
-        wave_launch, "launch", lambda *a, **k: calls.append("launch") or 0
+        wave_launch,
+        "launch",
+        lambda *a, **k: calls.append("launch") or 0,
     )
     monkeypatch.setattr(
-        wave_launch, "status", lambda *a, **k: calls.append("status") or "lane table"
+        wave_launch,
+        "status",
+        lambda *a, **k: calls.append("status") or "lane table",
     )
     monkeypatch.setattr(
-        wave_assemble, "assemble", lambda *a, **k: calls.append("assemble") or 0
+        wave_assemble,
+        "assemble",
+        lambda *a, **k: calls.append("assemble") or 0,
     )
     monkeypatch.setattr(
-        wave_review, "review", lambda *a, **k: calls.append("review") or "converged"
+        wave_review,
+        "review",
+        lambda *a, **k: calls.append("review") or "converged",
     )
     monkeypatch.setattr(wave_review, "land", lambda *a, **k: calls.append("land") or 0)
 
     exit_code = wave_run.run(
-        repo, yes=True, sleep_fn=_bounded_sleep(), clock=_rising_clock()
+        repo,
+        yes=True,
+        sleep_fn=_bounded_sleep(),
+        clock=_rising_clock(),
     )
 
     assert exit_code == 0
@@ -926,7 +948,9 @@ def test_run_orders_plan_launch_wait_assemble_review_land(
 
 
 def test_run_without_tty_needs_yes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     repo, _ = _repo(tmp_path, {})
     monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
@@ -942,7 +966,8 @@ def test_run_without_tty_needs_yes(
 
 
 def test_run_exit_code_follows_the_weakest_step(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """assemble reports a lane held back (3); review still converges and
     land still succeeds - the run's own exit code carries assemble's 3
@@ -958,14 +983,18 @@ def test_run_exit_code_follows_the_weakest_step(
     monkeypatch.setattr(wave_review, "land", lambda *a, **k: 0)
 
     exit_code = wave_run.run(
-        repo, yes=True, sleep_fn=_bounded_sleep(), clock=_rising_clock()
+        repo,
+        yes=True,
+        sleep_fn=_bounded_sleep(),
+        clock=_rising_clock(),
     )
 
     assert exit_code == 3
 
 
 def test_run_exit_code_last_nonzero_step_wins(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Pins the combination rule: the LAST non-zero code wins. land's 5
     (master moved between the confirmation gate and land) supersedes
@@ -981,14 +1010,51 @@ def test_run_exit_code_last_nonzero_step_wins(
     monkeypatch.setattr(wave_review, "land", lambda *a, **k: 5)
 
     exit_code = wave_run.run(
-        repo, yes=True, sleep_fn=_bounded_sleep(), clock=_rising_clock()
+        repo,
+        yes=True,
+        sleep_fn=_bounded_sleep(),
+        clock=_rising_clock(),
     )
 
     assert exit_code == 5
 
 
+def test_run_returns_1_at_once_when_assemble_refuses(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """assemble's 1 is a refusal (a live lane, or a corrupt/absent
+    wave.json), not a kept lane - run must return it immediately instead
+    of handing an unmet precondition to review, which would raise
+    ValueError."""
+    repo, wave_path = _repo(tmp_path, {})
+    _run_wave(wave_path)
+    _dead_after_one_pass(monkeypatch)
+    calls: list[str] = []
+    monkeypatch.setattr(wave, "plan", lambda *a, **k: 0)
+    monkeypatch.setattr(wave_launch, "launch", lambda *a, **k: 0)
+    monkeypatch.setattr(wave_launch, "status", lambda *a, **k: "lane table")
+    monkeypatch.setattr(wave_assemble, "assemble", lambda *a, **k: 1)
+    monkeypatch.setattr(
+        wave_review,
+        "review",
+        lambda *a, **k: calls.append("review") or "converged",
+    )
+
+    exit_code = wave_run.run(
+        repo,
+        yes=True,
+        sleep_fn=_bounded_sleep(),
+        clock=_rising_clock(),
+    )
+
+    assert exit_code == 1
+    assert calls == []
+
+
 def test_run_interrupt_terminates_lane_groups(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A real SIGINT delivered mid-wait - whether run() installs its own
     signal.signal handler or just lets the default SIGINT -> KeyboardInterrupt
@@ -1006,7 +1072,9 @@ def test_run_interrupt_terminates_lane_groups(
     monkeypatch.setattr(wave_launch, "lane_status", lambda lane: "running")
     killed: list[str] = []
     monkeypatch.setattr(
-        wave_launch, "_kill_lane", lambda lane, kill_fn: killed.append(lane["name"])
+        wave_launch,
+        "_kill_lane",
+        lambda lane, kill_fn: killed.append(lane["name"]),
     )
 
     def interrupt(_seconds: float) -> None:
@@ -1065,7 +1133,7 @@ def test_wave_cli_registers_review_land_run_as_wave_subverbs() -> None:
     assert land_args.verb == "land"
 
     run_args = parser.parse_args(
-        ["wave", "run", "--max-lanes", "2", "--review-slots", "1", "--yes"]
+        ["wave", "run", "--max-lanes", "2", "--review-slots", "1", "--yes"],
     )
     assert run_args.verb == "run"
     assert run_args.max_lanes == 2

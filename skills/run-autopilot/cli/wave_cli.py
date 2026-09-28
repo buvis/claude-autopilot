@@ -71,8 +71,9 @@ def run(args: argparse.Namespace, repo: Path, wave_path: Path) -> int:
         print(wave_launch.status(repo, loaded))
         return 0
     if args.verb == "review":
-        print(wave_review.review(repo, loaded))
-        return 0
+        outcome = wave_review.review(repo, loaded)
+        print(outcome)
+        return 4 if outcome == "review_failed" else 0
     if args.verb == "land":
         return wave_review.land(repo, loaded)
     # `abort` is the last verb the parser accepts, and it reloads wave.json under

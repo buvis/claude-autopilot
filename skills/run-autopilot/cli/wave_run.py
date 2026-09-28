@@ -43,7 +43,9 @@ def _wait_for_lanes(
         last_print = clock()
         while True:
             loaded = wave.load(wave_path)
-            if all(wave_launch.lane_status(lane) != "running" for lane in loaded["lanes"]):
+            if all(
+                wave_launch.lane_status(lane) != "running" for lane in loaded["lanes"]
+            ):
                 return
             now = clock()
             if now - last_print >= 600:
@@ -89,10 +91,10 @@ def run(
 
     _wait_for_lanes(repo, wave_path, sleep_fn, clock)
 
-    exit_code = 0
     assemble_code = wave_assemble.assemble(repo, wave_path)
-    if assemble_code:
-        exit_code = assemble_code
+    if assemble_code not in (0, 3):
+        return assemble_code
+    exit_code = assemble_code
 
     loaded = wave.load(wave_path)
     outcome = wave_review.review(repo, loaded)
