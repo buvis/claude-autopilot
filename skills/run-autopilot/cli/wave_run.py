@@ -63,6 +63,7 @@ def run(
     max_lanes: int = 3,
     review_slots: int = 3,
     yes: bool = False,
+    confirm_fn: Callable[..., str] = input,
     sleep_fn: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
 ) -> int:
@@ -71,6 +72,13 @@ def run(
     4 review failed; 5 master moved before land - see references/waves.md
     § wave run for the full contract."""
     wave_path = repo / "docs/dev/project-management/autopilot/wave.json"
+
+    if review_slots < 1:
+        print(
+            f"autopilot: review slots must be at least 1, got {review_slots}",
+            file=sys.stderr,
+        )
+        return 1
 
     if not sys.stdin.isatty() and not yes:
         print("autopilot: pass --yes to run a wave unattended", file=sys.stderr)
@@ -84,6 +92,16 @@ def run(
         loaded = wave.load(wave_path)
         loaded["review_slots"] = review_slots
         wave.save(wave_path, loaded)
+
+    if not yes:
+        try:
+            confirm_fn("autopilot: launch this wave? [Y/n] ")
+        except EOFError:
+            print(
+                "autopilot: no confirmation received; refusing to launch",
+                file=sys.stderr,
+            )
+            return 1
 
     launch_code = wave_launch.launch(repo, wave_path)
     if launch_code != 0:
