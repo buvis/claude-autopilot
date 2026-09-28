@@ -57,6 +57,45 @@ def _wait_for_lanes(
         signal.signal(signal.SIGTERM, previous[signal.SIGTERM])
 
 
+def _check_preconditions(review_slots: int, yes: bool) -> int | None:
+    """An error exit code, or None once both preconditions pass."""
+    if review_slots < 1:
+        print(
+            f"autopilot: review slots must be at least 1, got {review_slots}",
+            file=sys.stderr,
+        )
+        return 1
+    if not sys.stdin.isatty() and not yes:
+        print("autopilot: pass --yes to run a wave unattended", file=sys.stderr)
+        return 1
+    return None
+
+
+def _confirm_launch(confirm_fn: Callable[..., str]) -> int | None:
+    """An error exit code, or None once the operator confirms."""
+    try:
+        confirm_fn("autopilot: launch this wave? [Y/n] ")
+    except EOFError:
+        print(
+            "autopilot: no confirmation received; refusing to launch",
+            file=sys.stderr,
+        )
+        return 1
+    return None
+
+
+def _review_and_land(repo: Path, wave_path: Path, exit_code: int) -> int:
+    loaded = wave.load(wave_path)
+    outcome = wave_review.review(repo, loaded)
+    if outcome == "review_failed":
+        return 4
+    if outcome == "converged":
+        land_code = wave_review.land(repo, loaded)
+        if land_code:
+            return land_code
+    return exit_code
+
+
 def run(
     repo: Path,
     *,
@@ -73,16 +112,9 @@ def run(
     § wave run for the full contract."""
     wave_path = repo / "docs/dev/project-management/autopilot/wave.json"
 
-    if review_slots < 1:
-        print(
-            f"autopilot: review slots must be at least 1, got {review_slots}",
-            file=sys.stderr,
-        )
-        return 1
-
-    if not sys.stdin.isatty() and not yes:
-        print("autopilot: pass --yes to run a wave unattended", file=sys.stderr)
-        return 1
+    precondition_error = _check_preconditions(review_slots, yes)
+    if precondition_error is not None:
+        return precondition_error
 
     plan_code = wave.plan(repo, wave_path, max_lanes)
     if plan_code != 0:
@@ -94,14 +126,9 @@ def run(
         wave.save(wave_path, loaded)
 
     if not yes:
-        try:
-            confirm_fn("autopilot: launch this wave? [Y/n] ")
-        except EOFError:
-            print(
-                "autopilot: no confirmation received; refusing to launch",
-                file=sys.stderr,
-            )
-            return 1
+        confirm_error = _confirm_launch(confirm_fn)
+        if confirm_error is not None:
+            return confirm_error
 
     launch_code = wave_launch.launch(repo, wave_path)
     if launch_code != 0:
@@ -112,15 +139,5 @@ def run(
     assemble_code = wave_assemble.assemble(repo, wave_path)
     if assemble_code not in (0, 3):
         return assemble_code
-    exit_code = assemble_code
 
-    loaded = wave.load(wave_path)
-    outcome = wave_review.review(repo, loaded)
-    if outcome == "review_failed":
-        exit_code = 4
-    elif outcome == "converged":
-        land_code = wave_review.land(repo, loaded)
-        if land_code:
-            exit_code = land_code
-
-    return exit_code
+    return _review_and_land(repo, wave_path, assemble_code)
