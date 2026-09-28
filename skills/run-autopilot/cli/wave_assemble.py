@@ -56,7 +56,7 @@ def keep_both(text: str) -> str:
 def _totals(rows: list[dict]) -> str:
     """One `loop-metrics.jsonl` row is one session; a row may carry no wall time
     and may carry no cost, and an uncaptured cost is not a zero one."""
-    hours = sum(row.get("wall_secs", 0) for row in rows) / 3600
+    hours = sum(row.get("wall_secs") or 0 for row in rows) / 3600
     cost = sum(row["cost_usd"] for row in rows if row.get("cost_usd") is not None)
     return (
         f"totals: {len(rows)} sessions, {hours:.2f} wall hours,"
@@ -100,7 +100,7 @@ def summary(wave: dict, rows: list[dict], records: list[dict]) -> str:
         "",
         "## PRDs",
     ]
-    for entry in wave["prds"]:
+    for entry in wave.get("prds") or []:
         lines.append(
             f"- {entry['prd']}: Wave {wave['id']}, lane {entry['lane']}, "
             f"{entry['label']}"
@@ -238,6 +238,7 @@ def merge_lane(
             f" {', '.join(others)}"
         )
         return "conflict"
+    lane.pop("conflict_paths", None)
     run_git(["merge", "--ff-only", branch], cwd=assembly)
     checks = run_checks(assembly)
     if checks.returncode != 0:
@@ -358,6 +359,7 @@ def _migrate_jsonl(lane_ap: Path, main_ap: Path, tags: dict) -> None:
             out.writelines(
                 json.dumps({**json.loads(line), **tags}) + "\n"
                 for line in source.read_text(encoding="utf-8").splitlines()
+                if line.strip()
             )
 
 
@@ -448,7 +450,11 @@ def _wave_rows(main: Path, wave_id: str) -> list[dict]:
     path = main / _AUTOPILOT / "loop-metrics.jsonl"
     if not path.exists():
         return []
-    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    rows = [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     return [row for row in rows if row.get("wave") == wave_id]
 
 
