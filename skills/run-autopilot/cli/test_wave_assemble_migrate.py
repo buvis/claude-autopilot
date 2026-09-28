@@ -513,6 +513,71 @@ def test_rerun_report_still_names_a_prd_outside_the_lane_roster(
         assert f"- {held_prd}: Wave {wave_id}, lane l1," not in prds, (run, prds)
 
 
+# ── crash-safety on rerun ─────────────────────────────────────────────────
+
+
+def test_assemble_adopts_a_preexisting_assembly_worktree_after_a_crash(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, wave_path = _launched(tmp_path, monkeypatch, 1)
+    worktree = _finish(wave_path, "l1", "")
+    _commit(worktree, {"x/a.py": "# l1\n"}, "l1 change")
+    _to_done(worktree, "00001-a.md")
+    loaded = wave.load(wave_path)
+    wave_id, base_sha = loaded["id"], loaded["base_sha"]
+    branch = wave_assemble.WAVE_ASSEMBLY_BRANCH_FMT.format(wave_id=wave_id)
+    assembly = Path(
+        wave_assemble.WAVE_ASSEMBLY_WORKTREE_FMT.format(
+            repo_parent=repo.parent,
+            repo_name=repo.name,
+            wave_id=wave_id,
+        ),
+    )
+    # A crash between `git worktree add` and the end of the per-lane loop:
+    # the worktree is registered and present on disk, but wave.json never
+    # learned about it.
+    _git(repo, "worktree", "add", str(assembly), "-b", branch, base_sha)
+    assert "assembly" not in wave.load(wave_path)
+    assert wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass) == 0
+    saved = wave.load(wave_path)
+    assert saved["status"] == "assembled"
+    assert Path(saved["assembly"]["worktree"]).resolve() == assembly.resolve()
+    assert saved["assembly"]["branch"] == branch
+    assert assembly.is_dir()
+    # Adopted, not recreated: git still lists this worktree exactly once.
+    listed = _git(repo, "worktree", "list").stdout
+    assert listed.count(assembly.name) == 1, listed
+    assert (repo / _PRDS / "done" / "00001-a.md").exists()
+
+
+def test_assemble_tolerates_a_lane_worktree_removed_before_its_flag_was_saved(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, wave_path = _launched(tmp_path, monkeypatch, 1)
+    worktree = _finish(wave_path, "l1", "")
+    _commit(worktree, {"x/a.py": "# l1\n"}, "l1 change")
+    _to_done(worktree, "00001-a.md")
+    assert wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass) == 0
+    _, lanes = _saved(repo, wave_path)
+    assert lanes["l1"]["worktree_removed"] is True, lanes["l1"]
+    assert not worktree.exists(), worktree
+    # A crash between the real `git worktree remove` and the moment its own
+    # flag was saved: the worktree is truly gone, but wave.json never
+    # learned it - a rerun must not choke on the missing path.
+    with wave.locked(wave_path):
+        loaded = wave.load(wave_path)
+        lane = next(each for each in loaded["lanes"] if each["name"] == "l1")
+        del lane["worktree_removed"]
+        wave.save(wave_path, loaded)
+    assert not wave.load(wave_path)["lanes"][0].get("worktree_removed")
+    assert wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass) == 0
+    assert wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass) == 0
+    landed = [path.name for path in (repo / _PRDS / "done").iterdir()]
+    assert landed == ["00001-a.md"], landed
+
+
 # ── _migrate_jsonl and _wave_rows: a blank line in the file ──────────────
 
 
