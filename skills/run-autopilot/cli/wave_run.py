@@ -90,9 +90,7 @@ def _confirm_launch(confirm_fn: Callable[..., str]) -> int | None:
 def _review_and_land(repo: Path, wave_path: Path, exit_code: int) -> int:
     loaded = wave.load(wave_path)
     outcome = wave_review.review(repo, loaded)
-    if outcome == "review_failed":
-        return 4
-    if outcome == "converged":
+    if outcome in ("review_failed", "converged"):
         land_code = wave_review.land(repo, loaded)
         if land_code:
             return land_code

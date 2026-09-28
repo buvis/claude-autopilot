@@ -805,7 +805,16 @@ def test_land_resumes_after_a_migration_crash(
 
     monkeypatch.setattr(wave_assemble, "migrate_lane", real_migrate_lane)
     assert wave_review.land(repo, wave_dict) == 0
-    assert wave.load(wave_path)["status"] == "done"
+    # A successful land moves wave.json to reports/ rather than leaving it
+    # readable at wave_path (task 7: "move, not copy" - see
+    # test_land_removes_wave_slots_and_moves_wave_json_to_reports).
+    assert not wave_path.exists()
+    archived = json.loads(
+        (_autopilot(repo) / "reports" / f"{WAVE_ID}-wave.json").read_text(
+            encoding="utf-8",
+        ),
+    )
+    assert archived["status"] == "done"
     assert ledger.read_text(encoding="utf-8").count("cycle_done") == 1
     assert not worktree.exists()
 

@@ -327,6 +327,63 @@ def _land_merge(
     run_git(["-C", str(repo), "merge", "--ff-only", tip])
 
 
+def _cycle_count(worktree: Path) -> int:
+    """The review loop's cycle count, from the assembly worktree's state.json."""
+    state = worktree / "docs/dev/project-management/autopilot/state.json"
+    return json.loads(state.read_text(encoding="utf-8"))["cycle"]
+
+
+def _append_summary_line(repo: Path, wave_id: str, line: str) -> None:
+    """Append `line` to the wave's report and ledger markdown files, creating
+    each (and its parent folder) on first use."""
+    for folder in ("reports", "ledger"):
+        path = (
+            repo
+            / "docs/dev/project-management/autopilot"
+            / folder
+            / f"{wave_id}-wave.md"
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        existing = path.read_text(encoding="utf-8") if path.exists() else ""
+        path.write_text(existing + line + "\n", encoding="utf-8")
+
+
+def _land_cleanup(
+    repo: Path,
+    wave_path: Path,
+    wave: dict,
+    run_git: Callable[..., subprocess.CompletedProcess],
+) -> None:
+    """The destructive tail of `land`, safe to retry once status is already
+    "done": drop the assembly worktree (refusing over uncommitted changes)
+    and its branch, remove wave-slots, and archive wave.json into reports/."""
+    worktree = Path(wave["assembly"]["worktree"])
+    migrated_stub = f"docs/dev/project-management/prds/done/{_stub_name(wave)}"
+    dirty = run_git(
+        [
+            "-C",
+            str(worktree),
+            "status",
+            "--porcelain",
+            "--",
+            f":(exclude){migrated_stub}",
+        ],
+    ).stdout
+    if dirty.strip():
+        raise ValueError(f"{worktree} has uncommitted changes:\n{dirty}")
+    run_git(["-C", str(repo), "worktree", "remove", "--force", str(worktree)])
+    run_git(["-C", str(repo), "branch", "-d", f"wave/{wave['id']}/assembly"])
+
+    slots = repo / "docs/dev/project-management/autopilot/wave-slots"
+    if slots.exists():
+        shutil.rmtree(slots)
+
+    reports_dir = repo / "docs/dev/project-management/autopilot/reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    save(reports_dir / f"{wave['id']}-wave.json", wave)
+    wave_path.unlink()
+
+
 def land(
     repo: Path,
     wave: dict,
@@ -335,44 +392,53 @@ def land(
 ) -> int:
     """Land a converged assembly: migrate its worktree's records into `repo`
     as lane "assembly", fast-forward `repo`'s checked-out branch to the
-    assembly branch's tip, then drop the worktree and branch. Returns 4 when
-    the wave failed review (nothing to land) and 5 when `repo` has moved past
-    `wave["base_sha"]` since assembly (refuses rather than merge over new
-    history); raises ValueError when the wave was never reviewed."""
+    assembly branch's tip, append the outcome to the wave's report and
+    ledger, save status "done" and the refreshed head_sha, then drop the
+    worktree, branch and wave-slots and archive wave.json into reports/. A
+    wave already at "done" (a retry after a crash between that save and the
+    destructive cleanup) resumes at the cleanup step only. Returns 4 when the
+    wave failed review (nothing to land, but the outcome is still recorded)
+    and 5 when `repo` has moved past `wave["base_sha"]` since assembly
+    (refuses rather than merge over new history); raises ValueError when the
+    wave was never reviewed, or when the assembly worktree holds uncommitted
+    changes at removal time."""
     wave_path = repo / "docs/dev/project-management/autopilot/wave.json"
     with locked(wave_path):
         wave = load(wave_path)
 
     status = wave.get("status")
     if status == "review_failed":
+        _append_summary_line(
+            repo,
+            wave["id"],
+            "## Assembly review: review_failed, see no review file written",
+        )
         return 4
-    if status != "converged":
+    if status not in ("converged", "done"):
         raise ValueError(f"wave status {status!r} is not landable")
 
-    worktree = Path(wave["assembly"]["worktree"])
-    repo_head = run_git(["-C", str(repo), "rev-parse", "HEAD"]).stdout.strip()
-    resolved_assembly_tip = (
-        run_git(["-C", str(worktree), "rev-parse", "HEAD"]).stdout.strip()
-        if worktree.is_dir()
-        else repo_head
-    )
-    if repo_head not in (wave["base_sha"], resolved_assembly_tip):
-        return 5
+    if status == "converged":
+        branch = f"wave/{wave['id']}/assembly"
+        repo_head = run_git(["-C", str(repo), "rev-parse", "HEAD"]).stdout.strip()
+        assembly_tip = run_git(["-C", str(repo), "rev-parse", branch]).stdout.strip()
+        if repo_head not in (wave["base_sha"], assembly_tip):
+            return 5
 
-    _land_merge(repo, resolved_assembly_tip, run_git)
-    _land_migrate(repo, wave_path, wave)
+        _land_merge(repo, assembly_tip, run_git)
+        _land_migrate(repo, wave_path, wave)
 
-    run_git(["-C", str(repo), "worktree", "remove", "--force", str(worktree)])
-    run_git(["-C", str(repo), "branch", "-d", f"wave/{wave['id']}/assembly"])
+        cycles = _cycle_count(Path(wave["assembly"]["worktree"]))
+        _append_summary_line(
+            repo,
+            wave["id"],
+            f"## Assembly review: converged ({cycles} cycle(s)), landed {assembly_tip}",
+        )
 
-    with locked(wave_path):
-        current = load(wave_path)
-        current["assembly"]["head_sha"] = resolved_assembly_tip
-        current["status"] = "done"
-        save(wave_path, current)
+        with locked(wave_path):
+            wave = load(wave_path)
+            wave["assembly"]["head_sha"] = assembly_tip
+            wave["status"] = "done"
+            save(wave_path, wave)
 
-    reports_dir = repo / "docs/dev/project-management/autopilot/reports"
-    reports_dir.mkdir(parents=True, exist_ok=True)
-    save(reports_dir / f"{wave['id']}-wave.json", current)
-
+    _land_cleanup(repo, wave_path, wave, run_git)
     return 0
