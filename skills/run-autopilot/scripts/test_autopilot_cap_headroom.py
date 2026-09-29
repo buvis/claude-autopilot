@@ -18,6 +18,7 @@ import json
 import unittest
 from datetime import datetime, timedelta, timezone
 
+from _cap_task_record import last_task_wall, record_task_bounds
 from test_autopilot_context_cap_hook import HookFixture, _load_hook_module
 
 
@@ -660,6 +661,118 @@ class HeadroomHandoffTests(unittest.TestCase):
             task_id="task-x",
             session="",
         )
+
+
+class TaskBoundsWallTests(unittest.TestCase):
+    """`record_task_bounds`'s `now` stamp and `last_task_wall` on top of it.
+
+    Unit-level: exercises `_cap_task_record.py` directly on synthetic state
+    dicts, no hook subprocess involved.
+    """
+
+    def test_start_fire_stamps_started_at(self) -> None:
+        """The first fire after a task turns in_progress stamps `started_at`
+        as the third value of the START pair, alongside the existing
+        usage/calls stamps."""
+        state = {"tasks": [{"id": "t1", "status": "in_progress"}]}
+        record_task_bounds(state, "t1", 100_000, 20, 1_700_000_000, warn=True)
+        task = state["tasks"][0]
+        self.assertEqual(task["usage_at_start"], 100_000)
+        self.assertEqual(task["calls_at_start"], 20)
+        self.assertEqual(task["started_at"], 1_700_000_000)
+
+    def test_done_fire_stamps_done_at(self) -> None:
+        """The first fire after a task turns completed stamps `done_at` as
+        the third value of the DONE pair, and the task id comes back as
+        `done_task`."""
+        state = {
+            "tasks": [
+                {
+                    "id": "t1",
+                    "status": "completed",
+                    "usage_at_start": 100_000,
+                    "calls_at_start": 20,
+                    "started_at": 1_700_000_000,
+                },
+            ],
+        }
+        changed, done_task = record_task_bounds(
+            state, "t2", 250_000, 220, 1_700_000_500, warn=True
+        )
+        task = state["tasks"][0]
+        self.assertTrue(changed)
+        self.assertEqual(done_task, "t1")
+        self.assertEqual(task["usage_at_done"], 250_000)
+        self.assertEqual(task["calls_at_done"], 220)
+        self.assertEqual(task["done_at"], 1_700_000_500)
+
+    def test_started_at_survives_a_second_session(self) -> None:
+        """A `started_at` already stamped is never replaced by a later call:
+        time does not restart at a rotation, the same never-rewrite rule the
+        usage/calls halves of the START pair already follow."""
+        state = {
+            "tasks": [
+                {
+                    "id": "t1",
+                    "status": "in_progress",
+                    "usage_at_start": 50_000,
+                    "calls_at_start": 5,
+                    "started_at": 1_700_000_000,
+                },
+            ],
+        }
+        changed, _ = record_task_bounds(
+            state, "t1", 90_000, 15, 1_700_001_000, warn=True
+        )
+        self.assertFalse(changed)
+        self.assertEqual(state["tasks"][0]["started_at"], 1_700_000_000)
+
+    def test_last_task_wall_reads_the_latest_completed_task(self) -> None:
+        """`last_task_wall` reads `done_at - started_at` of the LAST
+        completed task in list order, the same "most recent" rule
+        `last_task_cost` already uses, ignoring an earlier completed task's
+        span."""
+        earlier = {
+            "id": "a",
+            "status": "completed",
+            "started_at": 1_000,
+            "done_at": 1_100,
+        }
+        latest = {
+            "id": "b",
+            "status": "completed",
+            "started_at": 2_000,
+            "done_at": 2_300,
+        }
+        state = {"tasks": [earlier, latest]}
+        self.assertEqual(last_task_wall(state), 300)
+
+    def test_last_task_wall_is_none_without_stamps(self) -> None:
+        """No completed task carries both `started_at` and `done_at` as
+        ints: `None`, not a crash or a fallback value."""
+        no_stamps = {"id": "a", "status": "completed"}
+        non_int = {
+            "id": "b",
+            "status": "completed",
+            "started_at": "later",
+            "done_at": 2_000,
+        }
+        pending = {"id": "c", "status": "pending", "started_at": 1, "done_at": 2}
+        self.assertIsNone(last_task_wall({"tasks": [no_stamps]}))
+        self.assertIsNone(last_task_wall({"tasks": [non_int]}))
+        self.assertIsNone(last_task_wall({"tasks": [pending]}))
+
+    def test_last_task_wall_rejects_a_negative_span(self) -> None:
+        """A `done_at` before its `started_at` (a stale start from an
+        earlier session) is not a valid span: `None`, never a negative
+        number."""
+        negative = {
+            "id": "a",
+            "status": "completed",
+            "started_at": 5_000,
+            "done_at": 4_000,
+        }
+        self.assertIsNone(last_task_wall({"tasks": [negative]}))
 
 
 if __name__ == "__main__":
