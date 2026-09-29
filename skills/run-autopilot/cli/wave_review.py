@@ -11,11 +11,12 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
 from cli import wave_assemble
-from cli.wave import WAVE_APPEND_ONLY, load, locked, save
+from cli.wave import WAVE_APPEND_ONLY, _is_basename, load, locked, save
 from cli.wave_assemble import _default_run_git
 from cli.wave_launch import _SPAWN_CMD, CLI_MAIN_PATH
 
@@ -159,13 +160,20 @@ def _seed_prd(pm: Path, wave: dict) -> str:
 def _seed_batch(plugins_json: Path, wave: dict) -> dict:
     """The `batch` state value: wave id, empty completed_prds, and the pinned
     plugin versions read from `plugins_json`."""
-    installed = json.loads(plugins_json.read_text(encoding="utf-8"))
+    try:
+        installed = json.loads(plugins_json.read_text(encoding="utf-8"))
+    except FileNotFoundError as err:
+        raise RuntimeError(f"{plugins_json}: no such file") from err
+    plugins = installed["plugins"]
+    for name in _PINNED_PLUGINS:
+        if name not in plugins:
+            raise RuntimeError(f"{plugins_json}: missing pinned plugin {name}")
     return {
         "id": wave["id"],
         "mode": "autopilot",
         "completed_prds": [],
         "plugin_versions": {
-            name: installed["plugins"][name][0]["version"] for name in _PINNED_PLUGINS
+            name: plugins[name][0]["version"] for name in _PINNED_PLUGINS
         },
     }
 
@@ -234,6 +242,8 @@ def seed_state(
 def _check_reviewable(repo: Path, wave: dict) -> Path:
     """The assembly worktree; ValueError when the wave is not assembled, the
     worktree is gone, or `repo` has any uncommitted change."""
+    if not _is_basename(wave.get("id")):
+        raise ValueError("wave.json: malformed top-level field id")
     if "assembly" not in wave:
         raise ValueError("wave has no assembly - run `wave assemble` first")
     if wave.get("status") not in ("assembled", "assembled_partial"):
@@ -465,6 +475,9 @@ def land(
     with locked(wave_path):
         wave = load(wave_path)
 
+    if not _is_basename(wave.get("id")):
+        raise ValueError("wave.json: malformed top-level field id")
+
     status = wave.get("status")
     if status == "review_failed":
         review_file = _review_file(Path(wave["assembly"]["worktree"]), wave)
@@ -474,6 +487,7 @@ def land(
             else "## Assembly review: review_failed, see no review file written"
         )
         _append_summary_line(repo, wave["id"], line)
+        print(f"autopilot: {line}", file=sys.stderr)
         return 4
     if status not in ("converged", "done"):
         raise ValueError(f"wave status {status!r} is not landable")

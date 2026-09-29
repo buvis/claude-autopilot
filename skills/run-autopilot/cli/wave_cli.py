@@ -46,12 +46,19 @@ def run(args: argparse.Namespace, repo: Path, wave_path: Path) -> int:
             print(f"autopilot: {wave.corrupt_message(err)}", file=sys.stderr)
             return 1
     if args.verb == "run":
-        return wave_run.run(
-            repo,
-            max_lanes=args.max_lanes,
-            review_slots=args.review_slots,
-            yes=args.yes,
-        )
+        try:
+            return wave_run.run(
+                repo,
+                max_lanes=args.max_lanes,
+                review_slots=args.review_slots,
+                yes=args.yes,
+            )
+        except wave.WaveCorruptError as err:
+            print(f"autopilot: {wave.corrupt_message(err)}", file=sys.stderr)
+            return 1
+        except (ValueError, RuntimeError, subprocess.CalledProcessError) as err:
+            print(f"autopilot: {err}", file=sys.stderr)
+            return 1
     # Read once for the two friendly early messages only: `launch` reloads
     # wave.json under its own lock and never sees this copy.
     try:
@@ -72,11 +79,25 @@ def run(args: argparse.Namespace, repo: Path, wave_path: Path) -> int:
         print(wave_launch.status(repo, loaded))
         return 0
     if args.verb == "review":
-        outcome = wave_review.review(repo, loaded)
+        try:
+            outcome = wave_review.review(repo, loaded)
+        except wave.WaveCorruptError as err:
+            print(f"autopilot: {wave.corrupt_message(err)}", file=sys.stderr)
+            return 1
+        except (ValueError, RuntimeError, subprocess.CalledProcessError) as err:
+            print(f"autopilot: {err}", file=sys.stderr)
+            return 1
         print(outcome)
         return 4 if outcome == "review_failed" else 0
     if args.verb == "land":
-        return wave_review.land(repo, loaded)
+        try:
+            return wave_review.land(repo, loaded)
+        except wave.WaveCorruptError as err:
+            print(f"autopilot: {wave.corrupt_message(err)}", file=sys.stderr)
+            return 1
+        except (ValueError, RuntimeError, subprocess.CalledProcessError) as err:
+            print(f"autopilot: {err}", file=sys.stderr)
+            return 1
     # `abort` is the last verb the parser accepts, and it reloads wave.json under
     # its own lock too.
     try:
