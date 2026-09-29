@@ -126,19 +126,11 @@ CREATED_FILES+=("$CONTEXT_FILE")
     echo "_Diff scope: ${DIFF_SCOPE}_"
     echo
     echo '```'
-    if [[ ${#PATH_ARGS[@]} -gt 0 ]]; then
-      git -C "$PROJECT_ROOT" diff "$DIFF_BASE" --stat "${PATH_ARGS[@]}" 2>/dev/null || echo "_No diff available_"
-    else
-      git -C "$PROJECT_ROOT" diff "$DIFF_BASE" --stat 2>/dev/null || echo "_No diff available_"
-    fi
+    git -C "$PROJECT_ROOT" diff "$DIFF_BASE" --stat ${PATH_ARGS[@]+"${PATH_ARGS[@]}"} 2>/dev/null || echo "_No diff available_"
     echo '```'
     echo
     DIFF_FILE="$TMP_DIR/review-diff-${_ID}.diff"
-    if [[ ${#PATH_ARGS[@]} -gt 0 ]]; then
-      git -C "$PROJECT_ROOT" diff "$DIFF_BASE" "${PATH_ARGS[@]}" > "$DIFF_FILE" 2>/dev/null || echo "_No diff available_" > "$DIFF_FILE"
-    else
-      git -C "$PROJECT_ROOT" diff "$DIFF_BASE" > "$DIFF_FILE" 2>/dev/null || echo "_No diff available_" > "$DIFF_FILE"
-    fi
+    git -C "$PROJECT_ROOT" diff "$DIFF_BASE" ${PATH_ARGS[@]+"${PATH_ARGS[@]}"} > "$DIFF_FILE" 2>/dev/null || echo "_No diff available_" > "$DIFF_FILE"
     CREATED_FILES+=("$DIFF_FILE")
     echo "### Diff Content"
     echo "Full diff available at: $DIFF_FILE"
