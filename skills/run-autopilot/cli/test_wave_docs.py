@@ -299,3 +299,81 @@ def test_retention_names_the_ledger_copy_of_the_wave_report_as_durable() -> None
         f"{_SKILL}: § Retention still calls a `reports/` copy of the wave report "
         "durable, but only the `ledger/` mirror is"
     )
+
+
+# ── state-schema.md: wave.json / review-paths rows (PRD 00216) ─────────────
+
+_STATE_SCHEMA = Path(__file__).resolve().parent.parent / "references" / "state-schema.md"
+
+
+def _table_row(marker: str) -> str:
+    """The one state-file table row whose marker cell is `marker`, so a check
+    binds to that row alone - other rows share words like `worktree`."""
+    prefix = f"| `{marker}` |"
+    text = _STATE_SCHEMA.read_text(encoding="utf-8")
+    rows = [line for line in text.splitlines() if line.startswith(prefix)]
+    assert len(rows) == 1, (marker, rows)
+    return rows[0]
+
+
+def test_wave_json_row_names_all_five_assembly_fields() -> None:
+    row = _table_row("wave.json")
+    match = re.search(r'"assembly":\s*\{([^}]*)\}', row)
+    assert match, row
+    shape = match.group(1)
+    for field in ("worktree", "branch", "head_sha", "merged", "kept"):
+        assert f'"{field}"' in shape, (field, shape)
+
+
+def test_review_paths_row_states_its_removal_lifecycle() -> None:
+    row = _table_row("review-paths").lower()
+    assert "remov" in row, row
+    assert "worktree" in row, row
+
+
+# ── waves.md § wave run: the dotfiles alias line (PRD 00216) ───────────────
+
+_WAVE_RUN_HEADING = "## wave run"
+_ALIAS_LINE = 'caffeinate -is python3 "$_skill/cli/__main__.py" wave run "$@"'
+
+
+def _wave_run_section() -> str:
+    """`waves.md`'s `## wave run` section, from its heading to the next `## `
+    heading, so wording elsewhere in the runbook cannot satisfy the pin
+    below."""
+    text = _WAVES.read_text(encoding="utf-8")
+    heading = f"\n{_WAVE_RUN_HEADING}\n"
+    assert heading in text, f"{_WAVES}: no `{_WAVE_RUN_HEADING}` section"
+    section = text[text.index(heading) + len(heading) :]
+    end = section.find("\n## ")
+    return section if end == -1 else section[:end]
+
+
+def test_wave_run_section_documents_the_dotfiles_alias_line() -> None:
+    assert _ALIAS_LINE in _wave_run_section()
+
+
+# ── stale docstrings (PRD 00216) ────────────────────────────────────────────
+
+_WAVE_RUN_PY = Path(__file__).resolve().parent / "wave_run.py"
+_TEST_WAVE_REVIEW_PY = Path(__file__).resolve().parent / "test_wave_review.py"
+
+
+def _module_docstring(path: Path) -> str:
+    """The module-level triple-quoted docstring, whatever precedes it (a
+    shebang line, in both files this task reads)."""
+    parts = path.read_text(encoding="utf-8").split('"""', 2)
+    assert len(parts) == 3, f"{path}: no triple-quoted module docstring found"
+    return parts[1]
+
+
+def test_wave_run_docstring_cites_prd_00216_not_00214() -> None:
+    docstring = _module_docstring(_WAVE_RUN_PY)
+    assert "PRD 00216" in docstring, docstring
+    assert "PRD 00214" not in docstring, docstring
+
+
+def test_wave_review_test_docstring_has_no_stale_not_implemented_sentence() -> None:
+    docstring = _module_docstring(_TEST_WAVE_REVIEW_PY).lower()
+    assert "not yet implemented" not in docstring, docstring
+    assert "importerror" not in docstring, docstring
