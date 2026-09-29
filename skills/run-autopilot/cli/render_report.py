@@ -603,11 +603,7 @@ def _task_wallclock_block(tasks: list[dict]) -> list[str]:
             lines.append(f"- {t.get('id')} ({t.get('model')}): not stamped")
             continue
         minutes = int((done - started) // 60)
-        suffix = (
-            " [over budget]"
-            if task_over_budget(t)
-            else ""
-        )
+        suffix = " [over budget]" if task_over_budget(t) else ""
         lines.append(f"- {t.get('id')} ({t.get('model')}): {minutes} min{suffix}")
     return lines
 
@@ -657,12 +653,27 @@ def prd_section(
     lines += _autonomous(autonomous)
     lines += _escalated(deferred)
     lines += _doubt_findings(doubts)
-    lines += _rubric_verdicts(state.get("doubts_rubric_verdicts") or [])
+    lines += _prd_section_tail(state, deferred, metrics_rows, json_items, attempts_ledger)
+    return "\n".join(lines)
+
+
+def _prd_section_tail(
+    state: dict,
+    deferred: list[dict],
+    metrics_rows: list[dict],
+    json_items: list[dict] | None,
+    attempts_ledger: Path | None,
+) -> list[str]:
+    """The rubric verdicts, loop metrics, implementor mix, deferred table
+    and task wall-clock block appended after `_doubt_findings` in
+    `prd_section` (extracted only to keep `prd_section` under the 50-line
+    style cap)."""
+    lines = _rubric_verdicts(state.get("doubts_rubric_verdicts") or [])
     lines += ["### Loop Metrics", "", render_metrics.phase_table(metrics_rows), ""]
     lines += _implementor_mix(state, _ledger_rows(state, attempts_ledger))
     lines += _deferred_to_batch_end(_merge_deferral_sinks(deferred, json_items or []))
     lines += _task_wallclock_block(state.get("tasks") or [])
-    return "\n".join(lines)
+    return lines
 
 
 def _batch_rows(batch_id: str, metrics_rows: list[dict]) -> list[dict]:
