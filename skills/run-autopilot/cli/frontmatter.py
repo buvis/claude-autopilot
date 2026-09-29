@@ -41,8 +41,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from . import lane, schema, state
-
 # 20, plus the two custody keys the hold refresh may add.
 _HEAD_LINES = 22
 
@@ -168,7 +166,14 @@ def apply(prd_path: Path, state_path: Path) -> tuple[dict, list[str]]:
     """Parse `prd_path`, add lane/lane_reason/lane_effective (`off` in
     `_AUTOPILOT_LANES` forces full), write every field to `state_path` in ONE
     transaction, and return (fields, warnings). Prints nothing; raises
-    OSError, state.StateError, or schema.SchemaError on a failed read/write."""
+    OSError, state.StateError, or schema.SchemaError on a failed read/write.
+
+    Imports the package siblings here, not at module level: `parse` and
+    `declared` are also loaded BY PATH (no parent package) by
+    fast-track/scripts/cards_from_prd.py, where a relative import cannot
+    resolve."""
+    from . import lane, schema, state
+
     text = Path(prd_path).read_text(encoding="utf-8")
     fields, warnings = parse(text)
     keys = declared(text)
