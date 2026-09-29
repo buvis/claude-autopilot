@@ -60,10 +60,12 @@ import json
 import os
 import sys
 import time
+from functools import partial
 from pathlib import Path
 from typing import Any
 
 from _cap_handoff_marker import request_handoff
+from _cap_headroom import headroom_exhausted, secs_left_from_env, trusted_last_wall
 from _cap_state_write import (
     import_cli_state,
     write_state_write_failed_marker,
@@ -196,30 +198,15 @@ def _usage_limit() -> int:
     return USAGE_CAP
 
 
-def _headroom_exhausted(
-    total: int | None,
-    count: int | None,
-    last_usage: int,
-    last_calls: int,
-    secs_left: float | None = None,
-    last_wall: float | None = None,
-) -> bool:
-    """The headroom rule (PRD 00200): the next task would not fit in the
-    context left under USAGE_CAP, the calls left under TURN_TRIPWIRE, or the
-    wall-clock seconds left before the session deadline, judged by what the
-    last task cost times HEADROOM_MARGIN. A None total (no usage line in the
-    transcript yet) drops the usage term; a None count (no session id on
-    stdin) drops the calls term; a None secs_left or last_wall drops the
-    time term."""
-    if total is not None and USAGE_CAP - total < last_usage * HEADROOM_MARGIN:
-        return True
-    if count is not None and TURN_TRIPWIRE - count < last_calls * HEADROOM_MARGIN:
-        return True
-    return (
-        secs_left is not None
-        and last_wall is not None
-        and secs_left < last_wall * HEADROOM_MARGIN
-    )
+# `_cap_headroom.headroom_exhausted` bound to this hook's caps. A partial, not
+# a def: the hook file is at its 800-line limit and this costs 6 lines instead
+# of 20 while keeping the exact call signature every caller and test uses.
+_headroom_exhausted = partial(
+    headroom_exhausted,
+    usage_cap=USAGE_CAP,
+    turn_tripwire=TURN_TRIPWIRE,
+    margin=HEADROOM_MARGIN,
+)
 
 
 def _last_task_cost(state: dict[str, Any]) -> tuple[int, int]:
@@ -582,7 +569,10 @@ def _handle_below_cap(
     if task_id is None:
         return
     last_usage, last_calls = _last_task_cost(state)
-    if _headroom_exhausted(total, count, last_usage, last_calls):
+    secs_left = secs_left_from_env(os.environ, int(time.time()))
+    if _headroom_exhausted(
+        total, count, last_usage, last_calls, secs_left, trusted_last_wall(state)
+    ):
         request_handoff(autopilot_dir, task_id, session_id, _phase_of(state))
 
 
