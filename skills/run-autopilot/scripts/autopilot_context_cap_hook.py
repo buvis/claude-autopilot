@@ -94,8 +94,7 @@ USAGE_CAP = 500_000
 # measured opus tasks (~200 each) minus the margin the headroom rule provides
 # (PRD 00200); at 300 the second task of every opus session died mid-flight.
 TURN_TRIPWIRE = 450
-# Safety factor on the headroom rule: hand off when what is left is under
-# the last task's cost times this, since task costs vary run to run.
+# Safety factor on the headroom rule, since task costs vary run to run.
 HEADROOM_MARGIN = 1.25
 # First-task estimates for the headroom rule (PRD 00200), used until a task
 # has completed in this session and recorded its own bounds. Measured opus
