@@ -245,7 +245,11 @@ def seed_state(
             )
 
 
-def _check_reviewable(repo: Path, wave: dict) -> Path:
+def _check_reviewable(
+    repo: Path,
+    wave: dict,
+    run_git: Callable[..., subprocess.CompletedProcess] = _default_run_git,
+) -> Path:
     """The assembly worktree; ValueError when the wave is not assembled, the
     worktree is gone, or `repo` has any uncommitted change."""
     if not _is_basename(wave.get("id")):
@@ -257,12 +261,7 @@ def _check_reviewable(repo: Path, wave: dict) -> Path:
     worktree = Path(wave["assembly"]["worktree"])
     if not worktree.is_dir():
         raise ValueError(f"assembly worktree {worktree} is gone")
-    dirty = subprocess.run(
-        ["git", "-C", str(repo), "status", "--porcelain"],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
+    dirty = run_git(["-C", str(repo), "status", "--porcelain"]).stdout
     if dirty:
         raise ValueError(f"{repo} has uncommitted changes:\n{dirty}")
     return worktree
@@ -272,11 +271,13 @@ def review(
     repo: Path,
     wave: dict,
     spawn_fn: Callable[..., subprocess.Popen] = subprocess.Popen,
+    *,
+    run_git: Callable[..., subprocess.CompletedProcess] = _default_run_git,
 ) -> str:
     """Review the assembly: seed its worktree at review, run one loop there to
     exit, and record the outcome in wave.json - converged when the stub PRD
     ends in done/, review_failed when it ends in hold/ or stays in wip/."""
-    worktree = _check_reviewable(repo, wave)
+    worktree = _check_reviewable(repo, wave, run_git=run_git)
     pm = worktree / "docs/dev/project-management"
     seed_state(
         pm / "autopilot/state.json",

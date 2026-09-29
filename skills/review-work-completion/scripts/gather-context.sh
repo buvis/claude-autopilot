@@ -116,21 +116,26 @@ CREATED_FILES+=("$CONTEXT_FILE")
     DIFF_SCOPE="path-scoped review (${#REVIEW_PATHS[@]} paths from docs/dev/project-management/autopilot/review-paths)"
   fi
 
+  PATH_ARGS=()
+  if [[ ${#REVIEW_PATHS[@]} -gt 0 ]]; then
+    PATH_ARGS=(-- "${REVIEW_PATHS[@]}")
+  fi
+
   if [[ -n "$DIFF_BASE" ]]; then
     echo "### Changed Files"
     echo "_Diff scope: ${DIFF_SCOPE}_"
     echo
     echo '```'
-    if [[ ${#REVIEW_PATHS[@]} -gt 0 ]]; then
-      git -C "$PROJECT_ROOT" diff "$DIFF_BASE" --stat -- "${REVIEW_PATHS[@]}" 2>/dev/null || echo "_No diff available_"
+    if [[ ${#PATH_ARGS[@]} -gt 0 ]]; then
+      git -C "$PROJECT_ROOT" diff "$DIFF_BASE" --stat "${PATH_ARGS[@]}" 2>/dev/null || echo "_No diff available_"
     else
       git -C "$PROJECT_ROOT" diff "$DIFF_BASE" --stat 2>/dev/null || echo "_No diff available_"
     fi
     echo '```'
     echo
     DIFF_FILE="$TMP_DIR/review-diff-${_ID}.diff"
-    if [[ ${#REVIEW_PATHS[@]} -gt 0 ]]; then
-      git -C "$PROJECT_ROOT" diff "$DIFF_BASE" -- "${REVIEW_PATHS[@]}" > "$DIFF_FILE" 2>/dev/null || echo "_No diff available_" > "$DIFF_FILE"
+    if [[ ${#PATH_ARGS[@]} -gt 0 ]]; then
+      git -C "$PROJECT_ROOT" diff "$DIFF_BASE" "${PATH_ARGS[@]}" > "$DIFF_FILE" 2>/dev/null || echo "_No diff available_" > "$DIFF_FILE"
     else
       git -C "$PROJECT_ROOT" diff "$DIFF_BASE" > "$DIFF_FILE" 2>/dev/null || echo "_No diff available_" > "$DIFF_FILE"
     fi
