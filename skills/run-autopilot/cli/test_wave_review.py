@@ -64,6 +64,20 @@ def _wave(**overrides: object) -> dict:
     return base
 
 
+def _field_section(lines: list[str], label: str) -> list[str]:
+    """Lines after `label` up to whichever comes first: the next of the four
+    field labels, or the next markdown heading."""
+    field_labels = ("Description:", "Inputs:", "Outputs:", "Behavior:")
+    start = lines.index(label) + 1
+    end = len(lines)
+    for index in range(start, len(lines)):
+        line = lines[index]
+        if line in field_labels or line.startswith("#"):
+            end = index
+            break
+    return lines[start:end]
+
+
 # ── stub_text ────────────────────────────────────────────────────────────
 
 
@@ -105,15 +119,37 @@ def test_stub_frontmatter_is_the_five_pairs() -> None:
     assert warnings == []
 
 
+def test_stub_prd_lists_description_inputs_outputs_behavior_separately() -> None:
+    text = wave_review.stub_text(_wave())
+    lines = text.splitlines()
+    labels = ("Description:", "Inputs:", "Outputs:", "Behavior:")
+    for label in labels:
+        assert label in lines, (label, text)
+    order = [lines.index(label) for label in labels]
+    assert order == sorted(order), (order, text)
+
+
+@pytest.mark.parametrize("label", ["Description:", "Inputs:", "Outputs:", "Behavior:"])
+def test_stub_field_sections_name_every_merged_lane(label: str) -> None:
+    text = wave_review.stub_text(_wave())
+    section = "\n".join(_field_section(text.splitlines(), label))
+    assert "l1" in section, (label, section)
+    assert "l2" in section, (label, section)
+
+
+def test_stub_behavior_reports_no_keep_both_resolutions_by_default() -> None:
+    text = wave_review.stub_text(_wave())
+    section = "\n".join(_field_section(text.splitlines(), "Behavior:"))
+    assert "no keep-both resolutions recorded" in section, section
+
+
 def test_stub_prd_lists_the_diff_scope() -> None:
     wave_dict = _wave()
     text = wave_review.stub_text(wave_dict)
     assert "Diff scope:" in text
     lines = text.splitlines()
     for path in wave_review.review_paths(wave_dict):
-        # The exact bullet styling is not pinned, only that each path gets
-        # its own line rather than being folded into one comma list.
-        assert path in lines or f"- {path}" in lines, (path, text)
+        assert f"- {path}" in lines, (path, text)
 
 
 def test_stub_text_raises_without_an_assembly() -> None:
@@ -424,6 +460,35 @@ def test_seed_state_extracts_only_the_two_pinned_plugin_versions(
     assert loop_decision.plugin_drift(state, installed) is None
 
 
+def test_seed_state_copies_meta_into_the_assembly_worktree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, _, wave_dict = _assembled(tmp_path, monkeypatch)
+    worktree = Path(wave_dict["assembly"]["worktree"])
+    state_path = _autopilot(worktree) / "state.json"
+    wave_review.seed_state(state_path, wave_dict, _plugins_json(tmp_path))
+    assert (_pm(worktree) / "meta" / "goals.md").read_text(
+        encoding="utf-8",
+    ) == "ship waves\n"
+
+
+def test_seed_state_rejects_a_positional_run_cli(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, _, wave_dict = _assembled(tmp_path, monkeypatch)
+    worktree = Path(wave_dict["assembly"]["worktree"])
+    state_path = _autopilot(worktree) / "state.json"
+    with pytest.raises(TypeError):
+        wave_review.seed_state(
+            state_path,
+            wave_dict,
+            _plugins_json(tmp_path),
+            _recording_cli([]),
+        )
+
+
 def test_seed_state_raises_on_a_failed_step_and_a_retry_resumes_past_init(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -465,6 +530,15 @@ def test_seed_state_raises_on_a_failed_step_and_a_retry_resumes_past_init(
 
 
 # ── review ───────────────────────────────────────────────────────────────
+
+
+def test_review_rejects_a_positional_spawn_fn(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, _, wave_dict = _assembled(tmp_path, monkeypatch)
+    with pytest.raises(TypeError):
+        wave_review.review(repo, wave_dict, _FakeLoop())
 
 
 def test_review_writes_review_paths_in_the_assembly_worktree(
