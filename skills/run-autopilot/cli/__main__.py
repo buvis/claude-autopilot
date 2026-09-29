@@ -439,9 +439,7 @@ def _add_check_plan(subparsers) -> None:
 
 
 def _check_plan_stall_lines(
-    verdict: policy.Verdict,
-    ceiling: int,
-    note_path: Path,
+    verdict: policy.Verdict, ceiling: int, note_path: Path
 ) -> tuple[str, str]:
     """The two stderr lines of a stall: the fired numbers, then the stall
     instruction whose detail a caller lifts verbatim into `stall --detail`."""
@@ -663,10 +661,7 @@ def _lane_fields(text: str) -> tuple[dict, list[str]]:
     fields = {
         "lane": verdict.lane,
         "lane_reason": verdict.reason,
-        "lane_effective": lane.effective(
-            verdict.lane,
-            os.environ.get("_AUTOPILOT_LANES"),
-        ),
+        "lane_effective": lane.effective(verdict.lane, os.environ.get("_AUTOPILOT_LANES")),
     }
     return fields, warnings
 
@@ -739,15 +734,10 @@ def _run_lane_check(args: argparse.Namespace) -> int:
     if signal is None:
         missing = [k for k in ("work_start_sha", "repo_root") if not data.get(k)]
         if missing:
-            print(
-                f"autopilot: lane-check: state has no {', '.join(missing)}",
-                file=sys.stderr,
-            )
+            print(f"autopilot: lane-check: state has no {', '.join(missing)}", file=sys.stderr)
             return 2
         signal = lane_check.diff_signal(
-            data["work_start_sha"],
-            data["repo_root"],
-            data.get("git_dir"),
+            data["work_start_sha"], data["repo_root"], data.get("git_dir")
         )
     if signal is None:
         print("lane: ok")
@@ -948,10 +938,7 @@ def _render_metrics_surface(args: argparse.Namespace) -> int:
 
 
 def _render_audit_surface(
-    args: argparse.Namespace,
-    loaded: dict,
-    autopilot_dir: Path,
-    now: str,
+    args: argparse.Namespace, loaded: dict, autopilot_dir: Path, now: str
 ) -> int:
     prd = str(loaded.get("prd", ""))
     if not prd:
@@ -970,14 +957,7 @@ def _render_audit_surface(
         )
         return 2
     repo_root = autopilot_dir.parents[3]
-    out_path = (
-        repo_root
-        / "docs"
-        / "dev"
-        / "project-management"
-        / "reviews"
-        / f"{prd_base}-audit.md"
-    )
+    out_path = repo_root / "docs" / "dev" / "project-management" / "reviews" / f"{prd_base}-audit.md"
     started = now
     if out_path.exists():
         try:
@@ -1027,14 +1007,8 @@ def _select_report_block(
         i for i in deferred_items or [] if isinstance(i, dict) and i.get("prd") == prd
     ]
     convergence = next(
-        (
-            r
-            for r in event_rows
-            if r.get("event") == "review_converged"
-            and r.get("prd") == prd
-            and r.get("batch") == batch_id
-        ),
-        None,
+        (r for r in event_rows if r.get("event") == "review_converged"
+         and r.get("prd") == prd and r.get("batch") == batch_id), None
     )
     block = render_report.prd_section(
         loaded,
@@ -1049,10 +1023,7 @@ def _select_report_block(
 
 
 def _render_report_surface(
-    args: argparse.Namespace,
-    loaded: dict,
-    autopilot_dir: Path,
-    now: str,
+    args: argparse.Namespace, loaded: dict, autopilot_dir: Path, now: str
 ) -> int:
     batch_id = (loaded.get("batch") or {}).get("id")
     if not batch_id:
@@ -1066,17 +1037,10 @@ def _render_report_surface(
     rows = render_metrics.load_rows(metrics_path)
     event_rows = render_metrics.load_event_rows(metrics_path)
     deferred_items = _deferred_items(
-        autopilot_dir / "deferred" / f"{batch_id}-deferred.json",
+        autopilot_dir / "deferred" / f"{batch_id}-deferred.json"
     )
     selected = _select_report_block(
-        args,
-        loaded,
-        autopilot_dir,
-        now,
-        batch_id,
-        rows,
-        event_rows,
-        deferred_items,
+        args, loaded, autopilot_dir, now, batch_id, rows, event_rows, deferred_items
     )
     if isinstance(selected, int):
         return selected
@@ -1224,13 +1188,7 @@ def _run_wave(args: argparse.Namespace) -> int:
     # caller-supplied --state is input, so a non-canonical one is reported, never
     # asserted: under `python -O` a bare assert vanishes and the wrong repo root
     # is derived in silence.
-    if state_path.parts[-5:] != (
-        "docs",
-        "dev",
-        "project-management",
-        "autopilot",
-        "state.json",
-    ):
+    if state_path.parts[-5:] != ("docs", "dev", "project-management", "autopilot", "state.json"):
         print(
             "autopilot: wave needs --state at <repo>/docs/dev/project-management/autopilot/state.json,"
             f" not {state_path}",
@@ -1261,10 +1219,7 @@ def _record_minted(state_path: Path, minted: list[str]) -> int:
     try:
         statectl.mutate(state_path, apply)
     except (state.StateError, schema.SchemaError, OSError) as err:
-        print(
-            f"autopilot: mint-stubs: recording minted stubs failed: {err}",
-            file=sys.stderr,
-        )
+        print(f"autopilot: mint-stubs: recording minted stubs failed: {err}", file=sys.stderr)
         return 9
     return 0
 
