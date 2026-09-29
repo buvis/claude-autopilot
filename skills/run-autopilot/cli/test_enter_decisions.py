@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Tests for cli/enter.py - the step 10/11 decisions: the frontmatter write,
 the default handoff row, the lane override, and catchup freshness against a
-moving clock. Split from test_enter.py for size; shares its Env harness.
+moving clock, plus the `--prd` argument checks that reject any value which is
+not a bare basename. Split from test_enter.py for size; shares its Env harness.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from cli import enter, frontmatter, notify_out
-from cli.enter_harness import PRD, Env, _cache, _open_state, _prd_text
+from cli.enter_harness import OTHER, PRD, Env, _cache, _open_state, _prd_text
 
 
 @pytest.fixture
@@ -119,3 +120,59 @@ def test_catchup_freshness_is_four_hours_before_now(
     out = env.run(now=lambda: now)
 
     assert (out["stop"], out["catchup"]) == (None, expected)
+
+
+# -- the --prd argument must be a bare basename -------------------------------
+
+
+@pytest.mark.parametrize(
+    "prd_arg",
+    [f"../hold/{OTHER}", f"./{PRD}", f"prds/wip/{PRD}"],
+    ids=["parent-traversal-reaching-hold", "dot-slash-reaching-wip", "nested-relative"],
+)
+def test_a_prd_arg_that_is_not_a_bare_basename_is_rejected(env: Env, prd_arg: str) -> None:
+    # Both arranged files are reachable by joining the argument onto a PRD
+    # folder, so a run that consults the filesystem would select one of them;
+    # the rejection has to fire before that lookup happens.
+    env.write_state(_open_state())
+    env.put("wip", PRD)
+    env.put("hold", OTHER)
+
+    out = env.run(prd_arg=prd_arg)
+
+    assert (out["stop"], out["prd"], out["source"]) == ("prd_not_found", None, None)
+    assert out["detail"] and prd_arg in out["detail"]
+    assert env.has("hold", OTHER) and env.has("wip", PRD)
+    assert not env.has("wip", OTHER)
+
+
+def test_an_absolute_prd_arg_is_rejected_even_though_that_file_exists(env: Env) -> None:
+    env.write_state(_open_state())
+    target = env.put("hold", OTHER)
+
+    out = env.run(prd_arg=str(target))
+
+    assert (out["stop"], out["prd"], out["source"]) == ("prd_not_found", None, None)
+    assert out["detail"] and str(target) in out["detail"]
+    assert env.has("hold", OTHER)
+    assert not env.has("wip", OTHER)
+
+
+def test_a_bare_basename_in_wip_is_still_selected_from_the_argument(env: Env) -> None:
+    env.write_state(_open_state())
+    env.put("wip", PRD)
+
+    out = env.run(prd_arg=PRD)
+
+    assert (out["stop"], out["prd"], out["source"]) == (None, PRD, "arg")
+    assert env.has("wip", PRD)
+
+
+def test_a_bare_basename_in_backlog_is_still_moved_into_wip(env: Env) -> None:
+    env.write_state(_open_state())
+    env.put("backlog", PRD)
+
+    out = env.run(prd_arg=PRD)
+
+    assert (out["stop"], out["prd"], out["source"]) == (None, PRD, "arg")
+    assert env.has("wip", PRD) and not env.has("backlog", PRD)
