@@ -430,23 +430,27 @@ def test_child_env_does_not_mutate_the_input_env():
 
 
 def test_spawn_exports_the_session_deadline(tmp_path):
+    # Run with two clearly different cap_secs values: a hardcoded offset
+    # (e.g. always +61s) would satisfy only one of these, not both, so the
+    # deadline must actually track the specific cap_secs passed in.
     stub = _stub_runner(
         tmp_path,
         "import json\nprint(json.dumps(dict(os.environ)))",
     )
-    ap = _ap_dir(tmp_path)
-    before = time.time()
-    result = spawn(
-        "m",
-        "low",
-        cap_secs=60,
-        autopilot_dir=ap,
-        env={},
-        runner_bin=stub,
-        presenter=_Collector(),
-    )
-    after = time.time()
-    dumped = json.loads(result.log_path.read_text())
-    assert "_AUTOPILOT_SESSION_DEADLINE" in dumped
-    deadline = int(dumped["_AUTOPILOT_SESSION_DEADLINE"])
-    assert before + 60 <= deadline <= after + 60 + 5
+    for cap_secs in (60, 3600):
+        ap = _ap_dir(tmp_path)
+        before = time.time()
+        result = spawn(
+            "m",
+            "low",
+            cap_secs=cap_secs,
+            autopilot_dir=ap,
+            env={},
+            runner_bin=stub,
+            presenter=_Collector(),
+        )
+        after = time.time()
+        dumped = json.loads(result.log_path.read_text())
+        assert "_AUTOPILOT_SESSION_DEADLINE" in dumped
+        deadline = int(dumped["_AUTOPILOT_SESSION_DEADLINE"])
+        assert before + cap_secs <= deadline <= after + cap_secs + 5

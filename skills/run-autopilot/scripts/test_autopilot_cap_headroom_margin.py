@@ -56,6 +56,47 @@ class HeadroomMarginTests(unittest.TestCase):
             )
         )
 
+    def test_time_term_is_false_when_plenty_of_time_remains(self) -> None:
+        """5000s left against a last task whose wall time was 900s: the
+        margined threshold is 900 * 1.25 = 1125, and 5000 is nowhere near
+        under it, so the time term must not fire even though both
+        secs_left and last_wall are set (it is not "any deadline plus any
+        completed task's wall time means hand off")."""
+        module = _load_hook_module()
+        self.assertFalse(
+            module._headroom_exhausted(
+                300_000, 120, 150_000, 200, secs_left=5000, last_wall=900
+            )
+        )
+
+    def test_time_term_boundary_pins_strict_less_than(self) -> None:
+        """The time term's margined threshold is last_wall * 1.25 = 1125
+        for last_wall=900. Exactly at the threshold must stay False (the
+        comparison is strict `<`, not `<=`); one second under must flip to
+        True."""
+        module = _load_hook_module()
+        self.assertFalse(
+            module._headroom_exhausted(
+                None, None, 150_000, 200, secs_left=1125, last_wall=900
+            )
+        )
+        self.assertTrue(
+            module._headroom_exhausted(
+                None, None, 150_000, 200, secs_left=1124, last_wall=900
+            )
+        )
+
+    def test_usage_margin_boundary_pins_the_exact_multiplier(self) -> None:
+        """HEADROOM_MARGIN's threshold for last_usage=164_000 is exactly
+        164_000 * 1.25 = 205_000. USAGE_CAP - total sitting exactly on that
+        threshold must stay False (strict `<`); one unit over the cap
+        (i.e. one unit less headroom) must flip to True. This pins the
+        multiplier precisely, closing the range of factors between ~1.055
+        and ~3.05 that would otherwise also pass."""
+        module = _load_hook_module()
+        self.assertFalse(module._headroom_exhausted(295_000, None, 164_000, 200))
+        self.assertTrue(module._headroom_exhausted(295_001, None, 164_000, 200))
+
     def test_malformed_deadline_drops_the_time_term(self) -> None:
         """secs_left=None (what a malformed _AUTOPILOT_SESSION_DEADLINE
         resolves to upstream) makes the time term never fire, regardless of
