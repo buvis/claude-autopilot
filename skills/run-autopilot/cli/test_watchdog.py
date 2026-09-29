@@ -276,6 +276,25 @@ def test_zero_idle_keeps_the_kill_at_the_cap():
     assert proc.returncode == -signal.SIGTERM
 
 
+def test_zero_idle_with_an_activity_path_still_fires_at_the_cap(tmp_path):
+    activity = tmp_path / "activity"
+    activity.touch()
+    proc = _spawn_sleeper(300)
+    dog = Watchdog(
+        proc,
+        cap_secs=0.2,
+        grace_secs=5,
+        idle_secs=0.0,
+        activity_path=str(activity),
+        poll_secs=0.1,
+    ).start()
+    proc.wait(timeout=10)
+    dog.cancel()
+    assert dog.fired is True
+    assert dog.fired_reason == "cap"
+    assert proc.returncode == -signal.SIGTERM
+
+
 def test_unreadable_activity_path_counts_as_silent(tmp_path):
     missing = tmp_path / "never-created"
     proc = _spawn_sleeper(300)

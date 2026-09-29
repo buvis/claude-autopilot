@@ -126,7 +126,7 @@ class Watchdog:
         Returns None when the child exited on its own before any reason
         applied - the caller must not fire in that case.
         """
-        if self._activity_path is None:
+        if self._activity_path is None or self._idle <= 0:
             print(
                 f"\nautoclaude: session exceeded the {int(self._cap)}s wall-clock "
                 "cap; SIGTERM (session cap).",
