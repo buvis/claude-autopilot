@@ -367,12 +367,15 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
                 except (ValueError, OSError):
                     pass
 
-    def _launch(self, plan: routing.Route, ap_dir: Path, phase: str) -> None:
+    def _launch(self, plan: routing.Route, ap_dir: Path, phase: str) -> float:
         """One routed session, plus the slot reset and orphan sweep that
         always follow it. The keyword set is the contract every spawn_fn
         (runner.spawn and the tests' ScriptedSpawn) is written against.
         A review session first claims a slot under
-        _AUTOPILOT_REVIEW_SLOTS_DIR, when set, and frees it after."""
+        _AUTOPILOT_REVIEW_SLOTS_DIR, when set, and frees it after. Returns
+        the clock reading taken once the slot is held (or immediately, when
+        there is none to wait for), so the metrics ts_start excludes the
+        queue wait."""
         slots_dir = self.env.get("_AUTOPILOT_REVIEW_SLOTS_DIR", "")
         slot = None
         if phase == "review" and slots_dir:
@@ -383,6 +386,7 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
                 sleep_fn=self._sleep,
                 clock=self._clock,
             )
+        ts_start = self._clock()
         try:
             self._spawn(
                 plan.model,
@@ -398,6 +402,7 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
                 wave_slots.release(slot)
         self._proc_slot[0] = None
         self._cleanup_orphans()
+        return ts_start
 
     def _one_shot_phase(self, state, state_path: Path) -> str | None:
         """The phase guard. Only `review` and `done` may be driven by a
@@ -434,10 +439,9 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
             self._teardown()
             return 1
 
-        ts_start = self._clock()
         prd = (state.get("prd") or "") if isinstance(state, dict) else ""
         plan = routing.route(next_phase, ap_dir, env=self.env)
-        self._announce_and_launch(ap_dir, next_phase, prd, plan)
+        ts_start = self._announce_and_launch(ap_dir, next_phase, prd, plan)
 
         decision = self._decide(ap_dir, ts_start)
         # NOT _fingerprint_bound: it parks.
@@ -486,24 +490,26 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
 
     def _announce_and_launch(
         self, ap_dir: Path, phase: str, prd: str, plan: routing.Route
-    ) -> None:
+    ) -> float:
         """Print the launch banner and spawn the routed session. Phase
         resolution and the banner's empty-phase fallback stay with each
         caller: `_run_once` passes an already-restricted phase,
-        `_launch_phase` passes `phase_launched or 'bootstrap'`."""
+        `_launch_phase` passes `phase_launched or 'bootstrap'`. Returns
+        `_launch`'s post-slot-wait clock reading."""
         stamp = _dt.datetime.now().strftime("%H:%M:%S")
         print(
             f"\n━━ {stamp} · phase {phase} · prd {prd or 'no-prd'} · "
             f"{plan.model}/{plan.effort} ━━",
             file=self.out,
         )
-        self._launch(plan, ap_dir, phase)
+        return self._launch(plan, ap_dir, phase)
 
     def _launch_phase(self, ap_dir: Path) -> tuple[float, str, routing.Route]:
         """Read state, route it, announce it, spawn it. Returns the
         start clock, the phase launched and the route, all three needed
-        by the metrics line the caller appends."""
-        ts_start = self._clock()
+        by the metrics line the caller appends. The start clock is read
+        once the session actually launches, excluding any review-slot
+        wait."""
         state = _load_json(ap_dir / "state.json")
         phase_launched = ""
         prd_launched = ""
@@ -512,7 +518,7 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
             prd_launched = state.get("prd") or ""
 
         plan = routing.route(phase_launched, ap_dir, env=self.env)
-        self._announce_and_launch(
+        ts_start = self._announce_and_launch(
             ap_dir, phase_launched or "bootstrap", prd_launched, plan
         )
         return ts_start, phase_launched, plan
