@@ -7,6 +7,10 @@ tree has ever used.
 
     parse(text) -> (fields, warnings)
 
+The one exception is `apply(prd_path, state_path)`, the non-printing core of
+`autopilot frontmatter`: it reads the PRD, adds the lane fields, and writes
+them all to state.json in one transaction.
+
 `fields` maps STATE keys (not PRD keys) to effective values, and carries only
 what Phase 0 should write: an absent optional field stays absent rather than
 being written as a null. `warnings` holds the lines the caller prints.
@@ -33,6 +37,11 @@ the per-task tier, `session_model` picks the build session's model.
 """
 
 from __future__ import annotations
+
+import os
+from pathlib import Path
+
+from . import lane, schema, state
 
 # 20, plus the two custody keys the hold refresh may add.
 _HEAD_LINES = 22
@@ -152,4 +161,33 @@ def parse(text: str) -> tuple[dict, list[str]]:
         if declared.get(prd_key) == marker:
             fields[state_key] = value
 
+    return fields, warnings
+
+
+def apply(prd_path: Path, state_path: Path) -> tuple[dict, list[str]]:
+    """Parse `prd_path`, add lane/lane_reason/lane_effective (`off` in
+    `_AUTOPILOT_LANES` forces full), write every field to `state_path` in ONE
+    transaction, and return (fields, warnings). Prints nothing; raises
+    OSError, state.StateError, or schema.SchemaError on a failed read/write."""
+    text = Path(prd_path).read_text(encoding="utf-8")
+    fields, warnings = parse(text)
+    keys = declared(text)
+    verdict = lane.classify(text, keys)
+    if "lane" in keys and keys["lane"] not in lane.LANES:
+        warnings.append(
+            f"autopilot: PRD frontmatter lane={keys['lane']!r} is not one of "
+            f"solo/fast-track/full; defaulting to {verdict.lane}",
+        )
+    fields["lane"] = verdict.lane
+    fields["lane_reason"] = verdict.reason
+    fields["lane_effective"] = lane.effective(
+        verdict.lane, os.environ.get("_AUTOPILOT_LANES"),
+    )
+    state.transaction(
+        state_path,
+        lambda current: {**current, **fields},
+        validator=lambda new_state: schema.validate(
+            {key: value for key, value in new_state.items() if key in fields},
+        ),
+    )
     return fields, warnings

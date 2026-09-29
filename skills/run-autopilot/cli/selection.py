@@ -8,6 +8,10 @@ without a filesystem and the caller owns the I/O.
     selectable(names)         -> the selectable subset, lowest sequence first
     select(wip, backlog)      -> (basename, source)
 
+The one exception is `select_eligible(prds_dir, project_root)`, which lists the
+directories and runs each backlog pick's `eligibility:` check (PRD 00137) - the
+I/O-owning core shared by `autopilot select` and `autopilot enter`.
+
 `hold/` is absent from the signature ON PURPOSE - that IS the parked/deferred
 exclusion. A function that cannot see `hold/` cannot pick from it, which is a
 stronger guarantee than a rule saying it must not.
@@ -27,6 +31,9 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
+from pathlib import Path
+
+from cli import eligibility
 
 _SEQUENCE_RE = re.compile(r"^(\d{5})-")
 
@@ -62,3 +69,42 @@ def select(wip: Iterable[str], backlog: Iterable[str]) -> tuple[str | None, str]
     if in_backlog:
         return in_backlog[0], "backlog"
     return None, "drained"
+
+
+def _listdir(path: Path) -> list[str]:
+    """Basenames in `path`, or [] when it does not exist."""
+    try:
+        return [entry.name for entry in path.iterdir()]
+    except (FileNotFoundError, NotADirectoryError):
+        return []
+
+
+def select_eligible(
+    prds_dir: Path, project_root: Path,
+) -> tuple[str | None, str, list[dict]]:
+    """Return (basename, source, skips): `select` over `prds_dir`, with each
+    backlog pick's `eligibility:` command run from `project_root` until one
+    passes. Each unmet candidate becomes one skip entry (prd, command, its real
+    exit code, note) and drops out of THIS pick only - it stays in backlog/.
+    wip candidates are never gated. Prints nothing."""
+    in_wip = _listdir(prds_dir / "wip")
+    in_backlog = _listdir(prds_dir / "backlog")
+    skips: list[dict] = []
+    while True:
+        prd, source = select(in_wip, in_backlog)
+        if source != "backlog":
+            return prd, source, skips
+        try:
+            text = (prds_dir / "backlog" / prd).read_text(encoding="utf-8")
+        except OSError:
+            # Unreadable declares no check: pick it, and let the session
+            # that opens it report the real problem.
+            text = ""
+        command = eligibility.command_for(text)
+        if command is None:
+            return prd, source, skips
+        exit_code, note = eligibility.evaluate(command, project_root)
+        if exit_code == 0:
+            return prd, source, skips
+        skips.append({"prd": prd, "command": command, "exit_code": exit_code, "note": note})
+        in_backlog = [name for name in in_backlog if name != prd]
