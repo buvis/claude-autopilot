@@ -179,3 +179,63 @@ def test_no_slot_dir_means_no_semaphore(tmp_path):
     assert len(lp._test["spawn"].launches) == 1
     assert not slots_dir.exists()
     assert not (tmp_path / "state").exists()
+
+
+def test_review_metrics_ts_start_excludes_the_slot_wait(tmp_path, monkeypatch):
+    slots_dir = tmp_path / "state" / "wave-slots"
+    held = slots_dir / "1"
+    held.mkdir(parents=True)
+    (held / "owner").write_text(str(os.getpid()))
+    lp = make_loop(tmp_path, [terminal_step()], env=_slot_env(slots_dir))
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="review", batch={"id": "b"})
+    clock = lp._test["clock"]
+    acquired_at = None
+    calls = 0
+
+    def sleep(secs: float) -> None:
+        nonlocal acquired_at, calls
+        calls += 1
+        if calls > 5:
+            raise AssertionError("the loop never claimed the freed slot")
+        clock.sleep(1000)  # advance the fake clock across the wait
+        if held.exists():
+            shutil.rmtree(held)
+        acquired_at = clock.now
+
+    monkeypatch.setattr(lp, "_sleep", sleep)
+
+    assert lp.run() == 0
+    assert acquired_at is not None  # confirms the wait actually happened
+    rows = loop_testutil.metrics_rows(lp._test["ap_dir"])
+    assert len(rows) == 1
+    # ts_start marks when the session started, not when the loop began
+    # waiting for the slot: no earlier than the clock reading taken when
+    # the wait ended and the slot was claimed.
+    assert rows[0]["ts_start"] >= acquired_at
+    # wall_secs describes the session, not the ~1000s spent queued.
+    assert rows[0]["wall_secs"] < 500
+
+
+def test_build_launch_ts_start_matches_pre_launch_clock(tmp_path):
+    slots_dir = tmp_path / "state" / "wave-slots"
+    lp = make_loop(tmp_path, [terminal_step()], env=_slot_env(slots_dir))
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b"})
+    before = lp._test["clock"].now
+
+    assert lp.run() == 0
+
+    rows = loop_testutil.metrics_rows(lp._test["ap_dir"])
+    assert len(rows) == 1
+    assert rows[0]["ts_start"] == int(before)  # no wait, no timing change
+
+
+def test_review_launch_without_slots_dir_ts_start_matches_pre_launch_clock(tmp_path):
+    lp = make_loop(tmp_path, [terminal_step()], env={"_AUTOPILOT_REVIEW_SLOTS": "1"})
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="review", batch={"id": "b"})
+    before = lp._test["clock"].now
+
+    assert lp.run() == 0
+
+    rows = loop_testutil.metrics_rows(lp._test["ap_dir"])
+    assert len(rows) == 1
+    assert rows[0]["ts_start"] == int(before)  # no slots dir, no wait, no change
