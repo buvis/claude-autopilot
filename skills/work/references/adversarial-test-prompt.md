@@ -86,7 +86,7 @@ Test output (all passing):
 {Devon's test run output}
 
 Weak points:
-{Devon's explanation of which tests are weak}
+{Devon's numbered weak-point list, verbatim}
 
 Address every numbered weak point. Answer each in your reply as
 `N. strengthened: <test name>` or `N. in-contract: <why the behavior is
