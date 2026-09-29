@@ -66,6 +66,12 @@ HOST_MARKERS = (
 DEFAULT_PROMPT = "/autopilot:run-autopilot"
 DEFAULT_GRACE_SECS = 60
 DEFAULT_WARN_SECS = 900
+DEFAULT_IDLE_SECS = 1200
+# The Watchdog's default poll_secs (60s) is tuned for a 7200s production
+# cap; polled at that granularity a small test cap never reaches its
+# ceiling check in reasonable time. 5s keeps idle/ceiling detection
+# responsive without hammering stat() in production.
+_IDLE_POLL_SECS = 5.0
 BRIEF_NAME = "session-brief.md"
 BRIEF_SUFFIX = " Read docs/dev/project-management/autopilot/session-brief.md first."
 # 2026-09-26: every headless session spent 5-14 calls hunting for an
@@ -100,6 +106,20 @@ def warn_secs_for(env: dict) -> int:
         return DEFAULT_WARN_SECS
 
 
+def idle_secs_for(env: dict) -> int:
+    """`_AUTOPILOT_SESSION_IDLE`: how many seconds of silence (no growth in
+    the tee'd log) past the wall-clock cap the watchdog tolerates before
+    firing. 0 restores kill-at-cap; an unset or non-integer value keeps
+    the default."""
+    raw = env.get("_AUTOPILOT_SESSION_IDLE")
+    if raw is None:
+        return DEFAULT_IDLE_SECS
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return DEFAULT_IDLE_SECS
+
+
 def child_env(env: dict) -> tuple[dict, list[str]]:
     """The command-scoped env for the launched child: strips host-CLI
     session markers (a nested claude launch must not inherit its parent
@@ -117,6 +137,7 @@ class SpawnResult:
     returncode: int
     log_path: Path
     cap_fired: bool
+    cap_reason: str | None = None
 
 
 class _DiscardPresenter:
@@ -227,11 +248,14 @@ def _run_session(
     presenter,
     proc_slot: list | None,
     warn_secs: float = 0,
-) -> tuple[int, bool]:
+    idle_secs: float = 0,
+) -> tuple[int, bool, str | None]:
     """Launch the child, tee its stdout to log_path, and stream it to
     presenter until the process exits (on its own or capped). Within
     `warn_secs` of the cap the watchdog writes the hand-off marker beside
-    the log, so a session at a task boundary leaves before the cap."""
+    the log, so a session at a task boundary leaves before the cap. Past
+    the cap, `idle_secs` of no growth in the tee'd log (used as the
+    watchdog's activity signal) is tolerated before it fires."""
     autopilot_dir = log_path.parent
     with open(log_path, "wb") as log:
         proc = subprocess.Popen(
@@ -249,6 +273,9 @@ def _run_session(
             grace_secs=grace_secs,
             warn_secs=warn_secs,
             on_warn=lambda: request_wrapper_handoff(autopilot_dir),
+            idle_secs=idle_secs,
+            activity_path=str(log_path),
+            poll_secs=_IDLE_POLL_SECS,
         ).start()
         assert proc.stdout is not None
         try:
@@ -260,7 +287,7 @@ def _run_session(
             rc = proc.wait()
             dog.cancel()
             presenter.close()
-    return rc, dog.fired
+    return rc, dog.fired, dog.fired_reason
 
 
 def _child_env_with_deadline(env: dict, cap_secs: float) -> dict:
@@ -311,7 +338,7 @@ def spawn(
         presenter = make_presenter(env)
 
     env_for_child = _child_env_with_deadline(env, cap_secs)
-    rc, cap_fired = _run_session(
+    rc, cap_fired, cap_reason = _run_session(
         argv,
         log_path,
         env_for_child,
@@ -320,5 +347,11 @@ def spawn(
         presenter,
         proc_slot,
         warn_secs=warn_secs_for(env),
+        idle_secs=idle_secs_for(env),
     )
-    return SpawnResult(returncode=rc, log_path=log_path, cap_fired=cap_fired)
+    return SpawnResult(
+        returncode=rc,
+        log_path=log_path,
+        cap_fired=cap_fired,
+        cap_reason=cap_reason,
+    )

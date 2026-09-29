@@ -181,6 +181,7 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
         self._fp_repeats = 0
         self._proc_slot: list = [None]
         self._warned_schema = False
+        self._last_spawn = None
 
     # ── env knobs ──
     def _int(self, key: str, default: int) -> int:
@@ -282,6 +283,8 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
                 "lane_effective": decision.get("lane_effective"),
             }
             line.update(_decision_fields(decision))
+            if self._last_spawn is not None and self._last_spawn.cap_fired:
+                line["killed_by"] = self._last_spawn.cap_reason
             cost = last_result_field(ap_dir / "last-session.log", "total_cost_usd")
             if isinstance(cost, (int, float)) and not isinstance(cost, bool):
                 line["cost_usd"] = cost
@@ -388,7 +391,7 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
             )
         ts_start = self._clock()
         try:
-            self._spawn(
+            self._last_spawn = self._spawn(
                 plan.model,
                 plan.effort,
                 cap_secs=plan.cap_secs,
