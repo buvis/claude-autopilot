@@ -53,85 +53,84 @@ def _section(text: str, path: Path, start_anchor: str, end_anchor: str) -> str:
     return text[start:end]
 
 
-class TestDevonRoundProse:
-    def test_step_2_9_runs_devon_once(self) -> None:
-        # "\n### " (not a literal next-heading title) bounds the section at
-        # whatever heading follows 2.9, without hardcoding its number.
-        step_2_9 = _section(_SKILL_TEXT, _SKILL_MD, "### 2.9", "\n### ")
-        assert "runs once per task" in step_2_9, (
-            f"{_SKILL_MD}: expected step 2.9 to say 'runs once per task' — "
-            "not found. The single-round Devon cap appears to have drifted "
-            "or been removed."
+def test_step_2_9_runs_devon_once() -> None:
+    # "\n### " (not a literal next-heading title) bounds the section at
+    # whatever heading follows 2.9, without hardcoding its number.
+    step_2_9 = _section(_SKILL_TEXT, _SKILL_MD, "### 2.9", "\n### ")
+    assert "runs once per task" in step_2_9, (
+        f"{_SKILL_MD}: expected step 2.9 to say 'runs once per task' — "
+        "not found. The single-round Devon cap appears to have drifted "
+        "or been removed."
+    )
+
+    # Whole-file on purpose: an absence assertion scoped to 2.9 would
+    # let this wording reappear elsewhere in the file and still pass.
+    for needle in ("re-run Devon", "second Devon dispatch"):
+        assert needle not in _SKILL_TEXT, (
+            f"{_SKILL_MD}: found {needle!r} — the second Devon round "
+            "appears to still be documented."
         )
 
-        # Whole-file on purpose: an absence assertion scoped to 2.9 would
-        # let this wording reappear elsewhere in the file and still pass.
-        for needle in ("re-run Devon", "second Devon dispatch"):
-            assert needle not in _SKILL_TEXT, (
-                f"{_SKILL_MD}: found {needle!r} — the second Devon round "
-                "appears to still be documented."
-            )
-
-    def test_outcomes_table_has_no_re_check_row(self) -> None:
-        for needle in ("re-run Devon", "1 round exhausted"):
-            assert needle not in _ADVERSARIAL_TEXT, (
-                f"{_ADVERSARIAL_TEST_PROMPT}: found {needle!r} — the old "
-                "two-round outcome row appears to still be documented."
-            )
-
-    def test_attempt_logging_lists_exploit_fixed(self) -> None:
-        assert '"exploit_fixed"' in _ATTEMPT_LOGGING_TEXT, (
-            f"{_ATTEMPT_LOGGING}: expected the `devon` attempt field to "
-            "list \"exploit_fixed\" as a value — not found."
+def test_outcomes_table_has_no_re_check_row() -> None:
+    for needle in ("re-run Devon", "1 round exhausted"):
+        assert needle not in _ADVERSARIAL_TEXT, (
+            f"{_ADVERSARIAL_TEST_PROMPT}: found {needle!r} — the old "
+            "two-round outcome row appears to still be documented."
         )
 
-    def test_devon_lists_every_weak_point(self) -> None:
-        for needle in (
-            "show every other weak point",
-            "a numbered `Weak points:` list",
-        ):
-            assert needle in _ADVERSARIAL_TEXT, (
-                f"{_ADVERSARIAL_TEST_PROMPT}: expected {needle!r} — not "
-                "found. Devon's every-weak-point instruction appears to "
-                "have drifted or been removed."
-            )
+def test_attempt_logging_lists_exploit_fixed() -> None:
+    assert '"exploit_fixed"' in _ATTEMPT_LOGGING_TEXT, (
+        f"{_ATTEMPT_LOGGING}: expected the `devon` attempt field to "
+        "list \"exploit_fixed\" as a value — not found."
+    )
 
-        # Whole-file: the old single-exploit instruction must be gone
-        # everywhere, not just out of whatever section replaced it.
-        assert "Report the exploit." not in _ADVERSARIAL_TEXT, (
-            f"{_ADVERSARIAL_TEST_PROMPT}: found 'Report the exploit.' — "
-            "the old single-exploit instruction appears to still be "
-            "documented."
+def test_devon_lists_every_weak_point() -> None:
+    for needle in (
+        "show every other weak point",
+        "a numbered `Weak points:` list",
+    ):
+        assert needle in _ADVERSARIAL_TEXT, (
+            f"{_ADVERSARIAL_TEST_PROMPT}: expected {needle!r} — not "
+            "found. Devon's every-weak-point instruction appears to "
+            "have drifted or been removed."
         )
 
-    def test_tess_answers_each_weak_point(self) -> None:
-        for needle in (
-            "Address every numbered weak point",
-            "strengthened:",
-            "in-contract:",
-        ):
-            assert needle in _ADVERSARIAL_TEXT, (
-                f"{_ADVERSARIAL_TEST_PROMPT}: expected {needle!r} in the "
-                "Feedback to Tess section — not found. The per-weak-point "
-                "feedback wording appears to have drifted or been removed."
-            )
+    # Whole-file: the old single-exploit instruction must be gone
+    # everywhere, not just out of whatever section replaced it.
+    assert "Report the exploit." not in _ADVERSARIAL_TEXT, (
+        f"{_ADVERSARIAL_TEST_PROMPT}: found 'Report the exploit.' — "
+        "the old single-exploit instruction appears to still be "
+        "documented."
+    )
 
-    def test_orchestrator_never_dismisses_a_weak_point(self) -> None:
-        needle = "the orchestrator never dismisses one itself"
+def test_tess_answers_each_weak_point() -> None:
+    for needle in (
+        "Address every numbered weak point",
+        "strengthened:",
+        "in-contract:",
+    ):
         assert needle in _ADVERSARIAL_TEXT, (
             f"{_ADVERSARIAL_TEST_PROMPT}: expected {needle!r} in the "
-            "outcomes row about unresolved weak points — not found."
+            "Feedback to Tess section — not found. The per-weak-point "
+            "feedback wording appears to have drifted or been removed."
         )
 
-    def test_attempt_logging_lists_weak_point_fields(self) -> None:
-        for needle in ("devon_weak_points", "devon_in_contract"):
-            assert needle in _ATTEMPT_LOGGING_TEXT, (
-                f"{_ATTEMPT_LOGGING}: expected {needle!r} — not found. The "
-                "new weak-point attempt-record field appears to be missing "
-                "from attempt-logging.md."
-            )
-            assert needle in _STATE_SCHEMA_TEXT, (
-                f"{_STATE_SCHEMA}: expected {needle!r} — not found. The new "
-                "weak-point attempt-record field appears to be missing from "
-                "state-schema.md."
-            )
+def test_orchestrator_never_dismisses_a_weak_point() -> None:
+    needle = "the orchestrator never dismisses one itself"
+    assert needle in _ADVERSARIAL_TEXT, (
+        f"{_ADVERSARIAL_TEST_PROMPT}: expected {needle!r} in the "
+        "outcomes row about unresolved weak points — not found."
+    )
+
+def test_attempt_logging_lists_weak_point_fields() -> None:
+    for needle in ("devon_weak_points", "devon_in_contract"):
+        assert needle in _ATTEMPT_LOGGING_TEXT, (
+            f"{_ATTEMPT_LOGGING}: expected {needle!r} — not found. The "
+            "new weak-point attempt-record field appears to be missing "
+            "from attempt-logging.md."
+        )
+        assert needle in _STATE_SCHEMA_TEXT, (
+            f"{_STATE_SCHEMA}: expected {needle!r} — not found. The new "
+            "weak-point attempt-record field appears to be missing from "
+            "state-schema.md."
+        )
