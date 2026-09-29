@@ -1,4 +1,4 @@
-"""Tests for cli/wave_slots.py: the mkdir semaphore that caps concurrent
+"""Tests for cli/wave_slots.py: the directory semaphore that caps concurrent
 wave sessions. Slots are numbered dirs under the slots dir, each holding an
 `owner` file with the claimant's pid. Liveness is faked by patching
 `wave_slots._pid_alive`, and sleep/clock are injected, so nothing here
@@ -273,6 +273,21 @@ def test_owner_of_non_utf8_bytes_is_reclaimed(tmp_path, monkeypatch):
     assert (slot / "owner").read_text().strip() == str(ME)
     # Bytes that do not even decode yield no pid, so the oracle is not asked.
     assert asked == [], f"an unreadable owner needs no question, asked {asked}"
+
+
+def test_a_non_decimal_digit_owner_is_reclaimed(tmp_path, monkeypatch):
+    # Every pid reads as alive, so only the owner text can free the slot. "²"
+    # is a digit to str.isdigit but not a literal int() will parse, so a guard
+    # that trusts isdigit lets ValueError escape acquire and abort the launch
+    # instead of reclaiming a slot whose owner is malformed.
+    asked = _only_alive(monkeypatch, all_alive=True)
+    slots = tmp_path / "wave-slots"
+    _hold(slots, 1, "²")
+    slot = acquire(slots, 1, ME, sleep_fn=_no_sleep, clock=_fake_clock)
+    assert slot == slots / "1"
+    assert (slot / "owner").read_text().strip() == str(ME)
+    # No pid comes out of a digit int() rejects, so the oracle is not asked.
+    assert asked == [], f"a digit int() rejects needs no question, asked {asked}"
 
 
 def test_owner_pid_zero_is_reclaimed_not_taken_for_a_live_peer(tmp_path, monkeypatch):

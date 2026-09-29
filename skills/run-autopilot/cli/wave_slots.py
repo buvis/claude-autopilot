@@ -1,4 +1,4 @@
-"""cli/wave_slots.py - a mkdir semaphore that caps concurrent wave sessions.
+"""cli/wave_slots.py - a directory semaphore that caps concurrent wave sessions.
 
 Slot N is the dir `<slots_dir>/N`, holding an `owner` file with the claimant's
 pid. A claim is staged under a non-digit name with its owner already inside
@@ -57,7 +57,7 @@ def _is_stale(owner: str) -> bool:
     is parsed instead of reaching the oracle: `os.kill(0, 0)` signals our own
     process group, so "0" would read as a live peer forever.
     """
-    return not (owner.isdigit() and int(owner) > 0 and _pid_alive(int(owner)))
+    return not (owner.isdecimal() and int(owner) > 0 and _pid_alive(int(owner)))
 
 
 def _claim(slot: Path, pid: int) -> bool:
