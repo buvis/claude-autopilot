@@ -202,6 +202,11 @@ the status table every 10 minutes of elapsed wall time), `assemble`,
 `--review-slots` value other than 3 (the planned default) is written into
 `wave.json` right after `plan`, before `launch` starts any lane.
 
+The review spawn itself is wrapped in a `wave_slots.acquire`/`release` pair,
+so at most `--review-slots` review sessions run at once. The pool's location
+and its planned-default count are named `_AUTOPILOT_REVIEW_SLOTS_DIR` and
+`_AUTOPILOT_REVIEW_SLOTS`.
+
 It refuses before touching anything (exit `1`, a precondition refused) when
 run with no controlling tty and without `--yes` - an unattended wave needs
 the flag spelled out, same as any other one-shot destructive step. Past that

@@ -134,6 +134,13 @@ def test_pid_alive_tells_a_live_pid_from_an_exited_one():
     assert wave_slots._pid_alive(child.pid) is False
 
 
+def test_docs_name_the_two_variables():
+    waves_md = Path(__file__).parent.parent / "references" / "waves.md"
+    text = waves_md.read_text()
+    assert "_AUTOPILOT_REVIEW_SLOTS_DIR" in text
+    assert "_AUTOPILOT_REVIEW_SLOTS" in text
+
+
 def test_claim_is_exclusive_when_a_peer_wins_the_mkdir_race(tmp_path, monkeypatch):
     # A live peer creates slot 1 in the gap after acquire sees it free and
     # before acquire's own mkdir lands. mkdir must be the claim: acquire has

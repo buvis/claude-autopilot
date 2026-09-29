@@ -53,6 +53,8 @@ _WAVE_TEST_FILES = (
     "test_wave_run.py",
     "test_wave_review.py",
     "test_wave_review_land.py",
+    "test_wave_slots.py",
+    "test_loop_slots.py",
 )
 
 
