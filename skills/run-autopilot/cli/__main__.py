@@ -11,7 +11,7 @@ Subcommands:
     init      --state --prd
         Create a fresh state.json ({"prd", "phase": "build",
         "next_phase": "build"}) via state.init().
-    enter     --state --prds
+    enter     --state --prd --prds
         enter.enter(): the Phase 0 step chain. Prints its one-line JSON
         result (the `stop` key names the halt, when there is one).
     stall     --state --prd --site --detail --prds
