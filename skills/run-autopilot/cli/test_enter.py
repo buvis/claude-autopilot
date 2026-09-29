@@ -11,128 +11,34 @@ produce on demand (a do_park exit 4/9, a failed move, a failed write).
 
 from __future__ import annotations
 
-import importlib
 import json
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
 from cli import custody, enter, frontmatter, notify_out, records, resume, state
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-_walk_up = importlib.import_module("_walk_up")
-
-KEYS = {
-    "stop", "detail", "prd", "source", "parked", "custody_pending",
-    "lane_effective", "catchup", "design", "resume_target", "batch",
-}
-EXPECTED_STOPS = (
-    "fs_error",
-    "park_halt", "mv_verify", "deferred_io", "stall_op_conflict",
-    "stall_op_malformed", "park_precondition_failed",
-    "replan", "escalation_exhausted", "cap_pause",
-    "custody", "drained", "prd_not_found", "batch_init", "lane",
-    "state_write_failed", "design_review_log_empty",
+from cli.enter_harness import (
+    BATCH_ID,
+    CLI_MAIN,
+    DISPATCH_LINE,
+    EARLY,
+    EXPECTED_STOPS,
+    HEAD,
+    KEYS,
+    OTHER,
+    PRD,
+    Env,
+    _cache,
+    _custody_entry,
+    _fake_park,
+    _open_state,
+    _prd_text,
+    _walk_up,
 )
-# Stops that can only happen at or after step 6 (resume_target computed).
-LATE_ONLY = {
-    "custody", "drained", "prd_not_found", "batch_init", "lane",
-    "state_write_failed", "design_review_log_empty",
-}
-EARLY = [s for s in EXPECTED_STOPS if s not in LATE_ONLY]
-
-PRD = "00010-sample-prd.md"
-OTHER = "00020-other-prd.md"
-BATCH_ID = "202609290000"
-NOW = "2026-09-29T12:00:00Z"
-HEAD = "c" * 40
-# Prose-only body: the lane classifier reads it as `full` (reason unparsed).
-FULL_PRD = "---\ndesign: skip\n---\n\n# Prose only\n\nNo paths here.\n"
-DISPATCH_LINE = (
-    "- dispatch 1 (codex): cardinal-sin 0, blocker 0, non-blocker 2, question 1"
-)
-
-
-def _prd_text(**keys: str) -> str:
-    head = ["---", *(f"{k}: {v}" for k, v in {"design": "skip", **keys}.items()), "---"]
-    return "\n".join(head) + "\n\n# Prose only\n\nNo paths here.\n"
-
-
-def _open_state(**overrides) -> dict:
-    base = {
-        "phase": "build",
-        "next_phase": "build",
-        "batch": {"id": BATCH_ID, "completed_prds": [], "parks_consecutive": 0},
-    }
-    base.update(overrides)
-    return base
-
-
-class Env:
-    """<root>/docs/dev/project-management/{prds,autopilot} plus fakes."""
-
-    def __init__(self, root: Path) -> None:
-        self.root = root
-        self.pm = root / "docs" / "dev" / "project-management"
-        self.prds_dir = self.pm / "prds"
-        self.autopilot_dir = self.pm / "autopilot"
-        self.state_path = self.autopilot_dir / "state.json"
-        self.autopilot_dir.mkdir(parents=True)
-        self.rows: list[tuple[str, str]] = []
-        self.head_calls: list[Path] = []
-        self.head: str | None = HEAD
-
-    def put(self, folder: str, name: str = PRD, text: str = FULL_PRD) -> Path:
-        path = self.prds_dir / folder / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-        return path
-
-    def has(self, folder: str, name: str = PRD) -> bool:
-        return (self.prds_dir / folder / name).exists()
-
-    def write_state(self, data: dict) -> None:
-        self.state_path.write_text(json.dumps(data), encoding="utf-8")
-
-    def read_state(self) -> dict:
-        return json.loads(self.state_path.read_text(encoding="utf-8"))
-
-    def marker(self, prd: str = PRD) -> None:
-        (self.autopilot_dir / "park-requested").write_text(
-            json.dumps({"prd": prd, "reason": "wrapper died mid-session"}),
-            encoding="utf-8",
-        )
-
-    def git_head(self, repo_root: Path) -> str | None:
-        self.head_calls.append(repo_root)
-        return self.head
-
-    def record(self, prd: str, site: str) -> None:
-        self.rows.append((prd, site))
-
-    def run(
-        self, *, prd_arg: str | None = None, in_loop: bool = False,
-        default_recorder: bool = False, **kw,
-    ) -> dict:
-        if not default_recorder:
-            kw.setdefault("record_resume_row", self.record)
-        kw.setdefault("now", lambda: NOW)
-        out = enter.enter(
-            self.state_path,
-            prds_dir=self.prds_dir,
-            autopilot_dir=self.autopilot_dir,
-            prd_arg=prd_arg,
-            in_loop=in_loop,
-            git_head=self.git_head,
-            **kw,
-        )
-        assert set(out) == KEYS
-        assert out["stop"] is None or out["stop"] in enter.STOPS
-        assert json.loads(json.dumps(out, sort_keys=True)) == out
-        return out
 
 
 @pytest.fixture
@@ -140,10 +46,6 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Env:
     monkeypatch.setattr(notify_out, "notify", lambda *a, **k: None)
     monkeypatch.delenv("_AUTOPILOT_LANES", raising=False)
     return Env(tmp_path)
-
-
-def _fake_park(monkeypatch: pytest.MonkeyPatch, code: int) -> None:
-    monkeypatch.setattr(records, "do_park", lambda *a, **k: code)
 
 
 # -- STOPS ---------------------------------------------------------------------
@@ -166,9 +68,16 @@ def test_fresh_wip_prd_continues_with_null_stop(env: Env, capsys) -> None:
     out = env.run()
 
     assert out == {
-        "stop": None, "detail": "", "prd": PRD, "source": "wip", "parked": None,
-        "custody_pending": 0, "lane_effective": "full", "catchup": "full",
-        "design": "skip", "resume_target": "build: catchup then planning",
+        "stop": None,
+        "detail": "",
+        "prd": PRD,
+        "source": "wip",
+        "parked": None,
+        "custody_pending": 0,
+        "lane_effective": "full",
+        "catchup": "full",
+        "design": "skip",
+        "resume_target": "build: catchup then planning",
         "batch": "open",
     }
     assert env.read_state()["prd"] == PRD
@@ -229,7 +138,11 @@ def test_raising_resume_row_is_swallowed_to_stderr(env: Env, capsys) -> None:
 
 def test_default_record_dispatch_path_exists_in_the_repo() -> None:
     assert enter._RECORD_DISPATCH.exists()
-    assert enter._RECORD_DISPATCH.parts[-3:] == ("work", "scripts", "record_dispatch.py")
+    assert enter._RECORD_DISPATCH.parts[-3:] == (
+        "work",
+        "scripts",
+        "record_dispatch.py",
+    )
 
 
 # -- selection -----------------------------------------------------------------
@@ -290,10 +203,13 @@ def test_ineligible_backlog_prd_is_skipped_and_recorded(env: Env) -> None:
 
 
 @pytest.mark.parametrize(
-    "command", ["true", "test -f 00010-eligibility-evidence.md"],
+    "command",
+    ["true", "test -f 00010-eligibility-evidence.md"],
     ids=["exit-0", "repo-relative-check"],
 )
-def test_eligible_backlog_prd_is_picked_without_a_skip_record(env: Env, command: str) -> None:
+def test_eligible_backlog_prd_is_picked_without_a_skip_record(
+    env: Env, command: str
+) -> None:
     # the evidence file exists only at the project root: the check must run there
     (env.root / "00010-eligibility-evidence.md").write_text("x", encoding="utf-8")
     env.write_state(_open_state())
@@ -364,7 +280,9 @@ def test_park_exit_zero_sets_parked(env: Env, capsys) -> None:
     ("code", "stop"),
     [(5, "park_halt"), (4, "mv_verify"), (9, "deferred_io"), (10, "stall_op_conflict")],
 )
-def test_park_halt_codes_map_to_their_stops(env: Env, monkeypatch, code: int, stop: str) -> None:
+def test_park_halt_codes_map_to_their_stops(
+    env: Env, monkeypatch, code: int, stop: str
+) -> None:
     env.write_state(_open_state())
     env.put("wip")
     env.marker(PRD)
@@ -377,16 +295,31 @@ def test_park_halt_codes_map_to_their_stops(env: Env, monkeypatch, code: int, st
     assert env.rows == []
     assert out["detail"] != ""
     if code == 5:
-        assert out["detail"] == f"parked {PRD}; systemic halt (2+ consecutive wrapper_died parks)"
+        assert (
+            out["detail"]
+            == f"parked {PRD}; systemic halt (2+ consecutive wrapper_died parks)"
+        )
 
 
-def test_park_exit_two_from_reconciliation_stops_park_precondition_failed(env: Env) -> None:
+def test_park_exit_two_from_reconciliation_stops_park_precondition_failed(
+    env: Env,
+) -> None:
     # A well-formed pending stall_op passes step 3; do_stall's own guard then
     # refuses the missing batch.id inside do_park -> exit 2.
-    env.write_state({
-        "prd": PRD, "phase": "build", "next_phase": "build", "batch": {"skips": []},
-        "stall_op": {"op_id": "op-1", "prd": PRD, "site": "design_gate", "detail": "d"},
-    })
+    env.write_state(
+        {
+            "prd": PRD,
+            "phase": "build",
+            "next_phase": "build",
+            "batch": {"skips": []},
+            "stall_op": {
+                "op_id": "op-1",
+                "prd": PRD,
+                "site": "design_gate",
+                "detail": "d",
+            },
+        }
+    )
     env.put("wip")
 
     out = env.run()
@@ -477,9 +410,12 @@ def test_paused_without_cap_reason_does_not_stop_cap_pause(env: Env) -> None:
 
 def test_pause_reason_is_deleted_before_the_checks(env: Env) -> None:
     pause = {"site": "reviewer_fail", "detail": "carl hung"}
-    env.write_state(_open_state(
-        pause_reason=pause, stall_reason={"stalled": "escalation_exhausted"},
-    ))
+    env.write_state(
+        _open_state(
+            pause_reason=pause,
+            stall_reason={"stalled": "escalation_exhausted"},
+        )
+    )
     env.put("wip")
 
     out = env.run()
@@ -489,15 +425,6 @@ def test_pause_reason_is_deleted_before_the_checks(env: Env) -> None:
 
 
 # -- custody (step 7) ----------------------------------------------------------
-
-
-def _custody_entry() -> dict:
-    return {
-        "prd": "00004-feature-x.md", "batch": BATCH_ID, "op_id": "op-c1",
-        "commit_range": "a" * 40 + ".." + "b" * 40, "commits": 2,
-        "detail": "cap tripped.", "repo_root": "/abs/path", "git_dir": None,
-        "branch": "master",
-    }
 
 
 @pytest.mark.parametrize("in_loop", [False, True])
@@ -519,7 +446,9 @@ def test_custody_stops_outside_the_loop_only(env: Env, in_loop: bool) -> None:
 def test_unreadable_custody_record_stops_deferred_io(env: Env) -> None:
     env.write_state(_open_state())
     env.put("wip")
-    (env.autopilot_dir / "critical-on-master").write_text('{"entries": "x"}', encoding="utf-8")
+    (env.autopilot_dir / "critical-on-master").write_text(
+        '{"entries": "x"}', encoding="utf-8"
+    )
 
     out = env.run(in_loop=True)
 
@@ -540,7 +469,9 @@ def test_unreadable_custody_record_stops_deferred_io(env: Env) -> None:
     ],
     ids=["no-batch", "batch-without-id", "closed"],
 )
-def test_absent_and_closed_batch_stop_batch_init(env: Env, data: dict, expected: str) -> None:
+def test_absent_and_closed_batch_stop_batch_init(
+    env: Env, data: dict, expected: str
+) -> None:
     env.write_state(data)
     env.put("wip")
 
@@ -569,7 +500,9 @@ def test_non_full_lane_stops_lane(env: Env) -> None:
 
 
 @pytest.mark.parametrize("err", [OSError("disk full"), state.StateError("lock lost")])
-def test_failed_frontmatter_write_stops_state_write_failed(env: Env, monkeypatch, err) -> None:
+def test_failed_frontmatter_write_stops_state_write_failed(
+    env: Env, monkeypatch, err
+) -> None:
     env.write_state(_open_state())
     env.put("wip")
 
@@ -587,31 +520,40 @@ def test_failed_frontmatter_write_stops_state_write_failed(env: Env, monkeypatch
 # -- catchup decision (step 11) ------------------------------------------------
 
 
-def _cache(**overrides) -> dict:
-    batch = {
-        "id": BATCH_ID, "completed_prds": [], "parks_consecutive": 0,
-        "catchup_completed_at": "2026-09-29T11:00:00Z", "catchup_head_sha": HEAD,
-    }
-    batch.update(overrides)
-    return batch
-
-
 @pytest.mark.parametrize(
     ("catchup_key", "tasks", "batch", "head", "expected"),
     [
         (None, None, _cache(), HEAD, "delta"),
-        ("force", [{"id": "t1", "name": "a", "status": "pending"}], _cache(), HEAD, "delta"),
+        (
+            "force",
+            [{"id": "t1", "name": "a", "status": "pending"}],
+            _cache(),
+            HEAD,
+            "delta",
+        ),
         ("force", None, _cache(), HEAD, "full"),
         (None, None, _cache(catchup_completed_at="2026-09-29T07:00:00Z"), HEAD, "full"),
         (None, None, {"id": BATCH_ID, "catchup_head_sha": HEAD}, HEAD, "full"),
         (None, None, _cache(catchup_head_sha="d" * 40), HEAD, "full"),
         (None, None, _cache(), None, "full"),
     ],
-    ids=["all-hold", "force-with-tasks", "force-no-tasks", "stale", "never-ran",
-         "head-moved", "head-unreadable"],
+    ids=[
+        "all-hold",
+        "force-with-tasks",
+        "force-no-tasks",
+        "stale",
+        "never-ran",
+        "head-moved",
+        "head-unreadable",
+    ],
 )
 def test_catchup_delta_needs_all_three_conditions(
-    env: Env, catchup_key, tasks, batch, head, expected,
+    env: Env,
+    catchup_key,
+    tasks,
+    batch,
+    head,
+    expected,
 ) -> None:
     extra = {"tasks": tasks} if tasks is not None else {}
     env.write_state(_open_state(batch=batch, **extra))
@@ -675,7 +617,9 @@ def test_design_reuse_needs_a_review_log_line(env: Env, line: str) -> None:
     env.put("wip", PRD, _prd_text(design="run"))
     doc = _design_doc(env)
     doc.parent.mkdir(parents=True, exist_ok=True)
-    doc.write_text(f"# Design\n\n## Review log\n\n{line}\n\n## Appendix\n", encoding="utf-8")
+    doc.write_text(
+        f"# Design\n\n## Review log\n\n{line}\n\n## Appendix\n", encoding="utf-8"
+    )
 
     out = env.run()
 
@@ -709,7 +653,9 @@ def test_empty_review_log_stops(env: Env, body: str) -> None:
 # -- fs_error (steps 0/2) ------------------------------------------------------
 
 
-@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root ignores modes")
+@pytest.mark.skipif(
+    hasattr(os, "geteuid") and os.geteuid() == 0, reason="root ignores modes"
+)
 def test_permission_denied_mkdir_stops_fs_error(env: Env) -> None:
     env.write_state(_open_state())
     env.pm.chmod(0o555)
@@ -727,7 +673,10 @@ def test_permission_denied_mkdir_stops_fs_error(env: Env) -> None:
 
 
 _PARK_CODES = {
-    "park_halt": 5, "mv_verify": 4, "deferred_io": 9, "stall_op_conflict": 10,
+    "park_halt": 5,
+    "mv_verify": 4,
+    "deferred_io": 9,
+    "stall_op_conflict": 10,
     "park_precondition_failed": 2,
 }
 
@@ -744,20 +693,28 @@ def _arrange(env: Env, monkeypatch, stop: str) -> None:
     elif stop == "stall_op_malformed":
         env.write_state(_open_state(stall_op={"prd": PRD}))
     elif stop == "replan":
-        env.write_state(_open_state(stall_reason={"stalled": "subagent_prompt_overrun"}))
+        env.write_state(
+            _open_state(stall_reason={"stalled": "subagent_prompt_overrun"})
+        )
     elif stop == "escalation_exhausted":
         env.write_state(_open_state(stall_reason={"stalled": "escalation_exhausted"}))
     elif stop == "cap_pause":
         cap = {"cycle": 3, "cap": 3, "unresolved_findings": []}
-        env.write_state(_open_state(phase="paused", next_phase="", cap_pause_reason=cap))
+        env.write_state(
+            _open_state(phase="paused", next_phase="", cap_pause_reason=cap)
+        )
     elif stop == "custody":
-        custody.write_marker(env.autopilot_dir / "critical-on-master", [_custody_entry()])
+        custody.write_marker(
+            env.autopilot_dir / "critical-on-master", [_custody_entry()]
+        )
     elif stop == "drained":
         (env.prds_dir / "wip" / PRD).unlink()
 
 
 @pytest.mark.parametrize("stop", EARLY)
-def test_resume_target_is_null_on_every_stop_before_step_six(env: Env, monkeypatch, stop) -> None:
+def test_resume_target_is_null_on_every_stop_before_step_six(
+    env: Env, monkeypatch, stop
+) -> None:
     _arrange(env, monkeypatch, stop)
 
     out = env.run()
@@ -767,7 +724,9 @@ def test_resume_target_is_null_on_every_stop_before_step_six(env: Env, monkeypat
 
 
 @pytest.mark.parametrize("stop", [*EARLY, "custody", "drained"])
-def test_batch_is_null_on_every_stop_before_step_nine(env: Env, monkeypatch, stop) -> None:
+def test_batch_is_null_on_every_stop_before_step_nine(
+    env: Env, monkeypatch, stop
+) -> None:
     _arrange(env, monkeypatch, stop)
 
     out = env.run()
@@ -775,3 +734,62 @@ def test_batch_is_null_on_every_stop_before_step_nine(env: Env, monkeypatch, sto
     assert out["stop"] == stop
     assert out["batch"] is None
     assert env.rows == []
+
+
+# -- the `enter` CLI verb ------------------------------------------------------
+
+
+def _run_cli(env: Env, *args: str) -> subprocess.CompletedProcess:
+    """`python3 cli/__main__.py enter ...` as a real subprocess, like test_cli.py."""
+    child_env = {k: v for k, v in os.environ.items() if not k.startswith("_AUTOPILOT_")}
+    return subprocess.run(
+        [sys.executable, str(CLI_MAIN), *args],
+        capture_output=True,
+        text=True,
+        cwd=str(env.root),
+        env=child_env,
+    )
+
+
+def test_cli_prints_one_json_line_with_every_key(env: Env) -> None:
+    env.write_state(_open_state())
+    env.put("wip")
+
+    # no --prds: the verb must resolve it from the state path's parent
+    proc = _run_cli(env, "enter", "--state", str(env.state_path))
+
+    assert proc.returncode == 0, proc.stderr
+    lines = proc.stdout.splitlines()
+    assert len(lines) == 1, proc.stdout
+    result = json.loads(lines[0])
+    assert set(result) == KEYS
+    assert (result["stop"], result["prd"], result["source"]) == (None, PRD, "wip")
+    assert lines[0] == json.dumps(result, sort_keys=True)
+    # the real orchestrator ran, not a stub: its step-10 write landed
+    assert env.read_state()["prd"] == PRD
+
+
+def test_cli_unreadable_state_exits_two(env: Env) -> None:
+    env.state_path.write_text("{not json", encoding="utf-8")
+    env.put("wip")
+
+    proc = _run_cli(env, "enter", "--state", str(env.state_path))
+
+    assert proc.returncode == 2
+    assert proc.stdout == ""
+    assert "enter failed" in proc.stderr
+
+
+def test_cli_future_schema_exits_six(env: Env) -> None:
+    env.write_state(_open_state(schema_version=99))
+    env.put("wip")
+    before = env.state_path.read_bytes()
+
+    proc = _run_cli(env, "enter", "--state", str(env.state_path))
+
+    assert proc.returncode == 6
+    assert proc.stdout == ""
+    assert "future" in proc.stderr
+    # refused before any effect: state byte-unchanged, step 0 never made the dirs
+    assert env.state_path.read_bytes() == before
+    assert not (env.prds_dir / "backlog").exists()

@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from cli import enter, frontmatter, notify_out
-from cli.test_enter import PRD, Env, _cache, _open_state, _prd_text
+from cli.enter_harness import PRD, Env, _cache, _open_state, _prd_text
 
 
 @pytest.fixture
