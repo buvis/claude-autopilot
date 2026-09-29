@@ -132,6 +132,48 @@ def _decision_fields(decision: dict) -> dict:
     return fields
 
 
+def _metrics_line(
+    ap_dir: Path,
+    ts_start: float,
+    ts_end: float,
+    decision: dict,
+    phase_launched: str,
+    model: str,
+    effort: str,
+    killed_by: str | None,
+) -> dict:
+    line = {
+        "ts_start": int(ts_start),
+        "ts_end": int(ts_end),
+        "wall_secs": int(ts_end) - int(ts_start),
+        "prd": decision["prd"],
+        "batch": decision["batch"],
+        "phase_launched": phase_launched,
+        "phase_end": decision["phase_end"],
+        "signal": decision["signal"],
+        "model": model,
+        "effort": effort,
+        "lane": decision.get("lane"),
+        "lane_effective": decision.get("lane_effective"),
+    }
+    line.update(_decision_fields(decision))
+    if killed_by:
+        line["killed_by"] = killed_by
+    cost = last_result_field(ap_dir / "last-session.log", "total_cost_usd")
+    if isinstance(cost, (int, float)) and not isinstance(cost, bool):
+        line["cost_usd"] = cost
+    usage = last_result_field(ap_dir / "last-session.log", "usage")
+    tokens = usage.get("output_tokens") if isinstance(usage, dict) else None
+    if isinstance(tokens, int) and not isinstance(tokens, bool):
+        line["tokens_out"] = tokens
+    return line
+
+
+def _write_metrics_row(path: Path, encoded: str) -> None:
+    with open(path, "a", encoding="utf-8") as fh:
+        fh.write(encoded + "\n")
+
+
 class Loop(GatesMixin, DecisionMixin, ActMixin):
     """One `autopilot loop` invocation: drives sessions until drain,
     pause, halt, or an operator signal. Collaborators are injectable so
@@ -275,35 +317,24 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
         only: the append can never block or fail the loop (the one sanctioned
         silent failure, scoped to itself)."""
         try:
-            line = {
-                "ts_start": int(ts_start),
-                "ts_end": int(ts_end),
-                "wall_secs": int(ts_end) - int(ts_start),
-                "prd": decision["prd"],
-                "batch": decision["batch"],
-                "phase_launched": phase_launched,
-                "phase_end": decision["phase_end"],
-                "signal": decision["signal"],
-                "model": model,
-                "effort": effort,
-                "lane": decision.get("lane"),
-                "lane_effective": decision.get("lane_effective"),
-            }
-            line.update(_decision_fields(decision))
-            line.update({"killed_by": reason} if (reason := self._killed_by()) else {})
-            cost = last_result_field(ap_dir / "last-session.log", "total_cost_usd")
-            if isinstance(cost, (int, float)) and not isinstance(cost, bool):
-                line["cost_usd"] = cost
-            usage = last_result_field(ap_dir / "last-session.log", "usage")
-            tokens = usage.get("output_tokens") if isinstance(usage, dict) else None
-            if isinstance(tokens, int) and not isinstance(tokens, bool):
-                line["tokens_out"] = tokens
+            line = _metrics_line(
+                ap_dir,
+                ts_start,
+                ts_end,
+                decision,
+                phase_launched,
+                model,
+                effort,
+                self._killed_by(),
+            )
             encoded = json.dumps(line, separators=(",", ":"))
+            # Primary row first: a mkdir failure below must not lose it, and
+            # an absent ap_dir must not get created as a mkdir(parents=True)
+            # side effect.
+            _write_metrics_row(ap_dir / "loop-metrics.jsonl", encoded)
             ledger_dir = ap_dir / "ledger"
             ledger_dir.mkdir(parents=True, exist_ok=True)
-            for metrics_path in (ap_dir / "loop-metrics.jsonl", ledger_dir / "loop-metrics.jsonl"):
-                with open(metrics_path, "a", encoding="utf-8") as fh:
-                    fh.write(encoded + "\n")
+            _write_metrics_row(ledger_dir / "loop-metrics.jsonl", encoded)
             # Session row first, so build_row sees this session's batch.
             converged = phase_launched == "review" or line["lane_effective"] in _LANES
             if decision.get("phase_end") == "done" and converged:
