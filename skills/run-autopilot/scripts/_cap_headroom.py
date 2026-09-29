@@ -62,12 +62,6 @@ def trusted_last_wall(state: dict[str, Any]) -> int | None:
     """The last completed task's wall in seconds, or None when that span cannot
     be trusted as one session's own work (which drops the time term).
 
-    ONE reverse walk over `state["tasks"]` finds the last `completed` entry
-    whose `started_at`/`done_at` are both ints with a non-negative difference,
-    and derives BOTH the span and that entry's `id` from that same entry. The
-    pairing is the point: the rotation test is asked about the task the span
-    actually came from, never about some other "last completed" task.
-
     Two reasons a span is not work. (1) The task ROTATED:
     `record_task_bounds` stamps `started_at` once and never replaces it (a PRD
     contract), so a task cut mid-flight and finished later carries every idle
@@ -75,10 +69,6 @@ def trusted_last_wall(state: dict[str, Any]) -> int | None:
     so this is answerable exactly rather than by guessing from the magnitude.
     (2) The span exceeds `MAX_CREDIBLE_WALL_SECS` - the backstop for what
     state does not record (a watchdog kill, an operator pause).
-
-    Tolerate a malformed `cap_rotations`: not a list, entries that are not
-    dicts, an entry `{}`, or a `task_id` of None must never raise and must
-    never match. A None id on the measured task matches nothing.
     """
     tasks = state.get("tasks")
     if not isinstance(tasks, list):
