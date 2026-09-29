@@ -46,6 +46,8 @@ from . import frontmatter
 
 LOOP_TASK_CEILING = 15
 
+TASK_WALL_BUDGET_SECS = {"haiku": 900, "sonnet": 1200, "opus": 2700, "fable": 2700}
+
 
 def plan_over_ceiling(
     state: dict, ceiling: int = LOOP_TASK_CEILING
@@ -54,6 +56,20 @@ def plan_over_ceiling(
     tasks = state.get("tasks")
     count = len(tasks) if isinstance(tasks, list) else 0
     return count > ceiling, count
+
+
+def task_over_budget(task: dict) -> bool:
+    """True when `task`'s wall-clock time exceeds its model's budget.
+
+    A missing or non-int `started_at`/`done_at`, or a model with no budget,
+    is never over budget.
+    """
+    started = task.get("started_at")
+    done = task.get("done_at")
+    budget = TASK_WALL_BUDGET_SECS.get(task.get("model"))
+    if budget is None or not isinstance(started, int) or not isinstance(done, int):
+        return False
+    return done - started > budget
 
 
 EXPANSION_RATIO_MAX = 3.0
