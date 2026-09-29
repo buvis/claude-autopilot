@@ -1,11 +1,12 @@
 """Task usage and call record for the context-cap hook (PRD 00200).
 
-The hook stamps four ints on each `state.tasks[]` entry: `usage_at_start`
-and `calls_at_start` on the first PostToolUse after the task turns
-in_progress, `usage_at_done` and `calls_at_done` on the first after it turns
-completed. The headroom rule then reads the most recently completed task's
-cost from them. Split out of `autopilot_context_cap_hook.py` to keep that
-file under the 800-line limit; imported as a sibling module, like `_walk_up`.
+The hook stamps `usage_at_start`, `calls_at_start`, and `started_at` on each
+`state.tasks[]` entry on the first PostToolUse after the task turns
+in_progress, and `usage_at_done`, `calls_at_done`, and `done_at` on the
+first after it turns completed. The headroom rule then reads the most
+recently completed task's cost and wall time from them. Split out of
+`autopilot_context_cap_hook.py` to keep that file under the 800-line limit;
+imported as a sibling module, like `_walk_up`.
 
 Stdlib only. Pure: nothing here touches disk; the hook owns the locked
 state write.
@@ -16,8 +17,8 @@ from __future__ import annotations
 import sys
 from typing import Any
 
-START_FIELDS = ("usage_at_start", "calls_at_start")
-DONE_FIELDS = ("usage_at_done", "calls_at_done")
+START_FIELDS = ("usage_at_start", "calls_at_start", "started_at")
+DONE_FIELDS = ("usage_at_done", "calls_at_done", "done_at")
 BOUND_FIELDS = ("usage_at_start", "usage_at_done", "calls_at_start", "calls_at_done")
 
 
@@ -38,11 +39,11 @@ def _warn_non_int(task: dict[str, Any], keys: list[str]) -> None:
 
 def record_pair(
     task: dict[str, Any],
-    fields: tuple[str, str],
-    values: tuple[int, int | None],
+    fields: tuple[str, str, str],
+    values: tuple[int, int | None, int],
     warn: bool,
 ) -> bool:
-    """Write the missing half of one usage/calls pair onto `task`.
+    """Write the missing members of one usage/calls/stamp group onto `task`.
 
     A field already holding an int is never rewritten, with one exception:
     a START value above the current one was stamped by an earlier session
@@ -86,9 +87,14 @@ def record_task_bounds(
     is needed at all, then re-apply the same mutation on the transaction's
     fresh read (with `warn=False`, so a non-int field is named once).
 
-    Alongside the usage/calls pairs, stamps `started_at`/`done_at` (epoch
-    seconds, `now`) the same way: written once, on the same fire as the
-    matching pair, and never replaced afterwards.
+    `started_at`/`done_at` (epoch seconds, `now`) are the third member of
+    `START_FIELDS`/`DONE_FIELDS`, so `record_pair` stamps them alongside the
+    usage/calls pair: written once, on the same fire, and never replaced
+    afterwards. `done_at` is only worth pairing with a task that already
+    carries a `started_at`; a completed record with no `started_at` at all
+    predates wall-clock stamping, and a lone `done_at` on it would not
+    yield a usable span, so `now` is withheld for that slot and the pair's
+    usage/calls halves still stamp normally.
     """
     tasks = state.get("tasks")
     if not isinstance(tasks, list):
@@ -100,26 +106,21 @@ def record_task_bounds(
             continue
         status = task.get("status")
         if status == "in_progress" and task.get("id") == task_id:
-            changed |= record_pair(task, START_FIELDS, (total, count), warn)
-            if int_field(task, "started_at") is None:
-                task["started_at"] = now
+            changed |= record_pair(task, START_FIELDS, (total, count, now), warn)
+        elif status == "completed":
+            done_now = now if int_field(task, "started_at") is not None else None
+            if record_pair(task, DONE_FIELDS, (total, count, done_now), warn):
                 changed = True
-        elif status == "completed" and record_pair(
-            task, DONE_FIELDS, (total, count), warn
-        ):
-            changed = True
-            if isinstance(task.get("id"), str):
-                done_task = task["id"]
-            if int_field(task, "done_at") is None:
-                task["done_at"] = now
+                if isinstance(task.get("id"), str):
+                    done_task = task["id"]
     return changed, done_task
 
 
 def last_task_wall(state: dict[str, Any]) -> int | None:
-    """`done_at - started_at` (seconds) of the LAST completed task in list
-    order, or `None` when that task lacks both stamps as ints or its span is
-    negative (a stale `started_at` from an earlier session). Mirrors
-    `last_task_cost`'s "last completed entry, else give up" shape.
+    """`done_at - started_at` (seconds) of the most recent completed task
+    whose two stamps are ints with a non-negative difference, walking back
+    through `state.tasks` in reverse order past any completed task that
+    lacks usable stamps, or `None` when none qualify.
     """
     tasks = state.get("tasks")
     if not isinstance(tasks, list):
@@ -130,9 +131,10 @@ def last_task_wall(state: dict[str, Any]) -> int | None:
         started = int_field(task, "started_at")
         done = int_field(task, "done_at")
         if started is None or done is None:
-            return None
+            continue
         span = done - started
-        return span if span >= 0 else None
+        if span >= 0:
+            return span
     return None
 
 
