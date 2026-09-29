@@ -164,17 +164,23 @@ def _seed_batch(plugins_json: Path, wave: dict) -> dict:
         installed = json.loads(plugins_json.read_text(encoding="utf-8"))
     except FileNotFoundError as err:
         raise RuntimeError(f"{plugins_json}: no such file") from err
-    plugins = installed["plugins"]
+    plugins = installed.get("plugins", {})
     for name in _PINNED_PLUGINS:
         if name not in plugins:
             raise RuntimeError(f"{plugins_json}: missing pinned plugin {name}")
+    versions = {}
+    for name in _PINNED_PLUGINS:
+        try:
+            versions[name] = plugins[name][0]["version"]
+        except (KeyError, IndexError, TypeError) as err:
+            raise RuntimeError(
+                f"{plugins_json}: malformed entry for {name}",
+            ) from err
     return {
         "id": wave["id"],
         "mode": "autopilot",
         "completed_prds": [],
-        "plugin_versions": {
-            name: plugins[name][0]["version"] for name in _PINNED_PLUGINS
-        },
+        "plugin_versions": versions,
     }
 
 
