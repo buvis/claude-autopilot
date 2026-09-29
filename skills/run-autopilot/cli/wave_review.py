@@ -87,7 +87,16 @@ def _stub_functional_decomposition(merged: list[dict]) -> list[str]:
         "Description:",
         *[f"- {each['name']}: {', '.join(each['prds'])}" for each in merged],
         "",
-        "Inputs/Outputs/Behavior:",
+        "Inputs:",
+        *[f"- {each['name']}: {', '.join(each['prds'])}" for each in merged],
+        "",
+        "Outputs:",
+        *[
+            f"- {each['name']}: {', '.join(each.get('files') or [])}"
+            for each in merged
+        ],
+        "",
+        "Behavior:",
         *[f"- {each['name']}: {_keep_both(each)}" for each in merged],
         "",
     ]
@@ -223,10 +232,19 @@ def _seed_steps(
     return steps
 
 
+def _repo_from_worktree(worktree: Path) -> Path:
+    """The main checkout `git worktree add` created `worktree` from, read
+    from the worktree's own `.git` file (`gitdir: <repo>/.git/worktrees/<name>`)."""
+    line = (worktree / ".git").read_text(encoding="utf-8").strip()
+    gitdir = Path(line.removeprefix("gitdir:").strip())
+    return gitdir.parents[2]
+
+
 def seed_state(
     state_path: Path,
     wave: dict,
     plugins_json: Path,
+    *,
     run_cli: Callable[[list[str]], subprocess.CompletedProcess] = _run_cli,
 ) -> None:
     """Seed `state_path` as a build whose tasks are done (next phase: review)
@@ -235,6 +253,10 @@ def seed_state(
     pm = state_path.parent.parent
     state_path.parent.mkdir(parents=True, exist_ok=True)
     stub = _seed_prd(pm, wave)
+    repo = _repo_from_worktree(state_path.parents[4])
+    meta = repo / "docs/dev/project-management/meta"
+    if meta.exists():
+        shutil.copytree(meta, pm / "meta", dirs_exist_ok=True)
     batch = _seed_batch(plugins_json, wave)
     for argv in _seed_steps(state_path, wave, stub, batch):
         result = run_cli(argv)
@@ -270,8 +292,8 @@ def _check_reviewable(
 def review(
     repo: Path,
     wave: dict,
-    spawn_fn: Callable[..., subprocess.Popen] = subprocess.Popen,
     *,
+    spawn_fn: Callable[..., subprocess.Popen] = subprocess.Popen,
     run_git: Callable[..., subprocess.CompletedProcess] = _default_run_git,
 ) -> str:
     """Review the assembly: seed its worktree at review, run one loop there to
@@ -288,9 +310,6 @@ def review(
         "".join(f"{path}\n" for path in review_paths(wave)),
         encoding="utf-8",
     )
-    meta = repo / "docs/dev/project-management/meta"
-    if meta.exists():
-        shutil.copytree(meta, pm / "meta", dirs_exist_ok=True)
 
     skip = ("_AUTOPILOT_LOOP", "_AUTOPILOT_REVIEW_SLOTS_DIR", "_AUTOPILOT_REVIEW_SLOTS")
     env = {k: v for k, v in os.environ.items() if k not in skip}
