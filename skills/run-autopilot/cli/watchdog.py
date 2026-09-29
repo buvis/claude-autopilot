@@ -1,13 +1,17 @@
 """cli/watchdog.py - wall-clock cap for a spawned phase session (PRD 00106).
 
 Ports the `_autopilot_session_cap` contract from
-development.plugin.bash: a session that exceeds its cap gets SIGTERM,
-then SIGKILL after a grace period if TERM was ignored; a session that
-exits on its own under the cap is never signaled. The bash sidecar had
-to FIND the claude child via pgrep/comm exact-matching (and so carried a
-bystander contract); here the spawner owns the Popen handle directly,
-so only that process can ever be signaled - the bystander guarantee
-holds by construction and needs no resolver.
+development.plugin.bash: a session that exceeds its cap fires SIGTERM
+under one of three reasons - "cap" (no activity path, or idle detection
+disabled), "idle" (the activity path went silent for `idle_secs`), or
+"ceiling" (the session is still running at twice the cap even though its
+activity path stayed live) - then SIGKILL after a grace period if TERM
+was ignored; a session that exits on its own under the cap is never
+signaled. The bash sidecar had to FIND the claude child via pgrep/comm
+exact-matching (and so carried a bystander contract); here the spawner
+owns the Popen handle directly, so only that process can ever be
+signaled - the bystander guarantee holds by construction and needs no
+resolver.
 
 The wrapper's cap kills the WHOLE session, and a capped session is a
 died session: it takes the loop's no-progress branch. Nothing here
@@ -18,7 +22,8 @@ killed, so a two-hour opus build session died mid-task with its work
 committed but its attempt record unwritten. With `warn_secs` set, the
 watchdog calls `on_warn` once the child is within that window of the cap;
 the runner's callback writes the `.handoff-requested` marker `/work`
-reads at its task boundaries. The cap itself is unchanged.
+reads at its task boundaries. The warning window does not change when or
+why the cap fires.
 """
 
 from __future__ import annotations
@@ -133,12 +138,13 @@ class Watchdog:
                 file=sys.stderr,
             )
             return "cap"
-        reason = self._wait_past_cap()
-        if reason is None:
+        result = self._wait_past_cap()
+        if result is None:
             return None
+        reason, silence = result
         if reason == "idle":
             print(
-                f"\nautoclaude: session silent for {self._idle:g}s past "
+                f"\nautoclaude: session silent for {silence:g}s past "
                 f"the {self._cap:g}s wall-clock cap; SIGTERM (idle).",
                 file=sys.stderr,
             )
@@ -161,15 +167,15 @@ class Watchdog:
             )
             self._proc.kill()
 
-    def _wait_past_cap(self) -> str | None:
+    def _wait_past_cap(self) -> tuple[str, float] | None:
         """Poll past the cap until the child exits, goes idle, or hits the
-        ceiling (twice the cap). Returns "idle", "ceiling", or None if the
-        child exited on its own."""
+        ceiling (twice the cap). Returns (reason, silence_secs) where reason
+        is "idle" or "ceiling" (silence_secs is the measured
+        now - mtime(activity_path) for "idle", unused for "ceiling"), or
+        None if the child exited on its own."""
         activity_path = self._activity_path
         assert activity_path is not None
         ceiling_at = time.monotonic() + self._cap
-        last_mtime = self._activity_mtime(activity_path)
-        last_change = time.monotonic()
         while True:
             try:
                 self._proc.wait(timeout=self._poll)
@@ -178,15 +184,12 @@ class Watchdog:
                 pass
             if self._cancelled.is_set():
                 return None
-            now = time.monotonic()
-            if now >= ceiling_at:
-                return "ceiling"
             mtime = self._activity_mtime(activity_path)
-            if mtime != last_mtime:
-                last_mtime = mtime
-                last_change = now
-            elif now - last_change >= self._idle:
-                return "idle"
+            silence = time.time() - mtime if mtime is not None else float("inf")
+            if silence >= self._idle:
+                return "idle", silence
+            if time.monotonic() >= ceiling_at:
+                return "ceiling", 0.0
 
     @staticmethod
     def _activity_mtime(path: str) -> float | None:
