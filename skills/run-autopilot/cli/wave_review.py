@@ -495,6 +495,11 @@ def land(
     if status == "converged":
         updated = _land_converged(repo, wave_path, wave, run_git)
         if updated is None:
+            print(
+                f"autopilot: repo has moved past base_sha {wave['base_sha']!r}"
+                " since assembly; nothing landed",
+                file=sys.stderr,
+            )
             return 5
         wave = updated
 
