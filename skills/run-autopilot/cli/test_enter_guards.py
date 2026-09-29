@@ -282,3 +282,53 @@ def test_stops_fs_error_when_prds_dir_has_no_grandparent(
     # satisfy it for free.
     named = detail.replace(str(tmp_path), "")
     assert "tmp" in named
+
+
+# -- the stop names the step that failed ---------------------------------------
+
+
+def test_an_unexpected_error_from_a_step_is_not_reported_as_a_stop(
+    env: Env,
+    monkeypatch,
+) -> None:
+    # No requirement covers a crash inside the injected `git_head`, which the
+    # catchup decision calls once selection and the frontmatter write have
+    # passed. A blanket handler around the step chain that guessed the stop from
+    # leftover state would dress this bug up as a plausible stop; an unguarded
+    # step must return a stop, an unforeseen bug must still crash.
+    env.write_state(_open_state(batch=_cache()))
+    env.put("wip")
+
+    def boom(repo_root: Path) -> str:
+        raise RuntimeError("git rev-parse crashed")
+
+    monkeypatch.setattr(env, "git_head", boom)
+
+    with pytest.raises(RuntimeError, match="git rev-parse crashed"):
+        env.run()
+
+
+def test_a_park_marker_does_not_make_a_later_failure_a_park_halt(
+    env: Env,
+    monkeypatch,
+) -> None:
+    # `park_halt` is only reachable with a park marker on disk, so the marker's
+    # presence must not stand in for "the park step failed": here park exits
+    # clean and a LATER step, the skips write, is the one that fails.
+    err = OSError("disk full")
+    env.write_state(_open_state())
+    env.put("backlog", PRD, _prd_text(eligibility='"exit 1"'))  # skipped
+    env.put("backlog", OTHER)  # eligible: selection still has a pick
+    env.marker(PRD)
+    _fake_park(monkeypatch, 0)  # park ran and did not halt
+
+    def raise_err(*a, **k):
+        raise err
+
+    monkeypatch.setattr(statectl, "mutate", raise_err)
+
+    out = env.run()
+
+    assert out["stop"] == "state_write_failed"
+    assert "skips" in out["detail"]
+    assert str(err) in out["detail"]
