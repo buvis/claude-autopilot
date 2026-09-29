@@ -105,6 +105,31 @@ def _in_slots_dir(path, slots: Path) -> bool:
     return Path(os.fsdecode(path)).parent == slots
 
 
+def _ownerless_slot_names(slots: Path) -> list[str]:
+    """Names in the slots dir that any peer would read as a free-for-all slot.
+
+    A slot is a digit-named entry, and the rule for a digit-named entry with
+    no readable `owner` is that it gets reclaimed. So a digit-named entry
+    without one is a slot that a peer in another process is entitled to take,
+    whatever the process that made it intends to do next. Anything not named
+    as a bare number is invisible to that rule and may sit there ownerless
+    for as long as a claim needs.
+    """
+    try:
+        names = sorted(child.name for child in slots.iterdir())
+    except OSError:
+        return []
+    ownerless = []
+    for name in names:
+        if not name.isdigit():
+            continue
+        try:
+            (slots / name / "owner").read_bytes()
+        except OSError:
+            ownerless.append(name)
+    return ownerless
+
+
 def _lines_while_waiting(tmp_path, monkeypatch, capsys, *, poll, until) -> list[str]:
     """Wait `until` seconds of injected time for the one slot, then report the
     stderr lines acquire wrote while it waited.
@@ -157,6 +182,25 @@ def test_acquire_takes_the_first_free_slot(tmp_path, monkeypatch):
     assert asked == [LIVE_PEER], f"asked the oracle {asked}"
 
 
+def test_the_last_slot_of_three_is_claimed_when_the_others_are_held(
+    tmp_path,
+    monkeypatch,
+):
+    # Two live holders and count=3: the only free slot is the last one, so a
+    # search that gives up before the count says to would poll for a slot
+    # that is right there. _no_sleep turns that into a failure.
+    _only_alive(monkeypatch, LIVE_PEER, PEER)
+    slots = tmp_path / "wave-slots"
+    _hold(slots, 1, str(LIVE_PEER))
+    _hold(slots, 2, str(PEER))
+    slot = acquire(slots, 3, ME, sleep_fn=_no_sleep, clock=_fake_clock)
+    assert slot == slots / "3"
+    assert (slot / "owner").read_text().strip() == str(ME)
+    # Both live holders keep their own slots, pid intact.
+    assert (slots / "1" / "owner").read_text().strip() == str(LIVE_PEER)
+    assert (slots / "2" / "owner").read_text().strip() == str(PEER)
+
+
 def test_acquire_blocks_until_release(tmp_path, monkeypatch):
     _only_alive(monkeypatch, LIVE_PEER)
     slots = tmp_path / "wave-slots"
@@ -178,11 +222,18 @@ def test_dead_owner_slot_is_reclaimed(tmp_path, monkeypatch):
     asked = _only_alive(monkeypatch, LIVE_PEER)
     slots = tmp_path / "wave-slots"
     stale = _hold(slots, 1, str(DEAD_PEER))
-    (stale / "leftover").write_text("junk from the dead session")
+    # The dead session left a file nobody can name in advance and a subtree
+    # under it, so the slot only comes back by clearing whatever is there
+    # rather than by deleting a known list of names.
+    junk = f"leftover-{os.urandom(6).hex()}"
+    (stale / junk).write_text("junk from the dead session")
+    (stale / "sub").mkdir()
+    (stale / "sub" / "deep.txt").write_text("more junk, one level down")
     slot = acquire(slots, 1, ME, sleep_fn=_no_sleep, clock=_fake_clock)
     assert slot == slots / "1"
     assert (slot / "owner").read_text().strip() == str(ME)
-    assert not (slot / "leftover").exists()  # stale dir was removed, not reused
+    assert not (slot / junk).exists()  # cleared, though nothing knew its name
+    assert not (slot / "sub").exists()  # and cleared right down the subtree
     # The slot came free because the oracle said its owner was gone: asked
     # once, about the pid read out of the owner file and parsed as an int.
     assert asked == [DEAD_PEER], f"asked the oracle {asked}"
@@ -239,7 +290,8 @@ def test_owner_pid_zero_is_reclaimed_not_taken_for_a_live_peer(tmp_path, monkeyp
 
 
 def test_nonpositive_count_is_rejected_instead_of_polling_forever(
-    tmp_path, monkeypatch
+    tmp_path,
+    monkeypatch,
 ):
     _only_alive(monkeypatch)
     slots = tmp_path / "wave-slots"
@@ -250,12 +302,17 @@ def test_nonpositive_count_is_rejected_instead_of_polling_forever(
         assert not slots.exists()  # rejected before the slots dir is created
 
 
-def test_release_frees_the_slot(tmp_path, monkeypatch):
+def test_release_frees_the_slot(tmp_path, monkeypatch, capsys):
     _only_alive(monkeypatch, ME)
     slots = tmp_path / "wave-slots"
     slot = acquire(slots, 1, ME, sleep_fn=_no_sleep, clock=_fake_clock)
+    # A session leaves its own scratch inside the slot it holds, so freeing
+    # the slot has to clear that too, and quietly: a removal that did not
+    # happen is reported on stderr, so silence here means the slot is gone.
+    (slot / "session.log").write_text("output from the finished session")
     release(slot)
     assert not slot.exists()
+    assert _stderr_lines(capsys) == [], "freeing a slot it holds is not news"
     # With our own (live) claim gone, a second acquire gets slot 1 at once.
     again = acquire(slots, 1, ME, sleep_fn=_no_sleep, clock=_fake_clock)
     assert again == slots / "1"
@@ -365,6 +422,56 @@ def test_one_slot_is_never_handed_to_two_holders(tmp_path, monkeypatch):
     assert (slots / "1" / "owner").read_text().strip() == str(holders[0])
 
 
+def test_a_slot_never_appears_in_the_slots_dir_without_its_owner(
+    tmp_path,
+    monkeypatch,
+):
+    # A peer in another process sees nothing of a claim but the slots dir, so
+    # the moment a numbered slot is visible there without a readable `owner`,
+    # that peer is entitled to reclaim it and the pool can hand one slot to
+    # two holders. The invariant is checked either side of every call that
+    # can publish an entry - a directory appearing (mkdir) or moving into
+    # place (rename) - so no in-process bookkeeping can stand in for it.
+    _only_alive(monkeypatch, LIVE_PEER)
+    slots = tmp_path / "wave-slots"
+    _hold(slots, 1, str(LIVE_PEER))
+    # A control, so the check below cannot pass for lack of looking: while an
+    # ownerless number is there, the probe says so.
+    (slots / "9").mkdir()
+    assert _ownerless_slot_names(slots) == ["9"], "the probe sees nothing"
+    (slots / "9").rmdir()
+
+    seen: list[str] = []
+    probed: list[str] = []
+    real_mkdir, real_rename = os.mkdir, os.rename
+
+    def check(when: str) -> None:
+        probed.append(when)
+        seen.extend(f"{when} {name}" for name in _ownerless_slot_names(slots))
+
+    def watched_mkdir(path, *args, **kwargs):
+        check("before mkdir:")
+        try:
+            return real_mkdir(path, *args, **kwargs)
+        finally:
+            check("after mkdir:")
+
+    def watched_rename(src, dst, *args, **kwargs):
+        check("before rename:")
+        try:
+            return real_rename(src, dst, *args, **kwargs)
+        finally:
+            check("after rename:")
+
+    monkeypatch.setattr(os, "mkdir", watched_mkdir)
+    monkeypatch.setattr(os, "rename", watched_rename)
+    slot = acquire(slots, 2, ME, sleep_fn=_no_sleep, clock=_fake_clock)
+    assert slot == slots / "2"
+    assert (slot / "owner").read_text().strip() == str(ME)
+    assert probed, "acquire claimed a slot without creating or moving anything"
+    assert not seen, f"a numbered slot was visible with no owner: {seen}"
+
+
 def test_waiting_prints_one_stderr_line_per_five_minutes(
     tmp_path,
     monkeypatch,
@@ -378,6 +485,21 @@ def test_waiting_prints_one_stderr_line_per_five_minutes(
     assert len(lines) == 2, f"expected one line per 300s of waiting, got {lines}"
     for line in lines:
         assert os.fspath(tmp_path / "wave-slots") in line  # the line names the dir
+
+
+def test_a_long_wait_keeps_a_line_coming_every_five_minutes(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    # Thirty-five minutes of waiting is seven five-minute periods and thirty
+    # 70s polls. The count of lines has to come from dividing the elapsed
+    # clock: a fixed list of the first one or two marks goes quiet here, and
+    # so does anything that stops announcing once the wait gets long.
+    lines = _lines_while_waiting(tmp_path, monkeypatch, capsys, poll=70, until=2100)
+    assert len(lines) == 7, f"expected one line per 300s of waiting, got {lines}"
+    for line in lines:
+        assert os.fspath(tmp_path / "wave-slots") in line  # each line names the dir
 
 
 def test_waiting_under_five_minutes_prints_nothing(tmp_path, monkeypatch, capsys):
