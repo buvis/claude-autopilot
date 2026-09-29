@@ -231,7 +231,8 @@ the steps ran: a kept lane (`3`) followed by a clean review and land still
 reports `3`, but a kept lane whose review then fails reports `4` instead.
 
 An `autoclaude wave` alias for `autopilot wave run` exists at the
-operator-shell layer, outside this PRD's scope.
+operator-shell layer, outside this PRD's scope: a one-line dotfiles change,
+`caffeinate -is python3 "$_skill/cli/__main__.py" wave run "$@"`.
 
 ## Operator notes
 

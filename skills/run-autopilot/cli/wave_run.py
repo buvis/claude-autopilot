@@ -1,5 +1,5 @@
 """cli/wave_run.py - `autopilot wave run`: chain plan, launch, wait, assemble,
-review and land into one call (PRD 00214 follow-on).
+review and land into one call (PRD 00216 follow-on).
 """
 
 from __future__ import annotations
