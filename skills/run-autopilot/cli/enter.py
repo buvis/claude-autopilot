@@ -255,8 +255,8 @@ def _fresh(stamp: object, now_iso: str) -> bool:
     try:
         then = datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
         now = datetime.fromisoformat(now_iso.replace("Z", "+00:00"))
-        return now - then < _CATCHUP_FRESH
-    except ValueError:
+        return timedelta(0) <= now - then < _CATCHUP_FRESH
+    except (TypeError, ValueError):
         return False
 
 
