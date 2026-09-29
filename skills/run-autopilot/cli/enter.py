@@ -153,6 +153,25 @@ def _prepare_tree(state_path: Path, prds_dir: Path, autopilot_dir: Path) -> None
         (autopilot_dir / name).unlink(missing_ok=True)
 
 
+def _bootstrap(out: dict, state_path: Path, prds_dir: Path, autopilot_dir: Path) -> bool:
+    """Steps 0-3: the lifecycle tree, state.json, inherited markers, then the
+    stall_op precheck. True when one of them halts Phase 0."""
+    try:
+        _prepare_tree(state_path, prds_dir, autopilot_dir)
+    except OSError as err:
+        _stop(out, "fs_error", str(err))
+        return True
+    except IndexError:
+        _stop(out, "fs_error", f"cannot place tmp/ above {prds_dir}: no grandparent directory")
+        return True
+    current, _ = state.load(state_path)
+    stall_op = current.get("stall_op")
+    if stall_op is not None and records._stall_op_malformed(stall_op):
+        _stop(out, "stall_op_malformed", "malformed stall_op in state.json; refusing to park")
+        return True
+    return False
+
+
 def _park(out: dict, state_path: Path, prds_dir: Path, autopilot_dir: Path) -> bool:
     """Step 4. True when the park result halts Phase 0."""
     marker = records._parse_marker(autopilot_dir / "park-requested")
@@ -191,6 +210,20 @@ def _stall_stop(state_path: Path) -> tuple[dict, tuple[str, str] | None]:
     if current.get("phase") == "paused" and current.get("cap_pause_reason"):
         return current, ("cap_pause", "paused at the rework cap (cap_pause_reason set)")
     return current, None
+
+
+def _check_custody(out: dict, autopilot_dir: Path, in_loop: bool) -> bool:
+    """Step 7: the pending-custody count, then the review halt a session outside
+    the loop takes. True when it halts Phase 0."""
+    try:
+        out["custody_pending"] = len(custody.pending(autopilot_dir))
+    except custody.CustodyError as err:
+        _stop(out, "deferred_io", str(err))
+        return True
+    if not in_loop and out["custody_pending"]:
+        _stop(out, "custody", f"{out['custody_pending']} custody record(s) pending review")
+        return True
+    return False
 
 
 def _select(
@@ -341,16 +374,8 @@ def enter(
     """Run the Phase 0 step chain in documented order; return the one JSON
     line as a dict. A corrupt state.json raises state.StateError."""
     out = dict(_EMPTY_RESULT)
-    try:
-        _prepare_tree(state_path, prds_dir, autopilot_dir)
-    except OSError as err:
-        return _stop(out, "fs_error", str(err))
-    except IndexError:
-        return _stop(out, "fs_error", f"cannot place tmp/ above {prds_dir}: no grandparent directory")
-    current, _ = state.load(state_path)
-    stall_op = current.get("stall_op")
-    if stall_op is not None and records._stall_op_malformed(stall_op):
-        return _stop(out, "stall_op_malformed", "malformed stall_op in state.json; refusing to park")
+    if _bootstrap(out, state_path, prds_dir, autopilot_dir):
+        return out
     if _park(out, state_path, prds_dir, autopilot_dir):
         return out
     try:
@@ -360,12 +385,8 @@ def enter(
     if stall is not None:
         return _stop(out, *stall)
     out["resume_target"] = resume.resume_target(current)
-    try:
-        out["custody_pending"] = len(custody.pending(autopilot_dir))
-    except custody.CustodyError as err:
-        return _stop(out, "deferred_io", str(err))
-    if not in_loop and out["custody_pending"]:
-        return _stop(out, "custody", f"{out['custody_pending']} custody record(s) pending review")
+    if _check_custody(out, autopilot_dir, in_loop):
+        return out
     try:
         halted = _select(out, state_path, prds_dir, autopilot_dir, prd_arg, now)
     except _WriteFailed as err:
