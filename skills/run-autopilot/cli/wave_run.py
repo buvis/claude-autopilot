@@ -27,12 +27,13 @@ def _wait_for_lanes(
     previous: dict[int, object] = {}
 
     def handler(signum: int, frame: object) -> None:
-        loaded = wave.load(wave_path)
-        for lane in loaded["lanes"]:
-            if wave_launch.lane_status(lane) == "running":
-                wave_launch._kill_lane(lane, os.killpg)
-        loaded["status"] = "interrupted"
-        wave.save(wave_path, loaded)
+        with wave.locked(wave_path):
+            loaded = wave.load(wave_path)
+            for lane in loaded["lanes"]:
+                if wave_launch.lane_status(lane) == "running":
+                    wave_launch._kill_lane(lane, os.killpg)
+            loaded["status"] = "interrupted"
+            wave.save(wave_path, loaded)
         signal.signal(signal.SIGINT, previous[signal.SIGINT])
         signal.signal(signal.SIGTERM, previous[signal.SIGTERM])
         sys.exit(130)
