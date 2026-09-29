@@ -113,15 +113,19 @@ class Env:
     def record(self, prd: str, site: str) -> None:
         self.rows.append((prd, site))
 
-    def run(self, *, prd_arg: str | None = None, in_loop: bool = False, **kw) -> dict:
-        kw.setdefault("record_resume_row", self.record)
+    def run(
+        self, *, prd_arg: str | None = None, in_loop: bool = False,
+        default_recorder: bool = False, **kw,
+    ) -> dict:
+        if not default_recorder:
+            kw.setdefault("record_resume_row", self.record)
+        kw.setdefault("now", lambda: NOW)
         out = enter.enter(
             self.state_path,
             prds_dir=self.prds_dir,
             autopilot_dir=self.autopilot_dir,
             prd_arg=prd_arg,
             in_loop=in_loop,
-            now=lambda: NOW,
             git_head=self.git_head,
             **kw,
         )
@@ -134,6 +138,7 @@ class Env:
 @pytest.fixture
 def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Env:
     monkeypatch.setattr(notify_out, "notify", lambda *a, **k: None)
+    monkeypatch.delenv("_AUTOPILOT_LANES", raising=False)
     return Env(tmp_path)
 
 
@@ -249,6 +254,7 @@ def test_failed_move_stops_mv_verify(env: Env, monkeypatch) -> None:
     out = env.run()
 
     assert out["stop"] == "mv_verify"
+    assert out["detail"] != ""
     assert out["resume_target"] is not None
     assert env.has("backlog")
     assert not env.has("wip")
@@ -273,9 +279,32 @@ def test_ineligible_backlog_prd_is_skipped_and_recorded(env: Env) -> None:
 
     assert (out["prd"], out["source"]) == (OTHER, "backlog")
     assert env.has("backlog", PRD)
-    assert env.read_state()["batch"]["skips"]
+    skips = env.read_state()["batch"]["skips"]
+    assert len(skips) == 1
+    # field names are not pinned here; the record must carry these values
+    assert PRD in skips[0].values()
+    assert "exit 1" in skips[0].values()
+    assert 1 in [v for v in skips[0].values() if type(v) is int]
     # skips alone carry no batch.id, so the batch still reads absent
     assert (out["stop"], out["batch"]) == ("batch_init", "absent")
+
+
+@pytest.mark.parametrize(
+    "command", ["true", "test -f 00010-eligibility-evidence.md"],
+    ids=["exit-0", "repo-relative-check"],
+)
+def test_eligible_backlog_prd_is_picked_without_a_skip_record(env: Env, command: str) -> None:
+    # the evidence file exists only at the project root: the check must run there
+    (env.root / "00010-eligibility-evidence.md").write_text("x", encoding="utf-8")
+    env.write_state(_open_state())
+    env.put("backlog", PRD, _prd_text(eligibility=f'"{command}"'))
+    env.put("backlog", OTHER)
+
+    out = env.run()
+
+    assert (out["stop"], out["prd"], out["source"]) == (None, PRD, "backlog")
+    assert env.has("wip", PRD)
+    assert env.read_state()["batch"].get("skips", []) == []
 
 
 @pytest.mark.parametrize("folder", ["wip", "backlog"])
@@ -346,6 +375,7 @@ def test_park_halt_codes_map_to_their_stops(env: Env, monkeypatch, code: int, st
     assert out["stop"] == stop
     assert (out["resume_target"], out["batch"], out["prd"]) == (None, None, None)
     assert env.rows == []
+    assert out["detail"] != ""
     if code == 5:
         assert out["detail"] == f"parked {PRD}; systemic halt (2+ consecutive wrapper_died parks)"
 
@@ -494,6 +524,7 @@ def test_unreadable_custody_record_stops_deferred_io(env: Env) -> None:
     out = env.run(in_loop=True)
 
     assert out["stop"] == "deferred_io"
+    assert out["detail"] != ""
     assert out["resume_target"] is not None
 
 
