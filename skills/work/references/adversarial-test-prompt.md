@@ -89,7 +89,6 @@ Weak points:
 {Devon's numbered weak-point list, verbatim}
 
 Address every numbered weak point. Answer each in your reply as
-`N. strengthened: <test name>` or `N. in-contract: <why the behavior is
-allowed>`.
+`N. strengthened: <test name>` or `N. in-contract: <why the behavior is allowed>`.
 Do not change tests that Devon could NOT break.
 ```
