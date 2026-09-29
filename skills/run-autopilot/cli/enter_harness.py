@@ -234,9 +234,20 @@ def _arrange(env: Env, monkeypatch: pytest.MonkeyPatch, stop: str) -> None:
         (env.prds_dir / "wip" / PRD).unlink()
 
 
-def run_cli(env: Env, *args: str) -> subprocess.CompletedProcess:
-    """`python3 cli/__main__.py enter ...` as a real subprocess, like test_cli.py."""
+def _design_doc(env: Env) -> Path:
+    return env.autopilot_dir.parent / "designs" / f"{Path(PRD).stem}-design.md"
+
+
+def run_cli(
+    env: Env, *args: str, extra_env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess:
+    """`python3 cli/__main__.py enter ...` as a real subprocess, like test_cli.py.
+
+    Every `_AUTOPILOT_*` variable is stripped from the child environment so an
+    ambient loop cannot leak in; `extra_env` puts chosen ones back.
+    """
     child_env = {k: v for k, v in os.environ.items() if not k.startswith("_AUTOPILOT_")}
+    child_env.update(extra_env or {})
     return subprocess.run(
         [sys.executable, str(CLI_MAIN), *args],
         capture_output=True,

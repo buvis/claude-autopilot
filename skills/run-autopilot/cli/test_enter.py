@@ -32,6 +32,7 @@ from cli.enter_harness import (
     _arrange,
     _cache,
     _custody_entry,
+    _design_doc,
     _fake_park,
     _open_state,
     _prd_text,
@@ -589,10 +590,6 @@ def test_catchup_skip_is_reported_and_written_as_skipped(env: Env) -> None:
 # -- design decision (step 12) -------------------------------------------------
 
 
-def _design_doc(env: Env) -> Path:
-    return env.autopilot_dir.parent / "designs" / f"{Path(PRD).stem}-design.md"
-
-
 def test_design_runs_when_no_design_doc_exists(env: Env) -> None:
     env.write_state(_open_state())
     env.put("wip", PRD, _prd_text(design="run"))
@@ -721,7 +718,7 @@ def test_cli_prints_one_json_line_with_every_key(env: Env) -> None:
     # ...and step 10's frontmatter fields, not only `prd`
     written = env.read_state()
     assert written["prd"] == PRD
-    assert (written["design"], written["lane_effective"]) == ("skip", "full")
+    assert (written["design_mode"], written["lane_effective"]) == ("skip", "full")
 
 
 def test_cli_moves_a_backlog_prd_into_wip(env: Env) -> None:
@@ -771,3 +768,29 @@ def test_cli_future_schema_exits_six(env: Env, bump: int) -> None:
     # refused before any effect: state byte-unchanged, step 0 never made the dirs
     assert env.state_path.read_bytes() == before
     assert not (env.prds_dir / "backlog").exists()
+
+
+def test_cli_prd_flag_selects_the_named_prd(env: Env) -> None:
+    env.write_state(_open_state())
+    env.put("wip", PRD)  # the one plain selection would pick (lower number)
+    env.put("wip", OTHER)
+    expected = enter_twin(env, prd_arg=OTHER)
+
+    proc = run_cli(env, "enter", "--state", str(env.state_path), "--prd", OTHER)
+
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.splitlines() == [json.dumps(expected, sort_keys=True)]
+    assert (expected["prd"], expected["source"]) == (OTHER, "arg")
+
+
+def test_cli_in_loop_is_read_from_the_environment(env: Env) -> None:
+    env.write_state(_open_state())
+    env.put("wip")
+    custody.write_marker(env.autopilot_dir / "critical-on-master", [_custody_entry()])
+    argv = ("enter", "--state", str(env.state_path))
+
+    inside = json.loads(run_cli(env, *argv, extra_env={"_AUTOPILOT_LOOP": "1"}).stdout)
+    outside = json.loads(run_cli(env, *argv).stdout)
+
+    assert (inside["stop"], inside["custody_pending"]) == (None, 1)
+    assert (outside["stop"], outside["custody_pending"]) == ("custody", 1)
