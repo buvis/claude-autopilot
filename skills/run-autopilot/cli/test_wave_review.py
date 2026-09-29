@@ -48,6 +48,7 @@ from cli import (
     wave_review,
     wave_run,
 )
+from cli.test_wave_assemble import _launched
 from cli.test_wave_launch import _autopilot, _git, _repo
 
 
@@ -1532,7 +1533,11 @@ def test_run_interrupt_terminates_lane_groups(
 
     assert raised.value.code == 130
     assert sorted(killed) == ["l1", "l2"]
-    assert wave.load(wave_path)["status"] == "interrupted"
+    saved_status = wave.load(wave_path)["status"]
+    assert saved_status == "interrupted"
+    # Not just the literal string: the real per-field validator must accept it too,
+    # or `wave assemble`/`plan`/`launch`/`abort` all refuse the saved wave.json.
+    assert wave._TOP_CHECKS["status"](saved_status) is True
 
 
 # ── docs: waves.md names the run() exit codes ───────────────────────────
@@ -1563,6 +1568,32 @@ def test_wave_statuses_include_converged_and_review_failed() -> None:
     assert "review_failed" in wave.WAVE_STATUSES
     assert wave._TOP_CHECKS["status"]("converged") is True
     assert wave._TOP_CHECKS["status"]("review_failed") is True
+
+
+def test_wave_statuses_include_interrupted() -> None:
+    assert "interrupted" in wave.WAVE_STATUSES
+    assert wave._TOP_CHECKS["status"]("interrupted") is True
+
+
+def test_structural_errors_and_assemble_accept_an_interrupted_wave(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The interrupt handler's `status: "interrupted"` must be a value
+    `_structural_errors` accepts and `_refusals` does not refuse assembly for
+    on status grounds alone - otherwise the documented `wave assemble` resume
+    is impossible. The one lane is marked already "assembled" (a
+    structurally valid lane status with a real precedent - a rerun that
+    finds a lane already merged) so this test isolates the wave-level status
+    check from the lane's own liveness and merge machinery."""
+    repo, wave_path = _launched(tmp_path, monkeypatch, 1)
+    saved = wave.load(wave_path)
+    finished = {**saved["lanes"][0], "pid": None, "status": "assembled"}
+    interrupted = {**saved, "status": "interrupted", "lanes": [finished]}
+    assert wave._structural_errors(repo, interrupted) == []
+    wave.save(wave_path, interrupted)
+    refusal_code = 1
+    assert wave_assemble.assemble(repo, wave_path) != refusal_code
 
 
 # ── wave_cli.py: review/land/run verbs ───────────────────────────────────
