@@ -61,7 +61,8 @@ uv run --no-project --with pytest python -m pytest -q skills/fast-track/scripts
 echo "[checks] plan size gate"
 uv run --no-project --with pytest python -m pytest -q \
   skills/plan-tasks/scripts/test_plan_size_gate_prose.py \
-  skills/run-autopilot/cli/test_policy.py
+  skills/run-autopilot/cli/test_policy.py \
+  skills/run-autopilot/cli/test_policy_budget.py
 
 echo "[checks] l3"
 uv run --no-project --with pytest python -m pytest -q \
@@ -73,10 +74,19 @@ uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_runner.py \
   skills/run-autopilot/cli/test_watchdog.py \
   skills/run-autopilot/cli/test_handoff_request.py
+
+echo "[checks] reporting"
+uv run --no-project --with pytest python -m pytest -q \
+  skills/run-autopilot/cli/test_loop_metrics.py \
+  skills/run-autopilot/cli/test_render_report.py \
+  skills/run-autopilot/cli/test_render.py \
+  skills/run-autopilot/cli/test_routing.py
+
 echo "[checks] cap hook"
 uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/scripts/test_autopilot_context_cap_hook.py \
   skills/run-autopilot/scripts/test_autopilot_cap_headroom.py \
+  skills/run-autopilot/scripts/test_autopilot_cap_headroom_margin.py \
   skills/run-autopilot/scripts/test_autopilot_cap_breach.py \
   skills/run-autopilot/scripts/test_autopilot_cap_rotation.py \
   skills/run-autopilot/scripts/test_autopilot_cap_review_phase.py \
