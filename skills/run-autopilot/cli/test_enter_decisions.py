@@ -136,10 +136,10 @@ def _assert_rejected(out: dict, prd_arg: str) -> None:
 @pytest.mark.parametrize(
     "prd_arg",
     [f"../hold/{OTHER}", f"./{PRD}", f"prds/wip/{PRD}", f"wip/{PRD}", "sub/x.md",
-     f"{PRD}/", f"a/../{PRD}", ".", "/etc/passwd"],
+     f"{PRD}/", f"a/../{PRD}", ".", "..", "/etc/passwd"],
     ids=["parent-traversal-reaching-hold", "dot-slash-reaching-wip", "nested-relative",
          "nested-into-wip", "nested-unrelated", "trailing-separator", "dot-dot-inside",
-         "the-wip-folder-itself", "absolute-outside-the-tree"],
+         "the-wip-folder-itself", "the-parent-folder-itself", "absolute-outside-the-tree"],
 )
 def test_a_prd_arg_that_is_not_a_bare_basename_is_rejected(env: Env, prd_arg: str) -> None:
     # Both arranged files are reachable by joining the argument onto a PRD
