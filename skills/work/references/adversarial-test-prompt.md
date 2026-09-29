@@ -15,8 +15,7 @@ Dispatch Devon to try to write a **wrong** implementation that passes all of Tes
 | Devon result | Action |
 |----------------|--------|
 | Cannot break tests (tests catch all exploits) | Tests are strong. Proceed to 2.95 (the tests were committed at step 2.85, before Devon ran). |
-| Breaks tests with wrong impl that passes | Send Devon's exploit back to Tess: "These tests can be passed by: {wrong impl}. Strengthen them." Commit the strengthened tests as `test(<scope>): strengthen <feature>` (the step 2.85 commit shape; this commit is now `<test_commit_sha>`) before the second Devon dispatch, then re-run Devon once against the strengthened tests. Max 1 Tess/Devon round (2 Devon dispatches, 1 strengthen-side Tess dispatch per task). |
-| 1 round exhausted (Devon still breaks the strengthened tests) | Flag weakness in task output, proceed anyway. |
+| Breaks tests with wrong impl that passes | Send Devon's exploit back to Tess as a numbered weak-point list (see Feedback to Tess below). Commit the strengthened tests as `test(<scope>): strengthen <feature>` (this commit is now `<test_commit_sha>`), record `devon: exploit_fixed` and `devon_exploit: <Devon's one-line weak-point summary>`, `devon_weak_points: <count of Devon's list>` and `devon_in_contract: [<each "N. in-contract: ..." line Tess returned>]` in the task's attempt entry, proceed to 2.95. A weak point Tess neither strengthened nor marked in-contract goes back to Tess in the same strengthen dispatch's one correction retry; the orchestrator never dismisses one itself (V33). |
 
 ## Prompt Template
 
@@ -43,7 +42,7 @@ Process:
 1. Read the tests carefully
 2. Write a deliberately wrong implementation
 3. Run the test suite against your wrong implementation
-4. If tests pass: you broke them. Report the exploit.
+4. If tests pass: you broke them. Keep going: show every other weak point you can prove the same way, up to 8 in total, before reporting.
 5. If tests fail: try a different exploit. After 3 failed attempts, report "Tests are robust."
 
 Rules:
@@ -54,7 +53,7 @@ Rules:
 5. Clean up your wrong implementation before returning. Do NOT use `rm` — it is denied to subagents and will fail. Instead, use the Write tool to OVERWRITE every file you created with a single placeholder line (`# adversarial placeholder - overwritten by implementor`). The Write tool always works. Never ask for permission to delete; just overwrite and report the path.
 
 Output format:
-- If you CAN break the tests: show the wrong implementation, the passing test output, and explain which tests are weak
+- If you CAN break the tests: show the wrong implementation and the passing test output, then a numbered `Weak points:` list, one line each: `N. <test name> - <what a wrong implementation gets away with> - <assertion that would prevent it>`
 - If you CANNOT break the tests: say "Tests are robust" and explain why each shortcut you tried was caught
 
 You receive NOTHING about what the code should actually do. You only see tests and types.
@@ -89,6 +88,8 @@ Test output (all passing):
 Weak points:
 {Devon's explanation of which tests are weak}
 
-Strengthen these specific tests so the above exploit no longer works.
+Address every numbered weak point. Answer each in your reply as
+`N. strengthened: <test name>` or `N. in-contract: <why the behavior is
+allowed>`.
 Do not change tests that Devon could NOT break.
 ```

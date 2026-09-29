@@ -19,10 +19,6 @@ _ADVERSARIAL = _WORK_DIR / "references" / "adversarial-test-prompt.md"
 
 _COMMIT_HEADING = "### 2.85. Commit tests"
 _DEVON_HEADING = "### 2.9. Adversarial validation"
-_STRENGTHEN_SENTENCE = (
-    "Commit the strengthened tests as test(<scope>): strengthen <feature> "
-    "before the second Devon dispatch."
-)
 
 
 def _section(text: str, path: Path, start: str, end: str) -> str:
@@ -56,37 +52,6 @@ def test_tests_commit_before_devon() -> None:
         "references/red-check.md still sends the strengthen path to step 2.9 "
         "(Devon) to re-capture <test_commit_sha>; the capture is step 2.85."
     )
-
-
-def test_strengthened_tests_are_committed_before_devon_round_two() -> None:
-    # Without this, the strengthen round's tests sit uncommitted through the
-    # second Devon dispatch, which is exactly the window the reorder closed.
-    text = _SKILL_MD.read_text()
-    devon_step = _section(text, _SKILL_MD, _DEVON_HEADING, "### 2.95.")
-    assert _STRENGTHEN_SENTENCE in devon_step, (
-        f"{_SKILL_MD}: step 2.9 lacks the sentence {_STRENGTHEN_SENTENCE!r}."
-    )
-    commit_step = _section(text, _SKILL_MD, _COMMIT_HEADING, _DEVON_HEADING)
-    assert "the last test commit" in commit_step, (
-        f"{_SKILL_MD}: step 2.85 no longer says <test_commit_sha> is the last "
-        "test commit, so an ESCALATE reset after a strengthen round would "
-        "throw the strengthened tests away."
-    )
-    outcomes = _section(
-        _ADVERSARIAL.read_text(),
-        _ADVERSARIAL,
-        "**Outcomes:**",
-        "## Prompt Template",
-    )
-    for needle in (
-        "strengthen <feature>",
-        "step 2.85",
-        "before the second Devon dispatch",
-    ):
-        assert needle in outcomes, (
-            f"{_ADVERSARIAL}: the outcome table lacks {needle!r}, so the "
-            "strengthen round never commits before Devon's re-check."
-        )
 
 
 def test_step_2_resumes_from_a_wip_commit() -> None:

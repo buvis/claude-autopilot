@@ -20,7 +20,8 @@ uv run --no-project --with pytest python -m pytest -q \
 
 echo "[checks] adversarial cap prose"
 uv run --no-project --with pytest python -m pytest -q \
-  skills/work/scripts/test_adversarial_cap_prose.py
+  skills/work/scripts/test_adversarial_cap_prose.py \
+  skills/work/scripts/test_devon_round_prose.py
 
 echo "[checks] record_dispatch"
 uv run --no-project --with pytest python -m pytest -q \
