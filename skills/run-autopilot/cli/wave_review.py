@@ -453,6 +453,20 @@ def _review_file(worktree: Path, wave: dict) -> Path | None:
     return max(matches, key=lambda path: path.stat().st_mtime)
 
 
+def _land_review_failed(repo: Path, wave: dict) -> int:
+    """Record a review_failed wave's outcome (summary line + operator
+    message) and return the "nothing to land" exit code, 4."""
+    review_file = _review_file(Path(wave["assembly"]["worktree"]), wave)
+    line = (
+        f"## Assembly review: review_failed, see {review_file}"
+        if review_file is not None
+        else "## Assembly review: review_failed, see no review file written"
+    )
+    _append_summary_line(repo, wave["id"], line)
+    print(f"autopilot: {line}", file=sys.stderr)
+    return 4
+
+
 def land(
     repo: Path,
     wave: dict,
@@ -480,15 +494,7 @@ def land(
 
     status = wave.get("status")
     if status == "review_failed":
-        review_file = _review_file(Path(wave["assembly"]["worktree"]), wave)
-        line = (
-            f"## Assembly review: review_failed, see {review_file}"
-            if review_file is not None
-            else "## Assembly review: review_failed, see no review file written"
-        )
-        _append_summary_line(repo, wave["id"], line)
-        print(f"autopilot: {line}", file=sys.stderr)
-        return 4
+        return _land_review_failed(repo, wave)
     if status not in ("converged", "done"):
         raise ValueError(f"wave status {status!r} is not landable")
 
