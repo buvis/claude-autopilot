@@ -23,9 +23,11 @@ reads at its task boundaries. The cap itself is unchanged.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import threading
+import time
 from typing import Callable
 
 
@@ -37,7 +39,13 @@ class Watchdog:
     and nothing is signaled. cancel() disarms a not-yet-fired cap and
     joins the thread (the post-exit `kill $_cap_pid; wait` parity).
     `fired` reports whether the cap ever signaled the child; `warned`
-    whether the warning callback ran.
+    whether the warning callback ran; `fired_reason` is "cap", "idle",
+    "ceiling", or None if the cap never fired.
+
+    When `activity_path` is given, a session still running past the cap
+    is not signaled immediately: it is left alone as long as the path's
+    mtime keeps advancing, up to `idle_secs` of silence or twice the cap
+    (the ceiling), whichever comes first.
     """
 
     def __init__(
@@ -47,16 +55,23 @@ class Watchdog:
         grace_secs: float,
         warn_secs: float = 0.0,
         on_warn: Callable[[], None] | None = None,
+        idle_secs: float = 0.0,
+        activity_path: str | None = None,
+        poll_secs: float = 60.0,
     ) -> None:
         self._proc = proc
         self._cap = cap_secs
         self._grace = grace_secs
         self._warn = warn_secs
         self._on_warn = on_warn
+        self._idle = idle_secs
+        self._activity_path = activity_path
+        self._poll = poll_secs
         self._cancelled = threading.Event()
         self._thread = threading.Thread(target=self._watch, daemon=True)
         self.fired = False
         self.warned = False
+        self.fired_reason: str | None = None
 
     def start(self) -> "Watchdog":
         self._thread.start()
@@ -97,11 +112,31 @@ class Watchdog:
             pass
         if self._cancelled.is_set():
             return
-        print(
-            f"\nautoclaude: session exceeded the {int(self._cap)}s wall-clock "
-            "cap; SIGTERM (session cap).",
-            file=sys.stderr,
-        )
+
+        if self._activity_path is not None:
+            reason = self._wait_past_cap()
+            if reason is None:
+                return  # exited on its own before idle/ceiling fired
+            self.fired_reason = reason
+            if reason == "idle":
+                print(
+                    f"\nautoclaude: session silent for {self._idle:g}s past "
+                    f"the {self._cap:g}s wall-clock cap; SIGTERM (idle).",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    f"\nautoclaude: session reached twice the {self._cap:g}s "
+                    "wall-clock cap; SIGTERM (ceiling).",
+                    file=sys.stderr,
+                )
+        else:
+            print(
+                f"\nautoclaude: session exceeded the {int(self._cap)}s wall-clock "
+                "cap; SIGTERM (session cap).",
+                file=sys.stderr,
+            )
+            self.fired_reason = "cap"
         self.fired = True
         self._proc.terminate()
         try:
@@ -112,3 +147,37 @@ class Watchdog:
                 file=sys.stderr,
             )
             self._proc.kill()
+
+    def _wait_past_cap(self) -> str | None:
+        """Poll past the cap until the child exits, goes idle, or hits the
+        ceiling (twice the cap). Returns "idle", "ceiling", or None if the
+        child exited on its own."""
+        activity_path = self._activity_path
+        assert activity_path is not None
+        ceiling_at = time.monotonic() + self._cap
+        last_mtime = self._activity_mtime(activity_path)
+        last_change = time.monotonic()
+        while True:
+            try:
+                self._proc.wait(timeout=self._poll)
+                return None
+            except subprocess.TimeoutExpired:
+                pass
+            if self._cancelled.is_set():
+                return None
+            now = time.monotonic()
+            if now >= ceiling_at:
+                return "ceiling"
+            mtime = self._activity_mtime(activity_path)
+            if mtime != last_mtime:
+                last_mtime = mtime
+                last_change = now
+            elif now - last_change >= self._idle:
+                return "idle"
+
+    @staticmethod
+    def _activity_mtime(path: str) -> float | None:
+        try:
+            return os.path.getmtime(path)
+        except OSError:
+            return None
