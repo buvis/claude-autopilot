@@ -184,7 +184,10 @@ def test_an_absolute_prd_arg_is_rejected_even_though_that_file_exists(env: Env) 
     assert not env.has("wip", OTHER)
 
 
-@pytest.mark.parametrize("name", [PRD, OTHER], ids=["sample-prd", "other-prd"])
+@pytest.mark.parametrize(
+    "name", [PRD, OTHER, "notes.md", "x.md", "00010-Sample-PRD.md"],
+    ids=["sample-prd", "other-prd", "no-number-prefix", "one-char-stem", "mixed-case-slug"],
+)
 def test_a_bare_basename_in_wip_is_still_selected_from_the_argument(env: Env, name: str) -> None:
     env.write_state(_open_state())
     env.put("wip", name)
@@ -195,7 +198,10 @@ def test_a_bare_basename_in_wip_is_still_selected_from_the_argument(env: Env, na
     assert env.has("wip", name)
 
 
-@pytest.mark.parametrize("name", [PRD, OTHER], ids=["sample-prd", "other-prd"])
+@pytest.mark.parametrize(
+    "name", [PRD, OTHER, "notes.md", "x.md", "00010-Sample-PRD.md"],
+    ids=["sample-prd", "other-prd", "no-number-prefix", "one-char-stem", "mixed-case-slug"],
+)
 def test_a_bare_basename_in_backlog_is_still_moved_into_wip(env: Env, name: str) -> None:
     env.write_state(_open_state())
     env.put("backlog", name)

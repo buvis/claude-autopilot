@@ -245,6 +245,7 @@ def test_prd_arg_absent_from_wip_and_backlog_stops_prd_not_found(env: Env) -> No
     out = env.run(prd_arg=PRD)
 
     assert out["stop"] == "prd_not_found"
+    assert "bare basename" not in out["detail"].lower()
     assert out["batch"] is None
     assert env.has("hold")
 
