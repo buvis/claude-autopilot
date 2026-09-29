@@ -38,6 +38,14 @@ def _remove(path: Path) -> None:
         print(f"could not remove {path}: {exc}", file=sys.stderr)
 
 
+def _owner(slot: Path) -> str:
+    """The slot's owner text, empty when there is nothing readable to read."""
+    try:
+        return (slot / "owner").read_bytes().decode(errors="replace").strip()
+    except OSError:
+        return ""
+
+
 def _stale(slot: Path) -> bool:
     """True unless the slot's owner file names a live claimant's pid.
 
@@ -45,10 +53,7 @@ def _stale(slot: Path) -> bool:
     is parsed instead of reaching the oracle: `os.kill(0, 0)` signals our own
     process group, so "0" would read as a live peer forever.
     """
-    try:
-        owner = (slot / "owner").read_bytes().decode(errors="replace").strip()
-    except OSError:
-        return True
+    owner = _owner(slot)
     return not (owner.isdigit() and int(owner) > 0 and _pid_alive(int(owner)))
 
 
@@ -71,11 +76,26 @@ def _claim(slot: Path, pid: int) -> bool:
 
 def _discard(slot: Path, pid: int) -> bool:
     """Clear a stale slot, moving it aside first so the slot name never
-    lingers half-emptied and only one reclaimer can win the rename."""
+    lingers half-emptied and only one reclaimer can win the rename.
+
+    The rename moves whatever sits at the path, so the owner it carried off
+    is read again there: a peer that reclaimed the slot first and published
+    a live claim between our staleness check and this rename would otherwise
+    have that claim deleted. An owner unchanged since the check is the one we
+    judged; a changed one gets its own question, and a live answer puts the
+    claim back and reads the slot as taken.
+    """
     aside = slot.parent / f"{slot.name}.stale-{pid}"
+    checked = _owner(slot)
     try:
         os.rename(slot, aside)
     except OSError:
+        return False
+    if _owner(aside) != checked and not _stale(aside):
+        try:
+            os.rename(aside, slot)
+        except OSError as exc:
+            print(f"could not put {aside} back as {slot}: {exc}", file=sys.stderr)
         return False
     _remove(aside)
     return True

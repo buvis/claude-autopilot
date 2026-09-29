@@ -422,6 +422,38 @@ def test_one_slot_is_never_handed_to_two_holders(tmp_path, monkeypatch):
     assert (slots / "1" / "owner").read_text().strip() == str(holders[0])
 
 
+def test_a_reclaim_never_steals_a_claim_that_went_live_first(tmp_path, monkeypatch):
+    # Slot 1 holds a killed loop's leftover owner, so both acquirers read it
+    # as stale. A whole peer acquire runs inside the window ME opens by moving
+    # that stale slot aside: the peer reclaims it and publishes a live claim
+    # of its own, which ME's rename then carries off. Moving a claim aside is
+    # not owning it, so with count=1 exactly one of the two may come back
+    # holding slots/1 and the other has to wait.
+    _only_alive(monkeypatch, ME, PEER)
+    slots = tmp_path / "wave-slots"
+    _hold(slots, 1, str(DEAD_PEER))
+    real_rename = os.rename
+    raced: list[str] = []
+    outcomes: list[tuple[int, Path | str]] = []
+
+    def racing_rename(src, dst, *args, **kwargs):
+        if not raced and ".stale-" in os.fspath(dst):
+            raced.append(os.fspath(dst))  # ME's reclaim is under way
+            outcomes.append((PEER, _claim_or_wait(slots, 1, PEER)))
+        return real_rename(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(os, "rename", racing_rename)
+    outcomes.append((ME, _claim_or_wait(slots, 1, ME)))
+    assert raced, "acquire never moved the stale slot aside"
+    holders = [pid for pid, out in outcomes if out == slots / "1"]
+    waiters = [pid for pid, out in outcomes if out == WAITED]
+    assert len(holders) == 1, f"count=1 handed slot 1 to {len(holders)} holders"
+    assert len(waiters) == 1, f"one acquirer had to wait, got {outcomes}"
+    # The slot names whoever actually holds it: the reclaim that lost the race
+    # put the winner's claim back rather than replacing it with its own.
+    assert (slots / "1" / "owner").read_text().strip() == str(holders[0])
+
+
 def test_a_slot_never_appears_in_the_slots_dir_without_its_owner(
     tmp_path,
     monkeypatch,
