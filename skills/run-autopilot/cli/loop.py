@@ -48,10 +48,31 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from cli import convergence, notify_out, pause, render_metrics, routing, runner, usage_limit
+from cli import (
+    convergence,
+    notify_out,
+    pause,
+    render_metrics,
+    routing,
+    runner,
+    usage_limit,
+    wave_slots,
+)
 from cli.loop_act import PURGE_SCRIPT, ActMixin, run_agoge, run_purge
-from cli.loop_decision import DecisionMixin, died_next, fingerprint, last_result_field, pause_detail, plugin_drift
-from cli.loop_gates import DEFAULT_LOOPS_DIR, GatesMixin, live_wrapper_pid, prune_registry
+from cli.loop_decision import (
+    DecisionMixin,
+    died_next,
+    fingerprint,
+    last_result_field,
+    pause_detail,
+    plugin_drift,
+)
+from cli.loop_gates import (
+    DEFAULT_LOOPS_DIR,
+    GatesMixin,
+    live_wrapper_pid,
+    prune_registry,
+)
 from cli.routing import _load_json
 
 _SKILL_ROOT = Path(__file__).resolve().parents[1]
@@ -63,8 +84,8 @@ import _walk_up
 # compat re-exports: the names loop.py defined before PRD 00192 split it
 __all__ = [
     "DEFAULT_LOOPS_DIR",
-    "Loop",
     "PURGE_SCRIPT",
+    "Loop",
     "died_next",
     "fingerprint",
     "last_result_field",
@@ -367,19 +388,34 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
                 except (ValueError, OSError):
                     pass
 
-    def _launch(self, plan: routing.Route, ap_dir: Path) -> None:
+    def _launch(self, plan: routing.Route, ap_dir: Path, phase: str) -> None:
         """One routed session, plus the slot reset and orphan sweep that
         always follow it. The keyword set is the contract every spawn_fn
-        (runner.spawn and the tests' ScriptedSpawn) is written against."""
-        self._spawn(
-            plan.model,
-            plan.effort,
-            cap_secs=plan.cap_secs,
-            autopilot_dir=ap_dir,
-            env=self.env,
-            runner_bin=self.runner_bin,
-            proc_slot=self._proc_slot,
-        )
+        (runner.spawn and the tests' ScriptedSpawn) is written against.
+        A review session first claims a slot under
+        _AUTOPILOT_REVIEW_SLOTS_DIR, when set, and frees it after."""
+        slots_dir = self.env.get("_AUTOPILOT_REVIEW_SLOTS_DIR", "")
+        slot = None
+        if phase == "review" and slots_dir:
+            slot = wave_slots.acquire(
+                Path(slots_dir),
+                self._int("_AUTOPILOT_REVIEW_SLOTS", 1),
+                self.loop_pid,
+                sleep_fn=self._sleep,
+            )
+        try:
+            self._spawn(
+                plan.model,
+                plan.effort,
+                cap_secs=plan.cap_secs,
+                autopilot_dir=ap_dir,
+                env=self.env,
+                runner_bin=self.runner_bin,
+                proc_slot=self._proc_slot,
+            )
+        finally:
+            if slot is not None:
+                wave_slots.release(slot)
         self._proc_slot[0] = None
         self._cleanup_orphans()
 
@@ -469,7 +505,11 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
         return None
 
     def _announce_and_launch(
-        self, ap_dir: Path, phase: str, prd: str, plan: routing.Route
+        self,
+        ap_dir: Path,
+        phase: str,
+        prd: str,
+        plan: routing.Route,
     ) -> None:
         """Print the launch banner and spawn the routed session. Phase
         resolution and the banner's empty-phase fallback stay with each
@@ -481,7 +521,7 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
             f"{plan.model}/{plan.effort} ━━",
             file=self.out,
         )
-        self._launch(plan, ap_dir)
+        self._launch(plan, ap_dir, phase)
 
     def _launch_phase(self, ap_dir: Path) -> tuple[float, str, routing.Route]:
         """Read state, route it, announce it, spawn it. Returns the
@@ -497,7 +537,10 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
 
         plan = routing.route(phase_launched, ap_dir, env=self.env)
         self._announce_and_launch(
-            ap_dir, phase_launched or "bootstrap", prd_launched, plan
+            ap_dir,
+            phase_launched or "bootstrap",
+            prd_launched,
+            plan,
         )
         return ts_start, phase_launched, plan
 
