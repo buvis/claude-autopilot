@@ -101,16 +101,19 @@ class TrustedLastWallTests(unittest.TestCase):
     def test_returns_the_last_completed_span(self) -> None:
         """The span is the LAST completed entry's own `done_at -
         started_at`; earlier completed tasks and the one still in progress
-        say nothing about what the next task will cost. A state with no
+        say nothing about what the next task will cost. The earlier task is
+        the LONGER one here, so "last" and "longest" disagree: a walk that
+        keeps the biggest span it saw answers 6540 and reserves twenty
+        times the headroom the next task needs. A state with no
         `cap_rotations` key at all is ordinary, not an error."""
         state = {
             "tasks": [
-                _spanned("t0", 100),
-                _spanned("t1", 6540),
+                _spanned("t0", 6540),
+                _spanned("t1", 300),
                 {"id": "t2", "name": "next", "status": "in_progress"},
             ],
         }
-        self.assertEqual(trusted_last_wall(state), 6540)
+        self.assertEqual(trusted_last_wall(state), 300)
 
     def test_a_rotation_of_the_measured_task_drops_its_span(self) -> None:
         """`started_at` is stamped once and never replaced, so a rotated
@@ -118,9 +121,14 @@ class TrustedLastWallTests(unittest.TestCase):
         per task and must be asked about the entry the span came from: the
         same two tasks give None when the measured one rotated, and the full
         span when a different one did. `cap_rotations` is per-PRD, so "any
-        rotation" would kill the term for the rest of the PRD."""
+        rotation" would kill the term for the rest of the PRD - and it
+        accumulates, so the measured task's entry is the SECOND one here.
+        A filter that consults only the first entry misses it."""
         tasks = [_spanned("t0", 100), _spanned("t1", 6540)]
-        measured_rotated = {"tasks": tasks, "cap_rotations": [{"task_id": "t1"}]}
+        measured_rotated = {
+            "tasks": tasks,
+            "cap_rotations": [{"task_id": "t0"}, {"task_id": "t1"}],
+        }
         other_rotated = {"tasks": tasks, "cap_rotations": [{"task_id": "t0"}]}
         self.assertIsNone(trusted_last_wall(measured_rotated))
         self.assertEqual(trusted_last_wall(other_rotated), 6540)
@@ -177,10 +185,15 @@ class TrustedLastWallTests(unittest.TestCase):
         self.assertIsNone(trusted_last_wall({"tasks": [_spanned("t1", -5)]}))
 
     def test_no_completed_task_gives_nothing(self) -> None:
-        """The first task of a session has nothing completed behind it, so
-        there is no span to measure and the time term stays off."""
-        state = {"tasks": [_spanned("t1", 600, status="in_progress")]}
-        self.assertIsNone(trusted_last_wall(state))
+        """Only a `completed` entry is finished work to measure. The first
+        task of a session has nothing completed behind it, and a task that
+        failed or was aborted stopped somewhere unknown - its stamps span an
+        attempt, not a task's cost. A filter written as "anything not still
+        in progress" would measure those two."""
+        for status in ("in_progress", "failed", "aborted"):
+            with self.subTest(status=status):
+                state = {"tasks": [_spanned("t1", 600, status=status)]}
+                self.assertIsNone(trusted_last_wall(state))
 
 
 class HeadroomExhaustedTests(unittest.TestCase):
@@ -253,9 +266,15 @@ class HeadroomExhaustedTests(unittest.TestCase):
     def test_the_thresholds_come_from_the_arguments(self) -> None:
         """The caps and the margin are the caller's, not constants baked
         into this module: a wider cap, a higher tripwire, or a margin of 1.0
-        each turn a firing case into a quiet one."""
+        each turn a firing case into a quiet one. The margin is pinned on
+        all three terms, one at a time - 173K left against a 164K task, 230
+        calls against a 200-call task and 1000s against a 900s span all fire
+        at 1.25 and all go quiet at 1.0, so a term that ignores the argument
+        and multiplies by its own 1.25 is caught here."""
         self.assertFalse(_exhausted(327_000, None, 164_000, 200, usage_cap=1_000_000))
         self.assertFalse(_exhausted(None, 220, 150_000, 200, turn_tripwire=900))
+        self.assertFalse(_exhausted(327_000, None, 164_000, 200, margin=1.0))
+        self.assertFalse(_exhausted(None, 220, 150_000, 200, margin=1.0))
         self.assertFalse(
             _exhausted(
                 None,

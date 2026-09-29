@@ -238,6 +238,17 @@ class TimeTermHookTests(unittest.TestCase):
             self._run_timed(wall=900)
         self.assertTrue(self._marker_written())
 
+    def test_time_term_is_inert_when_the_deadline_is_far(self) -> None:
+        """The same 900s span against a deadline 100000s out (threshold
+        1125) writes nothing: a far deadline is what proves the hook
+        compares the distance rather than merely noticing that the variable
+        is set. Wire the read so the parsed number is thrown away and every
+        session spawned with a deadline hands off at its first task
+        boundary, with every other case here still green."""
+        with _deadline(_epoch_in(100_000)):
+            self._run_timed(wall=900)
+        self.assertFalse(self._marker_written())
+
     def test_time_term_is_inert_without_a_deadline(self) -> None:
         """With `_AUTOPILOT_SESSION_DEADLINE` popped from the child env
         there is no deadline to measure against, so the same state that
