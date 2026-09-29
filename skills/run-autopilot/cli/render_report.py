@@ -42,6 +42,7 @@ import sys
 from pathlib import Path
 
 from cli import render_metrics
+from cli.policy import task_over_budget
 
 _PREFLIGHT_ORDER = (
     "healthy",
@@ -585,6 +586,32 @@ def lane_line(state: dict, record: dict | None) -> str:
     return text
 
 
+def _task_wallclock_block(tasks: list[dict]) -> list[str]:
+    """The `Task wall-clock:` block: one line per task with a wall-clock
+    duration in minutes, `not stamped` for a task missing either stamp, or
+    a single `- none stamped` line when no task in the list carries both."""
+    any_stamped = any(
+        t.get("started_at") is not None and t.get("done_at") is not None for t in tasks
+    )
+    lines = ["Task wall-clock:"]
+    if not any_stamped:
+        lines.append("- none stamped")
+        return lines
+    for t in tasks:
+        started, done = t.get("started_at"), t.get("done_at")
+        if started is None or done is None:
+            lines.append(f"- {t.get('id')} ({t.get('model')}): not stamped")
+            continue
+        minutes = int((done - started) // 60)
+        suffix = (
+            " [over budget]"
+            if task_over_budget(t)
+            else ""
+        )
+        lines.append(f"- {t.get('id')} ({t.get('model')}): {minutes} min{suffix}")
+    return lines
+
+
 def prd_section(
     state: dict,
     metrics_rows: list[dict],
@@ -634,6 +661,7 @@ def prd_section(
     lines += ["### Loop Metrics", "", render_metrics.phase_table(metrics_rows), ""]
     lines += _implementor_mix(state, _ledger_rows(state, attempts_ledger))
     lines += _deferred_to_batch_end(_merge_deferral_sinks(deferred, json_items or []))
+    lines += _task_wallclock_block(state.get("tasks") or [])
     return "\n".join(lines)
 
 
