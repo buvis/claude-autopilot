@@ -73,6 +73,58 @@ def test_review_launch_waits_for_a_slot(tmp_path, monkeypatch):
     assert _held_slots(slots_dir) == []
 
 
+def test_review_launch_honours_the_configured_slot_count(tmp_path, monkeypatch):
+    slots_dir = tmp_path / "state" / "wave-slots"
+    held = slots_dir / "1"
+    held.mkdir(parents=True)
+    (held / "owner").write_text(str(os.getpid()))
+    seen: list = []
+
+    def step(ap_dir) -> None:
+        seen.append((slots_dir / "2" / "owner").is_file())
+        terminal_step()(ap_dir)
+
+    env = {**_slot_env(slots_dir), "_AUTOPILOT_REVIEW_SLOTS": "2"}
+    lp = make_loop(tmp_path, [step], env=env)
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="review", batch={"id": "b"})
+    sleeps: list = []
+
+    def sleep(secs: float) -> None:
+        # Records only; never frees slot 1. Raising stops a loop that
+        # ignores the count from waiting on slot 1 forever.
+        sleeps.append(secs)
+        raise AssertionError("slept although slot 2 was free")
+
+    monkeypatch.setattr(lp, "_sleep", sleep)
+
+    assert lp.run() == 0
+    assert sleeps == []  # slot 2 was free, so no wait at all
+    assert seen == [True]  # the session ran holding slot 2
+    assert len(lp._test["spawn"].launches) == 1
+    assert (held / "owner").read_text() == str(os.getpid())  # slot 1 untouched
+    assert _held_slots(slots_dir) == ["1"]  # slot 2 released
+
+
+def test_review_slot_owner_is_the_loop_identity(tmp_path):
+    slots_dir = tmp_path / "state" / "wave-slots"
+    loop_tag = "1"  # never the test process's own pid
+    assert loop_tag != str(os.getpid())
+    owners: list = []
+
+    def step(ap_dir) -> None:
+        owners.append((slots_dir / "1" / "owner").read_text().strip())
+        terminal_step()(ap_dir)
+
+    env = {**_slot_env(slots_dir), "_AUTOPILOT_LOOP": loop_tag}
+    lp = make_loop(tmp_path, [step], env=env)
+    assert lp.loop_pid == int(loop_tag)
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="review", batch={"id": "b"})
+
+    assert lp.run() == 0
+    assert owners == [loop_tag]  # the loop's tracked pid, not os.getpid()
+    assert _held_slots(slots_dir) == []
+
+
 def test_build_launch_never_touches_slots(tmp_path):
     slots_dir = tmp_path / "state" / "wave-slots"
     lp = make_loop(tmp_path, [terminal_step()], env=_slot_env(slots_dir))
