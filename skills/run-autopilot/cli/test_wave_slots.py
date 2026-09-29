@@ -454,6 +454,41 @@ def test_a_reclaim_never_steals_a_claim_that_went_live_first(tmp_path, monkeypat
     assert (slots / "1" / "owner").read_text().strip() == str(holders[0])
 
 
+def test_a_reclaim_compares_the_owner_it_judged_not_a_later_read(tmp_path, monkeypatch):
+    # Slot 1 holds a killed loop's leftover owner, so ME reads it as stale. A
+    # whole peer acquire then runs in the window ME opens by reading that
+    # owner: the peer reclaims slot 1 and publishes a live claim of its own,
+    # which is what ME's reclaim then moves aside. Seeing that takes comparing
+    # the moved owner against the text ME judged; a reclaim that re-reads the
+    # owner instead reads the peer's live pid, finds it unchanged, and deletes
+    # a claim in use. With count=1 exactly one of the two may come back
+    # holding slots/1 and the other has to wait.
+    _only_alive(monkeypatch, ME, PEER)
+    slots = tmp_path / "wave-slots"
+    _hold(slots, 1, str(DEAD_PEER))
+    real_owner = wave_slots._owner
+    raced: list[str] = []
+    outcomes: list[tuple[int, Path | str]] = []
+
+    def racing_owner(slot: Path) -> str:
+        judged = real_owner(slot)
+        if not raced and slot == slots / "1":
+            raced.append(judged)  # the owner text ME's staleness check saw
+            outcomes.append((PEER, _claim_or_wait(slots, 1, PEER)))
+        return judged
+
+    monkeypatch.setattr(wave_slots, "_owner", racing_owner)
+    outcomes.append((ME, _claim_or_wait(slots, 1, ME)))
+    assert raced == [str(DEAD_PEER)], f"ME judged slot 1's owner as {raced}"
+    holders = [pid for pid, out in outcomes if out == slots / "1"]
+    waiters = [pid for pid, out in outcomes if out == WAITED]
+    assert len(holders) == 1, f"count=1 handed slot 1 to {len(holders)} holders"
+    assert len(waiters) == 1, f"one acquirer had to wait, got {outcomes}"
+    # The slot names whoever actually holds it: the reclaim that lost the race
+    # put the winner's claim back rather than replacing it with its own.
+    assert (slots / "1" / "owner").read_text().strip() == str(holders[0])
+
+
 def test_a_slot_never_appears_in_the_slots_dir_without_its_owner(
     tmp_path,
     monkeypatch,

@@ -46,14 +46,17 @@ def _owner(slot: Path) -> str:
         return ""
 
 
-def _stale(slot: Path) -> bool:
-    """True unless the slot's owner file names a live claimant's pid.
+def _is_stale(owner: str) -> bool:
+    """True unless the owner text names a live claimant's pid.
+
+    Judging owner text rather than a path keeps the reading and the judgement
+    one step: a reclaim has to compare against the very text it judged, so
+    the caller holds that text and asks about it here.
 
     Bytes that do not decode, and the text "0", are rejected while the owner
     is parsed instead of reaching the oracle: `os.kill(0, 0)` signals our own
     process group, so "0" would read as a live peer forever.
     """
-    owner = _owner(slot)
     return not (owner.isdigit() and int(owner) > 0 and _pid_alive(int(owner)))
 
 
@@ -74,24 +77,26 @@ def _claim(slot: Path, pid: int) -> bool:
     return True
 
 
-def _discard(slot: Path, pid: int) -> bool:
+def _discard(slot: Path, pid: int, judged: str) -> bool:
     """Clear a stale slot, moving it aside first so the slot name never
     lingers half-emptied and only one reclaimer can win the rename.
 
     The rename moves whatever sits at the path, so the owner it carried off
-    is read again there: a peer that reclaimed the slot first and published
-    a live claim between our staleness check and this rename would otherwise
-    have that claim deleted. An owner unchanged since the check is the one we
-    judged; a changed one gets its own question, and a live answer puts the
-    claim back and reads the slot as taken.
+    is read there and held against `judged`, the text the staleness check
+    actually ruled on. Reading the owner afresh here instead would capture
+    the pid of a peer that reclaimed the slot and published a live claim
+    since that ruling, match it against itself, and delete a claim in use.
+    An owner still equal to what we judged is the one we judged; a changed
+    one gets its own question, and a live answer puts the claim back and
+    reads the slot as taken.
     """
     aside = slot.parent / f"{slot.name}.stale-{pid}"
-    checked = _owner(slot)
     try:
         os.rename(slot, aside)
     except OSError:
         return False
-    if _owner(aside) != checked and not _stale(aside):
+    moved = _owner(aside)
+    if moved != judged and not _is_stale(moved):
         try:
             os.rename(aside, slot)
         except OSError as exc:
@@ -123,8 +128,12 @@ def acquire(
             slot = dir / str(n)
             if _claim(slot, owner_pid):
                 return slot
-            # Losing either step of a reclaim means a peer got there first.
-            if _stale(slot) and _discard(slot, owner_pid) and _claim(slot, owner_pid):
+            # One read of the owner per look at the slot, and the reclaim
+            # compares against that same text. Losing either step of a
+            # reclaim means a peer got there first.
+            owner = _owner(slot)
+            cleared = _is_stale(owner) and _discard(slot, owner_pid, owner)
+            if cleared and _claim(slot, owner_pid):
                 return slot
         sleep_fn(poll_secs)
         # Periods come off the elapsed clock: re-basing on the moment of the
