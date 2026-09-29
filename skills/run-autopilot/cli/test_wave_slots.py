@@ -56,8 +56,23 @@ def _wait_once(secs: float) -> None:
     raise _WouldWait(secs)
 
 
-def _only_alive(monkeypatch, *alive: int) -> None:
-    monkeypatch.setattr(wave_slots, "_pid_alive", lambda pid: pid in alive)
+def _only_alive(monkeypatch, *alive: int, all_alive: bool = False) -> list[int]:
+    """Patch the liveness oracle; return the list that records its calls.
+
+    The recorded pids are the questions `acquire` actually asked, in order, so
+    a test can pin that a slot's fate came from the oracle being asked about
+    the pid parsed out of its `owner` file, rather than from a table of the
+    pid constants above. `all_alive` answers yes to every pid, which leaves
+    the owner text as the only thing that can free a slot.
+    """
+    asked: list[int] = []
+
+    def pid_alive(pid: int) -> bool:
+        asked.append(pid)
+        return all_alive or pid in alive
+
+    monkeypatch.setattr(wave_slots, "_pid_alive", pid_alive)
+    return asked
 
 
 def _hold(slots: Path, n: int, owner: str) -> Path:
@@ -90,6 +105,32 @@ def _in_slots_dir(path, slots: Path) -> bool:
     return Path(os.fsdecode(path)).parent == slots
 
 
+def _lines_while_waiting(tmp_path, monkeypatch, capsys, *, poll, until) -> list[str]:
+    """Wait `until` seconds of injected time for the one slot, then report the
+    stderr lines acquire wrote while it waited.
+
+    A live peer holds the only slot until the injected clock has moved `until`
+    seconds, so the heartbeat sees elapsed time with nothing sleeping for
+    real. `until` has to be a whole number of `poll`-second polls, and the
+    count of lines is then a function of the clock alone: the poll size is
+    free to divide the heartbeat interval or not.
+    """
+    _only_alive(monkeypatch, LIVE_PEER)
+    slots = tmp_path / "wave-slots"
+    held = _hold(slots, 1, str(LIVE_PEER))
+    ticker = _Ticker()
+
+    def sleep_fn(secs: float) -> None:
+        ticker.sleep(secs)
+        if ticker.now >= until:
+            release(held)
+
+    slot = acquire(slots, 1, ME, sleep_fn=sleep_fn, clock=ticker.clock, poll_secs=poll)
+    assert slot == slots / "1"
+    assert ticker.now == until, f"waited {ticker.now}s, meant to wait {until}s"
+    return _stderr_lines(capsys)
+
+
 def test_acquire_creates_the_slots_dir(tmp_path, monkeypatch):
     _only_alive(monkeypatch)
     slots = tmp_path / "state" / "wave-slots"
@@ -101,7 +142,7 @@ def test_acquire_creates_the_slots_dir(tmp_path, monkeypatch):
 
 
 def test_acquire_takes_the_first_free_slot(tmp_path, monkeypatch):
-    _only_alive(monkeypatch, LIVE_PEER)
+    asked = _only_alive(monkeypatch, LIVE_PEER)
     slots = tmp_path / "wave-slots"
     _hold(slots, 1, str(LIVE_PEER))
     slot = acquire(slots, 3, ME, sleep_fn=_no_sleep, clock=_fake_clock)
@@ -110,6 +151,10 @@ def test_acquire_takes_the_first_free_slot(tmp_path, monkeypatch):
     # The live peer's slot is untouched, and slot 3 was never claimed.
     assert (slots / "1" / "owner").read_text().strip() == str(LIVE_PEER)
     assert not (slots / "3").exists()
+    # Slot 1 got skipped because the oracle was asked about the pid parsed out
+    # of its owner file, not because of which pid that happens to be. Slot 2
+    # holds no owner, so it takes no question to see that it is free.
+    assert asked == [LIVE_PEER], f"asked the oracle {asked}"
 
 
 def test_acquire_blocks_until_release(tmp_path, monkeypatch):
@@ -130,7 +175,7 @@ def test_acquire_blocks_until_release(tmp_path, monkeypatch):
 
 
 def test_dead_owner_slot_is_reclaimed(tmp_path, monkeypatch):
-    _only_alive(monkeypatch, LIVE_PEER)
+    asked = _only_alive(monkeypatch, LIVE_PEER)
     slots = tmp_path / "wave-slots"
     stale = _hold(slots, 1, str(DEAD_PEER))
     (stale / "leftover").write_text("junk from the dead session")
@@ -138,6 +183,9 @@ def test_dead_owner_slot_is_reclaimed(tmp_path, monkeypatch):
     assert slot == slots / "1"
     assert (slot / "owner").read_text().strip() == str(ME)
     assert not (slot / "leftover").exists()  # stale dir was removed, not reused
+    # The slot came free because the oracle said its owner was gone: asked
+    # once, about the pid read out of the owner file and parsed as an int.
+    assert asked == [DEAD_PEER], f"asked the oracle {asked}"
 
 
 def test_missing_owner_file_is_reclaimed(tmp_path, monkeypatch):
@@ -151,36 +199,43 @@ def test_missing_owner_file_is_reclaimed(tmp_path, monkeypatch):
 
 def test_malformed_owner_is_reclaimed(tmp_path, monkeypatch):
     # Every pid reads as alive, so only the malformed content can free it.
-    monkeypatch.setattr(wave_slots, "_pid_alive", lambda pid: True)
+    asked = _only_alive(monkeypatch, all_alive=True)
     slots = tmp_path / "wave-slots"
     _hold(slots, 1, "not-a-pid")
     slot = acquire(slots, 1, ME, sleep_fn=_no_sleep, clock=_fake_clock)
     assert slot == slots / "1"
     assert (slot / "owner").read_text().strip() == str(ME)
+    # Text that is not a pid is rejected while it is parsed, so there is no
+    # pid to ask the oracle about.
+    assert asked == [], f"an unparseable owner needs no question, asked {asked}"
 
 
 def test_owner_of_non_utf8_bytes_is_reclaimed(tmp_path, monkeypatch):
     # Every pid reads as alive, so only unreadable content can free the slot.
     # Decoding those bytes must not escape acquire and abort the launch.
-    monkeypatch.setattr(wave_slots, "_pid_alive", lambda pid: True)
+    asked = _only_alive(monkeypatch, all_alive=True)
     slots = tmp_path / "wave-slots"
     (slots / "1").mkdir(parents=True)
     (slots / "1" / "owner").write_bytes(b"\xff\xfe\x00 not a pid")
     slot = acquire(slots, 1, ME, sleep_fn=_no_sleep, clock=_fake_clock)
     assert slot == slots / "1"
     assert (slot / "owner").read_text().strip() == str(ME)
+    # Bytes that do not even decode yield no pid, so the oracle is not asked.
+    assert asked == [], f"an unreadable owner needs no question, asked {asked}"
 
 
 def test_owner_pid_zero_is_reclaimed_not_taken_for_a_live_peer(tmp_path, monkeypatch):
     # "0" is digits but no claimant's pid: os.kill(0, 0) signals the caller's
-    # own process group, so asking the liveness oracle would call it alive
+    # own process group, so it has to be rejected while the owner text is
+    # parsed and never handed to the oracle, which would call it alive
     # forever. _no_sleep fails the test if acquire polls instead of claiming.
-    monkeypatch.setattr(wave_slots, "_pid_alive", lambda pid: True)
+    asked = _only_alive(monkeypatch, all_alive=True)
     slots = tmp_path / "wave-slots"
     _hold(slots, 1, "0")
     slot = acquire(slots, 1, ME, sleep_fn=_no_sleep, clock=_fake_clock)
     assert slot == slots / "1"
     assert (slot / "owner").read_text().strip() == str(ME)
+    assert asked == [], f"0 is no pid to ask a liveness question about: {asked}"
 
 
 def test_nonpositive_count_is_rejected_instead_of_polling_forever(
@@ -315,39 +370,33 @@ def test_waiting_prints_one_stderr_line_per_five_minutes(
     monkeypatch,
     capsys,
 ):
+    # 70s polls do not divide HEARTBEAT_SECS, so counting polls cannot pass
+    # for reading the clock: 770s of waiting is eleven polls and two full
+    # five-minute periods, and one line per third poll would be three lines.
     assert wave_slots.HEARTBEAT_SECS == 300
-    _only_alive(monkeypatch, LIVE_PEER)
-    slots = tmp_path / "wave-slots"
-    held = _hold(slots, 1, str(LIVE_PEER))
-    ticker = _Ticker()
-    poll = wave_slots.HEARTBEAT_SECS / 3  # three polls per heartbeat
-
-    def sleep_fn(secs: float) -> None:
-        ticker.sleep(secs)
-        if len(ticker.sleeps) == 7:  # 700s waited, so two heartbeats are due
-            release(held)
-
-    slot = acquire(slots, 1, ME, sleep_fn=sleep_fn, clock=ticker.clock, poll_secs=poll)
-    assert slot == slots / "1"
-    assert ticker.now == 700
-    lines = _stderr_lines(capsys)
+    lines = _lines_while_waiting(tmp_path, monkeypatch, capsys, poll=70, until=770)
     assert len(lines) == 2, f"expected one line per 300s of waiting, got {lines}"
     for line in lines:
-        assert os.fspath(slots) in line  # the line names the slots dir
+        assert os.fspath(tmp_path / "wave-slots") in line  # the line names the dir
 
 
 def test_waiting_under_five_minutes_prints_nothing(tmp_path, monkeypatch, capsys):
-    _only_alive(monkeypatch, LIVE_PEER)
-    slots = tmp_path / "wave-slots"
-    held = _hold(slots, 1, str(LIVE_PEER))
-    ticker = _Ticker()
+    # One second short of HEARTBEAT_SECS, polled every second so the clock is
+    # read either side of the mark: an interval shorter than 300s would have
+    # spoken by now, so this silence is what makes the interval exact instead
+    # of merely bounded from above.
+    lines = _lines_while_waiting(tmp_path, monkeypatch, capsys, poll=1, until=299)
+    assert not lines, f"nothing is due before 300s of waiting, got {len(lines)} lines"
 
-    def sleep_fn(secs: float) -> None:
-        ticker.sleep(secs)
-        if ticker.now >= 200:  # still short of HEARTBEAT_SECS
-            release(held)
 
-    slot = acquire(slots, 1, ME, sleep_fn=sleep_fn, clock=ticker.clock, poll_secs=100)
-    assert slot == slots / "1"
-    assert ticker.now == 200
-    assert capsys.readouterr().err == ""
+def test_the_first_line_is_due_at_the_five_minute_mark(tmp_path, monkeypatch, capsys):
+    # One second past HEARTBEAT_SECS, polled every second: exactly one line,
+    # which bounds the interval from below too (a 350s interval would still
+    # be silent here, and a 150s one would already be on its second line).
+    # 301s rather than 300s so the test stays blind to whether the waiter
+    # reads the clock before or after its last sleep; both orders have spoken
+    # once by 301s, and an acquirer that stops waiting on the mark itself has
+    # nothing left to announce.
+    lines = _lines_while_waiting(tmp_path, monkeypatch, capsys, poll=1, until=301)
+    assert len(lines) == 1, f"one line is due by 301s of waiting, got {len(lines)}"
+    assert os.fspath(tmp_path / "wave-slots") in lines[0]
