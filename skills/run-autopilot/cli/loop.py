@@ -253,6 +253,13 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
             pass
         return ap_dir
 
+    def _killed_by(self) -> str | None:
+        """The watchdog's fire reason for the most recently launched session,
+        or None when it never fired (or none has launched yet)."""
+        if self._last_spawn is not None and self._last_spawn.cap_fired:
+            return self._last_spawn.cap_reason
+        return None
+
     def _append_metrics(
         self,
         ap_dir: Path,
@@ -283,8 +290,7 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
                 "lane_effective": decision.get("lane_effective"),
             }
             line.update(_decision_fields(decision))
-            if self._last_spawn is not None and self._last_spawn.cap_fired:
-                line["killed_by"] = self._last_spawn.cap_reason
+            line.update({"killed_by": reason} if (reason := self._killed_by()) else {})
             cost = last_result_field(ap_dir / "last-session.log", "total_cost_usd")
             if isinstance(cost, (int, float)) and not isinstance(cost, bool):
                 line["cost_usd"] = cost
@@ -293,12 +299,11 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
             if isinstance(tokens, int) and not isinstance(tokens, bool):
                 line["tokens_out"] = tokens
             encoded = json.dumps(line, separators=(",", ":"))
-            with open(ap_dir / "loop-metrics.jsonl", "a", encoding="utf-8") as fh:
-                fh.write(encoded + "\n")
             ledger_dir = ap_dir / "ledger"
             ledger_dir.mkdir(parents=True, exist_ok=True)
-            with open(ledger_dir / "loop-metrics.jsonl", "a", encoding="utf-8") as fh:
-                fh.write(encoded + "\n")
+            for metrics_path in (ap_dir / "loop-metrics.jsonl", ledger_dir / "loop-metrics.jsonl"):
+                with open(metrics_path, "a", encoding="utf-8") as fh:
+                    fh.write(encoded + "\n")
             # Session row first, so build_row sees this session's batch.
             converged = phase_launched == "review" or line["lane_effective"] in _LANES
             if decision.get("phase_end") == "done" and converged:

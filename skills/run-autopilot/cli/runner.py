@@ -339,19 +339,7 @@ def spawn(
 
     env_for_child = _child_env_with_deadline(env, cap_secs)
     rc, cap_fired, cap_reason = _run_session(
-        argv,
-        log_path,
-        env_for_child,
-        cap_secs,
-        grace_secs,
-        presenter,
-        proc_slot,
-        warn_secs=warn_secs_for(env),
-        idle_secs=idle_secs_for(env),
+        argv, log_path, env_for_child, cap_secs, grace_secs, presenter, proc_slot,
+        warn_secs=warn_secs_for(env), idle_secs=idle_secs_for(env),
     )
-    return SpawnResult(
-        returncode=rc,
-        log_path=log_path,
-        cap_fired=cap_fired,
-        cap_reason=cap_reason,
-    )
+    return SpawnResult(rc, log_path, cap_fired, cap_reason)
