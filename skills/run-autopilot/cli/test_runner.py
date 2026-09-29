@@ -227,7 +227,7 @@ def test_spawn_requests_a_handoff_before_the_cap(tmp_path, capsys):
     )
     ap = _ap_dir(tmp_path)
     (ap / "state.json").write_text(
-        json.dumps({"phase": "build", "tasks": [{"id": "2", "status": "in_progress"}]}),
+        json.dumps({"phase": "build", "tasks": [{"id": "2", "status": "in_progress"}]})
     )
     result = spawn(
         "m",
@@ -295,8 +295,7 @@ def test_spawn_scrubs_host_markers(tmp_path, capsys):
 
 
 def test_spawn_scrub_notice_sorts_multiple_markers_comma_space_joined(
-    tmp_path,
-    capsys,
+    tmp_path, capsys
 ):
     # Seeded out of alphabetical order so an implementation that merely
     # echoed the caller's dict order (rather than sorting) would fail.
@@ -329,7 +328,7 @@ def test_spawn_scrub_notice_sorts_multiple_markers_comma_space_joined(
         if line.startswith("autopilot: scrubbed inherited host markers:")
     ]
     assert err_lines == [
-        "autopilot: scrubbed inherited host markers: CODEX_CI, CODEX_THREAD_ID, COPILOT_CLI",
+        "autopilot: scrubbed inherited host markers: CODEX_CI, CODEX_THREAD_ID, COPILOT_CLI"
     ]
 
 
