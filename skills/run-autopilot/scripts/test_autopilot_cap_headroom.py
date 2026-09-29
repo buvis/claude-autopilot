@@ -14,6 +14,8 @@ about the marker's shape run at 400K with no completed task: the estimate
 leaves 100K of headroom under the 500K cap, so the rule fires.
 """
 
+import contextlib
+import io
 import json
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -730,6 +732,129 @@ class TaskBoundsWallTests(unittest.TestCase):
         self.assertFalse(changed)
         self.assertEqual(state["tasks"][0]["started_at"], 1_700_000_000)
 
+    def test_start_and_done_fields_are_three_tuples_ending_in_the_stamp(
+        self,
+    ) -> None:
+        """The PRD's contract makes `started_at`/`done_at` the third member
+        of `START_FIELDS`/`DONE_FIELDS`, with `now` as the third pair value
+        routed through the same `record_pair` machinery as usage/calls."""
+        from _cap_task_record import DONE_FIELDS, START_FIELDS
+
+        self.assertEqual(
+            START_FIELDS, ("usage_at_start", "calls_at_start", "started_at")
+        )
+        self.assertEqual(DONE_FIELDS, ("usage_at_done", "calls_at_done", "done_at"))
+
+    def test_bound_fields_excludes_the_stamps_so_last_task_cost_ignores_them(
+        self,
+    ) -> None:
+        """`BOUND_FIELDS` stays the four usage/call bounds; a malformed
+        `started_at` on an otherwise well-formed completed record must not
+        push `last_task_cost` onto the estimates fallback."""
+        from _cap_task_record import BOUND_FIELDS, last_task_cost
+
+        self.assertEqual(
+            BOUND_FIELDS,
+            ("usage_at_start", "usage_at_done", "calls_at_start", "calls_at_done"),
+        )
+        task = {
+            "id": "t1",
+            "status": "completed",
+            "usage_at_start": 100_000,
+            "usage_at_done": 220_000,
+            "calls_at_start": 20,
+            "calls_at_done": 170,
+            "started_at": "not-a-timestamp",
+        }
+        self.assertEqual(last_task_cost({"tasks": [task]}, (1, 1)), (120_000, 150))
+
+    def test_done_fire_stamps_done_at_when_usage_and_calls_are_already_recorded(
+        self,
+    ) -> None:
+        """A completed record whose `usage_at_done`/`calls_at_done` are
+        already stamped still acquires `done_at` on the next fire, rather
+        than being skipped because the usage/calls half of the pair reports
+        no change."""
+        state = {
+            "tasks": [
+                {
+                    "id": "t1",
+                    "status": "completed",
+                    "usage_at_start": 100_000,
+                    "calls_at_start": 20,
+                    "started_at": 1_700_000_000,
+                    "usage_at_done": 250_000,
+                    "calls_at_done": 220,
+                },
+            ],
+        }
+        changed, done_task = record_task_bounds(
+            state, "t2", 999_999, 999, 1_700_000_500, warn=True
+        )
+        self.assertTrue(changed)
+        self.assertEqual(done_task, "t1")
+        self.assertEqual(state["tasks"][0]["done_at"], 1_700_000_500)
+
+    def test_done_at_survives_a_second_session(self) -> None:
+        """A `done_at` already stamped is never replaced by a later call,
+        the same never-rewrite rule `started_at` follows: a fully-stamped
+        completed record reports no change and keeps its original stamp."""
+        state = {
+            "tasks": [
+                {
+                    "id": "t1",
+                    "status": "completed",
+                    "usage_at_start": 100_000,
+                    "calls_at_start": 20,
+                    "started_at": 1_700_000_000,
+                    "usage_at_done": 250_000,
+                    "calls_at_done": 220,
+                    "done_at": 1_700_000_500,
+                },
+            ],
+        }
+        changed, done_task = record_task_bounds(
+            state, "t2", 300_000, 260, 1_700_009_999, warn=True
+        )
+        self.assertFalse(changed)
+        self.assertIsNone(done_task)
+        self.assertEqual(state["tasks"][0]["done_at"], 1_700_000_500)
+
+    def test_non_int_started_at_warns_via_the_shared_diagnostic(self) -> None:
+        """A non-int `started_at` is named on the same `_warn_non_int`
+        stderr line the usage/call fields already get, once per fire, then
+        overwritten like any other malformed field."""
+        state = {
+            "tasks": [
+                {
+                    "id": "t1",
+                    "status": "in_progress",
+                    "usage_at_start": 100_000,
+                    "calls_at_start": 20,
+                    "started_at": "bad",
+                },
+            ],
+        }
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            record_task_bounds(state, "t1", 100_000, 20, 1_700_000_000, warn=True)
+        lines = [
+            line for line in stderr.getvalue().splitlines() if "not an int" in line
+        ]
+        self.assertEqual(len(lines), 1, stderr.getvalue())
+        self.assertIn("started_at", lines[0])
+        self.assertEqual(state["tasks"][0]["started_at"], 1_700_000_000)
+
+    def test_module_docstring_names_the_stamp_fields_not_four_ints(self) -> None:
+        """The module docstring describes the wall-clock stamps it now
+        writes and no longer claims the record is "four ints"."""
+        import _cap_task_record
+
+        doc = _cap_task_record.__doc__ or ""
+        self.assertNotIn("four ints", doc)
+        self.assertIn("started_at", doc)
+        self.assertIn("done_at", doc)
+
     def test_last_task_wall_reads_the_latest_completed_task(self) -> None:
         """`last_task_wall` reads `done_at - started_at` of the LAST
         completed task in list order, the same "most recent" rule
@@ -776,6 +901,22 @@ class TaskBoundsWallTests(unittest.TestCase):
             "done_at": 4_000,
         }
         self.assertIsNone(last_task_wall({"tasks": [negative]}))
+
+    def test_last_task_wall_falls_back_to_an_earlier_valid_span(self) -> None:
+        """A partly stamped tail does not end the scan: with the LATEST
+        completed task carrying no stamps, `last_task_wall` keeps walking
+        back to the most recent completed task whose two stamps are ints
+        with a non-negative difference, rather than returning `None` on the
+        first unusable one."""
+        valid_earlier = {
+            "id": "a",
+            "status": "completed",
+            "started_at": 1_000,
+            "done_at": 1_150,
+        }
+        unstamped_latest = {"id": "b", "status": "completed"}
+        state = {"tasks": [valid_earlier, unstamped_latest]}
+        self.assertEqual(last_task_wall(state), 150)
 
 
 if __name__ == "__main__":
