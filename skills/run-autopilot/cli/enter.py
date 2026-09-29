@@ -239,12 +239,10 @@ def _write_prd(
     prd = out["prd"]
     try:
         statectl.mutate(state_path, lambda data: data.update(prd=prd))
-        fields, warnings = frontmatter.apply(prds_dir / "wip" / prd, state_path)
+        fields, _warnings = frontmatter.apply(prds_dir / "wip" / prd, state_path)
     except (OSError, state.StateError, schema.SchemaError) as err:
         _stop(out, "state_write_failed", str(err))
         return None
-    for line in warnings:
-        print(line, file=sys.stderr)
     try:
         record_resume_row(prd, "build")
     except Exception as err:  # best-effort row: never halts Phase 0
@@ -258,7 +256,7 @@ def _fresh(stamp: object, now_iso: str) -> bool:
         then = datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
         now = datetime.fromisoformat(now_iso.replace("Z", "+00:00"))
         return now - then < _CATCHUP_FRESH
-    except (TypeError, ValueError):
+    except ValueError:
         return False
 
 
