@@ -272,7 +272,7 @@ def _refusals(
         return live
     if run_git(["status", "--porcelain"], cwd=repo).stdout.strip():
         return [f"{repo} has uncommitted changes - commit or stash them first"]
-    if wave["status"] not in ("running", "assembled", "assembled_partial"):
+    if wave["status"] not in ("running", "interrupted", "assembled", "assembled_partial"):
         return [f"wave is not in running state (it is {wave['status']})"]
     return []
 
