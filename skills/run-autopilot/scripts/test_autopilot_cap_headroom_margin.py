@@ -31,6 +31,8 @@ from test_autopilot_context_cap_hook import HookFixture, _load_hook_module
 
 DEADLINE_ENV = "_AUTOPILOT_SESSION_DEADLINE"
 RUNNER = Path(__file__).resolve().parent.parent / "cli" / "runner.py"
+HOOK = Path(__file__).resolve().parent / "autopilot_context_cap_hook.py"
+MAX_FILE_LINES = 800
 
 # A fire no term can carry on its own: 300K left under the 500K cap against
 # a last task that cost 50K (margined threshold 62.5K), and 250 calls left
@@ -238,6 +240,21 @@ class TimeTermHookTests(unittest.TestCase):
             self._run_timed(wall=900)
         self.assertTrue(self._marker_written())
 
+    def test_a_cheaper_last_task_keeps_working_under_the_same_deadline(self) -> None:
+        """The same deadline 1000s out as the case above, against a last
+        completed task that spanned 300s: the threshold is 375 and 1000 is
+        well clear of it, so the session keeps working. The pair is the
+        point. Firing at 900s and staying quiet at 300s under one deadline
+        leaves no room for a hook that reads the span as a yes/no ("is there
+        a trusted span?") and then judges the clock against a number of its
+        own - no constant is both over 5760 (what
+        test_a_rotation_of_another_task_still_fires_the_time_term demands)
+        and under 800 (what this case demands), so the number the hook
+        measured is the number it has to compare."""
+        with _deadline(_epoch_in(1000)):
+            self._run_timed(wall=300)
+        self.assertFalse(self._marker_written())
+
     def test_time_term_is_inert_when_the_deadline_is_far(self) -> None:
         """The same 900s span against a deadline 100000s out (threshold
         1125) writes nothing: a far deadline is what proves the hook
@@ -384,6 +401,21 @@ class DeadlineSeamTests(unittest.TestCase):
             f"{RUNNER}: the runner no longer exports "
             f"{_cap_headroom.DEADLINE_ENV!r}, so the hook's time term is "
             "dead at runtime while every unit test still passes",
+        )
+
+
+class HookFileSizeTests(unittest.TestCase):
+    def test_the_hook_file_stays_under_the_size_limit(self) -> None:
+        """800 lines is this project's hard per-file ceiling and the hook
+        already sits exactly on it, so the wiring this suite demands has to
+        arrive as a sibling module rather than as more lines in the hook.
+        This is a file-size rule, not a headroom bug - it lives here so a
+        failure reads that way."""
+        lines = len(HOOK.read_text().splitlines())
+        self.assertLessEqual(
+            lines,
+            MAX_FILE_LINES,
+            f"{HOOK}: {lines} lines, over the {MAX_FILE_LINES}-line limit",
         )
 
 

@@ -11,6 +11,7 @@ clock are arguments.
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 from _cap_headroom import (
     DEADLINE_ENV,
@@ -20,6 +21,7 @@ from _cap_headroom import (
     trusted_last_wall,
 )
 
+MODULE = Path(__file__).resolve().parent / "_cap_headroom.py"
 NOW = 1_700_000_000
 USAGE_CAP = 500_000
 TURN_TRIPWIRE = 450
@@ -61,6 +63,24 @@ def _spanned(task_id: str, wall: int, status: str = "completed") -> dict:
         "started_at": NOW,
         "done_at": NOW + wall,
     }
+
+
+class ModuleIndependenceTests(unittest.TestCase):
+    def test_cap_headroom_does_not_import_cli(self) -> None:
+        """The hook runs as a subprocess with only `scripts/` on its path,
+        so a `cli` import here would traceback at runtime while this suite,
+        run from the repo root, stayed green. Importing the module proves
+        nothing about that, which is why the source is read as text. This
+        pins freedom from `cli` only - it is not a stdlib-only proof."""
+        source = MODULE.read_text()
+        for statement in ("from cli", "import cli"):
+            with self.subTest(statement=statement):
+                self.assertNotIn(
+                    statement,
+                    source,
+                    f"{MODULE}: `{statement}` puts the hook's headroom rule "
+                    "behind a package the hook subprocess cannot import",
+                )
 
 
 class SecsLeftFromEnvTests(unittest.TestCase):
@@ -123,23 +143,31 @@ class TrustedLastWallTests(unittest.TestCase):
         span when a different one did. `cap_rotations` is per-PRD, so "any
         rotation" would kill the term for the rest of the PRD - and it
         accumulates, so the measured task's entry is the SECOND one here.
-        A filter that consults only the first entry misses it."""
-        tasks = [_spanned("t0", 100), _spanned("t1", 6540)]
+        A filter that consults only the first entry misses it. The honest
+        6540s task behind the rotated one must not be reported in its
+        place either: a walk that steps back past an untrusted last entry
+        answers 6540 where the truth is "nothing to measure"."""
+        tasks = [_spanned("t0", 6540), _spanned("t1", 300)]
         measured_rotated = {
             "tasks": tasks,
-            "cap_rotations": [{"task_id": "t0"}, {"task_id": "t1"}],
+            "cap_rotations": [{"task_id": "t9"}, {"task_id": "t1"}],
         }
         other_rotated = {"tasks": tasks, "cap_rotations": [{"task_id": "t0"}]}
         self.assertIsNone(trusted_last_wall(measured_rotated))
-        self.assertEqual(trusted_last_wall(other_rotated), 6540)
+        self.assertEqual(trusted_last_wall(other_rotated), 300)
 
     def test_a_span_over_the_credible_ceiling_is_dropped(self) -> None:
         """The ceiling is the backstop for what state does not record - a
         watchdog kill, an operator pause. It is a strict ceiling: exactly
-        three hours is still work, one second more is not."""
+        three hours is still work, one second more is not. An honest
+        completed task sits behind the over-ceiling one and the answer is
+        still None: the walk stops at the last completed entry rather than
+        stepping back to report some older task's span as this one's."""
         self.assertEqual(MAX_CREDIBLE_WALL_SECS, 10800)
         at_ceiling = {"tasks": [_spanned("t1", MAX_CREDIBLE_WALL_SECS)]}
-        over_ceiling = {"tasks": [_spanned("t1", MAX_CREDIBLE_WALL_SECS + 1)]}
+        over_ceiling = {
+            "tasks": [_spanned("t0", 6540), _spanned("t1", MAX_CREDIBLE_WALL_SECS + 1)],
+        }
         self.assertEqual(trusted_last_wall(at_ceiling), MAX_CREDIBLE_WALL_SECS)
         self.assertIsNone(trusted_last_wall(over_ceiling))
 
@@ -165,7 +193,9 @@ class TrustedLastWallTests(unittest.TestCase):
     def test_stamps_that_are_not_both_ints_give_no_span(self) -> None:
         """Both stamps must be ints to subtract. A task recorded before the
         stamps existed, a half-stamped one, or one carrying a string or null
-        gives no measurable span."""
+        gives no measurable span - and an honest 6540s task behind it is not
+        a substitute: the answer is about the LAST completed entry, so an
+        unmeasurable one means None, never an older task's span."""
         for stamps in (
             {},
             {"started_at": NOW},
@@ -176,13 +206,27 @@ class TrustedLastWallTests(unittest.TestCase):
         ):
             with self.subTest(stamps=stamps):
                 task = {"id": "t1", "name": "done", "status": "completed", **stamps}
-                self.assertIsNone(trusted_last_wall({"tasks": [task]}))
+                state = {"tasks": [_spanned("t0", 6540), task]}
+                self.assertIsNone(trusted_last_wall(state))
 
     def test_a_negative_span_gives_nothing(self) -> None:
         """`done_at` before `started_at` is a stale stamp from an earlier
         session, not a task that took negative time - and a negative span
-        would make the time term fire on every check."""
+        would make the time term fire on every check. An honest task behind
+        it is not a fallback: a walk that steps back past the unusable last
+        entry reports 6540 where the truth is "nothing to measure"."""
         self.assertIsNone(trusted_last_wall({"tasks": [_spanned("t1", -5)]}))
+        behind = {"tasks": [_spanned("t0", 6540), _spanned("t1", -5)]}
+        self.assertIsNone(trusted_last_wall(behind))
+
+    def test_a_zero_second_span_is_measured_not_dropped(self) -> None:
+        """A task that started and finished inside the same second is a
+        measurement of zero, not a missing measurement. The difference
+        matters: 0 keeps the time term alive, so a session already past its
+        deadline still hands off, while None switches the term off
+        entirely. A guard written as "drop anything <= 0" collapses the
+        two and leaves that session working on."""
+        self.assertEqual(trusted_last_wall({"tasks": [_spanned("t1", 0)]}), 0)
 
     def test_no_completed_task_gives_nothing(self) -> None:
         """Only a `completed` entry is finished work to measure. The first
@@ -193,6 +237,16 @@ class TrustedLastWallTests(unittest.TestCase):
         for status in ("in_progress", "failed", "aborted"):
             with self.subTest(status=status):
                 state = {"tasks": [_spanned("t1", 600, status=status)]}
+                self.assertIsNone(trusted_last_wall(state))
+
+    def test_a_state_without_a_usable_task_list_gives_nothing(self) -> None:
+        """This answer is computed inside a PostToolUse hook that must never
+        traceback, and state.json is a file on disk: the `tasks` key can be
+        missing entirely (a PRD whose planning has not run), null, or
+        something that is not a list at all. Each must answer None rather
+        than raise and take the hook down with it."""
+        for state in ({}, {"tasks": None}, {"tasks": "nope"}, {"tasks": []}):
+            with self.subTest(state=state):
                 self.assertIsNone(trusted_last_wall(state))
 
 
