@@ -2,11 +2,14 @@
 wave sessions. Slots are numbered dirs under the slots dir, each holding an
 `owner` file with the claimant's pid. Liveness is faked by patching
 `wave_slots._pid_alive`, and sleep/clock are injected, so nothing here
-depends on real processes or real time.
+depends on real time. Only the `_pid_alive` test uses real processes.
 """
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 from cli import wave_slots
@@ -120,3 +123,38 @@ def test_release_of_a_missing_slot_is_a_noop(tmp_path):
     slot = tmp_path / "wave-slots" / "1"
     assert release(slot) is None
     assert not slot.exists()
+
+
+def test_pid_alive_tells_a_live_pid_from_an_exited_one():
+    # The real helper, unpatched: a stub that calls every pid alive would
+    # never reclaim a dead owner's slot in production.
+    assert wave_slots._pid_alive(os.getpid()) is True
+    child = subprocess.Popen([sys.executable, "-c", "pass"])
+    child.wait()
+    assert wave_slots._pid_alive(child.pid) is False
+
+
+def test_claim_is_exclusive_when_a_peer_wins_the_mkdir_race(tmp_path, monkeypatch):
+    # A live peer creates slot 1 in the gap after acquire sees it free and
+    # before acquire's own mkdir lands. mkdir must be the claim: acquire has
+    # to lose that race and move on, not overwrite or ignore the peer's dir.
+    _only_alive(monkeypatch, LIVE_PEER)
+    slots = tmp_path / "wave-slots"
+    contested = os.fspath(slots / "1")
+    real_mkdir = os.mkdir
+    peer_won: list[str] = []
+
+    def racing_mkdir(path, *args, **kwargs):
+        if os.fspath(path) == contested and not peer_won:
+            peer_won.append(contested)
+            real_mkdir(path, *args, **kwargs)  # the peer's claim lands first
+            (slots / "1" / "owner").write_text(str(LIVE_PEER))
+        return real_mkdir(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "mkdir", racing_mkdir)
+    slot = acquire(slots, 2, ME, sleep_fn=_no_sleep, clock=_fake_clock)
+    assert peer_won, "acquire never tried to mkdir slot 1"
+    assert slot == slots / "2"
+    assert (slot / "owner").read_text().strip() == str(ME)
+    # The peer's slot is still the peer's.
+    assert (slots / "1" / "owner").read_text().strip() == str(LIVE_PEER)
