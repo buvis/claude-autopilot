@@ -14,16 +14,13 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
-from cli import custody, enter, frontmatter, notify_out, records, resume, state
+from cli import custody, enter, frontmatter, notify_out, records, resume, schema, state
 from cli.enter_harness import (
     BATCH_ID,
-    CLI_MAIN,
     DISPATCH_LINE,
     EARLY,
     EXPECTED_STOPS,
@@ -32,12 +29,15 @@ from cli.enter_harness import (
     OTHER,
     PRD,
     Env,
+    _arrange,
     _cache,
     _custody_entry,
     _fake_park,
     _open_state,
     _prd_text,
     _walk_up,
+    enter_twin,
+    run_cli,
 )
 
 
@@ -672,45 +672,6 @@ def test_permission_denied_mkdir_stops_fs_error(env: Env) -> None:
 # -- null fields on early stops ------------------------------------------------
 
 
-_PARK_CODES = {
-    "park_halt": 5,
-    "mv_verify": 4,
-    "deferred_io": 9,
-    "stall_op_conflict": 10,
-    "park_precondition_failed": 2,
-}
-
-
-def _arrange(env: Env, monkeypatch, stop: str) -> None:
-    """Put `env` into a state that reaches `stop`."""
-    env.write_state(_open_state())
-    env.put("wip")
-    if stop in _PARK_CODES:
-        env.marker(PRD)
-        _fake_park(monkeypatch, _PARK_CODES[stop])
-    elif stop == "fs_error":
-        (env.autopilot_dir / "reports").write_text("not a dir", encoding="utf-8")
-    elif stop == "stall_op_malformed":
-        env.write_state(_open_state(stall_op={"prd": PRD}))
-    elif stop == "replan":
-        env.write_state(
-            _open_state(stall_reason={"stalled": "subagent_prompt_overrun"})
-        )
-    elif stop == "escalation_exhausted":
-        env.write_state(_open_state(stall_reason={"stalled": "escalation_exhausted"}))
-    elif stop == "cap_pause":
-        cap = {"cycle": 3, "cap": 3, "unresolved_findings": []}
-        env.write_state(
-            _open_state(phase="paused", next_phase="", cap_pause_reason=cap)
-        )
-    elif stop == "custody":
-        custody.write_marker(
-            env.autopilot_dir / "critical-on-master", [_custody_entry()]
-        )
-    elif stop == "drained":
-        (env.prds_dir / "wip" / PRD).unlink()
-
-
 @pytest.mark.parametrize("stop", EARLY)
 def test_resume_target_is_null_on_every_stop_before_step_six(
     env: Env, monkeypatch, stop
@@ -739,57 +700,74 @@ def test_batch_is_null_on_every_stop_before_step_nine(
 # -- the `enter` CLI verb ------------------------------------------------------
 
 
-def _run_cli(env: Env, *args: str) -> subprocess.CompletedProcess:
-    """`python3 cli/__main__.py enter ...` as a real subprocess, like test_cli.py."""
-    child_env = {k: v for k, v in os.environ.items() if not k.startswith("_AUTOPILOT_")}
-    return subprocess.run(
-        [sys.executable, str(CLI_MAIN), *args],
-        capture_output=True,
-        text=True,
-        cwd=str(env.root),
-        env=child_env,
-    )
-
-
 def test_cli_prints_one_json_line_with_every_key(env: Env) -> None:
     env.write_state(_open_state())
     env.put("wip")
+    expected = enter_twin(env)  # what enter() itself returns for this tree
 
     # no --prds: the verb must resolve it from the state path's parent
-    proc = _run_cli(env, "enter", "--state", str(env.state_path))
+    proc = run_cli(env, "enter", "--state", str(env.state_path))
 
     assert proc.returncode == 0, proc.stderr
     lines = proc.stdout.splitlines()
     assert len(lines) == 1, proc.stdout
-    result = json.loads(lines[0])
-    assert set(result) == KEYS
-    assert (result["stop"], result["prd"], result["source"]) == (None, PRD, "wip")
-    assert lines[0] == json.dumps(result, sort_keys=True)
-    # the real orchestrator ran, not a stub: its step-10 write landed
-    assert env.read_state()["prd"] == PRD
+    assert set(json.loads(lines[0])) == KEYS
+    # every value, not just presence: no canned line can match enter()'s own
+    assert lines[0] == json.dumps(expected, sort_keys=True)
+    assert (expected["stop"], expected["prd"], expected["source"]) == (None, PRD, "wip")
+    # side effects no constant-printing stub produces: step 0's tree...
+    assert (env.prds_dir / "backlog").is_dir()
+    assert (env.autopilot_dir / "reports").is_dir()
+    # ...and step 10's frontmatter fields, not only `prd`
+    written = env.read_state()
+    assert written["prd"] == PRD
+    assert (written["design"], written["lane_effective"]) == ("skip", "full")
 
 
-def test_cli_unreadable_state_exits_two(env: Env) -> None:
-    env.state_path.write_text("{not json", encoding="utf-8")
+def test_cli_moves_a_backlog_prd_into_wip(env: Env) -> None:
+    env.write_state(_open_state())
+    env.put("backlog")
+    expected = enter_twin(env)
+
+    proc = run_cli(env, "enter", "--state", str(env.state_path))
+
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.splitlines() == [json.dumps(expected, sort_keys=True)]
+    assert (expected["prd"], expected["source"]) == (PRD, "backlog")
+    # the verified move happened in the real tree, not only in the printed line
+    assert env.has("wip")
+    assert not env.has("backlog")
+
+
+@pytest.mark.parametrize("shape", ["{not json", "[]"], ids=["truncated", "not-object"])
+def test_cli_unreadable_state_exits_two(env: Env, shape: str) -> None:
+    env.state_path.write_text(shape, encoding="utf-8")
     env.put("wip")
+    with pytest.raises(state.StateError) as raised:
+        state.load(env.state_path)  # the real loader's own diagnostic
 
-    proc = _run_cli(env, "enter", "--state", str(env.state_path))
+    proc = run_cli(env, "enter", "--state", str(env.state_path))
 
     assert proc.returncode == 2
     assert proc.stdout == ""
-    assert "enter failed" in proc.stderr
+    assert f"enter failed: {raised.value}" in proc.stderr
+    assert str(env.state_path) in proc.stderr
+    assert env.state_path.read_text(encoding="utf-8") == shape
 
 
-def test_cli_future_schema_exits_six(env: Env) -> None:
-    env.write_state(_open_state(schema_version=99))
+@pytest.mark.parametrize("bump", [1, 7])
+def test_cli_future_schema_exits_six(env: Env, bump: int) -> None:
+    version = schema.SCHEMA_VERSION + bump
+    env.write_state(_open_state(schema_version=version))
     env.put("wip")
     before = env.state_path.read_bytes()
 
-    proc = _run_cli(env, "enter", "--state", str(env.state_path))
+    proc = run_cli(env, "enter", "--state", str(env.state_path))
 
     assert proc.returncode == 6
     assert proc.stdout == ""
-    assert "future" in proc.stderr
+    assert f"v{version} > v{schema.SCHEMA_VERSION}" in proc.stderr
+    assert str(env.state_path) in proc.stderr
     # refused before any effect: state byte-unchanged, step 0 never made the dirs
     assert env.state_path.read_bytes() == before
     assert not (env.prds_dir / "backlog").exists()

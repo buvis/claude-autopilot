@@ -11,12 +11,15 @@ from __future__ import annotations
 
 import importlib
 import json
+import os
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
-from cli import enter, records
+from cli import custody, enter, records
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 _walk_up = importlib.import_module("_walk_up")
@@ -190,3 +193,79 @@ class Env:
 
 def _fake_park(monkeypatch: pytest.MonkeyPatch, code: int) -> None:
     monkeypatch.setattr(records, "do_park", lambda *a, **k: code)
+
+
+_PARK_CODES = {
+    "park_halt": 5,
+    "mv_verify": 4,
+    "deferred_io": 9,
+    "stall_op_conflict": 10,
+    "park_precondition_failed": 2,
+}
+
+
+def _arrange(env: Env, monkeypatch: pytest.MonkeyPatch, stop: str) -> None:
+    """Put `env` into a state that reaches `stop`."""
+    env.write_state(_open_state())
+    env.put("wip")
+    if stop in _PARK_CODES:
+        env.marker(PRD)
+        _fake_park(monkeypatch, _PARK_CODES[stop])
+    elif stop == "fs_error":
+        (env.autopilot_dir / "reports").write_text("not a dir", encoding="utf-8")
+    elif stop == "stall_op_malformed":
+        env.write_state(_open_state(stall_op={"prd": PRD}))
+    elif stop == "replan":
+        env.write_state(
+            _open_state(stall_reason={"stalled": "subagent_prompt_overrun"})
+        )
+    elif stop == "escalation_exhausted":
+        env.write_state(_open_state(stall_reason={"stalled": "escalation_exhausted"}))
+    elif stop == "cap_pause":
+        cap = {"cycle": 3, "cap": 3, "unresolved_findings": []}
+        env.write_state(
+            _open_state(phase="paused", next_phase="", cap_pause_reason=cap)
+        )
+    elif stop == "custody":
+        custody.write_marker(
+            env.autopilot_dir / "critical-on-master", [_custody_entry()]
+        )
+    elif stop == "drained":
+        (env.prds_dir / "wip" / PRD).unlink()
+
+
+def run_cli(env: Env, *args: str) -> subprocess.CompletedProcess:
+    """`python3 cli/__main__.py enter ...` as a real subprocess, like test_cli.py."""
+    child_env = {k: v for k, v in os.environ.items() if not k.startswith("_AUTOPILOT_")}
+    return subprocess.run(
+        [sys.executable, str(CLI_MAIN), *args],
+        capture_output=True,
+        text=True,
+        cwd=str(env.root),
+        env=child_env,
+    )
+
+
+def enter_twin(env: Env, *, prd_arg: str | None = None) -> dict:
+    """The dict the `enter` verb must print for `env`'s tree, computed by
+    `enter()` itself on a byte-identical clone beside it.
+
+    Every injectable stays at the CLI's own default (clock, git HEAD) so the
+    two runs can only differ if the verb does something other than call
+    `enter()`; only the handoff row is stubbed out, and the result does not
+    depend on it. Call this BEFORE the CLI runs: it clones the tree as it is.
+    """
+    clone_root = env.root.with_name(env.root.name + "-twin")
+    twin = Env(clone_root)
+    shutil.copytree(env.root, clone_root, dirs_exist_ok=True)
+    try:
+        return enter.enter(
+            twin.state_path,
+            prds_dir=twin.prds_dir,
+            autopilot_dir=twin.autopilot_dir,
+            prd_arg=prd_arg,
+            in_loop=False,
+            record_resume_row=lambda prd, site: None,
+        )
+    finally:
+        shutil.rmtree(clone_root, ignore_errors=True)
