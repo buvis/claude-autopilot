@@ -22,6 +22,7 @@ from cli.runner import (
     LAUNCH_ENV,
     build_argv,
     child_env,
+    idle_secs_for,
     make_presenter,
     prompt_for,
     spawn,
@@ -172,6 +173,50 @@ def test_warn_window_defaults_to_fifteen_minutes():
     assert warn_secs_for({"_AUTOPILOT_SESSION_WARN": "soon"}) == 900
 
 
+def test_idle_window_defaults_to_twenty_minutes():
+    assert idle_secs_for({}) == 1200
+    assert idle_secs_for({"_AUTOPILOT_SESSION_IDLE": "0"}) == 0
+    assert idle_secs_for({"_AUTOPILOT_SESSION_IDLE": "300"}) == 300
+    assert idle_secs_for({"_AUTOPILOT_SESSION_IDLE": "soon"}) == 1200
+
+
+def test_spawn_reports_the_cap_reason(tmp_path):
+    # A session that exits on its own reports no cap reason; a hung one
+    # with the idle window disabled (0 restores kill-at-cap) reports
+    # "cap" - an implementation that hardcodes either value fails the
+    # other half of this test.
+    stub = _stub_runner(tmp_path, 'print("done")')
+    ap = _ap_dir(tmp_path)
+    normal = spawn(
+        "m",
+        "low",
+        cap_secs=30,
+        autopilot_dir=ap,
+        env={},
+        runner_bin=stub,
+        presenter=_Collector(),
+    )
+    assert normal.cap_fired is False
+    assert normal.cap_reason is None
+
+    hung_stub = _stub_runner(
+        tmp_path,
+        'import time\nprint("started", flush=True)\ntime.sleep(300)',
+    )
+    capped = spawn(
+        "m",
+        "low",
+        cap_secs=2,
+        autopilot_dir=ap,
+        env={"_AUTOPILOT_SESSION_IDLE": "0"},
+        runner_bin=hung_stub,
+        grace_secs=5,
+        presenter=_Collector(),
+    )
+    assert capped.cap_fired is True
+    assert capped.cap_reason == "cap"
+
+
 def test_spawn_requests_a_handoff_before_the_cap(tmp_path, capsys):
     # 2026-09-26: the 7200s cap SIGTERM'd a build session mid-task with no
     # hand-off. Within the warning window the wrapper now writes the marker
@@ -182,7 +227,7 @@ def test_spawn_requests_a_handoff_before_the_cap(tmp_path, capsys):
     )
     ap = _ap_dir(tmp_path)
     (ap / "state.json").write_text(
-        json.dumps({"phase": "build", "tasks": [{"id": "2", "status": "in_progress"}]})
+        json.dumps({"phase": "build", "tasks": [{"id": "2", "status": "in_progress"}]}),
     )
     result = spawn(
         "m",
@@ -250,7 +295,8 @@ def test_spawn_scrubs_host_markers(tmp_path, capsys):
 
 
 def test_spawn_scrub_notice_sorts_multiple_markers_comma_space_joined(
-    tmp_path, capsys
+    tmp_path,
+    capsys,
 ):
     # Seeded out of alphabetical order so an implementation that merely
     # echoed the caller's dict order (rather than sorting) would fail.
@@ -283,7 +329,7 @@ def test_spawn_scrub_notice_sorts_multiple_markers_comma_space_joined(
         if line.startswith("autopilot: scrubbed inherited host markers:")
     ]
     assert err_lines == [
-        "autopilot: scrubbed inherited host markers: CODEX_CI, CODEX_THREAD_ID, COPILOT_CLI"
+        "autopilot: scrubbed inherited host markers: CODEX_CI, CODEX_THREAD_ID, COPILOT_CLI",
     ]
 
 
