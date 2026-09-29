@@ -237,6 +237,8 @@ autoclaude                 # bash: subcommands + tracon front-end, then
 
 Test-pinned invariants the build gate's Phase 0 references; they live here so every session carries them.
 
+`autopilot enter` is the first Bash call of a build session: it runs this whole step chain and prints one JSON line (`references/phase-build.md` § "Enter in one call").
+
 **Lifecycle directories first.** Before the abort handlers and before PRD selection, as its own Bash call:
 
 ```bash

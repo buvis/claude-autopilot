@@ -11,11 +11,47 @@ the test-pinned invariants this file references.
 
 Read `docs/dev/project-management/autopilot/session-brief.md` if it exists (PRD 00201). Its Where section replaces the state reads below; open only the files its Read next section lists. When its phase disagrees with `state.json`, fall back to the state reads.
 
+### Enter in one call
+
+Run `autopilot enter` (one Bash call). It runs the whole documented Phase 0 step
+chain below and prints one JSON line whose `stop` names the first step that
+halted.
+
+When `stop` is null every step passed: print the PRD banner and go straight to
+Phase 1, using the `catchup` and `design` decisions the call returned,
+without re-running any of the Phase 0 steps below by hand.
+
+When `stop` is set, follow the table below: it maps each `stop` value to the
+existing section that owns that halt.
+
+| `stop` | owner |
+|---|---|
+| `fs_error` | § Ensure lifecycle directories exist, the `mkdir -p` block could not run |
+| `park_halt` | § Handle park request, exit-code table row 5 (systemic halt) |
+| `mv_verify` | § Handle park request row 4, or Normal PRD selection's verified move, whichever move failed |
+| `deferred_io` | § Handle park request row 9 |
+| `stall_op_conflict` | § Handle park request row 10 |
+| `stall_op_malformed` | § Handle park request, a `do_stall` precondition failure |
+| `park_precondition_failed` | § Handle park request row 2 |
+| `replan` | § Handle Work-phase abort, the `subagent_prompt_overrun` bullet |
+| `escalation_exhausted` | § Handle Work-phase abort, the `escalation_exhausted` bullet |
+| `cap_pause` | § Handle Work-phase abort, the cap-pause bullet |
+| `custody` | § Handle pending custody |
+| `drained` | Normal PRD selection, the `drained` row |
+| `prd_not_found` | Normal PRD selection step 1, the named PRD is in neither `wip/` nor `backlog/` |
+| `batch_init` | Normal PRD selection step 3, then run `autopilot enter` again |
+| `lane` | § 5.5. Route by lane |
+| `state_write_failed` | § Frontmatter parse, the state write failed; Error Handling's statectl row |
+| `design_review_log_empty` | the design-gate invariant's non-zero branch (Phase 1.5) |
+
 ### Ensure lifecycle directories exist
 
 Before anything else — before the abort handlers and before PRD selection — run
 the lifecycle `mkdir -p` block from core `SKILL.md` § "Phase 0 invariants" as
 its own Bash call (idempotent; mandatory before any move can run).
+
+`autopilot enter` runs this step; the instructions below stay the hand-run
+reference.
 
 ### Clear inherited hand-off markers
 
@@ -30,6 +66,9 @@ makes step 6.5 hand off after the first task (PRD 00210: a 1-byte marker from
 2026-09-14 did exactly that on 2026-09-20). Markers this session's own hook
 writes later are untouched: this is the session's first Bash call after the
 `mkdir`.
+
+`autopilot enter` runs this step; the instructions below stay the hand-run
+reference.
 
 ### Handle park request (FIRST abort-handler check)
 
@@ -61,6 +100,9 @@ The deferred record's `detail` is the marker's reason plus a
 | 10 | stall_op conflict | PAUSE for human reconciliation |
 | 2 | state unreadable | the corrupted-state row of Error Handling applies |
 
+`autopilot enter` runs this step; the instructions below stay the hand-run
+reference.
+
 ### Handle Work-phase abort (from a prior session)
 
 Before anything else, read `docs/dev/project-management/autopilot/state.json` and check `stall_reason`:
@@ -73,6 +115,9 @@ Before anything else, read `docs/dev/project-management/autopilot/state.json` an
 
 Before acting on whichever branch matched, run `autopilot resume-target` (one Bash call) and compare its line to the handler you picked. It is the executable form of this same contract (`cli/resume.py`), so a disagreement means the prose and the encoding have drifted — follow the encoding and say so. The line adjudicates the abort handlers and the resume point only: `/work continues at first non-completed task <id>` means planning is done, not that Phase 1 is skipped; every build entry still runs § Batch cache check and takes the delta or full path it decides (PRD 00209). It also runs the schema-version preflight, refusing with exit 6 on a future-schema `state.json` rather than resuming it blindly. Exit 2 means there is no state file yet, which is a normal fresh start, not an error.
 
+`autopilot enter` runs this step; the instructions below stay the hand-run
+reference.
+
 ### Handle pending custody
 
 A loop-mode `cap_critical` stall (`references/recovery.md` § Stall `site` slugs) leaves a custody entry behind: a CRITICAL shipped to master with its commit range recorded for an attended decision. Run `autopilot custody list` (one Bash call). It prints one JSON line per pending entry — the marker ∪ the journal, so a journal-only entry whose marker was trashed is still listed. No lines → nothing is pending; fall through to Normal PRD selection. Exit 9 → the marker or the journal is present but unreadable: PAUSE in every mode (`site: "sub_skill_fail"`, the stderr line as `detail`) — unreadable custody state must not be walked past.
@@ -81,6 +126,9 @@ With entries listed:
 
 - **Interactive:** for each entry, ask via `AskUserQuestion` with the three choices — `revert` (revert the range on master), `branch-and-revert` (preserve the work on a branch, then revert master), `accept` (keep it on master, close custody) — then run `autopilot custody resolve --prd <stem> --choice <choice>` (one Bash call per entry). Exit 0 → next entry, then Normal PRD selection. Exit 1 → no pending entry, or a different choice was already recorded (cleanup still ran): report it and move on. Exit 5 → git refused or failed (wrong checkout, an unfinished revert/merge/cherry-pick, a partial revert, a conflict; custody retained): report git's message and STOP the turn — do not select a PRD while a revert is unfinished. The operator finishes or aborts it, then closes custody with `--choice accept` or re-runs the same choice. Exit 9 → ledger/marker/journal read or write failed: PAUSE as above.
 - **Loop mode (`$_AUTOPILOT_LOOP` set):** there is no human to answer, so this handler neither asks nor runs `custody resolve`. Print `custody: <n> entries await an attended resume` (`<n>` = the line count) and continue with Normal PRD selection.
+
+`autopilot enter` runs this step; the instructions below stay the hand-run
+reference.
 
 ### Normal PRD selection
 
@@ -112,6 +160,9 @@ With entries listed:
    ```
    Where `{n}` = `len(batch.completed_prds) + 1`
 9. Write the `resume` handoff row, best-effort (`work/references/subagent-dispatch.md` § Dispatch telemetry): `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py handoff --site build --edge resume --phase build --prd <state.prd>`. Its gap to the previous session's `leave` row is the handoff latency nothing else measures; it is written after selection so `<state.prd>` names this session's PRD.
+
+`autopilot enter` runs these steps; the instructions above stay the hand-run
+reference.
 
 ### Frontmatter parse (step 5)
 
@@ -162,6 +213,9 @@ Semantics the table cannot carry:
 
 The same call also classifies the PRD's effort lane (`cli/lane.py`) and writes `lane`, `lane_reason` and `lane_effective` in the same transaction; step 5.5 reads them.
 
+`autopilot enter` runs this step; the instructions above stay the hand-run
+reference.
+
 ### 5.5. Route by lane
 
 Read `state.lane_effective`, which step 5 wrote beside `state.lane` and `state.lane_reason` (`cli/lane.py` decides; three lanes: `solo`, `fast-track`, `full`). When it differs from `state.lane`, print
@@ -177,6 +231,9 @@ Then branch on `state.lane_effective`:
 - `fast-track`: read `references/lane-fast-track.md` and follow it; Phases 1 to 3 do not run for this PRD unless the runbook falls back to full. The runbook renders one card per `lane.plan_cards` plan with `cards_from_prd.py` (an exit 2 there writes `lane_effective: "full"` and `lane_reason: "uncardable"` and continues to Phase 1), runs `/autopilot:fast-track` per card, consolidates the cards' tables into the review file and closes with `--outcome lane_reviewed`, or stalls a parked card with site `fast_track_blocked`.
 
 An unreleased lane (one outside `lane.RELEASED_LANES`) always reads `full` here, with the `running full` banner above; the lane is still recorded in the session rows and the batch report. `_AUTOPILOT_LANES=off` in the loop environment forces `full` for every PRD.
+
+`autopilot enter` runs this step; the instructions above stay the hand-run
+reference.
 
 ## Phase 1: Catchup
 
@@ -204,6 +261,9 @@ If all conditions hold → **delta refresh** (no `/git-ferry:catchup` invocation
 - Update the Active Work section of `docs/dev/project-management/meta/project-capsule.md` with the current PRD list (use the same format Phase 9 step 8 uses). Leave Key Invariants, Architecture Decisions, Component Boundaries, GitHub State, Project Health, and Project Memories untouched — those reflect batch-stable knowledge.
 - Print a one-line note: `── AUTOPILOT ── catchup: delta refresh (cache <Xm> old, HEAD <sha7>) ──`
 
+`autopilot enter` runs this check and returns its verdict as the `catchup`
+decision; the instructions above stay the hand-run reference.
+
 After either path completes, proceed to Phase 1.5 (Design). Stay on `phase: "build"` and `next_phase: "build"`; do NOT add anything to `phases_completed`.
 
 ## Phase 1.5: Design (build-gate sub-step)
@@ -215,6 +275,11 @@ Let `<prd-stem>` = `state.prd` with its trailing `.md` removed. The design doc a
 **Skip if `state.design_mode == "skip"`:** do not invoke `/autopilot:design-solution`. Set `state.design_mode = "skipped"`, leave `state.design_doc` unset, and proceed to Phase 2. (This skip also bypasses the empty-review-log gate — no doc exists by design.)
 
 **Skip if the artifact already exists:** when `docs/dev/project-management/designs/<prd-stem>-design.md` is already on disk (a manual `/autopilot:design-solution` run earlier, or a work-abort replan re-entering the build gate). Log a one-line reuse note (`── AUTOPILOT ── design: reusing existing <prd-stem>-design.md ──`), set `state.design_doc` to that path, then **run the empty-review-log gate** (core `SKILL.md` § "Design-gate invariant") **on the artifact-reuse path** — an existing doc from a manual or aborted run is exactly where a skipped review hides — and proceed to Phase 2 only if the gate passes; do NOT re-invoke the skill. This artifact-based skip is what lets work-abort replans reuse the design with no extra logic.
+
+`autopilot enter` runs the design-doc existence check and its empty-review-log
+gate, returning the verdict as the `design` decision (a failed gate stops it
+with `design_review_log_empty`); the instructions above stay the hand-run
+reference.
 
 **Otherwise, run design:**
 
