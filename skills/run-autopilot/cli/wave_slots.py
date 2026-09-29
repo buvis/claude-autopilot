@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 import shutil
 import sys
+import tempfile
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -65,9 +66,15 @@ def _claim(slot: Path, pid: int) -> bool:
 
     `os.rename` onto a non-empty dir fails, so a slot a peer already
     published stays theirs, and that failure is how a lost race is seen.
+
+    Each attempt stages under a name of its own, because a name reused across
+    attempts collides with a staging dir that outlived a lost race - `_remove`
+    reports such a failure rather than raising it - and the collision would
+    abort the very next poll. A leaked staging dir costs nothing instead:
+    `acquire` reads only `<dir>/<n>`, so a non-digit name is invisible to
+    every code path and to the reclaim rule every peer applies.
     """
-    staged = slot.parent / f"{slot.name}.tmp-{pid}"
-    staged.mkdir()
+    staged = Path(tempfile.mkdtemp(dir=slot.parent, prefix=f"{slot.name}.tmp-"))
     (staged / "owner").write_text(str(pid))
     try:
         os.rename(staged, slot)
@@ -79,7 +86,9 @@ def _claim(slot: Path, pid: int) -> bool:
 
 def _discard(slot: Path, pid: int, judged: str) -> bool:
     """Clear a stale slot, moving it aside first so the slot name never
-    lingers half-emptied and only one reclaimer can win the rename.
+    lingers half-emptied. Winning that rename only serialises the move - one
+    reclaimer carries the slot off - and the owner comparison below is what
+    decides whether the reclaim goes through.
 
     The rename moves whatever sits at the path, so the owner it carried off
     is read there and held against `judged`, the text the staleness check
@@ -89,6 +98,12 @@ def _discard(slot: Path, pid: int, judged: str) -> bool:
     An owner still equal to what we judged is the one we judged; a changed
     one gets its own question, and a live answer puts the claim back and
     reads the slot as taken.
+
+    One residual stays open: the slot name is vacant while the claim sits
+    aside, so a third acquirer can take it in that window and the put-back
+    then fails, stranding a live claim. Closing it needs a primitive the
+    kernel releases (a per-slot `fcntl.flock`) rather than a name; until
+    then the loss is reported on stderr rather than papered over.
     """
     aside = slot.parent / f"{slot.name}.stale-{pid}"
     try:
@@ -100,7 +115,11 @@ def _discard(slot: Path, pid: int, judged: str) -> bool:
         try:
             os.rename(aside, slot)
         except OSError as exc:
-            print(f"could not put {aside} back as {slot}: {exc}", file=sys.stderr)
+            print(
+                f"another claimant took {slot} while it was moved aside, so a"
+                f" live claim is left stranded in {aside}: {exc}",
+                file=sys.stderr,
+            )
         return False
     _remove(aside)
     return True

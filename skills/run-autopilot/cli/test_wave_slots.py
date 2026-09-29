@@ -407,6 +407,23 @@ def test_claim_is_exclusive_when_a_peer_wins_the_race(tmp_path, monkeypatch):
     assert (slots / "1" / "owner").read_text().strip() == str(LIVE_PEER)
 
 
+def test_a_leftover_staging_dir_does_not_abort_acquire(tmp_path, monkeypatch):
+    # A staging dir outlives a lost race whenever the cleanup after it fails,
+    # because that failure gets reported rather than raised. The next poll of
+    # the same acquire then meets the leftover, so staging under a name that
+    # can already be there aborts the launch over a directory no code path and
+    # no peer ever reads. A free slot is still claimable with one sitting
+    # there, and _no_sleep fails the test if acquire polls instead.
+    _only_alive(monkeypatch)
+    slots = tmp_path / "wave-slots"
+    leftover = slots / f"1.tmp-{ME}"
+    leftover.mkdir(parents=True)
+    (leftover / "owner").write_text(str(ME))
+    slot = acquire(slots, 1, ME, sleep_fn=_no_sleep, clock=_fake_clock)
+    assert slot == slots / "1"
+    assert (slot / "owner").read_text().strip() == str(ME)
+
+
 def test_one_slot_is_never_handed_to_two_holders(tmp_path, monkeypatch):
     # A whole peer acquire runs inside the window ME opens by creating its
     # first directory in the slots dir, so the peer meets a claim that is
