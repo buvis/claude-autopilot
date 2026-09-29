@@ -41,12 +41,14 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Env:
 
 
 def test_stops_mv_verify_when_the_move_raises(env: Env, monkeypatch) -> None:
+    # A plain OSError, the same class the state writes below raise: the stop
+    # has to come from WHICH step failed, never from the exception's type.
     env.write_state(_open_state())
     src = env.put("backlog")
     dst = env.prds_dir / "wip" / PRD
 
     def raise_denied(*a, **k):
-        raise PermissionError("denied")
+        raise OSError("denied")
 
     monkeypatch.setattr(shutil, "move", raise_denied)
 
@@ -68,7 +70,7 @@ def test_stops_mv_verify_when_the_move_raises(env: Env, monkeypatch) -> None:
     [
         OSError("disk full"),
         state.StateError("lock lost"),
-        schema.SchemaError("batch.skips is not a list"),
+        schema.SchemaError("that value is not a list"),
     ],
     ids=["oserror", "stateerror", "schemaerror"],
 )
@@ -89,7 +91,33 @@ def test_stops_state_write_failed_when_recording_a_skip_raises(
     out = env.run()
 
     assert out["stop"] == "state_write_failed"
+    assert "skips" in out["detail"]  # which of the three writes failed
     assert str(err) in out["detail"]
+    assert env.read_state()["batch"].get("skips", []) == []
+
+
+def test_a_keyerror_from_a_state_write_is_not_reported_as_a_park_halt(
+    env: Env,
+    monkeypatch,
+) -> None:
+    # `park_halt` belongs to do_park's exit codes. A KeyError raised anywhere
+    # else is still the write that failed, so the exception class cannot pick
+    # the stop on its own.
+    err = KeyError(7)
+    env.write_state(_open_state())
+    env.put("backlog", PRD, _prd_text(eligibility='"exit 1"'))  # skipped
+    env.put("backlog", OTHER)  # eligible: selection still has a pick
+
+    def raise_err(*a, **k):
+        raise err
+
+    monkeypatch.setattr(statectl, "mutate", raise_err)
+
+    out = env.run()
+
+    assert out["stop"] == "state_write_failed"
+    assert "skips" in out["detail"]
+    assert "7" in out["detail"]
     assert env.read_state()["batch"].get("skips", []) == []
 
 
@@ -110,7 +138,34 @@ def test_stops_state_write_failed_when_dropping_pause_reason_raises(
     out = env.run()
 
     assert out["stop"] == "state_write_failed"
+    assert "pause_reason" in out["detail"]  # which of the three writes failed
     assert str(err) in out["detail"]
+    assert env.read_state()["pause_reason"] == pause  # the drop never landed
+
+
+def test_a_directory_error_from_a_state_write_is_not_blamed_on_the_design_doc(
+    env: Env,
+    monkeypatch,
+) -> None:
+    # This run never reads a design doc (the PRD carries `design: skip`), so an
+    # IsADirectoryError from the pause_reason drop must not be reported against
+    # the design doc's path - the read error's class does not name its reader.
+    err = IsADirectoryError(21, "Is a directory")
+    pause = {"site": "reviewer_fail", "detail": "carl hung"}
+    env.write_state(_open_state(pause_reason=pause))
+    env.put("wip")
+
+    def raise_err(*a, **k):
+        raise err
+
+    monkeypatch.setattr(statectl, "mutate", raise_err)
+
+    out = env.run()
+
+    assert out["stop"] == "state_write_failed"
+    assert "pause_reason" in out["detail"]
+    assert str(err) in out["detail"]
+    assert str(_design_doc(env)) not in out["detail"]
     assert env.read_state()["pause_reason"] == pause  # the drop never landed
 
 
@@ -134,6 +189,7 @@ def test_stops_state_write_failed_when_rewriting_catchup_mode_raises(
     out = env.run()
 
     assert out["stop"] == "state_write_failed"
+    assert "catchup_mode" in out["detail"]  # which of the three writes failed
     assert str(err) in out["detail"]
     assert env.read_state()["catchup_mode"] == "skip"  # the rewrite never landed
 
@@ -183,6 +239,7 @@ def test_stops_park_halt_when_do_park_returns_an_unmapped_code(
     out = env.run()
 
     assert out["stop"] == "park_halt"
+    assert "park" in out["detail"]  # the step that halted, not just its code
     assert "7" in out["detail"]
     assert env.rows == []
 
@@ -216,4 +273,12 @@ def test_stops_fs_error_when_prds_dir_has_no_grandparent(
     )
 
     assert out["stop"] == "fs_error"
-    assert "prds" in out["detail"]
+    detail = out["detail"]
+    assert "prds" in detail
+    # "prds" alone is satisfied by echoing the path, and it is a substring of
+    # nearly every path in the tree: the detail must name the operation that
+    # could not be completed, placing the `tmp` directory. The cwd comes out of
+    # the comparison first, so a temp root that happens to sit under /tmp cannot
+    # satisfy it for free.
+    named = detail.replace(str(tmp_path), "")
+    assert "tmp" in named
