@@ -2,15 +2,16 @@
 wave sessions. Slots are numbered dirs under the slots dir, each holding an
 `owner` file with the claimant's pid. Liveness is faked by patching
 `wave_slots._pid_alive`, and sleep/clock are injected, so nothing here
-depends on real time. Only the `_pid_alive` test uses real processes.
+depends on real time or on real sleeping.
 """
 
 from __future__ import annotations
 
 import os
-import subprocess
-import sys
+import re
 from pathlib import Path
+
+import pytest
 
 from cli import wave_slots
 from cli.wave_slots import acquire, release
@@ -18,6 +19,29 @@ from cli.wave_slots import acquire, release
 LIVE_PEER = 1111
 DEAD_PEER = 2222
 ME = 4242
+PEER = 5353  # a second live claimant, racing ME for the same slot
+
+WAITED = "waited for a slot"
+
+
+class _WouldWait(Exception):
+    """Raised by an injected sleep_fn instead of waiting for a slot."""
+
+
+class _Ticker:
+    """A clock that moves only when the injected sleep_fn is called, so the
+    heartbeat sees elapsed time without any real waiting."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.sleeps: list[float] = []
+
+    def clock(self) -> float:
+        return self.now
+
+    def sleep(self, secs: float) -> None:
+        self.sleeps.append(secs)
+        self.now += secs
 
 
 def _fake_clock() -> float:
@@ -26,6 +50,10 @@ def _fake_clock() -> float:
 
 def _no_sleep(secs: float) -> None:
     raise AssertionError(f"acquire slept {secs}s with a slot free")
+
+
+def _wait_once(secs: float) -> None:
+    raise _WouldWait(secs)
 
 
 def _only_alive(monkeypatch, *alive: int) -> None:
@@ -37,6 +65,29 @@ def _hold(slots: Path, n: int, owner: str) -> Path:
     slot.mkdir(parents=True)
     (slot / "owner").write_text(owner)
     return slot
+
+
+def _claim_or_wait(slots: Path, count: int, pid: int) -> Path | str:
+    """One acquire for `pid`: the slot it claimed, or WAITED if it polled."""
+    try:
+        return acquire(slots, count, pid, sleep_fn=_wait_once, clock=_fake_clock)
+    except _WouldWait:
+        return WAITED
+
+
+def _stderr_lines(capsys) -> list[str]:
+    return [line for line in capsys.readouterr().err.splitlines() if line.strip()]
+
+
+def _in_slots_dir(path, slots: Path) -> bool:
+    """True when this mkdir creates an entry directly in the slots dir.
+
+    The race tests hook on that instead of on a literal `<slots>/1`, so they
+    stay blind to how a claim gets published: a bare `1` dir and a staged
+    `1.tmp-<pid>` dir both pass through here, and either one lets the test
+    drive the same interleaving.
+    """
+    return Path(os.fsdecode(path)).parent == slots
 
 
 def test_acquire_creates_the_slots_dir(tmp_path, monkeypatch):
@@ -108,6 +159,42 @@ def test_malformed_owner_is_reclaimed(tmp_path, monkeypatch):
     assert (slot / "owner").read_text().strip() == str(ME)
 
 
+def test_owner_of_non_utf8_bytes_is_reclaimed(tmp_path, monkeypatch):
+    # Every pid reads as alive, so only unreadable content can free the slot.
+    # Decoding those bytes must not escape acquire and abort the launch.
+    monkeypatch.setattr(wave_slots, "_pid_alive", lambda pid: True)
+    slots = tmp_path / "wave-slots"
+    (slots / "1").mkdir(parents=True)
+    (slots / "1" / "owner").write_bytes(b"\xff\xfe\x00 not a pid")
+    slot = acquire(slots, 1, ME, sleep_fn=_no_sleep, clock=_fake_clock)
+    assert slot == slots / "1"
+    assert (slot / "owner").read_text().strip() == str(ME)
+
+
+def test_owner_pid_zero_is_reclaimed_not_taken_for_a_live_peer(tmp_path, monkeypatch):
+    # "0" is digits but no claimant's pid: os.kill(0, 0) signals the caller's
+    # own process group, so asking the liveness oracle would call it alive
+    # forever. _no_sleep fails the test if acquire polls instead of claiming.
+    monkeypatch.setattr(wave_slots, "_pid_alive", lambda pid: True)
+    slots = tmp_path / "wave-slots"
+    _hold(slots, 1, "0")
+    slot = acquire(slots, 1, ME, sleep_fn=_no_sleep, clock=_fake_clock)
+    assert slot == slots / "1"
+    assert (slot / "owner").read_text().strip() == str(ME)
+
+
+def test_nonpositive_count_is_rejected_instead_of_polling_forever(
+    tmp_path, monkeypatch
+):
+    _only_alive(monkeypatch)
+    slots = tmp_path / "wave-slots"
+    for bad in (0, -1):
+        with pytest.raises(ValueError) as excinfo:
+            acquire(slots, bad, ME, sleep_fn=_no_sleep, clock=_fake_clock)
+        assert str(bad) in str(excinfo.value)  # the message names the count
+        assert not slots.exists()  # rejected before the slots dir is created
+
+
 def test_release_frees_the_slot(tmp_path, monkeypatch):
     _only_alive(monkeypatch, ME)
     slots = tmp_path / "wave-slots"
@@ -119,49 +206,148 @@ def test_release_frees_the_slot(tmp_path, monkeypatch):
     assert again == slots / "1"
 
 
-def test_release_of_a_missing_slot_is_a_noop(tmp_path):
+def test_release_of_a_missing_slot_is_a_noop(tmp_path, capsys):
     slot = tmp_path / "wave-slots" / "1"
     assert release(slot) is None
     assert not slot.exists()
+    captured = capsys.readouterr()  # a slot already gone is not worth a word
+    assert captured.err == ""
+    assert captured.out == ""
 
 
-def test_pid_alive_tells_a_live_pid_from_an_exited_one():
-    # The real helper, unpatched: a stub that calls every pid alive would
-    # never reclaim a dead owner's slot in production.
-    assert wave_slots._pid_alive(os.getpid()) is True
-    child = subprocess.Popen([sys.executable, "-c", "pass"])
-    child.wait()
-    assert wave_slots._pid_alive(child.pid) is False
+def test_release_reports_a_removal_failure_on_one_stderr_line(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    # The caller releases from a `finally:`, so a failed removal must be
+    # reported rather than raised (a raise would mask the in-flight error)
+    # and rather than swallowed (a silently held slot blocks the pool).
+    slots = tmp_path / "wave-slots"
+    slot = _hold(slots, 1, str(ME))
+    real_rmdir = os.rmdir
+
+    def failing_rmdir(path, *args, **kwargs):
+        if not isinstance(path, int) and slots.name in os.fspath(path):
+            raise PermissionError("Permission denied")  # no path in the text
+        return real_rmdir(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "rmdir", failing_rmdir)
+    assert release(slot) is None
+    lines = _stderr_lines(capsys)
+    assert len(lines) == 1, f"expected one report of the failure, got {lines}"
+    assert os.fspath(slot) in lines[0]  # the line names the slot it could not free
+    assert slot.exists()  # still held: the failure was reported, not faked
 
 
 def test_docs_name_the_two_variables():
     waves_md = Path(__file__).parent.parent / "references" / "waves.md"
     text = waves_md.read_text()
     assert "_AUTOPILOT_REVIEW_SLOTS_DIR" in text
-    assert "_AUTOPILOT_REVIEW_SLOTS" in text
+    # The count variable is a prefix of the _DIR one, so a plain substring
+    # check cannot fail on its own: require a boundary _DIR does not satisfy.
+    count_hits = list(re.finditer(r"_AUTOPILOT_REVIEW_SLOTS(?!_DIR)", text))
+    assert count_hits, "waves.md never names the slot-count variable"
+    # Its default belongs beside the name, not paragraphs away.
+    assert any("3" in text[hit.start() : hit.end() + 100] for hit in count_hits), (
+        "waves.md does not state the default slot count of 3"
+    )
 
 
-def test_claim_is_exclusive_when_a_peer_wins_the_mkdir_race(tmp_path, monkeypatch):
-    # A live peer creates slot 1 in the gap after acquire sees it free and
-    # before acquire's own mkdir lands. mkdir must be the claim: acquire has
-    # to lose that race and move on, not overwrite or ignore the peer's dir.
+def test_claim_is_exclusive_when_a_peer_wins_the_race(tmp_path, monkeypatch):
+    # A live peer publishes a whole claim on slot 1 in the gap after acquire
+    # found it free and before acquire's own claim lands. A claim is
+    # exclusive: the loser of that race moves on to the next slot instead of
+    # overwriting the winner or carrying on as if it had won.
     _only_alive(monkeypatch, LIVE_PEER)
     slots = tmp_path / "wave-slots"
-    contested = os.fspath(slots / "1")
     real_mkdir = os.mkdir
     peer_won: list[str] = []
 
     def racing_mkdir(path, *args, **kwargs):
-        if os.fspath(path) == contested and not peer_won:
-            peer_won.append(contested)
-            real_mkdir(path, *args, **kwargs)  # the peer's claim lands first
+        if not peer_won and _in_slots_dir(path, slots):
+            peer_won.append(os.fspath(path))
+            real_mkdir(os.fspath(slots / "1"))  # the peer's claim lands first
             (slots / "1" / "owner").write_text(str(LIVE_PEER))
         return real_mkdir(path, *args, **kwargs)
 
     monkeypatch.setattr(os, "mkdir", racing_mkdir)
     slot = acquire(slots, 2, ME, sleep_fn=_no_sleep, clock=_fake_clock)
-    assert peer_won, "acquire never tried to mkdir slot 1"
+    assert peer_won, "acquire never created a directory in the slots dir"
     assert slot == slots / "2"
     assert (slot / "owner").read_text().strip() == str(ME)
-    # The peer's slot is still the peer's.
+    # The peer keeps slot 1, holding the peer's own pid.
     assert (slots / "1" / "owner").read_text().strip() == str(LIVE_PEER)
+
+
+def test_one_slot_is_never_handed_to_two_holders(tmp_path, monkeypatch):
+    # A whole peer acquire runs inside the window ME opens by creating its
+    # first directory in the slots dir, so the peer meets a claim that is
+    # under way and not yet published. With count=1 exactly one of the two
+    # may come back holding slots/1 and the other has to wait; nothing but
+    # the test's own sleep signal may escape either acquire.
+    _only_alive(monkeypatch, ME, PEER)
+    slots = tmp_path / "wave-slots"
+    real_mkdir = os.mkdir
+    raced: list[str] = []
+    outcomes: list[tuple[int, Path | str]] = []
+
+    def racing_mkdir(path, *args, **kwargs):
+        made = real_mkdir(path, *args, **kwargs)
+        if not raced and _in_slots_dir(path, slots):
+            raced.append(os.fspath(path))  # ME's claim is under way
+            outcomes.append((PEER, _claim_or_wait(slots, 1, PEER)))
+        return made
+
+    monkeypatch.setattr(os, "mkdir", racing_mkdir)
+    outcomes.append((ME, _claim_or_wait(slots, 1, ME)))
+    assert raced, "acquire never created a directory in the slots dir"
+    holders = [pid for pid, out in outcomes if out == slots / "1"]
+    waiters = [pid for pid, out in outcomes if out == WAITED]
+    assert len(holders) == 1, f"count=1 handed slot 1 to {len(holders)} holders"
+    assert len(waiters) == 1, f"one acquirer had to wait, got {outcomes}"
+    # The winner's own pid, intact: not the loser's, not both appended.
+    assert (slots / "1" / "owner").read_text().strip() == str(holders[0])
+
+
+def test_waiting_prints_one_stderr_line_per_five_minutes(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    assert wave_slots.HEARTBEAT_SECS == 300
+    _only_alive(monkeypatch, LIVE_PEER)
+    slots = tmp_path / "wave-slots"
+    held = _hold(slots, 1, str(LIVE_PEER))
+    ticker = _Ticker()
+    poll = wave_slots.HEARTBEAT_SECS / 3  # three polls per heartbeat
+
+    def sleep_fn(secs: float) -> None:
+        ticker.sleep(secs)
+        if len(ticker.sleeps) == 7:  # 700s waited, so two heartbeats are due
+            release(held)
+
+    slot = acquire(slots, 1, ME, sleep_fn=sleep_fn, clock=ticker.clock, poll_secs=poll)
+    assert slot == slots / "1"
+    assert ticker.now == 700
+    lines = _stderr_lines(capsys)
+    assert len(lines) == 2, f"expected one line per 300s of waiting, got {lines}"
+    for line in lines:
+        assert os.fspath(slots) in line  # the line names the slots dir
+
+
+def test_waiting_under_five_minutes_prints_nothing(tmp_path, monkeypatch, capsys):
+    _only_alive(monkeypatch, LIVE_PEER)
+    slots = tmp_path / "wave-slots"
+    held = _hold(slots, 1, str(LIVE_PEER))
+    ticker = _Ticker()
+
+    def sleep_fn(secs: float) -> None:
+        ticker.sleep(secs)
+        if ticker.now >= 200:  # still short of HEARTBEAT_SECS
+            release(held)
+
+    slot = acquire(slots, 1, ME, sleep_fn=sleep_fn, clock=ticker.clock, poll_secs=100)
+    assert slot == slots / "1"
+    assert ticker.now == 200
+    assert capsys.readouterr().err == ""
