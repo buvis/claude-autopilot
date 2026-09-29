@@ -113,31 +113,44 @@ class Watchdog:
         if self._cancelled.is_set():
             return
 
-        if self._activity_path is not None:
-            reason = self._wait_past_cap()
-            if reason is None:
-                return  # exited on its own before idle/ceiling fired
-            self.fired_reason = reason
-            if reason == "idle":
-                print(
-                    f"\nautoclaude: session silent for {self._idle:g}s past "
-                    f"the {self._cap:g}s wall-clock cap; SIGTERM (idle).",
-                    file=sys.stderr,
-                )
-            else:
-                print(
-                    f"\nautoclaude: session reached twice the {self._cap:g}s "
-                    "wall-clock cap; SIGTERM (ceiling).",
-                    file=sys.stderr,
-                )
-        else:
+        reason = self._determine_fire_reason()
+        if reason is None:
+            return  # exited on its own before idle/ceiling fired
+        self.fired_reason = reason
+        self.fired = True
+        self._terminate_and_escalate()
+
+    def _determine_fire_reason(self) -> str | None:
+        """Which reason (if any) the cap fires under, printing its message.
+
+        Returns None when the child exited on its own before any reason
+        applied - the caller must not fire in that case.
+        """
+        if self._activity_path is None:
             print(
                 f"\nautoclaude: session exceeded the {int(self._cap)}s wall-clock "
                 "cap; SIGTERM (session cap).",
                 file=sys.stderr,
             )
-            self.fired_reason = "cap"
-        self.fired = True
+            return "cap"
+        reason = self._wait_past_cap()
+        if reason is None:
+            return None
+        if reason == "idle":
+            print(
+                f"\nautoclaude: session silent for {self._idle:g}s past "
+                f"the {self._cap:g}s wall-clock cap; SIGTERM (idle).",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"\nautoclaude: session reached twice the {self._cap:g}s "
+                "wall-clock cap; SIGTERM (ceiling).",
+                file=sys.stderr,
+            )
+        return reason
+
+    def _terminate_and_escalate(self) -> None:
         self._proc.terminate()
         try:
             self._proc.wait(timeout=self._grace)
