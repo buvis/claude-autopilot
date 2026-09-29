@@ -59,6 +59,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -473,7 +474,7 @@ def _write_task_bounds(
     """Persist `record_task_bounds` through cli.state.transaction."""
 
     def _mutate(fresh: dict[str, Any]) -> dict[str, Any]:
-        record_task_bounds(fresh, task_id, total, count, warn=False)
+        record_task_bounds(fresh, task_id, total, count, now=int(time.time()), warn=False)
         return fresh
 
     def _validate(new_state: dict[str, Any]) -> None:
@@ -695,7 +696,9 @@ def _record_and_breach(
     None when none did, or "" after a breach (the caller stops there)."""
     # Task usage and call record (PRD 00200): decided on the hook's own read
     # so a fire with nothing to stamp costs no locked write.
-    changed, done_task = record_task_bounds(state, task_id, total, count)
+    changed, done_task = record_task_bounds(
+        state, task_id, total, count, now=int(time.time())
+    )
     if changed:
         _write_task_bounds(autopilot_dir, task_id, total, count)
     if total > _usage_limit():

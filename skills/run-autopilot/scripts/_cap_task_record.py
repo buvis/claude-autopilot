@@ -73,6 +73,7 @@ def record_task_bounds(
     task_id: str,
     total: int,
     count: int | None,
+    now: int,
     warn: bool = True,
 ) -> tuple[bool, str | None]:
     """Stamp the record onto `state.tasks`; return `(changed, done_task)`.
@@ -84,6 +85,10 @@ def record_task_bounds(
     the caller can decide on the hook's initial read whether a locked write
     is needed at all, then re-apply the same mutation on the transaction's
     fresh read (with `warn=False`, so a non-int field is named once).
+
+    Alongside the usage/calls pairs, stamps `started_at`/`done_at` (epoch
+    seconds, `now`) the same way: written once, on the same fire as the
+    matching pair, and never replaced afterwards.
     """
     tasks = state.get("tasks")
     if not isinstance(tasks, list):
@@ -96,13 +101,39 @@ def record_task_bounds(
         status = task.get("status")
         if status == "in_progress" and task.get("id") == task_id:
             changed |= record_pair(task, START_FIELDS, (total, count), warn)
+            if int_field(task, "started_at") is None:
+                task["started_at"] = now
+                changed = True
         elif status == "completed" and record_pair(
             task, DONE_FIELDS, (total, count), warn
         ):
             changed = True
             if isinstance(task.get("id"), str):
                 done_task = task["id"]
+            if int_field(task, "done_at") is None:
+                task["done_at"] = now
     return changed, done_task
+
+
+def last_task_wall(state: dict[str, Any]) -> int | None:
+    """`done_at - started_at` (seconds) of the LAST completed task in list
+    order, or `None` when that task lacks both stamps as ints or its span is
+    negative (a stale `started_at` from an earlier session). Mirrors
+    `last_task_cost`'s "last completed entry, else give up" shape.
+    """
+    tasks = state.get("tasks")
+    if not isinstance(tasks, list):
+        return None
+    for task in reversed(tasks):
+        if not isinstance(task, dict) or task.get("status") != "completed":
+            continue
+        started = int_field(task, "started_at")
+        done = int_field(task, "done_at")
+        if started is None or done is None:
+            return None
+        span = done - started
+        return span if span >= 0 else None
+    return None
 
 
 def last_task_cost(
