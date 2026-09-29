@@ -12,6 +12,7 @@ nothing else.
 from __future__ import annotations
 
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -201,10 +202,13 @@ def test_idle_guard_waits_for_an_active_session_past_the_cap(tmp_path):
     activity.touch()
     stop = threading.Event()
     toucher = _keep_touching(str(activity), stop)
+    # The child must exit well clear of the ceiling (2x cap = 0.8s) so that
+    # interpreter start-up jitter can never push its exit past it; a 0.1s
+    # margin here was flaky under load.
     proc = _spawn_sleeper(0.5)
     dog = Watchdog(
         proc,
-        cap_secs=0.3,
+        cap_secs=0.4,
         grace_secs=1,
         idle_secs=0.25,
         activity_path=str(activity),
@@ -238,7 +242,68 @@ def test_idle_guard_fires_after_the_idle_window(tmp_path, capsys):
     assert dog.fired_reason == "idle"
     assert proc.returncode == -signal.SIGTERM
     err = capsys.readouterr().err
-    assert "session silent for 0.1s past the 0.2s wall-clock cap; SIGTERM (idle)." in err
+    assert "past the 0.2s wall-clock cap; SIGTERM (idle)." in err
+    match = re.search(r"session silent for ([\d.]+)s past", err)
+    assert match is not None
+    # The log went silent before the cap even elapsed, so the real
+    # observed silence at fire time exceeds the 0.1s idle threshold; a
+    # message that just echoes the threshold would understate it.
+    assert float(match.group(1)) > 0.1
+
+
+def test_idle_guard_fires_on_the_first_poll_when_already_stale_at_the_cap(tmp_path, capsys):
+    activity = tmp_path / "activity"
+    activity.touch()
+    stale_since = time.time() - 5
+    os.utime(str(activity), (stale_since, stale_since))
+    proc = _spawn_sleeper(300)
+    start = time.monotonic()
+    dog = Watchdog(
+        proc,
+        cap_secs=0.2,
+        grace_secs=0.3,
+        idle_secs=1.0,
+        activity_path=str(activity),
+        poll_secs=0.1,
+    ).start()
+    proc.wait(timeout=10)
+    elapsed = time.monotonic() - start
+    dog.cancel()
+    assert dog.fired is True
+    assert dog.fired_reason == "idle"
+    assert proc.returncode == -signal.SIGTERM
+    # A clock that starts counting only once the cap elapses would need a
+    # full idle_secs (1.0s) after the cap before firing (~1.2s total); the
+    # log was already stale before the cap, so it must fire at the very
+    # next poll instead (~0.3s total).
+    assert elapsed < 0.7
+    err = capsys.readouterr().err
+    match = re.search(r"session silent for ([\d.]+)s past", err)
+    assert match is not None
+    # The real silence (~5s) must be reported, not the 1.0s idle threshold.
+    assert float(match.group(1)) > 3.0
+
+
+def test_idle_reason_wins_over_ceiling_when_both_hold_at_the_same_poll(tmp_path):
+    activity = tmp_path / "activity"
+    activity.touch()
+    proc = _spawn_sleeper(300)
+    dog = Watchdog(
+        proc,
+        cap_secs=0.1,
+        grace_secs=0.3,
+        idle_secs=0.05,
+        activity_path=str(activity),
+        # One poll spans both the ceiling (2x cap = 0.2s) and the idle
+        # threshold, so a single poll must pick between the two reasons;
+        # the PRD lists idle first.
+        poll_secs=1.0,
+    ).start()
+    proc.wait(timeout=10)
+    dog.cancel()
+    assert dog.fired is True
+    assert dog.fired_reason == "idle"
+    assert proc.returncode == -signal.SIGTERM
 
 
 def test_ceiling_fires_at_twice_the_cap(tmp_path, capsys):
