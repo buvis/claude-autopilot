@@ -586,25 +586,34 @@ def lane_line(state: dict, record: dict | None) -> str:
     return text
 
 
+def _is_task_stamped(t: dict) -> bool:
+    """True when `t` carries both `started_at` and `done_at` as ints - the
+    only types a real wall-clock stamp takes. A missing or non-int stamp is
+    never counted, regardless of value."""
+    started, done = t.get("started_at"), t.get("done_at")
+    return isinstance(started, int) and isinstance(done, int)
+
+
 def _task_wallclock_block(tasks: list[dict]) -> list[str]:
     """The `Task wall-clock:` block: one line per task with a wall-clock
-    duration in minutes, `not stamped` for a task missing either stamp, or
-    a single `- none stamped` line when no task in the list carries both."""
-    any_stamped = any(
-        t.get("started_at") is not None and t.get("done_at") is not None for t in tasks
-    )
+    duration in minutes, `not stamped` for a task missing either stamp,
+    carrying a non-int stamp, or spanning done_at before started_at, or a
+    single `- none stamped` line when no task in the list carries two int
+    stamps."""
+    any_stamped = any(_is_task_stamped(t) for t in tasks)
     lines = ["Task wall-clock:"]
     if not any_stamped:
         lines.append("- none stamped")
         return lines
     for t in tasks:
+        model = t.get("model") or ""
         started, done = t.get("started_at"), t.get("done_at")
-        if started is None or done is None:
-            lines.append(f"- {t.get('id')} ({t.get('model')}): not stamped")
+        if not _is_task_stamped(t) or done < started:
+            lines.append(f"- {t.get('id')} ({model}): not stamped")
             continue
-        minutes = int((done - started) // 60)
+        minutes = (done - started) // 60
         suffix = " [over budget]" if task_over_budget(t) else ""
-        lines.append(f"- {t.get('id')} ({t.get('model')}): {minutes} min{suffix}")
+        lines.append(f"- {t.get('id')} ({model}): {minutes} min{suffix}")
     return lines
 
 
