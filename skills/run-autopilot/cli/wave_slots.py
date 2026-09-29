@@ -128,9 +128,6 @@ def acquire(
             slot = dir / str(n)
             if _claim(slot, owner_pid):
                 return slot
-            # One read of the owner per look at the slot, and the reclaim
-            # compares against that same text. Losing either step of a
-            # reclaim means a peer got there first.
             owner = _owner(slot)
             cleared = _is_stale(owner) and _discard(slot, owner_pid, owner)
             if cleared and _claim(slot, owner_pid):
