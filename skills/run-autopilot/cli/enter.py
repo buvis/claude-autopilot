@@ -126,6 +126,19 @@ def _stop(out: dict, stop: str, detail: str) -> dict:
     return out
 
 
+class _WriteFailed(Exception):
+    """A guarded state write that failed; the message is the stop's detail."""
+
+
+def _mutate(state_path: Path, site: str, change: Callable[[dict], object]) -> None:
+    """statectl.mutate for the sites whose caller has no room for a stop: the
+    failure travels to enter() as a `state_write_failed` detail naming `site`."""
+    try:
+        statectl.mutate(state_path, change)
+    except (OSError, state.StateError, schema.SchemaError, KeyError) as err:
+        raise _WriteFailed(f"{site} write failed: {err}") from err
+
+
 def _prepare_tree(state_path: Path, prds_dir: Path, autopilot_dir: Path) -> None:
     """Steps 0-2: lifecycle dirs, state.json bootstrap, inherited markers."""
     for name in ("backlog", "wip", "done", "hold"):
@@ -155,7 +168,11 @@ def _park(out: dict, state_path: Path, prds_dir: Path, autopilot_dir: Path) -> b
     if code == 5:
         _stop(out, "park_halt", f"parked {marked}; systemic halt (2+ consecutive wrapper_died parks)")
         return True
-    _stop(out, *_PARK_STOPS[code])
+    mapped = _PARK_STOPS.get(code)
+    if mapped is None:
+        _stop(out, "park_halt", f"do_park exited {code}: unmapped park exit code")
+        return True
+    _stop(out, *mapped)
     return True
 
 
@@ -163,7 +180,7 @@ def _stall_stop(state_path: Path) -> tuple[dict, tuple[str, str] | None]:
     """Step 5: drop pause_reason, then the three stall/cap-pause stops."""
     current, _ = state.load(state_path)
     if "pause_reason" in current:
-        statectl.mutate(state_path, lambda data: data.pop("pause_reason", None))
+        _mutate(state_path, "pause_reason", lambda data: data.pop("pause_reason", None))
         current, _ = state.load(state_path)
     stall = current.get("stall_reason")
     stalled = stall.get("stalled") if isinstance(stall, dict) else None
@@ -196,8 +213,9 @@ def _select(
         if skips:
             at = now()
             entries = [{**skip, "at": at} for skip in skips]
-            statectl.mutate(
+            _mutate(
                 state_path,
+                "batch.skips",
                 lambda data: data.setdefault("batch", {}).setdefault("skips", []).extend(entries),
             )
         if source == "drained":
@@ -208,7 +226,11 @@ def _select(
             return False
     src = prds_dir / "backlog" / out["prd"]
     dst = prds_dir / "wip" / out["prd"]
-    shutil.move(str(src), str(dst))
+    try:
+        shutil.move(str(src), str(dst))
+    except OSError as err:
+        _stop(out, "mv_verify", f"move {src} -> {dst} failed: {err}")
+        return True
     if not dst.exists() or src.exists():
         _stop(out, "mv_verify", f"move {src} -> {dst} did not verify")
         return True
@@ -268,7 +290,10 @@ def _catchup(
     mode = current.get("catchup_mode")
     if mode in ("skip", "skipped"):
         if mode == "skip":
-            statectl.mutate(state_path, lambda data: data.update(catchup_mode="skipped"))
+            _mutate(
+                state_path, "catchup_mode",
+                lambda data: data.update(catchup_mode="skipped"),
+            )
         return "skip"
     batch = current["batch"]
     tasks = current.get("tasks")
@@ -290,7 +315,13 @@ def _design(out: dict, current: dict, autopilot_dir: Path) -> None:
     doc = autopilot_dir.parent / "designs" / f"{Path(out['prd']).stem}-design.md"
     if not doc.exists():
         out["design"] = "run"
-    elif _review_log_has_dispatch_line(doc.read_text(encoding="utf-8")):
+        return
+    try:
+        text = doc.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as err:
+        _stop(out, "fs_error", f"read design doc {doc} failed: {err}")
+        return
+    if _review_log_has_dispatch_line(text):
         out["design"] = "reuse"
     else:
         _stop(out, "design_review_log_empty", f"{doc} has empty ## Review log (review never ran)")
@@ -314,13 +345,18 @@ def enter(
         _prepare_tree(state_path, prds_dir, autopilot_dir)
     except OSError as err:
         return _stop(out, "fs_error", str(err))
+    except IndexError:
+        return _stop(out, "fs_error", f"cannot place tmp/ above {prds_dir}: no grandparent directory")
     current, _ = state.load(state_path)
     stall_op = current.get("stall_op")
     if stall_op is not None and records._stall_op_malformed(stall_op):
         return _stop(out, "stall_op_malformed", "malformed stall_op in state.json; refusing to park")
     if _park(out, state_path, prds_dir, autopilot_dir):
         return out
-    current, stall = _stall_stop(state_path)
+    try:
+        current, stall = _stall_stop(state_path)
+    except _WriteFailed as err:
+        return _stop(out, "state_write_failed", str(err))
     if stall is not None:
         return _stop(out, *stall)
     out["resume_target"] = resume.resume_target(current)
@@ -330,7 +366,11 @@ def enter(
         return _stop(out, "deferred_io", str(err))
     if not in_loop and out["custody_pending"]:
         return _stop(out, "custody", f"{out['custody_pending']} custody record(s) pending review")
-    if _select(out, state_path, prds_dir, autopilot_dir, prd_arg, now):
+    try:
+        halted = _select(out, state_path, prds_dir, autopilot_dir, prd_arg, now)
+    except _WriteFailed as err:
+        return _stop(out, "state_write_failed", str(err))
+    if halted:
         return out
     if _batch_report(out, state_path):
         return out
@@ -341,6 +381,9 @@ def enter(
     if fields["lane_effective"] != "full":
         return _stop(out, "lane", f"lane: {fields['lane']} ({fields['lane_reason']})")
     current, _ = state.load(state_path)
-    out["catchup"] = _catchup(current, state_path, autopilot_dir, now, git_head)
+    try:
+        out["catchup"] = _catchup(current, state_path, autopilot_dir, now, git_head)
+    except _WriteFailed as err:
+        return _stop(out, "state_write_failed", str(err))
     _design(out, current, autopilot_dir)
     return out
