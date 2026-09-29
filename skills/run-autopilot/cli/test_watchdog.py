@@ -11,9 +11,11 @@ nothing else.
 
 from __future__ import annotations
 
+import os
 import signal
 import subprocess
 import sys
+import threading
 import time
 
 from cli.watchdog import Watchdog
@@ -175,3 +177,118 @@ def test_warn_message_names_the_window(capsys):
     dog.cancel()
     err = capsys.readouterr().err
     assert "0.3s from the 0.6s wall-clock cap; requesting a task-boundary handoff" in err
+
+
+# The idle guard and ceiling (PRD 00106 follow-up): once the wall-clock cap
+# elapses, an active session (activity_path mtime moving) is left alone up
+# to twice the cap; a silent one is killed once idle_secs of silence is
+# seen, and any session still running at twice the cap is killed regardless.
+
+
+def _keep_touching(path: str, stop: threading.Event, interval: float = 0.02) -> threading.Thread:
+    def _touch() -> None:
+        while not stop.is_set():
+            os.utime(path, None)
+            time.sleep(interval)
+
+    thread = threading.Thread(target=_touch, daemon=True)
+    thread.start()
+    return thread
+
+
+def test_idle_guard_waits_for_an_active_session_past_the_cap(tmp_path):
+    activity = tmp_path / "activity"
+    activity.touch()
+    stop = threading.Event()
+    toucher = _keep_touching(str(activity), stop)
+    proc = _spawn_sleeper(0.5)
+    dog = Watchdog(
+        proc,
+        cap_secs=0.3,
+        grace_secs=1,
+        idle_secs=0.25,
+        activity_path=str(activity),
+        poll_secs=0.1,
+    ).start()
+    proc.wait(timeout=10)
+    dog.cancel()
+    stop.set()
+    toucher.join(timeout=1)
+    assert dog.fired is False
+    assert dog.fired_reason is None
+    # A negative returncode would mean the watchdog signaled it.
+    assert proc.returncode == 0
+
+
+def test_idle_guard_fires_after_the_idle_window(tmp_path, capsys):
+    activity = tmp_path / "activity"
+    activity.touch()
+    proc = _spawn_sleeper(300)
+    dog = Watchdog(
+        proc,
+        cap_secs=0.2,
+        grace_secs=0.3,
+        idle_secs=0.1,
+        activity_path=str(activity),
+        poll_secs=0.1,
+    ).start()
+    proc.wait(timeout=10)
+    dog.cancel()
+    assert dog.fired is True
+    assert dog.fired_reason == "idle"
+    assert proc.returncode == -signal.SIGTERM
+    err = capsys.readouterr().err
+    assert "session silent for 0.1s past the 0.2s wall-clock cap; SIGTERM (idle)." in err
+
+
+def test_ceiling_fires_at_twice_the_cap(tmp_path, capsys):
+    activity = tmp_path / "activity"
+    activity.touch()
+    stop = threading.Event()
+    toucher = _keep_touching(str(activity), stop)
+    proc = _spawn_sleeper(300)
+    dog = Watchdog(
+        proc,
+        cap_secs=0.2,
+        grace_secs=0.3,
+        idle_secs=5.0,
+        activity_path=str(activity),
+        poll_secs=0.1,
+    ).start()
+    proc.wait(timeout=10)
+    dog.cancel()
+    stop.set()
+    toucher.join(timeout=1)
+    assert dog.fired is True
+    assert dog.fired_reason == "ceiling"
+    assert proc.returncode == -signal.SIGTERM
+    err = capsys.readouterr().err
+    assert "session reached twice the 0.2s wall-clock cap; SIGTERM (ceiling)." in err
+
+
+def test_zero_idle_keeps_the_kill_at_the_cap():
+    proc = _spawn_sleeper(300)
+    dog = Watchdog(proc, cap_secs=0.2, grace_secs=5).start()
+    proc.wait(timeout=10)
+    dog.cancel()
+    assert dog.fired is True
+    assert dog.fired_reason == "cap"
+    assert proc.returncode == -signal.SIGTERM
+
+
+def test_unreadable_activity_path_counts_as_silent(tmp_path):
+    missing = tmp_path / "never-created"
+    proc = _spawn_sleeper(300)
+    dog = Watchdog(
+        proc,
+        cap_secs=0.2,
+        grace_secs=0.3,
+        idle_secs=0.1,
+        activity_path=str(missing),
+        poll_secs=0.1,
+    ).start()
+    proc.wait(timeout=10)
+    dog.cancel()
+    assert dog.fired is True
+    assert dog.fired_reason == "idle"
+    assert proc.returncode == -signal.SIGTERM
