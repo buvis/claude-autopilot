@@ -116,10 +116,12 @@ class HeadroomHandoffTests(unittest.TestCase):
         self.assertTrue(self._marker_written())
 
     def test_first_task_uses_the_fixed_estimates(self) -> None:
-        """No completed task: 150K and 200 calls stand in. 340K leaves 160K
-        (fits); 360K leaves 140K (marker); 251 calls leave 199 (marker)."""
-        with self.subTest(total=340_000, count=120):
-            self._run_with(total=340_000, count=120, tasks=[])
+        """No completed task: 150K and 200 calls stand in, margined by
+        HEADROOM_MARGIN (1.25x): the usage threshold is 187.5K. 300K leaves
+        200K (fits); 360K leaves 140K (marker); 251 calls leave 199, under
+        the margined 250-call threshold (marker)."""
+        with self.subTest(total=300_000, count=120):
+            self._run_with(total=300_000, count=120, tasks=[])
             self.assertFalse(self._marker_written())
         with self.subTest(total=360_000, count=120):
             self._run_with(total=360_000, count=120, tasks=[])
@@ -132,10 +134,10 @@ class HeadroomHandoffTests(unittest.TestCase):
     def test_negative_record_falls_back_to_the_estimates(self) -> None:
         """The last completed task's start (stamped by an earlier session)
         exceeds its done: the fixed estimates apply, never a negative cost.
-        340K fits under the 150K estimate and 360K does not; a -50K cost
-        would have let both pass."""
+        Margined by HEADROOM_MARGIN, 300K fits under the 187.5K threshold
+        and 360K does not; a -50K cost would have let both pass."""
         negative = _completed("t1", usage=(300_000, 250_000), calls=(20, 220))
-        self._run_with(total=340_000, count=120, tasks=[negative])
+        self._run_with(total=300_000, count=120, tasks=[negative])
         self.assertFalse(self._marker_written())
         self._run_with(total=360_000, count=120, tasks=[negative])
         self.assertTrue(self._marker_written())
@@ -317,8 +319,9 @@ class HeadroomHandoffTests(unittest.TestCase):
 
     def test_non_int_bound_on_the_last_completed_task_is_named_once(self) -> None:
         """A completed record with a non-int START bound is unusable for the
-        rule (the estimates apply) and is named on exactly one stderr line,
-        the same diagnostic the record's own writer gives."""
+        rule (the estimates apply, margined by HEADROOM_MARGIN) and is named
+        on exactly one stderr line, the same diagnostic the record's own
+        writer gives."""
         self.fx.write_state(
             phase="build",
             tasks=[
@@ -334,7 +337,7 @@ class HeadroomHandoffTests(unittest.TestCase):
                 {"id": "t2", "name": "next", "status": "in_progress"},
             ],
         )
-        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=340_000)])
+        self.fx.write_transcript_lines([self.fx.usage_line(input_tokens=300_000)])
         self.fx.seed_counter("test-session", 120)
         result = self.fx.run_hook()
         self.assertEqual(result.returncode, 0)

@@ -31,9 +31,11 @@ runner needs no spawn-layer redesign.
 
 from __future__ import annotations
 
+import math
 import os
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -296,6 +298,7 @@ def spawn(
         presenter = make_presenter(env)
 
     env_for_child, dropped = child_env(env)
+    env_for_child["_AUTOPILOT_SESSION_DEADLINE"] = str(math.ceil(time.time() + cap_secs))
     if dropped:
         print(
             "autopilot: scrubbed inherited host markers: " + ", ".join(dropped),

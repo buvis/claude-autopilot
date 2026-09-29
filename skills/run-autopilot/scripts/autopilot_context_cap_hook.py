@@ -94,6 +94,9 @@ USAGE_CAP = 500_000
 # measured opus tasks (~200 each) minus the margin the headroom rule provides
 # (PRD 00200); at 300 the second task of every opus session died mid-flight.
 TURN_TRIPWIRE = 450
+# Safety factor on the headroom rule: hand off when what is left is under
+# the last task's cost times this, since task costs vary run to run.
+HEADROOM_MARGIN = 1.25
 # First-task estimates for the headroom rule (PRD 00200), used until a task
 # has completed in this session and recorded its own bounds. Measured opus
 # tasks: 118K and 187K of context, ~200 calls; the estimates err high.
@@ -199,15 +202,25 @@ def _headroom_exhausted(
     count: int | None,
     last_usage: int,
     last_calls: int,
+    secs_left: float | None = None,
+    last_wall: float | None = None,
 ) -> bool:
     """The headroom rule (PRD 00200): the next task would not fit in the
-    context left under USAGE_CAP or in the calls left under TURN_TRIPWIRE,
-    judged by what the last task cost. A None total (no usage line in the
-    transcript yet) leaves only the calls half; a None count (no session id
-    on stdin) leaves only the usage half."""
-    if total is not None and USAGE_CAP - total < last_usage:
+    context left under USAGE_CAP, the calls left under TURN_TRIPWIRE, or the
+    wall-clock seconds left before the session deadline, judged by what the
+    last task cost times HEADROOM_MARGIN. A None total (no usage line in the
+    transcript yet) drops the usage term; a None count (no session id on
+    stdin) drops the calls term; a None secs_left or last_wall drops the
+    time term."""
+    if total is not None and USAGE_CAP - total < last_usage * HEADROOM_MARGIN:
         return True
-    return count is not None and TURN_TRIPWIRE - count < last_calls
+    if count is not None and TURN_TRIPWIRE - count < last_calls * HEADROOM_MARGIN:
+        return True
+    return (
+        secs_left is not None
+        and last_wall is not None
+        and secs_left < last_wall * HEADROOM_MARGIN
+    )
 
 
 def _last_task_cost(state: dict[str, Any]) -> tuple[int, int]:
