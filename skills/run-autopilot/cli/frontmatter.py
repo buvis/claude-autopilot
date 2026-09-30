@@ -196,20 +196,18 @@ def apply(
     *,
     on_warning: Callable[[str], None] | None = None,
 ) -> tuple[dict, list[str], list[str]]:
-    """Parse `prd_path`, add lane/lane_reason/lane_effective (`off` in
-    `_AUTOPILOT_LANES` forces full), write every field to `state_path` in ONE
-    transaction, and return (fields, warnings, resets). Prints nothing; raises
-    OSError, state.StateError, or schema.SchemaError on a failed read/write.
+    """Parse `prd_path`, add the lane fields, write every field to `state_path`
+    in ONE transaction, and return (fields, warnings, resets). Prints nothing;
+    raises OSError, state.StateError or schema.SchemaError on a failed write.
 
     `on_warning` is handed each warning line BEFORE the write, so a caller that
     prints them still has them when the write then raises. `resets` names one
     line per field whose value the write actually changed, read from the
     pre-write state inside the transaction, so it stays empty on a failure.
 
-    Imports the package siblings here, not at module level: `parse` and
-    `declared` are also loaded BY PATH (no parent package) by
-    fast-track/scripts/cards_from_prd.py, where a relative import cannot
-    resolve."""
+    Imports its siblings here, not at module level: `parse` and `declared` are
+    also loaded BY PATH by fast-track/scripts/cards_from_prd.py, where a
+    relative import cannot resolve."""
     from . import schema, state
 
     text = Path(prd_path).read_text(encoding="utf-8")
