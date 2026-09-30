@@ -80,6 +80,7 @@ def test_fresh_wip_prd_continues_with_null_stop(env: Env, capsys) -> None:
         "design": "skip",
         "resume_target": "build: catchup then planning",
         "batch": "open",
+        "warnings": [],
     }
     assert env.read_state()["prd"] == PRD
     assert env.rows == [(PRD, "build")]
@@ -731,7 +732,7 @@ def test_cli_moves_a_backlog_prd_into_wip(env: Env) -> None:
     proc = run_cli(env, "enter", "--state", str(env.state_path))
 
     assert proc.returncode == 0, proc.stderr
-    assert proc.stdout.splitlines() == [json.dumps(expected, sort_keys=True)]
+    assert proc.stdout == json.dumps({k: expected[k] for k in KEYS}, sort_keys=True) + "\n"
     assert (expected["prd"], expected["source"]) == (PRD, "backlog")
     # the verified move happened in the real tree, not only in the printed line
     assert env.has("wip")
@@ -781,7 +782,7 @@ def test_cli_prd_flag_selects_the_named_prd(env: Env) -> None:
     proc = run_cli(env, "enter", "--state", str(env.state_path), "--prd", OTHER)
 
     assert proc.returncode == 0, proc.stderr
-    assert proc.stdout.splitlines() == [json.dumps(expected, sort_keys=True)]
+    assert proc.stdout == json.dumps({k: expected[k] for k in KEYS}, sort_keys=True) + "\n"
     assert (expected["prd"], expected["source"]) == (OTHER, "arg")
 
 

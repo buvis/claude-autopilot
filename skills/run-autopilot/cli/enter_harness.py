@@ -189,9 +189,15 @@ class Env:
             git_head=self.git_head,
             **kw,
         )
+        # Three probes of one key set, because one is not enough: a dict
+        # subclass can yield a key from `__iter__` and serve it from
+        # `__getitem__` while `keys()` and the JSON it dumps to never hold it.
+        round_trip = json.loads(json.dumps(out, sort_keys=True))
         assert set(out) == RESULT_KEYS
+        assert set(out.keys()) == RESULT_KEYS
+        assert set(round_trip) == RESULT_KEYS
         assert out["stop"] is None or out["stop"] in enter.STOPS
-        assert json.loads(json.dumps(out, sort_keys=True)) == out
+        assert round_trip == out
         return out
 
 
@@ -262,13 +268,18 @@ def run_cli(
 
 
 def enter_twin(env: Env, *, prd_arg: str | None = None) -> dict:
-    """The dict the `enter` verb must print for `env`'s tree, computed by
+    """The dict the `enter` verb must produce for `env`'s tree, computed by
     `enter()` itself on a byte-identical clone beside it.
 
     Every injectable stays at the CLI's own default (clock, git HEAD) so the
     two runs can only differ if the verb does something other than call
     `enter()`; only the handoff row is stubbed out, and the result does not
     depend on it. Call this BEFORE the CLI runs: it clones the tree as it is.
+
+    This is the CALLER-shaped dict (`RESULT_KEYS`), NOT the shape of the
+    printed line: comparing it against the verb's stdout means projecting it
+    onto `KEYS` first - `json.dumps({k: twin[k] for k in KEYS}, sort_keys=True)`
+    - or the extra `warnings` key fails the comparison against a correct verb.
     """
     clone_root = env.root.with_name(env.root.name + "-twin")
     twin = Env(clone_root)

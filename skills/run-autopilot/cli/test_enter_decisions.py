@@ -155,6 +155,10 @@ _ENGINE_WARNING = (
     "autopilot: PRD frontmatter consensus_engine='bogus' is not one of "
     "legacy/shadow/workflow; defaulting to legacy"
 )
+_MODEL_WARNING = (
+    "autopilot: PRD frontmatter session_model='huge' is not one of sonnet/opus; "
+    "defaulting to sonnet"
+)
 
 
 def test_enter_returns_the_frontmatter_warning_line_verbatim(env: Env) -> None:
@@ -198,6 +202,43 @@ def test_a_valid_frontmatter_block_produces_no_warnings(env: Env) -> None:
     assert (out["stop"], out["warnings"]) == (None, [])
 
 
+def test_a_third_frontmatter_key_warns_with_the_same_shape(env: Env) -> None:
+    # A key and a value no other test here arranges: an implementation that
+    # recognizes the few invalid PRDs its suite happens to use, instead of
+    # reporting what the parse produced, hands back nothing for this one.
+    env.write_state(_open_state())
+    env.put("wip", PRD, _prd_text(session_model="huge"))
+
+    out = env.run()
+
+    assert (out["stop"], out["warnings"]) == (None, [_MODEL_WARNING])
+    assert env.read_state()["session_model"] == "sonnet"
+
+
+def test_the_warnings_the_frontmatter_write_produced_arrive_unchanged(
+    env: Env, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Binds the plumbing rather than the wording: these two lines are what the
+    # frontmatter write handed back for this PRD, and no PRD text could make
+    # them, so only a result that carries that list through can match. The
+    # fields stay the real ones, so the rest of the chain runs as it always does.
+    sentinel = ["autopilot: first sentinel line", "autopilot: second sentinel line"]
+    real_apply = frontmatter.apply
+
+    def apply_with_sentinel(prd_path: Path, state_path: Path) -> tuple[dict, list[str]]:
+        fields, _warnings = real_apply(prd_path, state_path)
+        return fields, list(sentinel)
+
+    env.write_state(_open_state())
+    env.put("wip", PRD, _prd_text())
+    monkeypatch.setattr(frontmatter, "apply", apply_with_sentinel)
+
+    out = env.run()
+
+    assert out["stop"] is None
+    assert out["warnings"] == sentinel
+
+
 @pytest.mark.parametrize("stop", ["fs_error", "custody", "drained"])
 def test_a_halt_before_the_frontmatter_write_still_carries_an_empty_warnings_list(
     env: Env, monkeypatch: pytest.MonkeyPatch, stop: str,
@@ -210,6 +251,23 @@ def test_a_halt_before_the_frontmatter_write_still_carries_an_empty_warnings_lis
 
     assert out["stop"] == stop
     assert out["warnings"] == []
+
+
+def test_a_lane_stopped_run_still_carries_its_frontmatter_warning(env: Env) -> None:
+    # The halt an operator most needs the warning for: the `lane:` line that
+    # was meant to route this run is the very line that got ignored. An
+    # invalid lane counts as absent, so this doc-only PRD classifies solo and
+    # halts. `frontmatter.parse` does not produce this warning - the write step
+    # does - so parse cannot stand in as its oracle; hence the exact shape.
+    env.write_state(_open_state())
+    env.put("wip", PRD, _prd_text(lane="nope") + "- **Location**: `docs/notes.md`\n")
+
+    out = env.run()
+
+    assert (out["stop"], out["lane_effective"]) == ("lane", "solo")
+    assert len(out["warnings"]) == 1, out["warnings"]
+    assert out["warnings"][0].startswith("autopilot: PRD frontmatter lane='nope' ")
+    assert "is not one of solo/fast-track/full" in out["warnings"][0]
 
 
 # -- the `enter` verb: eleven keys on stdout, the warnings on stderr -----------
