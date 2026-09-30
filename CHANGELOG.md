@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-30
+
 ### Added
 
 - **run-autopilot**: `autopilot enter` runs the documented Phase 0 step chain of a build session in one call - lifecycle directories, inherited-marker cleanup, the park handler, the stall and cap-pause checks, the resume target, pending custody, PRD selection with its verified move, the batch check, the frontmatter write and handoff row, and the catchup and design decisions - and prints one JSON line carrying either `stop: null` and the decisions the session should act on, or the `stop` token naming which existing handler owns the halt. `--prd` selects a named PRD, `--prds` overrides the PRD tree, an unreadable `state.json` exits 2 and a future-schema one exits 6 before any effect
