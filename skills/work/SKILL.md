@@ -68,7 +68,7 @@ after all tasks complete:
     j. run full verification suite ONCE (see step 7 below)
 ```
 
-**Per-task verification runs only the tests Tess wrote in step 2.7, not the full project suite.** The full suite runs once at the end (why: `references/design-rationale.md` § narrow verification).
+**Per-task verification runs only the tests Tess wrote in step 2.7, not the full project suite.** The full suite runs once at the end (why: `references/design-rationale.md` § narrow verification). This holds in rework mode and for every subagent prompt (Tess, Devon, Ivan): each carries the same narrow-run sentence.
 
 If you find yourself writing an Agent prompt that mentions multiple tasks, STOP — you are about to violate this rule.
 

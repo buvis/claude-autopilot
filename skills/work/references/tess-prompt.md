@@ -44,4 +44,10 @@ Abort and report if you read more than 100K of total input. Return the partial r
 
 Read every file before your first Edit to it. Never call bash `head`, `tail`, `cat`, `grep`, or `find` - a hook blocks them. Use the Read tool (offset/limit), `rg`, or `rg --files` instead. Never combine an inspection (read, list, search, diff) with a test, lint or build invocation in one Bash call - run them as two calls, because a combined command has two ways to hang and one exit code. Pass an explicit `timeout` on every Bash call: 60000 ms for an inspection, 300000 ms for a lint run or a narrow test run, 600000 ms for a full suite or a full build.
 
+Run only the test files this task names (the tests you wrote, or the
+failing tests in your prompt), with `-q --tb=line`. Never run a whole test
+directory or `dev/bin/release-checks`: the orchestrator runs the full suite
+once, after every task. Read the pass count and exit code from that one
+run; never re-run a suite to recover a number.
+
 End your report with `ASSUMPTIONS:` - one line per assumption you made where the task, tests, or listed files were silent (guessed interface, data shape, resolved ambiguity, unstated behavior). Write `ASSUMPTIONS: none` if you made none.

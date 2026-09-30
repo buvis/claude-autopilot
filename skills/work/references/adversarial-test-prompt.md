@@ -28,7 +28,7 @@ Test files:
 Public interfaces/types (so your implementation compiles):
 {type definitions, function signatures, module exports}
 
-Test runner command: {e.g. npm test, pytest, cargo test}
+Test runner command: {the command that runs ONLY this task's test files, e.g. uv run --no-project --with pytest python -m pytest -q --tb=line <the task's test files>; never a whole test directory}
 
 Your goal:
 Write an implementation that makes ALL tests pass but is clearly WRONG. Strategies:
@@ -51,6 +51,8 @@ Rules:
 3. Do NOT modify test files
 4. For each exploit, explain which test is too weak and what assertion would prevent it
 5. Clean up your wrong implementation before returning. Do NOT use `rm` — it is denied to subagents and will fail. Instead, use the Write tool to OVERWRITE every file you created with a single placeholder line (`# adversarial placeholder - overwritten by implementor`). The Write tool always works. Never ask for permission to delete; just overwrite and report the path.
+6. Run only the test runner command above, once per exploit; never a
+whole test directory.
 
 Output format:
 - If you CAN break the tests: show the wrong implementation and the passing test output, then a numbered `Weak points:` list, one line each: `N. <test name> - <what a wrong implementation gets away with> - <assertion that would prevent it>`
@@ -65,7 +67,7 @@ You receive NOTHING about what the code should actually do. You only see tests a
 |---------|-----|
 | Test file contents | The thing Devon is trying to break |
 | Public types/interfaces | So wrong implementation compiles |
-| Test runner command | So Devon can verify exploits |
+| Test runner command (the task's test files only) | So Devon can verify exploits without a full-suite run per attempt |
 
 | Exclude | Why |
 |---------|-----|
