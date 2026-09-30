@@ -29,10 +29,10 @@ existing section that owns that halt.
 | `fs_error` | § Ensure lifecycle directories exist, the `mkdir -p` block could not run |
 | `park_halt` | § Handle park request, exit-code table row 5 (systemic halt) |
 | `mv_verify` | § Handle park request row 4, or Normal PRD selection's verified move, whichever move failed |
-| `deferred_io` | § Handle park request row 9 |
+| `deferred_io` | routed by `detail`: `do_park exited 9: a deferred-record append failed` → § Handle park request row 9; an unreadable custody entry (`custody.CustodyError` from the pending-custody count) → § Handle pending custody's exit-9 branch, PAUSE in every mode with `site: "sub_skill_fail"` and the `detail` as the pause detail |
 | `stall_op_conflict` | § Handle park request row 10 |
-| `stall_op_malformed` | § Handle park request, a `do_stall` precondition failure |
-| `park_precondition_failed` | § Handle park request row 2 |
+| `stall_op_malformed` | § Handle park request row 10's action — PAUSE for human reconciliation: a half-written `stall_op` (a missing required key, or a half-captured `cap_critical` range) that `autopilot park` refuses to reconcile. `state.json` is readable, so row 2's corrupted-state path does NOT apply and state is never deleted |
+| `park_precondition_failed` | `references/recovery.md`'s exit-code table row 2, second branch — the `detail` names the cause (a missing `batch.id`, or a failed `cap_critical` range capture): retry the stall ONCE, then PAUSE with `site: "sub_skill_fail"`, PRD left in `wip/`, and never delete `state.json`. NOT § Handle park request row 2's corrupted-state row |
 | `replan` | § Handle Work-phase abort, the `subagent_prompt_overrun` bullet |
 | `escalation_exhausted` | § Handle Work-phase abort, the `escalation_exhausted` bullet |
 | `cap_pause` | § Handle Work-phase abort, the cap-pause bullet |
