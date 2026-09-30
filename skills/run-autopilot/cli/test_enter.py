@@ -11,14 +11,13 @@ produce on demand (a do_park exit 4/9, a failed move, a failed write).
 
 from __future__ import annotations
 
-import ast
 import os
 import shutil
 from pathlib import Path
 
 import pytest
 
-from cli import custody, enter, frontmatter, notify_out, records, resume, state
+from cli import custody, enter, frontmatter, handoff, notify_out, records, resume, state
 from cli.enter_harness import (
     BATCH_ID,
     DISPATCH_LINE,
@@ -54,66 +53,9 @@ def test_every_stop_value_is_in_STOPS() -> None:
     assert len(set(enter.STOPS)) == len(enter.STOPS)
 
 
-# Obligation 1 below covers MODULE-LEVEL statements, so function and class
-# bodies drop out; all three read the parsed tree, so a comment cannot trip them.
-_SKIPPED_BODIES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-
-
-def _is_sys_path(node: ast.AST) -> bool:
-    if not isinstance(node, ast.Attribute) or node.attr != "path":
-        return False
-    return isinstance(node.value, ast.Name) and node.value.id == "sys"
-
-
-def _mutates_sys_path(node: ast.AST) -> bool:
-    """`sys.path.append(...)`, `sys.path.insert(...)` or `sys.path = ...`."""
-    if isinstance(node, ast.Assign):
-        return any(_is_sys_path(t) for t in node.targets)
-    if isinstance(node, (ast.AugAssign, ast.AnnAssign)):
-        return _is_sys_path(node.target)
-    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-        return _is_sys_path(node.func.value)
-    return False
-
-
-def _uses_importlib(node: ast.AST) -> bool:
-    if isinstance(node, (ast.Import, ast.ImportFrom)):
-        return "importlib" in ast.dump(node)
-    return isinstance(node, ast.Call) and "import_module" in ast.dump(node.func)
-
-
-def _imports_sibling_handoff(tree: ast.Module) -> bool:
-    """True if an import names the sibling `handoff` module: `from . import
-    handoff`, `from cli import handoff` or `from .handoff import MARKERS`."""
-    froms = [n for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)]
-    names = [a.name for n in froms if n.module in (None, "cli") for a in n.names]
-    modules = [n.module for n in froms]
-    return "handoff" in names or "handoff" in modules or "cli.handoff" in modules
-
-
-def test_enter_reads_its_marker_tuple_by_plain_import_of_its_own_package() -> None:
-    source = Path(enter.__file__)
-    tree = ast.parse(source.read_text(encoding="utf-8"))
-    import_time = ast.Module(
-        body=[n for n in tree.body if not isinstance(n, _SKIPPED_BODIES)],
-        type_ignores=[],
-    )
-    mutations = [n for n in ast.walk(import_time) if _mutates_sys_path(n)]
-    dynamic = [n for n in ast.walk(tree) if _uses_importlib(n)]
-
-    assert not mutations, (
-        f"{source}: a module-level statement mutates `sys.path` at import time, "
-        "so every importer of `cli.enter` gains a search-path entry that can "
-        "shadow a real module. Take the marker names from `cli.handoff.MARKERS`."
-    )
-    assert not dynamic, (
-        f"{source}: imports `importlib` or calls `importlib.import_module` — the "
-        "marker tuple must arrive by a plain package import."
-    )
-    assert _imports_sibling_handoff(tree), (
-        f"{source}: no import names the sibling `handoff` module, so the "
-        "inherited marker names cannot come from `cli.handoff.MARKERS`."
-    )
+# `cli/enter.py`'s import hygiene (no import-time `sys.path` mutation, no
+# `importlib`, the marker tuple reached by a plain package import) is pinned
+# structurally in `test_enter_guards.py`; the behavioural half lives below.
 
 
 # -- the null-stop path --------------------------------------------------------
@@ -146,6 +88,35 @@ def test_fresh_wip_prd_continues_with_null_stop(env: Env, capsys) -> None:
     for name in _walk_up.INHERITED_MARKERS:
         assert not (env.autopilot_dir / name).exists()
     assert capsys.readouterr().out == ""
+
+
+def test_the_marker_clear_step_removes_exactly_cli_handoff_MARKERS(
+    env: Env, monkeypatch
+) -> None:
+    # The behavioural half of requirement A: the names must be READ from
+    # `cli.handoff.MARKERS` when the step runs. A hardcoded tuple, the
+    # `scripts/_walk_up.py` duplicate, or a module-level copy taken at import
+    # time all ignore this patch and leave the sentinel on disk, while a merely
+    # structural `from . import handoff` pin would call them all satisfied.
+    monkeypatch.setattr(handoff, "MARKERS", (".sentinel-marker",))
+    env.write_state(_open_state())
+    env.put("wip")
+    (env.autopilot_dir / ".sentinel-marker").write_text("x", encoding="utf-8")
+    (env.autopilot_dir / ".handoff-requested").write_text("x", encoding="utf-8")
+
+    out = env.run()
+
+    assert out["stop"] is None
+    assert not (env.autopilot_dir / ".sentinel-marker").exists(), (
+        "cli/enter.py: the marker clear step must remove every basename in "
+        "`cli.handoff.MARKERS` as read at call time — `.sentinel-marker` "
+        "survived, so the names came from somewhere else."
+    )
+    assert (env.autopilot_dir / ".handoff-requested").exists(), (
+        "cli/enter.py: the marker clear step removed `.handoff-requested`, a "
+        "name `cli.handoff.MARKERS` does not hold here — the step must clear "
+        "that tuple, not a second list of hand-off filenames of its own."
+    )
 
 
 def test_a_fresh_cache_and_a_reviewed_design_doc_reuse_both(env: Env) -> None:
@@ -392,13 +363,20 @@ def test_park_halt_codes_map_to_their_stops(
             out["detail"]
             == f"parked {PRD}; systemic halt (2+ consecutive wrapper_died parks)"
         )
-        # Exit 5 parked the PRD and then halted, so both facts are reported. A
-        # collapse of this branch into the other halt codes would drop `parked`
-        # silently while every assertion above still passed.
-        assert out["parked"] == PRD, (
-            f"cli/enter.py: exit 5 parked {PRD}, so `parked` must still name it "
-            f"— got {out['parked']!r}."
-        )
+    # One expectation per code, stated OUTSIDE the branch. Exit 5 parked the PRD
+    # and then halted, so both facts are reported; 4, 9 and 10 halt with the park
+    # INCOMPLETE (the move to hold/ or the record write failed), so `parked` has
+    # to stay null. A collapse of these branches into one leaks in both
+    # directions — dropping `parked` on 5, or claiming a park that never
+    # happened on the rest — and every assertion above still passes either way.
+    expected_parked = PRD if code == 5 else None
+    assert out["parked"] == expected_parked, (
+        f"cli/enter.py: a do_park exit of {code} must report `parked` as "
+        f"{expected_parked!r} — 5 is the one halt code that parked {PRD} first; "
+        "4, 9 and 10 mean the park did not complete, so naming a parked PRD "
+        "there tells the session a PRD reached hold/ while it is still in wip/. "
+        f"Got {out['parked']!r}."
+    )
 
 
 def test_park_exit_two_from_reconciliation_stops_park_precondition_failed(

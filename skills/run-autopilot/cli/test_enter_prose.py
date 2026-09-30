@@ -35,6 +35,7 @@ from cli.custody_prose_testutil import (
     _assert_absent,
     _assert_in_order,
     _assert_matches,
+    _assert_no_match,
     _assert_present,
     _prose,
     _section,
@@ -295,19 +296,36 @@ def test_every_existing_phase_0_subsection_survives_with_its_own_steps() -> None
 
 # § "Clear inherited hand-off markers" describes a hand-run script that names
 # each removed marker on stderr with its write time; the one-call path removes
-# the same markers and says nothing. Three tokens (`autopilot enter`, a
-# negation, the stderr diagnostic) in either clause order, gaps bounded to a
-# couple of wrapped lines so a negation from another sentence cannot pair with
-# the closing `autopilot enter` line.
+# the same markers and says nothing. The obligation is an EMISSION verb that is
+# negated ("emits no", "prints nothing", "without printing"), tied to `stderr`
+# and to `autopilot enter`, in either clause order. Every gap is `[^.]`, so all
+# the halves sit inside ONE sentence and none can borrow a negation from the
+# sentence next door — a bare negation-near-`stderr` pin accepts "never omits
+# the per-marker stderr line", which states the exact opposite of the contract.
+# `_ENTER_DOES_EMIT` then sweeps for that inversion and its paraphrases.
 _MARKERS_HEADING = "### Clear inherited hand-off markers"
 _AFTER_MARKERS = _SURVIVING_HEADINGS[_SURVIVING_HEADINGS.index(_MARKERS_HEADING) + 1]
-_NO_STDERR_LINE = (
-    r"\b(?:no|not|never|without|omits?|omitting|skips?|suppress(?:es|ing)?|"
-    r"silent(?:ly)?)\b[\s\S]{0,90}stderr"
+_EMITS = (
+    r"emit(?:s|ted|ting)?|print(?:s|ed|ing)?|write|writes|wrote|written|writing|"
+    r"name(?:s|d)?|naming|report(?:s|ed|ing)?|log(?:s|ged|ging)?|"
+    r"echo(?:es|ed|ing)?"
 )
-_ENTER_WITHOUT_THE_STDERR_LINES = (
-    rf"(?i)`autopilot enter`[\s\S]{{0,120}}(?:{_NO_STDERR_LINE})"
-    rf"|(?:{_NO_STDERR_LINE})[\s\S]{{0,120}}`autopilot enter`"
+_NOTHING = r"no|none|nothing|without"
+_EMITS_NOTHING = (
+    rf"\b(?:{_EMITS})\b[^.]{{0,24}}\b(?:{_NOTHING})\b"
+    rf"|\b(?:{_NOTHING})\b[^.]{{0,24}}\b(?:{_EMITS})\b"
+)
+_ENTER_EMITS_NOTHING_ON_STDERR = (
+    rf"(?i)`autopilot enter`[^.]{{0,100}}(?:{_EMITS_NOTHING})[^.]{{0,60}}stderr"
+    rf"|(?:{_EMITS_NOTHING})[^.]{{0,60}}stderr[^.]{{0,100}}`autopilot enter`"
+)
+_ENTER_DOES_EMIT = (
+    r"(?i)`autopilot enter`[^.]{0,120}\b(?:never|not|n't)\s+"
+    r"(?:omit|omits|omitting|skip|skips|skipping|suppress|suppresses|"
+    r"suppressing|drop|drops|dropping)\b"
+    r"|`autopilot enter`[^.]{0,120}\b(?:repeats?|repeating|reproduces?|"
+    r"mirrors?|echoes|echoing|still\s+(?:prints?|names?|emits?))\b"
+    r"[^.]{0,80}stderr"
 )
 
 
@@ -315,14 +333,24 @@ def test_clear_markers_section_says_enter_emits_no_per_marker_stderr_line() -> N
     section = _prose(
         _section(_phase_0(), _PHASE_BUILD, _MARKERS_HEADING, _AFTER_MARKERS)
     )
+    where = f"the {_MARKERS_HEADING!r} section alone"
     _assert_matches(
         section,
         _PHASE_BUILD,
-        f"the {_MARKERS_HEADING!r} section alone",
-        _ENTER_WITHOUT_THE_STDERR_LINES,
-        "say `autopilot enter` performs this step WITHOUT the per-marker stderr "
-        "lines the hand-run script prints, so nobody hunts for a diagnostic the "
-        "one-call path never emits",
+        where,
+        _ENTER_EMITS_NOTHING_ON_STDERR,
+        "say in ONE sentence that `autopilot enter` performs this step while "
+        "emitting NO per-marker stderr line, so nobody hunts for a diagnostic "
+        "the one-call path never prints (the hand-run script above still does)",
+    )
+    _assert_no_match(
+        section,
+        _PHASE_BUILD,
+        where,
+        _ENTER_DOES_EMIT,
+        "which claims the one-call path DOES emit the per-marker stderr lines — "
+        "the inversion of the contract, and it sends an operator hunting stderr "
+        "for removal times that never appear there",
     )
 
 

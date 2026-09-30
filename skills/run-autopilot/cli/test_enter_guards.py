@@ -5,12 +5,21 @@ design-doc read, an unmapped do_park exit code, and a `prds_dir` with no
 grandparent. `enter()` promises exactly one dict naming where the session
 goes next, so every failure below has to arrive as a `stop`, never as a
 traceback. Split from test_enter.py for size; shares its Env harness.
+
+It also holds `cli/enter.py`'s import-hygiene pins — no import-time `sys.path`
+mutation, no `importlib`, the inherited marker tuple reached by a plain sibling
+import — which moved here from test_enter.py when that file ran out of room.
+The same contract is pinned twice: once over the parsed source, once as the
+measured effect on a fresh interpreter's `sys.path`.
 """
 
 from __future__ import annotations
 
+import ast
 import json
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -332,3 +341,88 @@ def test_a_park_marker_does_not_make_a_later_failure_a_park_halt(
     assert out["stop"] == "state_write_failed"
     assert "skips" in out["detail"]
     assert str(err) in out["detail"]
+
+
+# -- import hygiene ------------------------------------------------------------
+
+_SKILL_ROOT = Path(enter.__file__).resolve().parent.parent
+
+# Obligation 1 covers MODULE-LEVEL statements, so function and class bodies drop
+# out; every check below reads the parsed tree, so a comment or a docstring that
+# merely mentions `sys.path` cannot trip them.
+_SKIPPED_BODIES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+
+
+def _is_sys_path(node: ast.AST) -> bool:
+    if not isinstance(node, ast.Attribute) or node.attr != "path":
+        return False
+    return isinstance(node.value, ast.Name) and node.value.id == "sys"
+
+
+def _uses_importlib(node: ast.AST) -> bool:
+    if isinstance(node, (ast.Import, ast.ImportFrom)):
+        return "importlib" in ast.dump(node)
+    return isinstance(node, ast.Call) and "import_module" in ast.dump(node.func)
+
+
+def _imports_sibling_handoff(tree: ast.Module) -> bool:
+    """True if an import names the sibling `handoff` module: `from . import
+    handoff`, `from cli import handoff` or `from .handoff import MARKERS`."""
+    froms = [n for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)]
+    names = [a.name for n in froms if n.module in (None, "cli") for a in n.names]
+    modules = [n.module for n in froms]
+    return "handoff" in names or "handoff" in modules or "cli.handoff" in modules
+
+
+def test_enter_reads_its_marker_tuple_by_plain_import_of_its_own_package() -> None:
+    source = Path(enter.__file__)
+    tree = ast.parse(source.read_text(encoding="utf-8"))
+    import_time = ast.Module(
+        body=[n for n in tree.body if not isinstance(n, _SKIPPED_BODIES)],
+        type_ignores=[],
+    )
+    # Any module-level MENTION of `sys.path`, not an enumeration of mutation
+    # shapes: `sys.path[:0] = [...]`, `sys.path.insert(...)` and `sys.path = ...`
+    # differ only in syntax, and a module with no import-time search-path side
+    # effect has no reason to name `sys.path` at import time at all.
+    mentions = [n for n in ast.walk(import_time) if _is_sys_path(n)]
+    dynamic = [n for n in ast.walk(tree) if _uses_importlib(n)]
+
+    assert not mentions, (
+        f"{source}: a module-level statement names `sys.path` at import time, "
+        "so every importer of `cli.enter` gains a search-path entry that can "
+        "shadow a real module. Take the marker names from `cli.handoff.MARKERS`."
+    )
+    assert not dynamic, (
+        f"{source}: imports `importlib` or calls `importlib.import_module` — the "
+        "marker tuple must arrive by a plain package import."
+    )
+    assert _imports_sibling_handoff(tree), (
+        f"{source}: no import names the sibling `handoff` module, so the "
+        "inherited marker names cannot come from `cli.handoff.MARKERS`."
+    )
+
+
+def test_importing_enter_leaves_every_importers_sys_path_untouched() -> None:
+    # The measured effect, not the syntax: this also catches a mutation written
+    # through an alias (`import sys as _s; _s.path.insert(...)`), which the AST
+    # pin above cannot see. It has to run in a fresh interpreter because
+    # `cli.enter_harness` already puts scripts/ on THIS process's `sys.path`, so
+    # an in-process check could not tell which module put it there.
+    code = (
+        "import sys; "
+        f"sys.path.insert(0, {str(_SKILL_ROOT)!r}); "
+        "before = list(sys.path); "
+        "import cli.enter; "
+        "print('unchanged' if sys.path == before else sys.path[:3])"
+    )
+
+    proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == "unchanged", (
+        f"{Path(enter.__file__)}: importing `cli.enter` changed `sys.path` — it "
+        f"now starts {proc.stdout.strip()}. Import time must have no global side "
+        "effect: the inherited marker names come from `cli.handoff.MARKERS`, a "
+        "plain sibling module, so no search-path entry is needed to reach them."
+    )
