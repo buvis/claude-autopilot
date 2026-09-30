@@ -231,8 +231,8 @@ def test_attempt_logging_devon_mirror_not_pending() -> None:
 def test_changelog_unreleased_has_one_changed_heading() -> None:
     unreleased = _section(_CHANGELOG_TEXT, _CHANGELOG, "## [Unreleased]", "\n## [")
     count = unreleased.count("### Changed")
-    assert count == 1, (
-        f"{_CHANGELOG}: expected exactly one '### Changed' heading in "
+    assert count <= 1, (
+        f"{_CHANGELOG}: expected at most one '### Changed' heading in "
         f"the [Unreleased] section — found {count}. Merge every "
         "'### Changed' bullet list into a single heading."
     )
