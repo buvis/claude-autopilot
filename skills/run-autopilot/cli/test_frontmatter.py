@@ -6,10 +6,17 @@ an invalid value falls back AND warns, an absent field falls back SILENTLY,
 and a malformed or missing block takes every default with exactly ONE warning.
 The golden fixture is parsed here too, so the fixture and the parser fail
 together if either drifts.
+
+The last section covers `apply`, the module's one I/O-owning function: the
+reset lines it computes from the pre-write state, and the `on_warning`
+callback that lets a caller print a warning it would otherwise lose when the
+write fails.
 """
 
 from __future__ import annotations
 
+import inspect
+import json
 import unittest
 from pathlib import Path
 
@@ -257,6 +264,97 @@ class GoldenFixtureTests(unittest.TestCase):
                 "pause_on_ambiguity": True,
             },
         )
+
+
+# -- apply: the non-printing core of the `frontmatter` verb --------------------
+#
+# pytest functions rather than TestCase methods: these need `tmp_path`, which
+# cannot be injected into a unittest method.
+
+
+def _state_file(tmp_path: Path, **fields: object) -> Path:
+    path = tmp_path / "state.json"
+    path.write_text(
+        json.dumps({"phase": "build", "next_phase": "build", **fields}),
+        encoding="utf-8",
+    )
+    return path
+
+
+def _prd_file(tmp_path: Path, *lines: str) -> Path:
+    path = tmp_path / "00090-example-v1.md"
+    path.write_text(_block(*lines), encoding="utf-8")
+    return path
+
+
+def test_apply_returns_the_reset_lines_beside_the_fields_and_warnings(
+    tmp_path: Path,
+) -> None:
+    # The reset diagnostics are a THIRD return value, not extra warnings: a
+    # caller that prints warnings before the write and resets after it needs
+    # the two lists apart.
+    state_path = _state_file(tmp_path, rework_cap=5)
+    prd = _prd_file(tmp_path, "rework_cap: 2")
+
+    fields, warnings, resets = frontmatter.apply(prd, state_path)
+
+    assert fields["rework_cap"] == 2
+    assert resets == ["autopilot: PRD frontmatter reset rework_cap 5 -> 2"]
+    assert warnings == [], "a reset is not a parse warning"
+
+
+def test_apply_reports_no_resets_when_the_state_already_held_the_value(
+    tmp_path: Path,
+) -> None:
+    state_path = _state_file(tmp_path, rework_cap=2)
+    prd = _prd_file(tmp_path, "rework_cap: 2")
+
+    _fields, _warnings, resets = frontmatter.apply(prd, state_path)
+
+    assert resets == [], "writing the same value back is not a reset"
+
+
+def test_apply_hands_every_warning_line_to_on_warning(tmp_path: Path) -> None:
+    state_path = _state_file(tmp_path)
+    prd = _prd_file(tmp_path, "catchup: sometimes", "doubt_reviewer: gemini")
+    seen: list[str] = []
+
+    _fields, warnings, _resets = frontmatter.apply(
+        prd, state_path, on_warning=seen.append,
+    )
+
+    assert len(warnings) == 2, warnings
+    assert seen == warnings, "every returned line reaches the callback, in order"
+
+
+def test_apply_calls_on_warning_before_it_writes_state(tmp_path: Path) -> None:
+    # This ordering is the whole point of the callback: the verb has to have
+    # printed the warnings by the time a failing write aborts the call.
+    state_path = _state_file(tmp_path, catchup_mode="skip")
+    prd = _prd_file(tmp_path, "catchup: force", "doubt_reviewer: gemini")
+    snapshots: list[str] = []
+
+    frontmatter.apply(
+        prd,
+        state_path,
+        on_warning=lambda _line: snapshots.append(
+            state_path.read_text(encoding="utf-8"),
+        ),
+    )
+
+    assert snapshots, "an invalid doubt_reviewer must produce a warning"
+    for snapshot in snapshots:
+        assert "force" not in snapshot, "the warning arrived after the write"
+    assert "force" in state_path.read_text(encoding="utf-8")
+
+
+def test_apply_keeps_two_positional_arguments_and_a_keyword_only_callback() -> None:
+    # `enter()` calls apply(prd_path, state_path) with no callback, so the new
+    # parameter has to be optional and must not take a positional slot.
+    parameters = inspect.signature(frontmatter.apply).parameters
+    assert list(parameters) == ["prd_path", "state_path", "on_warning"]
+    assert parameters["on_warning"].default is None
+    assert parameters["on_warning"].kind is inspect.Parameter.KEYWORD_ONLY
 
 
 if __name__ == "__main__":

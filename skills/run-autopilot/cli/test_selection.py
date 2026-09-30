@@ -6,12 +6,19 @@ unreachable. The last one is asserted structurally (on the signature) because
 "the function never scans hold/" is a claim about what it CAN do, and a test
 that only checks it did not scan hold this time would pass for a function that
 grew a `hold` parameter tomorrow.
+
+The last section covers `select_eligible`, the one I/O-owning function here:
+its single-argument signature, where it runs the `eligibility:` check, and the
+docstring claim that the rest of the module is pure.
 """
 
 from __future__ import annotations
 
 import inspect
 import unittest
+from pathlib import Path
+
+import pytest
 
 from cli import selection
 
@@ -100,6 +107,77 @@ class SelectTests(unittest.TestCase):
             "select() must take only wip and backlog; a hold parameter would "
             "make the parked/deferred exclusion optional",
         )
+
+
+# -- select_eligible: the I/O-owning core both verbs call ----------------------
+#
+# pytest functions rather than TestCase methods: these need `tmp_path`, which
+# cannot be injected into a unittest method.
+
+
+def _backlog_prd(prds_dir: Path, name: str, command: str) -> None:
+    (prds_dir / "backlog").mkdir(parents=True, exist_ok=True)
+    (prds_dir / "backlog" / name).write_text(
+        f'---\neligibility: "{command}"\n---\n\n# PRD\n',
+        encoding="utf-8",
+    )
+
+
+def test_select_eligible_takes_the_prds_dir_as_its_only_argument() -> None:
+    # One argument means one derivation of the check's working directory. While
+    # the caller supplied it, two callers derived it two different ways and the
+    # same PRD's check could run from two different directories.
+    assert list(inspect.signature(selection.select_eligible).parameters) == ["prds_dir"]
+
+
+@pytest.mark.parametrize(
+    ("marker_at_the_derived_root", "expected"),
+    [(True, ("00090-gated-v1.md", "backlog", 0)), (False, (None, "drained", 1))],
+    ids=["marker-at-the-derived-root", "marker-in-the-prds-dir"],
+)
+def test_the_eligibility_check_runs_from_the_directory_the_prds_dir_derives(
+    tmp_path: Path,
+    marker_at_the_derived_root: bool,
+    expected: tuple[str | None, str, int],
+) -> None:
+    # `prds_dir` alone names that directory: resolve it, then take parents[3]
+    # (for `<root>/docs/dev/project-management/prds` that is `<root>`). The
+    # check succeeds only where `marker.txt` is, so this measures where it RAN.
+    prds_dir = tmp_path / "a" / "b" / "c" / "d" / "prds"
+    _backlog_prd(prds_dir, "00090-gated-v1.md", "test -f marker.txt")
+    derived_root = prds_dir.resolve().parents[3]
+    marker_dir = derived_root if marker_at_the_derived_root else prds_dir
+    (marker_dir / "marker.txt").write_text("x", encoding="utf-8")
+
+    prd, source, skips = selection.select_eligible(prds_dir)
+
+    assert (prd, source, len(skips)) == expected
+
+
+def test_a_skip_entry_leaves_the_at_stamp_to_the_caller(tmp_path: Path) -> None:
+    # The helper prints nothing and stamps nothing: `autopilot select` adds the
+    # `at` key itself, so the helper's entry must not already carry one.
+    _backlog_prd(tmp_path / "prds", "00090-blocked-v1.md", "exit 3")
+
+    prd, source, skips = selection.select_eligible(tmp_path / "prds")
+
+    assert (prd, source) == (None, "drained")
+    assert [set(entry) for entry in skips] == [{"prd", "command", "exit_code", "note"}]
+    assert (skips[0]["command"], skips[0]["exit_code"]) == ("exit 3", 3)
+
+
+def test_the_module_docstring_does_not_claim_purity_it_does_not_have() -> None:
+    # `select_eligible` lists directories, reads PRDs and shells out through
+    # `from cli import eligibility`. An unqualified "PURE: ... never paths"
+    # header tells a reader the opposite of what the module does.
+    doc = selection.__doc__ or ""
+    assert doc.strip(), "the module keeps a docstring"
+    for paragraph in doc.split("\n\n"):
+        if "PURE" in paragraph:
+            assert "select_eligible" in paragraph, (
+                "a surviving purity claim must name its exception in the same "
+                f"breath; this one does not:\n{paragraph}"
+            )
 
 
 if __name__ == "__main__":
