@@ -17,10 +17,18 @@ from __future__ import annotations
 
 import inspect
 import json
+import os
 import unittest
 from pathlib import Path
 
+import pytest
+
 from cli import frontmatter
+
+_ROOT_IGNORES_MODES = pytest.mark.skipif(
+    hasattr(os, "geteuid") and os.geteuid() == 0,
+    reason="root ignores directory modes, so the write cannot be made to fail",
+)
 
 GOLDEN = Path(__file__).resolve().parent.parent / "scripts" / "golden"
 
@@ -303,6 +311,24 @@ def test_apply_returns_the_reset_lines_beside_the_fields_and_warnings(
     assert warnings == [], "a reset is not a parse warning"
 
 
+def test_apply_reports_one_reset_line_per_field_whose_value_changed(
+    tmp_path: Path,
+) -> None:
+    # A second key, and no number shared with the case above: a `resets` list
+    # built by matching one hardcoded key/value pair in the raw state text
+    # passes that test and silently reports nothing for every other field.
+    state_path = _state_file(tmp_path, rework_cap=4, catchup_mode="skip")
+    prd = _prd_file(tmp_path, "rework_cap: 3", "catchup: force")
+
+    _fields, warnings, resets = frontmatter.apply(prd, state_path)
+
+    assert sorted(resets) == [
+        "autopilot: PRD frontmatter reset catchup_mode skip -> force",
+        "autopilot: PRD frontmatter reset rework_cap 4 -> 3",
+    ]
+    assert warnings == [], "a reset is not a parse warning"
+
+
 def test_apply_reports_no_resets_when_the_state_already_held_the_value(
     tmp_path: Path,
 ) -> None:
@@ -315,16 +341,48 @@ def test_apply_reports_no_resets_when_the_state_already_held_the_value(
 
 
 def test_apply_hands_every_warning_line_to_on_warning(tmp_path: Path) -> None:
+    # `lane: garbage` earns a warning the PARSE never produces, so the list is
+    # not just the parse warnings: `seen == warnings` would hold vacuously for
+    # a callback fed only from `parse`, which is the one class of warning the
+    # callback exists to carry.
     state_path = _state_file(tmp_path)
-    prd = _prd_file(tmp_path, "catchup: sometimes", "doubt_reviewer: gemini")
+    prd = _prd_file(
+        tmp_path, "catchup: sometimes", "doubt_reviewer: gemini", "lane: garbage",
+    )
     seen: list[str] = []
 
     _fields, warnings, _resets = frontmatter.apply(
         prd, state_path, on_warning=seen.append,
     )
 
-    assert len(warnings) == 2, warnings
+    assert len(warnings) == 3, warnings
+    assert any("lane=" in line for line in warnings), warnings
     assert seen == warnings, "every returned line reaches the callback, in order"
+
+
+@_ROOT_IGNORES_MODES
+def test_apply_hands_the_lane_warning_to_on_warning_before_a_failing_write(
+    tmp_path: Path,
+) -> None:
+    # The guarantee the callback was added for: the state directory refuses new
+    # files, so the write raises after the parse and the lane classification
+    # already happened, and the caller must still have been told.
+    prd = _prd_file(tmp_path, "lane: garbage")
+    sealed = tmp_path / "sealed"
+    sealed.mkdir()
+    state_path = sealed / "state.json"
+    state_path.write_text(
+        json.dumps({"phase": "build", "next_phase": "build"}), encoding="utf-8",
+    )
+    seen: list[str] = []
+    sealed.chmod(0o555)
+    try:
+        with pytest.raises(OSError):
+            frontmatter.apply(prd, state_path, on_warning=seen.append)
+    finally:
+        sealed.chmod(0o755)
+
+    assert any("lane=" in line for line in seen), seen
 
 
 def test_apply_calls_on_warning_before_it_writes_state(tmp_path: Path) -> None:

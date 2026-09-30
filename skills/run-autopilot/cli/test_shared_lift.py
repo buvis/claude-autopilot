@@ -9,6 +9,10 @@ ordering) so a refactor cannot change any of it quietly, plus the two bindings
 that only hold once the lift is finished - the verb's skip record is the
 helper's entry plus its own `at` stamp, and `enter()` carries the reset lines.
 
+It also pins the lift itself, which no amount of output-comparing can: each
+verb's whole answer comes from ONE call to the shared helper, and the private
+helpers the inline copies needed are gone from `__main__.py`.
+
 It lives beside `test_lifecycle_cli.py` (630 lines) and `test_cli.py` (758)
 rather than inside them: both are near the 800-line ceiling.
 
@@ -29,7 +33,8 @@ from pathlib import Path
 
 import pytest
 
-from cli import notify_out, selection
+from cli import __main__ as cli_main
+from cli import frontmatter, notify_out, selection
 from cli.enter_harness import OTHER, PRD, Env, _open_state, _prd_text, run_cli
 
 CLI_DIR = Path(__file__).resolve().parent
@@ -57,6 +62,84 @@ def _frontmatter(env: Env, prd: Path) -> subprocess.CompletedProcess:
     return run_cli(
         env, "frontmatter", "--state", str(env.state_path), "--prd", str(prd),
     )
+
+
+# -- the verbs delegate, rather than keeping a second copy ---------------------
+#
+# Driven in-process (`main(argv)`) rather than as a subprocess: a spy on the
+# shared helper is what proves the verb CALLS it, and no amount of comparing
+# one tree's output can tell one call from two agreeing copies.
+
+
+def test_the_select_verb_gets_its_whole_answer_from_the_shared_helper(
+    env: Env,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    # The tree holds a PRD whose check fails, so a verb still running its own
+    # eligibility loop would print a skip entry the helper never returned.
+    env.put("backlog", PRD, _prd_text(eligibility='"exit 3"'))
+    calls: list[tuple] = []
+
+    def spy(*args: object, **kwargs: object) -> tuple:
+        calls.append((args, kwargs))
+        return None, "drained", []
+
+    monkeypatch.setattr(selection, "select_eligible", spy)
+
+    code = cli_main.main(["select", "--prds", str(env.prds_dir)])
+
+    assert code == 0
+    assert calls == [((env.prds_dir,), {})], calls
+    assert json.loads(capsys.readouterr().out) == {
+        "prd": None,
+        "source": "drained",
+        "skipped": [],
+    }
+
+
+def test_the_frontmatter_verb_gets_its_whole_answer_from_the_shared_helper(
+    env: Env,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    # `lane: garbage` would earn a warning from any inline copy of the parse,
+    # and the PRD's rework_cap is not the one the helper returns: an empty
+    # stderr and the helper's own fields are what a thin caller produces.
+    env.write_state(_open_state())
+    prd = env.put("wip", PRD, _prd_text(rework_cap="4", lane="garbage"))
+    applied = {"lane": "solo", "rework_cap": 9}
+    calls: list[tuple] = []
+
+    def spy(*args: object, **kwargs: object) -> tuple:
+        calls.append(args)
+        return dict(applied), [], []
+
+    monkeypatch.setattr(frontmatter, "apply", spy)
+
+    code = cli_main.main(
+        ["frontmatter", "--state", str(env.state_path), "--prd", str(prd)],
+    )
+
+    assert code == 0
+    assert calls == [(prd, env.state_path)], calls
+    captured = capsys.readouterr()
+    assert json.loads(captured.out) == applied
+    assert captured.err == "", captured.err
+
+
+@pytest.mark.parametrize(
+    "orphan",
+    ["_listdir", "_prd_text", "_project_root", "_lane_fields", "eligibility.evaluate"],
+)
+def test_no_inline_copy_of_the_lifted_logic_survives_in_the_cli(orphan: str) -> None:
+    # These four helpers exist only to serve the two inline copies; once the
+    # verbs call the shared helpers they are orphans, and an orphan left in
+    # place is the next caller's invitation to diverge again. The direct
+    # `eligibility.evaluate` call is the copy itself.
+    source = (CLI_DIR / "__main__.py").read_text(encoding="utf-8")
+
+    assert orphan not in source, f"{orphan} still lives in cli/__main__.py"
 
 
 # -- `autopilot select`: the skip record --------------------------------------

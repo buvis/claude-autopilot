@@ -154,6 +154,45 @@ def test_the_eligibility_check_runs_from_the_directory_the_prds_dir_derives(
     assert (prd, source, len(skips)) == expected
 
 
+def test_a_relative_prds_dir_derives_an_absolute_check_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # `--prds prds` is a legal argument. Deriving the directory by chopping
+    # components off the RAW string leaves nothing, and every check then runs
+    # from the filesystem root; resolving first is what the contract says.
+    deep = tmp_path / "a" / "b" / "c" / "d"
+    prds_dir = deep / "prds"
+    _backlog_prd(prds_dir, "00090-gated-v1.md", "test -f marker.txt")
+    (tmp_path / "a" / "marker.txt").write_text("x", encoding="utf-8")
+    monkeypatch.chdir(deep)
+
+    prd, source, skips = selection.select_eligible(Path("prds"))
+
+    assert (prd, source, skips) == ("00090-gated-v1.md", "backlog", [])
+
+
+def test_the_check_runs_from_the_resolved_root_when_a_parent_is_a_symlink(
+    tmp_path: Path,
+) -> None:
+    # Symlinked-in prds trees are the case a missing `.resolve()` survives: the
+    # lexical parent chain names one real directory and the resolved one names
+    # another, and only the resolved root holds the marker.
+    real = tmp_path / "real" / "p" / "q" / "r"
+    _backlog_prd(real / "prds", "00090-gated-v1.md", "test -f marker.txt")
+    link_parent = tmp_path / "s" / "t" / "u"
+    link_parent.mkdir(parents=True)
+    (link_parent / "link").symlink_to(real, target_is_directory=True)
+    prds_dir = link_parent / "link" / "prds"
+    derived_root = prds_dir.resolve().parents[3]
+    assert derived_root != prds_dir.parents[3], "the symlink must change the answer"
+    (derived_root / "marker.txt").write_text("x", encoding="utf-8")
+
+    prd, source, skips = selection.select_eligible(prds_dir)
+
+    assert (prd, source, skips) == ("00090-gated-v1.md", "backlog", [])
+
+
 def test_a_skip_entry_leaves_the_at_stamp_to_the_caller(tmp_path: Path) -> None:
     # The helper prints nothing and stamps nothing: `autopilot select` adds the
     # `at` key itself, so the helper's entry must not already carry one.
@@ -166,18 +205,25 @@ def test_a_skip_entry_leaves_the_at_stamp_to_the_caller(tmp_path: Path) -> None:
     assert (skips[0]["command"], skips[0]["exit_code"]) == ("exit 3", 3)
 
 
+_EXCEPTION_WORDS = ("takes a path", "lists", "I/O", "shells out", "runs")
+
+
 def test_the_module_docstring_does_not_claim_purity_it_does_not_have() -> None:
     # `select_eligible` lists directories, reads PRDs and shells out through
-    # `from cli import eligibility`. An unqualified "PURE: ... never paths"
-    # header tells a reader the opposite of what the module does.
+    # `from cli import eligibility`. Two specific claims are therefore banned
+    # rather than the whole word PURE: the module cannot say it never takes a
+    # path, and the exception has to be stated AS an exception - named next to
+    # what it actually does, not smuggled in as a trailing aside.
     doc = selection.__doc__ or ""
     assert doc.strip(), "the module keeps a docstring"
-    for paragraph in doc.split("\n\n"):
-        if "PURE" in paragraph:
-            assert "select_eligible" in paragraph, (
-                "a surviving purity claim must name its exception in the same "
-                f"breath; this one does not:\n{paragraph}"
-            )
+    assert "never paths" not in doc, f"the module does take a path:\n{doc}"
+    paragraphs = [p for p in doc.split("\n\n") if "select_eligible" in p]
+    assert any(
+        word in paragraph for paragraph in paragraphs for word in _EXCEPTION_WORDS
+    ), (
+        "some paragraph must name select_eligible beside what it does to the "
+        f"filesystem, one of {_EXCEPTION_WORDS}; none does:\n{doc}"
+    )
 
 
 if __name__ == "__main__":
