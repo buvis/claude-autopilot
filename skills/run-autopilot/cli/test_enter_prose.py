@@ -444,6 +444,79 @@ def test_the_selection_pointer_names_step_6_as_outside_enter() -> None:
     )
 
 
+# The `batch_init` rule, as the stop-table row must carry it. `\bid\b` reaches
+# `id`, `` `id` `` and `batch.id` alike, and every gap is `[^|]` so a match
+# stays inside the row's own cells instead of borrowing the cell next door.
+_NO_STRING_ID = (
+    r"(?:no|not|non-?)[^|]{0,14}string[^|]{0,24}\bid\b"
+    r"|\bid\b[^|]{0,24}(?:no|not|non-?)[^|]{0,14}string"
+)
+_ABSENT_WITHOUT_A_STRING_ID = (
+    rf"(?i)(?:{_NO_STRING_ID})[^|]{{0,80}}absent"
+    rf"|absent[^|]{{0,80}}(?:{_NO_STRING_ID})"
+)
+_MINTING_KEEPS_SKIPS = (
+    r"(?i)(?:preserv|keep|kept|retain|carr(?:y|ies|ied)|merg)[^|]{0,40}skips"
+    r"|skips[^|]{0,40}(?:preserv|keep|kept|retain|carr(?:y|ies|ied)|merg|surviv)"
+)
+
+# The same rule as § "Normal PRD selection" step 3 must state it. A numbered
+# step wraps, so the gaps allow newlines on a character budget; `[^.]` cannot
+# serve as the gap here because `state.batch.id` itself holds periods.
+_ID_IS_A_STRING = r"\bid\b[\s\S]{0,40}string|string[\s\S]{0,40}\bid\b"
+_PRESENT_MEANS_A_STRING_ID = (
+    rf"(?i)present[\s\S]{{0,120}}(?:{_ID_IS_A_STRING})"
+    rf"|(?:{_ID_IS_A_STRING})[\s\S]{{0,120}}present"
+)
+_FORBIDS = r"(?:never|not|n't|rather than|instead of|without|forbidden|prohibited)"
+_NEVER_REPLACES_THE_BATCH_OBJECT = (
+    rf"(?i){_FORBIDS}[\s\S]{{0,40}}(?:replac|overwrit|clobber)[\s\S]{{0,40}}\bbatch\b"
+    rf"|(?:replac|overwrit|clobber)[\s\S]{{0,40}}\bbatch\b[\s\S]{{0,40}}{_FORBIDS}"
+)
+
+# What each half must do, and why it is worth a pin. Named here so the pin
+# below reads as four obligations against two scopes.
+_ABSENT_WHAT = (
+    "say a `state.batch` with no string `id` counts as ABSENT however many "
+    "other keys it holds. An operator who reads presence as mere key existence "
+    "mints nothing, re-runs the call, and stops at this same halt forever"
+)
+_SKIPS_WHAT = (
+    "say minting PRESERVES any existing `batch.skips`. A selection pass that "
+    "recorded eligibility skips leaves a `batch` holding only `skips`, and "
+    "minting a whole new object destroys those records"
+)
+_PRESENT_WHAT = (
+    "define 'already present' as `state.batch.id` holding a string, not as the "
+    "`batch` key merely existing. A skips-only `batch` reads present to that "
+    "operator, who then mints nothing"
+)
+_NO_REPLACE_WHAT = (
+    "forbid replacing the whole `batch` object when it mints, because a fresh "
+    "object drops the `batch.skips` already persisted there"
+)
+_STEP_3_LEAD = "3. Initialize `batch`"
+
+
+def test_a_batch_with_no_string_id_counts_as_absent_and_minting_keeps_skips() -> None:
+    rows = _stop_table_rows(_enter_section())
+    row = next((r for r in rows if _first_cell(r) == "batch_init"), None)
+    assert row is not None, (
+        f"{_PHASE_BUILD}: {_ENTER_HEADING!r}'s stop-value table has no row whose "
+        f"FIRST COLUMN is `batch_init` — found {[_first_cell(r) for r in rows]!r}."
+    )
+    step_3 = _prose(_section(_selection_section(), _PHASE_BUILD, _STEP_3_LEAD, "\n4. "))
+    row_where = f"the `batch_init` row of {_ENTER_HEADING!r}'s stop-value table"
+    step_where = f"step 3 of {_SELECTION_HEADING!r} alone"
+    for scope, where, pattern, what in (
+        (row, row_where, _ABSENT_WITHOUT_A_STRING_ID, _ABSENT_WHAT),
+        (row, row_where, _MINTING_KEEPS_SKIPS, _SKIPS_WHAT),
+        (step_3, step_where, _PRESENT_MEANS_A_STRING_ID, _PRESENT_WHAT),
+        (step_3, step_where, _NEVER_REPLACES_THE_BATCH_OBJECT, _NO_REPLACE_WHAT),
+    ):
+        _assert_matches(scope, _PHASE_BUILD, where, pattern, what)
+
+
 def test_enter_mirrors_the_design_gate_awk_regex() -> None:
     # `enter._DISPATCH_RE` is a hand-mirrored port of the `awk` body pinned in
     # core SKILL.md's design-gate invariant. Editing one without the other lets
