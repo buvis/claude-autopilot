@@ -11,6 +11,7 @@ each with a failure message naming what drifted.
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 
 _SCRIPTS_DIR = Path(__file__).resolve().parent
@@ -30,6 +31,29 @@ _IVAN_AGENT_TEXT = _IVAN_AGENT.read_text()
 _ADVERSARIAL_TEST_PROMPT = _WORK_DIR / "references" / "adversarial-test-prompt.md"
 _ADVERSARIAL_TEXT = _ADVERSARIAL_TEST_PROMPT.read_text()
 
+_TESS_RETRY_PROMPT = _WORK_DIR / "references" / "tess-retry-prompt.md"
+_TESS_RETRY_PROMPT_TEXT = _TESS_RETRY_PROMPT.read_text()
+
+_MODULE_PATH = _SCRIPTS_DIR / "render_prompt.py"
+_SPEC = importlib.util.spec_from_file_location("render_prompt", _MODULE_PATH)
+assert _SPEC is not None and _SPEC.loader is not None
+render_prompt = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(render_prompt)
+
+# The complete narrow-test-run sentence, verbatim, as it appears in every
+# pinned file below — held once so every test asserts against this same
+# literal text instead of a prefix or a file-vs-file comparison.
+NARROW = (
+    "Run only the test files this task names (the tests you wrote, or the "
+    "failing tests in your prompt), with `-q --tb=line`. Never run a whole "
+    "test directory or `dev/bin/release-checks`: the orchestrator runs the "
+    "full suite once, after every task. Read the pass count and exit code "
+    "from that one run; never re-run a suite to recover a number."
+)
+
+# The paragraph NARROW must directly follow in the dispatch-prologue files.
+_ANCHOR = "Read every file before your first Edit to it."
+
 
 def _norm(text: str) -> str:
     """Collapse every run of whitespace (including line-wrap newlines) to a
@@ -38,50 +62,109 @@ def _norm(text: str) -> str:
     return " ".join(text.split())
 
 
-def test_tess_and_ivan_carry_the_narrow_sentence() -> None:
-    anchor = _norm("Read every file before your first Edit to it.")
-    narrow_start = _norm(
-        "Run only the test files this task names (the tests you wrote, "
-        "or the failing tests in your prompt)"
+def _section(
+    text: str, path: Path, start_anchor: str, end_anchor: str | None = None
+) -> str:
+    """Slice `text` from `start_anchor` up to `end_anchor`, or to the end of
+    `text` when `end_anchor` is None — for a section that is the last one in
+    its file, so there is no next heading to bound it against.
+
+    Asserts `start_anchor` is present (and, when given, that `end_anchor`
+    follows it) first, naming `path` and the missing anchor, so a drifted
+    heading fails loudly instead of raising a bare `ValueError: substring
+    not found`.
+    """
+    assert start_anchor in text, (
+        f"{path}: expected section anchor {start_anchor!r} — not found."
+    )
+    start = text.index(start_anchor)
+    if end_anchor is None:
+        return text[start:]
+    assert end_anchor in text[start:], (
+        f"{path}: expected section anchor {end_anchor!r} after "
+        f"{start_anchor!r} — not found."
+    )
+    end = text.index(end_anchor, start)
+    return text[start:end]
+
+
+def _assert_narrow_once_and_adjacent(text: str, path: Path) -> None:
+    """Assert NARROW appears exactly once in `text` and, split on blank
+    lines, is the paragraph immediately following the one starting with
+    `_ANCHOR` — adjacency, not merely ordering."""
+    norm_text = _norm(text)
+    norm_narrow = _norm(NARROW)
+    count = norm_text.count(norm_narrow)
+    assert count == 1, (
+        f"{path}: expected the NARROW sentence exactly once — found {count}."
     )
 
-    def _paragraph(text: str, path: Path) -> str:
-        norm_text = _norm(text)
-        assert anchor in norm_text, f"{path}: expected {anchor!r} — not found."
-        assert narrow_start in norm_text, (
-            f"{path}: expected the narrow-run paragraph starting "
-            f"{narrow_start!r} — not found."
-        )
-        assert norm_text.index(narrow_start) > norm_text.index(anchor), (
-            f"{path}: expected the narrow-run paragraph to come directly "
-            f"after {anchor!r} — found before it instead."
-        )
-        for para in text.split("\n\n"):
-            if _norm(para).startswith(narrow_start):
-                return para
-        raise AssertionError(
-            f"{path}: found the narrow-run paragraph in the normalized "
-            "whole-file text but could not locate it as a standalone "
-            "paragraph split on a blank line."
-        )
+    paragraphs = text.split("\n\n")
+    norm_anchor = _norm(_ANCHOR)
+    anchor_index = next(
+        (i for i, p in enumerate(paragraphs) if _norm(p).startswith(norm_anchor)),
+        None,
+    )
+    narrow_index = next(
+        (i for i, p in enumerate(paragraphs) if _norm(p).startswith(norm_narrow)),
+        None,
+    )
+    assert anchor_index is not None, (
+        f"{path}: expected a standalone paragraph starting {_ANCHOR!r} — "
+        "not found."
+    )
+    assert narrow_index is not None, (
+        f"{path}: expected a standalone paragraph starting with the NARROW "
+        "sentence — not found."
+    )
+    assert narrow_index == anchor_index + 1, (
+        f"{path}: expected the NARROW paragraph directly after the "
+        f"{_ANCHOR!r} paragraph (adjacent) — found it out of place "
+        "(ordering without adjacency)."
+    )
 
-    ivan_paragraph = _paragraph(_IVAN_AGENT_TEXT, _IVAN_AGENT)
-    tess_paragraph = _paragraph(_TESS_PROMPT_TEXT, _TESS_PROMPT)
-    assert _norm(ivan_paragraph) == _norm(tess_paragraph), (
-        f"{_IVAN_AGENT} and {_TESS_PROMPT}: the narrow-run paragraph "
-        "differs between the two files — expected verbatim text "
-        "(ignoring markdown line-wrap whitespace)."
+
+def test_tess_and_ivan_carry_the_narrow_sentence() -> None:
+    for text, path in (
+        (_IVAN_AGENT_TEXT, _IVAN_AGENT),
+        (_TESS_PROMPT_TEXT, _TESS_PROMPT),
+    ):
+        _assert_narrow_once_and_adjacent(text, path)
+
+
+def test_tess_retry_prompt_carries_the_narrow_sentence() -> None:
+    _assert_narrow_once_and_adjacent(_TESS_RETRY_PROMPT_TEXT, _TESS_RETRY_PROMPT)
+
+
+def test_adversarial_prompt_carries_narrow_in_feedback_section() -> None:
+    norm_narrow = _norm(NARROW)
+    count = _norm(_ADVERSARIAL_TEXT).count(norm_narrow)
+    assert count == 1, (
+        f"{_ADVERSARIAL_TEST_PROMPT}: expected the NARROW sentence exactly "
+        f"once in the file — found {count}."
+    )
+    feedback_section = _section(
+        _ADVERSARIAL_TEXT,
+        _ADVERSARIAL_TEST_PROMPT,
+        "## Feedback to Tess (when Devon succeeds)",
+    )
+    assert norm_narrow in _norm(feedback_section), (
+        f"{_ADVERSARIAL_TEST_PROMPT}: expected the NARROW sentence inside "
+        "the 'Feedback to Tess' fenced template — not found there."
     )
 
 
 def test_devon_runner_is_the_tasks_test_files() -> None:
-    norm_text = _norm(_ADVERSARIAL_TEXT)
-    assert _norm("runs ONLY this task's test files") in norm_text, (
-        f"{_ADVERSARIAL_TEST_PROMPT}: expected \"runs ONLY this task's "
-        'test files" in the Test runner command placeholder — not '
-        "found. It appears to have drifted or been removed."
+    runner_line = _section(
+        _ADVERSARIAL_TEXT, _ADVERSARIAL_TEST_PROMPT, "Test runner command:", "\n"
     )
-    assert _norm("e.g. npm test, pytest, cargo test") not in norm_text, (
+    assert _norm("runs ONLY this task's test files") in _norm(runner_line), (
+        f"{_ADVERSARIAL_TEST_PROMPT}: expected \"runs ONLY this task's "
+        'test files" on the Test runner command line — not found there.'
+    )
+    assert _norm("e.g. npm test, pytest, cargo test") not in _norm(
+        _ADVERSARIAL_TEXT
+    ), (
         f"{_ADVERSARIAL_TEST_PROMPT}: found the old generic runner-"
         "command placeholder 'e.g. npm test, pytest, cargo test' — it "
         "should have been replaced by the narrow, task-scoped wording."
@@ -89,23 +172,75 @@ def test_devon_runner_is_the_tasks_test_files() -> None:
 
 
 def test_devon_rules_forbid_a_directory_run() -> None:
+    rules_section = _section(
+        _ADVERSARIAL_TEXT, _ADVERSARIAL_TEST_PROMPT, "Rules:", "Output format:"
+    )
     needle = _norm(
         "Run only the test runner command above, once per exploit; "
         "never a whole test directory."
     )
+    normalized = _norm(rules_section).rstrip()
+    assert normalized.endswith(needle), (
+        f"{_ADVERSARIAL_TEST_PROMPT}: expected the Devon Rules list to end "
+        f"with {needle!r} as its last rule — not found there."
+    )
+
+
+def test_devon_context_selection_includes_test_runner_row() -> None:
+    needle = _norm(
+        "| Test runner command (the task's test files only) | So Devon "
+        "can verify exploits without a full-suite run per attempt |"
+    )
     assert needle in _norm(_ADVERSARIAL_TEXT), (
-        f"{_ADVERSARIAL_TEST_PROMPT}: expected the Devon Rules list to "
-        f"end with {needle!r} — not found."
+        f"{_ADVERSARIAL_TEST_PROMPT}: expected the Context Selection table "
+        f"row {needle!r} — not found."
     )
 
 
 def test_work_skill_names_rework_mode() -> None:
-    needle = _norm(
+    sentence_one = _norm(
+        "The full suite runs once at the end (why: "
+        "`references/design-rationale.md` § narrow verification)."
+    )
+    sentence_two = _norm(
         "This holds in rework mode and for every subagent prompt (Tess, "
         "Devon, Ivan): each carries the same narrow-run sentence."
     )
+    needle = f"{sentence_one} {sentence_two}"
     assert needle in _norm(_SKILL_TEXT), (
-        f"{_SKILL_MD}: expected {needle!r} — not found. The rework-mode "
-        "prose pin for the narrow-run sentence appears to have drifted "
-        "or been removed."
+        f"{_SKILL_MD}: expected {needle!r} directly adjacent — not found. "
+        "The rework-mode sentence has drifted away from directly "
+        "following 'The full suite runs once at the end...'."
+    )
+
+
+def test_render_tess_prompt_contains_narrow_once(tmp_path: Path) -> None:
+    out_path = tmp_path / "out.txt"
+    exit_code = render_prompt.main(
+        [
+            str(_TESS_PROMPT),
+            "--out",
+            str(out_path),
+            "--set",
+            "TASK_SUBJECT=x",
+            "--set",
+            "TASK_DESCRIPTION=x",
+            "--set",
+            "TASK_ACCEPTANCE_CRITERIA=x",
+            "--set",
+            "SAMPLE_TEST_FILE=x",
+            "--set",
+            "PUBLIC_INTERFACES=x",
+            "--set",
+            "TEST_FRAMEWORK=x",
+        ]
+    )
+    assert exit_code == 0, f"{_TESS_PROMPT}: render_prompt.py exited {exit_code}."
+
+    norm_narrow = _norm(NARROW)
+    rendered = _norm(out_path.read_text())
+    count = rendered.count(norm_narrow)
+    assert count == 1, (
+        f"{_TESS_PROMPT}: expected the rendered output to contain the "
+        f"NARROW sentence exactly once — found {count}."
     )
