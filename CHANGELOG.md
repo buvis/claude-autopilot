@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **work**: Tess, Devon and Ivan run only their task's tests and never re-run a suite for a count
+
 ## [0.6.0] - 2026-09-30
 
 ### Added
