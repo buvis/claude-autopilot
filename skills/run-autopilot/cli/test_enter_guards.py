@@ -269,7 +269,7 @@ def test_stops_fs_error_when_prds_dir_has_no_grandparent(
         in_loop=False,
         now=lambda: NOW,
         git_head=lambda repo_root: HEAD,
-        record_resume_row=lambda prd, site: None,
+        record_resume_row=lambda prd, site, autopilot_dir: None,
     )
 
     assert out["stop"] == "fs_error"

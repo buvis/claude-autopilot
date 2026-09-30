@@ -1,19 +1,32 @@
 #!/usr/bin/env python3
-"""Tests for cli/enter.py - the step 10/11 decisions: the frontmatter write,
-the default handoff row, the lane override, and catchup freshness against a
-moving clock, plus the `--prd` argument checks that reject any value which is
-not a bare basename. Split from test_enter.py for size; shares its Env harness.
+"""Tests for cli/enter.py - the step 10/11 decisions: the frontmatter write and
+the warnings it hands back, the default handoff row and the directory it runs
+in, the lane override, and catchup freshness against a moving clock, plus the
+`--prd` argument checks that reject any value which is not a bare basename.
+Split from test_enter.py for size; shares its Env harness.
 """
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
 import pytest
 
 from cli import enter, frontmatter, notify_out
-from cli.enter_harness import OTHER, PRD, Env, _cache, _open_state, _prd_text
+from cli.enter_harness import (
+    KEYS,
+    OTHER,
+    PRD,
+    Env,
+    _arrange,
+    _cache,
+    _open_state,
+    _prd_text,
+    enter_twin,
+    run_cli,
+)
 
 
 @pytest.fixture
@@ -50,6 +63,44 @@ def test_default_resume_row_runs_the_record_dispatch_handoff(env: Env, monkeypat
     assert calls[0][1]["timeout"] == 10
 
 
+def test_default_resume_row_runs_the_handoff_in_the_autopilot_dir(env: Env, monkeypatch) -> None:
+    # record_dispatch.py resolves the ledger from its own cwd, and the parent's
+    # cwd is the test runner's, not this tree: only an explicit `cwd` kwarg
+    # naming the resolved autopilot dir puts the row in the right project.
+    env.write_state(_open_state())
+    env.put("wip")
+    real_run = subprocess.run
+    calls: list[dict] = []
+
+    def fake_run(args, *a, **k):
+        if isinstance(args, list) and str(enter._RECORD_DISPATCH) in args:
+            calls.append(k)
+            return subprocess.CompletedProcess(args, 0, "", "")
+        return real_run(args, *a, **k)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    out = env.run(default_recorder=True)
+
+    assert out["stop"] is None
+    assert len(calls) == 1
+    assert Path(calls[0]["cwd"]).resolve() == env.autopilot_dir.resolve()
+
+
+def test_the_injected_resume_recorder_is_handed_the_autopilot_dir(env: Env) -> None:
+    env.write_state(_open_state())
+    env.put("wip")
+    calls: list[tuple[str, str, Path]] = []
+
+    def recorder(prd: str, site: str, autopilot_dir: Path) -> None:
+        calls.append((prd, site, autopilot_dir))
+
+    out = env.run(record_resume_row=recorder)
+
+    assert out["stop"] is None
+    assert calls == [(PRD, "build", env.autopilot_dir)]
+
+
 def test_lanes_off_forces_a_solo_prd_to_the_full_lane(env: Env, monkeypatch) -> None:
     monkeypatch.setenv("_AUTOPILOT_LANES", "off")
     env.write_state(_open_state())
@@ -79,10 +130,10 @@ def test_frontmatter_fields_land_in_state_as_declared_or_default(env: Env) -> No
 
 def test_invalid_frontmatter_value_takes_the_default(env: Env) -> None:
     # enter() is a pure function that returns a dict (see its docstring); it
-    # has no stdout/stderr contract of its own. Printing `frontmatter.apply`'s
-    # warnings, if any, is the CLI wrapper's job (a later task), not this
-    # function's — so this test only pins the one behavior the Contract
-    # actually promises: an invalid value still resolves to its default.
+    # has no stdout/stderr contract of its own. It hands the frontmatter
+    # warnings back in its `warnings` key, and the CLI wrapper (`_run_enter`)
+    # is what prints them to stderr. Both halves are pinned here: the invalid
+    # value resolves to its default, and its warning reaches the caller.
     text = _prd_text(consensus_engine="bogus")
     env.write_state(_open_state())
     env.put("wip", PRD, text)
@@ -93,6 +144,120 @@ def test_invalid_frontmatter_value_takes_the_default(env: Env) -> None:
 
     assert out["stop"] is None
     assert env.read_state()["consensus_engine"] == "legacy"
+    assert out["warnings"] == warnings
+
+
+# -- step 10: the frontmatter warnings reach the caller ------------------------
+
+# Composed here, not read back from `frontmatter.parse`: a canned result that
+# echoes the parse of some other PRD, or a summarised line, cannot match it.
+_ENGINE_WARNING = (
+    "autopilot: PRD frontmatter consensus_engine='bogus' is not one of "
+    "legacy/shadow/workflow; defaulting to legacy"
+)
+
+
+def test_enter_returns_the_frontmatter_warning_line_verbatim(env: Env) -> None:
+    env.write_state(_open_state())
+    env.put("wip", PRD, _prd_text(consensus_engine="bogus"))
+
+    out = env.run()
+
+    assert (out["stop"], out["warnings"]) == (None, [_ENGINE_WARNING])
+
+
+def test_two_invalid_values_keep_both_warnings_in_the_parse_order(env: Env) -> None:
+    text = _prd_text(consensus_engine="bogus", doubt_reviewer="nope")
+    env.write_state(_open_state())
+    env.put("wip", PRD, text)
+    _fields, expected = frontmatter.parse(text)
+    # parse emits doubt_reviewer first - the reverse of the document order - so
+    # a re-sorted, document-ordered or deduplicated list cannot match.
+    assert len(expected) == 2 and expected[1] == _ENGINE_WARNING
+
+    out = env.run()
+
+    assert out["warnings"] == expected
+
+
+def test_a_prd_without_a_frontmatter_block_warns_exactly_once(env: Env) -> None:
+    env.write_state(_open_state())
+    env.put("wip", PRD, "# No frontmatter here\n\nJust prose.\n")
+
+    out = env.run()
+
+    assert (out["stop"], out["warnings"]) == (None, [frontmatter.MALFORMED_WARNING])
+
+
+def test_a_valid_frontmatter_block_produces_no_warnings(env: Env) -> None:
+    env.write_state(_open_state())
+    env.put("wip", PRD, _prd_text(doubt_reviewer="fable", rework_cap="5"))
+
+    out = env.run()
+
+    assert (out["stop"], out["warnings"]) == (None, [])
+
+
+@pytest.mark.parametrize("stop", ["fs_error", "custody", "drained"])
+def test_a_halt_before_the_frontmatter_write_still_carries_an_empty_warnings_list(
+    env: Env, monkeypatch: pytest.MonkeyPatch, stop: str,
+) -> None:
+    # `warnings` belongs to the return shape, not to the write step: a caller
+    # that reads out["warnings"] on an early halt must not hit a KeyError.
+    _arrange(env, monkeypatch, stop)
+
+    out = env.run()
+
+    assert out["stop"] == stop
+    assert out["warnings"] == []
+
+
+# -- the `enter` verb: eleven keys on stdout, the warnings on stderr -----------
+
+
+def test_the_enter_verb_prints_eleven_keys_on_stdout_when_the_prd_warns(env: Env) -> None:
+    env.write_state(_open_state())
+    env.put("wip", PRD, _prd_text(consensus_engine="bogus"))
+
+    proc = run_cli(env, "enter", "--state", str(env.state_path))
+
+    assert proc.returncode == 0, proc.stderr
+    lines = proc.stdout.splitlines()
+    assert len(lines) == 1, proc.stdout
+    printed = json.loads(lines[0])
+    assert set(printed) == KEYS
+    assert (printed["stop"], printed["prd"]) == (None, PRD)
+    # not under any key, not appended after the object
+    assert "bogus" not in proc.stdout
+
+
+def test_the_enter_verb_prints_every_warning_on_its_own_stderr_line(env: Env) -> None:
+    text = _prd_text(consensus_engine="bogus", doubt_reviewer="nope")
+    env.write_state(_open_state())
+    env.put("wip", PRD, text)
+    _fields, expected = frontmatter.parse(text)
+    assert len(expected) == 2 and _ENGINE_WARNING in expected
+
+    proc = run_cli(env, "enter", "--state", str(env.state_path))
+
+    assert proc.returncode == 0, proc.stderr
+    # filtered, not sliced: a best-effort handoff-row failure may add a line of
+    # its own, but both warnings must appear whole, in order, one per line.
+    assert [ln for ln in proc.stderr.splitlines() if ln in expected] == expected
+
+
+def test_the_enter_verb_still_prints_only_the_detail_line_on_an_early_halt(
+    env: Env, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _arrange(env, monkeypatch, "drained")
+    expected = enter_twin(env)
+    assert expected["stop"] == "drained" and expected["detail"]
+
+    proc = run_cli(env, "enter", "--state", str(env.state_path))
+
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stderr.splitlines() == [f"autopilot: {expected['detail']}"]
+    assert set(json.loads(proc.stdout.strip())) == KEYS
 
 
 # -- step 11: catchup freshness against the injected clock ---------------------

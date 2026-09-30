@@ -37,6 +37,10 @@ KEYS = {
     "resume_target",
     "batch",
 }
+# KEYS is the JSON-line contract of the `enter` verb's stdout; RESULT_KEYS is
+# the shape `enter()` returns to a caller. They are deliberately different:
+# `warnings` goes to the caller (and from there to stderr), never to stdout.
+RESULT_KEYS = KEYS | {"warnings"}
 EXPECTED_STOPS = (
     "fs_error",
     "park_halt",
@@ -162,7 +166,7 @@ class Env:
         self.head_calls.append(repo_root)
         return self.head
 
-    def record(self, prd: str, site: str) -> None:
+    def record(self, prd: str, site: str, autopilot_dir: Path) -> None:
         self.rows.append((prd, site))
 
     def run(
@@ -185,7 +189,7 @@ class Env:
             git_head=self.git_head,
             **kw,
         )
-        assert set(out) == KEYS
+        assert set(out) == RESULT_KEYS
         assert out["stop"] is None or out["stop"] in enter.STOPS
         assert json.loads(json.dumps(out, sort_keys=True)) == out
         return out
@@ -276,7 +280,7 @@ def enter_twin(env: Env, *, prd_arg: str | None = None) -> dict:
             autopilot_dir=twin.autopilot_dir,
             prd_arg=prd_arg,
             in_loop=False,
-            record_resume_row=lambda prd, site: None,
+            record_resume_row=lambda prd, site, autopilot_dir: None,
         )
     finally:
         shutil.rmtree(clone_root, ignore_errors=True)

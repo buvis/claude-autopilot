@@ -125,7 +125,7 @@ def test_raising_resume_row_is_swallowed_to_stderr(env: Env, capsys) -> None:
     env.write_state(_open_state())
     env.put("wip")
 
-    def boom(prd: str, site: str) -> None:
+    def boom(prd: str, site: str, autopilot_dir: Path) -> None:
         raise OSError("record_dispatch unreachable")
 
     out = env.run(record_resume_row=boom)
@@ -710,8 +710,9 @@ def test_cli_prints_one_json_line_with_every_key(env: Env) -> None:
     lines = proc.stdout.splitlines()
     assert len(lines) == 1, proc.stdout
     assert set(json.loads(lines[0])) == KEYS
-    # every value, not just presence: no canned line can match enter()'s own
-    assert lines[0] == json.dumps(expected, sort_keys=True)
+    # every value, projected onto KEYS: no canned line can match enter()'s own,
+    # and `warnings` is returned to the caller but never printed on stdout
+    assert lines[0] == json.dumps({k: expected[k] for k in KEYS}, sort_keys=True)
     assert (expected["stop"], expected["prd"], expected["source"]) == (None, PRD, "wip")
     # side effects no constant-printing stub produces: step 0's tree...
     assert (env.prds_dir / "backlog").is_dir()
