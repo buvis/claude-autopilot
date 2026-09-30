@@ -299,6 +299,7 @@ def test_release_checks_runs_every_enter_test_file() -> None:
         "skills/run-autopilot/cli/test_enter_prose.py",
         "skills/run-autopilot/cli/test_enter_guards.py",
         "skills/run-autopilot/cli/test_enter_decisions.py",
+        "skills/run-autopilot/cli/test_enter_cli.py",
     )
     for path in enter_tests:
         assert text.count(path) == 1, (
