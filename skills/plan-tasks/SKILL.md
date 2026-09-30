@@ -305,6 +305,7 @@ This guarantees:
 - `default_model: sonnet` clamps `haiku` up to `sonnet` and leaves `sonnet` and `opus` alone.
 - `default_model: haiku` is a no-op (`haiku` is already the floor of the precedence; classifier output stands as-is).
 - An `opus` classification is never demoted by any `default_model` value.
+- Review-rework `[D]` tasks take this floor only when they carry a 🔴 finding (`run-autopilot/references/phase-review.md` Phase 6).
 
 **`qwen_eligible` computation**
 
