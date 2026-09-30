@@ -164,6 +164,32 @@ def parse(text: str) -> tuple[dict, list[str]]:
     return fields, warnings
 
 
+def _lane_fields(text: str) -> tuple[dict, list[str]]:
+    """The three lane fields `cli/lane.py` decides for this PRD, and the one
+    warning an invalid `lane:` value earns (silence when the key is absent).
+    `off` in `_AUTOPILOT_LANES` forces full.
+
+    Deferred import for the same by-path reason `apply` documents below."""
+    from . import lane
+
+    keys = declared(text)
+    verdict = lane.classify(text, keys)
+    warnings: list[str] = []
+    if "lane" in keys and keys["lane"] not in lane.LANES:
+        warnings.append(
+            f"autopilot: PRD frontmatter lane={keys['lane']!r} is not one of "
+            f"solo/fast-track/full; defaulting to {verdict.lane}",
+        )
+    fields = {
+        "lane": verdict.lane,
+        "lane_reason": verdict.reason,
+        "lane_effective": lane.effective(
+            verdict.lane, os.environ.get("_AUTOPILOT_LANES"),
+        ),
+    }
+    return fields, warnings
+
+
 def apply(
     prd_path: Path,
     state_path: Path,
@@ -184,23 +210,13 @@ def apply(
     `declared` are also loaded BY PATH (no parent package) by
     fast-track/scripts/cards_from_prd.py, where a relative import cannot
     resolve."""
-    from . import lane, schema, state
+    from . import schema, state
 
     text = Path(prd_path).read_text(encoding="utf-8")
     fields, warnings = parse(text)
-    keys = declared(text)
-    verdict = lane.classify(text, keys)
-    if "lane" in keys and keys["lane"] not in lane.LANES:
-        warnings.append(
-            f"autopilot: PRD frontmatter lane={keys['lane']!r} is not one of "
-            f"solo/fast-track/full; defaulting to {verdict.lane}",
-        )
-    fields["lane"] = verdict.lane
-    fields["lane_reason"] = verdict.reason
-    fields["lane_effective"] = lane.effective(
-        verdict.lane,
-        os.environ.get("_AUTOPILOT_LANES"),
-    )
+    lane_fields, lane_warnings = _lane_fields(text)
+    fields.update(lane_fields)
+    warnings += lane_warnings
     if on_warning is not None:
         for line in warnings:
             on_warning(line)
