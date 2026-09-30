@@ -23,6 +23,10 @@ uv run --no-project --with pytest python -m pytest -q \
   skills/work/scripts/test_adversarial_cap_prose.py \
   skills/work/scripts/test_devon_round_prose.py
 
+echo "[checks] narrow runs prose"
+uv run --no-project --with pytest python -m pytest -q \
+  skills/work/scripts/test_narrow_runs_prose.py
+
 echo "[checks] record_dispatch"
 uv run --no-project --with pytest python -m pytest -q \
   skills/work/scripts/test_record_dispatch.py
