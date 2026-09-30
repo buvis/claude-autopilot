@@ -381,9 +381,7 @@ def enter(
     """Run the Phase 0 step chain in documented order; return the one JSON
     line as a dict, plus the frontmatter write's `warnings` for the caller to
     print. A corrupt state.json raises state.StateError."""
-    # warnings is built per call, never copied out of _EMPTY_RESULT: one
-    # shared list would carry one run's warnings into the next.
-    out = {**_EMPTY_RESULT, "warnings": []}
+    out = {**_EMPTY_RESULT, "warnings": []}  # per call: one list would leak
     if _bootstrap(out, state_path, prds_dir, autopilot_dir):
         return out
     if _park(out, state_path, prds_dir, autopilot_dir):
