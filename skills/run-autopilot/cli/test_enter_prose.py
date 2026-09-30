@@ -262,11 +262,16 @@ def test_every_existing_phase_0_subsection_survives_with_its_own_steps() -> None
         )
 
 
-def test_release_checks_runs_both_enter_test_files() -> None:
+def test_release_checks_runs_every_enter_test_file() -> None:
     text = _RELEASE_CHECKS.read_text()
     unit = "skills/run-autopilot/cli/test_enter.py"
-    prose = "skills/run-autopilot/cli/test_enter_prose.py"
-    for path in (unit, prose):
+    enter_tests = (
+        unit,
+        "skills/run-autopilot/cli/test_enter_prose.py",
+        "skills/run-autopilot/cli/test_enter_guards.py",
+        "skills/run-autopilot/cli/test_enter_decisions.py",
+    )
+    for path in enter_tests:
         assert text.count(path) == 1, (
             f"{_RELEASE_CHECKS}: expected exactly one {path} argument — found "
             f"{text.count(path)}."
@@ -281,7 +286,7 @@ def test_release_checks_runs_both_enter_test_files() -> None:
         block,
         _RELEASE_CHECKS,
         "the `[checks]` block that runs the enter tests",
-        ("uv run --no-project --with pytest python -m pytest -q", unit, prose),
+        ("uv run --no-project --with pytest python -m pytest -q", *enter_tests),
     )
 
 

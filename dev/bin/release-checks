@@ -139,7 +139,8 @@ echo "[checks] enter"
 uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_enter.py \
   skills/run-autopilot/cli/test_enter_prose.py \
-  skills/run-autopilot/cli/test_enter_guards.py
+  skills/run-autopilot/cli/test_enter_guards.py \
+  skills/run-autopilot/cli/test_enter_decisions.py
 
 echo "[checks] gather-context paths"
 bash skills/review-work-completion/scripts/test_gather_context_paths.sh
