@@ -162,26 +162,41 @@ def test_a_skip_entry_carries_exactly_the_five_documented_keys(env: Env) -> None
     )
 
 
-def test_select_stamps_each_skip_with_an_iso_utc_at(env: Env) -> None:
+def test_select_stamps_each_skip_with_a_clock_reading_not_the_prds_own_mtime(
+    env: Env,
+) -> None:
     env.put("backlog", PRD, _prd_text(eligibility='"false"'))
+    # Backdate the PRD a week. "Within 5 minutes of now" is satisfied by ANY
+    # freshly created file's mtime, so without this the stamp only has to be
+    # recent - a `stat().st_mtime` read passes and a PRD last edited in July
+    # gets stamped July.
+    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).timestamp()
+    os.utime(env.prds_dir / "backlog" / PRD, (week_ago, week_ago))
 
     at = _select(env)["skipped"][0]["at"]
 
     assert at.endswith("Z"), at
     stamped = datetime.fromisoformat(at.replace("Z", "+00:00"))
     assert stamped.utcoffset() == timedelta(0)
-    # A constant would satisfy the format; the stamp is read off a real clock.
-    assert abs(datetime.now(timezone.utc) - stamped) < timedelta(minutes=5)
+    assert abs(datetime.now(timezone.utc) - stamped) < timedelta(minutes=5), (
+        f"{at} is not a clock reading - it tracks the skipped PRD's mtime"
+    )
 
 
-def test_skips_are_appended_under_batch_and_never_at_the_top_level(env: Env) -> None:
+def test_every_skip_is_appended_under_batch_and_never_at_the_top_level(
+    env: Env,
+) -> None:
     env.write_state(_open_state())
+    # TWO failing PRDs, not one: with a single skip, `extend(skipped)` and
+    # `extend(skipped[:1])` are indistinguishable, and a verb that records only
+    # the first skip loses the rest from the batch report silently.
     env.put("backlog", PRD, _prd_text(eligibility='"false"'))
+    env.put("backlog", OTHER, _prd_text(eligibility='"false"'))
 
     _select(env)
 
     state = env.read_state()
-    assert [entry["prd"] for entry in state["batch"]["skips"]] == [PRD]
+    assert [entry["prd"] for entry in state["batch"]["skips"]] == [PRD, OTHER]
     assert "skips" not in state, "a top-level skips[] is invisible to the batch report"
 
 

@@ -314,19 +314,65 @@ def test_apply_returns_the_reset_lines_beside_the_fields_and_warnings(
 def test_apply_reports_one_reset_line_per_field_whose_value_changed(
     tmp_path: Path,
 ) -> None:
-    # A second key, and no number shared with the case above: a `resets` list
-    # built by matching one hardcoded key/value pair in the raw state text
-    # passes that test and silently reports nothing for every other field.
-    state_path = _state_file(tmp_path, rework_cap=4, catchup_mode="skip")
-    prd = _prd_file(tmp_path, "rework_cap: 3", "catchup: force")
+    # Three keys from three families - an int, a catchup enum and a reviewer
+    # enum - and no number shared with the case above: a `resets` list built by
+    # matching one hardcoded key/value pair in the raw state text passes that
+    # test and silently reports nothing for every other field.
+    state_path = _state_file(
+        tmp_path, rework_cap=4, catchup_mode="skip", doubt_reviewer="codex",
+    )
+    prd = _prd_file(
+        tmp_path, "rework_cap: 3", "catchup: force", "doubt_reviewer: fable",
+    )
 
     _fields, warnings, resets = frontmatter.apply(prd, state_path)
 
     assert sorted(resets) == [
         "autopilot: PRD frontmatter reset catchup_mode skip -> force",
+        "autopilot: PRD frontmatter reset doubt_reviewer codex -> fable",
         "autopilot: PRD frontmatter reset rework_cap 4 -> 3",
     ]
     assert warnings == [], "a reset is not a parse warning"
+
+
+@pytest.mark.parametrize(
+    ("prd_line", "state_key", "old", "new"),
+    [
+        ("rework_cap: 3", "rework_cap", 4, 3),
+        ("catchup: force", "catchup_mode", "skip", "force"),
+        ("design: skip", "design_mode", "run", "skip"),
+        ("doubt_reviewer: fable", "doubt_reviewer", "codex", "fable"),
+        ("consensus_engine: shadow", "consensus_engine", "legacy", "shadow"),
+        ("session_model: opus", "session_model", "sonnet", "opus"),
+    ],
+    ids=[
+        "rework_cap",
+        "catchup_mode",
+        "design_mode",
+        "doubt_reviewer",
+        "consensus_engine",
+        "session_model",
+    ],
+)
+def test_every_overwritten_field_earns_its_own_reset_line(
+    tmp_path: Path,
+    prd_line: str,
+    state_key: str,
+    old: object,
+    new: object,
+) -> None:
+    # One case per field `parse` can write, so no fixed allowlist of keys can
+    # satisfy the suite: an allowlist that covers all of them IS the real
+    # before/after comparison. Round 1 hardcoded one key and round 2 hardcoded
+    # the two the multi-field case above happens to name; both passed. Without
+    # this axis an overwritten design_mode, doubt_reviewer, consensus_engine or
+    # session_model is applied in total silence.
+    state_path = _state_file(tmp_path, **{state_key: old})
+    prd = _prd_file(tmp_path, prd_line)
+
+    _fields, _warnings, resets = frontmatter.apply(prd, state_path)
+
+    assert resets == [f"autopilot: PRD frontmatter reset {state_key} {old} -> {new}"]
 
 
 def test_apply_reports_no_resets_when_the_state_already_held_the_value(

@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from cli import selection
+from cli import eligibility, selection
 
 
 class SequenceTests(unittest.TestCase):
@@ -203,6 +203,32 @@ def test_a_skip_entry_leaves_the_at_stamp_to_the_caller(tmp_path: Path) -> None:
     assert (prd, source) == (None, "drained")
     assert [set(entry) for entry in skips] == [{"prd", "command", "exit_code", "note"}]
     assert (skips[0]["command"], skips[0]["exit_code"]) == ("exit 3", 3)
+
+
+@pytest.mark.parametrize(
+    "verdict",
+    [(-1, "timeout"), (-1, "error: [Errno 20] Not a directory: '/etc/hosts'")],
+    ids=["timeout", "unusable-cwd"],
+)
+def test_a_check_that_never_answered_keeps_its_note_in_the_skip_entry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    verdict: tuple[int, str],
+) -> None:
+    # `note` is empty for a command that RAN, whatever it exited with, and names
+    # the failure mode only when the command never got to answer. Every other
+    # case here exits 3 or 4 with an empty note, so a helper that hardcodes
+    # `"note": ""` passes them all and silently erases the one value that
+    # distinguishes "the check said no" from "the check could not be run".
+    # The stub is the seam under test: producing the note is eligibility's job,
+    # carrying it through unchanged is select_eligible's.
+    _backlog_prd(tmp_path / "prds", "00090-blocked-v1.md", "sleep 99")
+    monkeypatch.setattr(eligibility, "evaluate", lambda command, cwd: verdict)
+
+    prd, source, skips = selection.select_eligible(tmp_path / "prds")
+
+    assert (prd, source) == (None, "drained")
+    assert (skips[0]["exit_code"], skips[0]["note"]) == verdict
 
 
 _EXCEPTION_WORDS = ("takes a path", "lists", "I/O", "shells out", "runs")
