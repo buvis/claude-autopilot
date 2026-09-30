@@ -232,7 +232,7 @@ def _select(
 ) -> bool:
     """Step 8. True when selection halts Phase 0."""
     if prd_arg is not None:
-        if Path(prd_arg).name != prd_arg or prd_arg == "..":
+        if not prd_arg or Path(prd_arg).name != prd_arg or prd_arg == "..":
             _stop(out, "prd_not_found", f"--prd {prd_arg} is not a bare basename")
             return True
         out.update(prd=prd_arg, source="arg")
