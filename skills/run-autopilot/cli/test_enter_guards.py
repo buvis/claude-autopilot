@@ -249,6 +249,14 @@ def test_stops_park_halt_when_do_park_returns_an_unmapped_code(
 
     assert out["stop"] == "park_halt"
     assert "park" in out["detail"]  # the step that halted, not just its code
+    # A marker was on disk, so `parked` is only null because an unmapped code
+    # proves nothing about whether the park happened. Collapsing the exit-0 and
+    # exit-5 branches into a blanket `out["parked"] = marked` (or a `code not in
+    # (4, 9, 10)` guard) would claim this PRD reached hold/ while it sits in wip/.
+    assert out["parked"] is None, (
+        "cli/enter.py: exit 7 is unmapped, so whether the park happened is "
+        f"unknown and `parked` must stay null - got {out['parked']!r}."
+    )
     assert "7" in out["detail"]
     assert env.rows == []
 
