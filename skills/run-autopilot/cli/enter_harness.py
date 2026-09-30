@@ -9,7 +9,6 @@ does not collect it): it holds the constants, the fixture builders and the
 
 from __future__ import annotations
 
-import importlib
 import json
 import os
 import subprocess
@@ -19,9 +18,6 @@ from pathlib import Path
 import pytest
 
 from cli import custody, enter, records
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-_walk_up = importlib.import_module("_walk_up")
 
 KEYS = {
     "stop",

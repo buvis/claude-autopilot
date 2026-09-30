@@ -93,7 +93,8 @@ writes later are untouched: this is the session's first Bash call after the
 `mkdir`.
 
 `autopilot enter` runs this step; the instructions below stay the hand-run
-reference.
+reference. Unlike the script above, `autopilot enter` names none of the removed
+markers on stderr — it clears them silently, so no removal time appears there.
 
 ### Handle park request (FIRST abort-handler check)
 

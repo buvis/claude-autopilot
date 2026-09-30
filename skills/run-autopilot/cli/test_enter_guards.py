@@ -414,9 +414,10 @@ def test_enter_reads_its_marker_tuple_by_plain_import_of_its_own_package() -> No
 def test_importing_enter_leaves_every_importers_sys_path_untouched() -> None:
     # The measured effect, not the syntax: this also catches a mutation written
     # through an alias (`import sys as _s; _s.path.insert(...)`), which the AST
-    # pin above cannot see. It has to run in a fresh interpreter because
-    # `cli.enter_harness` already puts scripts/ on THIS process's `sys.path`, so
-    # an in-process check could not tell which module put it there.
+    # pin above cannot see. It has to run in a fresh interpreter because this
+    # process has already imported `cli.enter` (and `cli/__main__.py` and
+    # `cli/loop.py` each add scripts/ for their own reasons), so an in-process
+    # check could neither observe the import nor say which module changed what.
     code = (
         "import sys; "
         f"sys.path.insert(0, {str(_SKILL_ROOT)!r}); "

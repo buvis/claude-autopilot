@@ -34,7 +34,6 @@ from cli.enter_harness import (
     _fake_park,
     _open_state,
     _prd_text,
-    _walk_up,
 )
 
 
@@ -64,7 +63,7 @@ def test_every_stop_value_is_in_STOPS() -> None:
 def test_fresh_wip_prd_continues_with_null_stop(env: Env, capsys) -> None:
     env.write_state(_open_state())
     env.put("wip")
-    for name in _walk_up.INHERITED_MARKERS:
+    for name in handoff.MARKERS:
         (env.autopilot_dir / name).write_text("x", encoding="utf-8")
 
     out = env.run()
@@ -85,7 +84,7 @@ def test_fresh_wip_prd_continues_with_null_stop(env: Env, capsys) -> None:
     }
     assert env.read_state()["prd"] == PRD
     assert env.rows == [(PRD, "build")]
-    for name in _walk_up.INHERITED_MARKERS:
+    for name in handoff.MARKERS:
         assert not (env.autopilot_dir / name).exists()
     assert capsys.readouterr().out == ""
 

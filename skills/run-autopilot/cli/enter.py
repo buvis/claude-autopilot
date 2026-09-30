@@ -15,7 +15,6 @@ effect runs through the module that already owns it; only the clock,
 from __future__ import annotations
 
 import contextlib
-import importlib
 import io
 import re
 import shutil
@@ -25,12 +24,7 @@ from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import custody, frontmatter, records, resume, schema, selection, state, statectl
-
-_SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
-if str(_SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS_DIR))
-_walk_up = importlib.import_module("_walk_up")
+from . import custody, frontmatter, handoff, records, resume, schema, selection, state, statectl
 
 STOPS: tuple[str, ...] = (
     "fs_error",
@@ -151,7 +145,7 @@ def _prepare_tree(state_path: Path, prds_dir: Path, autopilot_dir: Path) -> None
     (autopilot_dir / "deferred").mkdir(parents=True, exist_ok=True)
     if not state_path.exists():
         state.init(state_path, {"phase": "build", "next_phase": "build"})
-    for name in _walk_up.INHERITED_MARKERS:
+    for name in handoff.MARKERS:
         (autopilot_dir / name).unlink(missing_ok=True)
 
 
@@ -182,11 +176,11 @@ def _park(out: dict, state_path: Path, prds_dir: Path, autopilot_dir: Path) -> b
         code = records.do_park(state_path, prds_dir=prds_dir, autopilot_dir=autopilot_dir)
     if code == 3:
         return False
-    if code in (0, 5):
-        out["parked"] = marked
     if code == 0:
+        out["parked"] = marked
         return False
     if code == 5:
+        out["parked"] = marked
         _stop(out, "park_halt", f"parked {marked}; systemic halt (2+ consecutive wrapper_died parks)")
         return True
     mapped = _PARK_STOPS.get(code)
