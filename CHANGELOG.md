@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **run-autopilot**: review-rework fixes take the PRD's `default_model` floor only for CRITICAL findings
 - **run-autopilot**: boundary hand-off on time and margin, idle-only kill, wall-clock report lines
 - **work**: one Devon round
 - **run-autopilot**: working documents moved from `dev/local/` to `docs/dev/project-management/` (tracked) and scratch from `dev/local/tmp/` to `docs/dev/tmp/`; hooks, the `autopilot` CLI, skills and references now read and write only the new paths, so move an existing repo's `dev/local/` tree before running this version
