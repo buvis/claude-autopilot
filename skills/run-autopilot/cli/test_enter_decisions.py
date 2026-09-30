@@ -17,6 +17,7 @@ import pytest
 from cli import enter, frontmatter, notify_out
 from cli.enter_harness import (
     KEYS,
+    NOW,
     OTHER,
     PRD,
     Env,
@@ -99,6 +100,36 @@ def test_the_injected_resume_recorder_is_handed_the_autopilot_dir(env: Env) -> N
 
     assert out["stop"] is None
     assert calls == [(PRD, "build", env.autopilot_dir)]
+
+
+def test_the_resume_recorder_gets_the_autopilot_dir_it_was_given_not_a_rebuilt_one(
+    env: Env,
+) -> None:
+    # In every other test `autopilot_dir == prds_dir.parent / "autopilot"`, so a
+    # call site that REBUILDS the path from `prds_dir` is indistinguishable from
+    # one that passes the argument through. Here the two differ, so only
+    # pass-through can match - which is the whole point of resolving the ledger
+    # from the given directory instead of from a guess.
+    elsewhere = env.root / "ledger-elsewhere"
+    elsewhere.mkdir()
+    assert elsewhere != env.prds_dir.parent / "autopilot"
+    env.write_state(_open_state())
+    env.put("wip")
+    calls: list[tuple[str, str, Path]] = []
+
+    out = enter.enter(
+        env.state_path,
+        prds_dir=env.prds_dir,
+        autopilot_dir=elsewhere,
+        prd_arg=None,
+        in_loop=False,
+        now=lambda: NOW,
+        git_head=env.git_head,
+        record_resume_row=lambda prd, site, d: calls.append((prd, site, d)),
+    )
+
+    assert out["stop"] is None, out["detail"]
+    assert calls == [(PRD, "build", elsewhere)]
 
 
 def test_lanes_off_forces_a_solo_prd_to_the_full_lane(env: Env, monkeypatch) -> None:
@@ -222,7 +253,14 @@ def test_the_warnings_the_frontmatter_write_produced_arrive_unchanged(
     # frontmatter write handed back for this PRD, and no PRD text could make
     # them, so only a result that carries that list through can match. The
     # fields stay the real ones, so the rest of the chain runs as it always does.
-    sentinel = ["autopilot: first sentinel line", "autopilot: second sentinel line"]
+    # Three lines, not two: a result that truncates the list to a fixed length
+    # passed the two-line version, and every other warnings case here is 0, 1
+    # or 2 lines long, so nothing else would have noticed.
+    sentinel = [
+        "autopilot: first sentinel line",
+        "autopilot: second sentinel line",
+        "autopilot: third sentinel line",
+    ]
     real_apply = frontmatter.apply
 
     def apply_with_sentinel(prd_path: Path, state_path: Path) -> tuple[dict, list[str]]:
@@ -304,6 +342,37 @@ def test_the_enter_verb_prints_every_warning_on_its_own_stderr_line(env: Env) ->
     assert [ln for ln in proc.stderr.splitlines() if ln in expected] == expected
 
 
+def test_the_enter_verb_prints_the_warning_of_a_halted_run_too(env: Env) -> None:
+    # `enter()` returning the warning on a halt is pinned above; this pins that
+    # the verb PRINTS it. Printing only on the null-stop path passed everything
+    # else, and swallowed the warning on exactly the halt it explains.
+    env.write_state(_open_state())
+    env.put("wip", PRD, _prd_text(lane="nope") + "- **Location**: `docs/notes.md`\n")
+
+    proc = run_cli(env, "enter", "--state", str(env.state_path))
+
+    assert proc.returncode == 0, proc.stderr
+    lines = proc.stderr.splitlines()
+    warned = [ln for ln in lines if ln.startswith("autopilot: PRD frontmatter lane=")]
+    assert len(warned) == 1, proc.stderr
+    assert "is not one of solo/fast-track/full" in warned[0]
+    # and the halt's own detail line is still there beside it
+    assert [ln for ln in lines if ln.startswith("autopilot: lane: ")], proc.stderr
+
+
+def test_the_enter_verb_prints_a_lone_warning_too(env: Env) -> None:
+    # A single-warning run: printing only when more than one warning exists
+    # passed the two-warning test above, and a malformed PRD produces exactly
+    # one - the commonest real case.
+    env.write_state(_open_state())
+    env.put("wip", PRD, "# No frontmatter here\n\nJust prose.\n")
+
+    proc = run_cli(env, "enter", "--state", str(env.state_path))
+
+    assert proc.returncode == 0, proc.stderr
+    assert frontmatter.MALFORMED_WARNING in proc.stderr.splitlines()
+
+
 def test_the_enter_verb_still_prints_only_the_detail_line_on_an_early_halt(
     env: Env, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -315,7 +384,11 @@ def test_the_enter_verb_still_prints_only_the_detail_line_on_an_early_halt(
 
     assert proc.returncode == 0, proc.stderr
     assert proc.stderr.splitlines() == [f"autopilot: {expected['detail']}"]
-    assert set(json.loads(proc.stdout.strip())) == KEYS
+    # Every VALUE, not just the key set: the halt paths were the only ones whose
+    # printed line went unchecked, so a verb could null out `detail`, `prd`,
+    # `parked`, `batch` and the rest on the machine-readable line while stderr
+    # still read correctly to a human.
+    assert proc.stdout == json.dumps({k: expected[k] for k in KEYS}, sort_keys=True) + "\n"
 
 
 # -- step 11: catchup freshness against the injected clock ---------------------
