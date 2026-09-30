@@ -187,14 +187,7 @@ def test_phase_0_opens_with_autopilot_enter() -> None:
         section,
         _PHASE_BUILD,
         where,
-        (
-            "`autopilot enter`",
-            "one Bash call",
-            "`stop`",
-            "null",
-            "Phase 1",
-            "`stop` is set",
-        ),
+        ("`autopilot enter`", "one Bash call", "`stop`", "null", "Phase 1", "`stop` is set"),
     )
     _assert_present(section, _PHASE_BUILD, where, ("`catchup`", "`design`"))
     _assert_absent(section, _PHASE_BUILD, where, _ENTER_NEGATIONS)
@@ -298,9 +291,7 @@ def test_changelog_added_carries_the_enter_entry() -> None:
     added = _added_bullets(_CHANGELOG.read_text(), _CHANGELOG)
     bullets = [b for b in re.split(r"(?m)^- ", added) if b.strip()]
     hits = [
-        b
-        for b in bullets
-        if b.startswith("**run-autopilot**") and "`autopilot enter`" in b
+        b for b in bullets if b.startswith("**run-autopilot**") and "`autopilot enter`" in b
     ]
     assert hits, (
         f"{_CHANGELOG}: expected an Added bullet prefixed `- **run-autopilot**` "

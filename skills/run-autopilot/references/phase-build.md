@@ -65,7 +65,7 @@ comes:
 
 | exit | cause |
 |---|---|
-| `1` | no autopilot dir above cwd and no `--state` given; this call runs before the `mkdir -p` block, so a from-nothing repo hits it on its very first call — run from the project root, or pass `--state` |
+| `1` | no autopilot dir above cwd and no `--state` given; this call runs before the `mkdir -p` block, so a from-nothing repo hits it on its very first call. Re-run with `--state <project>/docs/dev/project-management/autopilot/state.json` — `enter` builds the whole lifecycle tree itself from that path, so the dir need not exist yet. Running from the project root only helps once the tree is already there |
 | `2` | `state.json` is corrupt (`StateError`) — the corrupted-state row of core `SKILL.md` § Error Handling owns it |
 | `6` | a future `schema_version` stamp, refused rather than resumed blindly (the same preflight `autopilot resume-target` makes) |
 
