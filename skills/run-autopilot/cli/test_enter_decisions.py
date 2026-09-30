@@ -25,7 +25,6 @@ from cli.enter_harness import (
     _cache,
     _open_state,
     _prd_text,
-    enter_twin,
     run_cli,
 )
 
@@ -382,8 +381,22 @@ def test_the_enter_verb_still_prints_only_the_detail_line_on_an_early_halt(
     env: Env, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _arrange(env, monkeypatch, "drained")
-    expected = enter_twin(env)
-    assert expected["stop"] == "drained" and expected["detail"]
+    # Written out by hand, not read back from `enter()`: an expected value the
+    # code under test computes is satisfied by a canned reply that answers every
+    # tree with one constant dict.
+    expected = {
+        "stop": "drained",
+        "detail": "no selectable PRD in wip/ or backlog/",
+        "prd": None,
+        "source": None,
+        "parked": None,
+        "custody_pending": 0,
+        "lane_effective": None,
+        "catchup": None,
+        "design": None,
+        "resume_target": "build: catchup then planning",
+        "batch": None,
+    }
 
     proc = run_cli(env, "enter", "--state", str(env.state_path))
 
@@ -393,7 +406,33 @@ def test_the_enter_verb_still_prints_only_the_detail_line_on_an_early_halt(
     # printed line went unchecked, so a verb could null out `detail`, `prd`,
     # `parked`, `batch` and the rest on the machine-readable line while stderr
     # still read correctly to a human.
-    assert proc.stdout == json.dumps({k: expected[k] for k in KEYS}, sort_keys=True) + "\n"
+    assert proc.stdout == json.dumps(expected, sort_keys=True) + "\n"
+
+
+def test_the_prds_override_selects_from_the_named_tree(env: Env) -> None:
+    # Without the flag the verb resolves `prds/` beside `state.json`, and this
+    # fixture leaves that tree empty: such a run stops `drained`, so a selection
+    # can only have come from the override.
+    env.write_state(_open_state())
+    elsewhere = env.root / "elsewhere" / "prds"
+    (elsewhere / "wip").mkdir(parents=True)
+    (elsewhere / "wip" / PRD).write_text(_prd_text(), encoding="utf-8")
+
+    proc = run_cli(
+        env,
+        "enter",
+        "--state",
+        str(env.state_path),
+        "--prds",
+        str(elsewhere),
+    )
+
+    assert proc.returncode == 0, proc.stderr
+    printed = json.loads(proc.stdout)
+    assert (printed["stop"], printed["prd"], printed["source"]) == (None, PRD, "wip")
+    # the override tree is where the work happened; the default one stayed empty
+    assert (elsewhere / "backlog").is_dir()
+    assert not env.has("wip")
 
 
 # -- step 11: catchup freshness against the injected clock ---------------------
@@ -421,6 +460,67 @@ def test_catchup_freshness_is_four_hours_before_now(
     out = env.run(now=lambda: now)
 
     assert (out["stop"], out["catchup"]) == (None, expected)
+
+
+@pytest.mark.parametrize(
+    "completed_at",
+    ["2026-09-29T13:00:00Z", "2026-09-29T11:00:00", "an hour ago"],
+    ids=["future", "naive", "unparseable"],
+)
+def test_a_stamp_that_is_not_a_past_utc_instant_degrades_to_full_catchup(
+    env: Env,
+    completed_at: str,
+) -> None:
+    # The clock is NOW (12:00Z) and the cached head matches, so freshness is the
+    # only thing left to decide this: each stamp below would read as `delta` if
+    # the guards went. A future stamp means the clock or the cache lies, a naive
+    # one cannot be compared with an aware `now` at all, and a stamp that does
+    # not parse is not a stamp - none of the three may pass for a fresh cache.
+    env.write_state(_open_state(batch=_cache(catchup_completed_at=completed_at)))
+    env.put("wip")
+
+    out = env.run()
+
+    assert (out["stop"], out["catchup"]) == (None, "full")
+
+
+# -- step 11: the real `git rev-parse HEAD` read -------------------------------
+
+
+def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
+    """git against `repo` by path — never a cd, and never the real repo."""
+    return subprocess.run(
+        ["git", "-C", str(repo), *args],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+
+def test_git_head_sha_reads_the_stripped_head_of_a_real_repo(tmp_path: Path) -> None:
+    # The real function, not the injected stand-in every other test passes: a
+    # trailing newline here never matches `batch.catchup_head_sha`, so every
+    # session would silently take `full` and the delta saving would vanish.
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "--quiet")
+    # local identity: the commit must work on a machine with no global one
+    _git(repo, "config", "user.email", "test@example.invalid")
+    _git(repo, "config", "user.name", "Enter Test")
+    _git(repo, "config", "commit.gpgsign", "false")
+    (repo / "f.txt").write_text("x\n", encoding="utf-8")
+    _git(repo, "add", "f.txt")
+    _git(repo, "commit", "--quiet", "-m", "first")
+    head = _git(repo, "rev-parse", "HEAD").stdout.strip()
+
+    sha = enter._git_head_sha(repo)
+
+    assert sha == head
+    assert sha == sha.strip() and "\n" not in sha
+
+
+def test_git_head_sha_is_none_outside_a_repo(tmp_path: Path) -> None:
+    assert enter._git_head_sha(tmp_path) is None
 
 
 # -- the --prd argument must be a bare basename -------------------------------

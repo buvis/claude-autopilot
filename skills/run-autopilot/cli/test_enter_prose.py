@@ -25,6 +25,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from cli import enter
 from cli.custody_prose_testutil import (
     _SELECTION_HEADING,
     _SKILL_DIR,
@@ -123,6 +124,26 @@ def _table_rows(scope: str) -> str:
     return "\n".join(rows)
 
 
+def _first_cell(row: str) -> str:
+    """A table row's first-column cell, backticks and whitespace stripped."""
+    return row.strip().strip("|").split("|")[0].strip().strip("`").strip()
+
+
+def _stop_table_rows(scope: str) -> list[str]:
+    """The body rows of `scope`'s stop-value table: the blank-line-delimited
+    table whose header's first cell is `stop`, header and separator dropped.
+
+    Isolated from the exit-code table in the same section, and returned row by
+    row: a stop must own a row's FIRST COLUMN, not merely appear somewhere in
+    the concatenated table text.
+    """
+    for block in re.split(r"\n[ \t]*\n", scope):
+        rows = _table_rows(block).splitlines()
+        if rows and _first_cell(rows[0]) == "stop":
+            return rows[1:]
+    return []
+
+
 def _units(scope: str) -> list[str]:
     """`scope` split into binding units: each table row alone, the rest by blank
     line.
@@ -195,16 +216,24 @@ def test_phase_0_opens_with_autopilot_enter() -> None:
 
 def test_every_stop_value_has_a_row() -> None:
     section = _enter_section()
-    rows = _table_rows(section)
+    rows = _stop_table_rows(section)
     assert rows, (
         f"{_PHASE_BUILD}: expected a stop-value table in {_ENTER_HEADING!r} — "
         "no table rows found."
     )
-    missing = [stop for stop in STOPS if stop not in rows]
+    cells = [_first_cell(row) for row in rows]
+    missing = [stop for stop in STOPS if stop not in cells]
     assert not missing, (
-        f"{_PHASE_BUILD}: {_ENTER_HEADING!r}'s stop-value table has no row for "
-        f"{missing!r} — every value of cli.enter.STOPS needs the section that "
-        "owns its halt."
+        f"{_PHASE_BUILD}: {_ENTER_HEADING!r}'s stop-value table has no row whose "
+        f"FIRST COLUMN is {missing!r} — every value of cli.enter.STOPS needs the "
+        "section that owns its halt, and being named inside another row's "
+        "explanation is not that row."
+    )
+    orphans = [cell for cell in cells if cell not in STOPS]
+    assert not orphans, (
+        f"{_PHASE_BUILD}: {_ENTER_HEADING!r}'s stop-value table routes {orphans!r}, "
+        "which cli.enter.STOPS does not define — a renamed stop leaves the old row "
+        "behind, pointing a session at a halt that can never happen."
     )
 
 
@@ -411,4 +440,24 @@ def test_the_selection_pointer_names_step_6_as_outside_enter() -> None:
         "say plainly that step 6 (the capsule's Active Work read) is NOT covered "
         "by `autopilot enter`, instead of claiming enter runs `these steps` and "
         "leaving that read silently dropped",
+    )
+
+
+def test_enter_mirrors_the_design_gate_awk_regex() -> None:
+    # `enter._DISPATCH_RE` is a hand-mirrored port of the `awk` body pinned in
+    # core SKILL.md's design-gate invariant. Editing one without the other lets
+    # the gate and the one-call entry disagree about what a dispatch summary
+    # line looks like, so the awk body is EXTRACTED here, never re-typed.
+    found = re.search(r"f && /(dispatch [^/]+)/\{hit=1\}", _SKILL_TEXT)
+    assert found, (
+        f"{_SKILL}: expected the design-gate invariant's `awk` line with a "
+        "section-scoped `f && /<dispatch summary regex>/{hit=1}` clause — not found."
+    )
+    awk_body = found.group(1)
+    # `\d` is the only licensed difference: awk's ERE has no shorthand class.
+    assert enter._DISPATCH_RE.pattern.replace(r"\d", "[0-9]") == awk_body, (
+        f"cli/enter.py's _DISPATCH_RE has drifted from {_SKILL}'s design-gate "
+        f"`awk` body.\n  enter: {enter._DISPATCH_RE.pattern}\n  awk:   {awk_body}\n"
+        "Change both or neither — a session running the gate and a session "
+        "reading `design: reuse` must accept exactly the same lines."
     )

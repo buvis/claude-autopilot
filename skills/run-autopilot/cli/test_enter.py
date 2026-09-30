@@ -37,7 +37,6 @@ from cli.enter_harness import (
     _open_state,
     _prd_text,
     _walk_up,
-    enter_twin,
     run_cli,
 )
 
@@ -87,6 +86,37 @@ def test_fresh_wip_prd_continues_with_null_stop(env: Env, capsys) -> None:
     for name in _walk_up.INHERITED_MARKERS:
         assert not (env.autopilot_dir / name).exists()
     assert capsys.readouterr().out == ""
+
+
+def test_a_fresh_cache_and_a_reviewed_design_doc_reuse_both(env: Env) -> None:
+    # The counterpart of the run above, and the reason both dicts are written
+    # out in full: these two fixtures differ in their catchup AND design
+    # decisions, so no single canned reply can satisfy both.
+    env.write_state(_open_state(batch=_cache()))
+    env.put("wip", PRD, _prd_text(design="run"))
+    doc = _design_doc(env)
+    doc.parent.mkdir(parents=True, exist_ok=True)
+    doc.write_text(
+        f"# Design\n\n## Review log\n\n{DISPATCH_LINE}\n",
+        encoding="utf-8",
+    )
+
+    out = env.run()
+
+    assert out == {
+        "stop": None,
+        "detail": "",
+        "prd": PRD,
+        "source": "wip",
+        "parked": None,
+        "custody_pending": 0,
+        "lane_effective": "full",
+        "catchup": "delta",
+        "design": "reuse",
+        "resume_target": "build: catchup then planning",
+        "batch": "open",
+        "warnings": [],
+    }
 
 
 def test_bootstrap_without_state_json_proceeds_through_selection(env: Env) -> None:
@@ -699,10 +729,36 @@ def test_batch_is_null_on_every_stop_before_step_nine(
 # -- the `enter` CLI verb ------------------------------------------------------
 
 
+def _printed_line(**overrides) -> dict:
+    """The JSON line the verb must print for a clean `wip` pick, written out by
+    hand; each caller states the fields its own fixture changes.
+
+    Literal on purpose. An expected value computed by `enter()` — or by
+    `enter_twin`, which calls it — makes the code under test its own oracle: a
+    canned implementation returning one constant dict for every tree matches
+    such an expectation exactly. These values are specified independently, so
+    two fixtures whose decisions differ cannot both be satisfied by one reply.
+    """
+    return {
+        "stop": None,
+        "detail": "",
+        "prd": PRD,
+        "source": "wip",
+        "parked": None,
+        "custody_pending": 0,
+        "lane_effective": "full",
+        "catchup": "full",
+        "design": "skip",
+        "resume_target": "build: catchup then planning",
+        "batch": "open",
+        **overrides,
+    }
+
+
 def test_cli_prints_one_json_line_with_every_key(env: Env) -> None:
     env.write_state(_open_state())
     env.put("wip")
-    expected = enter_twin(env)  # what enter() itself returns for this tree
+    expected = _printed_line()
 
     # no --prds: the verb must resolve it from the state path's parent
     proc = run_cli(env, "enter", "--state", str(env.state_path))
@@ -711,10 +767,9 @@ def test_cli_prints_one_json_line_with_every_key(env: Env) -> None:
     lines = proc.stdout.splitlines()
     assert len(lines) == 1, proc.stdout
     assert set(json.loads(lines[0])) == KEYS
-    # every value, projected onto KEYS: no canned line can match enter()'s own,
-    # and `warnings` is returned to the caller but never printed on stdout
-    assert lines[0] == json.dumps({k: expected[k] for k in KEYS}, sort_keys=True)
-    assert (expected["stop"], expected["prd"], expected["source"]) == (None, PRD, "wip")
+    # every value, not the key set alone, and `warnings` is returned to the
+    # caller but never printed on stdout
+    assert lines[0] == json.dumps(expected, sort_keys=True)
     # side effects no constant-printing stub produces: step 0's tree...
     assert (env.prds_dir / "backlog").is_dir()
     assert (env.autopilot_dir / "reports").is_dir()
@@ -727,13 +782,12 @@ def test_cli_prints_one_json_line_with_every_key(env: Env) -> None:
 def test_cli_moves_a_backlog_prd_into_wip(env: Env) -> None:
     env.write_state(_open_state())
     env.put("backlog")
-    expected = enter_twin(env)
+    expected = _printed_line(source="backlog")
 
     proc = run_cli(env, "enter", "--state", str(env.state_path))
 
     assert proc.returncode == 0, proc.stderr
-    assert proc.stdout == json.dumps({k: expected[k] for k in KEYS}, sort_keys=True) + "\n"
-    assert (expected["prd"], expected["source"]) == (PRD, "backlog")
+    assert proc.stdout == json.dumps(expected, sort_keys=True) + "\n"
     # the verified move happened in the real tree, not only in the printed line
     assert env.has("wip")
     assert not env.has("backlog")
@@ -777,13 +831,12 @@ def test_cli_prd_flag_selects_the_named_prd(env: Env) -> None:
     env.write_state(_open_state())
     env.put("wip", PRD)  # the one plain selection would pick (lower number)
     env.put("wip", OTHER)
-    expected = enter_twin(env, prd_arg=OTHER)
+    expected = _printed_line(prd=OTHER, source="arg")
 
     proc = run_cli(env, "enter", "--state", str(env.state_path), "--prd", OTHER)
 
     assert proc.returncode == 0, proc.stderr
-    assert proc.stdout == json.dumps({k: expected[k] for k in KEYS}, sort_keys=True) + "\n"
-    assert (expected["prd"], expected["source"]) == (OTHER, "arg")
+    assert proc.stdout == json.dumps(expected, sort_keys=True) + "\n"
 
 
 def test_cli_in_loop_is_read_from_the_environment(env: Env) -> None:
