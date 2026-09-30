@@ -263,9 +263,14 @@ def test_the_warnings_the_frontmatter_write_produced_arrive_unchanged(
     ]
     real_apply = frontmatter.apply
 
-    def apply_with_sentinel(prd_path: Path, state_path: Path) -> tuple[dict, list[str]]:
-        fields, _warnings = real_apply(prd_path, state_path)
-        return fields, list(sentinel)
+    def apply_with_sentinel(
+        prd_path: Path, state_path: Path,
+    ) -> tuple[dict, list[str], list[str]]:
+        # No resets: `apply` returns them as a third value and `enter` appends
+        # them to `warnings`, so passing the real ones through would make this
+        # assertion about resets too. `test_shared_lift.py` pins that half.
+        fields, _warnings, _resets = real_apply(prd_path, state_path)
+        return fields, list(sentinel), []
 
     env.write_state(_open_state())
     env.put("wip", PRD, _prd_text())
