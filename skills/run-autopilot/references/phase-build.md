@@ -44,6 +44,31 @@ existing section that owns that halt.
 | `state_write_failed` | § Frontmatter parse, the state write failed; Error Handling's statectl row |
 | `design_review_log_empty` | the design-gate invariant's non-zero branch (Phase 1.5) |
 
+`autopilot enter` prints no banner of its own. It prints the one JSON line
+(frontmatter warnings go to stderr); every banner is still this skill's to
+print, from the fields that line returned.
+
+A non-null `parked` means `autopilot park` parked that PRD: print the STALLED
+banner and continue selection (§ Handle park request's exit-0 row).
+
+A non-zero `custody_pending` in loop mode (`$_AUTOPILOT_LOOP` set) is the cue
+to print `custody: <n> entries await an attended resume` (`<n>` =
+`custody_pending`) and continue (§ Handle pending custody's loop-mode branch).
+
+`enter` makes no capsule read: before Phase 1, read the Active Work section of
+`docs/dev/project-management/meta/project-capsule.md` yourself if it exists
+(§ Normal PRD selection step 6).
+
+A non-zero exit prints NO JSON line — the diagnostics go to stderr, so read
+stderr and the exit code instead of waiting for a `stop` value that never
+comes:
+
+| exit | cause |
+|---|---|
+| `1` | no autopilot dir above cwd and no `--state` given; this call runs before the `mkdir -p` block, so a from-nothing repo hits it on its very first call — run from the project root, or pass `--state` |
+| `2` | `state.json` is corrupt (`StateError`) — the corrupted-state row of core `SKILL.md` § Error Handling owns it |
+| `6` | a future `schema_version` stamp, refused rather than resumed blindly (the same preflight `autopilot resume-target` makes) |
+
 ### Ensure lifecycle directories exist
 
 Before anything else — before the abort handlers and before PRD selection — run
@@ -161,8 +186,9 @@ reference.
    Where `{n}` = `len(batch.completed_prds) + 1`
 9. Write the `resume` handoff row, best-effort (`work/references/subagent-dispatch.md` § Dispatch telemetry): `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py handoff --site build --edge resume --phase build --prd <state.prd>`. Its gap to the previous session's `leave` row is the handoff latency nothing else measures; it is written after selection so `<state.prd>` names this session's PRD.
 
-`autopilot enter` runs these steps; the instructions above stay the hand-run
-reference.
+`autopilot enter` runs these steps except step 6 — it makes no capsule read, so
+the Active Work read stays this session's own (§ Enter in one call). The
+instructions above stay the hand-run reference.
 
 ### Frontmatter parse (step 5)
 
