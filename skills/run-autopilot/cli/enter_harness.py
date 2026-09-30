@@ -3,8 +3,8 @@
 
 Not a test module (the name deliberately avoids the `test_` prefix, so pytest
 does not collect it): it holds the constants, the fixture builders and the
-`Env` harness that test_enter.py and test_enter_decisions.py both drive
-`enter()` through. Every `def test_*` lives in those two modules.
+`Env` harness that the `test_enter*.py` modules drive `enter()` through. Every
+`def test_*` lives in those modules, never here.
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ from __future__ import annotations
 import importlib
 import json
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -267,31 +266,9 @@ def run_cli(
     )
 
 
-def enter_twin(env: Env, *, prd_arg: str | None = None) -> dict:
-    """The dict the `enter` verb must produce for `env`'s tree, computed by
-    `enter()` itself on a byte-identical clone beside it.
-
-    Every injectable stays at the CLI's own default (clock, git HEAD) so the
-    two runs can only differ if the verb does something other than call
-    `enter()`; only the handoff row is stubbed out, and the result does not
-    depend on it. Call this BEFORE the CLI runs: it clones the tree as it is.
-
-    This is the CALLER-shaped dict (`RESULT_KEYS`), NOT the shape of the
-    printed line: comparing it against the verb's stdout means projecting it
-    onto `KEYS` first - `json.dumps({k: twin[k] for k in KEYS}, sort_keys=True)`
-    - or the extra `warnings` key fails the comparison against a correct verb.
-    """
-    clone_root = env.root.with_name(env.root.name + "-twin")
-    twin = Env(clone_root)
-    shutil.copytree(env.root, clone_root, dirs_exist_ok=True)
-    try:
-        return enter.enter(
-            twin.state_path,
-            prds_dir=twin.prds_dir,
-            autopilot_dir=twin.autopilot_dir,
-            prd_arg=prd_arg,
-            in_loop=False,
-            record_resume_row=lambda prd, site, autopilot_dir: None,
-        )
-    finally:
-        shutil.rmtree(clone_root, ignore_errors=True)
+# `enter_twin` lived here until the CLI-verb tests stopped using it as their
+# expected value. It computed the expected dict by running `enter()` on a clone
+# of the tree, which made the code under test its own oracle: one canned
+# implementation returning a constant dict satisfied every assertion built on
+# it. `test_enter_cli._printed_line` states those values independently instead.
+# Do not reintroduce a twin helper here - that is the hole, not the fix.
