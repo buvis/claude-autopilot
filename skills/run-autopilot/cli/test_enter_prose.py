@@ -9,6 +9,13 @@ instruction, assert short reword-resistant substrings in order, and sweep each
 slice for the negation that would invert it. The stop-value table is checked
 against `cli.enter.STOPS` read at test time, so a stop value added later with
 no row fails here instead of leaving an undocumented halt.
+
+The obligations the section must carry beyond that table — the STALLED banner
+behind a non-null `parked`, the loop-mode custody line behind
+`custody_pending`, exits 1/2/6, the missing JSON line on a non-zero exit, and
+§ "Normal PRD selection" step 6's Active Work read — are pinned unit by unit:
+every half of such a pin must sit in ONE table row or ONE paragraph, so a row
+cannot borrow its meaning from the row below.
 """
 
 from __future__ import annotations
@@ -19,12 +26,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from cli.custody_prose_testutil import (
+    _SELECTION_HEADING,
     _SKILL_DIR,
     _added_bullets,
     _assert_absent,
     _assert_in_order,
     _assert_matches,
     _assert_present,
+    _prose,
     _section,
 )
 from cli.enter import STOPS
@@ -41,6 +50,7 @@ _PHASE_0 = "## Phase 0: PRD Selection"
 _PHASE_1 = "## Phase 1: Catchup"
 _ENTER_HEADING = "### Enter in one call"
 _MKDIR_HEADING = "### Ensure lifecycle directories exist"
+_FRONTMATTER_HEADING = "### Frontmatter parse (step 5)"
 
 # Every Phase 0 subsection that predates the one-call entry. The new section
 # points at these; it replaces none of them.
@@ -64,6 +74,32 @@ _ENTER_NEGATIONS = (
     "skip the enter call",
 )
 
+# The loop-mode custody line § "Handle pending custody" tells a session to
+# print, minus its `<n>` so a reworded count cannot break the pin.
+_CUSTODY_LINE = "entries await an attended resume"
+
+# Loop mode, named either way the file names it elsewhere.
+_LOOP_MODE = r"loop mode|_AUTOPILOT_LOOP"
+
+# Who prints the banners: the CLI prints the JSON line, the skill prints every
+# banner itself from the returned fields. Several honest phrasings, so the pin
+# measures the obligation and not one sentence.
+_SKILL_PRINTS_THE_BANNERS = (
+    r"(?i)prints? no banner"
+    r"|prints? (?:only|just) (?:the |one )?JSON line"
+    r"|JSON line (?:is all|and nothing else)"
+    r"|banners? (?:are|stay|remain) (?:yours|the skill's|this skill's)"
+    r"|print(?:s|ing)? (?:the |each |every )?banners? yourself"
+)
+
+# Each non-zero exit `autopilot enter` can take, with the substrings that turn
+# the bare code into a cause a session can act on.
+_EXIT_MEANINGS = (
+    (1, (r"autopilot dir", r"--state")),
+    (2, (r"corrupt", r"Error Handling")),
+    (6, (r"schema", r"future")),
+)
+
 
 def _phase_0() -> str:
     return _section(_BUILD_TEXT, _PHASE_BUILD, _PHASE_0, _PHASE_1)
@@ -71,6 +107,10 @@ def _phase_0() -> str:
 
 def _enter_section() -> str:
     return _section(_phase_0(), _PHASE_BUILD, _ENTER_HEADING, _MKDIR_HEADING)
+
+
+def _selection_section() -> str:
+    return _section(_phase_0(), _PHASE_BUILD, _SELECTION_HEADING, _FRONTMATTER_HEADING)
 
 
 def _table_rows(scope: str) -> str:
@@ -81,6 +121,50 @@ def _table_rows(scope: str) -> str:
         if line.strip().startswith("|") and not set(line.strip()) <= set("|-: ")
     ]
     return "\n".join(rows)
+
+
+def _units(scope: str) -> list[str]:
+    """`scope` split into binding units: each table row alone, the rest by blank
+    line.
+
+    A binding pin asks for every half inside ONE unit. `_assert_bound`'s gap
+    forbids newlines, which this file's ~80-column hard wraps would break, and
+    `_paragraph` needs a lead sentence a pin may not dictate; a table row must
+    still not borrow its meaning from the row below. Fences drop first, so a
+    token dump inside a code block satisfies no pin.
+    """
+    units: list[str] = []
+    for block in re.split(r"\n[ \t]*\n", _prose(scope)):
+        lines = block.splitlines()
+        rows = [line for line in lines if line.lstrip().startswith("|")]
+        units.extend(rows)
+        units.append("\n".join(line for line in lines if line not in rows))
+    return [unit for unit in units if unit.strip()]
+
+
+def _unit_with(scope: str, *patterns: str) -> str | None:
+    """The first unit of `scope` matching every pattern, case-insensitively."""
+    return next(
+        (
+            unit
+            for unit in _units(scope)
+            if all(re.search(pattern, unit, re.IGNORECASE) for pattern in patterns)
+        ),
+        None,
+    )
+
+
+def _assert_one_unit(
+    scope: str,
+    path: Path,
+    where: str,
+    patterns: tuple[str, ...],
+    what: str,
+) -> None:
+    assert _unit_with(scope, *patterns) is not None, (
+        f"{path}: expected {where} to {what} — no single table row or paragraph "
+        f"there carries all of {patterns!r}."
+    )
 
 
 def test_phase_0_opens_with_autopilot_enter() -> None:
@@ -103,7 +187,14 @@ def test_phase_0_opens_with_autopilot_enter() -> None:
         section,
         _PHASE_BUILD,
         where,
-        ("`autopilot enter`", "one Bash call", "`stop`", "null", "Phase 1", "`stop` is set"),
+        (
+            "`autopilot enter`",
+            "one Bash call",
+            "`stop`",
+            "null",
+            "Phase 1",
+            "`stop` is set",
+        ),
     )
     _assert_present(section, _PHASE_BUILD, where, ("`catchup`", "`design`"))
     _assert_absent(section, _PHASE_BUILD, where, _ENTER_NEGATIONS)
@@ -207,9 +298,121 @@ def test_changelog_added_carries_the_enter_entry() -> None:
     added = _added_bullets(_CHANGELOG.read_text(), _CHANGELOG)
     bullets = [b for b in re.split(r"(?m)^- ", added) if b.strip()]
     hits = [
-        b for b in bullets if b.startswith("**run-autopilot**") and "`autopilot enter`" in b
+        b
+        for b in bullets
+        if b.startswith("**run-autopilot**") and "`autopilot enter`" in b
     ]
     assert hits, (
         f"{_CHANGELOG}: expected an Added bullet prefixed `- **run-autopilot**` "
         "that mentions `autopilot enter` — not found."
+    )
+
+
+def test_a_non_null_parked_prompts_the_stalled_banner_the_skill_prints() -> None:
+    section = _prose(_enter_section())
+    where = f"the {_ENTER_HEADING!r} section"
+    _assert_present(section, _PHASE_BUILD, where, ("`parked`", "STALLED"))
+    _assert_one_unit(
+        section,
+        _PHASE_BUILD,
+        where,
+        (r"`parked`", r"STALLED", r"non-null|not null|is set|\bset\b|present"),
+        "tell a session that a non-null `parked` means it prints the STALLED "
+        "banner (§ Handle park request's exit-0 row: 'print the STALLED banner, "
+        "continue selection')",
+    )
+    _assert_matches(
+        section,
+        _PHASE_BUILD,
+        where,
+        _SKILL_PRINTS_THE_BANNERS,
+        "say `autopilot enter` prints no banner of its own — the CLI prints the "
+        "JSON line and the skill still prints every banner itself, from the "
+        "returned fields",
+    )
+
+
+def test_a_non_zero_custody_pending_in_loop_mode_prompts_the_custody_line() -> None:
+    section = _prose(_enter_section())
+    where = f"the {_ENTER_HEADING!r} section"
+    _assert_present(section, _PHASE_BUILD, where, ("`custody_pending`", _CUSTODY_LINE))
+    _assert_one_unit(
+        section,
+        _PHASE_BUILD,
+        where,
+        (
+            r"`custody_pending`",
+            re.escape(_CUSTODY_LINE),
+            _LOOP_MODE,
+            r"non-?zero|not (?:zero|0)",
+        ),
+        "tie a non-zero `custody_pending` in loop mode to printing "
+        f"`custody: <n> {_CUSTODY_LINE}` (§ Handle pending custody's loop-mode "
+        "branch)",
+    )
+
+
+def test_every_non_zero_exit_names_what_it_means() -> None:
+    section = _prose(_enter_section())
+    where = f"the {_ENTER_HEADING!r} section"
+    for code, needles in _EXIT_MEANINGS:
+        token = (
+            rf"\bexits?[ \t]*(?:with |status |code )?{code}\b"
+            rf"|^[ \t]*\|[ \t]*`?{code}`?[ \t]*\|"
+        )
+        _assert_one_unit(
+            section,
+            _PHASE_BUILD,
+            where,
+            (token, *needles),
+            f"document exit {code} beside what it means, so a session that gets "
+            "it knows the cause instead of re-running the call",
+        )
+
+
+def test_no_json_line_accompanies_a_non_zero_exit() -> None:
+    section = _prose(_enter_section())
+    where = f"the {_ENTER_HEADING!r} section"
+    _assert_present(section, _PHASE_BUILD, where, ("stderr",))
+    _assert_one_unit(
+        section,
+        _PHASE_BUILD,
+        where,
+        (
+            r"JSON line",
+            r"non-zero",
+            r"\b(?:no|not|never|nothing|absent|missing)\b",
+        ),
+        "say no JSON line is printed on a non-zero exit, so a session reads "
+        "stderr and the exit code instead of waiting for a `stop` value that "
+        "never comes",
+    )
+
+
+def test_the_enter_section_keeps_the_capsule_active_work_read() -> None:
+    _assert_one_unit(
+        _prose(_enter_section()),
+        _PHASE_BUILD,
+        f"the {_ENTER_HEADING!r} section",
+        (r"Active Work", r"\bread\b"),
+        "tell the reader to read the Active Work section of "
+        "`docs/dev/project-management/meta/project-capsule.md` before Phase 1 — "
+        f"that is {_SELECTION_HEADING!r} step 6, which `autopilot enter` cannot "
+        "perform, so the one-call section has to hand it back",
+    )
+
+
+def test_the_selection_pointer_names_step_6_as_outside_enter() -> None:
+    _assert_one_unit(
+        _prose(_selection_section()),
+        _PHASE_BUILD,
+        f"the pointer closing {_SELECTION_HEADING!r}",
+        (
+            r"`autopilot enter`",
+            r"step 6|Active Work",
+            r"\b(?:not|never|cannot|can't|excludes?|excluded|except|outside)\b",
+        ),
+        "say plainly that step 6 (the capsule's Active Work read) is NOT covered "
+        "by `autopilot enter`, instead of claiming enter runs `these steps` and "
+        "leaving that read silently dropped",
     )
