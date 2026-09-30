@@ -88,14 +88,16 @@ def _git_head_sha(repo_root: Path) -> str | None:
     return proc.stdout.strip() if proc.returncode == 0 else None
 
 
-def _record_resume_row(prd: str, site: str) -> None:
+def _record_resume_row(prd: str, site: str, autopilot_dir: Path) -> None:
     """Best-effort handoff row via the work pack's record_dispatch.py; any
-    failure goes to stderr, never past the caller."""
+    failure goes to stderr, never past the caller. Runs in `autopilot_dir`:
+    record_dispatch.py resolves the ledger from its own cwd, and this
+    process's cwd need not be inside the project at all."""
     try:
         proc = subprocess.run(
             ["python3", str(_RECORD_DISPATCH), "handoff", "--site", site,
              "--edge", "resume", "--phase", "build", "--prd", prd],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True, text=True, timeout=10, cwd=str(autopilot_dir),
         )
     except (OSError, subprocess.SubprocessError) as err:
         print(f"autopilot: enter: resume row failed: {err}", file=sys.stderr)
@@ -289,20 +291,22 @@ def _batch_report(out: dict, state_path: Path) -> bool:
 
 
 def _write_prd(
-    out: dict, state_path: Path, prds_dir: Path,
-    record_resume_row: Callable[[str, str], None],
+    out: dict, state_path: Path, prds_dir: Path, autopilot_dir: Path,
+    record_resume_row: Callable[[str, str, Path], None],
 ) -> dict | None:
     """Step 10 writes: state.prd, the frontmatter fields, the handoff row.
-    Returns the fields, or None after a state_write_failed stop."""
+    Returns the fields, or None after a state_write_failed stop. The write's
+    warnings travel on in `out["warnings"]`, halt or not."""
     prd = out["prd"]
     try:
         statectl.mutate(state_path, lambda data: data.update(prd=prd))
-        fields, _warnings = frontmatter.apply(prds_dir / "wip" / prd, state_path)
+        fields, warnings = frontmatter.apply(prds_dir / "wip" / prd, state_path)
     except (OSError, state.StateError, schema.SchemaError) as err:
         _stop(out, "state_write_failed", str(err))
         return None
+    out["warnings"] = list(warnings)
     try:
-        record_resume_row(prd, "build")
+        record_resume_row(prd, "build", autopilot_dir)
     except Exception as err:  # best-effort row: never halts Phase 0
         print(f"autopilot: enter: resume row failed: {err}", file=sys.stderr)
     return fields
@@ -372,11 +376,14 @@ def enter(
     in_loop: bool,
     now: Callable[[], str] = _utc_now,
     git_head: Callable[[Path], str | None] = _git_head_sha,
-    record_resume_row: Callable[[str, str], None] = _record_resume_row,
+    record_resume_row: Callable[[str, str, Path], None] = _record_resume_row,
 ) -> dict:
     """Run the Phase 0 step chain in documented order; return the one JSON
-    line as a dict. A corrupt state.json raises state.StateError."""
-    out = dict(_EMPTY_RESULT)
+    line as a dict, plus the frontmatter write's `warnings` for the caller to
+    print. A corrupt state.json raises state.StateError."""
+    # warnings is built per call, never copied out of _EMPTY_RESULT: one
+    # shared list would carry one run's warnings into the next.
+    out = {**_EMPTY_RESULT, "warnings": []}
     if _bootstrap(out, state_path, prds_dir, autopilot_dir):
         return out
     if _park(out, state_path, prds_dir, autopilot_dir):
@@ -398,7 +405,7 @@ def enter(
         return out
     if _batch_report(out, state_path):
         return out
-    fields = _write_prd(out, state_path, prds_dir, record_resume_row)
+    fields = _write_prd(out, state_path, prds_dir, autopilot_dir, record_resume_row)
     if fields is None:
         return out
     out["lane_effective"] = fields["lane_effective"]

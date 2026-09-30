@@ -13,7 +13,8 @@ Subcommands:
         "next_phase": "build"}) via state.init().
     enter     --state --prd --prds
         enter.enter(): the Phase 0 step chain. Prints its one-line JSON
-        result (the `stop` key names the halt, when there is one).
+        result (the `stop` key names the halt, when there is one); the
+        frontmatter warnings go to stderr, never onto that line.
     stall     --state --prd --site --detail --prds
         records.do_stall(); autopilot_dir is always the state file's own
         parent directory (no flag).
@@ -315,7 +316,12 @@ def _run_enter(args: argparse.Namespace) -> int:
     except (state.StateError, state.StateExistsError) as err:
         print(f"autopilot: enter failed: {err}", file=sys.stderr)
         return 2
+    # Popped, not filtered: the frontmatter warnings are for the operator's
+    # stderr, and the printed line is the machine-readable keys alone.
+    warnings = result.pop("warnings")
     print(json.dumps(result, sort_keys=True))
+    for line in warnings:
+        print(line, file=sys.stderr)
     if result["detail"]:
         print(f"autopilot: {result['detail']}", file=sys.stderr)
     return 0
