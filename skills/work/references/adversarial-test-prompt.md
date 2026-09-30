@@ -41,7 +41,7 @@ Write an implementation that makes ALL tests pass but is clearly WRONG. Strategi
 Process:
 1. Read the tests carefully
 2. Write a deliberately wrong implementation
-3. Run the test suite against your wrong implementation
+3. Run the test runner command above against your wrong implementation
 4. If tests pass: you broke them. Keep going: show every other weak point you can prove the same way, up to 8 in total, before reporting.
 5. If tests fail: try a different exploit. After 3 failed attempts, report "Tests are robust."
 
@@ -51,8 +51,7 @@ Rules:
 3. Do NOT modify test files
 4. For each exploit, explain which test is too weak and what assertion would prevent it
 5. Clean up your wrong implementation before returning. Do NOT use `rm` — it is denied to subagents and will fail. Instead, use the Write tool to OVERWRITE every file you created with a single placeholder line (`# adversarial placeholder - overwritten by implementor`). The Write tool always works. Never ask for permission to delete; just overwrite and report the path.
-6. Run only the test runner command above, once per exploit; never a
-whole test directory.
+6. Run only the test runner command above, once per exploit; never a whole test directory.
 
 Output format:
 - If you CAN break the tests: show the wrong implementation and the passing test output, then a numbered `Weak points:` list, one line each: `N. <test name> - <what a wrong implementation gets away with> - <assertion that would prevent it>`
@@ -93,4 +92,10 @@ Weak points:
 Address every numbered weak point. Answer each in your reply as
 `N. strengthened: <test name>` or `N. in-contract: <why the behavior is allowed>`.
 Do not change tests that Devon could NOT break.
+
+Run only the test files this task names (the tests you wrote, or the
+failing tests in your prompt), with `-q --tb=line`. Never run a whole test
+directory or `dev/bin/release-checks`: the orchestrator runs the full suite
+once, after every task. Read the pass count and exit code from that one
+run; never re-run a suite to recover a number.
 ```
