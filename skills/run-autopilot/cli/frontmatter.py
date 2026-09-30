@@ -9,7 +9,8 @@ tree has ever used.
 
 The one exception is `apply(prd_path, state_path)`, the non-printing core of
 `autopilot frontmatter`: it reads the PRD, adds the lane fields, and writes
-them all to state.json in one transaction.
+them all to state.json in one transaction, handing each warning to
+`on_warning` before that write and returning the reset lines beside them.
 
 `fields` maps STATE keys (not PRD keys) to effective values, and carries only
 what Phase 0 should write: an absent optional field stays absent rather than
@@ -39,6 +40,7 @@ the per-task tier, `session_model` picks the build session's model.
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 # 20, plus the two custody keys the hold refresh may add.
@@ -162,11 +164,21 @@ def parse(text: str) -> tuple[dict, list[str]]:
     return fields, warnings
 
 
-def apply(prd_path: Path, state_path: Path) -> tuple[dict, list[str]]:
+def apply(
+    prd_path: Path,
+    state_path: Path,
+    *,
+    on_warning: Callable[[str], None] | None = None,
+) -> tuple[dict, list[str], list[str]]:
     """Parse `prd_path`, add lane/lane_reason/lane_effective (`off` in
     `_AUTOPILOT_LANES` forces full), write every field to `state_path` in ONE
-    transaction, and return (fields, warnings). Prints nothing; raises
+    transaction, and return (fields, warnings, resets). Prints nothing; raises
     OSError, state.StateError, or schema.SchemaError on a failed read/write.
+
+    `on_warning` is handed each warning line BEFORE the write, so a caller that
+    prints them still has them when the write then raises. `resets` names one
+    line per field whose value the write actually changed, read from the
+    pre-write state inside the transaction, so it stays empty on a failure.
 
     Imports the package siblings here, not at module level: `parse` and
     `declared` are also loaded BY PATH (no parent package) by
@@ -186,13 +198,31 @@ def apply(prd_path: Path, state_path: Path) -> tuple[dict, list[str]]:
     fields["lane"] = verdict.lane
     fields["lane_reason"] = verdict.reason
     fields["lane_effective"] = lane.effective(
-        verdict.lane, os.environ.get("_AUTOPILOT_LANES"),
+        verdict.lane,
+        os.environ.get("_AUTOPILOT_LANES"),
     )
+    if on_warning is not None:
+        for line in warnings:
+            on_warning(line)
+
+    before: dict = {}
+
+    def commit(current: dict) -> dict:
+        before.update(current)
+        return {**current, **fields}
+
     state.transaction(
         state_path,
-        lambda current: {**current, **fields},
+        commit,
         validator=lambda new_state: schema.validate(
             {key: value for key, value in new_state.items() if key in fields},
         ),
     )
-    return fields, warnings
+    # Compared, not enumerated: every field `parse` can write earns its own
+    # line, so a new key cannot be overwritten in silence.
+    resets = [
+        f"autopilot: PRD frontmatter reset {key} {before[key]} -> {value}"
+        for key, value in fields.items()
+        if key in before and before[key] != value
+    ]
+    return fields, warnings, resets

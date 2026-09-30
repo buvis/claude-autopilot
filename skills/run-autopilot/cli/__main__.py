@@ -165,12 +165,10 @@ sys.path.insert(0, str(_SKILL_ROOT))
 
 from cli import (
     custody,
-    eligibility,
     enter,
     frontmatter,
     gate,
     handoff,
-    lane,
     lane_check,
     policy,
     records,
@@ -532,51 +530,12 @@ def _run_check_plan(args: argparse.Namespace) -> int:
     return 0
 
 
-def _listdir(path: Path) -> list[str]:
-    """Basenames in `path`, or [] when it does not exist.
-
-    An absent lifecycle dir is not an error here: Phase 0's `mkdir -p` block
-    runs before selection, and a directory that is missing anyway holds no
-    PRDs, which is what "empty" already means.
-    """
-    try:
-        return [entry.name for entry in path.iterdir()]
-    except (FileNotFoundError, NotADirectoryError):
-        return []
-
-
 def _add_select(subparsers) -> None:
     p = subparsers.add_parser("select")
     p.add_argument("--prds")
     # Deliberately no --hold and no --include-parked: hold/ is unreachable
     # from selection.select() by construction, and a flag would make the
     # parked/deferred exclusion optional.
-
-
-def _prd_text(path: Path) -> str:
-    """A PRD's text, or "" when it cannot be read.
-
-    An unreadable PRD declares no eligibility check, which is exactly the
-    pre-gate behavior: pick it, and let the session that opens it report the
-    real problem instead of the picker guessing at one.
-    """
-    try:
-        return path.read_text(encoding="utf-8")
-    except OSError:
-        return ""
-
-
-def _project_root(prds_dir: Path) -> Path:
-    """The directory holding `docs/dev/project-management` - where an eligibility check's
-    repo-relative paths resolve from.
-
-    Falls back to the prds dir itself when the path is too shallow to be the
-    standard `<root>/docs/dev/project-management/prds` shape. `--prds` accepts any path, and a
-    two-deep one (`/prds`) has no third parent: a misconfigured flag must cost
-    a failed check, not a traceback out of a verb that never crashed before.
-    """
-    resolved = prds_dir.resolve()
-    return resolved.parents[3] if len(resolved.parents) > 3 else resolved
 
 
 def _record_skips(state_path: Path, skipped: list[dict]) -> int:
@@ -602,34 +561,10 @@ def _run_select(args: argparse.Namespace) -> int:
         prds_dir = Path(args.prds)
     else:
         prds_dir = _walk_up_or_exit("--prds").parent / "prds"
-    project_root = _project_root(prds_dir)
-    in_wip = _listdir(prds_dir / "wip")
-    in_backlog = _listdir(prds_dir / "backlog")
-    skipped: list[dict] = []
-    while True:
-        prd, source = selection.select(in_wip, in_backlog)
-        # wip candidates are never gated: the check decides what to START, and
-        # a PRD already in flight is past that question.
-        if source != "backlog":
-            break
-        command = eligibility.command_for(_prd_text(prds_dir / "backlog" / prd))
-        if command is None:
-            break
-        exit_code, note = eligibility.evaluate(command, project_root)
-        if exit_code == 0:
-            break
-        skipped.append(
-            {
-                "prd": prd,
-                "command": command,
-                "exit_code": exit_code,
-                "note": note,
-                "at": _utc_now(),
-            },
-        )
-        # Drop it from THIS pick's listing only; the file stays in backlog/,
-        # so the next drain re-evaluates it. A skip is not a park.
-        in_backlog = [name for name in in_backlog if name != prd]
+    prd, source, skips = selection.select_eligible(prds_dir)
+    # The `at` stamp is the verb's own, not the helper's: a clock reading
+    # belongs to the record, and the helper returns data for both callers.
+    skipped = [{**skip, "at": _utc_now()} for skip in skips]
     # Printed before the state write: the pick is the caller's answer, and a
     # bookkeeping failure must not swallow it.
     print(json.dumps({"prd": prd, "source": source, "skipped": skipped}))
@@ -652,68 +587,36 @@ def _add_frontmatter(subparsers) -> None:
     p.add_argument("--prd", required=True)
 
 
-def _lane_fields(text: str) -> tuple[dict, list[str]]:
-    """The three lane fields `cli/lane.py` decides for this PRD, and the one
-    warning an invalid `lane:` value earns (silence when the key is absent).
-    This verb is the one reader of `_AUTOPILOT_LANES`; `off` forces full."""
-    declared = frontmatter.declared(text)
-    verdict = lane.classify(text, declared)
-    warnings: list[str] = []
-    if "lane" in declared and declared["lane"] not in lane.LANES:
-        warnings.append(
-            f"autopilot: PRD frontmatter lane={declared['lane']!r} is not one of "
-            f"solo/fast-track/full; defaulting to {verdict.lane}",
-        )
-    fields = {
-        "lane": verdict.lane,
-        "lane_reason": verdict.reason,
-        "lane_effective": lane.effective(verdict.lane, os.environ.get("_AUTOPILOT_LANES")),
-    }
-    return fields, warnings
-
-
 def _run_frontmatter(args: argparse.Namespace) -> int:
     prd_path = Path(args.prd)
+    # Read here as well as inside frontmatter.apply(): an unreadable PRD exits 1
+    # BEFORE a future-schema state.json can exit 6, and re-reading a small
+    # markdown file is cheaper than threading that precedence into the helper.
     try:
-        text = prd_path.read_text(encoding="utf-8")
+        prd_path.read_text(encoding="utf-8")
     except OSError as err:
         print(f"autopilot: cannot read PRD {prd_path}: {err}", file=sys.stderr)
         return 1
-    fields, warnings = frontmatter.parse(text)
-    lane_fields, lane_warnings = _lane_fields(text)
-    fields.update(lane_fields)
-    for line in warnings + lane_warnings:
-        print(line, file=sys.stderr)
 
     state_path = _resolve_state_path(args.state)
     refuse = _schema_version_preflight(state_path)
     if refuse is not None:
         return refuse
 
-    before: dict = {}
-
-    def apply(current: dict) -> dict:
-        before.update(current)
-        return {**current, **fields}
-
     try:
-        state.transaction(
+        # Printed through on_warning, not collected: a write that then fails
+        # must not swallow the parse and lane warnings it already earned.
+        fields, _warnings, resets = frontmatter.apply(
+            prd_path,
             state_path,
-            apply,
-            validator=lambda new_state: schema.validate(
-                {key: value for key, value in new_state.items() if key in fields},
-            ),
+            on_warning=lambda line: print(line, file=sys.stderr),
         )
     except (state.StateError, OSError) as err:
         print(f"autopilot: frontmatter write failed: {err}", file=sys.stderr)
         return 2
 
-    for key, new_value in fields.items():
-        if key in before and before[key] != new_value:
-            print(
-                f"autopilot: PRD frontmatter reset {key} {before[key]} -> {new_value}",
-                file=sys.stderr,
-            )
+    for line in resets:
+        print(line, file=sys.stderr)
     print(json.dumps(fields, sort_keys=True))
     return 0
 

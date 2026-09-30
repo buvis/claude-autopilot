@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """selection.py - which PRD the autopilot picks next.
 
-PURE: takes directory LISTINGS, never paths, so the decision is testable
-without a filesystem and the caller owns the I/O.
+The decision is PURE: `sequence`, `selectable` and `select` take directory
+LISTINGS, so it is testable without a filesystem and the caller owns the I/O.
 
     sequence(name)            -> the `00XXX-` prefix as an int, or None
     selectable(names)         -> the selectable subset, lowest sequence first
     select(wip, backlog)      -> (basename, source)
 
-The one exception is `select_eligible(prds_dir, project_root)`, which lists the
-directories and runs each backlog pick's `eligibility:` check (PRD 00137) - the
+The one exception is `select_eligible(prds_dir)`, which takes a path, lists the
+directories, reads each backlog pick's PRD and shells out to run its
+`eligibility:` check (PRD 00137) from the project root that path derives - the
 I/O-owning core shared by `autopilot select` and `autopilot enter`.
 
 `hold/` is absent from the signature ON PURPOSE - that IS the parked/deferred
@@ -79,14 +80,21 @@ def _listdir(path: Path) -> list[str]:
         return []
 
 
-def select_eligible(
-    prds_dir: Path, project_root: Path,
-) -> tuple[str | None, str, list[dict]]:
+def select_eligible(prds_dir: Path) -> tuple[str | None, str, list[dict]]:
     """Return (basename, source, skips): `select` over `prds_dir`, with each
-    backlog pick's `eligibility:` command run from `project_root` until one
-    passes. Each unmet candidate becomes one skip entry (prd, command, its real
-    exit code, note) and drops out of THIS pick only - it stays in backlog/.
-    wip candidates are never gated. Prints nothing."""
+    backlog pick's `eligibility:` command run from the project root `prds_dir`
+    derives until one passes. Each unmet candidate becomes one skip entry (prd,
+    command, its real exit code, note) and drops out of THIS pick only - it
+    stays in backlog/. wip candidates are never gated. Prints nothing.
+
+    That root is derived HERE, not taken from the caller: two callers derived it
+    two different ways, so the same PRD's check could run from two different
+    directories under one `--prds`. Resolved first, because `--prds prds` is
+    legal and chopping components off a relative string leaves nothing; the
+    fallback keeps a too-shallow `--prds` costing a failed check rather than a
+    traceback out of a verb that never crashed before."""
+    resolved = prds_dir.resolve()
+    project_root = resolved.parents[3] if len(resolved.parents) > 3 else resolved
     in_wip = _listdir(prds_dir / "wip")
     in_backlog = _listdir(prds_dir / "backlog")
     skips: list[dict] = []
@@ -106,5 +114,7 @@ def select_eligible(
         exit_code, note = eligibility.evaluate(command, project_root)
         if exit_code == 0:
             return prd, source, skips
-        skips.append({"prd": prd, "command": command, "exit_code": exit_code, "note": note})
+        skips.append(
+            {"prd": prd, "command": command, "exit_code": exit_code, "note": note}
+        )
         in_backlog = [name for name in in_backlog if name != prd]

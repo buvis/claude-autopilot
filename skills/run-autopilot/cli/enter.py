@@ -229,7 +229,7 @@ def _check_custody(out: dict, autopilot_dir: Path, in_loop: bool) -> bool:
 
 
 def _select(
-    out: dict, state_path: Path, prds_dir: Path, autopilot_dir: Path,
+    out: dict, state_path: Path, prds_dir: Path,
     prd_arg: str | None, now: Callable[[], str],
 ) -> bool:
     """Step 8. True when selection halts Phase 0."""
@@ -245,9 +245,7 @@ def _select(
             _stop(out, "prd_not_found", f"{prd_arg} is in neither wip/ nor backlog/")
             return True
     else:
-        prd, source, skips = selection.select_eligible(
-            prds_dir, custody.project_root(autopilot_dir),
-        )
+        prd, source, skips = selection.select_eligible(prds_dir)
         if skips:
             at = now()
             entries = [{**skip, "at": at} for skip in skips]
@@ -296,15 +294,19 @@ def _write_prd(
 ) -> dict | None:
     """Step 10 writes: state.prd, the frontmatter fields, the handoff row.
     Returns the fields, or None after a state_write_failed stop. The write's
-    warnings travel on in `out["warnings"]`, halt or not."""
+    warnings AND its reset lines travel on in `out["warnings"]`, halt or not -
+    a frontmatter value that overwrote one state already held is a diagnostic a
+    session entering here would otherwise never see."""
     prd = out["prd"]
     try:
         statectl.mutate(state_path, lambda data: data.update(prd=prd))
-        fields, warnings = frontmatter.apply(prds_dir / "wip" / prd, state_path)
+        fields, warnings, resets = frontmatter.apply(
+            prds_dir / "wip" / prd, state_path,
+        )
     except (OSError, state.StateError, schema.SchemaError) as err:
         _stop(out, "state_write_failed", str(err))
         return None
-    out["warnings"] = list(warnings)
+    out["warnings"] = list(warnings) + list(resets)
     try:
         record_resume_row(prd, "build", autopilot_dir)
     except Exception as err:  # best-effort row: never halts Phase 0
@@ -396,7 +398,7 @@ def enter(
     if _check_custody(out, autopilot_dir, in_loop):
         return out
     try:
-        halted = _select(out, state_path, prds_dir, autopilot_dir, prd_arg, now)
+        halted = _select(out, state_path, prds_dir, prd_arg, now)
     except _WriteFailed as err:
         return _stop(out, "state_write_failed", str(err))
     if halted:
