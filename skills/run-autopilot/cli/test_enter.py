@@ -11,6 +11,7 @@ produce on demand (a do_park exit 4/9, a failed move, a failed write).
 
 from __future__ import annotations
 
+import ast
 import os
 import shutil
 from pathlib import Path
@@ -51,6 +52,68 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Env:
 def test_every_stop_value_is_in_STOPS() -> None:
     assert enter.STOPS == EXPECTED_STOPS
     assert len(set(enter.STOPS)) == len(enter.STOPS)
+
+
+# Obligation 1 below covers MODULE-LEVEL statements, so function and class
+# bodies drop out; all three read the parsed tree, so a comment cannot trip them.
+_SKIPPED_BODIES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+
+
+def _is_sys_path(node: ast.AST) -> bool:
+    if not isinstance(node, ast.Attribute) or node.attr != "path":
+        return False
+    return isinstance(node.value, ast.Name) and node.value.id == "sys"
+
+
+def _mutates_sys_path(node: ast.AST) -> bool:
+    """`sys.path.append(...)`, `sys.path.insert(...)` or `sys.path = ...`."""
+    if isinstance(node, ast.Assign):
+        return any(_is_sys_path(t) for t in node.targets)
+    if isinstance(node, (ast.AugAssign, ast.AnnAssign)):
+        return _is_sys_path(node.target)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+        return _is_sys_path(node.func.value)
+    return False
+
+
+def _uses_importlib(node: ast.AST) -> bool:
+    if isinstance(node, (ast.Import, ast.ImportFrom)):
+        return "importlib" in ast.dump(node)
+    return isinstance(node, ast.Call) and "import_module" in ast.dump(node.func)
+
+
+def _imports_sibling_handoff(tree: ast.Module) -> bool:
+    """True if an import names the sibling `handoff` module: `from . import
+    handoff`, `from cli import handoff` or `from .handoff import MARKERS`."""
+    froms = [n for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)]
+    names = [a.name for n in froms if n.module in (None, "cli") for a in n.names]
+    modules = [n.module for n in froms]
+    return "handoff" in names or "handoff" in modules or "cli.handoff" in modules
+
+
+def test_enter_reads_its_marker_tuple_by_plain_import_of_its_own_package() -> None:
+    source = Path(enter.__file__)
+    tree = ast.parse(source.read_text(encoding="utf-8"))
+    import_time = ast.Module(
+        body=[n for n in tree.body if not isinstance(n, _SKIPPED_BODIES)],
+        type_ignores=[],
+    )
+    mutations = [n for n in ast.walk(import_time) if _mutates_sys_path(n)]
+    dynamic = [n for n in ast.walk(tree) if _uses_importlib(n)]
+
+    assert not mutations, (
+        f"{source}: a module-level statement mutates `sys.path` at import time, "
+        "so every importer of `cli.enter` gains a search-path entry that can "
+        "shadow a real module. Take the marker names from `cli.handoff.MARKERS`."
+    )
+    assert not dynamic, (
+        f"{source}: imports `importlib` or calls `importlib.import_module` — the "
+        "marker tuple must arrive by a plain package import."
+    )
+    assert _imports_sibling_handoff(tree), (
+        f"{source}: no import names the sibling `handoff` module, so the "
+        "inherited marker names cannot come from `cli.handoff.MARKERS`."
+    )
 
 
 # -- the null-stop path --------------------------------------------------------
@@ -328,6 +391,13 @@ def test_park_halt_codes_map_to_their_stops(
         assert (
             out["detail"]
             == f"parked {PRD}; systemic halt (2+ consecutive wrapper_died parks)"
+        )
+        # Exit 5 parked the PRD and then halted, so both facts are reported. A
+        # collapse of this branch into the other halt codes would drop `parked`
+        # silently while every assertion above still passed.
+        assert out["parked"] == PRD, (
+            f"cli/enter.py: exit 5 parked {PRD}, so `parked` must still name it "
+            f"— got {out['parked']!r}."
         )
 
 

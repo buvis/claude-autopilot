@@ -2,7 +2,9 @@
 subsection of `references/phase-build.md` § "Phase 0: PRD Selection" (after the
 session-brief paragraph, before `### Ensure lifecycle directories exist`), the
 `autopilot enter` mention beside core `SKILL.md` § "Phase 0 invariants", the
-`release-checks` wiring of both enter test files, and the changelog entry.
+`### Clear inherited hand-off markers` note that the one-call path emits no
+per-marker stderr line, the `release-checks` wiring of both enter test files,
+and the changelog entry.
 
 Same pattern as test_triage_prose.py: slice the section that must carry the
 instruction, assert short reword-resistant substrings in order, and sweep each
@@ -289,6 +291,39 @@ def test_every_existing_phase_0_subsection_survives_with_its_own_steps() -> None
             f"{_PHASE_BUILD}: the subsection at {phase_0[start:heading_end]!r} lost "
             "its step-by-step instructions (body under 200 chars)."
         )
+
+
+# § "Clear inherited hand-off markers" describes a hand-run script that names
+# each removed marker on stderr with its write time; the one-call path removes
+# the same markers and says nothing. Three tokens (`autopilot enter`, a
+# negation, the stderr diagnostic) in either clause order, gaps bounded to a
+# couple of wrapped lines so a negation from another sentence cannot pair with
+# the closing `autopilot enter` line.
+_MARKERS_HEADING = "### Clear inherited hand-off markers"
+_AFTER_MARKERS = _SURVIVING_HEADINGS[_SURVIVING_HEADINGS.index(_MARKERS_HEADING) + 1]
+_NO_STDERR_LINE = (
+    r"\b(?:no|not|never|without|omits?|omitting|skips?|suppress(?:es|ing)?|"
+    r"silent(?:ly)?)\b[\s\S]{0,90}stderr"
+)
+_ENTER_WITHOUT_THE_STDERR_LINES = (
+    rf"(?i)`autopilot enter`[\s\S]{{0,120}}(?:{_NO_STDERR_LINE})"
+    rf"|(?:{_NO_STDERR_LINE})[\s\S]{{0,120}}`autopilot enter`"
+)
+
+
+def test_clear_markers_section_says_enter_emits_no_per_marker_stderr_line() -> None:
+    section = _prose(
+        _section(_phase_0(), _PHASE_BUILD, _MARKERS_HEADING, _AFTER_MARKERS)
+    )
+    _assert_matches(
+        section,
+        _PHASE_BUILD,
+        f"the {_MARKERS_HEADING!r} section alone",
+        _ENTER_WITHOUT_THE_STDERR_LINES,
+        "say `autopilot enter` performs this step WITHOUT the per-marker stderr "
+        "lines the hand-run script prints, so nobody hunts for a diagnostic the "
+        "one-call path never emits",
+    )
 
 
 def test_release_checks_runs_every_enter_test_file() -> None:
