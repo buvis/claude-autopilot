@@ -57,7 +57,8 @@ def record_store(repo: Path, site: str, prd: str, run_git=run_git) -> str | None
         run_git(["commit", "-m", message, "--", STORE_PATHSPEC], cwd=repo)
         return run_git(["rev-parse", "HEAD"], cwd=repo).stdout.strip()
     except (OSError, RuntimeError, subprocess.SubprocessError) as err:
-        reason = getattr(err, "stderr", None) or str(err)
+        stderr = getattr(err, "stderr", None)
+        reason = (stderr if isinstance(stderr, str) else None) or str(err)
         print(
             f"autopilot: store record failed: {' '.join(reason.split())}",
             file=sys.stderr,
