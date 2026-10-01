@@ -73,6 +73,7 @@ def _repo(tmp_path: Path, prds: dict[str, str]) -> tuple[Path, Path]:
     _git(repo, "init", "-q", "-b", "master")
     _git(repo, "config", "user.email", "wave@example.com")
     _git(repo, "config", "user.name", "Wave Test")
+    _git(repo, "config", "commit.gpgsign", "false")
     _git(repo, "add", ".gitignore", "README.md")
     _git(repo, "commit", "-qm", "seed")
     return repo, _autopilot(repo) / "wave.json"
