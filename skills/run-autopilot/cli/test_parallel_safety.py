@@ -14,27 +14,47 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import pytest
+
 from cli.test_wave_launch import _repo
 
 _HAMMER_THREADS = 12
 
 
-def _hammer(tmp_path: Path) -> None:
+def _assert_gpgsign_disabled(repo: Path) -> None:
+    result = subprocess.run(
+        ["git", "config", "--local", "commit.gpgsign"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout.strip() == "false"
+
+
+def _hammer(tmp_path: Path) -> list[Path]:
     with ThreadPoolExecutor(max_workers=_HAMMER_THREADS) as pool:
-        list(pool.map(lambda i: _repo(tmp_path / f"case-{i}", {}), range(_HAMMER_THREADS)))
+        return list(
+            pool.map(lambda i: _repo(tmp_path / f"case-{i}", {})[0], range(_HAMMER_THREADS))
+        )
 
 
 def test_hammer_a(tmp_path: Path) -> None:
-    _hammer(tmp_path)
+    for repo in _hammer(tmp_path):
+        _assert_gpgsign_disabled(repo)
 
 
 def test_hammer_b(tmp_path: Path) -> None:
-    _hammer(tmp_path)
+    for repo in _hammer(tmp_path):
+        _assert_gpgsign_disabled(repo)
 
 
 def test_the_wave_pair_passes_under_two_workers() -> None:
     """Fail-first proof (PRD 00233 Phase 0): the hammer pair above, run
     under 2 real pytest-xdist workers in a subprocess, must both pass."""
+    pytest.importorskip(
+        "xdist", reason="gated by [checks] parallel safety, which installs pytest-xdist"
+    )
     result = subprocess.run(
         [
             sys.executable,
@@ -53,3 +73,20 @@ def test_the_wave_pair_passes_under_two_workers() -> None:
     assert result.returncode == 0, (
         f"wave hammer pair failed under -n 2:\n{result.stdout}\n{result.stderr}"
     )
+
+
+def test_repo_disables_signing_regardless_of_host_gpg_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Deterministic regression guard (PRD 00233): pins the `_repo()` fix
+    without depending on the host's own global git config. With this
+    global config active, the pre-fix `_repo()` exits 128 ("gpg failed to
+    sign the data"); the fixed `_repo()` returns normally because it
+    disables `commit.gpgsign` locally."""
+    global_config = tmp_path / "gitconfig-global"
+    global_config.write_text(
+        "[commit]\n\tgpgsign = true\n[gpg]\n\tprogram = /usr/bin/false\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(global_config))
+    _repo(tmp_path / "case", {})
