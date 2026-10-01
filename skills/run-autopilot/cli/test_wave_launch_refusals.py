@@ -71,6 +71,41 @@ def _stub_git(bin_dir: Path, blocked: list[str]) -> None:
     script.chmod(0o755)
 
 
+STORE_FILE = "docs/dev/project-management/decisions/0001-store.md"
+
+
+def _track_store_file(repo: Path) -> None:
+    """Commit a store file past `_repo`'s `.gitignore`, so a later edit to it
+    shows in `git status --porcelain` instead of hiding as an ignored path."""
+    (repo / STORE_FILE).parent.mkdir(parents=True, exist_ok=True)
+    (repo / STORE_FILE).write_text("decided\n", encoding="utf-8")
+    _git(repo, "add", "-f", "--", STORE_FILE)
+    _git(repo, "commit", "-qm", "track a store file")
+
+
+def _dirty_store_only(repo: Path) -> None:
+    """Edit the tracked store file and prove it is the tree's ONLY dirty path, so
+    a refusal-free result can only come from store churn being ignored."""
+    with (repo / STORE_FILE).open("a", encoding="utf-8") as store:
+        store.write("revised\n")
+    porcelain = _git(repo, "status", "--porcelain", "--untracked-files=all").stdout
+    assert porcelain.splitlines() == [f" M {STORE_FILE}"], porcelain
+
+
+def test_launch_ignores_a_tree_dirty_only_inside_the_store(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo, wave_path = _planned(tmp_path, monkeypatch, ONE_LANE, max_lanes=1)
+    _track_store_file(repo)
+    _dirty_store_only(repo)
+    capsys.readouterr()  # the plan listing, not launch's output
+    wave_launch.launch(repo, wave_path, spawn_fn=_FakeSpawn())
+    err = capsys.readouterr().err
+    assert "dirty tree" not in err, err
+
+
 def test_launch_refuses_a_checkout_a_live_loop_already_owns(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

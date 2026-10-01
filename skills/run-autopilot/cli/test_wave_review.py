@@ -38,6 +38,7 @@ from cli import (
     wave_review,
 )
 from cli.test_wave_launch import _autopilot, _git, _repo
+from cli.test_wave_launch_refusals import _dirty_store_only, _track_store_file
 
 
 def _lane(name: str, prds: list[str], files: list[str] | None = None) -> dict:
@@ -669,6 +670,21 @@ def test_review_refuses_before_assembly(
     assert wave_path.read_text(encoding="utf-8") == before
     assert not (_autopilot(worktree) / "state.json").exists()
     assert not (_autopilot(worktree) / "review-paths").exists()
+
+
+def test_review_ignores_a_tree_dirty_only_inside_the_store(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, _, wave_dict = _assembled(tmp_path, monkeypatch)
+    worktree = Path(wave_dict["assembly"]["worktree"])
+    _track_store_file(repo)
+    _dirty_store_only(repo)
+    spawn = _FakeLoop(_moving(worktree, "done"))
+    # No ValueError: the store edit is not a foreign change, so review proceeds
+    # to spawn the loop and reads its verdict like a clean checkout would.
+    assert wave_review.review(repo, wave_dict, spawn_fn=spawn) == "converged"
+    assert len(spawn.calls) == 1, spawn.calls
 
 
 def test_review_releases_the_lock_during_the_wait(

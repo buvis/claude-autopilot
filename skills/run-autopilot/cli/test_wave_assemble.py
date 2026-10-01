@@ -30,6 +30,7 @@ import pytest
 from cli import wave, wave_assemble, wave_launch
 from cli.loop_testutil import _spawn_tagged_incumbent
 from cli.test_wave_docs import _claims, _sentences
+from cli.test_wave_launch_refusals import _dirty_store_only, _track_store_file
 from cli.test_wave_launch import (
     THREE_LANES,
     _autopilot,
@@ -446,6 +447,30 @@ def test_live_lane_refuses_assembly(
     wave_id = wave.load(wave_path)["id"]
     assert _git(repo, "branch", "--list", f"wave/{wave_id}/assembly").stdout == ""
     assert not (tmp_path / f"proj-wave-{wave_id}").exists()
+
+
+def test_assemble_ignores_a_tree_dirty_only_inside_the_store(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # `_launched` minus its seed: the store file is tracked before the plan, so
+    # the wave's base commit already carries it and only the later edit is dirty.
+    repo, wave_path = _repo(tmp_path, dict(list(THREE_LANES.items())[:2]))
+    _track_store_file(repo)
+    monkeypatch.chdir(tmp_path)
+    assert wave.plan(repo, wave_path, max_lanes=2) == 0
+    assert wave_launch.launch(repo, wave_path, spawn_fn=_FakeSpawn()) == 0
+    for name, rel in (("l1", "x/a.py"), ("l2", "y/b.py")):
+        _commit(_finish(wave_path, name, ""), {rel: f"# {name}\n"}, f"{name} change")
+    _dirty_store_only(repo)
+    capsys.readouterr()  # plan and launch output, not assemble's
+    wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass)
+    err = capsys.readouterr().err
+    assert "uncommitted changes" not in err, err
+    # Past the refusals: the assembly branch exists and carries both lanes.
+    wave_id = wave.load(wave_path)["id"]
+    assert {"x/a.py", "y/b.py"} <= set(_tree(repo, f"wave/{wave_id}/assembly"))
 
 
 def test_assemble_records_each_lanes_files_and_integrator_trailers(
