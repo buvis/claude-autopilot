@@ -11,6 +11,7 @@ from __future__ import annotations
 import inspect
 import io
 import json
+import os
 import subprocess
 import sys
 import unittest
@@ -550,6 +551,42 @@ def test_cli_record_store_refuses_to_run_without_a_site(
     assert calls == [], "no record without a --site"
 
 
+@pytest.mark.parametrize(
+    "argv_tail",
+    [["dirty"], ["record-store", "--site", "build"]],
+    ids=["dirty", "record-store"],
+)
+@pytest.mark.parametrize(
+    "state_text",
+    [None, "{not json", "[]", json.dumps({"repo_root": ["x"]}), json.dumps({})],
+    ids=["no-state-file", "invalid-json", "list-body", "non-str-repo-root", "no-repo-root"],
+)
+def test_cli_falls_back_to_the_project_root_of_any_state_dir(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+    argv_tail: list[str],
+    state_text: str | None,
+) -> None:
+    state_dir = tmp_path / "w" / "x" / "y" / "z"
+    state_dir.mkdir(parents=True)
+    state_path = state_dir / "state.json"
+    if state_text is not None:
+        state_path.write_text(state_text, encoding="utf-8")
+    fn_name = "foreign_dirty" if argv_tail[0] == "dirty" else "record_store"
+    answer = [] if fn_name == "foreign_dirty" else None
+    calls: list[tuple] = []
+    monkeypatch.setattr(store_tree, fn_name, _spy(fn_name, answer, calls))
+
+    code = _run([argv_tail[0], "--state", str(state_path), *argv_tail[1:]])
+
+    assert code == 0, "an unusable state.json falls back, it never crashes the CLI"
+    assert [args[:1] for args in calls] == [
+        (custody.project_root(state_dir),),
+    ], "the repo comes from the state file's own directory, not a fixed layout"
+    assert capsys.readouterr().out == ""
+
+
 # -- custody.repo_and_git_dir --------------------------------------------------
 
 
@@ -580,8 +617,21 @@ def test_repo_and_git_dir_defaults_git_dir_to_none_when_state_omits_it(
         "{not json",
         json.dumps({"git_dir": "/abs/bare.git"}),
         json.dumps({"repo_root": "", "git_dir": "/abs/bare.git"}),
+        "[]",
+        json.dumps("x"),
+        json.dumps({"repo_root": ["x"], "git_dir": "/abs/bare.git"}),
+        json.dumps({"repo_root": 5}),
     ],
-    ids=["no-state-file", "invalid-json", "no-repo-root", "empty-repo-root"],
+    ids=[
+        "no-state-file",
+        "invalid-json",
+        "no-repo-root",
+        "empty-repo-root",
+        "list-body",
+        "string-body",
+        "list-repo-root",
+        "int-repo-root",
+    ],
 )
 def test_repo_and_git_dir_falls_back_to_the_project_root(
     tmp_path: Path,
@@ -595,6 +645,22 @@ def test_repo_and_git_dir_falls_back_to_the_project_root(
 
     assert result == (custody.project_root(autopilot_dir), None)
     assert result[0] == tmp_path, "the store's four-level parent is the repo"
+
+
+def test_repo_and_git_dir_falls_back_when_the_state_file_is_unreadable(
+    tmp_path: Path,
+) -> None:
+    autopilot_dir = _autopilot_dir(tmp_path)
+    state_path = _write_state(autopilot_dir, {"repo_root": str(tmp_path / "work")})
+    state_path.chmod(0)
+    try:
+        if os.access(state_path, os.R_OK):
+            pytest.skip("running with privileges that ignore file modes")
+        result = custody.repo_and_git_dir(autopilot_dir)
+    finally:
+        state_path.chmod(0o600)
+
+    assert result == (custody.project_root(autopilot_dir), None)
 
 
 if __name__ == "__main__":
