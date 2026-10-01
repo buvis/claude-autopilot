@@ -22,6 +22,7 @@ REPO = Path("/abs/repo")
 STORE_PATHSPEC = ":(top)docs/dev/project-management"
 STATUS_ARGS = ["status", "--porcelain", "-z", "--untracked-files=all"]
 SHA = "0123456789abcdef0123456789abcdef01234567"
+OTHER_SHA = "fedcba9876543210fedcba9876543210fedcba98"
 SUBCOMMANDS = ("add", "diff", "commit", "rev-parse")
 STAGED_STORE_FILE = "docs/dev/project-management/autopilot/state.json\n"
 
@@ -85,6 +86,27 @@ def _message_in(args: list[str], message: str) -> bool:
     return any(a == message or a.endswith("=" + message) for a in args)
 
 
+def _pathspecs(args: list[str]) -> list[str]:
+    """The non-option arguments after the subcommand: everything after `--`,
+    plus any bare word before it that is not an option's value."""
+    rest = args[args.index(_subcommand(args)) + 1 :]
+    out: list[str] = []
+    skip_value = False
+    after_dashdash = False
+    for arg in rest:
+        if after_dashdash:
+            out.append(arg)
+        elif skip_value:
+            skip_value = False
+        elif arg == "--":
+            after_dashdash = True
+        elif arg in ("-m", "--message", "-F", "--file"):
+            skip_value = True
+        elif not arg.startswith("-"):
+            out.append(arg)
+    return out
+
+
 def _one_line(text: str) -> bool:
     return len(text.strip("\n").splitlines()) == 1
 
@@ -127,6 +149,12 @@ class ForeignDirtyTests(unittest.TestCase):
             "?? docs/dev/tmpfile.txt",
             "?? dir with space/f.txt",
             "A  docs/dev/tmp/a.txt",
+            "?? vendor/docs/dev/tmp/x.txt",
+            "?? a/docs/dev/project-management/b",
+            " D src/deleted_in_tree.py",
+            "D  src/deleted_in_index.py",
+            "MM src/both.py",
+            "UU src/conflict.py",
         )
 
         out, _ = _foreign(porcelain)
@@ -139,9 +167,17 @@ class ForeignDirtyTests(unittest.TestCase):
                     "docs/dev/project-management-notes/foo.txt",
                     "docs/dev/tmpfile.txt",
                     "dir with space/f.txt",
+                    "vendor/docs/dev/tmp/x.txt",
+                    "a/docs/dev/project-management/b",
+                    "src/deleted_in_tree.py",
+                    "src/deleted_in_index.py",
+                    "src/both.py",
+                    "src/conflict.py",
                 ],
             ),
-            "a sibling that only shares the prefix text is outside the store",
+            "a sibling that only shares the prefix text, a nested path that "
+            "merely contains a store root, and any outside status code "
+            "(deletions and conflicts included) are all outside the store",
         )
 
     def test_an_untracked_store_reports_only_the_non_store_paths(self) -> None:
@@ -181,8 +217,7 @@ class ForeignDirtyTests(unittest.TestCase):
         self.assertEqual(
             out,
             ["notes/old.md"],
-            "the old side counts even though the entry's own path slot is in "
-            "the store",
+            "the old side counts even though the entry's own path slot is in the store",
         )
 
     def test_rename_and_copy_old_paths_are_not_misread_as_entries(self) -> None:
@@ -207,8 +242,8 @@ class ForeignDirtyTests(unittest.TestCase):
 
 
 class RecordStoreTests(unittest.TestCase):
-    def _staged_git(self) -> FakeGit:
-        return FakeGit({"diff": STAGED_STORE_FILE, "rev-parse": SHA + "\n"})
+    def _staged_git(self, sha: str = SHA) -> FakeGit:
+        return FakeGit({"diff": STAGED_STORE_FILE, "rev-parse": sha + "\n"})
 
     def _assert_never_touches_other_staged_paths(self, git: FakeGit) -> None:
         for args, _ in git.calls:
@@ -220,17 +255,28 @@ class RecordStoreTests(unittest.TestCase):
                 "the plain pathspec is not top-anchored; only the magic form is",
             )
         for args in git.calls_for("add"):
-            self.assertIn(STORE_PATHSPEC, args, "never a bare whole-repo add")
+            self.assertEqual(
+                _pathspecs(args),
+                [STORE_PATHSPEC],
+                f"add stages the store pathspec and nothing else: {args}",
+            )
         for args in git.calls_for("commit"):
             self.assertNotIn("-a", args, args)
             self.assertNotIn("--all", args, args)
+            self.assertNotIn("--no-verify", args, "commit hooks must run")
+            self.assertNotIn("-n", args, "commit hooks must run")
+            self.assertEqual(
+                _pathspecs(args),
+                [STORE_PATHSPEC],
+                f"commit is scoped to the store pathspec only: {args}",
+            )
 
     def test_record_store_stages_only_the_store(self) -> None:
-        git = self._staged_git()
+        git = self._staged_git(OTHER_SHA)
 
         sha = store_tree.record_store(REPO, "build", "00007-feature-z.md", run_git=git)
 
-        self.assertEqual(sha, SHA)
+        self.assertEqual(sha, OTHER_SHA, "the sha is the stripped rev-parse stdout")
         self.assertEqual(len(git.calls_for("add")), 1)
         diffs = git.calls_for("diff")
         self.assertEqual(len(diffs), 1)
@@ -251,7 +297,7 @@ class RecordStoreTests(unittest.TestCase):
             ),
             commits[0],
         )
-        self.assertEqual(len(git.calls_for("rev-parse")), 1)
+        self.assertEqual(git.calls_for("rev-parse"), [["rev-parse", "HEAD"]])
         self._assert_never_touches_other_staged_paths(git)
         order = [_subcommand(args) for args, _ in git.calls]
         self.assertLess(order.index("add"), order.index("diff"))
@@ -274,6 +320,19 @@ class RecordStoreTests(unittest.TestCase):
             commits[0],
         )
         self.assertFalse(any(" for " in a for a in commits[0]), commits[0])
+
+    def test_record_store_names_any_site_in_the_message(self) -> None:
+        git = self._staged_git()
+
+        sha = store_tree.record_store(REPO, "plan", "00009-q.md", run_git=git)
+
+        self.assertEqual(sha, SHA)
+        commits = git.calls_for("commit")
+        self.assertEqual(len(commits), 1)
+        self.assertTrue(
+            _message_in(commits[0], "chore(autopilot): record plan state for 00009-q.md"),
+            commits[0],
+        )
 
     def test_record_store_returns_none_when_nothing_changed(self) -> None:
         git = FakeGit({"diff": "", "rev-parse": SHA + "\n"})
@@ -311,6 +370,11 @@ class RecordStoreTests(unittest.TestCase):
 
                 self.assertIsNone(out)
                 self.assertTrue(_one_line(err.getvalue()), err.getvalue())
+                self.assertIn(
+                    "fatal: first line second line",
+                    err.getvalue(),
+                    "the git stderr reason survives, collapsed to one line",
+                )
                 if step in ("add", "diff"):
                     self.assertEqual(git.calls_for("commit"), [])
 
