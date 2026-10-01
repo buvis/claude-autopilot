@@ -43,7 +43,7 @@ uv run --no-project --with pytest python -m pytest -q hooks/test_guard_push_on_c
 uv run --no-project --with pytest python -m pytest -q hooks/test_guard_push_grammar.py
 
 echo "[checks] custody core"
-uv run --no-project --with pytest python -m pytest -q \
+uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n 4 \
   skills/run-autopilot/cli/test_custody.py \
   skills/run-autopilot/cli/test_custody_stall.py \
   skills/run-autopilot/cli/test_custody_resolve.py \
@@ -62,6 +62,8 @@ bash skills/use-sonnet/scripts/test_sonnet_run.sh
 echo "[checks] fast-track lane"
 uv run --no-project --with pytest python -m pytest -q skills/fast-track/scripts
 
+# serial: mixes files outside skills/run-autopilot/cli/, not covered by the
+# whole-cli-directory parallel-safety proof (PRD 00233)
 echo "[checks] plan size gate"
 uv run --no-project --with pytest python -m pytest -q \
   skills/plan-tasks/scripts/test_plan_size_gate_prose.py \
@@ -69,7 +71,7 @@ uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_policy_budget.py
 
 echo "[checks] l3"
-uv run --no-project --with pytest python -m pytest -q \
+uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n 4 \
   skills/run-autopilot/cli/test_loop_prose.py \
   skills/run-autopilot/cli/test_pause.py \
   skills/run-autopilot/cli/test_usage_limit.py \
@@ -80,12 +82,13 @@ uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_handoff_request.py
 
 echo "[checks] reporting"
-uv run --no-project --with pytest python -m pytest -q \
+uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n 4 \
   skills/run-autopilot/cli/test_loop_metrics.py \
   skills/run-autopilot/cli/test_render_report.py \
   skills/run-autopilot/cli/test_render.py \
   skills/run-autopilot/cli/test_routing.py
 
+# serial: no skills/run-autopilot/cli/ files here, outside PRD 00233's scope
 echo "[checks] cap hook"
 uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/scripts/test_autopilot_context_cap_hook.py \
@@ -99,30 +102,41 @@ uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/scripts/test_rework_tier_prose.py \
   skills/work/scripts/test_handoff_placement_prose.py
 
+# serial: mixes files outside skills/run-autopilot/cli/, not covered by the
+# whole-cli-directory parallel-safety proof (PRD 00233)
 echo "[checks] design rework prose"
 uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/scripts/test_design_review_contract.py \
   skills/run-autopilot/cli/test_design_rework_prose.py
+# serial: no skills/run-autopilot/cli/ files here, outside PRD 00233's scope
 echo "[checks] loop blockers prose"
 uv run --no-project --with pytest python -m pytest -q \
   skills/work/scripts/test_tess_size_limits_prose.py \
   skills/work/scripts/test_step_order_prose.py \
   skills/work/scripts/test_loop_blockers_prose.py
 
+# serial: mixes files outside skills/run-autopilot/cli/, not covered by the
+# whole-cli-directory parallel-safety proof (PRD 00233)
 echo "[checks] l4"
 uv run --no-project --with pytest python -m pytest -q \
   skills/review-work-completion/scripts/test_consolidate_findings.py \
   skills/review-work-completion/scripts/test_citation_format_prose.py \
   skills/run-autopilot/cli/test_triage.py \
   skills/run-autopilot/cli/test_triage_prose.py
+# serial: mixes files outside skills/run-autopilot/cli/, not covered by the
+# whole-cli-directory parallel-safety proof (PRD 00233)
 echo "[checks] effort lanes"
 uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_lane.py \
   skills/run-autopilot/cli/test_lane_cli.py \
   skills/run-autopilot/scripts/test_lane_prose.py
 
+echo "[checks] parallel safety"
+uv run --no-project --with pytest --with pytest-xdist python -m pytest -q \
+  skills/run-autopilot/cli/test_parallel_safety.py
+
 echo "[checks] waves"
-uv run --no-project --with pytest python -m pytest -q \
+uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n 4 \
   skills/run-autopilot/cli/test_wave.py \
   skills/run-autopilot/cli/test_wave_launch.py \
   skills/run-autopilot/cli/test_wave_launch_status.py \

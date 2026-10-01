@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **work**: Tess, Devon and Ivan run only their task's tests and never re-run a suite for a count
+- **run-autopilot**: the release gate's `skills/run-autopilot/cli` test blocks now run in parallel (`pytest-xdist`), cutting their wall-clock time roughly in half.
 
 ## [0.6.0] - 2026-09-30
 
