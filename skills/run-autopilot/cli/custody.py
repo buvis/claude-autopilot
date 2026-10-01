@@ -179,6 +179,20 @@ def project_root(autopilot_dir: Path) -> Path:
     return autopilot_dir.parent
 
 
+def repo_and_git_dir(autopilot_dir: Path) -> tuple[Path, str | None]:
+    """(repo_root, git_dir) from state.json; (project_root, None) when the
+    file is absent, unreadable, or carries no non-empty string repo_root."""
+    try:
+        loaded = json.loads((autopilot_dir / "state.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        loaded = None
+    repo_root = loaded.get("repo_root") if isinstance(loaded, dict) else None
+    if not isinstance(repo_root, str) or not repo_root:
+        return project_root(autopilot_dir), None
+    git_dir = loaded.get("git_dir")
+    return Path(repo_root), git_dir if isinstance(git_dir, str) else None
+
+
 def load_marker(path: Path) -> list[dict]:
     """[] when absent; CustodyError unless the file is {"entries": [dict...]}."""
     if not path.exists():

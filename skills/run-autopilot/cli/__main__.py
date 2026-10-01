@@ -153,6 +153,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -181,6 +182,7 @@ from cli import (
     state,
     statectl,
     status,
+    store_tree,
     transitions,
     triage,
     wave_cli,
@@ -1153,6 +1155,57 @@ def _run_mint_stubs(args: argparse.Namespace) -> int:
     return 0
 
 
+def _store_repo(state_arg: str | None) -> tuple[Path, object]:
+    """(repo, run_git) for the store verbs: the repo and git dir from
+    state.json (else the state dir's project root), and a run_git that
+    prefixes every call with custody.git_argv for that repo."""
+    repo, git_dir = custody.repo_and_git_dir(_resolve_state_path(state_arg).parent)
+    prefix = custody.git_argv(str(repo), git_dir)
+
+    def run_git(args: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
+        # `cwd` must reach subprocess.run even in the bare-backed branch:
+        # custody.git_argv's bare-repo prefix carries --git-dir/--work-tree
+        # but no -C, and --work-tree does NOT anchor pathspec resolution --
+        # git still resolves a relative pathspec against the process cwd.
+        return subprocess.run(
+            [*prefix, *args],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=store_tree.GIT_TIMEOUT_SECS,
+        )
+
+    return repo, run_git
+
+
+def _add_dirty(subparsers) -> None:
+    subparsers.add_parser("dirty").add_argument("--state")
+
+
+def _run_dirty(args: argparse.Namespace) -> int:
+    repo, run_git = _store_repo(args.state)
+    paths = store_tree.foreign_dirty(repo, run_git=run_git)
+    for path in paths:
+        print(path)
+    return 1 if paths else 0
+
+
+def _add_record_store(subparsers) -> None:
+    p = subparsers.add_parser("record-store")
+    p.add_argument("--state")
+    p.add_argument("--site", required=True)
+    p.add_argument("--prd", default="")
+
+
+def _run_record_store(args: argparse.Namespace) -> int:
+    repo, run_git = _store_repo(args.state)
+    sha = store_tree.record_store(repo, args.site, args.prd, run_git=run_git)
+    if sha is not None:
+        print(sha)
+    return 0
+
+
 # Registry, not an if/elif chain over sys.argv: PRD 00106 adds entries here
 # (an (add_parser_fn, run_fn) pair per subcommand name).
 _SUBCOMMANDS: dict[str, tuple] = {
@@ -1176,6 +1229,8 @@ _SUBCOMMANDS: dict[str, tuple] = {
     "review-once": (_add_review_once, _run_review_once),
     "custody": (_add_custody, _run_custody),
     "mint-stubs": (_add_mint_stubs, _run_mint_stubs),
+    "dirty": (_add_dirty, _run_dirty),
+    "record-store": (_add_record_store, _run_record_store),
     "wave": (wave_cli.add, _run_wave),
 }
 
