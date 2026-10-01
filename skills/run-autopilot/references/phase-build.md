@@ -73,7 +73,9 @@ comes:
 
 Before anything else — before the abort handlers and before PRD selection — run
 the lifecycle `mkdir -p` block from core `SKILL.md` § "Phase 0 invariants" as
-its own Bash call (idempotent; mandatory before any move can run).
+its own Bash call (idempotent; mandatory before any move can run). Then write
+the store's `docs/dev/project-management/.gitignore` with the Write tool, only
+when it does not already exist (same section; never clobber a hand-edited copy).
 
 `autopilot enter` runs this step; the instructions below stay the hand-run
 reference.
