@@ -157,7 +157,7 @@ def test_malformed_warning_is_byte_identical(tmp_path: Path) -> None:
 
 # ── lane-check (PRD 00205) ───────────────────────────────────────────────────
 
-_GIT_IDENTITY = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
+_GIT_IDENTITY = ["-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false"]
 
 
 def _git(repo: Path, *args: str) -> str:
