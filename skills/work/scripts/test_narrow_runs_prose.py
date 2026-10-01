@@ -148,7 +148,18 @@ def test_adversarial_prompt_carries_narrow_in_feedback_section() -> None:
         _ADVERSARIAL_TEST_PROMPT,
         "## Feedback to Tess (when Devon succeeds)",
     )
-    assert norm_narrow in _norm(feedback_section), (
+    assert "```" in feedback_section, (
+        f"{_ADVERSARIAL_TEST_PROMPT}: expected a fenced template under "
+        "'Feedback to Tess' — no opening fence found."
+    )
+    fence_start = feedback_section.index("```") + len("```")
+    assert "```" in feedback_section[fence_start:], (
+        f"{_ADVERSARIAL_TEST_PROMPT}: expected a closing fence for the "
+        "'Feedback to Tess' template — not found."
+    )
+    fence_end = feedback_section.index("```", fence_start)
+    fenced_template = feedback_section[fence_start:fence_end]
+    assert norm_narrow in _norm(fenced_template), (
         f"{_ADVERSARIAL_TEST_PROMPT}: expected the NARROW sentence inside "
         "the 'Feedback to Tess' fenced template — not found there."
     )
@@ -179,10 +190,49 @@ def test_devon_rules_forbid_a_directory_run() -> None:
         "Run only the test runner command above, once per exploit; "
         "never a whole test directory."
     )
-    normalized = _norm(rules_section).rstrip()
+    normalized = _norm(rules_section)
     assert normalized.endswith(needle), (
         f"{_ADVERSARIAL_TEST_PROMPT}: expected the Devon Rules list to end "
         f"with {needle!r} as its last rule — not found there."
+    )
+
+
+def test_devon_process_step_runs_test_runner_command() -> None:
+    process_section = _section(
+        _ADVERSARIAL_TEXT, _ADVERSARIAL_TEST_PROMPT, "Process:", "Rules:"
+    )
+    new_wording = "Run the test runner command above against your wrong implementation"
+    old_wording = "Run the test suite against your wrong implementation"
+    assert new_wording in process_section, (
+        f"{_ADVERSARIAL_TEST_PROMPT}: expected Process step 3 to read "
+        f"{new_wording!r} — not found."
+    )
+    assert old_wording not in process_section, (
+        f"{_ADVERSARIAL_TEST_PROMPT}: found the old Process step 3 wording "
+        f"{old_wording!r} — it should have been replaced by the "
+        "test-runner-command wording."
+    )
+
+
+def test_devon_rule_six_is_a_single_physical_line() -> None:
+    rules_section = _section(
+        _ADVERSARIAL_TEXT, _ADVERSARIAL_TEST_PROMPT, "Rules:", "Output format:"
+    )
+    rule_six_text = (
+        "Run only the test runner command above, once per exploit; "
+        "never a whole test directory."
+    )
+    lines = [line.strip() for line in rules_section.splitlines() if line.strip()]
+    rule_six_line = next((line for line in lines if line.startswith("6.")), None)
+    assert rule_six_line is not None, (
+        f"{_ADVERSARIAL_TEST_PROMPT}: expected a Rule 6 line starting "
+        "'6.' in the Rules list — not found."
+    )
+    expected = f"6. {rule_six_text}"
+    assert rule_six_line == expected, (
+        f"{_ADVERSARIAL_TEST_PROMPT}: expected Rule 6 as the single "
+        f"physical line {expected!r} — found {rule_six_line!r} (it may "
+        "have been hard-wrapped across two lines)."
     )
 
 
