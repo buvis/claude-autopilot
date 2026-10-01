@@ -1,8 +1,9 @@
 """cli/loop_act.py - the drained-path helpers and the act branches of the loop
 driver (PRD 00192).
 
-Allowed imports: stdlib, `cli.pause`, `cli.routing`, `cli.runner`,
-`cli.watchdog`, `cli.loop_decision`; never `cli.loop` or `cli.loop_gates`.
+Allowed imports: stdlib, `cli.custody`, `cli.pause`, `cli.routing`,
+`cli.runner`, `cli.store_tree`, `cli.watchdog`, `cli.loop_decision`; never
+`cli.loop` or `cli.loop_gates`.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from cli import pause, routing, runner
+from cli import custody, pause, routing, runner, store_tree
 from cli.loop_decision import _mtime
 from cli.routing import _load_json
 from cli.watchdog import Watchdog
@@ -29,6 +30,29 @@ PURGE_SCRIPT = (
 
 
 # ── drained-path helpers ─────────────────────────────────────────────────────
+
+
+def store_git(ap_dir: Path) -> tuple[Path, object]:
+    """(repo, run_git) for store_tree.record_store (PRD 00236): the repo
+    and git dir from <ap_dir>/state.json (else the project root), and a
+    run_git prefixed with custody.git_argv for that repo. Resolve it while
+    state.json is still live: once archived, the bare git dir is lost."""
+    repo, git_dir = custody.repo_and_git_dir(ap_dir)
+    prefix = custody.git_argv(str(repo), git_dir)
+
+    def run_git(args: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
+        # cwd must reach subprocess.run even when bare-backed: --work-tree
+        # does not anchor relative pathspecs, the process cwd does.
+        return subprocess.run(
+            [*prefix, *args],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=store_tree.GIT_TIMEOUT_SECS,
+        )
+
+    return repo, run_git
 
 
 def run_purge(repo: Path) -> None:
@@ -191,6 +215,7 @@ class ActMixin:
             completed = (state.get("batch") or {}).get("completed_prds")
             prds_done = len(completed) if isinstance(completed, list) else 0
         stamp = decision["batch"] or _dt.datetime.now().strftime("%Y%m%d%H%M")
+        store_repo, store_run_git = store_git(ap_dir)
         try:
             state_path.replace(reports / f"{stamp}-state-final.json")
         except OSError:
@@ -209,6 +234,9 @@ class ActMixin:
             self.env,
             self.out,
             claude_bin=self.runner_bin,
+        )
+        store_tree.record_store(
+            store_repo, "drained", decision.get("prd", ""), run_git=store_run_git,
         )
         return 0
 

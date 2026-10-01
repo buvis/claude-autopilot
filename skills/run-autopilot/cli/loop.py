@@ -48,8 +48,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from cli import convergence, notify_out, pause, render_metrics, routing, runner, usage_limit, wave_slots
-from cli.loop_act import PURGE_SCRIPT, ActMixin, run_agoge, run_purge
+from cli import convergence, notify_out, pause, render_metrics, routing, runner, store_tree, usage_limit, wave_slots
+from cli.loop_act import PURGE_SCRIPT, ActMixin, run_agoge, run_purge, store_git
 from cli.loop_decision import DecisionMixin, died_next, fingerprint, last_result_field, pause_detail, plugin_drift
 from cli.loop_gates import DEFAULT_LOOPS_DIR, GatesMixin, live_wrapper_pid, prune_registry
 from cli.routing import _load_json
@@ -588,6 +588,10 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
                 phase_launched,
                 plan.model,
                 plan.effort,
+            )
+            store_repo, store_run_git = store_git(ap_dir)
+            store_tree.record_store(
+                store_repo, "loop", decision.get("prd", ""), run_git=store_run_git,
             )
 
             code = self._act_branch(decision, ap_dir)
