@@ -42,8 +42,11 @@ echo "[checks] custody push guard"
 uv run --no-project --with pytest python -m pytest -q hooks/test_guard_push_on_critical.py
 uv run --no-project --with pytest python -m pytest -q hooks/test_guard_push_grammar.py
 
+# capped at 4 workers: bare -n auto resolves to 18 workers on this host and
+# dies with fork/process-table exhaustion (Errno 35/12, SIGKILLed git
+# children) on these blocks (PRD 00233)
 echo "[checks] custody core"
-uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n 4 \
+uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n auto --maxprocesses 4 \
   skills/run-autopilot/cli/test_custody.py \
   skills/run-autopilot/cli/test_custody_stall.py \
   skills/run-autopilot/cli/test_custody_resolve.py \
@@ -71,7 +74,7 @@ uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_policy_budget.py
 
 echo "[checks] l3"
-uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n 4 \
+uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n auto --maxprocesses 4 \
   skills/run-autopilot/cli/test_loop_prose.py \
   skills/run-autopilot/cli/test_pause.py \
   skills/run-autopilot/cli/test_usage_limit.py \
@@ -82,7 +85,7 @@ uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n 4 \
   skills/run-autopilot/cli/test_handoff_request.py
 
 echo "[checks] reporting"
-uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n 4 \
+uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n auto --maxprocesses 4 \
   skills/run-autopilot/cli/test_loop_metrics.py \
   skills/run-autopilot/cli/test_render_report.py \
   skills/run-autopilot/cli/test_render.py \
@@ -131,12 +134,14 @@ uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_lane_cli.py \
   skills/run-autopilot/scripts/test_lane_prose.py
 
+# serial: spawns its own -n 2 subprocess internally (PRD 00233)
 echo "[checks] parallel safety"
 uv run --no-project --with pytest --with pytest-xdist python -m pytest -q \
-  skills/run-autopilot/cli/test_parallel_safety.py
+  skills/run-autopilot/cli/test_parallel_safety.py \
+  skills/run-autopilot/cli/test_release_checks_parallel_prose.py
 
 echo "[checks] waves"
-uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n 4 \
+uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n auto --maxprocesses 4 \
   skills/run-autopilot/cli/test_wave.py \
   skills/run-autopilot/cli/test_wave_launch.py \
   skills/run-autopilot/cli/test_wave_launch_status.py \
@@ -154,6 +159,8 @@ uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n 4 \
   skills/run-autopilot/cli/test_wave_slots.py \
   skills/run-autopilot/cli/test_loop_slots.py
 
+# serial: pinned by test_enter_prose.py's exact invocation text; runs in
+# ~2s serial, not worth the pin edit (PRD 00233)
 echo "[checks] enter"
 uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_enter.py \
