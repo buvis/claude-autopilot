@@ -19,7 +19,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
-from cli import records
+from cli import records, store_tree
 from cli.wave import (
     WAVE_APPEND_ONLY,
     _structural_errors,
@@ -270,7 +270,7 @@ def _refusals(
     ]
     if live:
         return live
-    if run_git(["status", "--porcelain"], cwd=repo).stdout.strip():
+    if store_tree.foreign_dirty(repo, run_git=run_git):
         return [f"{repo} has uncommitted changes - commit or stash them first"]
     if wave["status"] not in ("running", "interrupted", "assembled", "assembled_partial"):
         return [f"wave is not in running state (it is {wave['status']})"]

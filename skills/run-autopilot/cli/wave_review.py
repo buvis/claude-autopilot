@@ -15,7 +15,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from cli import wave_assemble
+from cli import store_tree, wave_assemble
 from cli.wave import WAVE_APPEND_ONLY, _is_basename, load, locked, save
 from cli.wave_assemble import _default_run_git
 from cli.wave_launch import _SPAWN_CMD, CLI_MAIN_PATH
@@ -283,7 +283,7 @@ def _check_reviewable(
     worktree = Path(wave["assembly"]["worktree"])
     if not worktree.is_dir():
         raise ValueError(f"assembly worktree {worktree} is gone")
-    dirty = run_git(["-C", str(repo), "status", "--porcelain"]).stdout
+    dirty = "\n".join(store_tree.foreign_dirty(repo, run_git=run_git))
     if dirty:
         raise ValueError(f"{repo} has uncommitted changes:\n{dirty}")
     return worktree

@@ -19,6 +19,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
+from cli import store_tree
 from cli.loop_gates import DEFAULT_LOOPS_DIR, _load_json, _pid_alive, live_wrapper_pid
 from cli.wave import (
     WAVE_FORCE_SHARED,
@@ -138,7 +139,7 @@ def _refusal(repo: Path, wave: dict, run_git: Callable[..., object]) -> int | No
     shape = _structural_errors(repo, wave)
     if shape:
         return _refuse(shape)
-    if run_git(["status", "--porcelain"], cwd=repo).stdout.strip():
+    if store_tree.foreign_dirty(repo, run_git=run_git):
         print(
             "autopilot: dirty tree; commit or stash the main checkout before"
             " launching a wave",
