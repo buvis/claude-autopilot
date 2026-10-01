@@ -8,15 +8,20 @@ that records the argv it was called with, so no real git runs here.
 
 from __future__ import annotations
 
+import inspect
 import io
+import json
 import subprocess
 import sys
 import unittest
 from contextlib import redirect_stderr
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from cli import store_tree
+from cli import __main__ as cli_main
+from cli import custody, store_tree
 
 REPO = Path("/abs/repo")
 STORE_PATHSPEC = ":(top)docs/dev/project-management"
@@ -394,6 +399,202 @@ class RecordStoreTests(unittest.TestCase):
         self.assertIsNone(out)
         self.assertTrue(_one_line(err.getvalue()), err.getvalue())
         self.assertIn("boom first boom second", err.getvalue())
+
+
+# -- the CLI wiring: `dirty` and `record-store` --------------------------------
+#
+# Driven in-process (`main(argv)`) with spies on the two git-touching
+# store_tree functions, so the test target is the argument parsing, the repo
+# resolution and the exit code / stdout contract, not the git logic above.
+
+
+def _autopilot_dir(root: Path) -> Path:
+    path = root / "docs" / "dev" / "project-management" / "autopilot"
+    path.mkdir(parents=True)
+    return path
+
+
+def _write_state(autopilot_dir: Path, state: dict) -> Path:
+    path = autopilot_dir / "state.json"
+    path.write_text(json.dumps(state), encoding="utf-8")
+    return path
+
+
+def _spy(fn_name: str, answer: object, calls: list) -> object:
+    """A stand-in for store_tree.<fn_name> recording its first positional
+    parameters by the real signature, however the caller spelled them."""
+    signature = inspect.signature(getattr(store_tree, fn_name))
+
+    def spy(*args: object, **kwargs: object) -> object:
+        calls.append(signature.bind(*args, **kwargs).args)
+        return answer
+
+    return spy
+
+
+def _run(argv: list[str]) -> int:
+    try:
+        return cli_main.main(argv)
+    except SystemExit as exc:
+        return exc.code
+
+
+def test_cli_dirty_exits_one_on_foreign_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    repo = tmp_path / "elsewhere"
+    state_path = _write_state(_autopilot_dir(tmp_path), {"repo_root": str(repo)})
+    paths = ["src/b.py", "README.md", "dir with space/f.txt"]
+    calls: list[tuple] = []
+    monkeypatch.setattr(store_tree, "foreign_dirty", _spy("foreign_dirty", paths, calls))
+
+    code = _run(["dirty", "--state", str(state_path)])
+
+    assert code == 1
+    assert [args[:1] for args in calls] == [(repo,)], calls
+    assert capsys.readouterr().out.splitlines() == paths
+
+
+def test_cli_dirty_is_silent_and_exits_zero_on_a_clean_tree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    repo = tmp_path / "elsewhere"
+    state_path = _write_state(_autopilot_dir(tmp_path), {"repo_root": str(repo)})
+    calls: list[tuple] = []
+    monkeypatch.setattr(store_tree, "foreign_dirty", _spy("foreign_dirty", [], calls))
+
+    code = _run(["dirty", "--state", str(state_path)])
+
+    assert code == 0
+    assert [args[:1] for args in calls] == [(repo,)], calls
+    assert capsys.readouterr().out == ""
+
+
+def test_cli_dirty_checks_the_project_root_when_state_has_no_repo_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    state_path = _write_state(_autopilot_dir(tmp_path), {})
+    calls: list[tuple] = []
+    monkeypatch.setattr(store_tree, "foreign_dirty", _spy("foreign_dirty", [], calls))
+
+    code = _run(["dirty", "--state", str(state_path)])
+
+    assert code == 0
+    assert [args[:1] for args in calls] == [(tmp_path,)], calls
+    assert capsys.readouterr().out == ""
+
+
+def test_cli_record_store_commits_with_the_site_and_prd(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    repo = tmp_path / "elsewhere"
+    state_path = _write_state(_autopilot_dir(tmp_path), {"repo_root": str(repo)})
+    calls: list[tuple] = []
+    monkeypatch.setattr(store_tree, "record_store", _spy("record_store", SHA, calls))
+
+    code = _run(
+        [
+            "record-store",
+            "--state",
+            str(state_path),
+            "--site",
+            "build",
+            "--prd",
+            "00007-feature-z.md",
+        ],
+    )
+
+    assert code == 0
+    assert [args[:3] for args in calls] == [(repo, "build", "00007-feature-z.md")]
+    out = capsys.readouterr().out
+    assert _one_line(out), out
+    assert out.strip() == SHA
+
+
+def test_cli_record_store_defaults_prd_to_empty_and_is_silent_when_nothing_changed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    repo = tmp_path / "elsewhere"
+    state_path = _write_state(_autopilot_dir(tmp_path), {"repo_root": str(repo)})
+    calls: list[tuple] = []
+    monkeypatch.setattr(store_tree, "record_store", _spy("record_store", None, calls))
+
+    code = _run(["record-store", "--state", str(state_path), "--site", "review"])
+
+    assert code == 0, "nothing to commit is still a success"
+    assert [args[:3] for args in calls] == [(repo, "review", "")], calls
+    assert capsys.readouterr().out == ""
+
+
+def test_cli_record_store_refuses_to_run_without_a_site(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_path = _write_state(_autopilot_dir(tmp_path), {"repo_root": str(tmp_path)})
+    calls: list[tuple] = []
+    monkeypatch.setattr(store_tree, "record_store", _spy("record_store", SHA, calls))
+
+    code = _run(["record-store", "--state", str(state_path), "--prd", "00007-x.md"])
+
+    assert code not in (0, None)
+    assert calls == [], "no record without a --site"
+
+
+# -- custody.repo_and_git_dir --------------------------------------------------
+
+
+def test_repo_and_git_dir_reads_repo_root_and_git_dir_from_state(
+    tmp_path: Path,
+) -> None:
+    autopilot_dir = _autopilot_dir(tmp_path)
+    repo, git_dir = tmp_path / "work", str(tmp_path / "bare.git")
+    _write_state(autopilot_dir, {"repo_root": str(repo), "git_dir": git_dir})
+
+    assert custody.repo_and_git_dir(autopilot_dir) == (repo, git_dir)
+
+
+def test_repo_and_git_dir_defaults_git_dir_to_none_when_state_omits_it(
+    tmp_path: Path,
+) -> None:
+    autopilot_dir = _autopilot_dir(tmp_path)
+    repo = tmp_path / "work"
+    _write_state(autopilot_dir, {"repo_root": str(repo)})
+
+    assert custody.repo_and_git_dir(autopilot_dir) == (repo, None)
+
+
+@pytest.mark.parametrize(
+    "state_text",
+    [
+        None,
+        "{not json",
+        json.dumps({"git_dir": "/abs/bare.git"}),
+        json.dumps({"repo_root": "", "git_dir": "/abs/bare.git"}),
+    ],
+    ids=["no-state-file", "invalid-json", "no-repo-root", "empty-repo-root"],
+)
+def test_repo_and_git_dir_falls_back_to_the_project_root(
+    tmp_path: Path,
+    state_text: str | None,
+) -> None:
+    autopilot_dir = _autopilot_dir(tmp_path)
+    if state_text is not None:
+        (autopilot_dir / "state.json").write_text(state_text, encoding="utf-8")
+
+    result = custody.repo_and_git_dir(autopilot_dir)
+
+    assert result == (custody.project_root(autopilot_dir), None)
+    assert result[0] == tmp_path, "the store's four-level parent is the repo"
 
 
 if __name__ == "__main__":
