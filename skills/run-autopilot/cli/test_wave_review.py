@@ -38,7 +38,12 @@ from cli import (
     wave_review,
 )
 from cli.test_wave_launch import _autopilot, _git, _repo
-from cli.test_wave_launch_refusals import _dirty_store_only, _track_store_file
+from cli.test_wave_launch_refusals import (
+    FOREIGN_CASES,
+    _dirty_store_and_foreign,
+    _dirty_store_only,
+    _track_store_file,
+)
 
 
 def _lane(name: str, prds: list[str], files: list[str] | None = None) -> dict:
@@ -685,6 +690,23 @@ def test_review_ignores_a_tree_dirty_only_inside_the_store(
     # to spawn the loop and reads its verdict like a clean checkout would.
     assert wave_review.review(repo, wave_dict, spawn_fn=spawn) == "converged"
     assert len(spawn.calls) == 1, spawn.calls
+
+
+# `repo_dirty` in `test_review_refuses_before_assembly` already covers untracked.
+@pytest.mark.parametrize("case", [c for c in FOREIGN_CASES if c != "untracked"])
+def test_review_refuses_foreign_dirt_beside_dirt_inside_the_store(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    case: str,
+) -> None:
+    repo, _, wave_dict = _assembled(tmp_path, monkeypatch)
+    _track_store_file(repo)
+    foreign = _dirty_store_and_foreign(repo, case)
+    spawn = _FakeLoop()
+    with pytest.raises(ValueError, match="uncommitted changes") as refused:
+        wave_review.review(repo, wave_dict, spawn_fn=spawn)
+    assert foreign in str(refused.value), refused.value
+    assert spawn.calls == []
 
 
 def test_review_releases_the_lock_during_the_wait(

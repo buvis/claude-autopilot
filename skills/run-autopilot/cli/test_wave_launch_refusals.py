@@ -71,25 +71,71 @@ def _stub_git(bin_dir: Path, blocked: list[str]) -> None:
     script.chmod(0o755)
 
 
-STORE_FILE = "docs/dev/project-management/decisions/0001-store.md"
+# One file under each store root, so no literal path can be special-cased.
+STORE_FILES = (
+    "docs/dev/project-management/decisions/0001-store.md",
+    "docs/dev/tmp/0001-store.md",
+)
+# Foreign look-alikes: the store file's basename elsewhere, a repo-root `docs/`
+# file, and a sibling directory whose name only starts like the store's.
+LOOKALIKES = (
+    "decisions/0001-store.md",
+    "docs/guide.md",
+    "docs/dev/project-management-old/x.md",
+)
+# Each kind of foreign dirt that must still refuse beside store churn.
+FOREIGN_CASES = [
+    "readme_edited",
+    "same_basename",
+    "docs_root",
+    "near_miss_dir",
+    "renamed_out_of_store",
+    "untracked",
+]
 
 
 def _track_store_file(repo: Path) -> None:
-    """Commit a store file past `_repo`'s `.gitignore`, so a later edit to it
-    shows in `git status --porcelain` instead of hiding as an ignored path."""
-    (repo / STORE_FILE).parent.mkdir(parents=True, exist_ok=True)
-    (repo / STORE_FILE).write_text("decided\n", encoding="utf-8")
-    _git(repo, "add", "-f", "--", STORE_FILE)
-    _git(repo, "commit", "-qm", "track a store file")
+    """Commit the store files and look-alikes past `_repo`'s `.gitignore`, so a
+    later edit to any of them shows in `git status --porcelain`."""
+    for rel in (*STORE_FILES, *LOOKALIKES):
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_text("decided\n", encoding="utf-8")
+    _git(repo, "add", "-f", "--", *STORE_FILES, *LOOKALIKES)
+    _git(repo, "commit", "-qm", "track store files and look-alikes")
+
+
+def _append(repo: Path, rel: str) -> None:
+    with (repo / rel).open("a", encoding="utf-8") as tracked:
+        tracked.write("revised\n")
 
 
 def _dirty_store_only(repo: Path) -> None:
-    """Edit the tracked store file and prove it is the tree's ONLY dirty path, so
-    a refusal-free result can only come from store churn being ignored."""
-    with (repo / STORE_FILE).open("a", encoding="utf-8") as store:
-        store.write("revised\n")
+    """Edit both tracked store files and prove they are the tree's ONLY dirty
+    paths, so a refusal-free result can only come from store churn being ignored."""
+    for rel in STORE_FILES:
+        _append(repo, rel)
     porcelain = _git(repo, "status", "--porcelain", "--untracked-files=all").stdout
-    assert porcelain.splitlines() == [f" M {STORE_FILE}"], porcelain
+    assert sorted(porcelain.splitlines()) == [f" M {rel}" for rel in STORE_FILES]
+
+
+def _dirty_store_and_foreign(repo: Path, case: str) -> str:
+    """Store churn plus one foreign change of kind `case`; the foreign path."""
+    _dirty_store_only(repo)
+    if case == "renamed_out_of_store":
+        # Destination inside the store, source outside: the source is foreign.
+        _git(repo, "mv", "README.md", "docs/dev/project-management/x.md")
+        return "README.md"
+    if case == "untracked":
+        (repo / "stray.py").write_text("x = 1\n", encoding="utf-8")
+        return "stray.py"
+    rel = {
+        "readme_edited": "README.md",
+        "same_basename": LOOKALIKES[0],
+        "docs_root": LOOKALIKES[1],
+        "near_miss_dir": LOOKALIKES[2],
+    }[case]
+    _append(repo, rel)
+    return rel
 
 
 def test_launch_ignores_a_tree_dirty_only_inside_the_store(
@@ -101,9 +147,29 @@ def test_launch_ignores_a_tree_dirty_only_inside_the_store(
     _track_store_file(repo)
     _dirty_store_only(repo)
     capsys.readouterr()  # the plan listing, not launch's output
-    wave_launch.launch(repo, wave_path, spawn_fn=_FakeSpawn())
+    spawn = _FakeSpawn()
+    assert wave_launch.launch(repo, wave_path, spawn_fn=spawn) == 0
     err = capsys.readouterr().err
     assert "dirty tree" not in err, err
+    assert len(spawn.calls) == 1, spawn.calls
+
+
+@pytest.mark.parametrize("case", FOREIGN_CASES)
+def test_launch_refuses_foreign_dirt_beside_dirt_inside_the_store(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    case: str,
+) -> None:
+    repo, wave_path = _planned(tmp_path, monkeypatch, ONE_LANE, max_lanes=1)
+    _track_store_file(repo)
+    _dirty_store_and_foreign(repo, case)
+    capsys.readouterr()  # the plan listing, not launch's output
+    spawn = _FakeSpawn()
+    assert wave_launch.launch(repo, wave_path, spawn_fn=spawn) == 1
+    assert "dirty tree" in capsys.readouterr().err
+    assert spawn.calls == []
+    assert wave.load(wave_path)["status"] == "planned"
 
 
 def test_launch_refuses_a_checkout_a_live_loop_already_owns(
