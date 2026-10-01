@@ -16,20 +16,13 @@ from pathlib import Path
 
 import pytest
 
-from cli.test_wave_launch import _repo
+from cli.test_wave_launch import _git, _repo
 
 _HAMMER_THREADS = 12
 
 
 def _assert_gpgsign_disabled(repo: Path) -> None:
-    result = subprocess.run(
-        ["git", "config", "--local", "commit.gpgsign"],
-        cwd=repo,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    assert result.stdout.strip() == "false"
+    assert _git(repo, "config", "--local", "commit.gpgsign").stdout.strip() == "false"
 
 
 def _hammer(tmp_path: Path) -> list[Path]:
@@ -89,4 +82,5 @@ def test_repo_disables_signing_regardless_of_host_gpg_config(
         encoding="utf-8",
     )
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(global_config))
-    _repo(tmp_path / "case", {})
+    repo, _ = _repo(tmp_path / "case", {})
+    _assert_gpgsign_disabled(repo)

@@ -132,13 +132,13 @@ echo "[checks] effort lanes"
 uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_lane.py \
   skills/run-autopilot/cli/test_lane_cli.py \
-  skills/run-autopilot/scripts/test_lane_prose.py
+  skills/run-autopilot/scripts/test_lane_prose.py \
+  skills/run-autopilot/cli/test_release_checks_parallel_prose.py
 
 # serial: spawns its own -n 2 subprocess internally (PRD 00233)
 echo "[checks] parallel safety"
 uv run --no-project --with pytest --with pytest-xdist python -m pytest -q \
-  skills/run-autopilot/cli/test_parallel_safety.py \
-  skills/run-autopilot/cli/test_release_checks_parallel_prose.py
+  skills/run-autopilot/cli/test_parallel_safety.py
 
 echo "[checks] waves"
 uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n auto --maxprocesses 4 \

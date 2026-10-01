@@ -205,6 +205,21 @@ def _solo_repo(tmp_path: Path) -> tuple[Path, Path]:
     return repo, state_path
 
 
+def test_solo_repo_commits_despite_host_signing_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`_GIT_IDENTITY`'s `commit.gpgsign=false` keeps `_solo_repo` committing on a
+    host whose global git config signs every commit with a failing gpg program."""
+    global_config = tmp_path / "gitconfig-global"
+    global_config.write_text(
+        "[commit]\n\tgpgsign = true\n[gpg]\n\tprogram = /usr/bin/false\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(global_config))
+    repo, _ = _solo_repo(tmp_path)
+    assert _git(repo, "log", "--format=%s") == "base"
+
+
 def _lane_check(state_path: Path, *extra: str) -> tuple[subprocess.CompletedProcess, dict]:
     proc = _run(["lane-check", "--state", str(state_path), *extra], cwd=state_path.parent)
     return proc, json.loads(state_path.read_text(encoding="utf-8"))
