@@ -24,7 +24,10 @@ from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import custody, frontmatter, handoff, records, resume, schema, selection, state, statectl
+from . import (
+    custody, frontmatter, handoff, records, resume, schema, selection, state,
+    statectl, store_tree,
+)
 
 STOPS: tuple[str, ...] = (
     "fs_error",
@@ -143,6 +146,10 @@ def _prepare_tree(state_path: Path, prds_dir: Path, autopilot_dir: Path) -> None
     (prds_dir.parents[1] / "tmp").mkdir(parents=True, exist_ok=True)
     (autopilot_dir / "reports").mkdir(parents=True, exist_ok=True)
     (autopilot_dir / "deferred").mkdir(parents=True, exist_ok=True)
+    # Best-effort: a store .gitignore that cannot be written is not worth
+    # halting Phase 0 over, so it is suppressed rather than an fs_error.
+    with contextlib.suppress(OSError):
+        store_tree.ensure_store_gitignore(prds_dir.parent)
     if not state_path.exists():
         state.init(state_path, {"phase": "build", "next_phase": "build"})
     for name in handoff.MARKERS:

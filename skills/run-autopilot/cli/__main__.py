@@ -116,6 +116,14 @@ Subcommands:
         stderr note. Exit 2 on a present but unreadable, undecodable or
         invalid ledger, 9 on a failed stub or state write (the stubs already
         published stay and own their keys, so the retry mints only the rest).
+    record-store --state --site [--prd]
+        store_tree.record_store() over the store pathspec alone: one commit of
+        the autopilot state tree for `site` (the PRD named when given). Prints
+        the new HEAD sha, nothing when there was nothing to commit.
+    ensure-store --state
+        store_tree.ensure_store_gitignore() on the state file's grandparent
+        (the store dir). Prints the .gitignore path only when it wrote one;
+        state.json is never read, so a from-empty batch can call it first.
 
 --state, when omitted, resolves by walking up from cwd via
 _walk_up.find_autopilot_dir() to <dir>/state.json. park's --autopilot-dir,
@@ -1206,6 +1214,19 @@ def _run_record_store(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add_ensure_store(subparsers) -> None:
+    subparsers.add_parser("ensure-store").add_argument("--state")
+
+
+def _run_ensure_store(args: argparse.Namespace) -> int:
+    # The store dir is the state file's grandparent (<store>/autopilot/state.json);
+    # state.json itself is never read, so a from-empty batch can call this first.
+    store_dir = _resolve_state_path(args.state).parents[1]
+    if store_tree.ensure_store_gitignore(store_dir):
+        print(store_dir / ".gitignore")
+    return 0
+
+
 # Registry, not an if/elif chain over sys.argv: PRD 00106 adds entries here
 # (an (add_parser_fn, run_fn) pair per subcommand name).
 _SUBCOMMANDS: dict[str, tuple] = {
@@ -1231,6 +1252,7 @@ _SUBCOMMANDS: dict[str, tuple] = {
     "mint-stubs": (_add_mint_stubs, _run_mint_stubs),
     "dirty": (_add_dirty, _run_dirty),
     "record-store": (_add_record_store, _run_record_store),
+    "ensure-store": (_add_ensure_store, _run_ensure_store),
     "wave": (wave_cli.add, _run_wave),
 }
 
