@@ -4,6 +4,11 @@
 `foreign_dirty` lists the dirty paths outside the autopilot store roots;
 `record_store` stages and commits the store alone, leaving any other staged
 path untouched.
+
+Both take the store directory their caller already holds. The store is
+`<project root>/docs/dev/project-management`, and a bare-backed project puts
+the project root below git's work-tree root (`$HOME/.claude` under `$HOME`),
+so the roots `git status` prints carry a prefix that git itself cannot report.
 """
 
 from __future__ import annotations
@@ -12,8 +17,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-STORE_PREFIXES = ("docs/dev/project-management/", "docs/dev/tmp/")
-STORE_PATHSPEC = ":(top)docs/dev/project-management"
+STORE_SUBDIR = "docs/dev/project-management"
+STORE_PREFIXES = (f"{STORE_SUBDIR}/", "docs/dev/tmp/")
+STORE_PATHSPEC = f":(top){STORE_SUBDIR}"
 GIT_TIMEOUT_SECS = 30
 
 STORE_GITIGNORE = "".join(
@@ -46,6 +52,10 @@ STORE_GITIGNORE = "".join(
 )
 
 
+class StoreGitError(RuntimeError):
+    """A `git status` probe behind `foreign_dirty` failed."""
+
+
 def run_git(args: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["git", *args],
@@ -57,19 +67,66 @@ def run_git(args: list[str], cwd: Path | None = None) -> subprocess.CompletedPro
     )
 
 
-def foreign_dirty(repo: Path, run_git=run_git) -> list[str]:
-    """Dirty paths (either side of a rename or copy) outside STORE_PREFIXES."""
-    out = run_git(["status", "--porcelain", "-z", "--untracked-files=all"], cwd=repo)
+def _store_prefix(repo: Path, store_dir: Path | None) -> str:
+    """The slash-terminated path from git's work-tree root down to the store's
+    parent, or "" when `store_dir` is absent or is not `<x>/STORE_SUBDIR` inside
+    `repo`. git resolves symlinks in `--show-toplevel`, so both sides must too."""
+    if store_dir is None:
+        return ""
+    try:
+        rel = store_dir.resolve().relative_to(repo.resolve()).as_posix()
+    except (OSError, ValueError):
+        return ""
+    if not rel.endswith(f"/{STORE_SUBDIR}"):
+        return ""
+    return rel[: -len(STORE_SUBDIR)]
+
+
+def _status(args: list[str], repo: Path, run_git) -> list[tuple[str, str]]:
+    """(code, path) per porcelain entry, both sides of a rename or copy;
+    StoreGitError when the probe itself failed."""
+    try:
+        out = run_git(args, cwd=repo)
+    except (OSError, subprocess.SubprocessError) as err:
+        stderr = getattr(err, "stderr", None)
+        detail = f"{err} {stderr if isinstance(stderr, str) else ''}"
+        raise StoreGitError(f"git status failed: {' '.join(detail.split())}") from err
     fields = iter(out.stdout.split("\0"))
-    paths = []
+    entries = []
     for field in fields:
         if not field:
             continue
         code, path = field[:2], field[3:]
-        paths.append(path)
+        entries.append((code, path))
         if "R" in code or "C" in code:
-            paths.append(next(fields))
-    return [p for p in paths if not p.startswith(STORE_PREFIXES)]
+            entries.append((code, next(fields)))
+    return entries
+
+
+def foreign_dirty(
+    repo: Path, store_dir: Path | None = None, run_git=run_git
+) -> list[str]:
+    """Dirty paths (either side of a rename or copy) outside the store roots as
+    they read from `repo`, git's work-tree root. The repository's own
+    `status.showUntrackedFiles` decides which untracked paths reach us, so a
+    wholly untracked store can arrive collapsed into one ancestor directory;
+    such an entry is re-listed in full instead of being reported as foreign."""
+    roots = tuple(_store_prefix(repo, store_dir) + root for root in STORE_PREFIXES)
+    paths = []
+    for code, path in _status(["status", "--porcelain", "-z"], repo, run_git):
+        if path.startswith(roots):
+            continue
+        untracked_dir = code == "??" and path.endswith("/")
+        if untracked_dir and any(root.startswith(path) for root in roots):
+            probe = ["status", "--porcelain", "-z", "--untracked-files=all"]
+            paths.extend(
+                leaf
+                for _code, leaf in _status([*probe, "--", path], repo, run_git)
+                if not leaf.startswith(roots)
+            )
+        else:
+            paths.append(path)
+    return paths
 
 
 def ensure_store_gitignore(store_dir: Path) -> bool:
@@ -86,18 +143,20 @@ def ensure_store_gitignore(store_dir: Path) -> bool:
     return True
 
 
-def record_store(repo: Path, site: str, prd: str, run_git=run_git) -> str | None:
+def record_store(
+    repo: Path, site: str, prd: str, store_dir: Path | None = None, run_git=run_git
+) -> str | None:
     """Commit the store pathspec only; the new HEAD sha, or None when nothing
-    changed or git failed (the reason on one stderr line)."""
+    changed or git failed (the reason on one stderr line). The pathspec is
+    STORE_PATHSPEC shifted under `store_dir`'s own prefix inside `repo`."""
+    pathspec = f":(top){_store_prefix(repo, store_dir)}{STORE_SUBDIR}"
     message = f"chore(autopilot): record {site} state" + (f" for {prd}" if prd else "")
     try:
-        run_git(["add", "--", STORE_PATHSPEC], cwd=repo)
-        staged = run_git(
-            ["diff", "--cached", "--name-only", "--", STORE_PATHSPEC], cwd=repo
-        )
+        run_git(["add", "--", pathspec], cwd=repo)
+        staged = run_git(["diff", "--cached", "--name-only", "--", pathspec], cwd=repo)
         if not staged.stdout.strip():
             return None
-        run_git(["commit", "-m", message, "--", STORE_PATHSPEC], cwd=repo)
+        run_git(["commit", "-m", message, "--", pathspec], cwd=repo)
         return run_git(["rev-parse", "HEAD"], cwd=repo).stdout.strip()
     except (OSError, RuntimeError, subprocess.SubprocessError) as err:
         stderr = getattr(err, "stderr", None)

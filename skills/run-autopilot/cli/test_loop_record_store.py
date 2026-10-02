@@ -23,10 +23,11 @@ _no_real_drain_side_effects = loop_testutil._no_real_drain_side_effects
 
 
 def _record_store_into(monkeypatch, events: list, calls: list, probe=None):
-    def fake(repo, site, prd, run_git=store_tree.run_git):
+    def fake(repo, site, prd, store_dir=None, run_git=store_tree.run_git):
         events.append(("store", site, prd))
         calls.append(
             {"repo": repo, "site": site, "prd": prd, "run_git": run_git,
+             "store_dir": store_dir,
              "probe": probe() if probe else None},
         )
         return None  # nothing committed: the wrapper must carry on regardless

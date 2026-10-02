@@ -26,7 +26,9 @@ from cli import custody, store_tree
 
 REPO = Path("/abs/repo")
 STORE_PATHSPEC = ":(top)docs/dev/project-management"
-STATUS_ARGS = ["status", "--porcelain", "-z", "--untracked-files=all"]
+# No --untracked-files override: the repository's own status.showUntrackedFiles
+# decides (PRD 00236 task 9; test_store_boundary.py pins why).
+STATUS_ARGS = ["status", "--porcelain", "-z"]
 SHA = "0123456789abcdef0123456789abcdef01234567"
 OTHER_SHA = "fedcba9876543210fedcba9876543210fedcba98"
 SUBCOMMANDS = ("add", "diff", "commit", "rev-parse")

@@ -236,7 +236,11 @@ class ActMixin:
             claude_bin=self.runner_bin,
         )
         store_tree.record_store(
-            store_repo, "drained", decision.get("prd", ""), run_git=store_run_git,
+            store_repo,
+            "drained",
+            decision.get("prd", ""),
+            ap_dir.parent,
+            run_git=store_run_git,
         )
         return 0
 

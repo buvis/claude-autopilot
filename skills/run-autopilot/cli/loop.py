@@ -591,7 +591,11 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
             )
             store_repo, store_run_git = store_git(ap_dir)
             store_tree.record_store(
-                store_repo, "loop", decision.get("prd", ""), run_git=store_run_git,
+                store_repo,
+                "loop",
+                decision.get("prd", ""),
+                ap_dir.parent,
+                run_git=store_run_git,
             )
 
             code = self._act_branch(decision, ap_dir)

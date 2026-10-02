@@ -1164,11 +1164,14 @@ def _run_mint_stubs(args: argparse.Namespace) -> int:
     return 0
 
 
-def _store_repo(state_arg: str | None) -> tuple[Path, object]:
-    """(repo, run_git) for the store verbs: the repo and git dir from
-    state.json (else the state dir's project root), and a run_git that
-    prefixes every call with custody.git_argv for that repo."""
-    repo, git_dir = custody.repo_and_git_dir(_resolve_state_path(state_arg).parent)
+def _store_repo(state_arg: str | None) -> tuple[Path, Path, object]:
+    """(repo, store_dir, run_git) for the store verbs: the repo and git dir
+    from state.json (else the state dir's project root), the store dir the
+    state path sits in (<store>/autopilot/state.json), and a run_git that
+    prefixes every call with custody.git_argv for that repo. The repo is
+    git's work-tree root, which the store is not always directly under."""
+    state_path = _resolve_state_path(state_arg)
+    repo, git_dir = custody.repo_and_git_dir(state_path.parent)
     prefix = custody.git_argv(str(repo), git_dir)
 
     def run_git(args: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
@@ -1185,7 +1188,7 @@ def _store_repo(state_arg: str | None) -> tuple[Path, object]:
             timeout=store_tree.GIT_TIMEOUT_SECS,
         )
 
-    return repo, run_git
+    return repo, state_path.parents[1], run_git
 
 
 def _add_dirty(subparsers) -> None:
@@ -1193,8 +1196,8 @@ def _add_dirty(subparsers) -> None:
 
 
 def _run_dirty(args: argparse.Namespace) -> int:
-    repo, run_git = _store_repo(args.state)
-    paths = store_tree.foreign_dirty(repo, run_git=run_git)
+    repo, store_dir, run_git = _store_repo(args.state)
+    paths = store_tree.foreign_dirty(repo, store_dir, run_git=run_git)
     for path in paths:
         print(path)
     return 1 if paths else 0
@@ -1208,8 +1211,10 @@ def _add_record_store(subparsers) -> None:
 
 
 def _run_record_store(args: argparse.Namespace) -> int:
-    repo, run_git = _store_repo(args.state)
-    sha = store_tree.record_store(repo, args.site, args.prd, run_git=run_git)
+    repo, store_dir, run_git = _store_repo(args.state)
+    sha = store_tree.record_store(
+        repo, args.site, args.prd, store_dir, run_git=run_git
+    )
     if sha is not None:
         print(sha)
     return 0
