@@ -43,11 +43,13 @@ stops the item says so.
   failure) `TaskStop` it if it is still running. A `WAITING` return after 30
   runs means a stalled CLI lane; count that lane as failed after its one
   retry, as the Roster says.
-- **A worktree you know.** Run `git status --porcelain` and account for every
-  dirty path. A dirty path inside the card's `## Files` stops the item before
-  any dispatch: the lane cannot tell that work from the implementor's, and it
-  refuses rather than commit somebody else's edit. The lane stages the card's
-  files and leaves every other dirty path untouched.
+- **A worktree you know.** Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/cli/__main__.py dirty --state <state.json>`
+  and account for every path it prints (it skips the store, so this session's
+  own store writes need no accounting). A dirty path inside the
+  card's `## Files` stops the item before any dispatch: the lane cannot tell
+  that work from the implementor's, and it refuses rather than commit somebody
+  else's edit. The lane stages the card's files and leaves every other dirty
+  path untouched.
 - **Reviewer CLIs.** `${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex-run.sh`
   is executable. The gemini lane is optional: drop it when
   `${CLAUDE_PLUGIN_ROOT}/skills/use-gemini/scripts/gemini-run.sh` or its backend
@@ -201,7 +203,9 @@ Agent tool:
 ```
 
 Close the row, stage the paths from the `FILES_TOUCHED:` footer, and commit.
-Any other dirty path is foreign: leave it unstaged and name it in the report.
+Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/cli/__main__.py dirty --state <state.json>`;
+any path it still prints, beyond the staged `FILES_TOUCHED:` set, is foreign:
+leave it unstaged and name it in the report.
 
 Read the card's `changelog` field. Write the entry into `CHANGELOG.md` under
 the `## [Unreleased]` heading with the Edit tool when `changelog` is not
