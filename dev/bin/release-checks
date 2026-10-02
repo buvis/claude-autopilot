@@ -160,6 +160,12 @@ uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n aut
   skills/run-autopilot/cli/test_wave_slots.py \
   skills/run-autopilot/cli/test_loop_slots.py
 
+echo "[checks] store tree"
+uv run --no-project --with pytest python -m pytest -q \
+  skills/run-autopilot/cli/test_store_tree.py \
+  skills/run-autopilot/cli/test_store_gitignore.py \
+  skills/run-autopilot/scripts/test_store_tree_prose.py
+
 # serial: pinned by test_enter_prose.py's exact invocation text; runs in
 # ~2s serial, not worth the pin edit (PRD 00233)
 echo "[checks] enter"
