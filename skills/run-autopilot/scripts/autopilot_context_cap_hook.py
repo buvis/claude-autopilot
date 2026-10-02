@@ -127,6 +127,7 @@ def _rotation_instructions(limit: int, phase: str) -> str:
         "review file exists), and /work continues at the first non-completed "
         "rework task"
     )
+    cli_main = Path(__file__).resolve().parent.parent / "cli" / "__main__.py"
     return (
         f"Context cap reached (~{limit // 1000}K tokens). This is a ROTATION: "
         "the rotation entry is already recorded in state.cap_rotations, the "
@@ -135,8 +136,8 @@ def _rotation_instructions(limit: int, phase: str) -> str:
         "stopping, commit every dirty file named in this task's Tess or Ivan "
         "allowlist as chore(<scope>): wip - rotated mid-task, with the body "
         "naming the step reached (tess, devon or ivan). Also run "
-        f"`autopilot record-store --site {phase} --prd <the PRD>` so this "
-        "session's store writes are committed before the rotation hands off. "
+        f"`python3 {cli_main} record-store --site {phase} --prd <the PRD>` so "
+        "this session's store writes are committed before the rotation hands off. "
         "Then STOP. The "
         "autopilot Stop hook performs the "
         "loop handoff from next_phase. The fresh session reads the pending "
