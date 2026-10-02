@@ -15,6 +15,7 @@ What these tests enforce:
 
 from __future__ import annotations
 
+import importlib.util
 import re
 import sys
 from pathlib import Path
@@ -26,6 +27,21 @@ _RUN_AUTOPILOT = Path(__file__).resolve().parent.parent
 _SKILLS = _RUN_AUTOPILOT.parent
 _SKILL = _RUN_AUTOPILOT / "SKILL.md"
 _TEXT = _SKILL.read_text(encoding="utf-8")
+
+_HOOK = Path(__file__).resolve().parent / "autopilot_context_cap_hook.py"
+_HANDOFF = _SKILLS / "work" / "references" / "task-boundary-handoff.md"
+_HANDOFF_TEXT = _HANDOFF.read_text(encoding="utf-8")
+
+
+def _load_hook_module():
+    """Load autopilot_context_cap_hook.py as an importable module, same
+    pattern as test_autopilot_context_cap_hook.py, so `_rotation_instructions`
+    is callable without installing the package or touching sys.path."""
+    spec = importlib.util.spec_from_file_location("autopilot_context_cap_hook", _HOOK)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
 
 # `--shortstat` is a diff flag, not a status gate, so it must not match.
 _PORCELAIN = re.compile(r"status --porcelain|status --short(?!stat)")
@@ -102,3 +118,42 @@ def test_store_gitignore_matches_the_disposable_list() -> None:
     }
     patterns = {p.rstrip("/") for p in STORE_GITIGNORE.split()}
     assert listed == patterns, f"drift: {listed ^ patterns}"
+
+
+def test_rotation_instructions_build_phase_names_build_site() -> None:
+    """The rotation's record-store call is a runnable invocation (an
+    absolute `python3 .../cli/__main__.py` call, not the bare non-runnable
+    `autopilot record-store`), and its `--site` tracks the `phase` argument
+    rather than a hardcoded literal."""
+    module = _load_hook_module()
+    text = module._rotation_instructions(500_000, "build")
+    assert "record-store" in text
+    assert "--site build" in text
+    assert "python3 " in text
+    assert "cli/__main__.py" in text
+    assert "--prd" in text
+
+
+def test_rotation_instructions_review_phase_names_review_site() -> None:
+    """Same pin as the build-phase test, for the review-phase rotation
+    (rework rotation, PRD 00196) — `--site` must read `review`, not a
+    literal carried over from the build case."""
+    module = _load_hook_module()
+    text = module._rotation_instructions(500_000, "review")
+    assert "record-store" in text
+    assert "--site review" in text
+    assert "python3 " in text
+    assert "cli/__main__.py" in text
+    assert "--prd" in text
+
+
+def test_task_boundary_handoff_records_the_store_before_the_leave_row() -> None:
+    """task-boundary-handoff.md step h hands off the `leave` row before
+    `autopilot record-store`, the same ordering SKILL.md's handoff procedure
+    pins (test_handoff_procedure_records_the_store_before_the_leave_row,
+    above) for the core-skill copy of this rule."""
+    start = _HANDOFF_TEXT.index("**Write the contract card**")
+    step = _HANDOFF_TEXT[start : _HANDOFF_TEXT.index("**Do NOT return to step 1", start)]
+    assert step.index("record_dispatch.py handoff") < step.index(
+        "`autopilot record-store`"
+    )
