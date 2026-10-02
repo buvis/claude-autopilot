@@ -34,7 +34,8 @@ class LayoutVocabularyTest(unittest.TestCase):
         reason = hook._check_project_management_layout(("scratch", "notes.md"))
         self.assertIsNotNone(reason)
         self.assertIn(
-            "`scratch/` is not a docs/dev/project-management top-level dir", reason
+            "`scratch/` is not a docs/dev/project-management top-level dir",
+            reason,
         )
 
     def test_blocks_file_in_store_root(self) -> None:
