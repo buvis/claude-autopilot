@@ -38,8 +38,6 @@ from cli import enter, store_tree
 
 REPO = Path("/abs/repo")
 SUBCOMMANDS = ("add", "diff", "commit", "rev-parse")
-STAGED_STORE_FILE = "docs/dev/project-management/autopilot/state.json\n"
-SHA = "0123456789abcdef0123456789abcdef01234567"
 IGNORED_STDERR = (
     "The following paths are ignored by one of your .gitignore files:\n"
     "docs/dev/project-management\n"
