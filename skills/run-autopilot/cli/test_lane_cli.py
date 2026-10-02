@@ -256,6 +256,59 @@ def test_lane_check_passes_a_docs_only_diff(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
+    ("store_path", "text"),
+    [
+        (
+            "docs/dev/project-management/autopilot/ledger/dispatch-metrics.jsonl",
+            '{"dispatch": 1}\n',
+        ),
+        ("docs/dev/project-management/.gitignore", "*.log\n"),
+    ],
+    ids=["ledger-jsonl", "gitignore"],
+)
+def test_lane_check_passes_a_range_of_only_store_paths(
+    tmp_path: Path,
+    store_path: str,
+    text: str,
+) -> None:
+    # Both paths read as production code to lane.is_production_path; the
+    # store is excluded from the check, so neither can escalate.
+    repo, state_path = _solo_repo(tmp_path)
+    before = state_path.read_bytes()
+    _commit(repo, store_path, text)
+    # The check runs from inside the store itself, so an exclude pathspec
+    # resolved against the process cwd would exclude nothing at all.
+    assert state_path.parent.is_relative_to(repo / "docs/dev/project-management")
+    proc, _state = _lane_check(state_path)
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == "lane: ok"
+    assert state_path.read_bytes() == before, "a passing check writes nothing"
+
+
+def test_lane_check_ignores_a_security_word_inside_a_store_file(tmp_path: Path) -> None:
+    repo, state_path = _solo_repo(tmp_path)
+    _commit(
+        repo, "docs/dev/project-management/notes.md", "# notes\npassword: hunter2\n"
+    )
+    proc, state = _lane_check(state_path)
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == "lane: ok"
+    assert "lane_escalated" not in state
+
+
+def test_lane_check_still_escalates_when_a_store_commit_rides_along(
+    tmp_path: Path,
+) -> None:
+    repo, state_path = _solo_repo(tmp_path)
+    _commit(repo, "docs/dev/project-management/autopilot/ledger/x.jsonl", "{}\n")
+    _commit(repo, "pkg/mod.py", "x = 1\n")
+    proc, state = _lane_check(state_path)
+    assert proc.returncode == 3, proc.stderr
+    assert proc.stdout.strip() == "lane: escalate unnamed_path"
+    assert state["lane_escalated"] == {"from": "solo", "signal": "unnamed_path"}
+
+
+@pytest.mark.parametrize(
     "signal", ["critical_finding", "high_unresolved", "suite_red", "review_failed"]
 )
 def test_lane_check_records_an_explicit_signal(tmp_path: Path, signal: str) -> None:

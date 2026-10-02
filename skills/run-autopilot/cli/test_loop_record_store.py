@@ -1,6 +1,7 @@
 """Tests for the wrapper's own store recording (PRD 00236): the loop records
-the store after each metrics append (site "loop"), and the drained exit
-records it once more after the state-final archive (site "drained"). The
+the store after the metrics append of a session that made progress (site
+"loop"), and the drained exit records it once more after the state-final
+archive (site "drained"). Inside a wave lane neither record fires. The
 harness (fake clock, scripted spawn, make_loop) is cli/loop_testutil.py.
 """
 
@@ -16,7 +17,13 @@ from cli import loop_act
 from cli import loop_testutil
 from cli import store_tree
 from cli.loop import Loop
-from cli.loop_testutil import make_loop, terminal_step, write_log, write_state
+from cli.loop_testutil import (
+    make_loop,
+    noop_step,
+    terminal_step,
+    write_log,
+    write_state,
+)
 
 # The autouse fixture registers by being a module attribute.
 _no_real_drain_side_effects = loop_testutil._no_real_drain_side_effects
@@ -78,6 +85,27 @@ def _bare_terminal(lp, git_dir: Path, batch: str = "b-1"):
     return step
 
 
+def _bare_review(lp, git_dir: Path, prd: str = "p.md"):
+    """A session that made progress, whose state names a bare git dir."""
+    subprocess.run(["git", "init", "-q", "--bare", str(git_dir)], check=True)
+
+    def step(ap_dir: Path) -> None:
+        _review_step(prd)(ap_dir)
+        state = json.loads((ap_dir / "state.json").read_text())
+        state.update(repo_root=str(lp.cwd), git_dir=str(git_dir))
+        (ap_dir / "state.json").write_text(json.dumps(state))
+
+    return step
+
+
+def _lane_env(tmp_path: Path) -> dict:
+    """The two variables `autopilot wave launch` sets on every lane loop."""
+    return {
+        "_AUTOPILOT_REVIEW_SLOTS_DIR": str(tmp_path / "wave-slots"),
+        "_AUTOPILOT_REVIEW_SLOTS": "1",
+    }
+
+
 def _assert_runner_bound_to_bare_repo(run_git, lp, git_dir: Path, tmp_path) -> None:
     seen = run_git(["rev-parse", "--git-dir"], lp.cwd)
     assert Path(seen.stdout.strip()).resolve() == git_dir.resolve()
@@ -112,8 +140,8 @@ def test_each_iteration_records_the_store_after_metrics_and_before_acting(
         ("metrics", first_prd),
         ("store", "loop", first_prd),
         ("act",),
+        # The second session drained the batch: no per-iteration record.
         ("metrics", second_prd),
-        ("store", "loop", second_prd),
         ("act",),
         # The drained record carries the PRD the final state named.
         ("store", "drained", "q.md"),
@@ -125,7 +153,8 @@ def test_loop_site_records_the_projects_repo_with_a_git_runner_bound_to_it(
 ):
     events, calls = [], []
     _record_store_into(monkeypatch, events, calls)
-    lp = make_loop(tmp_path, [terminal_step()])
+    # The first session made progress, so it is the one that records.
+    lp = make_loop(tmp_path, [_review_step("p.md"), terminal_step()])
     _git_init(lp.cwd)
     write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b-1"})
     assert lp.run() == 0
@@ -151,7 +180,9 @@ def test_loop_site_runner_uses_the_bare_git_dir_recorded_in_state(
     _record_store_into(monkeypatch, events, calls)
     lp = make_loop(tmp_path, [])
     git_dir = tmp_path / "bare.git"
-    lp._test["spawn"].steps.append(_bare_terminal(lp, git_dir))
+    # A session that made progress, then one that drains the batch.
+    lp._test["spawn"].steps.append(_bare_review(lp, git_dir))
+    lp._test["spawn"].steps.append(terminal_step())
     write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b-1"})
     assert lp.run() == 0
 
@@ -221,8 +252,8 @@ def test_drained_site_runner_uses_the_bare_git_dir_from_state_before_archive(
 
 
 def test_operator_pause_exit_records_no_drained_store(tmp_path, monkeypatch):
-    # A stand-down also exits 0, but the batch is not drained: only the
-    # per-iteration "loop" record may fire, never the "drained" one.
+    # A stand-down also exits 0, but the batch is not drained and the
+    # session made no progress: neither record may fire.
     events, calls = [], []
     _record_store_into(monkeypatch, events, calls)
 
@@ -236,4 +267,79 @@ def test_operator_pause_exit_records_no_drained_store(tmp_path, monkeypatch):
     assert (ap / "paused-by-operator").is_file()
     assert "stood down" in lp._test["out"].getvalue()
 
-    assert [c["site"] for c in calls] == ["loop"]
+    assert [c["site"] for c in calls] == []
+
+
+# ── the gate: a session that made progress, outside a wave lane ────────────
+
+
+def test_a_session_that_died_records_no_store(tmp_path, monkeypatch):
+    monkeypatch.delenv("_AUTOPILOT_REVIEW_SLOTS_DIR", raising=False)
+    events, calls = [], []
+    _record_store_into(monkeypatch, events, calls)
+    # The first session touches nothing (it died and is retried); the
+    # second drains the batch.
+    lp = make_loop(tmp_path, [noop_step, terminal_step(prd="q.md")])
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b-1"})
+    assert lp.run() == 0
+    assert len(lp._test["spawn"].launches) == 2
+
+    assert [c["site"] for c in calls] == ["drained"]
+
+
+def test_a_paused_session_records_no_store(tmp_path, monkeypatch):
+    monkeypatch.delenv("_AUTOPILOT_REVIEW_SLOTS_DIR", raising=False)
+    events, calls = [], []
+    _record_store_into(monkeypatch, events, calls)
+
+    def pausing(ap_dir: Path) -> None:
+        (ap_dir / "state.json").write_text(
+            json.dumps(
+                {
+                    "prd": "p.md",
+                    "phase": "paused",
+                    "next_phase": "paused",
+                    "pause_reason": {"detail": "design gate needs the operator"},
+                    "batch": {"id": "b-1"},
+                },
+            ),
+        )
+        write_log(ap_dir, {"type": "result"})
+
+    lp = make_loop(tmp_path, [pausing])
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b-1"})
+    assert lp.run() == 1
+
+    assert calls == []
+
+
+def test_a_wave_lane_records_no_store_for_a_session_that_made_progress(
+    tmp_path, monkeypatch,
+):
+    events, calls = [], []
+    _record_store_into(monkeypatch, events, calls)
+    lp = make_loop(
+        tmp_path,
+        [_review_step("p.md"), terminal_step(prd="q.md", batch="b-1")],
+        env=_lane_env(tmp_path),
+    )
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b-1"})
+    assert lp.run() == 0
+    assert len(lp._test["spawn"].launches) == 2
+
+    assert calls == [], "a lane branch takes no store commit, at any site"
+
+
+def test_a_wave_lane_drained_exit_archives_but_records_no_store(tmp_path, monkeypatch):
+    events, calls = [], []
+    _record_store_into(monkeypatch, events, calls)
+    lp = make_loop(tmp_path, [terminal_step(batch="b-7")], env=_lane_env(tmp_path))
+    ap = lp._test["ap_dir"]
+    write_state(ap, prd="p.md", next_phase="build", batch={"id": "b-7"})
+    assert lp.run() == 0
+
+    assert calls == []
+    # Only the record is skipped: the drained exit itself ran to the end.
+    assert (ap / "reports" / "b-7-state-final.json").is_file()
+    assert not (ap / "state.json").exists()
+    assert "Backlog drained." in lp._test["out"].getvalue()
