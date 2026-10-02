@@ -663,5 +663,75 @@ def test_repo_and_git_dir_falls_back_when_the_state_file_is_unreadable(
     assert result == (custody.project_root(autopilot_dir), None)
 
 
+# -- store_tree.STORE_GITIGNORE / ensure_store_gitignore -----------------------
+#
+# The volatile control files the store must never commit. The patterns are the
+# contract, so the expected body is spelled out here rather than derived from
+# the module under test.
+
+EXPECTED_GITIGNORE_PATTERNS = [
+    "autopilot/state.json",
+    "autopilot/state.json.bak",
+    "autopilot/*.lock",
+    "autopilot/.turn-counts.json",
+    "autopilot/.handoff-requested",
+    "autopilot/.cap-fired",
+    "autopilot/.session-left",
+    "autopilot/.review-gate-blocks",
+    "autopilot/.review-gate-failed",
+    "autopilot/.lane-guard-blocks",
+    "autopilot/lanes/",
+    "autopilot/wave-slots/",
+    "autopilot/wave.json",
+    "autopilot/review-paths",
+    "autopilot/last-session.log",
+    "autopilot/wrapper.log",
+    "autopilot/pause-requested",
+    "autopilot/paused-by-operator",
+    "autopilot/park-requested",
+    "autopilot/session-brief.md",
+    "autopilot/contract-card.md",
+    "autopilot/replan-context.md",
+    "autopilot/last-verification.json",
+]
+
+
+def test_ensure_store_gitignore_writes_the_pattern_list(tmp_path: Path) -> None:
+    store_dir = tmp_path / "project-management"
+    store_dir.mkdir()
+
+    wrote = store_tree.ensure_store_gitignore(store_dir)
+
+    assert wrote is True, "a missing .gitignore is written and the write reported"
+    body = (store_dir / ".gitignore").read_text(encoding="utf-8")
+    assert body == store_tree.STORE_GITIGNORE, "the file body is STORE_GITIGNORE itself"
+    assert body.endswith("\n"), "the body ends with a final newline"
+    assert not body.endswith("\n\n"), "one final newline, no trailing blank line"
+    assert (
+        body.splitlines() == EXPECTED_GITIGNORE_PATTERNS
+    ), "every volatile control path is listed, one per line, in the contract's order"
+
+
+def test_ensure_store_gitignore_is_idempotent(tmp_path: Path) -> None:
+    store_dir = tmp_path / "project-management"
+    store_dir.mkdir()
+    gitignore = store_dir / ".gitignore"
+    store_tree.ensure_store_gitignore(store_dir)
+    stamp = gitignore.stat().st_mtime_ns
+
+    again = store_tree.ensure_store_gitignore(store_dir)
+
+    assert again is False, "a matching .gitignore is left alone and no write reported"
+    assert gitignore.read_text(encoding="utf-8") == store_tree.STORE_GITIGNORE
+    assert gitignore.stat().st_mtime_ns == stamp, "the matching file is not rewritten"
+
+    gitignore.write_text("autopilot/state.json\n", encoding="utf-8")
+
+    repaired = store_tree.ensure_store_gitignore(store_dir)
+
+    assert repaired is True, "a hand-edited .gitignore differs, so it is rewritten"
+    assert gitignore.read_text(encoding="utf-8") == store_tree.STORE_GITIGNORE
+
+
 if __name__ == "__main__":
     unittest.main()
