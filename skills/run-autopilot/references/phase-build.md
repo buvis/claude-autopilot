@@ -73,11 +73,15 @@ comes:
 
 Before anything else — before the abort handlers and before PRD selection — run
 the lifecycle `mkdir -p` block from core `SKILL.md` § "Phase 0 invariants" as
-its own Bash call (idempotent; mandatory before any move can run). Then write
-the store's `docs/dev/project-management/.gitignore` with the Write tool, only
-when it does not already exist (same section; never clobber a hand-edited copy).
+its own Bash call (idempotent; mandatory before any move can run). Then, right
+after it and as its own Bash call, run `autopilot ensure-store`:
+`python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/cli/__main__.py ensure-store --state <state.json>`.
+It ships the store's `docs/dev/project-management/.gitignore` idempotently and
+exits 0 either way. That file is written by code, never with the Write or Edit
+tool: `hooks/enforce_prd_location.py` rejects a top-level store file outside its
+keeper list for editor tools, and that refusal stays.
 
-`autopilot enter` runs this step; the instructions below stay the hand-run
+`autopilot enter` runs both steps; the instructions below stay the hand-run
 reference.
 
 ### Clear inherited hand-off markers
