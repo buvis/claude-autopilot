@@ -5,10 +5,9 @@
 `record_store` stages and commits the store alone, leaving any other staged
 path untouched.
 
-Both take the store directory their caller already holds. The store is
-`<project root>/docs/dev/project-management`, and a bare-backed project puts
-the project root below git's work-tree root (`$HOME/.claude` under `$HOME`),
-so the roots `git status` prints carry a prefix that git itself cannot report.
+The store is `<project root>/docs/dev/project-management`, and a bare-backed
+project puts the project root below git's work-tree root (`$HOME/.claude` under
+`$HOME`), so the roots `git status` prints carry a prefix git cannot report.
 """
 
 from __future__ import annotations
@@ -147,8 +146,7 @@ def record_store(
     repo: Path, site: str, prd: str, store_dir: Path | None = None, run_git=run_git
 ) -> str | None:
     """Commit the store pathspec only; the new HEAD sha, or None when nothing
-    changed or git failed (the reason on one stderr line). The pathspec is
-    STORE_PATHSPEC shifted under `store_dir`'s own prefix inside `repo`."""
+    changed or git failed (the reason on one stderr line)."""
     pathspec = f":(top){_store_prefix(repo, store_dir)}{STORE_SUBDIR}"
     message = f"chore(autopilot): record {site} state" + (f" for {prd}" if prd else "")
     try:
