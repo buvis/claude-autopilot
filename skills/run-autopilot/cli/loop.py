@@ -493,6 +493,17 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
             plan.model,
             plan.effort,
         )
+        self._record_review_once_store(ap_dir, decision)
+        print(
+            f"autopilot review-once: signal {decision['signal']} · next phase "
+            f"'{decision['next']}' · {decision['detail']}",
+            file=self.out,
+        )
+        self._teardown()
+        ok = decision["state_touched"] and decision["signal"] != "state_write_failed"
+        return 0 if ok else 1
+
+    def _record_review_once_store(self, ap_dir: Path, decision: dict) -> None:
         try:
             store_repo, store_run_git = store_git(ap_dir)
             store_tree.record_store(
@@ -504,14 +515,6 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
             )
         except Exception:
             pass
-        print(
-            f"autopilot review-once: signal {decision['signal']} · next phase "
-            f"'{decision['next']}' · {decision['detail']}",
-            file=self.out,
-        )
-        self._teardown()
-        ok = decision["state_touched"] and decision["signal"] != "state_write_failed"
-        return 0 if ok else 1
 
     def _loop_gates(self, ap_dir: Path) -> int | None:
         """The per-iteration gates that run once the autopilot dir is
