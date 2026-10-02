@@ -589,8 +589,7 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
                 plan.model,
                 plan.effort,
             )
-            # Only a session that made progress, and never inside a wave lane
-            # (a lane branch carries no store commits). state_touched is not
+            # A lane branch carries no store commits. state_touched is not
             # redundant: the first death continues as a retry.
             if (
                 decision["signal"] == "continue"

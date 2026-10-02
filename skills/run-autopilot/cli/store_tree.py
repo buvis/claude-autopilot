@@ -21,7 +21,7 @@ from pathlib import Path
 STORE_SUBDIR = "docs/dev/project-management"
 STORE_PREFIXES = (f"{STORE_SUBDIR}/", "docs/dev/tmp/")
 STORE_PATHSPEC = f":(top){STORE_SUBDIR}"
-# One exclude pathspec per store root, derived so a new root needs no edit here.
+# Derived, so a store root added above needs no second edit here.
 STORE_EXCLUDE_PATHSPECS = tuple(
     ":(exclude)" + prefix.removesuffix("/") for prefix in STORE_PREFIXES
 )
