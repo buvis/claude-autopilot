@@ -162,7 +162,11 @@ uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n aut
 
 echo "[checks] store tree"
 uv run --no-project --with pytest python -m pytest -q \
-  skills/run-autopilot/cli/test_store_tree.py \
+  skills/run-autopilot/cli/test_store_tree_foreign_dirty.py \
+  skills/run-autopilot/cli/test_store_tree_record_store.py \
+  skills/run-autopilot/cli/test_store_tree_cli.py \
+  skills/run-autopilot/cli/test_store_tree_custody.py \
+  skills/run-autopilot/cli/test_store_tree_gitignore.py \
   skills/run-autopilot/cli/test_store_gitignore.py \
   skills/run-autopilot/cli/test_store_boundary.py \
   skills/run-autopilot/cli/test_store_lane.py \
