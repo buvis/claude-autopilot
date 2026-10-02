@@ -159,6 +159,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import subprocess
@@ -1222,8 +1223,10 @@ def _run_ensure_store(args: argparse.Namespace) -> int:
     # The store dir is the state file's grandparent (<store>/autopilot/state.json);
     # state.json itself is never read, so a from-empty batch can call this first.
     store_dir = _resolve_state_path(args.state).parents[1]
-    if store_tree.ensure_store_gitignore(store_dir):
-        print(store_dir / ".gitignore")
+    # Phase 0 calls this on every session: a read-only store may not halt it.
+    with contextlib.suppress(OSError):
+        if store_tree.ensure_store_gitignore(store_dir):
+            print(store_dir / ".gitignore")
     return 0
 
 

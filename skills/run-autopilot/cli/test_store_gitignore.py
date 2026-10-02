@@ -160,6 +160,22 @@ def test_cli_ensure_store_rewrites_a_differing_body_then_leaves_a_matching_one(
     assert gitignore.stat().st_mtime_ns == stamp, "a matching body is left alone"
 
 
+def test_cli_ensure_store_survives_a_failing_store_gitignore_write(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    store_dir, state_path = _store(tmp_path)
+    state_path.parent.mkdir(parents=True)
+    calls = _recorder(monkeypatch, fail=True)
+
+    code = _run(["ensure-store", "--state", str(state_path)])
+
+    assert calls == [store_dir], "the raising writer is the one the verb called"
+    assert code == 0, "a .gitignore failure must not halt Phase 0"
+    assert capsys.readouterr().out == "", "nothing written means nothing printed"
+
+
 def test_cli_ensure_store_works_before_state_json_exists(
     tmp_path: Path,
     capsys: pytest.CaptureFixture,
