@@ -44,15 +44,22 @@ def _porcelain(*entries: str) -> str:
 
 
 class FakeGit:
-    """A `run_git` stand-in. Replies are returned, or raised, in order."""
+    """A `run_git` stand-in. A list of replies is returned, or raised, in
+    order; a dict answers by git verb instead, leaving the call order free."""
 
-    def __init__(self, replies: list) -> None:
-        self.replies = list(replies)
+    def __init__(self, replies: list | dict) -> None:
+        self.by_verb = dict(replies) if isinstance(replies, dict) else None
+        self.replies = [] if self.by_verb is not None else list(replies)
         self.calls: list[list[str]] = []
+        self.cwds: list[Path | None] = []
 
     def __call__(self, args: list[str], cwd: Path | None = None):
         self.calls.append(list(args))
-        reply = self.replies.pop(0) if self.replies else ""
+        self.cwds.append(cwd)
+        if self.by_verb is not None:
+            reply = self.by_verb.get(args[0], "")
+        else:
+            reply = self.replies.pop(0) if self.replies else ""
         if isinstance(reply, BaseException):
             raise reply
         return subprocess.CompletedProcess(
@@ -66,6 +73,14 @@ class FakeGit:
     def pathspecs(self) -> set[str]:
         """Every `:(top)...` pathspec the caller handed to git."""
         return {a for call in self.calls for a in call if a.startswith(":(top)")}
+
+    def unanchored(self, repo: Path) -> list[list[str]]:
+        """The calls that did not run with `repo` as their working directory."""
+        return [
+            call
+            for call, cwd in zip(self.calls, self.cwds)
+            if cwd is None or Path(cwd) != repo
+        ]
 
 
 def _worktree(tmp_path: Path) -> Path:
@@ -94,17 +109,23 @@ def test_the_store_roots_are_published_relative_to_a_project_root() -> None:
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize(
+    "prefix",
+    [".claude/", "sub/", "a/b/"],
+    ids=["dot-directory", "plain-sub-directory", "two-levels-down"],
+)
 def test_foreign_dirty_shifts_every_store_prefix_under_a_nested_store_dir(
     tmp_path: Path,
+    prefix: str,
 ) -> None:
     repo = _worktree(tmp_path)
-    store_dir = repo / NESTED
+    store_dir = repo / prefix / "docs/dev/project-management"
     store_dir.mkdir(parents=True)
     git = FakeGit(
         [
             _porcelain(
-                f" M {NESTED}/autopilot/state.json",
-                " M .claude/docs/dev/tmp/scratch.md",
+                f" M {prefix}docs/dev/project-management/autopilot/state.json",
+                f" M {prefix}docs/dev/tmp/scratch.md",
                 " M .config/foo",
                 " M docs/dev/tmp/x",
                 " M docs/dev/project-management/old.md",
@@ -131,8 +152,17 @@ def test_foreign_dirty_shifts_every_store_prefix_under_a_nested_store_dir(
         "docs/dev/project-management",
         ".claude/store",
         "../outside/docs/dev/project-management",
+        f"../outside/{NESTED}",
+        "../worktree-two/docs/dev/project-management",
     ],
-    ids=["default-none", "directly-under-repo", "wrong-tail", "outside-the-repo"],
+    ids=[
+        "default-none",
+        "directly-under-repo",
+        "wrong-tail",
+        "outside-the-repo",
+        "outside-the-repo-under-a-dot-dir",
+        "sibling-directory-whose-name-extends-the-repo",
+    ],
 )
 def test_foreign_dirty_falls_back_to_the_unprefixed_store_roots(
     tmp_path: Path,
@@ -168,14 +198,27 @@ def test_foreign_dirty_falls_back_to_the_unprefixed_store_roots(
 
 
 @pytest.mark.parametrize(
-    ("prefix", "collapsed"),
-    [("", "docs/"), (".claude/", ".claude/")],
-    ids=["store-under-the-repo", "store-under-a-dot-dir"],
+    ("prefix", "collapsed", "foreign"),
+    [
+        ("", "docs/", "docs/other.md"),
+        (".claude/", ".claude/", ".claude/docs/other.md"),
+        ("", "docs/dev/", "docs/dev/notes.md"),
+        (".claude/", ".claude/docs/dev/", ".claude/docs/dev/notes.md"),
+        ("sub/", "sub/", "sub/docs/other.md"),
+    ],
+    ids=[
+        "store-under-the-repo",
+        "store-under-a-dot-dir",
+        "deeper-ancestor-of-the-store",
+        "deeper-ancestor-under-a-dot-dir",
+        "ancestor-that-is-a-plain-sub-directory",
+    ],
 )
 def test_foreign_dirty_expands_a_collapsed_ancestor_and_keeps_only_non_store_paths(
     tmp_path: Path,
     prefix: str,
     collapsed: str,
+    foreign: str,
 ) -> None:
     repo = _worktree(tmp_path)
     store_dir = repo / prefix / "docs/dev/project-management"
@@ -186,14 +229,14 @@ def test_foreign_dirty_expands_a_collapsed_ancestor_and_keeps_only_non_store_pat
             _porcelain(
                 f"?? {prefix}docs/dev/project-management/autopilot/state.json",
                 f"?? {prefix}docs/dev/tmp/scratch.md",
-                f"?? {prefix}docs/other.md",
+                f"?? {foreign}",
             ),
         ],
     )
 
     out = store_tree.foreign_dirty(repo, store_dir=store_dir, run_git=git)
 
-    assert out == [f"{prefix}docs/other.md"]
+    assert out == [foreign]
     assert git.calls[0] == ["status", "--porcelain", "-z"]
     assert len(git.calls) == 2, git.calls
     assert git.calls[1][:5] == [
@@ -213,8 +256,16 @@ def test_foreign_dirty_expands_a_collapsed_ancestor_and_keeps_only_non_store_pat
         ("?? docs/dev/project-management/autopilot/", []),
         ("?? docs/dev/tmp/", []),
         ("?? vendor/", ["vendor"]),
+        ("?? .claude/", [".claude"]),
+        ("?? docs-old/", ["docs-old"]),
     ],
-    ids=["inside-the-store", "inside-the-tmp-store", "unrelated-directory"],
+    ids=[
+        "inside-the-store",
+        "inside-the-tmp-store",
+        "unrelated-directory",
+        "dot-directory-that-is-not-on-the-store-path",
+        "sibling-whose-name-extends-a-store-ancestor",
+    ],
 )
 def test_foreign_dirty_classifies_a_non_ancestor_directory_without_a_second_probe(
     tmp_path: Path,
@@ -228,6 +279,58 @@ def test_foreign_dirty_classifies_a_non_ancestor_directory_without_a_second_prob
 
     assert [path.rstrip("/") for path in out] == expected
     assert len(git.calls) == 1, git.calls
+    assert git.calls == [["status", "--porcelain", "-z"]], (
+        "the repository's own status.showUntrackedFiles must be honoured"
+    )
+
+
+def test_foreign_dirty_keeps_classifying_after_it_expanded_one_collapsed_dir(
+    tmp_path: Path,
+) -> None:
+    """A second collapsed directory in the same status output is classified on
+    its own merits, not dropped because an expansion already happened."""
+    repo = _worktree(tmp_path)
+    store_dir = repo / "docs/dev/project-management"
+    store_dir.mkdir(parents=True)
+    git = FakeGit(
+        [
+            _porcelain("?? docs/", "?? .claude/", "?? notes.md"),
+            _porcelain(
+                "?? docs/dev/project-management/autopilot/state.json",
+                "?? docs/other.md",
+            ),
+        ],
+    )
+
+    out = store_tree.foreign_dirty(repo, store_dir=store_dir, run_git=git)
+
+    assert sorted(path.rstrip("/") for path in out) == [
+        ".claude",
+        "docs/other.md",
+        "notes.md",
+    ], out
+    assert len(git.calls) == 2, git.calls
+
+
+def test_foreign_dirty_anchors_every_status_call_at_the_work_tree_root(
+    tmp_path: Path,
+) -> None:
+    repo = _worktree(tmp_path)
+    store_dir = repo / NESTED
+    store_dir.mkdir(parents=True)
+    git = FakeGit(
+        [
+            _porcelain("?? .claude/"),
+            _porcelain(f"?? {NESTED}/autopilot/state.json"),
+        ],
+    )
+
+    store_tree.foreign_dirty(repo, store_dir=store_dir, run_git=git)
+
+    assert len(git.calls) == 2, git.calls
+    assert git.unanchored(repo) == [], (
+        "a bare-repo prefix carries no -C, so git must be run inside the work-tree"
+    )
 
 
 # --------------------------------------------------------------------------
@@ -266,22 +369,26 @@ def test_foreign_dirty_converts_a_failing_status_probe_into_a_store_git_error(
 
     message = str(caught.value)
     assert any(fragment in message for fragment in fragments), message
+    assert all(fragment in message for fragment in fragments), message
+    assert caught.value.__cause__ is boom, caught.value.__cause__
 
 
 def test_foreign_dirty_converts_a_failing_expansion_probe_into_a_store_git_error(
     tmp_path: Path,
 ) -> None:
-    git = FakeGit(
-        [
-            _porcelain("?? docs/"),
-            subprocess.TimeoutExpired(["git", "status"], 30),
-        ],
+    boom = subprocess.CalledProcessError(
+        128,
+        ["git", "status"],
+        stderr="fatal: this operation must be run in a work tree",
     )
+    git = FakeGit([_porcelain("?? docs/"), boom])
 
-    with pytest.raises(store_tree.StoreGitError):
+    with pytest.raises(store_tree.StoreGitError) as caught:
         store_tree.foreign_dirty(_worktree(tmp_path), run_git=git)
 
     assert len(git.calls) == 2, git.calls
+    assert "must be run in a work tree" in str(caught.value), str(caught.value)
+    assert caught.value.__cause__ is boom, caught.value.__cause__
 
 
 # --------------------------------------------------------------------------
@@ -295,8 +402,21 @@ def test_foreign_dirty_converts_a_failing_expansion_probe_into_a_store_git_error
         (None, ":(top)docs/dev/project-management"),
         (NESTED, f":(top){NESTED}"),
         (".claude/store", ":(top)docs/dev/project-management"),
+        ("sub/docs/dev/project-management", ":(top)sub/docs/dev/project-management"),
+        ("a/b/docs/dev/project-management", ":(top)a/b/docs/dev/project-management"),
+        (
+            "../worktree-two/docs/dev/project-management",
+            ":(top)docs/dev/project-management",
+        ),
     ],
-    ids=["default-none", "nested-store", "wrong-tail-falls-back"],
+    ids=[
+        "default-none",
+        "nested-store",
+        "wrong-tail-falls-back",
+        "plain-sub-directory",
+        "two-levels-down",
+        "sibling-directory-falls-back",
+    ],
 )
 def test_record_store_targets_the_pathspec_derived_from_the_store_dir(
     tmp_path: Path,
@@ -315,6 +435,54 @@ def test_record_store_targets_the_pathspec_derived_from_the_store_dir(
     store_tree.record_store(repo, "handoff", "00236", store_dir, run_git=git)
 
     assert git.pathspecs == {expected}, git.calls
+
+
+def test_record_store_names_the_site_and_the_prd_in_the_commit_it_makes(
+    tmp_path: Path,
+) -> None:
+    repo = _worktree(tmp_path)
+    store_dir = repo / NESTED
+    store_dir.mkdir(parents=True)
+    git = FakeGit({"diff": "M\tnotes.md\n", "rev-parse": "0" * 40 + "\n"})
+
+    sha = store_tree.record_store(repo, "handoff", "00236", store_dir, run_git=git)
+
+    commits = [call for call in git.calls if call[0] == "commit"]
+    assert len(commits) == 1, git.calls
+    subject = commits[0][commits[0].index("-m") + 1]
+    assert "handoff" in subject and "00236" in subject, subject
+    assert sha == "0" * 40, sha
+
+
+def test_record_store_makes_no_commit_when_the_store_has_no_staged_change(
+    tmp_path: Path,
+) -> None:
+    repo = _worktree(tmp_path)
+    store_dir = repo / NESTED
+    store_dir.mkdir(parents=True)
+    git = FakeGit({"diff": "  \n", "rev-parse": "0" * 40 + "\n"})
+
+    out = store_tree.record_store(repo, "handoff", "00236", store_dir, run_git=git)
+
+    assert out is None, out
+    assert any(call[:2] == ["diff", "--cached"] for call in git.calls), git.calls
+    assert not any("commit" in call for call in git.calls), git.calls
+
+
+def test_record_store_anchors_every_git_call_at_the_work_tree_root(
+    tmp_path: Path,
+) -> None:
+    repo = _worktree(tmp_path)
+    store_dir = repo / NESTED
+    store_dir.mkdir(parents=True)
+    git = FakeGit({"diff": "M\tnotes.md\n", "rev-parse": "0" * 40 + "\n"})
+
+    store_tree.record_store(repo, "handoff", "00236", store_dir, run_git=git)
+
+    assert len(git.calls) >= 3, git.calls
+    assert git.unanchored(repo) == [], (
+        "--work-tree does not anchor pathspec resolution, only cwd does"
+    )
 
 
 @pytest.mark.parametrize(
@@ -411,6 +579,9 @@ class Fixture:
         return self._exec([*self.prefix, *args]).stdout
 
     def run_git(self, args: list[str], cwd: Path | None = None):
+        assert cwd is not None, (
+            f"git must be run inside the work-tree, not the process cwd: {args}"
+        )
         return self._exec([*self.prefix, *args], cwd=cwd)
 
     def dirty_the_tree(self) -> None:
@@ -486,6 +657,10 @@ def test_record_store_commits_the_nested_store_and_not_a_sibling_docs_tree(
     assert sha, "a store change must produce a commit"
     head = bare_repo.git("rev-parse", "HEAD").strip()
     assert head.startswith(sha.strip()), (sha, head)
+    assert sha == head, (sha, head)
+    assert len(sha) == 40, sha
+    subject = bare_repo.git("log", "-1", "--format=%s").strip()
+    assert "handoff" in subject and "00236" in subject, subject
     assert bare_repo.committed_paths() == [f"{NESTED}/notes.md"]
 
 
@@ -546,7 +721,12 @@ def test_cli_record_store_commits_the_store_the_state_path_points_at(
     out = capsys.readouterr().out.strip()
     assert code == 0, out
     assert plain_repo.committed_paths() == [f"{NESTED}/notes.md"]
-    assert out and plain_repo.git("rev-parse", "HEAD").strip().startswith(out)
+    head = plain_repo.git("rev-parse", "HEAD").strip()
+    assert out and head.startswith(out)
+    assert out == head, (out, head)
+    assert len(out) == 40, out
+    subject = plain_repo.git("log", "-1", "--format=%s").strip()
+    assert "handoff" in subject and "00236" in subject, subject
 
 
 if __name__ == "__main__":
