@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **hooks**: `enforce_prd_location` accepts `docs/dev/project-management/intake/`, the raw-input tree specflow decided on 2026-09-27, instead of blocking every edit under it
+
 ### Changed
 
 - **work**: Tess, Devon and Ivan run only their task's tests and never re-run a suite for a count

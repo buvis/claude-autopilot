@@ -42,6 +42,7 @@ KNOWN_DIRS = {
     "autopilot",
     "meta",
     "discovery",
+    "intake",
     "specs",
     "notes",
     "walkthroughs",

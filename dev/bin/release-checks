@@ -35,6 +35,7 @@ echo "[checks] hook registration"
 uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/scripts/test_review_coverage_hook_registration.py \
   hooks/test_hook_registration.py \
+  hooks/test_enforce_prd_location.py \
   hooks/test_guard_skill_after_leave.py \
   hooks/test_guard_stop_on_live_lanes.py
 
