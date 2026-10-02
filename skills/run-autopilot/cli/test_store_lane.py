@@ -72,9 +72,11 @@ def test_every_store_prefix_has_its_own_exclude_pathspec() -> None:
         ":(exclude)" + prefix.removesuffix("/") for prefix in store_tree.STORE_PREFIXES
     )
 
-    assert derived == store_tree.STORE_EXCLUDE_PATHSPECS, (
-        "a store root added to STORE_PREFIXES must be excluded without a second edit"
-    )
+    # One entry per store prefix, in the same order, each the prefix without
+    # its trailing slash. Whether the module derives that tuple or spells it
+    # out is not observable from here; this enforces only that the two agree,
+    # so a store root added to STORE_PREFIXES cannot be left unexcluded.
+    assert derived == store_tree.STORE_EXCLUDE_PATHSPECS
     # Today's two roots, spelled out once so the derivation above is readable.
     assert derived == (
         ":(exclude)docs/dev/project-management",
@@ -105,7 +107,13 @@ def test_every_store_prefix_has_its_own_exclude_pathspec() -> None:
 def test_only_a_non_empty_review_slots_dir_marks_a_wave_lane(
     env: dict[str, str],
     expected: bool,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # The surrounding process IS in a lane, so a mapping that was passed
+    # must answer for itself: an empty one is "no lane", never a fall-through
+    # to os.environ, and a lane value in os.environ cannot make one a lane.
+    monkeypatch.setenv(LANE_VAR, "/srv/surrounding-lane")
+
     assert store_tree.in_wave_lane(env) is expected
 
 
@@ -155,12 +163,20 @@ def test_the_record_store_verb_commits_outside_a_wave_lane(
     assert capsys.readouterr().out.strip() == SHA
 
 
+@pytest.mark.parametrize(
+    "lane_value",
+    ["/srv/slots-7", "wave-slots"],
+    ids=["arbitrary-directory", "the-usual-basename"],
+)
 def test_the_record_store_verb_records_nothing_inside_a_wave_lane(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture,
+    lane_value: str,
 ) -> None:
-    monkeypatch.setenv(LANE_VAR, str(tmp_path / "wave-slots"))
+    # The value is an opaque directory path: any non-empty one is a lane,
+    # whatever it is named.
+    monkeypatch.setenv(LANE_VAR, lane_value)
     repo = tmp_path / "elsewhere"
     state_path = _state(tmp_path, repo)
     calls: list[tuple] = []
@@ -171,3 +187,32 @@ def test_the_record_store_verb_records_nothing_inside_a_wave_lane(
     assert code == 0, "a lane skips the record, it does not fail"
     assert calls == [], "a lane branch takes no store commit"
     assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize(
+    ("lane_answer", "env_value", "recorded"),
+    [(True, None, []), (False, "/srv/slots-7", ["build"])],
+    ids=["predicate-says-lane", "predicate-says-no-lane"],
+)
+def test_the_record_store_verb_follows_the_shared_wave_lane_predicate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    lane_answer: bool,
+    env_value: str | None,
+    recorded: list[str],
+) -> None:
+    # The verb's answer tracks store_tree.in_wave_lane, not its own reading
+    # of the environment: the two disagree here, and the predicate wins.
+    if env_value is None:
+        monkeypatch.delenv(LANE_VAR, raising=False)
+    else:
+        monkeypatch.setenv(LANE_VAR, env_value)
+    monkeypatch.setattr(store_tree, "in_wave_lane", lambda *_a, **_kw: lane_answer)
+    state_path = _state(tmp_path, tmp_path / "elsewhere")
+    calls: list[tuple] = []
+    monkeypatch.setattr(store_tree, "record_store", _spy(SHA, calls))
+
+    code = _run(_record_store_argv(state_path))
+
+    assert code == 0
+    assert [args[1] for args in calls] == recorded

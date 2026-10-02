@@ -13,9 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from cli import loop_act
-from cli import loop_testutil
-from cli import store_tree
+from cli import loop_act, loop_testutil, store_tree
 from cli.loop import Loop
 from cli.loop_testutil import (
     make_loop,
@@ -33,9 +31,14 @@ def _record_store_into(monkeypatch, events: list, calls: list, probe=None):
     def fake(repo, site, prd, store_dir=None, run_git=store_tree.run_git):
         events.append(("store", site, prd))
         calls.append(
-            {"repo": repo, "site": site, "prd": prd, "run_git": run_git,
-             "store_dir": store_dir,
-             "probe": probe() if probe else None},
+            {
+                "repo": repo,
+                "site": site,
+                "prd": prd,
+                "run_git": run_git,
+                "store_dir": store_dir,
+                "probe": probe() if probe else None,
+            },
         )
         return None  # nothing committed: the wrapper must carry on regardless
 
@@ -58,10 +61,13 @@ def _trace_metrics_and_act(monkeypatch, events: list) -> None:
     monkeypatch.setattr(Loop, "_act_branch", act)
 
 
-def _review_step(prd: str):
+def _progress_step(prd: str, hand_off: str = "plan"):
+    """A session that made progress: it queued `hand_off` as the next phase.
+    Which phase it handed off to is not what makes it progress."""
+
     def step(ap_dir: Path) -> None:
         (ap_dir / "state.json").write_text(
-            json.dumps({"prd": prd, "next_phase": "review", "batch": {"id": "b-1"}}),
+            json.dumps({"prd": prd, "next_phase": hand_off, "batch": {"id": "b-1"}}),
         )
         write_log(ap_dir, {"type": "result"})
 
@@ -85,12 +91,12 @@ def _bare_terminal(lp, git_dir: Path, batch: str = "b-1"):
     return step
 
 
-def _bare_review(lp, git_dir: Path, prd: str = "p.md"):
+def _bare_progress(lp, git_dir: Path, prd: str = "p.md"):
     """A session that made progress, whose state names a bare git dir."""
     subprocess.run(["git", "init", "-q", "--bare", str(git_dir)], check=True)
 
     def step(ap_dir: Path) -> None:
-        _review_step(prd)(ap_dir)
+        _progress_step(prd)(ap_dir)
         state = json.loads((ap_dir / "state.json").read_text())
         state.update(repo_root=str(lp.cwd), git_dir=str(git_dir))
         (ap_dir / "state.json").write_text(json.dumps(state))
@@ -99,11 +105,20 @@ def _bare_review(lp, git_dir: Path, prd: str = "p.md"):
 
 
 def _lane_env(tmp_path: Path) -> dict:
-    """The two variables `autopilot wave launch` sets on every lane loop."""
+    """The two variables `autopilot wave launch` sets on every lane loop.
+    The slots dir is an opaque path: any non-empty value is a lane, and
+    nothing may read its name."""
     return {
-        "_AUTOPILOT_REVIEW_SLOTS_DIR": str(tmp_path / "wave-slots"),
+        "_AUTOPILOT_REVIEW_SLOTS_DIR": str(tmp_path / "slots-7"),
         "_AUTOPILOT_REVIEW_SLOTS": "1",
     }
+
+
+def _store_dir_of(call: dict) -> Path:
+    """The store dir the call carried, resolved. None (the pathspec would
+    then miss a project root below git's work-tree root) is not a path."""
+    assert call["store_dir"] is not None, "the store dir is not optional here"
+    return Path(call["store_dir"]).resolve()
 
 
 def _assert_runner_bound_to_bare_repo(run_git, lp, git_dir: Path, tmp_path) -> None:
@@ -119,14 +134,20 @@ def _assert_runner_bound_to_bare_repo(run_git, lp, git_dir: Path, tmp_path) -> N
 # ── site "loop": once per iteration, between metrics and act ────────────────
 
 
+@pytest.mark.parametrize("hand_off", ["plan", "design", "build", "verify", "review"])
 def test_each_iteration_records_the_store_after_metrics_and_before_acting(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
+    hand_off,
 ):
+    # Whatever phase the session handed off to, it made progress and the
+    # loop relaunches: that, not the phase name, is what records the store.
     events, calls = [], []
     _record_store_into(monkeypatch, events, calls)
     _trace_metrics_and_act(monkeypatch, events)
     lp = make_loop(
-        tmp_path, [_review_step("p.md"), terminal_step(prd="q.md", batch="b-1")],
+        tmp_path,
+        [_progress_step("p.md", hand_off), terminal_step(prd="q.md", batch="b-1")],
     )
     write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b-1"})
 
@@ -149,12 +170,13 @@ def test_each_iteration_records_the_store_after_metrics_and_before_acting(
 
 
 def test_loop_site_records_the_projects_repo_with_a_git_runner_bound_to_it(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     events, calls = [], []
     _record_store_into(monkeypatch, events, calls)
     # The first session made progress, so it is the one that records.
-    lp = make_loop(tmp_path, [_review_step("p.md"), terminal_step()])
+    lp = make_loop(tmp_path, [_progress_step("p.md"), terminal_step()])
     _git_init(lp.cwd)
     write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b-1"})
     assert lp.run() == 0
@@ -163,6 +185,9 @@ def test_loop_site_records_the_projects_repo_with_a_git_runner_bound_to_it(
     assert len(loop_calls) == 1
     call = loop_calls[0]
     assert Path(call["repo"]).resolve() == lp.cwd.resolve()
+    # The store dir, not None: it is what puts the store pathspec under a
+    # project root that sits below git's work-tree root.
+    assert _store_dir_of(call) == lp._test["ap_dir"].parent.resolve()
     # The runner targets the project repo even when invoked from elsewhere.
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
@@ -174,14 +199,15 @@ def test_loop_site_records_the_projects_repo_with_a_git_runner_bound_to_it(
 
 
 def test_loop_site_runner_uses_the_bare_git_dir_recorded_in_state(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     events, calls = [], []
     _record_store_into(monkeypatch, events, calls)
     lp = make_loop(tmp_path, [])
     git_dir = tmp_path / "bare.git"
     # A session that made progress, then one that drains the batch.
-    lp._test["spawn"].steps.append(_bare_review(lp, git_dir))
+    lp._test["spawn"].steps.append(_bare_progress(lp, git_dir))
     lp._test["spawn"].steps.append(terminal_step())
     write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b-1"})
     assert lp.run() == 0
@@ -195,14 +221,17 @@ def test_loop_site_runner_uses_the_bare_git_dir_recorded_in_state(
 
 
 def test_drained_exit_records_the_store_once_after_archive_and_agoge(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     events, calls = [], []
     lp = make_loop(tmp_path, [terminal_step(batch="b-7")])
     ap = lp._test["ap_dir"]
     archived = ap / "reports" / "b-7-state-final.json"
     _record_store_into(
-        monkeypatch, events, calls,
+        monkeypatch,
+        events,
+        calls,
         probe=lambda: (archived.is_file(), (ap / "state.json").exists()),
     )
     monkeypatch.setattr(loop_act, "run_purge", lambda repo: events.append(("purge",)))
@@ -233,7 +262,8 @@ def test_drained_exit_records_the_store_once_after_archive_and_agoge(
 
 
 def test_drained_site_runner_uses_the_bare_git_dir_from_state_before_archive(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     # The live state.json is archived before the drained record, so the
     # repo and git dir must come from the state as it stood before that.
@@ -248,6 +278,8 @@ def test_drained_site_runner_uses_the_bare_git_dir_from_state_before_archive(
     drained = [c for c in calls if c["site"] == "drained"]
     assert len(drained) == 1
     assert Path(drained[0]["repo"]).resolve() == lp.cwd.resolve()
+    # The store dir, not None: see the loop site's test above.
+    assert _store_dir_of(drained[0]) == lp._test["ap_dir"].parent.resolve()
     _assert_runner_bound_to_bare_repo(drained[0]["run_git"], lp, git_dir, tmp_path)
 
 
@@ -314,13 +346,14 @@ def test_a_paused_session_records_no_store(tmp_path, monkeypatch):
 
 
 def test_a_wave_lane_records_no_store_for_a_session_that_made_progress(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     events, calls = [], []
     _record_store_into(monkeypatch, events, calls)
     lp = make_loop(
         tmp_path,
-        [_review_step("p.md"), terminal_step(prd="q.md", batch="b-1")],
+        [_progress_step("p.md"), terminal_step(prd="q.md", batch="b-1")],
         env=_lane_env(tmp_path),
     )
     write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b-1"})

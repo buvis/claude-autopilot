@@ -157,7 +157,14 @@ def test_malformed_warning_is_byte_identical(tmp_path: Path) -> None:
 
 # ── lane-check (PRD 00205) ───────────────────────────────────────────────────
 
-_GIT_IDENTITY = ["-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false"]
+_GIT_IDENTITY = [
+    "-c",
+    "user.name=t",
+    "-c",
+    "user.email=t@example.com",
+    "-c",
+    "commit.gpgsign=false",
+]
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -206,7 +213,8 @@ def _solo_repo(tmp_path: Path) -> tuple[Path, Path]:
 
 
 def test_solo_repo_commits_despite_host_signing_config(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """`_GIT_IDENTITY`'s `commit.gpgsign=false` keeps `_solo_repo` committing on a
     host whose global git config signs every commit with a failing gpg program."""
@@ -220,8 +228,12 @@ def test_solo_repo_commits_despite_host_signing_config(
     assert _git(repo, "log", "--format=%s") == "base"
 
 
-def _lane_check(state_path: Path, *extra: str) -> tuple[subprocess.CompletedProcess, dict]:
-    proc = _run(["lane-check", "--state", str(state_path), *extra], cwd=state_path.parent)
+def _lane_check(
+    state_path: Path, *extra: str
+) -> tuple[subprocess.CompletedProcess, dict]:
+    proc = _run(
+        ["lane-check", "--state", str(state_path), *extra], cwd=state_path.parent
+    )
     return proc, json.loads(state_path.read_text(encoding="utf-8"))
 
 
@@ -285,10 +297,42 @@ def test_lane_check_passes_a_range_of_only_store_paths(
     assert state_path.read_bytes() == before, "a passing check writes nothing"
 
 
+def test_lane_check_escalates_on_a_production_path_under_docs(tmp_path: Path) -> None:
+    # Only the two store roots are skipped, never the whole docs/ tree: a
+    # production file living beside the store still names itself.
+    repo, state_path = _solo_repo(tmp_path)
+    _commit(repo, "docs/scripts/tool.py", "x = 1\n")
+    proc, state = _lane_check(state_path)
+    assert proc.returncode == 3, proc.stderr
+    assert proc.stdout.strip() == "lane: escalate unnamed_path"
+    assert state["lane_escalated"] == {"from": "solo", "signal": "unnamed_path"}
+
+
 def test_lane_check_ignores_a_security_word_inside_a_store_file(tmp_path: Path) -> None:
     repo, state_path = _solo_repo(tmp_path)
     _commit(
-        repo, "docs/dev/project-management/notes.md", "# notes\npassword: hunter2\n"
+        repo,
+        "docs/dev/project-management/notes.md",
+        "# notes\npassword: hunter2\n",
+    )
+    proc, state = _lane_check(state_path)
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == "lane: ok"
+    assert "lane_escalated" not in state
+
+
+def test_lane_check_ignores_a_store_secret_beside_a_non_store_change(
+    tmp_path: Path,
+) -> None:
+    # notes.md keeps the security scan running (the changed-path list is not
+    # empty), so the secret can only stay harmless if the scanned diff TEXT
+    # carries nothing from the store file either.
+    repo, state_path = _solo_repo(tmp_path)
+    _commit(repo, "notes.md", "# notes\nA second line.\n")
+    _commit(
+        repo,
+        "docs/dev/project-management/log.md",
+        "# log\npassword: hunter2\n",
     )
     proc, state = _lane_check(state_path)
     assert proc.returncode == 0, proc.stderr
@@ -309,7 +353,8 @@ def test_lane_check_still_escalates_when_a_store_commit_rides_along(
 
 
 @pytest.mark.parametrize(
-    "signal", ["critical_finding", "high_unresolved", "suite_red", "review_failed"]
+    "signal",
+    ["critical_finding", "high_unresolved", "suite_red", "review_failed"],
 )
 def test_lane_check_records_an_explicit_signal(tmp_path: Path, signal: str) -> None:
     _repo, state_path = _solo_repo(tmp_path)
