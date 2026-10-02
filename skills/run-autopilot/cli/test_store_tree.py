@@ -336,7 +336,10 @@ class RecordStoreTests(unittest.TestCase):
         commits = git.calls_for("commit")
         self.assertEqual(len(commits), 1)
         self.assertTrue(
-            _message_in(commits[0], "chore(autopilot): record plan state for 00009-q.md"),
+            _message_in(
+                commits[0],
+                "chore(autopilot): record plan state for 00009-q.md",
+            ),
             commits[0],
         )
 
@@ -449,7 +452,11 @@ def test_cli_dirty_exits_one_on_foreign_paths(
     state_path = _write_state(_autopilot_dir(tmp_path), {"repo_root": str(repo)})
     paths = ["src/b.py", "README.md", "dir with space/f.txt"]
     calls: list[tuple] = []
-    monkeypatch.setattr(store_tree, "foreign_dirty", _spy("foreign_dirty", paths, calls))
+    monkeypatch.setattr(
+        store_tree,
+        "foreign_dirty",
+        _spy("foreign_dirty", paths, calls),
+    )
 
     code = _run(["dirty", "--state", str(state_path)])
 
@@ -559,7 +566,13 @@ def test_cli_record_store_refuses_to_run_without_a_site(
 @pytest.mark.parametrize(
     "state_text",
     [None, "{not json", "[]", json.dumps({"repo_root": ["x"]}), json.dumps({})],
-    ids=["no-state-file", "invalid-json", "list-body", "non-str-repo-root", "no-repo-root"],
+    ids=[
+        "no-state-file",
+        "invalid-json",
+        "list-body",
+        "non-str-repo-root",
+        "no-repo-root",
+    ],
 )
 def test_cli_falls_back_to_the_project_root_of_any_state_dir(
     tmp_path: Path,
@@ -665,9 +678,7 @@ def test_repo_and_git_dir_falls_back_when_the_state_file_is_unreadable(
 
 # -- store_tree.STORE_GITIGNORE / ensure_store_gitignore -----------------------
 #
-# The volatile control files the store must never commit. The patterns are the
-# contract, so the expected body is spelled out here rather than derived from
-# the module under test.
+# The patterns are the contract, so they are spelled out here, not derived.
 
 EXPECTED_GITIGNORE_PATTERNS = [
     "autopilot/state.json",
@@ -695,42 +706,78 @@ EXPECTED_GITIGNORE_PATTERNS = [
     "autopilot/last-verification.json",
 ]
 
+EXACT_BODY = "".join(f"{pattern}\n" for pattern in EXPECTED_GITIGNORE_PATTERNS)
+# Each near miss below shares the line count, the word set or the last line with
+# the contract's body; only a byte-exact body already matches.
+EXISTING_BODIES = {
+    "absent": (None, True),
+    "exact": (EXACT_BODY, False),
+    "reordered": ("".join(f"{p}\n" for p in EXPECTED_GITIGNORE_PATTERNS[::-1]), True),
+    "same-line-count-of-junk": ("junk\n" * len(EXPECTED_GITIGNORE_PATTERNS), True),
+    "same-words-on-one-line": (" ".join(EXPECTED_GITIGNORE_PATTERNS) + "\n", True),
+    "last-line-only": (EXPECTED_GITIGNORE_PATTERNS[-1] + "\n", True),
+    "extra-line": (EXACT_BODY + "autopilot/extra\n", True),
+    "missing-line": ("".join(f"{p}\n" for p in EXPECTED_GITIGNORE_PATTERNS[:-1]), True),
+    "trailing-blank-line": (EXACT_BODY + "\n", True),
+    # read_text translates CRLF to LF, so the contract's comparison matches
+    "crlf": (EXACT_BODY.replace("\n", "\r\n"), False),
+}
+
+
+def _store_dir(tmp_path: Path) -> Path:
+    """A store holding two files the writer must never touch."""
+    autopilot_dir = _autopilot_dir(tmp_path)
+    _write_state(autopilot_dir, {"phase": "build"})
+    (autopilot_dir.parent / "decisions.md").write_text("# kept\n", encoding="utf-8")
+    return autopilot_dir.parent
+
+
+def _fingerprint(path: Path) -> tuple:
+    stat = path.stat()
+    return (path.read_bytes(), stat.st_ino, stat.st_mtime_ns, stat.st_ctime_ns)
+
 
 def test_ensure_store_gitignore_writes_the_pattern_list(tmp_path: Path) -> None:
-    store_dir = tmp_path / "project-management"
-    store_dir.mkdir()
+    store_dir = _store_dir(tmp_path)
 
     wrote = store_tree.ensure_store_gitignore(store_dir)
 
     assert wrote is True, "a missing .gitignore is written and the write reported"
     body = (store_dir / ".gitignore").read_text(encoding="utf-8")
     assert body == store_tree.STORE_GITIGNORE, "the file body is STORE_GITIGNORE itself"
-    assert body.endswith("\n"), "the body ends with a final newline"
-    assert not body.endswith("\n\n"), "one final newline, no trailing blank line"
-    assert (
-        body.splitlines() == EXPECTED_GITIGNORE_PATTERNS
-    ), "every volatile control path is listed, one per line, in the contract's order"
+    assert body.endswith("\n") and not body.endswith("\n\n"), "one single final newline"
+    assert body.splitlines() == EXPECTED_GITIGNORE_PATTERNS, "one per line, in order"
+    assert [p.name for p in store_dir.parent.iterdir()] == ["project-management"]
 
 
-def test_ensure_store_gitignore_is_idempotent(tmp_path: Path) -> None:
-    store_dir = tmp_path / "project-management"
-    store_dir.mkdir()
+@pytest.mark.parametrize(
+    ("existing", "expected"),
+    list(EXISTING_BODIES.values()),
+    ids=list(EXISTING_BODIES),
+)
+def test_ensure_store_gitignore_is_idempotent(
+    tmp_path: Path,
+    existing: str | None,
+    expected: bool,
+) -> None:
+    store_dir = _store_dir(tmp_path)
     gitignore = store_dir / ".gitignore"
-    store_tree.ensure_store_gitignore(store_dir)
-    stamp = gitignore.stat().st_mtime_ns
+    siblings = [store_dir / "decisions.md", store_dir / "autopilot" / "state.json"]
+    if existing is not None:
+        gitignore.write_text(existing, encoding="utf-8")
+    before = _fingerprint(gitignore) if existing is not None else ()
+    siblings_before = [_fingerprint(path) for path in siblings]
 
-    again = store_tree.ensure_store_gitignore(store_dir)
+    wrote = store_tree.ensure_store_gitignore(store_dir)
 
-    assert again is False, "a matching .gitignore is left alone and no write reported"
+    assert wrote is expected, f"only a byte-exact body already matches: {existing!r}"
     assert gitignore.read_text(encoding="utf-8") == store_tree.STORE_GITIGNORE
-    assert gitignore.stat().st_mtime_ns == stamp, "the matching file is not rewritten"
-
-    gitignore.write_text("autopilot/state.json\n", encoding="utf-8")
-
-    repaired = store_tree.ensure_store_gitignore(store_dir)
-
-    assert repaired is True, "a hand-edited .gitignore differs, so it is rewritten"
-    assert gitignore.read_text(encoding="utf-8") == store_tree.STORE_GITIGNORE
+    assert [_fingerprint(p) for p in siblings] == siblings_before, (
+        "no other file touched"
+    )
+    assert sorted(p.name for p in store_dir.parent.iterdir()) == ["project-management"]
+    if not expected:
+        assert _fingerprint(gitignore) == before, "a matching file is never rewritten"
 
 
 if __name__ == "__main__":
