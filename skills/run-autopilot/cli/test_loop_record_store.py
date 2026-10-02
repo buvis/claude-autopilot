@@ -1,8 +1,10 @@
 """Tests for the wrapper's own store recording (PRD 00236): the loop records
 the store after the metrics append of a session that made progress (site
 "loop"), and the drained exit records it once more after the state-final
-archive (site "drained"). Inside a wave lane neither record fires. The
-harness (fake clock, scripted spawn, make_loop) is cli/loop_testutil.py.
+archive (site "drained"). Review-once records it once per call, right after
+its own metrics append (site "review_once"), with no wave-lane gate. Inside
+a wave lane neither loop-site record fires. The harness (fake clock,
+scripted spawn, make_loop) is cli/loop_testutil.py.
 """
 
 from __future__ import annotations
@@ -376,3 +378,49 @@ def test_a_wave_lane_drained_exit_archives_but_records_no_store(tmp_path, monkey
     assert (ap / "reports" / "b-7-state-final.json").is_file()
     assert not (ap / "state.json").exists()
     assert "Backlog drained." in lp._test["out"].getvalue()
+
+
+# ── site "review_once": once per call, after metrics ───────────────────────
+
+
+def test_run_once_records_the_store_once_after_metrics_with_site_review_once(
+    tmp_path,
+    monkeypatch,
+):
+    events, calls = [], []
+    _record_store_into(monkeypatch, events, calls)
+    _trace_metrics_and_act(monkeypatch, events)
+    lp = make_loop(tmp_path, [_progress_step("p.md", "build")])
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="review", batch={"id": "b-1"})
+
+    assert lp.run_once() == 0
+    assert len(lp._test["spawn"].launches) == 1
+    assert events == [
+        ("metrics", "p.md"),
+        ("store", "review_once", "p.md"),
+    ]
+    assert [c["site"] for c in calls] == ["review_once"]
+
+
+def test_a_raising_recorder_still_lets_run_once_return_its_normal_code(
+    tmp_path,
+    monkeypatch,
+):
+    calls: list = []
+
+    def boom(*args, **kwargs):
+        calls.append(1)
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(store_tree, "record_store", boom)
+    lp = make_loop(tmp_path, [_progress_step("p.md", "build")])
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="review", batch={"id": "b-1"})
+
+    # Same script, state and expected code as the non-raising baseline
+    # (test_review_once_spawns_the_review_route_once_and_exits_zero in
+    # cli/test_loop_review_once.py): a raising recorder must not change it,
+    # and must not escape _run_once uncaught (the call below would error,
+    # not just fail an assertion, if it did).
+    assert lp.run_once() == 0
+    assert calls == [1]
+    assert "signal continue" in lp._test["out"].getvalue()
