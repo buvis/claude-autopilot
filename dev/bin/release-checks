@@ -164,6 +164,9 @@ echo "[checks] store tree"
 uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_store_tree.py \
   skills/run-autopilot/cli/test_store_gitignore.py \
+  skills/run-autopilot/cli/test_store_boundary.py \
+  skills/run-autopilot/cli/test_store_lane.py \
+  skills/run-autopilot/cli/test_loop_record_store.py \
   skills/run-autopilot/scripts/test_store_tree_prose.py
 
 # serial: pinned by test_enter_prose.py's exact invocation text; runs in
