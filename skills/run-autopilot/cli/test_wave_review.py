@@ -40,6 +40,7 @@ from cli import (
 from cli.test_wave_launch import _autopilot, _git, _repo
 from cli.test_wave_launch_refusals import (
     FOREIGN_CASES,
+    STORE_FILES,
     _dirty_store_and_foreign,
     _dirty_store_only,
     _track_store_file,
@@ -705,7 +706,12 @@ def test_review_refuses_foreign_dirt_beside_dirt_inside_the_store(
     spawn = _FakeLoop()
     with pytest.raises(ValueError, match="uncommitted changes") as refused:
         wave_review.review(repo, wave_dict, spawn_fn=spawn)
-    assert foreign in str(refused.value), refused.value
+    message = str(refused.value)
+    assert foreign in message, message
+    # The store is dirty too (via `_track_store_file` + `_dirty_store_and_foreign`),
+    # but the diagnostic names only the foreign path(s), never the store's.
+    for rel in STORE_FILES:
+        assert rel not in message, message
     assert spawn.calls == []
 
 

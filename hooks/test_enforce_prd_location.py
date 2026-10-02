@@ -1,8 +1,9 @@
 """Behavior tests for hooks/enforce_prd_location.py, the working-document
 layout gate.
 
-`_check_project_management_layout` decides from store-relative path parts
-alone, so the tests drive it with tuples; no filesystem is touched.
+Drives the hook through its real dispatched entry point, `run(payload)`,
+which feeds a PreToolUse-shaped payload to `main()` as stdin JSON and
+returns the (exit_code, stdout, stderr) triple the dispatcher sees.
 
 Stdlib-only unittest, collected by pytest.
 """
@@ -19,6 +20,14 @@ if str(_HOOKS_DIR) not in sys.path:
     sys.path.insert(0, str(_HOOKS_DIR))
 hook = importlib.import_module("enforce_prd_location")
 
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _run(rel: tuple[str, ...]) -> tuple[int, str, str]:
+    file_path = str(_REPO_ROOT.joinpath("docs/dev/project-management", *rel))
+    payload = {"tool_name": "Write", "tool_input": {"file_path": file_path}}
+    return hook.run(payload)
+
 
 class LayoutVocabularyTest(unittest.TestCase):
     def test_allows_intake_tree_for_raw_requirement_inputs(self) -> None:
@@ -28,18 +37,20 @@ class LayoutVocabularyTest(unittest.TestCase):
             ("intake", "processed", "00002-widget", "qa-log.md"),
         ):
             with self.subTest(rel=rel):
-                self.assertIsNone(hook._check_project_management_layout(rel))
+                exit_code, _, _ = _run(rel)
+                self.assertEqual(exit_code, 0)
 
     def test_blocks_unknown_top_level_dir(self) -> None:
-        reason = hook._check_project_management_layout(("scratch", "notes.md"))
-        self.assertIsNotNone(reason)
+        exit_code, _, stderr = _run(("scratch", "notes.md"))
+        self.assertEqual(exit_code, 2)
         self.assertIn(
             "`scratch/` is not a docs/dev/project-management top-level dir",
-            reason,
+            stderr,
         )
 
     def test_blocks_file_in_store_root(self) -> None:
-        self.assertIsNotNone(hook._check_project_management_layout(("stray.md",)))
+        exit_code, _, _ = _run(("stray.md",))
+        self.assertEqual(exit_code, 2)
 
 
 if __name__ == "__main__":

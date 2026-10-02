@@ -531,7 +531,9 @@ def test_launch_runs_every_git_call_in_the_repo(
         assert args[0] != "git", f"the call site prepended git itself: {args}"
         assert cwd is not None and Path(cwd) == repo, (args, cwd)
     recorded = [args for args, _ in calls]
-    assert any(args[:2] == ["status", "--porcelain"] for args in recorded), recorded
+    # `_refusal` checks dirt through `store_tree.foreign_dirty`, which issues the
+    # NUL-delimited porcelain form, not the old plain `status --porcelain`.
+    assert ["status", "--porcelain", "-z"] in recorded, recorded
     # The base sha and branch are read through run_git too, not around it.
     assert ["rev-parse", "HEAD"] in recorded, recorded
     assert ["rev-parse", "--abbrev-ref", "HEAD"] in recorded, recorded

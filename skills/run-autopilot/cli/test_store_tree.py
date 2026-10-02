@@ -407,6 +407,53 @@ class RecordStoreTests(unittest.TestCase):
         self.assertIn("boom first boom second", err.getvalue())
 
 
+def test_record_store_commits_store_changes_and_leaves_other_staged_work_staged(
+    tmp_path: Path,
+) -> None:
+    """Against a REAL git repo, not FakeGit: the commit's tree reflects both a
+    store addition and a store deletion `record_store` was given, and a file
+    outside the store staged before the call is still staged, not committed or
+    unstaged, afterward."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            ["git", *args],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+    git("init", "-q", "-b", "master")
+    git("config", "user.email", "wave@example.com")
+    git("config", "user.name", "Wave Test")
+    git("config", "commit.gpgsign", "false")
+    store = repo / "docs" / "dev" / "project-management"
+    (store / "autopilot").mkdir(parents=True)
+    (store / "autopilot" / "old.json").write_text("{}\n", encoding="utf-8")
+    (repo / "README.md").write_text("seed\n", encoding="utf-8")
+    git("add", "README.md", "docs/dev/project-management/autopilot/old.json")
+    git("commit", "-qm", "seed")
+
+    (store / "autopilot" / "old.json").unlink()
+    (store / "autopilot" / "state.json").write_text(
+        '{"phase": "build"}\n', encoding="utf-8"
+    )
+    (repo / "foreign.py").write_text("x = 1\n", encoding="utf-8")
+    git("add", "foreign.py")
+
+    sha = store_tree.record_store(repo, "build", "00007-x.md")
+
+    assert sha is not None
+    tree = git("ls-tree", "-r", "--name-only", sha).stdout.splitlines()
+    assert "docs/dev/project-management/autopilot/state.json" in tree, tree
+    assert "docs/dev/project-management/autopilot/old.json" not in tree, tree
+    assert "foreign.py" not in tree, tree
+    assert git("status", "--porcelain").stdout.splitlines() == ["A  foreign.py"]
+
+
 # -- the CLI wiring: `dirty` and `record-store` --------------------------------
 #
 # Driven in-process (`main(argv)`) with spies on the two git-touching
