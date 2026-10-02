@@ -24,7 +24,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import notify_out, records, render_report, schema, state
+from . import notify_out, records, render_report, schema, state, store_tree
 
 CUSTODY_SITE = "cap_critical"
 MARKER_NAME = "critical-on-master"
@@ -191,6 +191,30 @@ def repo_and_git_dir(autopilot_dir: Path) -> tuple[Path, str | None]:
         return project_root(autopilot_dir), None
     git_dir = loaded.get("git_dir")
     return Path(repo_root), git_dir if isinstance(git_dir, str) else None
+
+
+def store_git(ap_dir: Path) -> tuple[Path, object]:
+    """(repo, run_git) for the store verbs (PRD 00236): the repo and git dir
+    from <ap_dir>/state.json (else the project root), and a run_git that
+    prefixes every call with git_argv for that repo."""
+    repo, git_dir = repo_and_git_dir(ap_dir)
+    prefix = git_argv(str(repo), git_dir)
+
+    def run_git(args: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
+        # `cwd` must reach subprocess.run even in the bare-backed branch:
+        # git_argv's bare-repo prefix carries --git-dir/--work-tree but no
+        # -C, and --work-tree does NOT anchor pathspec resolution -- git
+        # still resolves a relative pathspec against the process cwd.
+        return subprocess.run(
+            [*prefix, *args],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=store_tree.GIT_TIMEOUT_SECS,
+        )
+
+    return repo, run_git
 
 
 def load_marker(path: Path) -> list[dict]:

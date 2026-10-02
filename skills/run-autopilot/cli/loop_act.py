@@ -32,27 +32,7 @@ PURGE_SCRIPT = (
 # ── drained-path helpers ─────────────────────────────────────────────────────
 
 
-def store_git(ap_dir: Path) -> tuple[Path, object]:
-    """(repo, run_git) for store_tree.record_store (PRD 00236): the repo
-    and git dir from <ap_dir>/state.json (else the project root), and a
-    run_git prefixed with custody.git_argv for that repo. Resolve it while
-    state.json is still live: once archived, the bare git dir is lost."""
-    repo, git_dir = custody.repo_and_git_dir(ap_dir)
-    prefix = custody.git_argv(str(repo), git_dir)
-
-    def run_git(args: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
-        # cwd must reach subprocess.run even when bare-backed: --work-tree
-        # does not anchor relative pathspecs, the process cwd does.
-        return subprocess.run(
-            [*prefix, *args],
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=store_tree.GIT_TIMEOUT_SECS,
-        )
-
-    return repo, run_git
+store_git = custody.store_git
 
 
 def run_purge(repo: Path) -> None:

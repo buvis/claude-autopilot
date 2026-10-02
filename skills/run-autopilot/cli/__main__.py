@@ -1178,23 +1178,7 @@ def _store_repo(state_arg: str | None) -> tuple[Path, Path, object]:
     prefixes every call with custody.git_argv for that repo. The repo is
     git's work-tree root, which the store is not always directly under."""
     state_path = _resolve_state_path(state_arg)
-    repo, git_dir = custody.repo_and_git_dir(state_path.parent)
-    prefix = custody.git_argv(str(repo), git_dir)
-
-    def run_git(args: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
-        # `cwd` must reach subprocess.run even in the bare-backed branch:
-        # custody.git_argv's bare-repo prefix carries --git-dir/--work-tree
-        # but no -C, and --work-tree does NOT anchor pathspec resolution --
-        # git still resolves a relative pathspec against the process cwd.
-        return subprocess.run(
-            [*prefix, *args],
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=store_tree.GIT_TIMEOUT_SECS,
-        )
-
+    repo, run_git = custody.store_git(state_path.parent)
     return repo, state_path.parents[1], run_git
 
 
