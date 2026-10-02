@@ -63,7 +63,7 @@ def test_stand_down_asks_the_peer_before_pausing() -> None:
         (
             "`SendMessage`",
             "at most 120 s",
-            "`git status --porcelain`",
+            "`autopilot dirty`",
             '`edge: "leave"`',
             "never answers, never pauses a batch",
             "skip the mtime test",
