@@ -1,0 +1,19 @@
+[BOB] 🟠 FIX: A read-only hooks directory containing an unregistered empty .py still aborts repair during orphan cleanup, discarding every accumulated row. Root executed my isolated reproduction with two stale registered hooks plus unused.py: exit 2, empty stdout, PermissionError from unused.py. Guard the cleanup scan's per-target stat/unlink errors, report unrepairable, and add this mixed-directory regression. | File: skills/use-codex/scripts/codex_hook_doctor.py:296 | Task: 2
+[BOB] 🟡 FIX: _repair_known grew to 53 lines according to the supplied mechanical count, exceeding R12's 50-line limit. Extract the guarded write/cleanup operation into a focused I/O helper to separate validation from mutation. | File: skills/use-codex/scripts/codex_hook_doctor.py:184 | Task: 2
+R1: fail
+R2: pass
+R3: pass
+R4: fail
+R6: pass
+R7: pass
+R8: pass
+R9: fail
+R10: pass
+R11: pass
+R12: fail
+R13: pass
+D1: pass
+D2: pass
+D3: pass
+D4: pass
+D5: pass

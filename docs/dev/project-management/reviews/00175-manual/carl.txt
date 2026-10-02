@@ -1,0 +1,11 @@
+### Findings
+
+1. **`skills/run-autopilot/references/state-schema.md` (Missing from diff)**
+   Omitted despite PRD Phase 2 requirements. `skills/review-work-completion/scripts/test_carl_skip_prose.py` (lines 37–43) explicitly asserts `batch.unavailable_reviewers` and `batch.unavailable_reviewer_details` in `state-schema.md`. Without this file, `dev/bin/release-checks` will fail on `test_schema_defines_batch_lifetime_and_origin`.
+
+2. **`skills/review-work-completion/scripts/test_carl_skip_prose.py` (Diff format)**
+   Pasted inline without a `diff --git` header or patch hunks following `test_gemini_run.sh`, preventing clean patch application.
+
+3. **`CHANGELOG.md` (Missing from diff)**
+   Omitted despite explicit Phase 1 (`use-gemini`) and Phase 2 (`review-work-completion`) tasks.
+

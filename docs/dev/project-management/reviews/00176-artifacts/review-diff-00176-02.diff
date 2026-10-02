@@ -1,0 +1,145 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 4910a5e..f6bae97 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ### Fixed
+ 
+-- **use-codex**: report unreadable hook targets and failed repairs per target, continue processing remaining hooks, and clean up temporary files after failed writes.
++- **use-codex**: report unreadable hook targets, failed repairs, and orphan cleanup errors per target, continue processing remaining hooks, and clean up temporary files after failed writes.
+ - **use-gemini**: restore Carl's Copilot lane with a served Gemini Flash pin,
+   distinguish permanent model/client-tier rejection (exit 4) from runtime
+   failures, try native Gemini for rejected default prompt runs, and keep
+diff --git a/skills/use-codex/scripts/codex_hook_doctor.py b/skills/use-codex/scripts/codex_hook_doctor.py
+index f67336a..30ae21e 100644
+--- a/skills/use-codex/scripts/codex_hook_doctor.py
++++ b/skills/use-codex/scripts/codex_hook_doctor.py
+@@ -222,6 +222,14 @@ def _repair_known(
+     if dry_run:
+         return ("would-repair", target_str, str(canonical))
+ 
++    return _write_repair(target, canonical, canonical_bytes)
++
++
++def _write_repair(
++    target: Path,
++    canonical: Path,
++    canonical_bytes: bytes,
++) -> tuple[str, str, str]:
+     tmp_path = target.with_name(target.name + ".tmp")
+     try:
+         tmp_path.write_bytes(canonical_bytes)
+@@ -232,8 +240,8 @@ def _repair_known(
+             tmp_path.unlink(missing_ok=True)
+         except OSError as cleanup_exc:
+             detail += f"; temp cleanup failed: {cleanup_exc}"
+-        return ("unrepairable", target_str, detail)
+-    return ("repaired", target_str, str(canonical))
++        return ("unrepairable", str(target), detail)
++    return ("repaired", str(target), str(canonical))
+ 
+ 
+ def _repair_target(
+@@ -285,16 +293,18 @@ def _remove_orphaned_empty(
+     if not hooks_dir.is_dir():
+         return out
+     for path in sorted(hooks_dir.glob("*.py")):
+-        if (
+-            path.stat().st_size == 0
+-            and path not in registered
+-            and path.name != "_common.py"
+-        ):
++        if path in registered or path.name == "_common.py":
++            continue
++        try:
++            if path.stat().st_size != 0:
++                continue
+             if dry_run:
+                 out.append(("would-remove", str(path), ""))
+             else:
+                 path.unlink()
+                 out.append(("removed", str(path), ""))
++        except OSError as exc:
++            out.append(("unrepairable", str(path), str(exc)))
+     return out
+ 
+ 
+diff --git a/skills/use-codex/scripts/test_codex_hook_doctor_parse_errors.py b/skills/use-codex/scripts/test_codex_hook_doctor_parse_errors.py
+index cfb62a2..a7d432c 100644
+--- a/skills/use-codex/scripts/test_codex_hook_doctor_parse_errors.py
++++ b/skills/use-codex/scripts/test_codex_hook_doctor_parse_errors.py
+@@ -208,6 +208,7 @@ def readonly_hooks(
+     if os.geteuid() == 0:
+         pytest.skip("root bypasses directory permission bits")
+     hooks_dir, _ = repair_targets
++    (hooks_dir / "unused.py").touch()
+     mode = hooks_dir.stat().st_mode
+     hooks_dir.chmod(0o555)
+     try:
+@@ -223,17 +224,20 @@ def test_readonly_repair_reports_all_targets_without_tmp_litter(
+ 
+     proc = _run_repair_cli(args)
+ 
+-    assert proc.returncode == 3, proc.stderr
++    assert proc.returncode == 1, proc.stderr
+     rows = [line.split("\t") for line in proc.stdout.splitlines()]
+     assert rows[0][:2] == ["unrepairable", str(hooks_dir / "protect_config.py")]
+     assert "Permission denied" in rows[0][2]
+     assert rows[1][:2] == ["unrepairable", str(hooks_dir / "validate_commit_msg.py")]
+     assert "Permission denied" in rows[1][2]
+-    assert rows[2] == ["summary", "0 ok, 2 stale, 0 broken"]
+-    assert len(rows) == 3
++    assert rows[2][:2] == ["unrepairable", str(hooks_dir / "unused.py")]
++    assert "Permission denied" in rows[2][2]
++    assert rows[3] == ["summary", "0 ok, 2 stale, 1 broken"]
++    assert len(rows) == 4
+     assert list(hooks_dir.glob("*.tmp")) == []
+     assert (hooks_dir / "protect_config.py").read_bytes() == b"X = 1\n"
+     assert (hooks_dir / "validate_commit_msg.py").read_bytes() == b"X = 1\n"
++    assert (hooks_dir / "unused.py").read_bytes() == b""
+     assert proc.stderr == ""
+ 
+ 
+@@ -318,3 +322,41 @@ def test_cleanup_failure_is_reported_without_losing_remaining_rows(
+     assert (hooks_dir / "validate_commit_msg.py").read_bytes() == b"X = 2\n"
+     assert temp.read_bytes() == b"X = 2\n"
+     assert output.err == ""
++
++
++@pytest.mark.parametrize("operation", ["stat", "unlink"])
++def test_orphan_cleanup_error_still_processes_next_target(
++    tmp_path: Path,
++    monkeypatch: pytest.MonkeyPatch,
++    operation: str,
++) -> None:
++    target = tmp_path / "a_orphan.py"
++    target.touch()
++    later = tmp_path / "z_orphan.py"
++    later.touch()
++    error = PermissionError(errno.EACCES, "Permission denied", str(target))
++    real_stat = Path.stat
++    real_unlink = Path.unlink
++
++    def failed_stat(path: Path, *, follow_symlinks: bool = True) -> os.stat_result:
++        if path == target:
++            raise error
++        return real_stat(path, follow_symlinks=follow_symlinks)
++
++    def failed_unlink(path: Path, missing_ok: bool = False) -> None:
++        if path == target:
++            raise error
++        real_unlink(path, missing_ok=missing_ok)
++
++    with monkeypatch.context() as patch:
++        patch.setattr(
++            Path, operation, {"stat": failed_stat, "unlink": failed_unlink}[operation]
++        )
++        rows = codex_hook_doctor._remove_orphaned_empty(tmp_path, set(), False)
++
++    assert rows == [
++        ("unrepairable", str(target), str(error)),
++        ("removed", str(later), ""),
++    ]
++    assert target.read_bytes() == b""
++    assert not later.exists()

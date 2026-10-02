@@ -1,0 +1,130 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "FIX-03: Abort skips returning PRDs whenever a worktree has commits or uncommitted work, contradicting the PRD requirement that aborted PRDs return to the main checkout",
+    "file": "skills/run-autopilot/cli/wave_launch.py:461",
+    "reason": "Design-conformant and deliberate. The reviewed design doc states it explicitly with its rationale: 'keep the worktree AND its dev/local/prds/ files exactly where they are - do NOT move anything back to the main checkout (an in-progress PRD's only complete record is that worktree's own branch/working tree; the main checkout's state.json has no matching task record for it)' (00214 design doc lines 481-486). The PRD's unconditional-move wording was narrowed at the design gate on a stated safety ground. Carl was merged onto this row by consolidate_findings.py but his actual finding was the separate wip/-to-backlog/ deviation, so this row's real consensus is 1/4."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "FIX-02: Abort trusts any process group reusing the stored PID without the existing `_AUTOPILOT_LOOP` ownership guard, risking termination of unrelated processes",
+    "file": "skills/run-autopilot/cli/wave_launch.py:389",
+    "reason": "The design rules on this directly: pid == pgid from creation 'permanently, independent of whether that leader later exits - no separate lookup is needed or correct here' (00214 design doc lines 431-436). Process-group liveness via killpg was chosen over a leader-pid tag check on purpose. The genuine residue of this finding - that nothing bounds the stored pid at all - is tracked as the cycle-1 CRITICAL on wave.py:289 and is fixed there, so this is settled rather than dropped."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "FIX-08: Non-core lanes retain packing order instead of applying the PRD's lowest-PRD tie-break; use one sort by descending core-path count and lowest PRD",
+    "file": "skills/run-autopilot/cli/wave.py:136",
+    "reason": "Design-conformant. `_order_lanes`' contract scopes the lowest-PRD tie-break to the lanes owning core paths and then says 'remaining lanes keep packing order' (00214 design doc line 134). The finding reads the PRD's tie-break clause as global; the design already decided it is not."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "FIX-09: Exported `cut()` does not validate `max_lanes >= 1` and crashes through `min([])` for a nonempty input; validate at the API boundary",
+    "file": "skills/run-autopilot/cli/wave.py:74",
+    "reason": "Design-conformant. The contract places the `max_lanes >= 1` bound at `plan()`, which refuses with a named message before `cut` is ever called, and `test_plan_refuses_max_lanes_below_one_before_cutting` pins it there (it stubs `cut` and asserts it is never reached). Moving or duplicating the bound into `cut` adds a second validation site for a caller that cannot reach it."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "FIX-12: Two added plan-regression tests duplicate existing coverage; delete `test_plan_refuses_an_abort_failed_wave_like_a_planned_one` and `test_run_still_plans_a_wave_after_the_new_verbs`",
+    "file": "skills/run-autopilot/cli/test_wave_launch_abort.py:561",
+    "reason": "Rejected. The two tests pin distinct behaviour that nothing else pins: that the new `abort_failed` wave status refuses a re-plan the same way `planned` does, and that the `plan` verb is still reachable after the `status`/`abort` verbs were added to the dispatcher. Deleting regression tests to reduce apparent duplication trades a real guard for tidiness, which the de-slop lens is not licensed to do."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "Redundant return statement in _pgid_alive exception handler",
+    "file": "skills/run-autopilot/cli/wave_launch.py:370",
+    "reason": "Factually wrong. `except OSError: return True` is load-bearing: it converts EPERM (the group exists but this process may not signal it) into 'alive', mirroring `loop_gates._pid_alive`'s own convention. Deleting it would let that OSError propagate out of the liveness probe. The trailing `return True` is the no-exception path, not a duplicate of the handler."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "KNOWN-01: A main-root loop can start after launch's point-in-time preflight and race PRD moves; enforcement requires a loop-side reservation outside PRD 00214, and the runbook currently relies on operator discipline",
+    "file": "skills/run-autopilot/cli/wave_launch.py:148",
+    "reason": "Out of scope, as the reviewer himself classified it (KNOWN bucket with a written justification). A loop-side reservation is outside this PRD's boundary; the design doc records the same point-in-time race as an accepted non-blocker and `references/waves.md` documents the operator constraint."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`status` still treats any existing directory as a worktree instead of consulting Git's worktree registry",
+    "file": "skills/run-autopilot/cli/wave_launch.py:319",
+    "reason": "Design-accepted, and ruled so in cycle 1 already. The design's export is `status(repo, wave) -> str` with no `run_git` seam, so `status` structurally cannot consult the git registry without a signature change the design did not specify; it is a read-only renderer and a stray directory at a lane's worktree path is an operator-created condition. Cycle 1 recorded this verdict in the review file but never wrote it to the ledger, which is why it re-raised this cycle; ledgered now so it stops recurring. Worth a documented caveat in `references/waves.md` whenever that file is next touched for another reason."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "`plan(repo, wave_path, max_lanes)`, `validate(repo, wave, prds)`, `launch(repo, wave_path, ...)` and `abort(repo, wave_path, ...)` all diverge from the Module Exports signatures the PRD specifies (`plan(repo, max_lanes) -> int`, `validate(wave, prds) -> list[str]`, `launch(repo, wave, *, spawn_fn, run_git) -> int`, `abort(repo, wave, *, kill_fn, run_git) -> int`)",
+    "file": "skills/run-autopilot/cli/wave.py:225",
+    "reason": "Design-conformant, and ruled so in cycle 1 for each of these signatures individually. Taking a `wave_path` and reloading the file under the lock IS the design's concurrency fix (dispatch 2's blocker: `save`'s old 'one writer by construction' claim had nothing enforcing it, so `plan`/`launch`/`abort` each wrap their whole load-through-save body in `with locked(wave_path)`). Passing an already-loaded dict would reintroduce the exact race the design closed. Cycle 1 left these out of the ledger, so `--ledger-dismiss BLAKE` could not suppress the re-raise; ledgered now."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "`wave.json`'s lane object and the `wave status` table both carry fields the PRD's stated shapes never mention: `worktree_created` and `abort_error` in `Lane.as_dict()`, and an `abort_error` column in `_STATUS_HEADERS`",
+    "file": "skills/run-autopilot/cli/wave.py:32",
+    "reason": "Design-mandated, not scope creep. `worktree_created` is dispatch 3's own blocker fix: at wave.json's minute-resolution id, path-plus-branch matching alone cannot prove THIS launch created the worktree, so abort requires the flag AND the git-registry match before it removes anything. `abort_error` is named in the design's abort contract (set on a failed cleanup step, including 'still alive after SIGKILL') and is what makes the `abort_failed` status diagnosable. Both are additive and non-breaking, and `test_wave_json_round_trips` pins them. The blind lens is PRD-only by construction and could not see the design doc that approved them."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "48 touched `test_wave.py` cases pass against the pre-change implementation, failing the strict fail-first criterion",
+    "file": "skills/run-autopilot/cli/test_wave.py:571",
+    "reason": "Computed replay fact, not a defect in this diff. Task 5 appends four `pid` rows and two `base_sha` rows to existing parametrize lists, so the fail-first replay marks the whole enclosing test function as touched while its 48 pre-existing cases are untouched sibling cases and positive boundary controls. The six genuinely new cases DO fail against the base (the replay reports 44 failures overall). Forcing the 48 neighbours red would mean changing unrelated production behaviour. The skill's own rule for a replay row applies verbatim: a behaviour-preserving addition's neighbours pass by design and the gate may dismiss with that reason. The reviewer pre-emptively justified this himself in his KNOWN bucket."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "Two touched abort tests pass against the pre-change implementation, failing the strict fail-first criterion",
+    "file": "skills/run-autopilot/cli/test_wave_launch_abort.py:321",
+    "reason": "Computed replay fact, not a defect. `test_abort_runs_every_git_call_in_the_repo_but_the_lane_probes` and `test_abort_kills_a_group_whose_leader_has_already_exited` exist precisely to close two coverage gaps CYCLE 1 ASKED FOR, on behaviour that was already correct. A coverage test for already-correct behaviour cannot fail against the base unless production is broken first, so demanding fail-first here would require regressing the code to satisfy a metric. The reviewer justified this in his own KNOWN bucket."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "The new live-main-loop refusal test passes against the pre-change implementation, failing the strict fail-first criterion",
+    "file": "skills/run-autopilot/cli/test_wave_launch_refusals.py:74",
+    "reason": "Computed replay fact, not a defect. `test_launch_refuses_a_checkout_a_live_loop_already_owns` closes cycle 1's own finding that no test covered the PRD-required live-loop refusal; the refusal itself already worked. Same reasoning as the two rows above, and again pre-justified by the reviewer in KNOWN."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "`wave_cli.run` duplicates identical `CalledProcessError` handling for launch and abort; one shared dispatch guard is simpler",
+    "file": "skills/run-autopilot/cli/wave_cli.py:48",
+    "reason": "Declined as a de-slop suggestion, not refuted. It is behaviour-preserving only if the shared guard's scope is identical to the union of the two current ones, and collapsing two per-verb `try` blocks into one would extend `CalledProcessError` handling over the `plan` and `status` verbs that currently do not want it. The duplication being removed is two lines. Surgical Changes: working dispatch code is not refactored to save two lines, and the de-slop lens is not licensed to trade a deliberate boundary for brevity."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "A mid-launch `OSError` (e.g. `shutil.move`/`shutil.copytree` failing in `_seed_lane_worktree`) is not caught anywhere between `wave_launch._launch_lane` and `cli/wave_cli.run`, which only catches `subprocess.CalledProcessError`; it would propagate as a raw traceback and leave `wave.json` recording `worktree_created: true` for a lane with no process spawned",
+    "file": "skills/run-autopilot/cli/wave_launch.py:202",
+    "reason": "Out of scope, as the reviewer classified it himself at Low with the reason stated: the PRD's Test Strategy exercises this class of failure for `abort` and never for `launch`, and `abort` remains a working manual recovery path against the resulting worktree (the recorded `worktree_created: true` is exactly what lets abort clean it up). Adding launch-side rollback or a new error boundary is a behaviour decision outside this PRD's contract, and `wave_cli.run` already catches the failure mode the design did specify. Fit for a follow-on PRD, not for this cycle's sweep."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Cannot statically verify: in-scope test suites and release-checks pass",
+    "file": null,
+    "reason": "Answered by evidence, and a sandbox limitation rather than a finding about the code. The codex lens cannot execute anything by design; three other reviewers ran the code this cycle and agree. Alice: 177 passed, 0 failed across the six in-scope files. Blake: 137 passed on the PRD's named Success-Metric invocation, 14 passed on the three CI-orphaned files, and the whole of `dev/bin/release-checks` green end to end. Carl: wave suites and `release-checks` green (re-run with the nested-dispatch env vars unset). The recorded verification at this same HEAD is release-checks exit 0 and 1506 passed, 0 failed."
+  }
+]

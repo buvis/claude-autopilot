@@ -1,0 +1,6 @@
+| Consensus | Severity | Issue | File | Task | Found By |
+|-----------|----------|-------|------|------|----------|
+| [2/3] | 🟡 | Medium: On Python 3.14.6, create a readable registered target inside a directory, then chmod its parent to 000. Direct target.stat() raises PermissionError, but target.exists() suppresses that error, causing `missing` with empty detail instead of the required `syntax_error` with OSError text. Reproduced: exit 1, remaining target processed. | skills/use-codex/scripts/codex_hook_doctor.py:54 | 1 | BLAKE, BOB |
+| [1/3] | 🟡 | Both changed partial-write/replace test cases pass the incremental baseline, leaving the mandatory changed-test fail-first requirement unmet. | skills/use-codex/scripts/test_codex_hook_doctor_parse_errors.py:245 | 2 | ALICE |
+| [1/3] | 🟡 | KNOWN Mechanical replay reports two touched partial-write/replace cases passing against the incremental base. These preserve existing error-handling coverage while adapting its I/O patch; forcing them to discriminate an unchanged behavior is outside this rework. | skills/use-codex/scripts/test_codex_hook_doctor_parse_errors.py:245 | 2 | BOB |
+| [1/3] | ⚪ | VERIFY Cannot statically verify acceptance checks: confirm the parent’s full scripts pytest suite and bash dev/bin/release-checks both pass at captured HEAD 4f9ca6405081eea7b869883c6b53d301e53f6080. | N/A | general | BOB |

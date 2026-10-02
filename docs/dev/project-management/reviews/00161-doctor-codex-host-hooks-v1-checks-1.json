@@ -1,0 +1,10 @@
+[
+  {
+    "cycle": 1,
+    "finding": "Cannot statically verify: acceptance pytest suites, release checks, and the post-release host check/repair/check signal pass.",
+    "file": null,
+    "command": "uv run --no-project --with pytest --with rich --with textual python -m pytest -q skills/use-codex/scripts skills/work/scripts skills/run-autopilot",
+    "source": "bob",
+    "result": {"exit": 0}
+  }
+]

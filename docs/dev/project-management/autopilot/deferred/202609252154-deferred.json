@@ -1,0 +1,758 @@
+{
+  "batch_id": "202609252154",
+  "items": [
+    {
+      "type": "review-critical",
+      "cycle": 1,
+      "severity": "critical",
+      "consensus": "1/4",
+      "issue": "wave.json's hand-editable `pid` field is validated only as int-or-None, with no positivity bound, so `\"pid\": 0` reaches os.killpg(0, SIGTERM) in wave_launch._kill_lane and signals the caller's own process group (the operator's shell, or the autopilot loop itself under a wave). `order` and `review_slots` are both bounded > 0 in the same _LANE_CHECKS/_TOP_CHECKS table; `pid` is the one destructive field that is not.",
+      "file": "skills/run-autopilot/cli/wave.py:289",
+      "found_by": "bob",
+      "reason": "Critical severity always defers to batch end per the decision framework, and the fix task is created by Phase 6's Dispatch rework after the rework design. Confirmed against the design doc: its Step 0 rationale names a hand-edited `pid` as the exact hazard _structural_errors exists to close (design lines 408-417), so this is a gap in that validator rather than an accepted limitation.",
+      "prd": "00214-plan-and-launch-a-wave-of-lanes-v1.md"
+    },
+    {
+      "cycle": 1,
+      "severity": "critical",
+      "issue": "wave.json's hand-editable `pid` is validated only as int-or-None with no positivity bound, so `\"pid\": 0` reaches os.killpg(0, SIGTERM) in wave_launch._kill_lane and signals the caller's own process group - the operator's shell, or the autopilot loop itself under a wave (skills/run-autopilot/cli/wave.py:289, found by bob, 1/4)",
+      "action": "Deferred to batch end per the decision framework's 'Critical severity, always' row, and recorded in the batch deferred JSON via `autopilot defer`. The fix itself is created as a [D1] task by Phase 6's Dispatch rework, after the mandatory rework design, so it never starts without a reviewed contract.",
+      "reason": "Confirmed against the design doc rather than taken on the reviewer's word: its Step 0 rationale names a hand-edited `pid` as the exact hazard _structural_errors exists to close (design lines 408-417), and `order` and `review_slots` are both bounded > 0 in the same check tables. So this is a gap in that validator, not an accepted limitation.",
+      "type": "deferred_decision",
+      "prd": "00214-plan-and-launch-a-wave-of-lanes-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "H1: test_wave_assemble_summary.py is absent from both the `[checks] waves` block's pytest invocation (dev/bin/release-checks:107-119) and test_wave_docs.py's _WAVE_TEST_FILES whitelist (:41-53), so its 12 tests - three of them PRD-named Phase 0 acceptance tests - never run in the repo's only CI gate while release-checks still reports green. test_the_release_gate_runs_every_wave_test_file cannot catch it: it asserts named == set(_WAVE_TEST_FILES) and task 10 updated neither side.",
+      "severity": "high",
+      "consensus": "2/4",
+      "file": "dev/bin/release-checks",
+      "found_by": "BLAKE, BOB",
+      "fix": "Add skills/run-autopilot/cli/test_wave_assemble_summary.py to the [checks] waves pytest invocation and to _WAVE_TEST_FILES.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00215-assemble-a-drained-wave-onto-one-branch-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "H2: teardown is still crash-unsafe on the real pre-save crash. _drain_lane writes lane[held_prds] and _assemble_lane writes lane[status] in memory only; the single save() is at wave_assemble.py:591, after the git worktree remove / branch -D at :524-526, so a crash in that window loses held_prds, status, batch_id and worktree_removed together. On the rerun lane_status either returns unfinished (the merged lane is relabelled unfinished, lands in kept, exit flips 0 to 3, the report drops non-roster PRDs and blanks the lane batch id, and worktree_removed is never set so every later rerun repeats it) or returns the stale drained, in which case lane_files_and_notes runs subprocess.run with a removed cwd and raises an uncaught OSError that wave_cli.run does not catch. Task 12's new test cannot catch either: it runs a full successful assemble first and then deletes only worktree_removed.",
+      "severity": "high",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/wave_assemble.py:519",
+      "found_by": "BOB",
+      "fix": "Persist lane status and held_prds before the destructive removal, then persist worktree_removed after it.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00215-assemble-a-drained-wave-onto-one-branch-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "_open_assembly (wave_assemble.py:549) adopts any existing directory at the assembly path without verifying it is this repository's registered worktree on the expected branch, and wave[assembly][branch] is then reported as the expected branch name whatever the worktree is really on. Downgraded from high by the gate: the path is wave-id-scoped, and a stale plain directory surfaces as a loud git -C failure rather than silent mutation.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/wave_assemble.py:549",
+      "found_by": "BOB",
+      "fix": "Verify the path is a registered worktree of this repo on the expected assembly branch, otherwise refuse.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00215-assemble-a-drained-wave-onto-one-branch-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "CHANGELOG.md:12 still says a lane kept for a conflict or a checks failure has its own branch and worktree left untouched - the blanket claim task 13 corrected in references/waves.md:133-137, where a conflict lane's branch is untouched but a checks_failed lane's branch was already rebased. The changelog and the runbook now contradict each other inside task 13's own scope.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "file": "CHANGELOG.md:12",
+      "found_by": "BOB",
+      "fix": "Split the changelog sentence so only the conflict case claims an untouched branch, and say a checks_failed branch is retained but already rebased.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00215-assemble-a-drained-wave-onto-one-branch-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "_assemble_kept_region (test_wave_docs.py:196-212) duplicates _abort_keep_region (:118-133): the two differ only in their heading and anchor constants over an otherwise identical 10-line body.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/test_wave_docs.py:196",
+      "found_by": "BOB",
+      "fix": "Replace both with one parameterized anchored-region helper.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00215-assemble-a-drained-wave-onto-one-branch-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "M4: 9 of the 14 touched tests in test_wave_assemble_summary.py pass against the pre-change code, among them test_summary_opens_with_the_base_and_the_assembled_head (cycle 1 gap 1) and test_summary_tables_each_lane_with_its_branch_status_and_batch (gap 3), so those two strengthenings pin already-correct behavior rather than failing on the swap or pluralisation defect their findings named.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/test_wave_assemble_summary.py",
+      "found_by": "mech-check",
+      "fix": "Prove the two pins with a mutation-style case: a summary() that swaps base_sha and head_sha, and a lane carrying more than one prd/path/file, must each fail them.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00215-assemble-a-drained-wave-onto-one-branch-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "merge_lane clears stale conflict_paths on a later clean rebase but never clears a stale conflict_detail, so a lane that succeeds on retry can still carry its previous failure's detail string in wave.json.",
+      "severity": "low",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/wave_assemble.py:220",
+      "found_by": "ALICE",
+      "fix": "Clear conflict_detail alongside conflict_paths when a rebase lands clean.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00215-assemble-a-drained-wave-onto-one-branch-v1.md"
+    },
+    {
+      "type": "review-critical",
+      "issue": "autopilot wave run crashes on every real invocation: the run sub-parser registers no --state but __main__._run_wave reads args.state, so the PRD headline verb exits 1 with AttributeError before wave_run.run is reached",
+      "severity": "critical",
+      "consensus": "2/4",
+      "cycle": 1,
+      "file": "skills/run-autopilot/cli/wave_cli.py:29",
+      "reason": "critical severity always defers to batch end; the fix task is created in Phase 6 behind a rework design",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "type": "requirements-ambiguity",
+      "issue": "The wave feature family assumes docs/dev/project-management is gitignored (design Architecture fit, test_wave_launch.py:71 fixture), but commit 5d9036a in this same range states the store is tracked and never age-purged, and git check-ignore confirms the path is NOT ignored in this repo. review()/launch() dirty-tree gates therefore refuse in a real managed repo, and a tracked store would also seed the assembly worktree with backlog PRDs the nested loop could select",
+      "severity": "high",
+      "consensus": "3/4",
+      "cycle": 1,
+      "file": "skills/run-autopilot/cli/wave_review.py:244",
+      "reason": "spans PRDs 00214/00215/00216 and needs an operator decision on whether waves support a tracked store; not resolvable inside this PRD by the simplest safe assumption",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "type": "out-of-scope",
+      "issue": "Test-quality findings in commit 5d9036a files, not PRD 00216 tasks: two touched tests pass against pre-change code (test_custody_prose_schema.py:105, test_codex_hook_doctor_extra.py:32) and one pre-existing or-hedge assertion (test_codex_hook_doctor_extra.py:641)",
+      "severity": "medium",
+      "consensus": "2/4",
+      "cycle": 1,
+      "file": "skills/run-autopilot/cli/test_custody_prose_schema.py:105",
+      "reason": "these files belong to the tracked-store migration commit that landed inside the review range, not to this PRD plan; fixing them here would widen scope beyond the PRD",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "high",
+      "consensus": "2/4",
+      "issue": "`land` still cannot land after a hand review. `review_failed` returns 4 unconditionally via `_land_review_failed`, even after the operator moved the stub to the assembly worktree's `prds/done/`; `assembled`/`assembled_partial` are refused as 'not landable'. The only route is hand-editing `wave.json` status to `converged`, which nothing documents or tests. The PRD's Edge case requires a later `wave land` after a hand review to still land (skills/run-autopilot/cli/wave_review.py:522)",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "3/4",
+      "issue": "`land` does not hold `wave.json`'s lock for its body; it locks only the initial load and short later saves, so the merge, migration and cleanup run unlocked and a concurrent `wave abort`/`assemble` can interleave (skills/run-autopilot/cli/wave_review.py:514)",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "2/4",
+      "issue": "`references/waves.md` contradicts the rework in five places: land runs on `review_failed` too, the exit-1 row omits the `--review-slots < 1` and declined-confirm refusals, the TTY Enter prompt is undocumented, preconditions are now caught not propagated, and `done` is accepted as a land resume path (skills/run-autopilot/references/waves.md:174)",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "2/4",
+      "issue": "The `review_failed` summary line names only the review file, not where the stub sits (`hold/` or `wip/`) as the PRD's Land behavior requires (skills/run-autopilot/cli/wave_review.py:482)",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "1/4",
+      "issue": "The release gate omits `test_wave_cli_refusals.py` (256 lines, 14 tests, added by task 9), so `release-checks` passes without exercising the refusal contract. Verified by the orchestrator against dev/bin/release-checks:108-122",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "1/4",
+      "issue": "A malformed `plugins` value can raise an uncaught `TypeError` instead of the refusal message task 9's own review fix introduced (skills/run-autopilot/cli/wave_review.py:169)",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "1/4",
+      "issue": "The `wave run` confirmation gate launches on an unrecognized reply such as `cancel`; it honours Enter, EOF and an explicit decline, but anything else falls through to launch (skills/run-autopilot/cli/wave_run.py:75)",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "1/4",
+      "issue": "Simplification, carried from cycle 1: `review()` re-implements `_spawn_lane`'s recipe inline (env filter, `_AUTOPILOT_TRACON_CHILD`, `wrapper.log` open, `Popen` kwargs, `_SPAWN_CMD`), so the two spawn sites can drift (skills/run-autopilot/cli/wave_review.py:314)",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "1/4",
+      "issue": "`_land_cleanup` refuses to remove a dirty assembly worktree, but in a repo that tracks `docs/dev/project-management/` that worktree always holds untracked `state.json`, `review-paths`, `wrapper.log`, the copied `meta/` and reviews, so the check raises after the fast-forward and after status is already `done`. Suspected, not reproduced (skills/run-autopilot/cli/wave_review.py:399)",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved; a downstream consequence of the settled tracked-store deferral, on the cleanup tail rather than the precondition",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "1/4",
+      "issue": "The `waves.md` Scope note and the CHANGELOG entry both say the assembly review covers the paths the lanes 'actually touched'; the code and the PRD narrow it to files listed by two or more lanes plus `WAVE_APPEND_ONLY` (skills/run-autopilot/references/waves.md:178)",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "1/4",
+      "issue": "Three touched tests in test_wave_review.py pass against the pre-change code and so pin nothing this cycle: test_stub_field_sections_name_every_merged_lane, test_stub_prd_lists_the_diff_scope, test_review_releases_the_lock_during_the_wait. The task-11 fix itself is pinned by test_stub_prd_lists_description_inputs_outputs_behavior_separately, which does fail at base",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "1/4",
+      "issue": "Six touched tests in test_wave_review_land.py pass against the pre-change code; all six are task 10's verbatim move out of test_wave_review.py, so passing at base is expected of a behaviour-preserving split",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved; computed fact recorded rather than dropped",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "1/4",
+      "issue": "Eleven touched tests in test_wave_run.py pass against the pre-change code. Most are task 10's verbatim move into the new file, but each one that is not a move pins nothing and needs checking",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved; computed fact recorded rather than dropped",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "low",
+      "consensus": "2/4",
+      "issue": "When `assemble` returns 3 with `merged: []`, `_review_and_land` still runs a full-roster review over an empty assembly and then lands a no-op (skills/run-autopilot/cli/wave_run.py:141)",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "low",
+      "consensus": "2/4",
+      "issue": "`_review_and_land` wraps `land` in `if outcome in (\"review_failed\", \"converged\")`, but `review()` only returns those two values, so the guard is always true and the branch is dead (skills/run-autopilot/cli/wave_run.py:94)",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "low",
+      "consensus": "2/4",
+      "issue": "test_wave_review_test_docstring_has_no_stale_not_implemented_sentence passes against the pre-change revision: it asserts about a test file's own content, which the replay overlays with HEAD's version, so it can never fail there (skills/run-autopilot/cli/test_wave_docs.py:376)",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "low",
+      "consensus": "1/4",
+      "issue": "`_GUARDED_ERRORS` omits `OSError`, so I/O failures still surface as raw tracebacks: `_cycle_count` reading a missing `state.json` after master is already fast-forwarded, and `_repo_from_worktree` reading the worktree's `.git` file (skills/run-autopilot/cli/wave_cli.py:37)",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "low",
+      "consensus": "1/4",
+      "issue": "The SIGINT/SIGTERM handler discards `_kill_lane` failure strings, holds the wave lock through up to 70 s of per-lane kill grace, and writes `interrupted` and exits 130 even if a lane group survived (skills/run-autopilot/cli/wave_run.py:29)",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "low",
+      "consensus": "1/4",
+      "issue": "`land` runs `git branch -d` where the design specifies `branch -D`; safe after a clean fast-forward, but a recorded deviation carried from cycle 1 (skills/run-autopilot/cli/wave_review.py:418)",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "low",
+      "consensus": "1/4",
+      "issue": "Signals during the nested review wait still have no resume or termination handler. Bob bucketed this KNOWN, matching the design doc's own recorded scope-out (skills/run-autopilot/cli/wave_review.py:292)",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved; already a documented scope-out, carried for visibility",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "low",
+      "consensus": "1/4",
+      "issue": "The PRD's literal paths (dev/local/prds/wip, dev/local/autopilot/review-paths, dev/local/meta) are implemented as docs/dev/project-management/... throughout, consistently across code, docs and tests. Spec drift by deliberate design correction, not a defect (skills/review-work-completion/scripts/gather-context.sh:108)",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "high",
+      "consensus": "3/4",
+      "action": "deferred at rework cap",
+      "issue": "The reclaim can still hand one slot to two holders (three-party put-back race). _discard moves a stale-looking slot aside before judging it; if it wins that rename against a peer that just re-claimed the slot live, the slot name is vacant from os.rename(slot, aside) at wave_slots.py:110 until the put-back at :116. A third acquirer _claim can take the name in that window, the put-back then fails, the live claim is stranded in N.stale-<pid>, and count=1 admits two concurrent sessions. The stranded holder release (no ownership check) later removes the third party slot. The source documents the residual at wave_slots.py:102-106 and names the fix: a per-slot fcntl.flock. File: skills/run-autopilot/cli/wave_slots.py:116",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00217-bound-concurrent-review-sessions-with-a-slot-semaphore-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "low",
+      "consensus": "2/4",
+      "action": "deferred at rework cap",
+      "issue": "Leaked N.tmp-* and N.stale-* dirs are never swept. A kill between mkdtemp and rename, or an ENOSPC on the owner write, leaves a staging dir; a failed _remove leaves an aside dir. Nothing cleans either until the wave-slots dir is removed at wave end. Harmless to correctness because acquire reads only <dir>/<n>. File: skills/run-autopilot/cli/wave_slots.py:77",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00217-bound-concurrent-review-sessions-with-a-slot-semaphore-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "1/4",
+      "action": "deferred at rework cap",
+      "issue": "A decimal owner too large for a C int crashes acquire instead of being reclaimed. _is_stale passes a 20-digit decimal (isdecimal true, >0 true) to _pid_alive, whose os.kill raises OverflowError; _pid_alive catches only OSError, so it escapes out of acquire. Reproduced directly against acquire by Alice. A string over 4300 digits would also raise ValueError from int(). Same class as the cycle-1 malformed-owner finding, and the PRD says a malformed owner is reclaimed. Fix: bound the parsed pid, or catch (OverflowError, ValueError) and treat the owner as stale. File: skills/run-autopilot/cli/wave_slots.py:61",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00217-bound-concurrent-review-sessions-with-a-slot-semaphore-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "1/4",
+      "action": "deferred at rework cap",
+      "issue": "_discard aside name N.stale-<pid> is deterministic, the exact collision commit ef9314e removed from _claim. If _remove(aside) fails, or a live claim is stranded there by the race above, the next _discard by the same pid renames onto a non-empty leftover, raises OSError and returns False permanently. The loop pid is stable for its lifetime, so that slot number can never be reclaimed again by that loop, silently shrinking wave capacity. Fix: use a unique aside name as _claim does. File: skills/run-autopilot/cli/wave_slots.py:108",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00217-bound-concurrent-review-sessions-with-a-slot-semaphore-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "1/4",
+      "action": "deferred at rework cap",
+      "issue": "Scope creep (blind lens, sole B6 fail): _launch and _announce_and_launch now return a ts_start taken after the slot wait, and the metrics clock uses it. The PRD Feature text asks only to acquire, spawn and release in a finally. Counterpoint: the PRD third success metric is unmeasurable without it, which is why cycle 1 created task 5 for exactly this. File: skills/run-autopilot/cli/loop.py:389",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00217-bound-concurrent-review-sessions-with-a-slot-semaphore-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "1/4",
+      "action": "deferred at rework cap",
+      "issue": "A bad slot count crashes the loop. _AUTOPILOT_REVIEW_SLOTS=0 or negative makes acquire raise ValueError at loop.py:382, outside the try at :390, so it escapes _launch and kills the loop at its first review launch. A non-numeric value silently falls back to 3 via routing._env_int. Confirmed by reading the call site. The raise is a deliberate cycle-1 decision (fail-loud over polling forever); the open question is fail-loud-crash vs clamp-to-1. File: skills/run-autopilot/cli/wave_slots.py:140",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00217-bound-concurrent-review-sessions-with-a-slot-semaphore-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "1/4",
+      "action": "deferred at rework cap",
+      "issue": "The acquire/reclaim mechanism differs from the spec literal wording (mkdir, write owner, rmdir on reclaim); the code stages a mkdtemp dir and publishes with os.rename. That deviation is the sanctioned cycle-1 4/4 fix. The substantive half: os.rename onto an existing EMPTY dir succeeds on POSIX, so an empty <n> from a hand-made mkdir would be silently overwritten. No code path here creates an empty <n>. File: skills/run-autopilot/cli/wave_slots.py:64",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00217-bound-concurrent-review-sessions-with-a-slot-semaphore-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "1/4",
+      "action": "deferred at rework cap",
+      "issue": "_claim treats every rename error as a lost slot race. A permission or filesystem error is indistinguishable from an occupied destination, so acquire can poll indefinitely on a broken filesystem. Fix: distinguish ENOTEMPTY/EEXIST from other errors and surface the rest. File: skills/run-autopilot/cli/wave_slots.py:78",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00217-bound-concurrent-review-sessions-with-a-slot-semaphore-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "1/4",
+      "action": "deferred at rework cap",
+      "issue": "Review metrics still END after the slot is released: ts_end is read after _launch returns, so decision work runs inside the measured interval while another loop may already hold the slot. Cycle 1 fixed the start of the interval; the same argument applies to its end. Fix: capture the session end before release. File: skills/run-autopilot/cli/loop.py:402",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00217-bound-concurrent-review-sessions-with-a-slot-semaphore-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "1/4",
+      "action": "deferred at rework cap",
+      "issue": "Moving ts_start into _launch also changes timing for builds and reviews without a slots dir: their rows now exclude routing and banner time, despite the PRD requiring those paths run exactly as today. UNADJUDICATED DISAGREEMENT: Alice reports two tests pin that these paths keep the old timing, but the fail-first replay shows both of those tests pass against the base, so they cannot demonstrate preservation. The gate did not adjudicate it. File: skills/run-autopilot/cli/loop.py:387",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00217-bound-concurrent-review-sessions-with-a-slot-semaphore-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "low",
+      "consensus": "1/4",
+      "action": "deferred at rework cap",
+      "issue": "The waves.md paragraph sits inside the ## wave run section and reads as a wave run feature. The PRD names manual export for two loops in two repos as a use case, and that is not described. Both variable names and the default 3 are present, so the Phase 2 acceptance criterion itself is met. File: skills/run-autopilot/references/waves.md:205",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00217-bound-concurrent-review-sessions-with-a-slot-semaphore-v1.md"
+    },
+    {
+      "type": "review-critical",
+      "issue": "Time term never wired into the context-cap hook: _handle_below_cap calls _headroom_exhausted with no secs_left or last_wall, the hook never imports last_task_wall and never reads _AUTOPILOT_SESSION_DEADLINE. The PRD headline capability is absent at runtime. Orchestrator-verified at e5a8479.",
+      "severity": "critical",
+      "consensus": "4/4",
+      "reason": "Critical severity always defers to batch end; the fix runs this cycle through the Phase 6 rework design (cycle 1 of cap 2).",
+      "prd": "00218-leave-sessions-at-task-boundaries-and-run-one-devon-round-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "`trusted_last_wall` stops at the first completed task whose stamps are missing, non-int or negative and returns None, instead of scanning back. Its tests pin that shape (`test_stamps_that_are_not_both_ints_give_no_span`, `test_a_negative_span_gives_nothing`). The PRD wording, the design doc (\"finds the last completed entry whose stamps are both ints\") and task 11's widening of `last_task_wall` all say scan back. Since the hook never calls `last_task_wall`, task 11's fix has no runtime effect. Any completed task that was never seen in progress now drops the time term for the next fire. This is conservative, and the rotated-task and over-ceiling stops are deliberate, but the unstamped case is undocumented as a deviation. Either skip unstamped or negative entries and stop only on rotated or over-ceiling ones, or record the deviation. The design's `test_trusted_last_wall_agrees_with_last_task_wall` pin is also missing (`rg` finds no such test), so the two walks can silently disagree. ALSO FOLDED INTO THIS ROW BY THE CONSOLIDATOR (three distinct defects, see the review file's consolidation caveat): (a) no `isinstance(task, dict)` guard at _cap_headroom.py:77, so a non-dict entry in state.tasks raises AttributeError inside a PostToolUse hook with no except around it; (b) booleans satisfy `isinstance(..., int)` at _cap_headroom.py:81, so started_at/done_at of True yields a bogus span where `int_field` would reject it; (c) Blake's separate HIGH that the hook substitutes `trusted_last_wall` for the PRD's `last_task_wall(state)`, and its rotation and 10800s stops invert the PRD's own edge case (\"a rotated task's wall spans both sessions and the next session hands off earlier, never later\").",
+      "file": "skills/run-autopilot/scripts/_cap_headroom.py:61",
+      "severity": "high",
+      "consensus": "4/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00218-leave-sessions-at-task-boundaries-and-run-one-devon-round-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "R13 regression: the rework grew this test file from 782 to 923 lines, and the project's own style gate (`check_style_limits.py`, \"files the diff pushed over 800\") flags it (verified by the orchestrator: exit 1, `FILE | skills/run-autopilot/scripts/test_autopilot_cap_headroom.py | 923 lines`). The earlier split existed to stay under 800. Move the new `TaskBoundsWallTests` additions into a sibling file such as `test_cap_task_record_wall.py`, and add it to `dev/bin/release-checks`.",
+      "file": "skills/run-autopilot/scripts/test_autopilot_cap_headroom.py:735",
+      "severity": "high",
+      "consensus": "2/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00218-leave-sessions-at-task-boundaries-and-run-one-devon-round-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "`record_task_bounds` withholds `done_at` when the task has no `started_at`. The PRD says `now` is passed as the third value of each pair. This is defensible (a lone `done_at` gives no usable span) but it is an undocumented deviation from the contract. Note that `MAX_CREDIBLE_WALL_SECS` and this guard are extra behavior beyond the PRD.",
+      "file": "skills/run-autopilot/scripts/_cap_task_record.py:111",
+      "severity": "medium",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00218-leave-sessions-at-task-boundaries-and-run-one-devon-round-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "Adding `started_at` to `START_FIELDS` lets `record_pair` replace an existing timestamp when it exceeds `now`, breaking the write-once contract. Limit the stale-start replacement rule to usage and calls.",
+      "file": "skills/run-autopilot/scripts/_cap_task_record.py:65",
+      "severity": "medium",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00218-leave-sessions-at-task-boundaries-and-run-one-devon-round-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "A correction retry requires another Tess dispatch, but the four-dispatch budget allocates only one adversarial strengthen dispatch. The new prose still permits an unanswered weak point when that budget is spent. Reconcile the budget and retry rule; the test's check for the word \"correction\" does not pin dispatch counts.",
+      "file": "skills/work/SKILL.md:243",
+      "severity": "medium",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00218-leave-sessions-at-task-boundaries-and-run-one-devon-round-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The expanded module introduction still repeats the assertions and test mechanics. Replace it with a short purpose statement, as requested in cycle 1.",
+      "file": "skills/work/scripts/test_devon_round_prose.py:1",
+      "severity": "medium",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00218-leave-sessions-at-task-boundaries-and-run-one-devon-round-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "`record_pair`'s annotation says `values: tuple[int, int | None, int]`, but `record_task_bounds` passes `done_now`, which is `int | None`, in the third slot. The code handles it (`None` is skipped). Only the type is wrong.",
+      "file": "skills/run-autopilot/scripts/_cap_task_record.py:43",
+      "severity": "low",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00218-leave-sessions-at-task-boundaries-and-run-one-devon-round-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The PRD says step 2.8's Tess budget line is unchanged. The implementation rewrote it to say the strengthen \"also covers Devon's one weak-point correction retry\". This resolves a real tension in the spec (a correction retry versus a fixed budget of 4), but it edits a line the spec said to leave alone.",
+      "file": "skills/work/SKILL.md:243",
+      "severity": "low",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00218-leave-sessions-at-task-boundaries-and-run-one-devon-round-v1.md"
+    },
+    {
+      "type": "known-limitation",
+      "issue": "cli/__main__.py is now 1289 lines against the 800-line limit (1253 before this PRD)",
+      "severity": "low",
+      "consensus": "2/4",
+      "reason": "Pre-existing debt the PRD explicitly refuses to touch: the task says the file is already 1253 lines, this is a thin addition, do not restructure it. Splitting the CLI registry is its own PRD.",
+      "prd": "00223-enter-the-build-gate-in-one-cli-call-v1.md"
+    },
+    {
+      "cycle": 1,
+      "type": "known-limitation",
+      "issue": "cli/__main__.py is now 1289 lines against the 800-line limit (1253 before this PRD)",
+      "severity": "low",
+      "consensus": "2/4",
+      "action": "deferred to batch end",
+      "reason": "Pre-existing debt the PRD explicitly refuses to touch: the task says do not restructure the file. Splitting the CLI registry is its own PRD.",
+      "prd": "00223-enter-the-build-gate-in-one-cli-call-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "enter.py is 414 lines against the PRD Phase 0 exit criterion \"under 400 lines\" (computed: over by 14). Named fixes: move the three side-effect helpers (_git_head_sha, _record_resume_row, _review_log_has_dispatch_line) to a sibling module, inline the single-caller _prepare_tree into _bootstrap, or trim 14 lines of restating docstring.",
+      "file": "skills/run-autopilot/cli/enter.py:1",
+      "severity": "high",
+      "consensus": "4/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00223-enter-the-build-gate-in-one-cli-call-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The enter stop-table rows for fs_error and park_halt each name one owning section while the code now raises them from several distinct causes. fs_error fires at enter.py:158 (mkdir failed), :161 (shallow --prds, no grandparent) and :358 (design-doc read failed), but its row routes only to the mkdir block. park_halt fires at :184 (exit 5, systemic halt) and :188 (unmapped park exit code), but its row names only exit-code row 5. Fix: state in both rows that detail selects the owner, as the deferred_io row already does, and name the design-gate non-zero branch for the design-doc cause.",
+      "file": "skills/run-autopilot/references/phase-build.md:29",
+      "severity": "high",
+      "consensus": "2/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00223-enter-the-build-gate-in-one-cli-call-v1.md"
+    },
+    {
+      "type": "out-of-scope-observation",
+      "issue": "PRD 00231 Success Metric 3 (a [D] task records tier_reason from the classifier, never floor) may not be observable: the Phase 6 task-add payload line names only estimated_tokens and est_context_peak as classifier-produced fields, and tier_reason is read only in cli/statectl.py:418",
+      "severity": "low",
+      "consensus": "1/4",
+      "reason": "out of scope by the PRD text itself (the reviewer notes the spec did not ask for a change here); it is a gap in the PRD post-release metric, not a spec/implementation divergence. Making tier_reason observable on [D] tasks is a separate change to the task-add payload contract.",
+      "status": "deferred",
+      "prd": "00231-route-rework-fixes-on-their-own-tier-v1.md"
+    },
+    {
+      "cycle": 1,
+      "type": "deferred_decision",
+      "issue": "PRD 00231 Success Metric 3 (a [D] task records tier_reason from the classifier, never floor) may not be observable: the Phase 6 task-add payload line names only estimated_tokens and est_context_peak as classifier-produced fields, and tier_reason is read only in cli/statectl.py:418",
+      "severity": "low",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "out of scope by the PRD text itself (the reviewer notes the spec did not ask for a change here); a gap in the PRD post-release metric, not a spec/implementation divergence",
+      "status": "deferred",
+      "prd": "00231-route-rework-fixes-on-their-own-tier-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "deferred_decision",
+      "issue": "bash dev/bin/release-checks fails its [checks] runner recursion guard section (6 passed, 20 failed, every failure refusing nested dispatch (depth=1)) when run from inside a nested CLI dispatch, because AUTOPILOT_DISPATCH_DEPTH / COPILOT_CLI / _AUTOPILOT_LOOP are inherited and the guard under test refuses; re-running with env -u for those three passes",
+      "severity": "low",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "out of scope for a prose-only PRD and pre-existing: release-checks exits 0 in a normal shell at this HEAD (orchestrator-verified). It only reproduces from inside a reviewer CLI dispatch, so it affects CLI reviewers running the gate, not the release gate itself. Making those tests scrub their inherited markers is a separate change to the test harness.",
+      "status": "deferred",
+      "prd": "00231-route-rework-fixes-on-their-own-tier-v1.md"
+    },
+    {
+      "type": "prd-wording",
+      "cycle": 1,
+      "issue": "NARROW hard-codes pytest flags (-q --tb=line) in a stack-agnostic pack, and \"Read the pass count and exit code from that one run\" has an ambiguous antecedent (the orchestrator run the subagent cannot read).",
+      "severity": "low",
+      "consensus": "2/4",
+      "reason": "The PRD mandates the NARROW sentence verbatim and the code reproduces it exactly, so the defect is in the spec wording, not this change. Needs a follow-up PRD against the NARROW text.",
+      "prd": "00232-keep-subagent-test-runs-narrow-v1.md"
+    },
+    {
+      "type": "pre-existing-contradiction",
+      "cycle": 1,
+      "issue": "skills/fast-track/SKILL.md:495 RETRY_INSTRUCTION ends \"keep the suite green\", which pulls Ivan toward the whole-suite run the new narrow-run sentence forbids.",
+      "severity": "low",
+      "consensus": "1/4",
+      "reason": "Pre-existing text in a file this PRD neither touches nor names; fixing it here would widen the diff beyond scope. Tracked for batch end.",
+      "prd": "00232-keep-subagent-test-runs-narrow-v1.md"
+    },
+    {
+      "type": "spec-inconsistency",
+      "cycle": 1,
+      "issue": "The PRD-mandated sentence at skills/work/SKILL.md:71 asserts every subagent prompt carries the same narrow-run sentence, but the PRD own Devon feature specifies different wording for Devon, a narrowed runner line plus a new last rule. The claim cannot be made true for Devon without either rewording the mandated sentence or giving Devon the NARROW paragraph.",
+      "severity": "medium",
+      "consensus": "3/4",
+      "reason": "Internal PRD inconsistency needing a spec decision, not an implementation fix. Rework cycle 1 fixes the Tess half, adding NARROW to tess-retry-prompt.md and the strengthen template, which is unambiguous and matches the PRD stated capability. The Devon half is deferred so the choice is made deliberately.",
+      "prd": "00232-keep-subagent-test-runs-narrow-v1.md"
+    },
+    {
+      "type": "deferred_decision",
+      "cycle": 1,
+      "issue": "NARROW hard-codes pytest flags (-q --tb=line) in a stack-agnostic pack, and \"Read the pass count and exit code from that one run\" has an ambiguous antecedent (the orchestrator run the subagent cannot read).",
+      "severity": "low",
+      "consensus": "2/4",
+      "action": "deferred to batch end",
+      "reason": "The PRD mandates the NARROW sentence verbatim and the code reproduces it exactly, so the defect is in the spec wording, not this change. Needs a follow-up PRD against the NARROW text.",
+      "prd": "00232-keep-subagent-test-runs-narrow-v1.md"
+    },
+    {
+      "type": "deferred_decision",
+      "cycle": 1,
+      "issue": "skills/fast-track/SKILL.md:495 RETRY_INSTRUCTION ends \"keep the suite green\", which pulls Ivan toward the whole-suite run the new narrow-run sentence forbids.",
+      "severity": "low",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "Pre-existing text in a file this PRD neither touches nor names; fixing it here would widen the diff beyond scope.",
+      "prd": "00232-keep-subagent-test-runs-narrow-v1.md"
+    },
+    {
+      "type": "deferred_decision",
+      "cycle": 1,
+      "issue": "The PRD-mandated sentence at skills/work/SKILL.md:71 asserts every subagent prompt carries the same narrow-run sentence, but the PRD own Devon feature specifies different wording for Devon. The claim cannot be made true for Devon without rewording the mandated sentence or giving Devon the NARROW paragraph.",
+      "severity": "medium",
+      "consensus": "3/4",
+      "action": "deferred to batch end",
+      "reason": "Internal PRD inconsistency needing a spec decision, not an implementation fix. Cycle 1 rework fixes the unambiguous Tess half.",
+      "prd": "00232-keep-subagent-test-runs-narrow-v1.md"
+    },
+    {
+      "type": "requirements-ambiguity",
+      "cycle": 2,
+      "issue": "Scope beyond the PRD four insertion points: NARROW also lands in skills/work/references/tess-retry-prompt.md:34 and inside the \"Feedback to Tess\" template at skills/work/references/adversarial-test-prompt.md:96, with four extra pinning tests. The PRD Repository Structure names only tess-prompt, ivan, adversarial and SKILL.md.",
+      "severity": "low",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "Requirements ambiguity in the PRD, not a defect in the change: the PRD file list names four files while the sentence the PRD mandates at skills/work/SKILL.md:71 asserts EVERY subagent prompt carries the rule. Cycle 1 High 3/4 was exactly that omission, and task 4 made the mandated claim true rather than rewording it; reverting the extras would re-open it. Blake is blind by design and grants the extras are consistent with the intent, harmless and passing. Same root as the cycle-1 deferral of the Devon \"same sentence\" inconsistency - resolve both as one spec decision against the PRD text.",
+      "prd": "00232-keep-subagent-test-runs-narrow-v1.md"
+    },
+    {
+      "type": "out-of-scope",
+      "issue": "skills/run-autopilot/cli/test_wave_cli_refusals.py and test_wave_assemble_summary.py are in no dev/bin/release-checks block at all, so the gate never exercises them (the first is one of PRD 00233 Problem Statement s named failing wave files). Predates PRD 00233 and is outside its diff.",
+      "severity": "low",
+      "consensus": "1/4",
+      "reason": "pre-existing gate coverage gap, not introduced by this PRD; fixing it would widen the diff into block membership this PRD does not touch",
+      "file": "dev/bin/release-checks:138",
+      "found_by": "BLAKE",
+      "cycle": 1,
+      "prd": "00233-run-the-test-suites-in-parallel-v1.md"
+    },
+    {
+      "type": "tooling-defect",
+      "issue": "consolidate_findings.py merges findings that are distinct defects merely because they cite the same file. In this cycle it folded four separate test_parallel_safety.py findings (a HIGH plus three Mediums) into one row, and four separate dev/bin/release-checks findings (a HIGH, a Medium and two Lows) into another. It printed a merged citations that matched only after suffix stripping warning each time, which is the only reason the loss was caught. A lossy consolidation silently drops the finding nobody wrote down twice, which is the exact failure PRD 00095 exists to prevent.",
+      "severity": "medium",
+      "consensus": "orchestrator",
+      "reason": "found during PRD 00233 cycle 1 review but lives in skills/review-work-completion/scripts/consolidate_findings.py, outside this PRD diff; needs its own PRD",
+      "file": "skills/review-work-completion/scripts/consolidate_findings.py",
+      "found_by": "orchestrator",
+      "cycle": 1,
+      "prd": "00233-run-the-test-suites-in-parallel-v1.md"
+    },
+    {
+      "type": "tooling-defect",
+      "issue": "gather-context.sh full-review path produces an EMPTY diff in a repo that works directly on master. It resolves its base to the detected branch (origin/HEAD or master) and runs git diff <base>, so at a clean HEAD on master the diff is empty and every cycle-1 reviewer would receive nothing to review. This review worked around it by passing --since <work_start_sha>, which yields exactly the work_start_sha..HEAD range the gate specifies, and the context file scope label was corrected by hand from incremental review to full review. The workaround is undocumented, so the next full review in a master-only repo can silently review an empty diff.",
+      "severity": "high",
+      "consensus": "orchestrator",
+      "reason": "found during PRD 00233 cycle 1 review but lives in skills/review-work-completion/scripts/gather-context.sh, outside this PRD diff; needs its own PRD",
+      "file": "skills/review-work-completion/scripts/gather-context.sh:99",
+      "found_by": "orchestrator",
+      "cycle": 1,
+      "prd": "00233-run-the-test-suites-in-parallel-v1.md"
+    },
+    {
+      "type": "requirements-ambiguity",
+      "issue": "dev/bin/release-checks ships -n auto --maxprocesses 4, but PRD 00233 Phase 2 specifies only --with pytest-xdist and -n auto; the worker cap is undocumented spec drift, and the same cap wording now sits in skills/work/references/final-verification.md",
+      "severity": "medium",
+      "consensus": "1/4",
+      "cycle": 2,
+      "reason": "Deliberate deviation prescribed by the cycle-1 decision gate after two reviewers reproduced fork/process-table exhaustion at this host 18 workers; load-bearing, not cosmetic. The PRD text is a shipped record and is not amended by this PRD, so the drift is recorded for batch end rather than reworked.",
+      "prd": "00233-run-the-test-suites-in-parallel-v1.md"
+    },
+    {
+      "type": "prevent-the-class",
+      "issue": "Nothing stops a future wave fixture reintroducing the gpg-signing exposure: skills/run-autopilot/cli has no conftest.py, so each fixture disables commit.gpgsign (or redirects GIT_CONFIG_GLOBAL) on its own - test_wave_launch.py::_repo, test_lane_cli.py::_GIT_IDENTITY, test_enter_decisions.py:510, custody_testutil.py:28. One autouse isolation would close the class for the whole directory.",
+      "severity": "low",
+      "consensus": "1/4",
+      "cycle": 2,
+      "reason": "Prevention of a known class across a directory PRD 00233 does not own, and the design doc explicitly rejected a cli-local conftest for this codebase. The in-scope half is already fixed and now pinned deterministically on any host by test_repo_disables_signing_regardless_of_host_gpg_config.",
+      "prd": "00233-run-the-test-suites-in-parallel-v1.md"
+    },
+    {
+      "type": "sweep-residual",
+      "issue": "skills/run-autopilot/cli/test_release_checks_parallel_prose.py:33 - _pytest_invocation() takes the FIRST non-comment line containing -m pytest, so a non-comment decoy such as echo \"python -m pytest .../test_parallel_safety.py --with pytest-xdist\" placed before the real command would be selected and both pins would pass even if the real command lost the path or the flag. One-line fix: require the selected line to start with uv run.",
+      "severity": "low",
+      "consensus": "1/1",
+      "cycle": 2,
+      "reason": "Raised by Pat at step 5.7 of the tail-sweep task and confirmed as real by reading the parser. LOW only, so the per-task review ladder routes it to note-and-proceed rather than a further Ivan dispatch; the implementor had already flagged the same first-match assumption in its own ASSUMPTIONS footer. Deferred rather than dropped: the decoy requires someone to write an echo line carrying both -m pytest and the exact test path into the gate script, which nothing in the repo does today.",
+      "prd": "00233-run-the-test-suites-in-parallel-v1.md"
+    },
+    {
+      "type": "stall",
+      "site": "tooling_conflict",
+      "detail": "Task 5: docs/dev/project-management/.gitignore (design Place 4) cannot be created via Write/Edit -- hooks/enforce_prd_location.py blocks any bare file at the project-management root outside KEEP_NAMES, and KEEP_NAMES redirects to meta/ which breaks gitignore path semantics. SKILL.md/phase-build.md prose (sites 1-4) already committed c8bbe2b. Needs a human call: (1) add a root-level exemption for .gitignore in hooks/enforce_prd_location.py (source fix, needs release to unblock future Phase-0 writes too), (2) relocate the gitignore -- rejected: breaks task 8's planned test_store_gitignore_matches_the_disposable_list parity check which expects autopilot/-prefixed patterns at project-management root, or (3) a one-off manual write to unblock this batch now. Task 5 left in_progress with an aborted attempt recorded.",
+      "op_id": "3310ce8e7236",
+      "prd": "00236-track-the-store-without-tripping-the-loop-v1.md"
+    }
+  ]
+}

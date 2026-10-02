@@ -1,0 +1,10 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Cannot statically verify: run `uv run --no-project --with pytest python -m pytest -q skills/work/scripts/test_dispatch_prose.py`, `uv run --no-project --with pytest python -m pytest -q skills/work/scripts/test_adversarial_cap_prose.py`, and `bash dev/bin/release-checks` to confirm all current-head checks pass and the new suite reports 3 passed",
+    "file": "N/A",
+    "reason": "Not a defect — Bob's sandbox cannot execute, so this is his mandated placeholder for a runtime criterion. All three named commands were executed at this same HEAD this cycle and are green: Alice ran test_adversarial_cap_prose.py (3 passed), test_dispatch_prose.py (32 passed) and bash dev/bin/release-checks (all blocks green); Blake and Carl independently re-ran the same set green; the orchestrator's own suite run at this HEAD is 2634 passed, 0 failed, 1 skipped. Nothing left to verify."
+  }
+]

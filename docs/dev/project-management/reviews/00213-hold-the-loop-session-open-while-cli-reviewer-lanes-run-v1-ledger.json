@@ -1,0 +1,50 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "[MECH] test_hooks_json_is_valid has no assertion: it only proves the code does not raise",
+    "file": "skills/run-autopilot/scripts/test_review_coverage_hook_registration.py:60",
+    "reason": "pre-existing test, untouched by this diff (git log -S confirms it predates 00213); fixing it is unrelated cleanup under the surgical-changes rule. Bob's own doubt lens filed it KNOWN with that justification (D4 pass)."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Pre-existing `test_hooks_json_is_valid` has no assertion body (only proves the JSON load doesn't raise) — not touched by this diff, flagged here only because the pack's mechanical check surfaces it in the same file.",
+    "file": "skills/run-autopilot/scripts/test_review_coverage_hook_registration.py:60",
+    "reason": "same finding as the medium row above, raised by a second reviewer; settled for the same reason (pre-existing, out of scope under surgical changes)."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The lane-snapshot one-liner (`ls \"$STUB_LANES_DIR\" > ...; cp ...; for _p in ...; do ps -o command= ...`) is duplicated verbatim across three stub heredocs (codex stub, copilot stub, gemini stub); each is a standalone subshell script so extraction isn't trivial without a larger stub-generation refactor, flagging only as a minor redundancy note.",
+    "file": "skills/use-codex/scripts/codex_run_test_lib.sh:70",
+    "reason": "the three stubs are independent generated subshell scripts in two separate suites; the reviewer states extraction needs a stub-generation refactor. Deliberate per-stub isolation is worth more than de-duplicating three test fixtures. The `${VAR:?}` hardening of the same line IS swept (separate finding)."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "gemini-run.sh writes the lane marker before the per-mode empty-prompt validation that lives inside run_copilot/run_gemini, unlike codex-run.sh which validates the prompt before writing its marker. The PRD states the marker is \"written after argument parsing and prompt validation, before any backend runs\".",
+    "file": "skills/use-gemini/scripts/gemini-run.sh",
+    "reason": "the observable contract holds: the merged EXIT trap removes the marker on the validation-triggered exit, so no stale marker escapes, and the reviewer confirms no acceptance criterion fails. gemini-run.sh's empty-prompt validation lives inside the per-backend functions, so moving the marker after it would duplicate the write across two backends for no behavioral gain."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The marker removal is on `EXIT` only, not `INT`/`TERM`, so the PRD's own scenario (headless claude killing the wrapper seconds after a turn ends) can leave the marker behind; harmless because the hook reaps dead-pid markers, but it means the lanes dir is not self-cleaning without a later loop session in that checkout",
+    "file": "skills/use-codex/scripts/codex-run.sh:186",
+    "reason": "bash runs the EXIT trap on SIGINT/SIGTERM-initiated exits in the common cases, and the hook's dead-pid reaping already makes a stale marker self-healing. Adding INT/TERM would also change gemini-run.sh's pre-existing RUN_TMP cleanup path, outside this PRD's scope. Bob's doubt lens filed it KNOWN with that justification."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`_guard()`'s cwd resolution (`Path(payload.get(\"cwd\") or os.getcwd())`) skips the `str(...)` cast its sibling hook uses (`guard_skill_after_leave.py:70`); harmless since `main()`'s outer `except Exception` would catch a malformed-payload TypeError anyway, but worth aligning for consistency next time this file is touched.",
+    "file": "hooks/guard_stop_on_live_lanes.py:127",
+    "reason": "not applied, deliberately: it conflicts with the same cycle's MEDIUM finding that internal failures must be loud. Without the cast a non-string `cwd` raises TypeError, which the new fail-open handler reports on stderr; with the cast `Path(str(42))` resolves quietly, the walk-up finds no lanes and the hook allows the stop silently - the exact silent-skip class this PRD exists to end. Alice rated it LOW, harmless and cosmetic. `test_internal_failure_fails_open_but_says_so[non-string cwd-TypeError]` now pins the loud path, and Pat's closure verdict records the non-fix with this reason."
+  }
+]

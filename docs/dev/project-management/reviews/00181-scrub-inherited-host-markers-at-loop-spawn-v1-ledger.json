@@ -1,0 +1,34 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "The PRD's own Success Metrics command (`pytest -q skills/run-autopilot/cli/test_runner.py -k \"child_env or scrub\"`) selects only 4 of the \"five new tests\" the PRD claims it verifies - `test_spawn_silent_without_markers` doesn't match either keyword, and `test_run_agoge_scrubs_host_markers` lives in `test_loop.py`, outside the named file. All five named tests exist and pass individually and together; this is a PRD-authoring imprecision, not an implementation defect.",
+    "file": null,
+    "reason": "The substantive success criterion is met and independently verified: Alice, Blake and Carl each confirmed all five named tests exist and pass, and Blake ran the full test_runner.py + test_loop.py suite (90 passed) plus `bash dev/bin/release-checks` end to end. The defect is in a shorthand `-k` filter written into the PRD's Success Metrics bullet, not in the implementation, and both reviewers who raised it said so explicitly and rated it Low. The PRD is a historical record at finalize; rewriting its metric line after the fact changes nothing about the product."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "VERIFY - Cannot statically verify tests and release checks pass; run `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_runner.py skills/run-autopilot/cli/test_loop.py` and `bash dev/bin/release-checks`",
+    "file": null,
+    "reason": "Not a defect - a statement of Bob's own sandbox limitation (his persona forbids executing commands). Both named commands were run at this exact HEAD (407c1e87) and are green: the work phase recorded 971 passed / 0 failed / 0 skipped with `bash dev/bin/release-checks` exit 0 in dev/local/autopilot/last-verification.json, and Alice, Blake and Carl each re-ran them independently this cycle (90 passed on the two named files; release-checks all sub-suites passed)."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Pre-existing file-size cap violation: `skills/run-autopilot/cli/loop.py` (1355 lines) and `test_loop.py` (1404 lines) both exceed the 800-line max; both were already over (1343 / 1378 lines) before this diff (base commit f1489df17d88), so this diff adds to but did not create the violation. Flagging per rubric R13, not attributable to this PRD's scope.",
+    "file": "skills/run-autopilot/cli/loop.py",
+    "reason": "Real and confirmed by measurement, but out of scope for this PRD, which adds one constant, one pure function and two call-site rewires. Alice measured both files as already over the cap at the base commit. Splitting a 1355-line module is its own change with its own risk surface; doing it inside a host-marker-scrub PRD would violate the surgical-changes rule. Deferred to batch end so it gets a durable home rather than being dropped."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "FIX - Exact tuple equality already verifies the tuple shape and excludes `AUTOPILOT_DISPATCH_DEPTH`; remove the redundant `isinstance` assertion and standalone exclusion test while retaining the behavioral depth-survival test (SECOND HALF ONLY: the removal of `test_host_markers_excludes_the_dispatch_depth_backstop`)",
+    "file": "skills/run-autopilot/cli/test_runner.py",
+    "reason": "Accepted in part, declined in part. The `isinstance(HOST_MARKERS, tuple)` assertion at test_runner.py:263 is genuinely redundant - a list never compares equal to a tuple literal in Python, so the exact-equality assertion two lines above already proves tuple-ness - and its removal IS swept into the [D1] task. The second half is declined: `test_host_markers_excludes_the_dispatch_depth_backstop` is the only test named for the PRD's explicit invariant that AUTOPILOT_DISPATCH_DEPTH is deliberately not in the list, and rules/testing.md requires tests to be named for the rule they enforce and treats exact-shape assertions as golden tests to be used sparingly. Deleting the intent-named test would leave that deliberate decision pinned only by a golden equality that fires on every correct change too. Coverage redundancy is the cheaper problem."
+  }
+]

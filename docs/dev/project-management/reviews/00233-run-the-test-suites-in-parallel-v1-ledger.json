@@ -1,0 +1,106 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "[MECH] 🟡 3 touched test(s) pass against the pre-change code: test_hammer_a, test_hammer_b, test_the_wave_pair_passes_under_two_workers | File: skills/run-autopilot/cli/test_parallel_safety.py | Task: general",
+    "file": "skills/run-autopilot/cli/test_parallel_safety.py",
+    "reason": "Verified tool artifact for this diff shape, confirmed by reading replay_tests_against_base.py:155: the replay overlays every changed TEST file from HEAD onto the base worktree, and this PRD's entire production fix is one line inside skills/run-autopilot/cli/test_wave_launch.py, which is itself a test file. The overlay restored the fix, so the replay compared HEAD against HEAD and could not have reported a failure. The separate, real concern that the guard is probabilistic is NOT dismissed: it is carried as an actionable finding into rework task 4."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "[BOB] ⚪ Cannot statically verify: the shipped blocks finish under half their serial time (VERIFY). Compare identical custody core, l3, reporting and waves workloads serially versus four workers; recorded whole-directory timings and waves-only 78.29s are not comparable evidence. | File: N/A | Task: 3",
+    "file": null,
+    "reason": "Answered in this same cycle by the like-for-like measurement Bob asked for. Alice ran the identical waves file list both ways: 350 passed in 165.89s serial against 350 passed in 79.14s at four workers, i.e. 47.7% of serial. Blake measured the same block at 78s against 160s (ratio 0.49). The PRD's under-half metric is met on the dominant block, with a thin margin that is recorded in the review file rather than dismissed."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "[BOB] ⚪ Cannot statically verify: tests pass (VERIFY). The exact runtime check, `bash dev/bin/release-checks`, is already recorded exit 0 at c502c2f; no full-suite rerun requested. | File: N/A | Task: general",
+    "file": null,
+    "reason": "Resolved by running it. The orchestrator ran the project's documented full suite this cycle (last-verification.json carried null counts, so reuse was not permitted): 1 failed, 4199 passed, 1 skipped, 3 errors. The single failure is test_parallel_safety.py::test_the_wave_pair_passes_under_two_workers, which is already the cycle's 3/4-consensus HIGH, so this item adds nothing beyond it. bash dev/bin/release-checks is genuinely green at this sha; the two facts do not conflict because the gate's new block installs pytest-xdist and never exercises the broken serial path."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "[BLAKE] ⚪ `test_wave_cli_refusals.py` and `test_wave_assemble_summary.py` are in no `release-checks` block. The first is one of the spec's named failing wave files. This predates the PRD, but the gate never exercises them in parallel. | File: dev/bin/release-checks:138 | Task: 3",
+    "file": "dev/bin/release-checks:138",
+    "reason": "Correct and pre-existing: it predates PRD 00233 and sits outside its diff. Fixing it means changing block membership this PRD never touches, against closed-set prose pins. Deferred to batch end as an out-of-scope record rather than widened into this PRD's rework."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "consolidate_findings.py merges findings that are distinct defects merely because they cite the same file. In this cycle it folded four separate test_parallel_safety.py findings (a HIGH plus three Mediums) into one row, and four separate dev/bin/release-checks findings (a HIGH, a Medium and two Lows) into another.",
+    "file": "skills/review-work-completion/scripts/consolidate_findings.py",
+    "reason": "Orchestrator-found during this cycle, but it lives in the review skill's own script, outside PRD 00233's diff. Deferred to batch end for its own PRD. Mitigated in-cycle: the review file re-expanded the collapsed rows by hand, keeps every reviewer's findings verbatim in their own section, and the rework tasks were transcribed from those sections rather than from the merged table."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "gather-context.sh full-review path produces an EMPTY diff in a repo that works directly on master: it resolves its base to the detected branch and runs git diff <base>, so at a clean HEAD on master there is nothing to review.",
+    "file": "skills/review-work-completion/scripts/gather-context.sh:99",
+    "reason": "Orchestrator-found during this cycle, outside PRD 00233's diff. Deferred to batch end for its own PRD. Mitigated in-cycle by passing --since <work_start_sha>, which produces exactly the work_start_sha..HEAD range this gate specifies, plus a hand correction of the context file's scope label so no reviewer was told a full review was a rework slice. Severity is high because the silent failure mode is a reviewer receiving an empty diff and converging on nothing."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "high",
+    "issue": "[BLAKE] 🟠 The PRD's literal success metric (`pytest -q -n auto skills/run-autopilot/cli` green three times in a row) is not reliably met on this host. I ran it twice on a scratch copy. Run 1 had about 15 failures, all wave-family (`test_wave_launch_abort_keep`, `test_wave_assemble_migrate` and others). The traceback was inside `subprocess.Popen` on `git worktree add`, which looks like the fork/process-table exhaustion the implementer's own commit message describes (18 workers). Run 2 was green: 1952 passed in 78 s. | File: dev/bin/release-checks | Task: general",
+    "file": "dev/bin/release-checks",
+    "reason": "Refuted by measurement, with an identified cause for Blake's red run: reviewer concurrency, not the code. Blake's failing run carried a resource-exhaustion signature (BlockingIOError [Errno 35] at fork, SIGKILLed git children) and happened while two other reviewers were each driving full suites on the same 18-core host in the same window - Alice ran `bash dev/bin/release-checks` end to end plus a 221s serial whole-directory run plus scratch-copy suites, and Carl ran release-checks twice plus `--continue-on-collection-errors skills/run-autopilot/cli`. After every reviewer finished, with the host otherwise idle, the orchestrator ran bare `-n auto` over skills/run-autopilot/cli three consecutive times: 1952 passed each, 77.86s / 77.83s / 78.04s, 0 failed. The PRD's Success Metric 1 as literally written is therefore met, 3/3. What is NOT dismissed, and is carried as a low instead: at 18 workers the suite sits near this host's fork limit, which is exactly why the shipped `--maxprocesses 4` cap exists in the gate."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "high",
+    "issue": "[BLAKE] 🟠 Phase 1 acceptance requires `-n auto` over `cli/` green on three consecutive runs. Bare `-n auto` went red on one of my two runs. The capped form `-n auto --maxprocesses 4` passed once for me. The design doc contains no three-run record for the shipped, capped invocation. The 3x-green evidence in it (76-77 s) comes from a simulated `GIT_CONFIG_GLOBAL=/dev/null` run with uncapped workers. | File: docs/dev/project-management/designs/00233-run-the-test-suites-in-parallel-v1-design.md | Task: general",
+    "file": "docs/dev/project-management/designs/00233-run-the-test-suites-in-parallel-v1-design.md",
+    "reason": "The evidence gap this finding names was real and is now closed by running it in this cycle. The orchestrator ran the shipped capped form, `uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n auto --maxprocesses 4 skills/run-autopilot/cli`, three consecutive times with the host idle: 1952 passed each, 153.96s / 91.18s / 92.28s, 0 failed (run 1 is cold-cache; runs 2 and 3 settle at ~92s). Against Alice's measured 221s serial for the same directory that is 41.6% of serial, so the PRD's under-half metric holds on the whole directory and not only on the dominant waves block. Both records are written into this cycle's review file. The separate complaint that the DESIGN DOC does not carry these numbers is not dismissed: it survives as its own medium and is swept."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "[BLAKE] 🟡 `--maxprocesses 4` is a new option the PRD does not specify. The PRD asks only for `--with pytest-xdist` and `-n auto`. The cap is also written into `skills/work/references/final-verification.md`, replacing the PRD's wording \"(its release gate already passes it)\". The change is defensible, but it is spec drift. | File: skills/work/references/final-verification.md | Task: general",
+    "file": "skills/work/references/final-verification.md",
+    "reason": "Correctly identified spec drift, and a deliberate one: `-n auto --maxprocesses 4` is the exact remedy the cycle-1 decision gate prescribed, after two reviewers independently reproduced fork/process-table exhaustion at the host's 18 workers. It is load-bearing rather than cosmetic - this cycle's own runs show bare `-n auto` green 3/3 on an idle host but Blake's run red under concurrent load, which is the margin the cap buys. The PRD text itself is not amended by this PRD (a shipped PRD is a record, not a living document), so this is a requirements-ambiguity deferral to batch end per the decision framework, not a rework item."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "[BLAKE] ⚪ The root cause is host-specific: the global `commit.gpgsign=true` plus a shared gpg-agent. However, `test_the_wave_pair_passes_under_two_workers` is probabilistic and passes on hosts without global signing, so it only guards the regression on hosts like this one. The same latent exposure was patched separately in `test_lane_cli.py` and `test_enter_decisions.py:510`, and nothing prevents a future fixture from reintroducing it. | File: skills/run-autopilot/cli/test_parallel_safety.py | Task: general",
+    "file": "skills/run-autopilot/cli/test_parallel_safety.py",
+    "reason": "Accurate, and the first half is already answered by this cycle's rework: `test_repo_disables_signing_regardless_of_host_gpg_config` points GIT_CONFIG_GLOBAL at a gpgsign=true config with a failing signer, so the fixture change is now pinned deterministically on ANY host, and Alice verified it fails when the `_repo()` line is removed. The residual half - that nothing stops a FUTURE fixture reintroducing the exposure, which a single autouse conftest isolation would close for the whole directory - is a prevention-of-the-class change across a directory this PRD does not own, and the design doc explicitly rejected a cli-local conftest for this codebase. Deferred to batch end as its own candidate rather than widened into this PRD."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "[BLAKE] ⚪ Extra artifacts beyond the PRD's file list: `test_release_checks_parallel_prose.py`, the `test_repo_disables_signing_...` test, and the `test_lane_cli.py` fix. All are test-only and justified by the root cause. | File: skills/run-autopilot/cli/test_release_checks_parallel_prose.py | Task: general",
+    "file": "skills/run-autopilot/cli/test_release_checks_parallel_prose.py",
+    "reason": "Not a defect, and Blake says so himself in the same line. All three artifacts were created by the cycle-1 decision gate: the pin file closes the unpinned-block finding (task 5 item 5), the deterministic test closes the probabilistic-guard finding (task 4 item 2), and the test_lane_cli.py line closes the same-bug-class finding (task 6). Each is named in its task's file list with its acceptance criterion, so none is unrequested scope."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "[MECH] 🟡 3 touched test(s) pass against the pre-change code: test_hammer_a, test_hammer_b, test_repo_disables_signing_regardless_of_host_gpg_config | File: skills/run-autopilot/cli/test_parallel_safety.py | Task: general. And: [MECH] 🟡 2 touched test(s) pass against the pre-change code: test_parallel_safety_block_runs_test_parallel_safety, test_parallel_safety_block_uses_pytest_xdist | File: skills/run-autopilot/cli/test_release_checks_parallel_prose.py | Task: general",
+    "file": "skills/run-autopilot/cli/test_parallel_safety.py",
+    "reason": "Expected for an INCREMENTAL review and computed against the wrong baseline for the question being asked. This cycle's replay base is c502c2f, the end of the cycle-1 build, not the PRD's work_start_sha. The production fix those three test_parallel_safety.py tests pin - the one `commit.gpgsign false` line in test_wave_launch.py::_repo - landed at d9868f8, BEFORE that base, and test_wave_launch.py is not in this cycle's changed-file list, so the base worktree already carries the fix and the tests necessarily pass there. The two prose pins likewise pin a `[checks] parallel safety` block that already existed at c502c2f by design: their purpose is to stop a FUTURE deletion. Alice independently verified the real fail-first property by deleting the `_repo()` line in a scratch copy, where the new deterministic test and test_hammer_a both failed with CalledProcessError, and by removing `--with pytest-xdist` from the block, where the pin failed as an ordinary assertion."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "[BOB] ⚪ Cannot statically verify: task 6's final-revision parallel acceptance (VERIFY). Check records for three consecutive runs of `uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n auto skills/run-autopilot/cli` and its serial counterpart; the current verification record contains neither parallel run evidence nor counts for that directory. | File: N/A | Task: 6",
+    "file": null,
+    "reason": "Resolved by running exactly the check Bob named. Bare `-n auto` over skills/run-autopilot/cli: 1952 passed, 0 failed, three consecutive runs at 77.86s / 77.83s / 78.04s. The shipped capped form: 1952 passed, 0 failed, three consecutive runs at 153.96s / 91.18s / 92.28s. Serial counterpart: Alice measured 1951 passed, 1 skipped, 0 failed in 221s this cycle (the skip is the xdist-gated meta-test, which is the intended behaviour of the task-4 importorskip). All six parallel runs were green with the host idle. The counts are now recorded in this cycle's review file, which is the record Bob asked for."
+  }
+]

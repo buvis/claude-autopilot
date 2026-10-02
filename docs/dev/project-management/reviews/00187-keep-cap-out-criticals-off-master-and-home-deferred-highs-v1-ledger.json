@@ -1,0 +1,114 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "__main__.py is 1008 lines (was 909 pre-PRD; +99 from this diff), past the project's 800-line file cap; check_style_limits.py deliberately doesn't flag pre-existing overflow and defers it to review. Consider extracting the custody subcommand (_add_custody/_run_custody) into its own module.",
+    "file": "skills/run-autopilot/cli/__main__.py",
+    "reason": "Pre-existing overflow: the file was 909 lines at work_start_sha, so it broke the 800-line cap before this PRD. The ~99 lines this PRD added are the design-mandated custody verb, the stall-record lookup and the style-gate split of _run_render; moving only those out leaves the file over the cap. A split of __main__.py into per-surface modules is its own PRD (same treatment as loop.py under 00192). Deferred to batch end for PRD minting; recorded in state.deferred_decisions."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "__main__.py is 1009 lines, over the 800-line cap; it was already over before this PRD and the diff grew it by roughly 110 net lines (custody verb, _stall_range, render split)",
+    "file": "skills/run-autopilot/cli/__main__.py",
+    "reason": "Same finding as the entry above (Alice + Bob, 2/4): pre-existing overflow, split is its own PRD, deferred to batch end."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "stalled_section hardcodes \"live on master\" although the stall record carries `branch` (a trunk/topic-branch custody renders a wrong report line); the PRD and design text mandate this literal",
+    "file": "skills/run-autopilot/cli/render_report.py",
+    "reason": "The PRD's 'Custody in the stalled report' output text mandates the literal `- Commits: <range> (<n>) live on master, custody pending` and the design pins it byte-for-byte; a branch-aware line is a spec change, not a defect. Bob filed it as KNOWN with this reason."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "_refresh_block scans 20 head lines while frontmatter._HEAD_LINES is now 22: a block closing on line 21-22 parses before the refresh, then gets a second block prepended and its original keys drop out of frontmatter.parse (needs 19+ keys; design-specified bound)",
+    "file": "skills/run-autopilot/cli/custody.py",
+    "reason": "Design-specified: § Hold PRD refresh says the refresh treats a block that does not close within the first 20 lines as no block, and _HEAD_LINES moved to 22 precisely so a block that closed within 20 still parses after the two custody keys are added. Reachable only with 19+ frontmatter keys, which no PRD in this repo has. Bob filed it as KNOWN with this reason."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Fail-first replay: 5 test_render_custody tests pass against base (range-less byte-identity pins)",
+    "file": "skills/run-autopilot/cli/test_render_custody.py",
+    "reason": "The five tests (test_default_section_gains_no_commits_line, test_ignores_records_for_another_prd_site_or_type, test_prints_todays_three_lines_when_no_deferred_json_exists, test_prints_todays_three_lines_when_the_stall_record_has_no_range, test_no_range_returns_todays_three_line_body) pin the PRD's 'range-less stalls render as before / completed golden byte-identical' requirement. A preservation pin passes against the base by construction; the four with-range tests in the same file fail at base, which is the fail-first evidence for the new behavior."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "records and custody import each other (`from . import custody` / `from . import records`); works only because attributes are accessed lazily inside functions",
+    "file": "skills/run-autopilot/cli/custody.py",
+    "reason": "The design contract places the record_defer calls inside custody.record_critical and the record_critical call inside records.do_stall (§ cli/records.py changes, step 4b); the module-level imports resolve because every attribute is read inside a function body, and every suite imports both modules in both orders. Documented shape, not a defect. Bob filed it as KNOWN."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Guard worst case exceeds its 10s hooks.json timeout: up to 8 candidate cwds each running resolve_toplevel (5s) plus marker_from_locator (5s)",
+    "file": "hooks/guard_push_on_critical.py",
+    "reason": "Reaching it needs eight literal cd candidates in one command, each inside a repository whose git hangs for the full 5s; the common path is one `in` check and a real push costs at most two 5s git calls, which the design § Risks documents as the accepted cost. resolve_toplevel is memoized per path. Bob filed it as KNOWN with this reason."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "custody.marker_entry() is built twice with identical inputs in the do_stall step-4b path (once inside custody.record_critical, again in records._record_stall_custody right after) instead of threading the single built entry through; harmless since the builder is pure, but redundant",
+    "file": "skills/run-autopilot/cli/records.py",
+    "reason": "record_critical's signature is the design's verbatim contract (keyword-only inputs, returns int | None); threading the entry through means changing that interface (a new parameter or a dict return) to save one pure five-key dict build. Both call sites already share the single builder (the cycle-1 finding that mattered); the residual duplicate call is not worth an interface change. Alice rated it Low and harmless."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "Fail-first replay: 9 touched test(s) pass against the pre-change code: test_lone_ampersand_and_pipe_ampersand_split_segments, test_parentheses_are_separators_in_their_own_right, test_splits_at_unquoted_separators_and_keeps_quoted_ones, test_unterminated_quote_is_malformed, test_dollar_or_backtick_in_a_location_or_subcommand_marks_the_call_unresolved, test_resolves_the_git_call_and_its_global_options +3 more",
+    "file": "hooks/test_guard_push_grammar.py",
+    "reason": "Measured in a base worktree at 1fda596 with HEAD's test files overlaid: 8 of the 9 are grammar tests moved byte-for-byte from test_guard_push_on_critical.py by task 10's style split (a refactor split passes at base by design); the 9th, test_flags_commands_that_could_run_a_push_the_parser_cannot_see, FAILS at base (5 SUBFAILED: the sudo/nice/env and quote-split cases) - the replay script reads the parent test's PASSED line and misses pytest's separate SUBFAILED lines for unittest.subTest failures. That blind spot belongs to replay_tests_against_base.py, outside this PRD."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "Fail-first replay: 2 touched test(s) pass against the pre-change code: test_hidden_push_denies_only_when_the_payload_cwd_has_custody, test_bash_matcher_registers_the_guard_once_beside_enforce_prd_location",
+    "file": "hooks/test_guard_push_on_critical.py",
+    "reason": "Measured at base: test_hidden_push_denies_only_when_the_payload_cwd_has_custody FAILS (5 SUBFAILED on the sudo/nice/env and quote-split cases; the replay's subTest blind spot). test_bash_matcher_registers_the_guard_once_beside_enforce_prd_location is a pre-existing test the split left in place; hooks.json is unchanged in this range, so it passes at base by construction."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "Fail-first replay: 2 touched test(s) pass against the pre-change code: test_invents_no_default_for_a_missing_capture_key, test_returns_exactly_the_nine_keys_with_scalars_and_capture_as_given",
+    "file": "skills/run-autopilot/cli/test_custody_entry.py",
+    "reason": "Measured at base: both FAIL with AttributeError (cli.custody has no marker_entry at 1fda596) inside subTest blocks, which the replay script's parent-PASSED read misses. The fix is pinned."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "Fail-first replay: 4 touched test(s) pass against the pre-change code: test_a_successful_stall_prints_nothing_to_stderr, test_load_marker_raises_custody_error_for_an_entry_without_a_string_op_id, test_rows_without_a_string_op_id_raise_custody_error_never_key_or_type_error, test_collapses_every_whitespace_run_in_the_detail_to_one_space",
+    "file": "skills/run-autopilot/cli/test_custody_loud.py",
+    "reason": "Measured at base: the op_id tests (3 and 6 SUBFAILED) and the whitespace-collapse test (3 SUBFAILED) FAIL at base; the replay's subTest blind spot. test_a_successful_stall_prints_nothing_to_stderr is a preservation pin (the success path printed nothing before the fail-loud change too) and passes at base by construction."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "Fail-first replay: 1 touched test(s) pass against the pre-change code: test_pending_custody_handler_pauses_when_custody_state_is_unreadable",
+    "file": "skills/run-autopilot/cli/test_custody_prose.py",
+    "reason": "Task 12 tightened a loose pin (it now slices the custody section at the exit-9 offset) over prose that was unchanged and already correct in this range, so the tightened assertion passes at base by design; the cycle-1 finding was about the test's looseness, not the prose."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "Fail-first replay: 1 touched test(s) pass against the pre-change code: test_unreadable_mirror_exits_9_with_the_custody_already_closed",
+    "file": "skills/run-autopilot/cli/test_custody_resolve.py",
+    "reason": "Task 12 backfilled coverage of _cleanup's mirror-stale exit-9 branch, which already existed and behaved correctly at 1fda596 (the cycle-1 finding was 'documented but untested'); a coverage backfill passes at base by design and the assumptions ledger admits it."
+  }
+]

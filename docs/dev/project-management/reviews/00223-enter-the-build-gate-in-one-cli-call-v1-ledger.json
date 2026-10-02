@@ -1,0 +1,82 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "The `resume` handoff row is written inside `_write_prd`, before the lane check, so a non-full lane stop still writes it. Spec step 9 (frontmatter and lane stop) comes before step 10 (row), and \"the first step that yields a stop ... without running later steps\". test_enter.py:498 pins this deviation.",
+    "file": "skills/run-autopilot/cli/enter.py:246",
+    "reason": "Contradicts the task contract, which the blind lens cannot see: step 10 states the order verbatim - \"in this exact order (the handoff row must be written BEFORE any non-full-lane stop, so a solo/fast-track PRD still gets its resume row)\". The behaviour is the specified one, and test_enter.py:498 pins it on purpose."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "Scope creep beyond the PRD. Five extra `stop` values: `fs_error`, `stall_op_malformed`, `park_precondition_failed`, `prd_not_found`, `state_write_failed`. Extra behaviours: a `state.init` bootstrap of a missing state.json, a stall_op precheck, and a `catchup_mode` to \"skipped\" write. The extra CLI flag `--prds` is documented in the CHANGELOG. Two new files (`enter_harness.py`, `test_enter_decisions.py`) and two edited modules (`selection.py`, `frontmatter.py`) are not in the PRD's structure.",
+    "file": "skills/run-autopilot/cli/__main__.py:297",
+    "reason": "Design-approved, and the PRD itself says the design doc may rename but not drop keys. The design doc's `STOPS` tuple lists all five extra values, its step chain defines the state bootstrap, the stall_op precheck and the skipped write, and `_add_enter` declares `--prds` verbatim. selection.py and frontmatter.py are the two lifts the task mandates. Blake is PRD-only by construction and could not see any of it."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "`enter()` signature differs from the spec's `enter(state_path, prd_arg, in_loop, now)`. The real one is keyword-only for `prd_arg` and `in_loop`, and requires two extra params (`prds_dir`, `autopilot_dir`), plus extra injectables `git_head` and `record_resume_row`.",
+    "file": "skills/run-autopilot/cli/enter.py:299",
+    "reason": "Design-approved. The design doc carries the exact signature the code implements, and the task description copied it verbatim as the contract. The PRD's own Exports section is the pre-design sketch."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "`batch` is null on every stop before step 8. The spec's value domain is `\"open\"|\"absent\"|\"closed\"` with no null, unlike the other keys, which list null. test_enter.py:685 pins the deviation.",
+    "file": "skills/run-autopilot/cli/enter.py:55",
+    "reason": "Design-approved with a written rationale: `batch` carries `|null` because four earlier steps can stop before step 9 evaluates it, and \"absent\" is a load-bearing checked condition that must not double as \"this step never ran\"."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "`detail` for `park_halt`, `mv_verify`, `deferred_io` and `stall_op_conflict` is a synthetic string, not \"the executor's message\". The executor's stdout is swallowed by `redirect_stdout`.",
+    "file": "skills/run-autopilot/cli/enter.py:147",
+    "reason": "Design-approved: step 4 of the contract says the captured text \"carries nothing enter() doesn't already derive from the exit code and its own pre-call marker read, so it is discarded, not forwarded\", and spells out the synthetic detail for exit 5."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Subprocess invocation uses hardcoded python3 instead of sys.executable for record_dispatch.py",
+    "file": "skills/run-autopilot/cli/enter.py:96",
+    "reason": "Design-approved: the task contract specifies the argv verbatim as [\"python3\", str(_RECORD_DISPATCH), \"handoff\", ...]. Changing it is a contract edit, not a fix."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Cannot statically verify: tests and release checks pass",
+    "file": null,
+    "reason": "Not a defect - the codex sandbox's own no-execution statement. The check it names was queued as a verification check (checks-1.json) and both Blake and Carl ran `bash dev/bin/release-checks` green this cycle."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`__main__.py` is now 1289 lines against the 800 limit (1253 before). This is PRD-mandated and pre-existing, and the diff only adds the thin `_add_enter` and `_run_enter`, but the debt keeps growing",
+    "file": "skills/run-autopilot/cli/__main__.py:293",
+    "reason": "Pre-existing debt the PRD explicitly refuses to touch: the task says \"already 1253 lines; this is a thin addition, do not restructure the file\". Splitting the CLI registry is its own PRD. Deferred to batch end."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "The `stop` vocabulary goes beyond the spec. `STOPS` adds `fs_error`, `stall_op_malformed`, `park_precondition_failed`, `prd_not_found` and `state_write_failed`. The spec lists a closed set, and the mapping of park exit 2 to a new stop is invented behaviour. The extra values also add rows to the phase-build.md table. Any downstream consumer keyed on the spec set will meet unknown stops.",
+    "file": "skills/run-autopilot/cli/enter.py:29",
+    "reason": "Same settled discard as cycle 1's scope-creep entry, re-raised by the blind lens at a different citation (enter.py:29 rather than __main__.py:297), so the mechanical ledger dismissal did not match it. All five values are design-approved: the design doc's `STOPS` tuple lists them verbatim. The one new sub-claim - that mapping park exit 2 is invented - was checked and refuted: `_PARK_STOPS[2]` is `park_precondition_failed` (enter.py:62-66), one of the five design-approved values, and phase-build.md:35 documents its routing to recovery.md's exit-code row 2, second branch. Blake is PRD-only by construction and cannot see the design doc."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "16 touched test(s) in test_shared_lift.py pass against the pre-change code, including test_a_skip_entry_carries_exactly_the_five_documented_keys and test_select_stamps_each_skip_with_a_clock_reading_not_the_prds_own_mtime",
+    "file": "skills/run-autopilot/cli/test_shared_lift.py",
+    "reason": "Contradicts nothing, but passing against the base is this file's PURPOSE, not a defect. test_shared_lift.py was written by task 9 (commit 4f11652, \"pin the select and frontmatter verb contracts BEFORE lifting them onto the shared helpers\") as a behavior-preservation harness for a deliberate behavior-preserving refactor. A pin that did NOT pass against the pre-lift code would mean the lift changed behaviour, which is the failure it exists to catch. The computed replay block states this caveat itself: \"a behavior-preserving refactor's tests pass by design, so weigh the PRD's intent before raising one.\""
+  }
+]

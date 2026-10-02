@@ -1,0 +1,796 @@
+{
+  "batch_id": "202609061630",
+  "items": [
+    {
+      "type": "infra-bug",
+      "issue": "qwen dispatch is unusable on this host: qwen-run.sh resolves provider llamacpp8002 (preflight exits 0 healthy) but the pi request underneath hits localhost:8080 and is refused, so every real qwen dispatch fails endpoint_unreachable while the preflight probe cannot detect it",
+      "detail": "Two dispatches on PRD 00178 task 3 aborted this way. Workaround applied: state.qwen_preflight latched endpoint_unreachable for batch 202609061630, routing qwen-eligible tasks to Claude Sonnet. Needs its own PRD: make the dispatch path use the same provider/base URL the preflight resolved (or make the preflight probe the dispatch path).",
+      "prd": "00178-fix-bob-first-run-and-specify-his-retry-v1.md"
+    },
+    {
+      "type": "out-of-prd-scope",
+      "issue": "The prose tests do not pin ledger closure/outcomes, the ALL-THREE conjunction, exact inlined blocks, output-path reuse, or omission of --resume-thread, so several introduced behaviors can regress while all tests pass",
+      "severity": "medium",
+      "consensus": "1/4",
+      "file": "skills/review-work-completion/scripts/test_retry_policy_prose.py",
+      "reason": "PRD 00178 Phase 2 enumerates the exact assertion list test_retry_policy_prose.py must carry, and every listed assertion is present. Deepening the pins beyond that list is new test scope this PRD did not specify; raised in review cycle 1.",
+      "prd": "00178-fix-bob-first-run-and-specify-his-retry-v1.md"
+    },
+    {
+      "type": "out-of-prd-scope",
+      "issue": "The unrelated Python-first UUID fallback is not pinned; the existing test checks only that pat_session_id exists, so reversing the fallback order would pass",
+      "severity": "medium",
+      "consensus": "1/4",
+      "file": "skills/work/SKILL.md",
+      "reason": "This concerns commit fda6abd (fix(work): generate the per-task review id with python first, uuidgen as fallback), which landed inside the reviewed range but is NOT one of PRD 00178 four tasks. Real gap, wrong PRD; needs its own PRD against skills/work. Raised in review cycle 1.",
+      "prd": "00178-fix-bob-first-run-and-specify-his-retry-v1.md"
+    },
+    {
+      "type": "style-refactor",
+      "issue": "Eleven single-assert methods carry comments that largely repeat their descriptive names and assertions; use table-driven subTest cases and retain only comments explaining non-obvious invariants",
+      "severity": "medium",
+      "consensus": "1/4",
+      "file": "skills/review-work-completion/scripts/test_retry_policy_prose.py",
+      "reason": "PRD 00178 Phase 2 mandates mirroring the _section helper pattern of test_codex_resume_contract.py, which is exactly what shipped; Alice verified the helper bounds every section correctly. Restructuring to subTest is a behavior-preserving refactor of a file whose assertions are the PRD contract, so it trades regression risk for style. Raised in review cycle 1.",
+      "prd": "00178-fix-bob-first-run-and-specify-his-retry-v1.md"
+    },
+    {
+      "type": "style-refactor",
+      "issue": "The refusal predicate and retry assembly are dense single paragraphs; replace them with three numbered gates and ordered assembly steps while preserving every required literal",
+      "severity": "medium",
+      "consensus": "1/4",
+      "file": "skills/review-work-completion/references/retry-policy.md",
+      "reason": "PRD 00178 specifies both section bodies as verbatim Outputs, and test_retry_policy_prose.py plus the acceptance rg -c commands pin literals inside them. Reformatting mandated prose risks the pinned counts for no behavior change. Raised in review cycle 1.",
+      "prd": "00178-fix-bob-first-run-and-specify-his-retry-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "severity": "high",
+      "consensus": "2/4",
+      "issue": "PRD acceptance gate unmet: rg -c on PASS lines in skills/use-codex/scripts/test_codex_run.sh prints 21, not the 40 the PRD requires, because 24 cases were relocated into a new file test_codex_run_resume.sh that the PRD structural decomposition never names. Aggregate coverage is preserved (21+24=45) and no case was lost, but the PRD stop-and-report instruction was not honored.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00180-route-codex-prompt-through-stdin-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "3/4",
+      "issue": "Tautological test: the unreadable prompt file case in skills/use-codex/scripts/test_codex_run.sh passes against the pre-fix code, so it does not pin the new cat-failure guard or its new stderr message.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00180-route-codex-prompt-through-stdin-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "2/4",
+      "issue": "The unrequested test-file split duplicates 239 byte-identical lines across test_codex_run.sh and test_codex_run_resume.sh and defines child_stdin_is_prompt twice, instead of the single shared-helper extraction the cycle-1 task asked for.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00180-route-codex-prompt-through-stdin-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "1/4",
+      "issue": "Scope creep in commit bb08599: codex-run.sh now rejects whitespace-only prompt files as Prompt required and errors explicitly on a failed cat read. Both were requested by the cycle-1 decision-gate task, but PRD 00180 never authorised either.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00180-route-codex-prompt-through-stdin-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "1/4",
+      "issue": "The whitespace guard at codex-run.sh:154 sits outside the PROMPT_FILE block, so it also rejects a whitespace-only positional prompt, while the CHANGELOG describes the change as -f only.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00180-route-codex-prompt-through-stdin-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "1/4",
+      "issue": "Fresh-JSON marker coverage at test_codex_run.sh:454 adds a separate codex invocation although the existing JSON-path case already captured argv; the final-token check could fold into that case.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00180-route-codex-prompt-through-stdin-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "1/4",
+      "issue": "Trailing-newline coverage at test_codex_run.sh:434 duplicates the leading-dash file case, which already byte-compares a newline-terminated file.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00180-route-codex-prompt-through-stdin-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "severity": "low",
+      "consensus": "1/4",
+      "issue": "The unreadable prompt file test at test_codex_run.sh:392 degrades to a no-op PASS on any user that can read chmod-000 files, for example root in CI.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00180-route-codex-prompt-through-stdin-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "severity": "low",
+      "consensus": "1/4",
+      "issue": "The PRD Test Strategy wants the leading-dash prompt case verified on the plain, JSON and resume paths, but the new test exercises only the plain path.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00180-route-codex-prompt-through-stdin-v1.md"
+    },
+    {
+      "type": "out-of-scope",
+      "issue": "Pre-existing file-size cap violation: skills/run-autopilot/cli/loop.py (1355 lines) and skills/run-autopilot/cli/test_loop.py (1404 lines) both exceed the 800-line max. Both were already over (1343 / 1378) at base commit f1489df17d88, so PRD 00181 adds to but did not create the violation. Raised by Alice under consensus rubric R13, which she failed on this basis.",
+      "severity": "low",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/loop.py",
+      "cycle": 1,
+      "reason": "Out of scope for PRD 00181, whose whole change is one constant, one pure function and two call-site rewires. Splitting a 1355-line module is a separate change with its own risk surface; doing it here would violate the surgical-changes rule. Deferred to batch end so the standing violation keeps a durable home.",
+      "prd": "00181-scrub-inherited-host-markers-at-loop-spawn-v1.md"
+    },
+    {
+      "type": "scope-boundary",
+      "issue": "dev/bin/release-checks never invokes test_record_dispatch tests, so the PRD Phase 2 exit criterion is a vacuous gate for these changes",
+      "severity": "low",
+      "consensus": "1/4",
+      "reason": "pre-existing repo-wide gap that Blake states was not introduced by this PRD; changing what the release gate runs is outside the stated scope of PRD 00182",
+      "found_by": "blake",
+      "cycle": 1,
+      "prd": "00182-close-open-dispatch-rows-at-session-handoffs-v1.md"
+    },
+    {
+      "type": "infra-bug",
+      "issue": "A .handoff-requested marker written during the build phase survived the build-to-review handoff and was still present when the review gate dispatched its rework work pass. Had /autopilot:work reached a task boundary with it there, step 6.5 would have set next_phase to build while phase was review, hijacking the review cycle into the build gate and losing the cycle increment.",
+      "severity": "medium",
+      "detail": "Observed on PRD 00182 review cycle 1. Marker content was the literal string unknown (the build session fired the soft cap after all 4 tasks were completed, so no in-progress task id resolved), mtime 02:06, build-to-review handoff at 02:18. Removed by hand this cycle before dispatching rework. PRD 00181 scrubs host-inherited markers at loop spawn, which is a different case: this one is written and stranded inside a single batch. Candidate fix: have the phase-done transition clear .handoff-requested and .cap-fired, or have step 6.5 ignore a marker whose task id does not match a task in the current rework or pending set.",
+      "cycle": 1,
+      "prd": "00182-close-open-dispatch-rows-at-session-handoffs-v1.md"
+    },
+    {
+      "type": "assumed-ambiguity",
+      "question": "Task 7's acceptance criterion is `rg -n 'implementor mix' CHANGELOG.md` returns one hit under [Unreleased]. That command is case-sensitive and returns zero hits, because the CHANGELOG prose capitalises the section name as 'Implementor Mix'. Should the CHANGELOG prose be lowercased to satisfy the literal grep, or should the criterion be read as case-insensitive?",
+      "assumption": "Read the criterion as case-insensitive. The required entry already exists verbatim at CHANGELOG.md line 22 under [Unreleased] / ### Fixed, and `rg -ni 'implementor mix' CHANGELOG.md` returns exactly one hit inside [Unreleased] (a second hit at line 117 sits under an older released version). Lowercasing correct prose to satisfy a grep would be fixing the test rather than the implementation, so the CHANGELOG was left untouched and task 7 verified it instead of adding it.",
+      "prd": "00183-make-batch-report-decisions-and-implementor-mix-render-v1.md",
+      "resolved": {
+        "detail": "assumed-ambiguity records render under Assumptions Made from state.autonomous_decisions, not via this JSON sink's Deferred table; the assumption itself was verified (rg -ni hit confirmed) and needs no batch-end decision. Marked resolved so Phase 9's missing-from-report guard (which checks issue text this record never carries) does not trip on a record that was never meant to land in that table."
+      }
+    },
+    {
+      "type": "out-of-scope",
+      "issue": "_run_render in skills/run-autopilot/cli/__main__.py is 111 lines against a 50-line limit; 105 of those pre-date this PRD, which added only 6 lines of ledger-path wiring",
+      "severity": "medium",
+      "consensus": "2/4",
+      "reason": "pre-existing violation; restructuring an unrelated render dispatcher is outside this PRD and forbidden by the surgical-changes rule",
+      "prd": "00183-make-batch-report-decisions-and-implementor-mix-render-v1.md"
+    },
+    {
+      "type": "prd-wording",
+      "issue": "PRD Phase 0 acceptance names python3 skills/run-autopilot/cli/statectl.py, which is a library module since PRD 00089 and exits 1 with ImportError; the working entry point is skills/run-autopilot/scripts/statectl.py, which emits the exact required rejection and leaves the state byte-identical",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "requirements ambiguity, not an implementation defect; adding a __main__ guard to a library module to satisfy a PRD typo would be fixing the test",
+      "prd": "00183-make-batch-report-decisions-and-implementor-mix-render-v1.md"
+    },
+    {
+      "type": "tooling-defect",
+      "issue": "skills/review-work-completion/scripts/replay_tests_against_base.py credits a pytest subTest parent node as passed, so any unittest test using self.subTest is reported as passing against base even when every subtest fails; this cycle it produced 6 false-positive [MECH] rows covering roughly 40 touched tests",
+      "severity": "medium",
+      "consensus": "2/4",
+      "reason": "out of this PRD diff scope (the script is not in 479142e..91c1ab3), but it silently weakens the fail-first evidence every future review cycle relies on",
+      "prd": "00183-make-batch-report-decisions-and-implementor-mix-render-v1.md"
+    },
+    {
+      "type": "requirements-ambiguity",
+      "issue": "cli/statectl.py defines main() but never calls it: python3 -m cli.statectl <state> append autonomous_decisions {\"cycle\": 1} exits 0 with empty output and leaves the state byte-unchanged, performing no validation and no write. A fail-open that looks like success. The PRD Phase 0 acceptance command names this path.",
+      "severity": "high",
+      "consensus": "1/4",
+      "reason": "Pre-existing (file created without the guard in 3f4ef75, outside this diff); no product path invokes -m cli.statectl, every skill doc uses the correct scripts/statectl.py shim; Surgical Changes forbids repairing unrelated pre-existing code inside this PRD. Batch-end fix: correct the PRD wording AND close the fail-open.",
+      "prd": "00183-make-batch-report-decisions-and-implementor-mix-render-v1.md"
+    },
+    {
+      "type": "requirements-ambiguity",
+      "issue": "PRD Phase 2 task 2 acceptance runs rg -n \"implementor mix\" CHANGELOG.md, which returns nothing because ripgrep is case-sensitive and the file says \"Implementor Mix\". The substance (a Fixed entry under [Unreleased]) is present and correct.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "Verified: the literal command exits 1, the case-insensitive control returns 3 hits. The PRD wording needs the correction, not the CHANGELOG; lowercasing the entry to satisfy the grep would be fixing the test.",
+      "prd": "00183-make-batch-report-decisions-and-implementor-mix-render-v1.md"
+    },
+    {
+      "type": "test-strength",
+      "issue": "Adversarial cap reached with two exploits unclosed by the suite. (a) test_rows_for_another_prd_or_batch_are_not_counted: every foreign row spells foreign with the same two literals, so an _ledger_rows that hardcodes them and never reads state passes all 23 ledger tests. Closing assertion: drive the mismatch from the STATE side (mutate state[prd] and state[batch][id]) and assert []. (b) Every rejection fixture in test_schema_decision_scope.py leaves <=5 entries, so a len(after)>5 bypass in the entry matcher passes. Closing assertion: repeat a rejection case with a long list, e.g. _appended_batch(9, 7).",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "Test-strength only, verified: the shipped code exhibits neither exploit (12/12 orchestrator checks pass, including state-side prd and batch mismatches, the event-row rule, and blank-entry rejection at list sizes 2/5/6/7/12/40). The Devon round cap is 2 and was spent; adding these two assertions is a cheap follow-up, not a blocker.",
+      "prd": "00183-make-batch-report-decisions-and-implementor-mix-render-v1.md"
+    },
+    {
+      "type": "assumed-ambiguity",
+      "question": "Two PRD Phase 2 premises are stale: release-checks has five [checks] blocks not three, and the CHANGELOG 0.5.1 heading moved from line 20 to 46.",
+      "assumption": "Re-anchored both premises to the measured 2026-09-07 file structure rather than the PRD line numbers; the structural facts the task needs all hold.",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md",
+      "resolved": {
+        "reason": "assumption already actioned during build; informational only"
+      }
+    },
+    {
+      "type": "assumed-ambiguity",
+      "question": "The PRD says the eight fast-track: kinds but describes ten lanes.",
+      "assumption": "The eight are ivan, fanout, blake, eve, bob, carl, victor, delta; tess and alice are documented as conditional and do not fail the test.",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md",
+      "resolved": {
+        "reason": "assumption already actioned during build; informational only"
+      }
+    },
+    {
+      "type": "assumed-ambiguity",
+      "question": "The PRD names two reference tests but its Repository Structure lists no file for them.",
+      "assumption": "Both land in skills/fast-track/scripts/test_fast_track_prose.py; no fifth test file is created.",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md",
+      "resolved": {
+        "reason": "assumption already actioned during build; informational only"
+      }
+    },
+    {
+      "type": "assumed-ambiguity",
+      "cycle": 1,
+      "task": "6",
+      "question": "Task 6 acceptance says rg -n fast-track dev/bin/release-checks prints ONE line, but the mandated block puts fast-track on both the echo line and the pytest path, so it prints two.",
+      "assumption": "Contract wins: two-line block verbatim, acceptance probe read as a presence check.",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md",
+      "resolved": {
+        "reason": "assumption already actioned during build; informational only"
+      }
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "high",
+      "consensus": "3/4",
+      "found_by": "Alice, Bob, Carl",
+      "file": "skills/fast-track/SKILL.md:296-298",
+      "issue": "SKILL.md's Roster section gives Eve only 3 run inputs (card, `<base-sha>..HEAD`, changed-file list) while `lane-dispatch.md` documents 6, and the PRD requires \"her five run inputs ... and a sixth, the `{OUTPUT_FORMAT}` block ... so each FIX item is also an `[EVE] {emoji} ... | File: ...` line the consolidator can read.\" SKILL.md never appends the mechanical-checks block or the OUTPUT_FORMAT block to Eve's render. Without the sixth input Eve's FIX items are not consolidator-readable, so a CRITICAL she raises never reaches victor or the exit rule.",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "high",
+      "consensus": "1/4",
+      "found_by": "Blake",
+      "file": "skills/fast-track/SKILL.md:348-360",
+      "issue": "The Workflow tool call for the consensus lane (review-fanout.workflow.js) never states the values for `prd_text` or `agent_name` in either SKILL.md or lane-dispatch.md; only the bare arg names are listed. The PRD explicitly requires `prd_text` = the card and `agent_name` = `ALICE` and cites `review-work-completion/SKILL.md:315-325` as the arg-to-value table to reuse; fast-track's own args block gives an operator no way to know what to put in `prd_text` or `agent_name`. Only `personas` gets an explanation.",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "high",
+      "consensus": "1/4",
+      "found_by": "Alice",
+      "file": "skills/fast-track/SKILL.md:576-581",
+      "issue": "Task 9's blocked-exit failure transitions (`stopped: branch-failed`, `stopped: reset-refused`, `branch: refused (<paths>)`) and the `<base-sha>`/`<rework-base-sha>` capture steps ship with zero test coverage: `rg -i 'reset-refused|branch-failed|branch: refused|rev-parse|base-sha' skills/fast-track/scripts` prints nothing (gate-verified). Task 9 was the only rework task with no test commit (b67a3fa fix only), so a future SKILL.md edit could silently drop either failure transition and nothing in the suite would catch it (rules/testing.md: every bug fix ships with its regression test).",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "high",
+      "consensus": "1/4",
+      "found_by": "Bob",
+      "file": "skills/fast-track/SKILL.md:153",
+      "issue": "FIX: Tess's bare commit still includes unrelated staged changes. Add a test-file pathspec and extend commit-scope coverage to the Tests section. (Gate-verified: SKILL.md:148-154 runs `git add <the test files>` then `git commit -m \"test(<scope>): add tests for <item>\"` with no `-- <paths>` pathspec, while the Implement and Rework commits from task 11 carry one.)",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "high",
+      "consensus": "1/4",
+      "found_by": "Bob",
+      "file": "skills/fast-track/SKILL.md:191",
+      "issue": "FIX: The changelog step commits existing foreign edits when CHANGELOG.md is outside the card's Files list. Include it in the dirty-path preflight whenever changelog is not none. (Gate-verified: the Preconditions dirty-path check at SKILL.md:31-35 covers only `## Files`; the changelog step at :191-195 Edits and stages CHANGELOG.md regardless of a pre-existing foreign edit in it.)",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "high",
+      "consensus": "1/4",
+      "found_by": "Bob",
+      "file": "skills/fast-track/SKILL.md:114",
+      "issue": "FIX: Tess's interface command still fails when every Files entry is new: the filtered list is empty, and the renderer rejects failed or empty command output. Provide an explicit empty-interface fallback in both render examples. (Gate-verified: `render_prompt.py:_run_set_cmd` returns exit 4 on empty stdout, so `--set-cmd PUBLIC_INTERFACES=\"cat $(printf '%q ' <entries that exist today>)\"` takes the render down for a card that only creates files.)",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "high",
+      "consensus": "1/4",
+      "found_by": "Bob",
+      "file": "skills/fast-track/SKILL.md:583",
+      "issue": "FIX: Branch creation or reset failure leaves blocked commits on the current branch, but the final push checks only the batch suite. Disable pushing or terminate the run on either failure. (Gate-verified: SKILL.md:576-585; an item that ended `stopped: reset-refused` keeps confirmed CRITICAL/HIGH commits on the working branch, and the end-of-run `--push` is gated only on a green batch suite.)",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "high",
+      "consensus": "1/4",
+      "found_by": "Bob",
+      "file": "skills/fast-track/scripts/fast_track_plan.py:102",
+      "issue": "FIX: The findings loader validates keys but accepts invalid severity values; `\"high\"` or null silently bypasses verification and produces `commit`. Validate field types and the severity enum before either decision. (Gate-verified: `_load_findings` builds `Finding(r[\"severity\"], ...)` with no enum check; `verify_targets` and `exit_action` test membership in `(\"CRITICAL\", \"HIGH\")`, so a lowercase or null severity fails open to `commit`.)",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "3/4",
+      "found_by": "Alice, Bob, Carl",
+      "file": "skills/fast-track/scripts/fast_track_prose_testutil.py:558",
+      "issue": "`asserted()`'s negator check only inspects text before a match's start (`text[:match.start()]`), so a negator embedded inside a two-limb pattern span (the shape GREEN_STOP/GATE_STOP from task 7 use) is invisible to it. Alice's live repro: `asserted(\"When the suite is green, this never causes the item to end stopped: tests-green-before-implementation.\", GREEN_STOP)` returns True. Task 8's fix (ced1678) closed it only for the multicard patterns; the stop-rule pins still carry the hole (also raised by Bob at fast_track_stop_testutil.py:82 and Carl at :89).",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "2/4",
+      "found_by": "Alice, Blake",
+      "file": "skills/fast-track/scripts/fast_track_multicard_testutil.py",
+      "issue": "The prose-testutil pattern carried from cycle 1 (~692-line bespoke reader model vs. a 374-line precedent) grew substantially this cycle: five new testutil modules (`fast_track_multicard_testutil.py` 740 lines, `fast_track_render_testutil.py` 682, `fast_track_stop_testutil.py` 384, `fast_track_wiring_testutil.py` 182, `fast_track_reference_testutil.py` 164, ~2150 lines total) plus `test_fast_track_commit.py` 625 and `test_fast_track_prose.py` at 798/800 lines. Blake: the scripts dir carries far more files than the PRD's Repository Structure names, all test-only. Behavior-preserving simplification, not urgent.",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "1/4",
+      "found_by": "Bob",
+      "file": "skills/fast-track/scripts/fast_track_plan.py:140",
+      "issue": "FIX: The new count CLI catches only ValueError. A JSON null row, missing kind, or unreadable ledger produces a traceback instead of the documented diagnostic and exit 2. Validate ledger rows and handle those failures. (Gate-verified by reading `count_item_dispatches` and `_main`: a `null` row raises AttributeError on `.get`, a row with `queued_at` and no `kind` raises KeyError, a directory or unreadable path raises OSError; only ValueError is caught.)",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "1/4",
+      "found_by": "Bob",
+      "file": "skills/fast-track/scripts/test_fast_track_wiring_cli.py:88",
+      "issue": "FIX: The CLI matrix never tests workflow unavailable with Carl available; incorrectly enabling the workflow whenever Carl exists passes every case. Add that independent flag combination.",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "1/4",
+      "found_by": "Bob",
+      "file": "skills/fast-track/scripts/test_fast_track_wiring_cli.py:95",
+      "issue": "FIX: Every blocking exit fixture starts with a blocker, so examining only the first finding passes. Add a nonblocking row followed by HIGH and require `branch`.",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "1/4",
+      "found_by": "Bob",
+      "file": "skills/fast-track/scripts/test_fast_track_wiring.py:130",
+      "issue": "FIX: The exit prose pin accepts a sentence such as \"`branch` never parks the item\" because _bound_case checks only matching words. Validate the action's polarity and add negated cases.",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "1/4",
+      "found_by": "Bob",
+      "file": "skills/fast-track/scripts/test_skill_frontmatter.py:147",
+      "issue": "FIX: The strict frontmatter reader accepts raw NUL characters inside scalar values, allowing invalid YAML to pass the pack-wide check. Reject forbidden raw characters before scalar parsing and add regression coverage. (The rework session's own Devon round reported the same ceiling: control characters, tabs in plain values and duplicate keys pass the stdlib reader.)",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "1/4",
+      "found_by": "Bob",
+      "file": "skills/fast-track/scripts/test_record_item_render.py:46",
+      "issue": "FIX: The new metrics test file copies five fixture/CLI helpers from test_record_item.py. Move their shared implementations into one test utility, preserving the separate test files and assertions.",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "gate",
+      "found_by": "gate (review-2 verification of the Tests commit block)",
+      "file": "skills/fast-track/SKILL.md:153",
+      "issue": "The Tests commit message in SKILL.md is `test(<scope>): add tests for <item>` while the PRD's Tests-are-the-spec feature specifies `test(<item>): add tests for <goal>`; the scope and subject are swapped. No reviewer raised it; the gate found it while verifying Bob's pathspec finding on the same line.",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "low",
+      "consensus": "2/4",
+      "found_by": "Alice, Carl",
+      "file": "skills/fast-track/scripts/fast_track_plan.py:1",
+      "issue": "`fast_track_plan.py`'s module docstring still carries em dashes (\"Lane planner for /fast-track \u2014 the four decisions...\", \"...decide two things and no more \u2014 which ones...\"), against the project's no-em-dash convention. Pre-existing, untouched by tasks 7-16, self-reported by the build session as an open item.",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "low",
+      "consensus": "1/4",
+      "found_by": "Alice",
+      "file": "skills/fast-track/SKILL.md:172-173",
+      "issue": "`ARCHITECTURE_CONTEXT`'s three-way fallback (`AGENTS.md` -> `CLAUDE.md` -> `/dev/null`) goes beyond task 10's literal ask (\"`## Constraints` + `AGENTS.md`\"); it's tested and defensible but is scope not explicitly requested.",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "1/4 (cycle 1)",
+      "found_by": "Bob (cycle 1, carried)",
+      "file": "skills/fast-track/scripts/test_fast_track_plan.py:375",
+      "issue": "FIX: Three standalone roster tests duplicate cases already fully asserted by the eight-combination matrix. Remove those duplicate wrappers while retaining the matrix and explicitly required acceptance-test names. (Carried from cycle 1, never tasked; no tail sweep runs on a cap-out, so it is deferred here rather than dropped.)",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "1/4 (cycle 1)",
+      "found_by": "Bob (cycle 1, carried)",
+      "file": "skills/fast-track/scripts/fast_track_prose_testutil.py:573",
+      "issue": "FIX: `_pasteable`, `_instructive` and `code_fragments` repeat the module's explanation of fenced commands in lengthy docstrings. Keep the central rationale and replace these repetitions with concise function contracts. (Carried from cycle 1, never tasked; no tail sweep runs on a cap-out.)",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "low",
+      "consensus": "1/4 (cycle 1)",
+      "found_by": "Alice (cycle 1, carried)",
+      "file": "skills/fast-track/SKILL.md",
+      "issue": "Every `render_prompt.py` call in SKILL.md omits the `--dispatch-kind`/`--dispatch-task` flags the PRD names verbatim for Ivan and Tess, issuing a separate `record_dispatch.py start` call instead. Functionally equivalent but departs from the cited reuse pattern without being flagged as deliberate. (Carried from cycle 1.)",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "low",
+      "consensus": "1/4 (cycle 1)",
+      "found_by": "Blake (cycle 1, carried)",
+      "file": "skills/fast-track/scripts/fast_track_plan.py:83",
+      "issue": "`count_item_dispatches` calls `json.loads(line)` on every line with no try/except; a blank or truncated ledger line raises `json.JSONDecodeError` and crashes the planner rather than skipping the bad row. (Carried from cycle 1; the task-16 CLI now turns the ValueError into exit 2 with one stderr line, so the library function still raises but the CLI no longer tracebacks on that shape. Bob's cycle-2 finding on `:140` covers the shapes it still misses.)",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "low",
+      "consensus": "1/4 (cycle 1)",
+      "found_by": "Blake (cycle 1, carried)",
+      "file": "skills/fast-track/SKILL.md",
+      "issue": "The exit rule and the foreign-WIP dirty-path check are documented only as SKILL.md prose; no automated test runs those git commands end to end, so a watered-down rewording could still pass the string-matching pins. (Carried from cycle 1; overlaps Alice's cycle-2 High on the untested task-9 transitions.)",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00186-add-item-grained-fast-track-lane-v1.md"
+    },
+    {
+      "type": "out-of-scope",
+      "severity": "medium",
+      "issue": "render report (default completed section) exits 12 via missing_from_report when THIS PRD has a type=stall record in the batch deferred JSON; a PRD that stalled cap_critical, was un-parked and completed in the same batch cannot render its completed section",
+      "source": "task 6 Tess probe",
+      "suggested_fix": "missing_from_report should skip type == stall items (they render in the STALLED short form, never in the completed section)",
+      "prd": "00187-keep-cap-out-criticals-off-master-and-home-deferred-highs-v1.md"
+    },
+    {
+      "type": "review-deferral",
+      "cycle": 1,
+      "issue": "skills/run-autopilot/cli/__main__.py is 1008 lines, over the 800-line file cap (909 at work_start_sha, +99 from this PRD: custody verb, stall-record lookup, _run_render split)",
+      "severity": "medium",
+      "consensus": "2/4",
+      "reason": "pre-existing overflow; the lines this PRD added are design-mandated and removing only them leaves the file over the cap; a per-surface split of __main__.py is its own PRD, as loop.py got under 00192",
+      "prd": "00187-keep-cap-out-criticals-off-master-and-home-deferred-highs-v1.md"
+    },
+    {
+      "cycle": 1,
+      "phase": "review",
+      "type": "review-deferral",
+      "issue": "skills/run-autopilot/cli/__main__.py is 1008 lines, over the 800-line file cap (909 at work_start_sha, +99 from this PRD: custody verb, stall-record lookup, _run_render split)",
+      "severity": "medium",
+      "consensus": "2/4",
+      "reason": "pre-existing overflow; the lines this PRD added are design-mandated and removing only them leaves the file over the cap; a per-surface split of __main__.py is its own PRD, as loop.py got under 00192",
+      "status": "deferred",
+      "action": "defer to batch end for PRD minting",
+      "prd": "00187-keep-cap-out-criticals-off-master-and-home-deferred-highs-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "high",
+      "consensus": "1/4",
+      "found_by": "Bob",
+      "file": "skills/run-autopilot/cli/convergence.py:57",
+      "issue": "The false-clean finding is only partially resolved: a file containing just `reviewers: alice` still produces zero severity counts because one regex matched. The new partial-parse test also expects zeros for `Verdict: 1 finding` without a findings table. Missing findings evidence still appears clean, contrary to the PRD\u2019s null requirement. (Gate-verified by probe: reviewers-only -> findings {0,0,0,0}, verdict None; `Verdict: 1 finding` with no table -> verdict 1, findings {0,0,0,0}. Bob\u2019s FIX: return null findings when neither parseable findings rows nor an explicit clean verdict (converged / 0 findings) establishes counts; add a metadata-only fixture and correct the positive-verdict-without-table expectation in test_partially_parsed_review_file_keeps_its_counts.)",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00188-record-convergence-cap-and-roster-per-prd-v1.md"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "severity": "low",
+      "consensus": "1/4",
+      "found_by": "Alice",
+      "file": "skills/run-autopilot/cli/loop.py:962",
+      "issue": "`batch` in `_append_convergence` holds only the batch id, not the batch dict; `batch_id` would read clearer (already self-noted by the work phase as LOW, left unapplied)",
+      "action": "deferred to batch end (cap-overflow)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00188-record-convergence-cap-and-roster-per-prd-v1.md"
+    },
+    {
+      "type": "assumed-ambiguity",
+      "phase": "plan",
+      "question": "The PRD's Repository Structure parse rules never mention trailing comments, yet its own 00169 fixture tree carries `# Maps to: ...` after every file name. Strip them, or treat the comment as part of the name?",
+      "assumption": "Strip a trailing ` #` comment and trailing whitespace from each tree line before rebuilding the path (task 2 Details); the ddb fixtures cannot parse otherwise and no PRD tree relies on `#` in a file name.",
+      "prd": "00189-stall-to-split-on-plan-expansion-v1.md",
+      "resolved": {
+        "reason": "assumption already actioned during build; informational only"
+      }
+    },
+    {
+      "cycle": 1,
+      "phase": "build",
+      "severity": "medium",
+      "issue": "Task-boundary handoff marker cannot be cleared in-session: step 6.5(b) removes dev/local/autopilot/.handoff-requested, but autopilot_context_cap_hook.py re-writes it on the very next PostToolUse fire because the session is still over SOFT_CAP (320K), so the marker (content `unknown`, no in-progress task) survives into the fresh session, whose step 6.5 will hand off again after its first task - a one-task-per-session cadence for the rest of the PRD.",
+      "action": "Handed off anyway (lossless; the cost is extra session starts). Recorded here for batch-end review; the fix belongs in the hook or in `_walk_up.py --clear-cap` (clear `.handoff-requested` at task start / session start), outside PRD 00189's scope.",
+      "reason": "The marker is a hook-owned artifact and the fix is not in this PRD's files; a stale marker degrades cadence, never correctness.",
+      "type": "out-of-scope",
+      "prd": "00189-stall-to-split-on-plan-expansion-v1.md"
+    },
+    {
+      "type": "assumed-ambiguity",
+      "phase": "build",
+      "task": "3",
+      "question": "Task 3 says a missing --prd is an argparse usage error with exit 2, but cli/__main__.py's _ArgumentParser maps every usage error to exit 1 and reserves 2 for state errors (its docstring exit-code table). Which exit does test_missing_prd_flag_is_a_usage_error pin?",
+      "assumption": "Exit 1, the CLI's documented usage-error code; the PRD contract itself only says 'argparse usage error'. Changed the one assertion Tess wrote from 2 to 1 with a comment naming the table; the --prd-in-stderr assertion is unchanged.",
+      "prd": "00189-stall-to-split-on-plan-expansion-v1.md",
+      "resolved": {
+        "reason": "assumption already actioned during build; informational only"
+      }
+    },
+    {
+      "type": "assumed-ambiguity",
+      "cycle": 1,
+      "phase": "review",
+      "issue": "F1: a file entry with a slash in the PRD Repository Structure tree recorded no implicit parent directory, so the explicit directory above it stayed a leaf and granted recursive coverage to unlisted sibling modules (policy.py:126)",
+      "severity": "high",
+      "consensus": "1/4",
+      "question": "The PRD says directory ancestry is rebuilt including parents implicit in slash-separated paths AND that a listed file is allowed individually without allowing its siblings; do a file entry implicit parents count as directories, and are they leaves?",
+      "assumption": "Fail-closed: implicit ancestors of a file entry are grouping-only directories (they demote the explicit directory above them from leaf to grouping parent and grant no recursive coverage themselves), so a listed file covers exactly itself. Applied in [D1] task 6 of review cycle 1.",
+      "reason": "simplest safe assumption in loop mode: a false stall costs one human look, a false pass reproduces the failure the gate exists for; no existing fixture changes verdict.",
+      "prd": "00189-stall-to-split-on-plan-expansion-v1.md"
+    },
+    {
+      "type": "rejected-by-design",
+      "cycle": 1,
+      "issue": "F7: _mask_non_prose duplicates the existing implementation in test_plan_tasks_prose.py:55, creating two copies of the same masking behavior to maintain",
+      "severity": "medium",
+      "consensus": "1/4",
+      "file": "skills/plan-tasks/scripts/test_plan_size_gate_prose.py:65",
+      "reason": "task 4 mandated copying the private helpers into the new suite rather than importing them, so the two prose suites stay independent; a shared helper module is a new file the plan chose not to add. Raised by Bob in review cycle 1; batch-end review may overrule (one-file extraction, S).",
+      "prd": "00189-stall-to-split-on-plan-expansion-v1.md"
+    },
+    {
+      "type": "rejected-by-design",
+      "cycle": 1,
+      "issue": "_run_check_plan re-parses the PRD tree via policy.prd_modules(text) to derive drift_word instead of reading it off Verdict (Pat LOW carried from the build)",
+      "severity": "low",
+      "consensus": "2/4",
+      "file": "skills/run-autopilot/cli/__main__.py",
+      "reason": "the PRD pins Verdict field list exactly, so tree presence cannot ride on the dataclass without a spec deviation, and task 3 prescribed deriving drift_word from policy.prd_modules(text); the second parse is pure and costs one string scan. Raised by Alice and Carl in review cycle 1; batch-end review may overrule by amending the Verdict contract.",
+      "prd": "00189-stall-to-split-on-plan-expansion-v1.md"
+    },
+    {
+      "type": "requirements-ambiguity",
+      "cycle": 2,
+      "issue": "PRD task 3 acceptance line says test_missing_prd_flag_is_a_usage_error pins exit 2; the shipped test pins exit 1 because _ArgumentParser.error maps every usage error to 1 and the CLI docstring exit-code table reserves 2 for state errors",
+      "severity": "high",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/test_check_plan_cli.py:340-348",
+      "reason": "resolved at build time as an assumed-ambiguity: the PRD Requirements text says only argparse usage error, the literal 2 sits in the task acceptance line, and every other subcommand usage error exits 1; cycle-1 Blake judged the reading consistent, cycle-2 Blake raised it as High. Batch-end review may overrule (one assertion plus an _ArgumentParser special case, S).",
+      "prd": "00189-stall-to-split-on-plan-expansion-v1.md"
+    },
+    {
+      "type": "rejected-by-design",
+      "cycle": 2,
+      "issue": "test_unwritable_split_note_fails_loud and test_unwritable_split_note_file_fails_loud are near-duplicates differing only in which call inside _write_split_note raises; a subTest loop over the blocker kind would fold them (Pat LOW carried from task 7)",
+      "severity": "low",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/test_check_plan_cli.py",
+      "reason": "task 7 kept them separate as independent coverage of the two wrapped calls (mkdir and write_text); raised by Alice in review cycle 2 with no action needed. Batch-end review may overrule (a subTest fold, S).",
+      "prd": "00189-stall-to-split-on-plan-expansion-v1.md"
+    },
+    {
+      "cycle": 1,
+      "phase": "build",
+      "severity": "medium",
+      "issue": "Task-boundary handoff marker cannot be cleared in-session: step 6.5(b) removes dev/local/autopilot/.handoff-requested, but autopilot_context_cap_hook.py re-writes it on the very next PostToolUse fire because the session is still over SOFT_CAP (320K), so the marker (content `unknown`, no in-progress task) survives into the fresh session, whose step 6.5 will hand off again after its first task - a one-task-per-session cadence for the rest of the PRD.",
+      "action": "Handed off anyway (lossless; the cost is extra session starts). Recorded here for batch-end review; the fix belongs in the hook or in `_walk_up.py --clear-cap` (clear `.handoff-requested` at task start / session start), outside PRD 00189's scope.",
+      "reason": "The marker is a hook-owned artifact and the fix is not in this PRD's files; a stale marker degrades cadence, never correctness.",
+      "type": "deferred_decision",
+      "prd": "00189-stall-to-split-on-plan-expansion-v1.md"
+    },
+    {
+      "cycle": 2,
+      "phase": "review",
+      "type": "cap-overflow",
+      "severity": "high",
+      "consensus": "1/4",
+      "found_by": "Bob",
+      "file": "skills/run-autopilot/cli/policy.py:115",
+      "issue": "F2 residue: a tree entry `//tmp/src/` still hangs the parse. posixpath.normpath keeps two leading slashes and posixpath.dirname(\"//\") == \"//\", so _ancestors never stops and grows its list unbounded; the cycle-1 fix bounded the walk at \"/\" only (orchestrator-confirmed by computing both posixpath values)",
+      "action": "deferred to batch end (cap-overflow); the fix is one condition (stop when posixpath.dirname(path) == path, or add \"//\" to the stop set) plus a bounded test for `//tmp/src/` directory and file entries",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00189-stall-to-split-on-plan-expansion-v1.md"
+    },
+    {
+      "cycle": 2,
+      "phase": "review",
+      "type": "cap-overflow",
+      "severity": "medium",
+      "consensus": "1/4",
+      "found_by": "Bob",
+      "file": "skills/run-autopilot/cli/test_policy.py:117",
+      "issue": "F9: the _bounded test helper reports a timeout but leaves the looping daemon thread running, so a termination regression keeps consuming CPU (and memory, as _ancestors grows its list) for the rest of the suite; daemon status only affects process shutdown",
+      "action": "deferred to batch end (cap-overflow); Bob proposes running the termination probes in an isolated process and terminating it on timeout, following the cleanup precedent in test_state.py",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00189-stall-to-split-on-plan-expansion-v1.md"
+    },
+    {
+      "cycle": 2,
+      "phase": "review",
+      "type": "cap-overflow",
+      "severity": "low",
+      "consensus": "1/4",
+      "found_by": "Alice",
+      "file": "skills/plan-tasks/SKILL.md",
+      "issue": "step 5.5 Exit 2 bullet still names only an unreadable state or PRD; the rework made an unwritable split note a third exit-2 cause (documented in the CLI docstring and CHANGELOG, not in the skill prose the planner follows)",
+      "action": "deferred to batch end (cap-overflow); a four-word addition to the Exit 2 bullet",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00189-stall-to-split-on-plan-expansion-v1.md"
+    },
+    {
+      "cycle": 2,
+      "phase": "review",
+      "type": "cap-overflow",
+      "severity": "low",
+      "consensus": "1/4",
+      "found_by": "Alice (Pat LOW carried from task 6)",
+      "file": "skills/run-autopilot/cli/policy.py:187",
+      "issue": "`for item in files if isinstance(files, list) else []:` embeds the type guard in the loop iterable; hoisting it to `files = files if isinstance(files, list) else []` reads cleaner",
+      "action": "deferred to batch end (cap-overflow); style only",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00189-stall-to-split-on-plan-expansion-v1.md"
+    },
+    {
+      "type": "deferred-by-design",
+      "issue": "F6: New leading-dash cases remove output files before use even though their unique paths are inside a freshly created temporary directory; remove these redundant cleanup commands.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "file": "skills/use-codex/scripts/test_codex_run.sh",
+      "reason": "Cycle 1: the new cases copy the rm -f pattern every sibling case already uses; removing it from the new cases alone leaves the harness inconsistent and touching baseline cases is outside the PRD contract; batch-end review may overrule",
+      "prd": "00190-bind-the-codex-run-tests-and-dedupe-their-split-v1.md"
+    },
+    {
+      "type": "deferred-by-design",
+      "issue": "Unchecked negative array index on empty ARGV_ARR causes bad array subscript in bash 3.2",
+      "severity": "medium",
+      "consensus": "1/4",
+      "file": "skills/use-codex/scripts/test_codex_run.sh",
+      "reason": "Cycle 1: confirmed on /bin/bash 3.2.57 (stderr line, FAIL branch taken, script continues); the pattern is baseline (case 14, old case 45) and only fires when codex was never invoked, which already FAILs; a guard would touch pre-existing cases; batch-end review may overrule",
+      "prd": "00190-bind-the-codex-run-tests-and-dedupe-their-split-v1.md"
+    },
+    {
+      "cycle": 1,
+      "type": "deferred_decision",
+      "issue": "F6: New leading-dash cases remove output files before use even though their unique paths are inside a freshly created temporary directory; remove these redundant cleanup commands.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "action": "deferred (ledger settled-deferral, batch deferred JSON)",
+      "reason": "Cycle 1: the new cases copy the rm -f pattern every sibling case already uses (test_codex_run_resume.sh:22, the --emit-thread-id block); removing it from the new cases alone leaves the harness inconsistent and touching baseline cases is outside the PRD contract; batch-end review may overrule",
+      "status": "deferred",
+      "prd": "00190-bind-the-codex-run-tests-and-dedupe-their-split-v1.md"
+    },
+    {
+      "cycle": 1,
+      "type": "deferred_decision",
+      "issue": "Unchecked negative array index on empty ARGV_ARR causes bad array subscript in bash 3.2",
+      "severity": "medium",
+      "consensus": "1/4",
+      "action": "deferred (ledger settled-deferral, batch deferred JSON)",
+      "reason": "Cycle 1: confirmed on /bin/bash 3.2.57 (stderr line, FAIL branch taken, script continues); the pattern is baseline (case 14, old case 45) and only fires when codex was never invoked, which already FAILs, so the verdict is correct; a guard would touch pre-existing cases; batch-end review may overrule",
+      "status": "deferred",
+      "prd": "00190-bind-the-codex-run-tests-and-dedupe-their-split-v1.md"
+    },
+    {
+      "type": "out-of-scope",
+      "issue": "inherited size violations: record_defer 54 lines, do_park 61, _bump_and_check_tripwire 62 (50-line rule); cli/__main__.py 1099 lines and test_autopilot_context_cap_hook.py 958 -> 1210 lines (800-line rule, both already over before this PRD)",
+      "severity": "low",
+      "consensus": "2/4",
+      "reason": "pre-existing before 68c624d; surgical-changes rule; a hygiene PRD is the right home for the splits",
+      "cycle": 1,
+      "prd": "00191-clear-the-handoff-marker-at-phase-edges-v1.md"
+    },
+    {
+      "cycle": 1,
+      "type": "deferred_decision",
+      "issue": "inherited size violations: record_defer 54 lines, do_park 61, _bump_and_check_tripwire 62 (50-line rule); cli/__main__.py 1099 lines and test_autopilot_context_cap_hook.py 958 -> 1210 lines (800-line rule, both already over before this PRD)",
+      "severity": "low",
+      "consensus": "2/4",
+      "action": "deferred",
+      "reason": "pre-existing before 68c624d; the surgical-changes rule keeps adjacent code untouched and the PRD names none of these functions; the hook test file grew by ~250 lines while already over the cap - a split belongs to a hygiene PRD, not this fix",
+      "prd": "00191-clear-the-handoff-marker-at-phase-edges-v1.md"
+    },
+    {
+      "type": "requirements-ambiguity",
+      "cycle": 1,
+      "issue": "Intermediate commit 5235090 (test(run-autopilot-cli): pin the cli.loop compat surface, 00192 seam 4) adds test_loop_exports.py before loop_act.py exists, so pytest collection errors (ImportError: cannot import name loop_act from cli) and the whole CLI suite fails at that one commit; the next commit 3712430 lands loop_act.py and HEAD is green. The PRD says the CLI suite passes after each commit / after every seam commit.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "not fixable forward (HEAD and every seam implementation commit green); the red commit is the work skill's tests-first pipeline shape; the only remedy is a rewrite of unpushed master history (fixup 5235090 into 3712430), which an unattended session must not do on a shared checkout. Human decides at batch end: squash, or read the per-commit criterion as per seam implementation commit. Upstream question: should the work skill commit test and implementation together when a PRD requires an always-green history.",
+      "prd": "00192-split-loop-py-and-its-tests-under-the-cap-v1.md"
+    }
+  ]
+}

@@ -1,0 +1,308 @@
+{
+  "prd": "00194-design-critical-rework-before-task-dispatch-v1.md",
+  "phase": "done",
+  "next_phase": "",
+  "schema_version": 1,
+  "batch": {
+    "id": "202609061630",
+    "mode": "autopilot",
+    "completed_prds": [
+      {
+        "filename": "00178-fix-bob-first-run-and-specify-his-retry-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 8,
+        "tasks_total": 8
+      },
+      {
+        "filename": "00179-cap-the-adversarial-test-loop-at-one-round-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 2,
+        "escalated_decisions": 0,
+        "tasks_completed": 3,
+        "tasks_total": 3
+      },
+      {
+        "filename": "00180-route-codex-prompt-through-stdin-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 9,
+        "escalated_decisions": 0,
+        "tasks_completed": 2,
+        "tasks_total": 2
+      },
+      {
+        "filename": "00181-scrub-inherited-host-markers-at-loop-spawn-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 7,
+        "escalated_decisions": 0,
+        "tasks_completed": 5,
+        "tasks_total": 5
+      },
+      {
+        "filename": "00182-close-open-dispatch-rows-at-session-handoffs-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 14,
+        "escalated_decisions": 0,
+        "tasks_completed": 8,
+        "tasks_total": 8
+      },
+      {
+        "filename": "00183-make-batch-report-decisions-and-implementor-mix-render-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 12,
+        "escalated_decisions": 0,
+        "tasks_completed": 13,
+        "tasks_total": 13
+      },
+      {
+        "filename": "00184-carry-tool-discipline-into-every-bash-bearing-loop-prompt-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 3,
+        "escalated_decisions": 0,
+        "tasks_completed": 5,
+        "tasks_total": 5
+      },
+      {
+        "filename": "00185-route-review-reruns-to-high-effort-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 9,
+        "escalated_decisions": 0,
+        "tasks_completed": 4,
+        "tasks_total": 4
+      },
+      {
+        "filename": "00186-add-item-grained-fast-track-lane-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 18,
+        "escalated_decisions": 0,
+        "tasks_completed": 16,
+        "tasks_total": 16
+      },
+      {
+        "filename": "00187-keep-cap-out-criticals-off-master-and-home-deferred-highs-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 8,
+        "escalated_decisions": 0,
+        "tasks_completed": 13,
+        "tasks_total": 13
+      },
+      {
+        "filename": "00188-record-convergence-cap-and-roster-per-prd-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 14,
+        "escalated_decisions": 0,
+        "tasks_completed": 7,
+        "tasks_total": 7
+      },
+      {
+        "filename": "00189-stall-to-split-on-plan-expansion-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 14,
+        "escalated_decisions": 4,
+        "tasks_completed": 7,
+        "tasks_total": 7
+      },
+      {
+        "filename": "00190-bind-the-codex-run-tests-and-dedupe-their-split-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 6,
+        "escalated_decisions": 0,
+        "tasks_completed": 4,
+        "tasks_total": 4
+      },
+      {
+        "filename": "00191-clear-the-handoff-marker-at-phase-edges-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 11,
+        "escalated_decisions": 0,
+        "tasks_completed": 5,
+        "tasks_total": 5
+      },
+      {
+        "filename": "00192-split-loop-py-and-its-tests-under-the-cap-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 12,
+        "escalated_decisions": 0,
+        "tasks_completed": 8,
+        "tasks_total": 8
+      },
+      {
+        "filename": "00194-design-critical-rework-before-task-dispatch-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 1,
+        "escalated_decisions": 0,
+        "tasks_completed": 2,
+        "tasks_total": 4
+      }
+    ],
+    "plugin_versions": {
+      "aegis@buvis-plugins": "0.3.2",
+      "warden@buvis-plugins": "0.14.0"
+    },
+    "parks_consecutive": 0,
+    "catchup_completed_at": "2026-09-14T20:33:23Z",
+    "catchup_head_sha": "54b7706cf1887034a33285253f5e87e489da8eeb"
+  },
+  "catchup_mode": "skipped",
+  "doubt_reviewer": "codex",
+  "consensus_engine": "legacy",
+  "rework_cap": 2,
+  "tasks_total": 4,
+  "tasks_completed": 4,
+  "codex_probe": {
+    "batch_id": "202609061630",
+    "verdict": "unhealthy",
+    "backend": "codex",
+    "detail": "hook_doctor: empty\t/Users/bob/.codex/hooks/analyze-instincts.py",
+    "hook_doctor": "3 ok, 7 stale, 2 broken",
+    "checked_at": "2026-09-06T06:31:18Z"
+  },
+  "qwen_breaker": {
+    "tripped": false,
+    "after_task": null,
+    "failed_tasks": [],
+    "batch_id": "202609061630"
+  },
+  "qwen_gate_failures_consecutive": 0,
+  "qwen_preflight": {
+    "batch_id": "202609061630",
+    "verdict": "endpoint_unreachable",
+    "detail": "dispatch-time refusal on task 3 (twice): qwen-run.sh banner resolves provider llamacpp8002 but the underlying pi request hits localhost:8080 and is refused; the --preflight probe itself reports healthy, so the verdict is latched unhealthy for this batch to stop a third identical infra failure",
+    "checked_at": "2026-09-06T08:55:43Z"
+  },
+  "cycle": 1,
+  "phases_completed": [],
+  "replan_count": 0,
+  "contract_card": "step: build Phase 3 (work), resumed session at task 3 of PRD 00194-design-critical-rework-before-task-dispatch-v1.md. Tasks 1-2 completed and committed (tree clean at b6bdc12); tasks 3-4 pending (sequential blocked_by). Design reused (awk gate exit 0). work_start_sha a68ec83 and repo_root recorded - never re-capture.\ninvariants: loop mode (_AUTOPILOT_LOOP set) - never AskUserQuestion; batch.id 202609061630 preserved; statectl is the sole state writer; CLI = python3 /Users/bob/.claude/plugins/cache/buvis-plugins/autopilot/0.5.2/skills/run-autopilot/cli/__main__.py <cmd>; the batch runs the installed 0.5.2 cache, never write to ~/.claude; prose under skills/run-autopilot must never contain \"design-rework\" or \"--range\" (test_custody_prose absent-needle sweep); verbatim contracts are in state.tasks[].description; loupe reflows edited .py files at turn end - git checkout a tracked file's reflow; check_style_limits fails a test function over 50 lines; a stale `.handoff-requested` marker from the prior session is removed at task-start 3; CHANGELOG entries for this PRD land in task 4 (C6).\nnext: /autopilot:work resumes at task 3 (recovery.md + state-schema.md slug bullets + test_recovery_and_schema_list_the_design_rework_slug), then task 4 (release-checks + CHANGELOG + two tests), then step 7 full suite + `bash dev/bin/release-checks`, write last-verification.json, then `autopilot phase-done --outcome tasks_done`, handoff leave row, banner, END TURN.",
+  "design_mode": "run",
+  "design_doc": "dev/local/designs/00194-design-critical-rework-before-task-dispatch-v1-design.md",
+  "autonomous_decisions": [
+    {
+      "cycle": 0,
+      "issue": "design-solution for 00194: chosen approach",
+      "severity": "n/a",
+      "action": "design chosen: prose-only feature, one flag (--rework <review-file>), no state field, no CLI change; design-solution gains a Rework mode (cycle-scoped doc, Prior fix: opener, Source review: binding line, terminal result: line); phase-review Phase 6 designs CRITICAL rework once below the cap before any task-add, with a source check + last-line awk pass gate and design_rework loop stall / sub_skill_fail interactive pause; review-work-completion step 7 leaves CRITICAL rows to Phase 6 (the one file outside the PRD's Repository Structure)",
+      "reason": "3 reviewer dispatches (claude, codex, codex verification + engagement re-run): 0 cardinal sins, 7 blockers all fixed in place, 11 non-blockers and 6 questions recorded in the design doc's Review log; unresolved non-blockers: whole-cycle contract block rides into every CRITICAL D-task (bounded by the 50K subagent_prompt_overrun stall), design covers discarded CRITICAL rows as surplus, a design_rework stall records no custody (same exposure as blocking_escalation)"
+    }
+  ],
+  "tasks": [
+    {
+      "name": "00194 T1: add design-solution rework mode and pin it",
+      "description": "Add a rework mode to the design-solution skill: `--rework <review-file>` designs one review cycle's CRITICAL fixes into a cycle-scoped doc, opens `## Architecture fit` with a `Prior fix:` paragraph, writes a `Source review:` line under the title and a terminal `result:` line in `## Review log`, and reports `design-solution: <prd-stem> (rework cycle <n>)`; pin every new literal in the existing contract test.\n\nLocation: skills/design-solution/SKILL.md (frontmatter `argument-hint`, `## Inputs`, `## Output`, a new `## Rework mode` section between `## Output` and `## Workflow`, `## Exit report`); skills/run-autopilot/scripts/test_design_review_contract.py (new `unittest` methods on the existing `DesignReviewContractTests` class).\n\nReuse: the skill's existing steps 3-5 (nine-section doc shape, three-dispatch cross-model review, ceiling, minimum-engagement check, Claude fallback, pinned dispatch-summary line) are reused unchanged; the review file's `review:` and `head_sha` frontmatter and `Diff range:` line (`skills/review-work-completion/references/output-formats.md`) are the inputs; the test file's existing `assertIn(..., self.design)` pattern is the model for every new method.\n\nDesign: dev/local/designs/00194-design-critical-rework-before-task-dispatch-v1-design.md (read `## Architecture fit`, `## Risks & edge cases` for the why; the Contract below is its `## Interfaces & contracts` copied verbatim).\n\nPremise: the skill has no existing rework mode; recheck semantic headings/dispatch procedure, skip/report if superseded.\n\nContract (verbatim from the design doc `## Interfaces & contracts` C1 and C7):\n\n### C1. `skills/design-solution/SKILL.md`\n\nFrontmatter:\n\n```\nargument-hint: \"<prd-path> [--rework <review-file>]\"\n```\n\n`## Inputs`, new bullet after the PRD-path bullet:\n\n```\n- **Rework mode** (`--rework <review-file>`): design one review cycle's\n  CRITICAL fixes instead of the PRD's first implementation - see\n  `## Rework mode`.\n```\n\n`## Output`, appended sentence:\n\n```\nIn rework mode the output is `dev/local/designs/<prd-stem>-rework-<cycle>-design.md`,\nwhere `<cycle>` is the review file's `review:` frontmatter value.\n```\n\nNew section, placed between `## Output` and `## Workflow`:\n\n```\n## Rework mode\n\n`/autopilot:design-solution <prd-path> --rework <review-file>` designs one\nreview cycle's CRITICAL fixes (PRD 00194). `/autopilot:run-autopilot` Phase 6\ninvokes it once per cycle, before any fix task is created. Steps 1-5 run as\nin default mode except where a bullet below says otherwise.\n\n- **Inputs** (step 1): the PRD, plus from `<review-file>`: `<cycle>` = its\n  `review:` frontmatter value, and the CRITICAL rows = every\n  `## Consolidated Findings` table row whose Severity cell is `\ud83d\udd34 Critical`.\n  `<work_start_sha>` = the left side of the `Diff range:` line in the cycle-1\n  review file beside it, `<prd-stem>-review-1.md` (or `-review-01.md`) - under\n  autopilot that range is `work_start_sha..HEAD`, so no flag carries it. Run\n  `git diff --stat <work_start_sha>..HEAD` for the PRD's whole work range, and\n  on cycle 2 or later also `git diff --stat` over `<review-file>`'s own\n  `Diff range:` (the prior cycle's rework commits, the range the prior fix\n  changed); a `Diff range:` holding a single SHA `X` is read as\n  `X..<head_sha>`, `<head_sha>` being `<review-file>`'s frontmatter value. A\n  review file with no `\ud83d\udd34 Critical` row, or no cycle-1 review file with a\n  `Diff range:` line, is a usage error: print\n  `design-solution: --rework needs a \ud83d\udd34 Critical row and a cycle-1 Diff range` and\n  stop without writing a doc.\n- **Output**: `dev/local/designs/<prd-stem>-rework-<cycle>-design.md` with the\n  same nine sections, same headings, same order as step 3, preceded by one\n  source line directly under the H1 title, exactly\n  `Source review: <review-file> (head_sha <head_sha>)` - the review file path\n  as given and its frontmatter `head_sha`. Phase 6 compares that line before\n  reusing a doc, so a design reviewed for one cycle's findings never supplies\n  the contract for another's. An existing file at that path is overwritten.\n- **`## Architecture fit` opens with a `Prior fix:` paragraph** -\n  what the prior fix changed and why it regressed, quoting the CRITICAL rows'\n  evidence and the files the prior-cycle `git diff --stat` names, and saying\n  whether each CRITICAL was introduced by that fix or only exposed by it. On\n  cycle 1 it reads exactly `Prior fix: none - there was no prior rework fix.`\n- **`## Interfaces & contracts` is the sole contract source** for the cycle's\n  CRITICAL fix tasks: Phase 6 copies it verbatim into each CRITICAL\n  `[D{cycle}]` task's `### Contract` block, so name every symbol exactly, and\n  open each entry with the \ud83d\udd34 row it closes (`Closes: <row text>`) so a task\n  owner is readable from the shared block.\n- **Review** (step 4): the same three-dispatch procedure, the same 3-dispatch\n  ceiling, prompt package, minimum-engagement check and Claude fallback,\n  unchanged. The prompt additionally carries the CRITICAL rows verbatim so a\n  reviewer judges the fix design against the finding it must close.\n- **Terminal result line** (step 5): after the exit report is decided, append\n  its `result:` value as the last line of `## Review log`, unindented - exactly\n  `result: ok` or `result: failed (open cardinal sins/blockers)`. The Review log\n  is the ninth section, so this is the doc's last non-empty line; Phase 6 reads\n  it as the pass gate. Default mode writes no such line.\n- **Exit report**: the first line is `design-solution: <prd-stem> (rework cycle <n>)`\n  and `doc:` names the rework path; the remaining lines are unchanged. Open\n  cardinal sins or blockers after dispatch 3 end the report with\n  `result: failed (open cardinal sins/blockers)` exactly as step 5 describes;\n  the caller routes the failure.\n```\n\n`## Exit report`, appended sentence after the code block:\n\n```\nIn rework mode the first line reads `design-solution: <prd-stem> (rework cycle <n>)`.\n```\n\n### C7. `skills/run-autopilot/scripts/test_design_review_contract.py` - new methods\n\nSame `unittest.TestCase`, same `self.design` text. Each asserts one literal\nfrom C1:\n\n| method | literal |\n|---|---|\n| `test_rework_mode_takes_a_review_file` | `--rework <review-file>` |\n| `test_rework_output_is_cycle_scoped` | `dev/local/designs/<prd-stem>-rework-<cycle>-design.md` |\n| `test_rework_keeps_the_nine_sections` | `same nine sections, same headings, same order as step 3` |\n| `test_rework_architecture_fit_explains_the_prior_fix` | `what the prior fix changed and why it regressed` AND `Prior fix: none - there was no prior rework fix.` |\n| `test_rework_keeps_the_three_dispatch_procedure` | `the same 3-dispatch` AND (existing) `3-dispatch ceiling` |\n| `test_rework_summary_line_is_cycle_specific` | `design-solution: <prd-stem> (rework cycle <n>)` |\n| `test_rework_contract_is_the_sole_source` | `is the sole contract source` |\n| `test_rework_derives_the_work_base_from_the_cycle_1_review` | `<prd-stem>-review-1.md` AND `Diff range:` |\n| `test_rework_review_log_ends_with_the_result_line` | `result: ok` AND `result: failed (open cardinal sins/blockers)` AND `last line of \\`## Review log\\`` |\n| `test_rework_doc_names_its_source_review` | `Source review: <review-file> (head_sha <head_sha>)` |\n\nDetails:\n- Insert every C1 block at the stated place; the `## Rework mode` section goes between `## Output` and `## Workflow` as one fenced-free markdown section (the fence in C1 delimits the contract, it is not part of the skill text).\n- Keep each pinned literal contiguous on one line where C7 pins it (`what the prior fix changed and why it regressed` must not wrap); every other line may wrap at the file's ~80-column style.\n- Add the nine C7 methods to `DesignReviewContractTests`, each one `assertIn` of the literal named in the C7 table against `self.design`; keep `test_design_solution_pins_three_dispatch_ceiling` green (the existing `3-dispatch ceiling` literal stays in step 4).\n- Default mode is unchanged: no `Source review:` line and no terminal `result:` line outside rework mode.\n- Do not touch run-autopilot prose in this task; Phase 6 routing is the next task.\n\nAcceptance criteria:\n- test_design_review_contract.py pins review-file input, cycle-scoped filename, nine sections, Architecture fit's prior-fix explanation, unchanged three-dispatch procedure/ceiling and cycle-specific summary.\n\nVerify: uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/scripts/test_design_review_contract.py\n",
+      "files": [
+        "skills/design-solution/SKILL.md",
+        "skills/run-autopilot/scripts/test_design_review_contract.py"
+      ],
+      "estimated_tokens": 62200,
+      "est_context_peak": 82200,
+      "model": "opus",
+      "tier_reason": "floor",
+      "qwen_eligible": false,
+      "qwen_excluded_reason": "tier",
+      "id": "1",
+      "status": "completed",
+      "attempts": [
+        {
+          "attempt": 1,
+          "model": "opus",
+          "outcome": "completed",
+          "review_cycle": null,
+          "cause": null,
+          "implementor": "claude",
+          "preflight_outcome": null,
+          "pipeline": "full",
+          "self_deslop": "skipped:trivial",
+          "style_gate": "clean",
+          "split_hygiene": "clean",
+          "note": "Devon round exhausted: strengthened tests are section-scoped but still negation-blind substring pins (known ceiling of prose-contract tests); flagged, proceeded. Pat: NO FINDINGS."
+        }
+      ]
+    },
+    {
+      "name": "00194 T2: design CRITICAL rework before Phase 6 task-add and pin the routing",
+      "description": "Route CRITICAL rework through the rework design in Phase 6: `references/phase-review.md` \u00a7 Dispatch rework designs CRITICAL rework once below the cap before any task is created (source check, pass gate, `design_rework` loop stall / `sub_skill_fail` interactive pause), CRITICAL `[D{cycle}]` tasks carry `Design:` + `### Contract` above `### Findings (verbatim)`, and `review-work-completion` step 7 leaves \ud83d\udd34 rows to Phase 6; pin it all in a new prose test.\n\nLocation: skills/run-autopilot/references/phase-review.md (`### Dispatch rework`: two paragraphs under the heading, one new first sub-bullet in source 2); skills/review-work-completion/SKILL.md (`### 7. Create follow-up tasks`: one inserted paragraph, two amended sentences); skills/run-autopilot/cli/test_design_rework_prose.py (NEW).\n\nReuse: `cli/custody_prose_testutil.py` helpers (`_section`, `_bullet`, `_assert_present`, `_assert_absent`, `_assert_in_order`, `_ROSTER_SENTENCE`) and the header shape of `cli/test_custody_prose.py` (`sys.path.insert(0, parent.parent)`); the existing loop-mode stall procedure (`references/recovery.md`) and `autopilot stall --site <slug>` (free-form slug, no CLI change); the Phase 1.5 artifact-skip shape for the reuse rule.\n\nDesign: dev/local/designs/00194-design-critical-rework-before-task-dispatch-v1-design.md (read `## Architecture fit`, `## Risks & edge cases` for the why; the Contract below is its `## Interfaces & contracts` copied verbatim).\n\nPremise: CRITICAL below-cap rework currently task-adds without design; recheck after earlier backlog changes, skip/report a superseding route.\n\nContract (verbatim from the design doc `## Interfaces & contracts` C2, C2b and C8):\n\n### C2. `skills/run-autopilot/references/phase-review.md` \u00a7 `### Dispatch rework`\n\nInsert these two paragraphs directly under the `### Dispatch rework` heading,\nbefore `Build the rework batch from two sources:`:\n\n```\n**Design CRITICAL rework before any task-add (PRD 00194).** When this cycle's consolidated table holds at least one \ud83d\udd34 CRITICAL row AND `state.cycle < state.rework_cap`, invoke `/autopilot:design-solution dev/local/prds/wip/<state.prd> --rework <this cycle's review file>` ONCE for this cycle, before the first task is created below. Every unresolved \ud83d\udd34 row of this cycle becomes (or joins) a `[D{cycle}]` task in source 2 below; its Defer-to-batch-end record (Classification) is the audit trail, not a reason to skip the fix - the Cap check reads \"A CRITICAL blocks until it is fixed\". This section is the only task-creation point for a \ud83d\udd34 finding under autopilot: `review-work-completion` step 7 leaves \ud83d\udd34 rows to it (PRD 00194) and creates the other severities as today. The skill writes `dev/local/designs/<prd-stem>-rework-<cycle>-design.md` (`<cycle>` = `state.cycle`), reviewed by its own three-dispatch loop, and ends its `## Review log` with a terminal `result:` line. **Artifact rule on entry:** first the source check - `rg -q -F 'Source review: <review-file> (head_sha <head_sha>)' dev/local/designs/<prd-stem>-rework-<cycle>-design.md`, `<review-file>` being the path passed to `--rework` and `<head_sha>` its frontmatter value; a missing doc or a non-zero exit means the doc is absent or stale (written for other findings) and the skill is invoked, which overwrites it. When the source line matches: if the pass gate below exits 0 (a crash-resume of this cycle), reuse it and skip the invocation; if it has a terminal `result: failed` line, take the failure routing below without re-invoking; if it has no terminal `result:` line (an interrupted run), invoke the skill, which overwrites it. **Pass gate**, run after the invocation or on reuse: `awk 'NF{last=$0} END{exit last!=\"result: ok\"}' dev/local/designs/<prd-stem>-rework-<cycle>-design.md` - exit 0 means the review completed with no open cardinal sin or blocker; anything else is a rework design failure. At the cap (`state.cycle >= state.rework_cap`) the Cap check above already routed the cycle - the loop-mode `site: \"cap_critical\"` custody stall or the interactive Cap-pause behavior - so no rework design and no fix task is launched here. A cycle with no \ud83d\udd34 row runs no rework design (the exit-2 doubt-constraint CRITICAL of the Converged outcome is not a table row and runs none either), and every other severity routes exactly as before.\n\n**Rework design failure** - the pass gate exits non-zero: the report ended `result: failed (open cardinal sins/blockers)`, or the doc is missing after the invocation. The skill's three dispatches were the retry budget: do not re-invoke it, and create no fix task. **Loop mode (`$_AUTOPILOT_LOOP` set):** follow the **Loop-mode stall procedure** (`references/recovery.md`) with `site: \"design_rework\"`, recording the rework design doc path and the open cardinal-sin / blocker titles in `--detail`, and continue the batch. **Interactive:** set `state.phase = \"paused\"` and `state.next_phase = \"paused\"`, write `state.pause_reason = {\"site\": \"sub_skill_fail\", \"detail\": \"rework design failed with open findings (cycle <state.cycle>): <rework design doc path>; resolve them, then delete the doc so the next Phase 6 entry regenerates it\"}`, print `\u2500\u2500 AUTOPILOT \u2500\u2500 PRD: {prd-name} \u2500\u2500 PAUSED (rework design failed, cycle {n}) \u2500\u2500`, and STOP. Every consensus, blind and doubt/de-slop lens already ran in Phase 4; the rework design adds a step before the fix task and removes nothing from the roster.\n```\n\nInsert this bullet in source 2 (`**Decision gate `[D{cycle}]` follow-ups**`),\nas the FIRST sub-bullet, before `**Transcribe the findings verbatim (PRD 00095).**`:\n\n```\n   - **CRITICAL D-tasks carry the rework design (PRD 00194).** A D-task whose findings include at least one \ud83d\udd34 CRITICAL line carries, in this order: the line `Design: dev/local/designs/<prd-stem>-rework-<cycle>-design.md`, then a `### Contract` block holding the rework design's `## Interfaces & contracts` section body copied verbatim - byte-identical, not paraphrased; the rework design is the sole contract source for these tasks - then the existing `### Findings (verbatim)` block below them. A D-task with no \ud83d\udd34 line carries neither and is built exactly as before.\n```\n\nUnchanged and pinned: the roster sentence (`_ROSTER_SENTENCE` in\n`cli/custody_prose_testutil.py`) appears exactly once; the paragraph\nbeginning `**Escalation caveat \u2014 diagnose the failure before escalating.**`\nappears exactly once; the loop-mode cap-out bullet keeps\n`site: \"cap_critical\"`.\n\n### C2b. `skills/review-work-completion/SKILL.md` \u00a7 `### 7. Create follow-up tasks`\n\nInsert this paragraph directly after the line\n`**If issues found, and `dev/local/autopilot/state.json` exists (autopilot run):** Create each follow-up with `task-add`, prioritizing multi-agent consensus:`\nand before its `- Process \ud83d\udd34 \u2192 \ud83d\udfe0 \u2192 \ud83d\udfe1 order` bullet list:\n\n```\nA \ud83d\udd34 CRITICAL finding gets no task here (PRD 00194): `run-autopilot/references/phase-review.md` Phase 6 \u00a7 Dispatch rework creates it after the cycle's rework design, so a CRITICAL fix never starts without a reviewed contract. Every other severity is created below as today.\n```\n\nTwo existing sentences in the same step contradict that paragraph and are\namended in the same edit (codex, dispatch 3):\n\n- In the verification-queue paragraph, replace\n  `A queued **CRITICAL or HIGH is not skipped**: it is never routed (`run-autopilot/references/phase-review.md` Phase 5), so it gets its task as today.`\n  with\n  `A queued **HIGH is not skipped**: it is never routed (`run-autopilot/references/phase-review.md` Phase 5), so it gets its task as today; a queued CRITICAL is never routed either, and its task is Phase 6's (below).`\n- Replace the bullet `- Process \ud83d\udd34 \u2192 \ud83d\udfe0 \u2192 \ud83d\udfe1 order` with\n  `- Process \ud83d\udfe0 \u2192 \ud83d\udfe1 order (\ud83d\udd34 rows belong to Phase 6, above)`.\n\nThis is the one file outside the PRD's Repository Structure (the\nplan-expansion gate stalls at two unlisted modules, not one): the review\nskill is today's first `task-add` owner for a cycle's findings, so without\nthis sentence the \"design before task-add\" rule has two owners and the\nreview skill's step 7 would create the CRITICAL task before Phase 5's cap\ncheck or the rework design ever ran.\n\n### C8. `skills/run-autopilot/cli/test_design_rework_prose.py` - new file\n\nHeader mirrors `test_custody_prose.py`: `sys.path.insert(0, parent.parent)`,\n`from cli.custody_prose_testutil import _PHASE_REVIEW, _REVIEW_TEXT, _RECOVERY,\n_RECOVERY_TEXT, _STATE_SCHEMA, _ROSTER_SENTENCE, _SKILL_DIR, _section, _bullet,\n_deferred_log_section, _h2_section, _rows_starting_with, _assert_present,\n_assert_absent, _assert_in_order`. The repo-level paths are NOT in the\ntestutil (they are module-level in `test_custody_prose.py`, and a test must\nnot import another test module), so the new file re-derives them:\n\n```python\n_REPO_ROOT = _SKILL_DIR.parent.parent\n_RELEASE_CHECKS = _REPO_ROOT / \"dev\" / \"bin\" / \"release-checks\"\n_RELEASE_CHECKS_TEXT = _RELEASE_CHECKS.read_text()\n_CHANGELOG = _REPO_ROOT / \"CHANGELOG.md\"\n_CHANGELOG_TEXT = _CHANGELOG.read_text()\n_REVIEW_SKILL = _SKILL_DIR.parent / \"review-work-completion\" / \"SKILL.md\"\n_REVIEW_SKILL_TEXT = _REVIEW_SKILL.read_text()\n_DISPATCH = _section(_REVIEW_TEXT, _PHASE_REVIEW, \"### Dispatch rework\", \"### After /autopilot:work returns\")\n_STEP_7 = _section(_REVIEW_SKILL_TEXT, _REVIEW_SKILL, \"### 7. Create follow-up tasks\", \"### 8. Save review file\")\n```\n\n`_section` has no to-EOF form (it asserts the end anchor exists), so the\nrelease-checks block is sliced as `_RELEASE_CHECKS_TEXT[_RELEASE_CHECKS_TEXT.index('echo \"[checks] design rework prose\"'):]`\nafter asserting the echo line is present.\n\nTest functions and what each pins (presence via `_assert_present`, order via\n`_assert_in_order`, inversion via `_assert_absent`):\n\n| function | pins |\n|---|---|\n| `test_dispatch_rework_designs_critical_rework_once_before_any_task_add` | in `_DISPATCH`: `--rework <this cycle's review file>`, `state.cycle < state.rework_cap`, `ONCE for this cycle`; order (first occurrences): `ONCE for this cycle`, then `Build the rework batch from two sources:`, then `` `task-add <task-json-file>` `` (the real creation step, not the bare token); absent: `Do NOT invoke \\`/autopilot:design-solution\\``, `after the tasks are created` |\n| `test_every_critical_row_becomes_a_d_task_with_one_owner` | in `_DISPATCH`: `Every unresolved \ud83d\udd34 row of this cycle becomes (or joins) a \\`[D{cycle}]\\` task`, `audit trail, not a reason to skip the fix`, `only task-creation point for a \ud83d\udd34 finding`; in `_STEP_7`: `A \ud83d\udd34 CRITICAL finding gets no task here (PRD 00194)`, `Phase 6`, `A queued **HIGH is not skipped**`, `- Process \ud83d\udfe0 \u2192 \ud83d\udfe1 order`; absent in `_STEP_7`: `CRITICAL or HIGH is not skipped`, `Process \ud83d\udd34 \u2192 \ud83d\udfe0 \u2192 \ud83d\udfe1 order`, `creates the CRITICAL task here` |\n| `test_rework_design_reuse_needs_the_source_check_and_the_pass_gate` | in `_DISPATCH`: `rg -q -F 'Source review:`, `stale`, the literal `awk 'NF{last=$0} END{exit last!=\"result: ok\"}'`, `result: failed`, `interrupted run`, `reuse it and skip the invocation`; order: `Source review:` before `Pass gate`; absent: `reuse it unconditionally`, `skip the pass gate`, `skip the source check` |\n| `test_critical_d_task_carries_design_then_contract_then_findings` | in `_DISPATCH`, in order: `Design: dev/local/designs/<prd-stem>-rework-<cycle>-design.md`, `### Contract`, `### Findings (verbatim)`; presence `copied verbatim`, `sole contract source`; absent: `paraphrase the contract`, `below its \\`### Findings (verbatim)\\`` |\n| `test_at_cap_keeps_the_custody_stall_and_launches_no_rework_design` | in `_DISPATCH`: `state.cycle >= state.rework_cap`, `site: \"cap_critical\"`, `no rework design and no fix task`; the loop-mode cap-out bullet (same slice as `test_loop_cap_out_captures_the_range_internally_with_no_range_flag`) still says `site: \"cap_critical\"` |\n| `test_non_critical_rework_routing_is_unchanged` | in `_DISPATCH`: `A cycle with no \ud83d\udd34 row runs no rework design`, `every other severity routes exactly as before`, `A D-task with no \ud83d\udd34 line carries neither` |\n| `test_rework_design_failure_stalls_in_loop_and_pauses_interactively` | in `_DISPATCH`: `site: \"design_rework\"`, `Loop-mode stall procedure`, `\"site\": \"sub_skill_fail\"`, `state.phase = \"paused\"`, `do not re-invoke it`, `create no fix task`, `delete the doc so the next Phase 6 entry regenerates it`; order: `Loop mode` before `Interactive`; absent: `re-invoke the sub-skill ONCE`, `never stall` |\n| `test_recovery_and_schema_list_the_design_rework_slug` | `_bullet(slugs section, _RECOVERY, \"design_rework\")` contains `Phase 6`, `--rework`, `detail`; the schema `stall` bullet (`_bullet(_deferred_log_section(), _STATE_SCHEMA, \"stall\")`) contains `` `design_rework` `` |\n| `test_roster_sentence_and_escalation_caveat_survive` | `_REVIEW_TEXT.count(_ROSTER_SENTENCE) == 1`; `_REVIEW_TEXT.count(\"**Escalation caveat \u2014 diagnose the failure before escalating.**\") == 1` |\n| `test_release_checks_runs_both_design_contract_suites` | `dev/bin/release-checks` contains the C5 block verbatim (both paths inside the `[checks] design rework prose` block, sliced from that echo line to EOF as shown above) |\n| `test_changelog_unreleased_added_carries_both_design_rework_entries` | `_h2_section(CHANGELOG, \"## [Unreleased]\")` \u2192 `### Added` slice \u2192 a `- **design-solution**:` bullet containing `--rework` and a `- **run-autopilot**:` bullet containing `design_rework` |\n\nRun command (PRD acceptance, verbatim):\n\n```\nuv run --no-project --with pytest python -m pytest -q skills/run-autopilot/scripts/test_design_review_contract.py skills/run-autopilot/cli/test_design_rework_prose.py\nbash dev/bin/release-checks\n```\n\nDetails:\n- Insert the two C2 paragraphs directly under `### Dispatch rework`, before `Build the rework batch from two sources:`; insert the C2 bullet as the FIRST sub-bullet of source 2, before `**Transcribe the findings verbatim (PRD 00095).**`. Every other sentence of `### Dispatch rework`, the Cap check, the escalation caveat paragraph and the roster sentence stay byte-identical.\n- Apply C2b in `review-work-completion/SKILL.md` step 7: the inserted paragraph plus both sentence amendments (the `A queued **HIGH is not skipped**` rewrite and the `- Process \ud83d\udfe0 \u2192 \ud83d\udfe1 order (\ud83d\udd34 rows belong to Phase 6, above)` bullet).\n- Create `skills/run-autopilot/cli/test_design_rework_prose.py` per C8 with these functions in this task: `test_dispatch_rework_designs_critical_rework_once_before_any_task_add`, `test_every_critical_row_becomes_a_d_task_with_one_owner`, `test_rework_design_reuse_needs_the_source_check_and_the_pass_gate`, `test_critical_d_task_carries_design_then_contract_then_findings`, `test_at_cap_keeps_the_custody_stall_and_launches_no_rework_design`, `test_non_critical_rework_routing_is_unchanged`, `test_rework_design_failure_stalls_in_loop_and_pauses_interactively`, `test_roster_sentence_and_escalation_caveat_survive`. The slug, release-checks and changelog tests are later tasks; import only the names this task's functions use (the module-level `_REPO_ROOT`/`_RELEASE_CHECKS*`/`_CHANGELOG*` lines may be added now or by the later task that needs them).\n- Every `_assert_in_order` uses first occurrences (see `custody_prose_testutil._assert_in_order`), so keep the C8 order pins anchored on the preserved lines `Build the rework batch from two sources:` and `` `task-add <task-json-file>` ``.\n- `skills/run-autopilot/cli/test_custody_prose.py` sweeps every `.md` under `skills/run-autopilot` for the hyphenated spelling `design-rework` and for `--range` (a 00187 fence). Use the slug `design_rework` and the phrase \"rework design\" only; never edit that needle list.\n- Run `skills/run-autopilot/cli/test_custody_prose.py` too: its absent-needle sweep, roster-sentence pin and cap-out bullet slice must stay green.\n\nAcceptance criteria:\n- cli/test_design_rework_prose.py pins one design call before any task-add, Design/Contract/Findings ordering and verbatim contract source, below-cap versus at-cap behavior, non-CRITICAL unchanged routing, loop design_rework stall and interactive sub_skill_fail pause; the execution-time review-lens roster sentence remains byte-identical.\n\nVerify: uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_design_rework_prose.py skills/run-autopilot/cli/test_custody_prose.py\n",
+      "files": [
+        "skills/run-autopilot/references/phase-review.md",
+        "skills/review-work-completion/SKILL.md",
+        "skills/run-autopilot/cli/test_design_rework_prose.py"
+      ],
+      "estimated_tokens": 90000,
+      "est_context_peak": 110000,
+      "model": "opus",
+      "tier_reason": "floor",
+      "qwen_eligible": false,
+      "qwen_excluded_reason": "tier",
+      "blocked_by": [
+        1
+      ],
+      "id": "2",
+      "status": "completed",
+      "attempts": [
+        {
+          "attempt": 1,
+          "model": "opus",
+          "outcome": "completed",
+          "review_cycle": null,
+          "cause": null,
+          "implementor": "claude",
+          "preflight_outcome": null,
+          "pipeline": "full",
+          "self_deslop": "skipped:trivial",
+          "style_gate": "fixed:b6bdc12",
+          "split_hygiene": "clean",
+          "reflow": "skills/run-autopilot/cli/test_design_rework_prose.py:26",
+          "note": "Devon round exhausted: after one strengthen pass (prose-stripped sections, noun-verb binds, paragraph-scoped negation sweeps) a past-tense 'withdrawn preview' narration still passes every pin - the unbounded-hedge ceiling of prose-contract substring pins; flagged, proceeded. Reflow stamp is the style-fix refactor of six over-limit test functions into helpers, not a formatter sweep. Pat: NO FINDINGS."
+        }
+      ]
+    },
+    {
+      "name": "00194 T3: add the design_rework stall slug to recovery and state-schema",
+      "description": "Add the `design_rework` stall site to the slug lists: a bullet in `references/recovery.md` \u00a7 Stall `site` slugs and an entry in `references/state-schema.md`'s deferred-log `stall` bullet; pin both in the prose test.\n\nLocation: skills/run-autopilot/references/recovery.md (`### Stall \\`site\\` slugs`, new bullet directly after the `blocking_escalation` bullet); skills/run-autopilot/references/state-schema.md (`## Batch Deferred Log`, the `- \\`stall\\`` bullet's slug list); skills/run-autopilot/cli/test_design_rework_prose.py (one added function).\n\nReuse: the neighbouring `blocking_escalation` / `design_gate` bullets as the shape; `custody_prose_testutil._bullet`, `_deferred_log_section`, `_RECOVERY`, `_RECOVERY_TEXT`, `_STATE_SCHEMA` for the test; `cli/test_custody_prose_schema.py` `test_deferred_log_stall_bullet_lists_cap_critical_with_its_capture_keys` as the schema-bullet pin model.\n\nDesign: dev/local/designs/00194-design-critical-rework-before-task-dispatch-v1-design.md (read `## Architecture fit`, `## Risks & edge cases` for the why; the Contract below is its `## Interfaces & contracts` copied verbatim).\n\nPremise: CRITICAL below-cap rework currently task-adds without design; recheck after earlier backlog changes, skip/report a superseding route.\n\nContract (verbatim from the design doc `## Interfaces & contracts` C3, C4 and the C8 row `test_recovery_and_schema_list_the_design_rework_slug`):\n\n### C3. `skills/run-autopilot/references/recovery.md` \u00a7 `### Stall \\`site\\` slugs`\n\nNew bullet directly after the `blocking_escalation` bullet:\n\n```\n- `design_rework` \u2014 a loop-mode Phase 6 rework design (`/autopilot:design-solution\n  --rework`, PRD 00194) that ended with open cardinal sins / blockers after its\n  three dispatches, a missing doc, or an empty `## Review log`; records the\n  rework design doc path and the open finding titles in the deferred `detail`.\n  No fix task was created. On un-park the PRD re-enters the build gate; read\n  the rework doc's open findings before moving it back.\n```\n\n### C4. `skills/run-autopilot/references/state-schema.md` \u00a7 `## Batch Deferred Log`\n\nIn the `- \\`stall\\`` bullet's slug list, insert after\n`` `blocking_escalation` (a loop-mode Phase 5 blocking escalation), ``:\n\n```\n`design_rework` (a loop-mode Phase 6 rework design that failed, PRD 00194; `detail` names the rework design doc path and the open findings),\n```\n\n- `test_recovery_and_schema_list_the_design_rework_slug` | `_bullet(slugs section, _RECOVERY, \"design_rework\")` contains `Phase 6`, `--rework`, `detail`; the schema `stall` bullet (`_bullet(_deferred_log_section(), _STATE_SCHEMA, \"stall\")`) contains `` `design_rework` ``\n\nDetails:\n- The C3 bullet keeps `Phase 6`, `--rework` and `detail` each inside the bullet (no blank line inside it, so `_bullet` slices the whole bullet).\n- The C4 text is inserted inside the existing single-line `- \\`stall\\`` bullet, right after `\\`blocking_escalation\\` (a loop-mode Phase 5 blocking escalation), `; nothing else on that line changes, so `cli/test_custody_prose_schema.py`'s pins on the same bullet stay green.\n- Append `test_recovery_and_schema_list_the_design_rework_slug` to `skills/run-autopilot/cli/test_design_rework_prose.py`; slice the slug section with `_section(_RECOVERY_TEXT, _RECOVERY, \"### Stall `site` slugs\", \"### Systemic-park breaker interaction\")`.\n- `skills/run-autopilot/cli/test_custody_prose.py` sweeps every `.md` under `skills/run-autopilot` for the hyphenated spelling `design-rework` and for `--range` (a 00187 fence). Use the slug `design_rework` and the phrase \"rework design\" only; never edit that needle list.\n\nAcceptance criteria:\n- cli/test_design_rework_prose.py pins one design call before any task-add, Design/Contract/Findings ordering and verbatim contract source, below-cap versus at-cap behavior, non-CRITICAL unchanged routing, loop design_rework stall and interactive sub_skill_fail pause; the execution-time review-lens roster sentence remains byte-identical.\n\nVerify: uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_design_rework_prose.py skills/run-autopilot/cli/test_custody_prose.py skills/run-autopilot/cli/test_custody_prose_schema.py\n",
+      "files": [
+        "skills/run-autopilot/references/recovery.md",
+        "skills/run-autopilot/references/state-schema.md",
+        "skills/run-autopilot/cli/test_design_rework_prose.py"
+      ],
+      "estimated_tokens": 95000,
+      "est_context_peak": 115000,
+      "model": "opus",
+      "tier_reason": "floor",
+      "qwen_eligible": false,
+      "qwen_excluded_reason": "tier",
+      "blocked_by": [
+        2
+      ],
+      "id": "3",
+      "status": "completed"
+    },
+    {
+      "name": "00194 T4: register the design contract suites in release-checks and log the changelog",
+      "description": "Register both design contract suites in the release gate and describe the routing in the changelog: append the `[checks] design rework prose` block to `dev/bin/release-checks`, add the two `### Added` bullets under `## [Unreleased]`, and pin both in the prose test.\n\nLocation: dev/bin/release-checks (append as the last block); CHANGELOG.md (`## [Unreleased]` / `### Added`); skills/run-autopilot/cli/test_design_rework_prose.py (two added functions).\n\nReuse: the existing release-checks block shape (`echo \"[checks] ...\"` + one `uv run --no-project --with pytest python -m pytest -q \\` invocation); `custody_prose_testutil._h2_section` and `_rows_starting_with` plus `cli/test_custody_prose.py`'s `test_changelog_unreleased_added_carries_both_custody_entries` as the changelog-pin model; the module-level `_REPO_ROOT` / `_RELEASE_CHECKS` / `_CHANGELOG` derivation in C8.\n\nDesign: dev/local/designs/00194-design-critical-rework-before-task-dispatch-v1-design.md (read `## Architecture fit`, `## Risks & edge cases` for the why; the Contract below is its `## Interfaces & contracts` copied verbatim).\n\nContract (verbatim from the design doc `## Interfaces & contracts` C5, C6 and the last two C8 rows):\n\n### C5. `dev/bin/release-checks`\n\nAppend as the last block:\n\n```\necho \"[checks] design rework prose\"\nuv run --no-project --with pytest python -m pytest -q \\\n  skills/run-autopilot/scripts/test_design_review_contract.py \\\n  skills/run-autopilot/cli/test_design_rework_prose.py\n```\n\n### C6. `CHANGELOG.md` `## [Unreleased]` / `### Added`\n\n```\n- **design-solution**: `--rework <review-file>` designs one review cycle's CRITICAL fixes into `dev/local/designs/<prd-stem>-rework-<cycle>-design.md`, opening with what the prior fix changed and why it regressed, under the same three-dispatch review, and ends its review log with a `result:` line\n- **run-autopilot**: a review cycle with a CRITICAL below the rework cap now runs the rework design before any fix task is created (the review skill leaves CRITICAL rows to Phase 6), and each CRITICAL `[D{cycle}]` task carries the design path and its `## Interfaces & contracts` verbatim above the findings; a failed rework design stalls the PRD under site `design_rework` in loop mode and pauses interactively\n```\n\n- `test_release_checks_runs_both_design_contract_suites` | `dev/bin/release-checks` contains the C5 block verbatim (both paths inside the `[checks] design rework prose` block, sliced from that echo line to EOF as shown above)\n- `test_changelog_unreleased_added_carries_both_design_rework_entries` | `_h2_section(CHANGELOG, \"## [Unreleased]\")` \u2192 `### Added` slice \u2192 a `- **design-solution**:` bullet containing `--rework` and a `- **run-autopilot**:` bullet containing `design_rework`\n\nDetails:\n- `_section` has no to-EOF form, so slice the release-checks block as `_RELEASE_CHECKS_TEXT[_RELEASE_CHECKS_TEXT.index('echo \"[checks] design rework prose\"'):]` after asserting the echo line is present; assert both test paths appear inside that slice.\n- Add the two C6 bullets to the existing `### Added` list under `## [Unreleased]`; leave every other entry untouched (`cli/test_custody_prose.py` pins two custody bullets in the same list).\n- Then run the full gate: `bash dev/bin/release-checks` must pass end to end, including the new last block.\n- `skills/run-autopilot/cli/test_custody_prose.py` sweeps every `.md` under `skills/run-autopilot` for the hyphenated spelling `design-rework` and for `--range` (a 00187 fence). Use the slug `design_rework` and the phrase \"rework design\" only; never edit that needle list.\n\nAcceptance criteria:\n- `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/scripts/test_design_review_contract.py skills/run-autopilot/cli/test_design_rework_prose.py` and `bash dev/bin/release-checks` pass; each new changelog subject is present under Unreleased while unrelated entries remain.\n\nVerify: uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/scripts/test_design_review_contract.py skills/run-autopilot/cli/test_design_rework_prose.py ; then bash dev/bin/release-checks\n",
+      "files": [
+        "dev/bin/release-checks",
+        "CHANGELOG.md",
+        "skills/run-autopilot/cli/test_design_rework_prose.py"
+      ],
+      "estimated_tokens": 69000,
+      "est_context_peak": 89000,
+      "model": "opus",
+      "tier_reason": "floor",
+      "qwen_eligible": false,
+      "qwen_excluded_reason": "tier",
+      "blocked_by": [
+        3
+      ],
+      "id": "4",
+      "status": "completed"
+    }
+  ],
+  "work_start_sha": "a68ec83f8d03aa1abb6d7d214fb3e9144873f725",
+  "repo_root": "/Users/bob/git/src/github.com/buvis/claude-autopilot",
+  "cap_rotations": [
+    {
+      "task_id": "1",
+      "cycle": 1
+    }
+  ]
+}

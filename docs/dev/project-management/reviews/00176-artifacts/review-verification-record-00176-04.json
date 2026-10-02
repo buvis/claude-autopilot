@@ -1,0 +1,22 @@
+{
+  "sha": "fdee7b9b3d147ff12e475cd1dceeb9d4bab86f63",
+  "cycle": 4,
+  "commands": [
+    {
+      "command": "mise exec -- uv run --no-project --with pytest --with rich --with textual python -m pytest -q skills",
+      "exit": 0
+    },
+    {
+      "command": "mise exec -- env -u CODEX_SESSION_ID -u COPILOT_CLI -u AUTOPILOT_DISPATCH_DEPTH bash dev/bin/release-checks",
+      "exit": 0
+    }
+  ],
+  "passed": 2616,
+  "failed": 0,
+  "skipped": 1,
+  "warnings": 4,
+  "subtests_passed": 459,
+  "release_checks_passed": 224,
+  "doctor_python_310_passed": 91,
+  "doctor_python_314_passed": 91
+}

@@ -1,0 +1,3 @@
+step: PRD 00171-route-sonnet-prompt-through-stdin-v1 converged at review cycle 1 and the tail sweep is done. Sweep task 2 committed at 57ed616; full release-checks green (203 passed, 0 failed); last-verification.json written at that sha. Handing off to the finalize session.
+invariants: do NOT reopen phase 5 and do NOT increment cycle - phase 5 never reopens after convergence. Preserve the three uncommitted PRD 00170 files under skills/run-autopilot/scripts/ - they are a concurrent PRD's in-flight work, never stage them. Finalize must move the PRD wip->done with the 00XXX- prefix and verify the move landed.
+next: done gate (references/phase-done.md) - Phase 9 finalize, audit render, batch report append under batch id 202609011951, then the next PRD or batch end.

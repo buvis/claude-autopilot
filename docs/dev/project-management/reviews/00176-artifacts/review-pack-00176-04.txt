@@ -1,0 +1,2 @@
+exit: 1
+not inside a registered repo; register it in /Users/bob/.config/gita/repos.csv

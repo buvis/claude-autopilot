@@ -1,0 +1,242 @@
+[
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "SKILL.md's Roster section gives Eve only 3 run inputs (card, `<base-sha>..HEAD`, changed-file list) while `lane-dispatch.md` documents 6, and the PRD requires \"her five run inputs ... and a sixth, the `{OUTPUT_FORMAT}` block ... so each FIX item is also an `[EVE] {emoji} ... | File: ...` line the consolidator can read.\" SKILL.md never appends the mechanical-checks block or the OUTPUT_FORMAT block to Eve's render. Without the sixth input Eve's FIX items are not consolidator-readable, so a CRITICAL she raises never reaches victor or the exit rule.",
+    "file": "skills/fast-track/SKILL.md:296-298",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "The Workflow tool call for the consensus lane (review-fanout.workflow.js) never states the values for `prd_text` or `agent_name` in either SKILL.md or lane-dispatch.md; only the bare arg names are listed. The PRD explicitly requires `prd_text` = the card and `agent_name` = `ALICE` and cites `review-work-completion/SKILL.md:315-325` as the arg-to-value table to reuse; fast-track's own args block gives an operator no way to know what to put in `prd_text` or `agent_name`. Only `personas` gets an explanation.",
+    "file": "skills/fast-track/SKILL.md:348-360",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "Task 9's blocked-exit failure transitions (`stopped: branch-failed`, `stopped: reset-refused`, `branch: refused (<paths>)`) and the `<base-sha>`/`<rework-base-sha>` capture steps ship with zero test coverage: `rg -i 'reset-refused|branch-failed|branch: refused|rev-parse|base-sha' skills/fast-track/scripts` prints nothing (gate-verified). Task 9 was the only rework task with no test commit (b67a3fa fix only), so a future SKILL.md edit could silently drop either failure transition and nothing in the suite would catch it (rules/testing.md: every bug fix ships with its regression test).",
+    "file": "skills/fast-track/SKILL.md:576-581",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "FIX: Tess's bare commit still includes unrelated staged changes. Add a test-file pathspec and extend commit-scope coverage to the Tests section. (Gate-verified: SKILL.md:148-154 runs `git add <the test files>` then `git commit -m \"test(<scope>): add tests for <item>\"` with no `-- <paths>` pathspec, while the Implement and Rework commits from task 11 carry one.)",
+    "file": "skills/fast-track/SKILL.md:153",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "FIX: The changelog step commits existing foreign edits when CHANGELOG.md is outside the card's Files list. Include it in the dirty-path preflight whenever changelog is not none. (Gate-verified: the Preconditions dirty-path check at SKILL.md:31-35 covers only `## Files`; the changelog step at :191-195 Edits and stages CHANGELOG.md regardless of a pre-existing foreign edit in it.)",
+    "file": "skills/fast-track/SKILL.md:191",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "FIX: Tess's interface command still fails when every Files entry is new: the filtered list is empty, and the renderer rejects failed or empty command output. Provide an explicit empty-interface fallback in both render examples. (Gate-verified: `render_prompt.py:_run_set_cmd` returns exit 4 on empty stdout, so `--set-cmd PUBLIC_INTERFACES=\"cat $(printf '%q ' <entries that exist today>)\"` takes the render down for a card that only creates files.)",
+    "file": "skills/fast-track/SKILL.md:114",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "FIX: Branch creation or reset failure leaves blocked commits on the current branch, but the final push checks only the batch suite. Disable pushing or terminate the run on either failure. (Gate-verified: SKILL.md:576-585; an item that ended `stopped: reset-refused` keeps confirmed CRITICAL/HIGH commits on the working branch, and the end-of-run `--push` is gated only on a green batch suite.)",
+    "file": "skills/fast-track/SKILL.md:583",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "FIX: The findings loader validates keys but accepts invalid severity values; `\"high\"` or null silently bypasses verification and produces `commit`. Validate field types and the severity enum before either decision. (Gate-verified: `_load_findings` builds `Finding(r[\"severity\"], ...)` with no enum check; `verify_targets` and `exit_action` test membership in `(\"CRITICAL\", \"HIGH\")`, so a lowercase or null severity fails open to `commit`.)",
+    "file": "skills/fast-track/scripts/fast_track_plan.py:102",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "`asserted()`'s negator check only inspects text before a match's start (`text[:match.start()]`), so a negator embedded inside a two-limb pattern span (the shape GREEN_STOP/GATE_STOP from task 7 use) is invisible to it. Alice's live repro: `asserted(\"When the suite is green, this never causes the item to end stopped: tests-green-before-implementation.\", GREEN_STOP)` returns True. Task 8's fix (ced1678) closed it only for the multicard patterns; the stop-rule pins still carry the hole (also raised by Bob at fast_track_stop_testutil.py:82 and Carl at :89).",
+    "file": "skills/fast-track/scripts/fast_track_prose_testutil.py:558",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "The prose-testutil pattern carried from cycle 1 (~692-line bespoke reader model vs. a 374-line precedent) grew substantially this cycle: five new testutil modules (`fast_track_multicard_testutil.py` 740 lines, `fast_track_render_testutil.py` 682, `fast_track_stop_testutil.py` 384, `fast_track_wiring_testutil.py` 182, `fast_track_reference_testutil.py` 164, ~2150 lines total) plus `test_fast_track_commit.py` 625 and `test_fast_track_prose.py` at 798/800 lines. Blake: the scripts dir carries far more files than the PRD's Repository Structure names, all test-only. Behavior-preserving simplification, not urgent.",
+    "file": "skills/fast-track/scripts/fast_track_multicard_testutil.py",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "FIX: The new count CLI catches only ValueError. A JSON null row, missing kind, or unreadable ledger produces a traceback instead of the documented diagnostic and exit 2. Validate ledger rows and handle those failures. (Gate-verified by reading `count_item_dispatches` and `_main`: a `null` row raises AttributeError on `.get`, a row with `queued_at` and no `kind` raises KeyError, a directory or unreadable path raises OSError; only ValueError is caught.)",
+    "file": "skills/fast-track/scripts/fast_track_plan.py:140",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "FIX: The CLI matrix never tests workflow unavailable with Carl available; incorrectly enabling the workflow whenever Carl exists passes every case. Add that independent flag combination.",
+    "file": "skills/fast-track/scripts/test_fast_track_wiring_cli.py:88",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "FIX: Every blocking exit fixture starts with a blocker, so examining only the first finding passes. Add a nonblocking row followed by HIGH and require `branch`.",
+    "file": "skills/fast-track/scripts/test_fast_track_wiring_cli.py:95",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "FIX: The exit prose pin accepts a sentence such as \"`branch` never parks the item\" because _bound_case checks only matching words. Validate the action's polarity and add negated cases.",
+    "file": "skills/fast-track/scripts/test_fast_track_wiring.py:130",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "FIX: The strict frontmatter reader accepts raw NUL characters inside scalar values, allowing invalid YAML to pass the pack-wide check. Reject forbidden raw characters before scalar parsing and add regression coverage. (The rework session's own Devon round reported the same ceiling: control characters, tabs in plain values and duplicate keys pass the stdlib reader.)",
+    "file": "skills/fast-track/scripts/test_skill_frontmatter.py:147",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "FIX: The new metrics test file copies five fixture/CLI helpers from test_record_item.py. Move their shared implementations into one test utility, preserving the separate test files and assertions.",
+    "file": "skills/fast-track/scripts/test_record_item_render.py:46",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "The Tests commit message in SKILL.md is `test(<scope>): add tests for <item>` while the PRD's Tests-are-the-spec feature specifies `test(<item>): add tests for <goal>`; the scope and subject are swapped. No reviewer raised it; the gate found it while verifying Bob's pathspec finding on the same line.",
+    "file": "skills/fast-track/SKILL.md:153",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`fast_track_plan.py`'s module docstring still carries em dashes (\"Lane planner for /fast-track — the four decisions...\", \"...decide two things and no more — which ones...\"), against the project's no-em-dash convention. Pre-existing, untouched by tasks 7-16, self-reported by the build session as an open item.",
+    "file": "skills/fast-track/scripts/fast_track_plan.py:1",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`ARCHITECTURE_CONTEXT`'s three-way fallback (`AGENTS.md` -> `CLAUDE.md` -> `/dev/null`) goes beyond task 10's literal ask (\"`## Constraints` + `AGENTS.md`\"); it's tested and defensible but is scope not explicitly requested.",
+    "file": "skills/fast-track/SKILL.md:172-173",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "FIX: Three standalone roster tests duplicate cases already fully asserted by the eight-combination matrix. Remove those duplicate wrappers while retaining the matrix and explicitly required acceptance-test names. (Carried from cycle 1, never tasked; no tail sweep runs on a cap-out, so it is deferred here rather than dropped.)",
+    "file": "skills/fast-track/scripts/test_fast_track_plan.py:375",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "FIX: `_pasteable`, `_instructive` and `code_fragments` repeat the module's explanation of fenced commands in lengthy docstrings. Keep the central rationale and replace these repetitions with concise function contracts. (Carried from cycle 1, never tasked; no tail sweep runs on a cap-out.)",
+    "file": "skills/fast-track/scripts/fast_track_prose_testutil.py:573",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Every `render_prompt.py` call in SKILL.md omits the `--dispatch-kind`/`--dispatch-task` flags the PRD names verbatim for Ivan and Tess, issuing a separate `record_dispatch.py start` call instead. Functionally equivalent but departs from the cited reuse pattern without being flagged as deliberate. (Carried from cycle 1.)",
+    "file": "skills/fast-track/SKILL.md",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`count_item_dispatches` calls `json.loads(line)` on every line with no try/except; a blank or truncated ledger line raises `json.JSONDecodeError` and crashes the planner rather than skipping the bad row. (Carried from cycle 1; the task-16 CLI now turns the ValueError into exit 2 with one stderr line, so the library function still raises but the CLI no longer tracebacks on that shape. Bob's cycle-2 finding on `:140` covers the shapes it still misses.)",
+    "file": "skills/fast-track/scripts/fast_track_plan.py:83",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The exit rule and the foreign-WIP dirty-path check are documented only as SKILL.md prose; no automated test runs those git commands end to end, so a watered-down rewording could still pass the string-matching pins. (Carried from cycle 1; overlaps Alice's cycle-2 High on the untested task-9 transitions.)",
+    "file": "skills/fast-track/SKILL.md",
+    "reason": "cap-overflow: rework cap 2 reached at cycle 2 with this finding unresolved; deferred to batch end (state.deferred_decisions)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "1 touched test(s) pass against the pre-change code: test_count_prints_the_items_dispatches_by_kind_sorted_and_ignores_the_rest",
+    "file": "skills/fast-track/scripts/test_fast_track_wiring_cli.py",
+    "reason": "behavior-preserving parametrization by design: only the `absent` case (no ledger -> empty output, exit 0) passes at base because the pre-CLI module also exited 0 silently; the other four cases fail at base and pin the new CLI (Alice and Carl both verified)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "2 touched test(s) pass against the pre-change code: test_both_rework_values_are_accepted_and_land_as_integers",
+    "file": "skills/fast-track/scripts/test_record_item.py",
+    "reason": "behavior-preserving pin by design: it guards that 0 and 1 stay accepted while its sibling test_a_rework_count_outside_zero_or_one_is_refused fails at base and pins the fix (Alice and Carl both verified)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "1 touched test(s) pass against the pre-change code: test_cost_is_null_unless_passed",
+    "file": "skills/fast-track/scripts/test_record_item_render.py",
+    "reason": "behavior-preserving pin by design: the PRD requires cost_usd null unless --cost is passed and the producer already did that at base; the sibling test_a_row_written_without_cost_renders_through_both_metrics_tables fails at base and pins the renderer fix (Alice and Carl both verified)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "Phase 2's `dev/bin/release-checks` task carried an explicit premise-and-skip instruction (\"the file still has exactly three `echo \"[checks]` lines ... skip and report otherwise\") that did not hold when the task actually ran: `git blame` shows the file already had five `[checks]` blocks by 2026-09-07 when the fast-track block was added, yet the task proceeded instead of skipping-and-reporting. The task's own literal acceptance criterion is also violated as written: `rg -n 'fast-track' dev/bin/release-checks` prints two lines, not the \"one line\" the acceptance text specifies.",
+    "file": "dev/bin/release-checks:34-35",
+    "reason": "premise half refuted: task 6's description re-measured the premise at plan time (2026-09-07: five [checks] blocks at :11,16,20,24,28) and re-anchored it to >= 3, so the task proceeded on a premise that held; acceptance half is a PRD self-contradiction: the block the same task specifies (an echo line plus the pytest line) necessarily prints two `fast-track` lines, and the implementation matches the PRD's description; nothing to change in the code"
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "`record_dispatch.append_row` writes the working ledger and the `ledger/` mirror as two separate non-atomic writes; a failure on the second leaves them out of sync. Blake notes this is pre-existing shared code outside this PRD's new files.",
+    "file": "skills/work/scripts/record_dispatch.py",
+    "reason": "pre-existing shared code outside this PRD's scope, as the reviewer himself noted; not a finding against this PRD's work (carried from cycle 1, settled here)"
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Cannot statically verify: suite success, zero skips and CLI output.",
+    "file": "N/A",
+    "reason": "runtime verification exists: last-verification.json at 2c922c3 records 1373 passed, 0 failed, 0 skipped across the fast-track suite, release-checks and the cli suite; Alice, Blake and Carl each re-ran the suite green this cycle (carried from cycle 1, settled here)"
+  }
+]

@@ -1,0 +1,50 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "NARROW is verbatim from the PRD and needs a PRD wording change. It hard-codes pytest flags (`-q --tb=line`) for a stack-agnostic pack; `final-verification.md:16` covers cargo/npm projects, where `--tb=line` is invalid. \"Read the pass count and exit code from that one run\" directly follows \"the orchestrator runs the full suite once\", so \"that one run\" is ambiguous between the subagent's own narrow run and the orchestrator's later run, which the subagent cannot read. Devon's example runner (:31) has the same pytest-only slant, after dropping the old npm/cargo examples.",
+    "file": "skills/work/references/tess-prompt.md:47",
+    "reason": "The PRD mandates the NARROW sentence verbatim and the implementation reproduces it exactly, so this is a defect in the specification's wording, not in the change under review. Rewording it here would deviate from the spec the blind lens grades against. Deferred to batch end as a follow-up PRD against the NARROW text itself (stack-agnostic phrasing plus an unambiguous antecedent for \"that one run\")."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The fast-track lane reuses `agents/ivan.md`. Its rework `RETRY_INSTRUCTION` ends \"keep the suite green\" (skills/fast-track/SKILL.md:495). That can pull Ivan toward the whole-suite run the new sentence forbids. This was not caused by the PRD, but the narrow rule now contradicts it.",
+    "file": "skills/fast-track/SKILL.md:495",
+    "reason": "Pre-existing text in a file this PRD does not touch and does not name. The reviewer states it was not caused by this change. Fixing it here would widen the diff beyond the PRD's scope (surgical-changes rule). Deferred to batch end so the contradiction is tracked rather than silently absorbed."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Cannot statically verify: the next batch contains no Tess, Devon, or Ivan whole-directory or release-checks invocations",
+    "file": null,
+    "reason": "Not a defect. This restates the PRD's own third Success Metric, which is explicitly a post-release signal measured in the NEXT batch's last-session.log. No artifact exists at review time that could satisfy it, so it is unevaluable pre-release by construction rather than unmet. Recorded so it is not re-raised every cycle."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Recorded full-suite collection errors come from three unchanged Tracon tests importing unavailable rich; those imports exist at the base revision, supporting the pre-existing-error claim",
+    "file": "docs/dev/tmp/collect-00232c1.log:4193",
+    "reason": "Not a defect and not adverse: this row corroborates the build session's claim rather than contesting it. Independently confirmed three ways this cycle (the orchestrator's own `--collect-only` run, Alice, and Carl): exactly 3 collection errors, all `ModuleNotFoundError: No module named 'rich'` in `tracon/test_panels.py`, `test_screens.py` and `test_stream.py`, none of which this diff touches. The missing `rich` dependency is an environment gap outside a prose-rule PRD."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Scope beyond the PRD's four insertion points: the NARROW sentence is also inserted in skills/work/references/tess-retry-prompt.md:34 and inside Devon's \"Feedback to Tess\" template at skills/work/references/adversarial-test-prompt.md:96. A context-selection row and Rules item are also pinned by extra tests (test_tess_retry_prompt_carries_the_narrow_sentence, test_adversarial_prompt_carries_narrow_in_feedback_section, test_render_tess_prompt_contains_narrow_once, test_devon_context_selection_includes_test_runner_row). The PRD names only tess-prompt, ivan, adversarial (runner line, row, last rule) and SKILL.md. The extras are consistent with the intent (the SKILL.md sentence says \"every subagent prompt carries the same narrow-run sentence\"), are harmless, and pass. They are still unrequested prose.",
+    "file": "skills/work/references/tess-retry-prompt.md",
+    "reason": "Requirements ambiguity in the PRD itself, not a defect in the change. The PRD's Repository Structure lists four files, but the sentence the PRD mandates at skills/work/SKILL.md:71 asserts that EVERY subagent prompt carries the narrow-run sentence. Cycle 1's High 3/4 consensus finding was exactly that the two omitted Tess prompts made that mandated sentence false as shipped, and the cycle-1 decision gate created task 4 to make the claim true rather than reword it. Blake is blind by design, so he cannot see that history; his own text grants the extras are consistent with the intent, harmless, and passing. Reverting them would re-open the High that blocked convergence in cycle 1. This is the same root as the cycle-1 deferral of the Devon \"same sentence\" inconsistency (skills/work/SKILL.md:71): the PRD's universal claim versus its narrower file enumeration. Deferred to batch end with that one, so the spec decision is taken once, against the PRD text."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "6 touched test(s) pass against the pre-change code: test_tess_and_ivan_carry_the_narrow_sentence, test_devon_runner_is_the_tasks_test_files, test_devon_rules_forbid_a_directory_run, test_devon_context_selection_includes_test_runner_row, test_work_skill_names_rework_mode, test_render_tess_prompt_contains_narrow_once",
+    "file": "skills/work/scripts/test_narrow_runs_prose.py",
+    "reason": "Computed fact, correctly reported, but not a defect on this diff. Task 5's whole contract was to STRENGTHEN pins over prose cycle 1 had already shipped (NARROW in tess-prompt.md and agents/ivan.md, Devon's runner line, the Context Selection row, the Rules item and the SKILL.md rework sentence all landed in 744f918/eeb6c78/be7da2c). A pin over already-correct prose necessarily passes against the base that carries that prose; its value is failing on a FUTURE deletion, which task 5's acceptance criteria verified by temporary local edit. This is the fail-first replay block's own documented carve-out (\"a behavior-preserving refactor's tests pass by design, so weigh the PRD's intent before raising one\"). The two tests covering task 4's NEW prose, test_tess_retry_prompt_carries_the_narrow_sentence and test_adversarial_prompt_carries_narrow_in_feedback_section, do fail at base, which is the correct fail-first signal for what this diff actually added. Alice reviewed the same block, accepted it for this reason, and passed R2."
+  }
+]

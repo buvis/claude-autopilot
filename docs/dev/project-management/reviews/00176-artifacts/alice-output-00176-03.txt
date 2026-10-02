@@ -1,0 +1,13 @@
+[ALICE] 🟡 Both changed partial-write/replace test cases pass the incremental baseline, leaving the mandatory changed-test fail-first requirement unmet. | File: skills/use-codex/scripts/test_codex_hook_doctor_parse_errors.py:245 | Task: 2
+R1: pass
+R2: fail
+R3: pass
+R4: pass
+R6: pass
+R7: pass
+R8: pass
+R9: pass
+R10: pass
+R11: pass
+R12: pass
+R13: pass

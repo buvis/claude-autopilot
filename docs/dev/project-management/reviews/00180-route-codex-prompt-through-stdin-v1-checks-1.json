@@ -1,0 +1,9 @@
+[
+  {
+    "cycle": 1,
+    "finding": "Test and release-check status cannot be established statically",
+    "file": null,
+    "command": "bash dev/bin/release-checks",
+    "source": "bob"
+  }
+]

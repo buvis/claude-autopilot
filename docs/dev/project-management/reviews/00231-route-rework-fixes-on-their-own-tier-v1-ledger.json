@@ -1,0 +1,34 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "The Tail sweep sentence still says \"then the `default_model` floor exactly as that section computes it\", but a Tail sweep takes only actionable Medium/Low findings so it can never carry a 🔴 line, making the floor a no-op there while the clause still reads as if a floor may apply",
+    "file": "skills/run-autopilot/references/phase-review.md:195",
+    "reason": "contradicts the PRD contract: the PRD's Functional Decomposition states verbatim that the Tail sweep sentence \"is unchanged; it now inherits the rule because it points at the same section\". Editing it would violate the spec this cycle reviews against, and the no-op is the intended consequence of the rule, not a defect. Clarity-only, no behavior change."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Cannot statically verify: VERIFY — release checks pass; exact check: `bash dev/bin/release-checks`. The supplied replay proves base failures, not current-suite success.",
+    "file": null,
+    "reason": "resolved by evidence this cycle: the orchestrator ran `bash dev/bin/release-checks` at HEAD f550a2e and it exited 1. The check Bob could not run inside his read-only sandbox has now been run, and its result is raised as the orange row on test_devon_round_prose.py:231. A sandbox-limitation placeholder whose check has been executed is not a residual finding."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The spec's post-release signal (\"a `[D]` task records `tier_reason` from the classifier, never `floor`\") may not be observable, because the task-add payload line lists only estimated_tokens and est_context_peak as classifier fields and tier_reason is read only in cli/statectl.py:418; the spec did not ask for a change here",
+    "file": "skills/run-autopilot/references/phase-review.md:270",
+    "reason": "out of scope by the PRD's own text, as the reporting reviewer notes. This questions whether the PRD's third Success Metric (a post-release telemetry signal) is measurable, not whether the implementation matches the spec. Making tier_reason observable on [D] tasks is a separate change to the task-add payload contract; deferred to batch end so the metric gap stays visible rather than being silently fixed inside a prose PRD."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "bash dev/bin/release-checks fails its [checks] runner recursion guard section (6 passed, 20 failed, every failure reading \"refusing nested dispatch (depth=1)\") when run from inside a nested CLI dispatch, because AUTOPILOT_DISPATCH_DEPTH / COPILOT_CLI / _AUTOPILOT_LOOP are inherited and the guard under test refuses; re-running with `env -u` for those three passes",
+    "file": "dev/bin/release-checks",
+    "reason": "out of scope for a prose-only PRD, and pre-existing rather than introduced by this diff. release-checks exits 0 in a normal shell at this HEAD, verified by the orchestrator with the exit code captured explicitly. The failure reproduces only from inside a reviewer CLI dispatch (Carl hit it, diagnosed it himself, and re-ran clean with those three vars unset), so it affects a CLI reviewer running the gate rather than the gate itself. Teaching those tests to scrub inherited markers is a separate change to the test harness; deferred to batch end so it stays visible."
+  }
+]

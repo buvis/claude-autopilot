@@ -1,0 +1,82 @@
+[
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "[MECH] 🟡 21 touched test(s) pass against the pre-change code: test_structural_errors_names_a_malformed_top_level_field +15 more | File: skills/run-autopilot/cli/test_wave.py | Task: general",
+    "file": "skills/run-autopilot/cli/test_wave.py",
+    "reason": "Incidentally-touched pre-existing tests, not an unpinned change. Task 7's edit added parametrize cases to functions that already held many cases, and the replay counts every case of an edited function as touched. The NEW cases do fail against base (`_TOP_CHECKS[\"id\"]` was `isinstance(v, str)` there, which accepts `../202609261200`), which is what the fail-first evidence requires; the 21 passing rows are the pre-existing cases riding along."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "[MECH] 🟡 1 touched test(s) pass against the pre-change code: test_docs_name_the_site_and_the_summary | File: skills/run-autopilot/cli/test_wave_assemble.py | Task: general",
+    "file": "skills/run-autopilot/cli/test_wave_assemble.py",
+    "reason": "Pre-existing docs pin from task 4, edited incidentally this cycle. The prose task 8 actually changed is pinned by test_wave_docs.py's new test_retention_names_the_ledger_copy_of_the_wave_report_as_durable, and test_wave_docs.py is absent from the replay's pass list, i.e. its new pins DO fail against base."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "[MECH] 🟡 1 touched test(s) pass against the pre-change code: test_wave_report_states_the_real_base_totals_and_lane_batches | File: skills/run-autopilot/cli/test_wave_assemble_migrate.py | Task: general",
+    "file": "skills/run-autopilot/cli/test_wave_assemble_migrate.py",
+    "reason": "Pre-existing report test from task 3, touched by this cycle's helper edits rather than rewritten to pin new behavior. The rerun/crash-safety behavior task 5 and task 12 added is pinned by the new tests in the same file, which are among the 20 that fail against base."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "test_wave_assemble_summary.py is absent from both the `[checks] waves` block's pytest invocation and test_wave_docs.py's _WAVE_TEST_FILES whitelist, so its 12 tests - including three PRD-named Phase 0 acceptance tests - never run in the repo's only CI gate while release-checks still reports green",
+    "file": "dev/bin/release-checks",
+    "reason": "Deferred by the rework cap, not by judgment: state.cycle 2 >= rework_cap 2, no CRITICAL, so the loop-mode cap-out records it instead of dispatching a third rework. Confirmed by direct read of both lists plus a direct run of the file (12 passed). Cheap to fix: one path in the block, one entry in the whitelist."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "Teardown remains crash-unsafe: held_prds and status=\"assembled\" are not saved before the worktree is removed; the new test simulates a later state that already preserved both, not the actual pre-save crash state",
+    "file": "skills/run-autopilot/cli/wave_assemble.py",
+    "reason": "Deferred by the rework cap (cycle 2 >= rework_cap 2, no CRITICAL). Confirmed by source trace: the only save() is after the worktree removal, so held_prds, status, batch_id and worktree_removed are lost together; lane_status then either relabels the merged lane unfinished (exit 3 instead of 0) or lets lane_files_and_notes run with a removed cwd and raise an uncaught OSError."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "_open_assembly adopts any existing directory without verifying it is this repository's registered worktree on the expected assembly branch, allowing a same-repo worktree on another branch to be modified",
+    "file": "skills/run-autopilot/cli/wave_assemble.py",
+    "reason": "Downgraded from high by the gate (the assembly path is wave-id-scoped, and a stale plain directory surfaces as a loud `git -C` failure rather than silent mutation), then deferred by the rework cap."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "The changed CHANGELOG still claims checks-failed lane branches are untouched, contradicting the corrected runbook and actual rebase behavior",
+    "file": "CHANGELOG.md",
+    "reason": "Deferred by the rework cap. Confirmed: CHANGELOG.md:12 makes the blanket claim task 13 corrected at references/waves.md:133-137."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "_assemble_kept_region duplicates _abort_keep_region's section-and-anchor extraction; replace both with one parameterized anchored-region helper",
+    "file": "skills/run-autopilot/cli/test_wave_docs.py",
+    "reason": "Deferred by the rework cap. Confirmed: the two helpers differ only in their heading and anchor constants over an otherwise identical 10-line body."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "9 of the 14 touched tests in the split-out summary file pass against the pre-change code, among them test_summary_opens_with_the_base_and_the_assembled_head (cycle 1's gap 1) and test_summary_tables_each_lane_with_its_branch_status_and_batch (gap 3), so those two strengthenings pin already-correct behavior rather than the swap or pluralisation defect their findings named",
+    "file": "skills/run-autopilot/cli/test_wave_assemble_summary.py",
+    "reason": "Deferred by the rework cap rather than dismissed like M1-M3: the gap-1 and gap-3 findings were test-underdetermination, so passing against base is expected, but nothing here proves the strengthened assertions would fail on the specific mutation each gap named. Only a mutation-style test would."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "merge_lane clears stale conflict_paths on a later clean rebase but never clears stale conflict_detail when a retried lane eventually reaches \"assembled\", so a successfully-assembled lane's wave.json can still show an old failure detail",
+    "file": "skills/run-autopilot/cli/wave_assemble.py",
+    "reason": "Deferred by the rework cap. Raised by Alice as out of this cycle's required scope (not one of cycle 1's 25 findings, not a regression from this rework)."
+  }
+]

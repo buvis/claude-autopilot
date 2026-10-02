@@ -1,0 +1,18 @@
+[
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "PRD 00160 is still parked in wip/ although the implementation is complete, all Phase 1/2 acceptance commands and the full release-checks pass — per the repo's own PRD-lifecycle rule this should move to dev/local/prds/done/ once verified. Process note, not a code defect.",
+    "file": null,
+    "reason": "False positive. The wip/->done/ move is Phase 9's verified finalize step, which by construction has not run while the review gate is still open. Blake, on a PRD-only prompt, cannot see the lifecycle position. Not actionable at any cycle."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Prose pins still cannot detect deliberately inverted meaning; cycle 2 does not touch this disclosed repo-wide limitation",
+    "file": "skills/plan-tasks/scripts/test_plan_tasks_prose.py",
+    "reason": "Bob placed this in his own KNOWN bucket with the justification that robust semantic verification is a repo-wide testing limitation unchanged by this rework. Alice raised the same limitation in cycle 1 and it was accepted there too. Out of scope for PRD 00160, which did not introduce the technique."
+  }
+]

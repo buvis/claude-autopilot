@@ -1,0 +1,71 @@
+{
+  "prd": "00171-route-sonnet-prompt-through-stdin-v1.md",
+  "phase": "build",
+  "next_phase": "build",
+  "schema_version": 1,
+  "batch": {
+    "id": "202609011951",
+    "mode": "autopilot",
+    "completed_prds": [
+      {
+        "filename": "00164-close-verify-findings-through-the-final-gate-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 1,
+        "escalated_decisions": 0,
+        "tasks_completed": 0,
+        "tasks_total": 0
+      },
+      {
+        "filename": "00161-doctor-codex-host-hooks-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 5,
+        "escalated_decisions": 0,
+        "tasks_completed": 11,
+        "tasks_total": 11
+      },
+      {
+        "filename": "00160-route-opus-on-task-local-risk-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 2,
+        "escalated_decisions": 2,
+        "tasks_completed": 6,
+        "tasks_total": 6
+      },
+      {
+        "filename": "00171-route-sonnet-prompt-through-stdin-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 5,
+        "escalated_decisions": 0,
+        "tasks_completed": 2,
+        "tasks_total": 2
+      }
+    ],
+    "plugin_versions": {
+      "aegis@buvis-plugins": "0.3.2",
+      "warden@buvis-plugins": "0.14.0"
+    },
+    "parks_consecutive": 0
+  },
+  "catchup_mode": "skipped",
+  "doubt_reviewer": "codex",
+  "consensus_engine": "legacy",
+  "rework_cap": 2,
+  "tasks_total": 0,
+  "tasks_completed": 0,
+  "phases_completed": [],
+  "cycle": 1,
+  "replan_count": 0,
+  "qwen_breaker": {
+    "tripped": false,
+    "after_task": null,
+    "failed_tasks": [],
+    "batch_id": "202609011951"
+  },
+  "qwen_gate_failures_consecutive": 0,
+  "qwen_preflight": {
+    "batch_id": "202609011951",
+    "verdict": "healthy",
+    "detail": null,
+    "checked_at": "2026-09-04T07:12:55Z"
+  }
+}

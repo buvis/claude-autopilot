@@ -1,0 +1,18 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "[MECH] 🟡 12 touched test(s) pass against the pre-change code: test_dangling_symlink_at_autopilot_path_is_noop, test_handoff_marker_empty_or_malformed_is_replaced_with_json, test_handoff_marker_legacy_plain_same_task_not_rewritten, test_handoff_marker_task_whose_id_prefixes_the_marked_one_is_overwritten, test_missing_or_unreadable_state_writes_no_handoff_marker, test_no_autopilot_ancestor_is_noop +6 more",
+    "file": "skills/run-autopilot/scripts/test_autopilot_context_cap_hook.py",
+    "reason": "refuted by a direct replay: Alice checked out base 68c624db35b9 in a worktree, overlaid HEAD's hook test file and ran pytest -v; test_handoff_marker_empty_or_malformed_is_replaced_with_json and test_handoff_marker_task_whose_id_prefixes_the_marked_one_is_overwritten FAIL at base (12 failed, 48 passed). The other listed passers pin guards the PRD says to PRESERVE (unreadable-state, review-phase, dangling-symlink, no-ancestor, legacy same-task no-op), which pass at base by design. replay_tests_against_base.py mis-scored the subTest-carrying methods. Bob's VERIFY item on the same discrepancy was not queued (command shape: needs a worktree plus overlay, not one project command) and is answered by the same run."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Inherited size violations remain: supplied AST facts report `record_defer` at 54 lines, `do_park` at 61 and `_bump_and_check_tripwire` at 62; the lightly touched CLI entrypoint is also 1099 lines. / Inherited function length violations in touched files (record_defer at 54 lines, do_park at 61 lines in records.py; _bump_and_check_tripwire at 62 lines in hook) exceed the 50-line limit / the hook suite grew 958 -> 1210 lines (already over 800 at base)",
+    "file": "skills/run-autopilot/cli/records.py, skills/run-autopilot/cli/__main__.py, skills/run-autopilot/scripts/autopilot_context_cap_hook.py, skills/run-autopilot/scripts/test_autopilot_context_cap_hook.py",
+    "reason": "pre-existing before this PRD's base 68c624d; the surgical-changes rule keeps adjacent code untouched and the PRD names none of these functions. Bob filed it under KNOWN himself. Recorded in state.deferred_decisions (type out-of-scope) for the batch-end review; a hygiene PRD is the right home for the splits."
+  }
+]

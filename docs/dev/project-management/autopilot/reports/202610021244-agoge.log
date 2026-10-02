@@ -1,0 +1,22 @@
+**Done.** This was an unattended run: the findings are written up, but no decisions or backlog PRDs were made.
+
+**Changed:**
+- Recon profile refreshed to HEAD `1daea55`. The human-owned "Pins and vetoes" section came through unchanged (`cksum 1723024031 52` before and after).
+- Report and JSON sidecar written to `docs/dev/project-management/audit-results/agoge-2026-10-03.{md,json}`. The skill's `dev/local/` path doesn't exist since v0.6.0 moved the store.
+- 24 findings, all checked as verified: 4 HIGH, 9 MEDIUM, 11 LOW. Judy was not armed (no browser surface). The security lane ran on the `--authorized autoclaude-drain` flag.
+```
+jq '.findings | length' -> 24 ; git status --short -> (empty)
+```
+
+The four HIGH findings:
+- **Push guard bypass:** `git -c alias.p=push p` pushes past the block on open critical findings. Trudy proved it with a real push to a local repo under `/tmp`.
+- **Nested store and the solo lane:** with a nested store such as `~/.claude`, any store commit pushes a solo build up to the full review.
+- **Lost `.gitignore` lines:** `ensure-store` silently erases lines the operator added to the store `.gitignore`. The next `record-store` then commits whatever those lines hid, including a `*.secret` file.
+- **Nested store and `dirty`:** with no `repo_root` in state, `dirty` reports the store's own files as foreign, and `record-store` fails but still exits 0.
+
+**Not done:**
+- No regression tests were written. Writing them means switching branches in this checkout, and the live loop (PID 88048) runs there. Each finding's fix section proposes a test instead.
+- Gate disclosure: walter ran two `chmod` calls and one `rm` inside `bash -c`, where warden didn't check them. They touched only walter's own `/tmp` fixture.
+- `/tmp/olivia-fx2` from recon is still on disk; a safety gate stopped its removal.
+
+**Next:** You: run `/run-agoge --resume /Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/audit-results/agoge-2026-10-03.md` to walk the 24 findings.

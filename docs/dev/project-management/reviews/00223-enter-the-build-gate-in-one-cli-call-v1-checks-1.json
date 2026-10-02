@@ -1,0 +1,12 @@
+[
+  {
+    "cycle": 1,
+    "finding": "Tests and release checks pass",
+    "file": null,
+    "command": "bash dev/bin/release-checks",
+    "source": "bob",
+    "result": {
+      "exit": 0
+    }
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "cycle": 1,
+    "finding": "Full pytest result was not statically verifiable",
+    "file": null,
+    "command": "uv run --no-project --with pytest --with rich --with textual python -m pytest -q skills/plan-tasks/scripts skills/work/scripts skills/run-autopilot",
+    "source": "bob",
+    "result": {"exit": 0}
+  },
+  {
+    "cycle": 1,
+    "finding": "Classifier help exit status was not statically verifiable",
+    "file": null,
+    "command": "python3 skills/plan-tasks/scripts/classify_tier.py --help",
+    "source": "bob",
+    "result": {"exit": 0}
+  },
+  {
+    "cycle": 1,
+    "finding": "Release-check result was not statically verifiable",
+    "file": null,
+    "command": "bash dev/bin/release-checks",
+    "source": "bob",
+    "result": {"exit": 0}
+  }
+]

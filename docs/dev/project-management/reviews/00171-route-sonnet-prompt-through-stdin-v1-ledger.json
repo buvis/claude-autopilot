@@ -1,0 +1,18 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Cannot statically verify: `bash skills/use-sonnet/scripts/test_sonnet_run.sh` and `bash dev/bin/release-checks` green, and that the new leading-dash case was watched failing against the pre-fix script",
+    "file": null,
+    "reason": "Bob's sandbox marker for runtime claims, answered live in the same cycle by two other reviewers: Alice and Blake each ran the suite (25 passed, 0 failed), Blake ran dev/bin/release-checks green end to end, and Alice ran the new test file against the pre-fix script at 20be167^ and observed 7 of 25 failing. last-verification.json independently records 201 passed / 0 failed / 0 skipped at the reviewed HEAD."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "No test exercises the interactive (`-i`) path that the PRD requires to keep the TTY and the positional prompt, so nothing pins the boundary the fix must not cross",
+    "file": "skills/use-sonnet/scripts/test_sonnet_run.sh",
+    "reason": "Bob himself bucketed this KNOWN with an out-of-scope justification: a pre-existing harness gap untouched by this diff. The PRD enumerates only the five --print-path cases plus the leading-dash and empty-prompt cases, so interactive coverage is new scope, not a regression from this change."
+  }
+]

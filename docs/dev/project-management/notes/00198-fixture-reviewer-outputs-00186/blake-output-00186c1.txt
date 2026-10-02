@@ -1,0 +1,23 @@
+[BLAKE] ⚪ `count_item_dispatches` calls `json.loads(line)` on every non-empty split line with no try/except; a ledger with a blank or truncated line (e.g. from an interrupted write, or a manually edited fixture) raises `json.JSONDecodeError` and crashes the planner rather than skipping the bad row, even though `record_dispatch.append_row` itself documents a no-lock, interleaving-possible append. | File: /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/fast-track/scripts/fast_track_plan.py | Task: general
+[BLAKE] ⚪ `record_dispatch.append_row` (reused by `record_item.append_item_row`) writes the working ledger file and the `ledger/` mirror as two separate non-atomic writes; a failure on the second write (e.g. disk full after the first succeeds) leaves the two files out of sync with no reconciliation path, though this is pre-existing shared code outside this PRD's new files. | File: /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/work/scripts/record_dispatch.py | Task: general
+[BLAKE] ⚪ The exit rule (`git branch fast-track/<item>` + `git reset --keep <base>`) and the foreign-WIP dirty-path check are documented only as SKILL.md prose for the operator/agent to execute manually; there is no automated test that actually runs these git commands end-to-end (only the prose-pin regex tests confirm the text is present), so a future edit that reorders or waters down the wording could slip past the pytest suite while still passing the string-matching pins. | File: /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/fast-track/SKILL.md | Task: general
+
+B1: pass
+B2: pass
+B3: pass
+B4: pass
+B5: pass
+B6: pass
+B7: pass
+B8: pass
+B9: pass
+B10: pass
+B11: pass
+B12: pass
+B13: pass
+B14: pass
+B15: pass
+B16: pass
+B17: pass
+B18: pass
+B19: pass

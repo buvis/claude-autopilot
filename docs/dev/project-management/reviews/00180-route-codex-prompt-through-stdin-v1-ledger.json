@@ -1,0 +1,90 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Cannot statically verify: the Bash harness and release checks pass at HEAD",
+    "file": null,
+    "reason": "Sandbox artifact, not a defect. Bob runs static-only and cannot execute. The checks did run green at this exact HEAD: dev/local/autopilot/last-verification.json records sha 61bd107b4cf16f26f222bcdf7871aa85cf2679dc with 243 passed / 0 failed / 0 skipped from 'bash dev/bin/release-checks' (exit 0); Alice independently ran 'bash skills/use-codex/scripts/test_codex_run.sh' (42/42) and release-checks green, and Carl ran release-checks green. The check is also queued in the cycle-1 verification queue so it re-runs after rework."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "queued verification check 'bash dev/bin/release-checks' from cycle 1 has no result recorded in 00180-route-codex-prompt-through-stdin-v1-checks-1.json, so it counts as not passed and carries forward as a cycle-2 finding",
+    "file": null,
+    "reason": "Verified resolved this cycle: the orchestrator ran 'bash dev/bin/release-checks' in the foreground at HEAD 6ee0acadecf7282ab18e5240e929f043d823844d and it exited 0 with 247 passed, 0 failed, 0 skipped. Alice ran test_codex_run.sh (22/22), test_codex_run_resume.sh (24/24) and release-checks green; Blake ran test_codex_run.sh green; Carl ran all three green. The missing result is a work-phase recording gap -- dev/local/autopilot/last-verification.json is still stamped sha 61bd107 / cycle 1 despite the three rework commits -- not a red check. Recorded separately as an orchestrator note in the cycle-2 review file."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "The PRD's explicit acceptance gate (`rg -c 'PASS \"' skills/use-codex/scripts/test_codex_run.sh` must print 40) is not met — it prints 21. All 18 `--resume-thread` cases plus the fresh-path exit-code pin were silently relocated into a brand-new file `test_codex_run_resume.sh` (24 PASS lines), which the PRD's Repository/Structural Decomposition never names (it lists only codex-run.sh, test_codex_run.sh, dispatch-contract.md, CHANGELOG.md). Coverage is arguably preserved in aggregate (21+24=45), but the PRD's literal instruction — \"a different count means a case was lost, so stop and report\" — was not honored.",
+    "file": "skills/use-codex/scripts/test_codex_run.sh",
+    "reason": "cap-overflow: rework cap (2) reached with this finding unresolved. Deferred to batch end, not fixed. Orchestrator-verified as a real gate miss: the count is 21 in test_codex_run.sh and 24 in test_codex_run_resume.sh. No test case was lost (247 passed / 0 failed at HEAD vs 243 at cycle 1, +4 new cases), so the underlying risk the gate guards against did not materialise; what failed is the PRD's chosen single-file proxy for it."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "tautological test: \"unreadable prompt file\" case passes against pre-fix code (mech-confirmed), so it does not pin the new cat-failure guard or its new stderr message",
+    "file": "skills/use-codex/scripts/test_codex_run.sh",
+    "reason": "cap-overflow: rework cap (2) reached with this finding unresolved. Orchestrator-verified by the bash fail-first replay: the case passes against base 61bd107 because cat's own stderr already names the file and the old '[ -z \"$PROMPT\" ]' guard already exited 1. The fix itself is correct; the test does not bind to it."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "The unrequested file split duplicates fixture/helper code verbatim across test_codex_run.sh and the new test_codex_run_resume.sh instead of the requested single shared-helper extraction, and creates two copies of the single stdin helper the cycle-1 task asked for",
+    "file": "skills/use-codex/scripts/test_codex_run_resume.sh",
+    "reason": "cap-overflow: rework cap (2) reached with this finding unresolved. Orchestrator-verified: 239 of the two files' lines are byte-identical (483 and 524 lines; diff reports 244 left-only and 285 right-only), and child_stdin_is_prompt() is defined twice, at test_codex_run.sh:43 and test_codex_run_resume.sh:45. Merged from Alice's and Bob's separately-consolidated rows, which are the same defect."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "Scope creep: commit bb08599 bundles two behaviors into codex-run.sh that PRD 00180 never specifies — (a) a whitespace-only prompt file is now rejected as \"Prompt required\" (previously only a truly empty string was rejected), and (b) a failed `cat` read of the prompt file now errors explicitly. Neither belongs to \"route the codex prompt through stdin.\"",
+    "file": "skills/use-codex/scripts/codex-run.sh",
+    "reason": "cap-overflow: rework cap (2) reached with this finding unresolved. Both behaviors were explicitly requested by the cycle-1 decision-gate task (items 2 and 3b), so they are traceable to a review decision rather than unsanctioned drift; Blake is blind to that task by design. What stands is that the PRD itself never authorised them."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "Whitespace validation also rejects positional whitespace-only prompts, expanding behavior beyond the requested `-f` prompt-file guard",
+    "file": "skills/use-codex/scripts/codex-run.sh:154",
+    "reason": "cap-overflow: rework cap (2) reached with this finding unresolved. Orchestrator-verified by reading codex-run.sh:137-161: the `case \"$PROMPT\"` guard sits outside the `if [ -n \"$PROMPT_FILE\" ]` block, so it applies to a positional prompt too, while the CHANGELOG entry describes the change as `-f`-only."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "Fresh-JSON marker coverage adds a separate invocation although the existing JSON invocation already captured argv; fold the final-token check into case 3",
+    "file": "skills/use-codex/scripts/test_codex_run.sh:454",
+    "reason": "cap-overflow: rework cap (2) reached with this finding unresolved. A behavior-preserving simplification, not a correctness defect."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "Trailing-newline coverage duplicates the leading-dash file case, which already byte-compares a newline-terminated file; extend that case's wording instead",
+    "file": "skills/use-codex/scripts/test_codex_run.sh:434",
+    "reason": "cap-overflow: rework cap (2) reached with this finding unresolved. A behavior-preserving simplification, not a correctness defect."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "\"unreadable prompt file\" test silently becomes a no-op PASS on any user/environment that can read chmod-000 files (e.g. root in CI)",
+    "file": "skills/use-codex/scripts/test_codex_run.sh",
+    "reason": "cap-overflow: rework cap (2) reached with this finding unresolved. Orchestrator-verified at test_codex_run.sh:392-393, the only skip-shaped PASS branch in either harness. It did not fire in this run."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The PRD's Test Strategy \"Happy path\" wants the leading-dash prompt-file case verified \"on the plain, JSON and resume paths,\" but the new test only exercises the plain path; no leading-dash regression exists against `--emit-thread-id`/JSON or `--resume-thread`. Low risk since the code path is shared, but the stated scenario isn't fully pinned.",
+    "file": "skills/use-codex/scripts/test_codex_run.sh",
+    "reason": "cap-overflow: rework cap (2) reached with this finding unresolved. The JSON and resume paths share one dispatch site, so the risk is coverage-shaped rather than behavioral."
+  }
+]

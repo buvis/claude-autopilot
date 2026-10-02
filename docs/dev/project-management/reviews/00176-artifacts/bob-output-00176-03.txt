@@ -1,0 +1,21 @@
+[BOB] 🟡 FIX Supplied verification confirms Path.exists() suppresses EACCES on Python 3.14, returning missing without detail for an unreadable existing target. Classify existence from guarded stat, preserve missing for ENOENT, and add the permission regression. | File: skills/use-codex/scripts/codex_hook_doctor.py:55 | Task: 1
+[BOB] 🟡 KNOWN Mechanical replay reports two touched partial-write/replace cases passing against the incremental base. These preserve existing error-handling coverage while adapting its I/O patch; forcing them to discriminate an unchanged behavior is outside this rework. | File: skills/use-codex/scripts/test_codex_hook_doctor_parse_errors.py:245 | Task: 2
+[BOB] ⚪ VERIFY Cannot statically verify acceptance checks: confirm the parent’s full scripts pytest suite and bash dev/bin/release-checks both pass at captured HEAD 4f9ca6405081eea7b869883c6b53d301e53f6080. | File: N/A | Task: general
+
+R1: fail
+R2: fail
+R3: pass
+R4: pass
+R6: pass
+R7: pass
+R8: pass
+R9: fail
+R10: fail
+R11: pass
+R12: pass
+R13: pass
+D1: pass
+D2: pass
+D3: pass
+D4: pass
+D5: pass

@@ -1,0 +1,1048 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 49a3a80..e8f131b 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ## [Unreleased]
+ 
++### Fixed
++
++- **work**: limit Qwen planning and dispatch to its qualified single-file scope, preserve Codex routing for wider tasks, and escalate no-edit or test-mutating Qwen attempts to Sonnet before committing or testing.
++
+ ## [0.5.0] - 2026-09-05
+ 
+ ### Added
+diff --git a/skills/plan-tasks/SKILL.md b/skills/plan-tasks/SKILL.md
+index 36be0fa..0144f31 100644
+--- a/skills/plan-tasks/SKILL.md
++++ b/skills/plan-tasks/SKILL.md
+@@ -191,10 +191,12 @@ Below the 150K threshold → task ships as-is.
+ 
+ ### 4.6. Split tasks (context + eligibility)
+ 
+-Step 4.6 has **two independent split triggers**. The existing context-budget trigger is unchanged; the eligibility trigger is new (PRD 00032, widened by PRD 00019) and pushes separable backend work toward the `<=3`-file shape that `/autopilot:work` can route to qwen.
++Step 4.6 has **two independent split triggers**. The existing context-budget trigger is unchanged; the eligibility trigger pushes separable backend work toward the qualified single-file shape that `/autopilot:work` can route to qwen (PRD 00174).
+ 
+ - **Context-budget trigger** (always active): when `estimated_tokens > THRESHOLD` (150K normally; replan-context.md budget in replan mode), the task is too big for a single context window.
+-- **Eligibility trigger** (infra-gated, see the qwen infra preflight subsection below): a **backend** task (UI/backend definition: see step 4.7 — UI matches the "Gemini-first tasks" list in `${CLAUDE_PLUGIN_ROOT}/skills/work/SKILL.md`, everything else is backend) touching `>=4` files is split toward `<=3`-file pieces so each subtask can route to qwen. The split is valid only when **cleanly separable** — judged from the PRD's Functional Decomposition and Dependency Graph, with each resulting piece required to independently compile and carry its own passing tests (no piece depends on a symbol another piece introduces). **A trait definition cannot be split from its implementations.**
++- **Eligibility trigger** (infra-gated, see the qwen infra preflight subsection below): a **backend** task (UI/backend definition: see step 4.7 — UI matches the "Gemini-first tasks" list in `${CLAUDE_PLUGIN_ROOT}/skills/work/SKILL.md`, everything else is backend) touching `>=2` files may split into one-file pieces so each subtask can route to qwen. The split is valid only when **cleanly separable** — judged from the PRD's Functional Decomposition and Dependency Graph, with each resulting piece required to independently compile and carry its own passing tests (no piece depends on a symbol another piece introduces). **A trait definition cannot be split from its implementations.** Correlated implementation/test, interface/implementation, and implementation/caller edits remain together and route above Qwen; do not manufacture a task boundary to gain eligibility.
++
++An inseparable two-file task stays one task and is Qwen-ineligible (`files`); a separable two-file task may become two independently gated one-file tasks. Count only expected implementor writes: Tess-owned tests that Ivan must only read are outside that write set, while tests Ivan must edit count as writes.
+ 
+ When **both** triggers apply to the same task, a **single split pass** satisfies both — do not run two passes. After splitting, each subtask is re-estimated per step 4.5 and re-classified per step 4.7 (so `qwen_eligible` reflects the new file count).
+ 
+@@ -309,11 +311,11 @@ This guarantees:
+ After the classifier has settled `final_tier` (the floor above included), compute the `qwen_eligible` boolean that `/autopilot:work` (PRD 00031) reads to decide qwen routing. The formula (widened by PRD 00019) is:
+ 
+ ```
+-qwen_eligible = task is backend (not UI) AND model in {haiku, sonnet} AND files_touched <= 3 AND task edits no public contract
++qwen_eligible = task is backend (not UI) AND model in {haiku, sonnet} AND files_touched == 1 AND task edits no public contract
+ ```
+ 
+ - `model` is the tier the classifier printed (the same value persisted as the top-level `model` key).
+-- `files_touched` is the per-task file count already used in step 4.5 and handed to the classifier as the file slice.
++- Here `files_touched` counts distinct, non-empty expected implementor-writable file paths, excluding read-only context and Tess-owned tests; it does not change the step-4.5 context estimate or the classifier's inputs. Empty or missing file slices are ineligible (`files`).
+ - **UI** = the task matches the **"Gemini-first tasks"** list in `${CLAUDE_PLUGIN_ROOT}/skills/work/SKILL.md`. Anything not matching that list is **backend**. Reuse `work`'s list as the single source of truth so producer and consumer agree by construction — do not restate the list here; if it changes in `work`, this rule inherits the change.
+ - **Public contract** = the `contract_edit` fact judged above under its evidence rule. Reuse that value as the single source of truth so the tier and this flag cannot disagree; do not restate the definition here and do not widen its evidence. `contract_edit` false means the task edits no public contract.
+ 
+@@ -322,7 +324,7 @@ Each of the following yields `qwen_eligible = false` independently, with the nam
+ - The task matches the UI list (Gemini's domain, not qwen's) → `ui`.
+ - `model == "opus"` (opus tier is never qwen-eligible) → `tier`.
+ - The task edits a public contract, meaning `contract_edit` is true → `contract`.
+-- `files_touched >= 4` (qwen under-covers wide multi-file tasks) → `files`.
++- `files_touched >= 2` or `files_touched == 0` (outside the measured single-file scope) → `files`.
+ 
+ **`qwen_excluded_reason`**: on **every** ineligible task, also persist `qwen_excluded_reason` — one of `ui` / `tier` / `files` / `contract`. When several conditions fail, record the FIRST failing one in the order above (`ui` → `tier` → `contract` → `files`). `contract` is recorded ahead of `files` because the codex rung's fence (`run-autopilot/references/model-ladder.md` § Codex rung) admits `files` but must exclude `contract`, so a task that both spans many files and edits a public contract has to record `contract`, keeping it off codex. Eligible tasks omit the key. This makes under-routing auditable per batch: the Phase 9 Implementor Mix render counts exclusions by reason (PRD 00019).
+ 
+@@ -332,6 +334,8 @@ The flag is computed **from** the classifier output; it does **not** alter the t
+ 
+ **Persist** `model`, `tier_reason`, the `qwen_eligible` flag, and (on ineligible tasks) the `qwen_excluded_reason` alongside the existing token estimate as top-level keys in the task's `task-add` JSON payload, e.g.:
+ 
++A one-file backend task → `qwen_eligible: true`; a two-file backend task → `qwen_eligible: false`, `qwen_excluded_reason: "files"` (both Sonnet, no public-contract edit):
++
+ ```json
+ {"estimated_tokens": 72000, "est_context_peak": 92000, "model": "sonnet", "tier_reason": "default", "qwen_eligible": true}
+ ```
+@@ -340,7 +344,7 @@ The flag is computed **from** the classifier output; it does **not** alter the t
+ {"estimated_tokens": 90000, "est_context_peak": 110000, "model": "sonnet", "tier_reason": "default", "qwen_eligible": false, "qwen_excluded_reason": "files"}
+ ```
+ 
+-`qwen_eligible` is persisted on **every** task `plan-tasks` creates. `/autopilot:work` reads the field directly and does no re-judging — it routes per `qwen_eligible` + its own qwen infra preflight (see `${CLAUDE_PLUGIN_ROOT}/skills/work/SKILL.md`).
++`qwen_eligible` is persisted on **every** task `plan-tasks` creates. `/autopilot:work` retains that classification and reconciles the concrete `FILE_PATHS` write set before routing, so stale multi-file eligibility cannot bypass the single-file fence (see `${CLAUDE_PLUGIN_ROOT}/skills/work/SKILL.md`).
+ 
+ On legacy plans created before PRD 00025, `state.tasks[i].model` is simply absent — `/autopilot:work` falls back to omitting the Agent `model` parameter so subagents inherit the session model (backwards-compatible). Likewise, on legacy plans created before PRD 00032, `state.tasks[i].qwen_eligible` is absent and `/autopilot:work` treats it as `false` (routes to Claude at the task's tier); plans created before PRD 00019 lack `qwen_excluded_reason`, which readers treat as `unknown` — never an error. Plans created before PRD 00160 lack `tier_reason`; readers render the tier as unexplained rather than failing.
+ 
+diff --git a/skills/plan-tasks/scripts/test_plan_tasks_prose.py b/skills/plan-tasks/scripts/test_plan_tasks_prose.py
+index a65eac7..8e8f9e5 100644
+--- a/skills/plan-tasks/scripts/test_plan_tasks_prose.py
++++ b/skills/plan-tasks/scripts/test_plan_tasks_prose.py
+@@ -528,7 +528,7 @@ def test_skill_md_drops_the_retired_automatic_opus_promotions() -> None:
+             "still reads as opus work."
+         )
+     # Same rule, respelled, is the same rule: pin the shape, not the two
+-    # spellings. `files_touched >= 4` and `estimated_tokens > THRESHOLD` are
++    # spellings. The Qwen file boundary and `estimated_tokens > THRESHOLD` are
+     # deliberately untouched - those are qwen eligibility and the context
+     # budget, not tier promotions.
+     for pattern, description in (
+@@ -637,3 +637,23 @@ def test_design_rationale_records_why_the_rule_1_triggers_retired() -> None:
+         "not say which triggers misfired cannot stop the next attempt from "
+         "reintroducing them."
+     )
++
++
++def test_qwen_predicate_is_exactly_one_nonempty_writable_file() -> None:
++    assert "files_touched == 1" in _STEP_4_7
++    assert "expected implementor-writable" in _STEP_4_7_PROSE
++    assert "Empty or missing" in _STEP_4_7_PROSE
++    assert "files_touched >= 2" in _STEP_4_7_PROSE
++    assert "`ui` → `tier` → `contract` → `files`" in _STEP_4_7_PROSE
++    assert "one-file backend task → `qwen_eligible: true`" in _STEP_4_7_PROSE
++    assert "two-file backend task → `qwen_eligible: false`" in _STEP_4_7_PROSE
++
++
++def test_eligibility_split_requires_independently_gated_one_file_tasks() -> None:
++    assert "touching `>=2` files" in _STEP_4_6_PROSE
++    assert "one-file pieces" in _STEP_4_6_PROSE
++    assert "independently compile and carry its own passing tests" in _STEP_4_6_PROSE
++    assert "no piece depends on a symbol another piece introduces" in _STEP_4_6_PROSE
++    assert "implementation/test, interface/implementation, and implementation/caller" in _STEP_4_6_PROSE
++    assert "inseparable two-file task stays one task" in _STEP_4_6_PROSE
++    assert "separable two-file task may become two independently gated one-file tasks" in _STEP_4_6_PROSE
+diff --git a/skills/run-autopilot/references/model-ladder.md b/skills/run-autopilot/references/model-ladder.md
+index a7ca94b..b376c8a 100644
+--- a/skills/run-autopilot/references/model-ladder.md
++++ b/skills/run-autopilot/references/model-ladder.md
+@@ -72,6 +72,13 @@ machinery (PRD 00017), through the Fable rescue gate (§ Fable rescue) on the
+ way. No new halt class. A `fable` attempt has **no rung above it**: its gate
+ failure goes straight to the same exhaustion path, never to an escalation.
+ 
++Qwen output causes `qwen_no_edit` and `qwen_test_mutation` are capability
++failures on that same one-shot edge, detected before staging or test execution.
++They never retry Qwen, take Codex, or invalidate a healthy preflight cache.
++The runtime single-file fence applies before the table; stale two/three-file
++tasks use the effective `files` exclusion for the existing Codex interception,
++while zero paths fail closed to Claude at tier. Planner metadata is unchanged.
++
+ ## Fable rescue
+ 
+ The `opus -> fable` edge is a human gate, not a ladder step. In ladder terms:
+diff --git a/skills/run-autopilot/references/state-schema.md b/skills/run-autopilot/references/state-schema.md
+index a9aedab..160c611 100644
+--- a/skills/run-autopilot/references/state-schema.md
++++ b/skills/run-autopilot/references/state-schema.md
+@@ -179,11 +179,13 @@ State file location: `dev/local/autopilot/state.json`
+ | `tasks` | object[] | Canonical task list for the current PRD: `{"id": "<task-id>", "name": "...", "status": "pending\|in_progress\|completed", "description"?: string, "blocked_by"?: int[], "model"?: "haiku\|sonnet\|opus\|fable", "attempts"?: object[]}`. Include `id` — state readers (tracon, the review phase, `rework_task_ids` targeting) key on it. The two optional entry fields `description` and `blocked_by` are detailed in the `tasks[].description` and `tasks[].blocked_by` rows below. |
+ | `tasks[].model` | enum? | Per-task model tier: `"haiku"`, `"sonnet"`, `"opus"`, `"fable"`. `"fable"` (PRD 00076) is reachable **only** via the Fable rescue gate (`references/recovery.md` § Rework escalation exhausted, on a human-approved ledger entry), never by the plan-tasks tier classifier and never as a session model. Set by plan-tasks step 4.7's tier classifier (`classify_tier.py`) and rewritten by /autopilot:run-autopilot Phase 6 escalation (see `references/phase-review.md` Phase 6). The dashboard, the review phase, and `/autopilot:work` read this field. When absent (plans created before PRD 00025), `/autopilot:work` omits `model` and subagents inherit the session model. |
+ | `tasks[].attempts` | object[]? | Per-task execution log: `{"attempt": int, "model": string, "outcome": "completed"\|"aborted"\|"review_flagged"\|"rework_failed"\|"escalated", "review_cycle": int\|null, "cause": string\|null, "implementor": "claude"\|"gemini"\|"qwen"\|"codex"\|"orchestrator", "preflight_outcome": "healthy"\|"pi_missing"\|"endpoint_unreachable"\|"model_id_missing"\|"completion_failed"\|null, "pipeline"?: "minimal"\|"lean"\|"full", "self_deslop"?: string, "escalation_reason"?: "gate_failure"\|"review_flag"\|"fable_rescue", "escalated_from"?: "qwen"\|"haiku"\|"sonnet"\|"opus"\|"codex", "diagnosis"?: "spec_gap"\|"solid_spec", "repair_used"?: true, "breaker_skipped"?: true, "qwen_gate_failed"?: true, "qwen_excluded_reason"?: "memory_pressure"\|"memory_probe_failed", "codex_no_edit"?: true, "codex_no_edit_probe_exit"?: int, "micro_lane"?: "overrun", "reflow"?: string, "review"?: string, "style_gate"?: string, "split_hygiene"?: string, "verification"?: string}`. Records each Work pass on the task. Appended by `/autopilot:work` at task exit (success or abort). The `implementor` field reflects what actually dispatched (NOT what step 3's routing table initially picked — a qwen pick that fell back to Claude on preflight failure records `"claude"`). The `preflight_outcome` field is set only for attempts on qwen-eligible tasks (`state.tasks[i].qwen_eligible == true` at attempt start); for non-qwen-eligible attempts (UI tasks, `opus`-tier tasks, backend tasks where `qwen_eligible` is `false` or absent) it is `null`. A qwen-eligible attempt that the breaker (row 3) or the memory-pressure gate (row 4) rerouted also records `null`, because the probe never ran. The `pipeline` field records the tier-gated pipeline depth the attempt ran — `"minimal"`/`"lean"`/`"full"` for `haiku`/`sonnet`/`opus`, and `"full"` for `fable` (the rescue rung runs the deepest pipeline, like `opus`; absent/legacy `model` is treated as `sonnet` → `"lean"`), written at every task exit (PRD 00044) — the `?` in the signature marks read-side tolerance for pre-00044 rows only; new writes always include `pipeline`. **Cardinality (PRD 00065):** today `/autopilot:work` appends exactly one entry per task at exit. Under in-loop escalation the rule widens to one entry per rung/dispatch-group: each rung that dispatched writes its own entry when the task escalates away from it or exits on it. `attempt` numbers stay sequential across rungs (`len(existing)+1`). This is a widening, not a break — a task that never escalates still writes exactly one entry, byte-identical to today. **Six escalation fields (PRD 00065, all optional, absence = legacy / not-applicable):** `escalation_reason` (`"gate_failure"` stamped by `/autopilot:work` on the entry of the rung it escalated INTO (in-loop diagnosis); `"review_flag"` stamped by phase-review Phase 6 on its escalation path; `"fable_rescue"` (PRD 00076) stamped by the Fable rescue gate on the entry of the human-approved fable retry, always paired with `escalated_from: "opus"` and an entry `model` of `"fable"` (the rescue rung — the one tier `/autopilot:work` never selects on its own). Absent = none of the three (legacy / no escalation)); `escalated_from` (string?; normally a tier — on the entry of the rung escalated INTO, the immediate-prior rung it came from; the one exception is `"codex"` (PRD 00077), which names a BACKEND rather than a tier — stamped on the Claude entry a codex capability failure escalates into, the others are all tiers. Absent on non-escalated entries); `diagnosis` (string?; the 2nd-failure diagnosis verdict, stamped on the entry of the rung that was diagnosed); `repair_used` (bool?; `true` stamped on the entry of the same-tier attempt that ran after a task-description repair; absent otherwise, never written `false`); `breaker_skipped` (bool?; `true` stamped on a qwen-eligible attempt the breaker rerouted off qwen — to codex (PRD 00077) or to Claude at original tier (no preflight probe); absent otherwise); `qwen_gate_failed` (bool?; `true` stamped on an `implementor:"qwen"` entry whose step-5.5 gate FAILED — the durable signal the qwen capability breaker keys on; absent otherwise). `qwen_excluded_reason` (string?, PRD 00075; stamped on a qwen-eligible attempt the memory-pressure gate (`model-ladder.md` § Memory gate) rerouted off qwen — to codex (PRD 00077) or to Claude at original tier — `"memory_pressure"` when the gate probe exited 1 (under pressure), `"memory_probe_failed"` when it exited 2 (probe failed); absent otherwise, including on qwen dispatches, breaker-skipped attempts, and non-qwen-eligible tasks. **Attempt-level** — distinct from the plan-time `tasks[].qwen_excluded_reason` field described below, which records why plan-tasks excluded a task from qwen routing at plan time, not why a dispatch-time gate rerouted it). **Codex no-edit fields (PRD 00077, both optional):** `cause` gains the value `"codex_no_edit"` — the no-edit infra arm, stamped when the codex helper exited 0 with a non-empty output file but produced no working-tree change (the hook-blocked, prose-only case); classified as INFRA, so the attempt falls back to Claude at the task's own tier with no `escalation_reason` stamp. `codex_no_edit` (bool?; the LATCHED detector result, captured at the dispatch boundary — `work` SKILL.md step 4, before step 5's `git add` — by comparing the task's own file slice porcelain before and after the codex dispatch; step 5.5 reads this latched flag and never re-runs the detector. Absent on non-codex attempts and on attempts written before PRD 00077). `codex_no_edit_probe_exit` (int?; the detector's own exit code, recorded ONLY when the detector exited non-zero — a non-zero exit means the probe is INDETERMINATE, not "no change": `codex_no_edit` is NOT latched and the attempt continues on the capability path normally. Exists so a broken detector is visible in the record instead of silently reclassifying every real codex capability failure as infra. Absent when the detector ran cleanly and on attempts written before PRD 00077). The `"escalated"` outcome value is stamped on the entry for a rung the task was reset away from and escalated up; the final rung's entry carries the real terminal outcome (`completed`/`aborted`), and the escalated-away entry keeps its true `implementor` (a qwen rung escalated to Sonnet keeps `implementor:"qwen"`; likewise, a codex attempt records `model` at the task's own tier, e.g. `"sonnet"`, with `implementor: "codex"` carrying the backend identity — the same split the qwen rung already uses). **Micro-lane fields (PRD 00148, both optional):** `implementor` gains `"orchestrator"` — the one value meaning no implementor dispatched at all, stamped when a small rework task was edited in-session by the orchestrator (`work/references/rework-mode.md` § Micro lane), which also records `red_check: "n/a:micro-lane"`. `micro_lane` (string?; `"overrun"` when the lane's post-edit ceiling fired, the edit was reverted and the task fell through to a normal dispatch — that attempt records the real dispatcher in `implementor`; absent otherwise). `reflow` (string?; `"<path>:<hunks>"`, `;`-joined for several, when `/autopilot:work` step 5's `check_reflow.py` flagged a staged file, or `"failed:<stderr>"` when the script could not run; absent when nothing was flagged). **Per-task review field (PRD 00159):** `review` (string?; `"failed:<cause>"` when the step-5.7 reviewer lane failed twice, `"failed:invalid_output"` when both replies broke the reporting contract and `parse_review.py` rejected each, `"skipped:test-only"` when every path in `<task_base_sha>..HEAD` was test or fixture code outside rework mode; may also carry a `medium-retry:fixed`/`medium-retry:unfixed` suffix from PRD 00140. Absent when the review ran cleanly or the haiku tier-gate skipped it). **Per-task style gate (PRD 00163):** `style_gate` (string?; the step-5.65 verdict on that task's own diff — `"clean"`, `"fixed:<sha>"` (one fix dispatch landed and the re-run was clean), `"failed:<detail>"` (the violation lines joined by `"; "`, or the script's stderr when the gate could not run), or `"skipped:tier"` for a `haiku` task. Absent on attempts written before PRD 00163, when the gate ran once per phase and stamped nothing per task). **Per-task split-hygiene check (PRD 00166):** `split_hygiene` (string?; the step-5.65 verdict on the test files that task touched — `"clean"`, `"fixed:<sha>"` (one deletion-only fix dispatch landed and the re-run was clean), `"failed:<detail>"` (the reported lines joined by `"; "`, or the script's stderr when the check could not run), or `"skipped:no-tests"` when the task's candidate list held no test path. Distinct from `style_gate` because the two answer different questions on different file sets: one measures line spans over every `.py` file, the other reads bindings in test files only. Absent on attempts written before PRD 00166 and when the haiku tier-gate skipped step 5.65). **Verification stamp (PRD 00167):** `verification` (string?; `"skipped:<cause>"` when step 5.5's per-task test verification could not run at all, or `"timeout:<command>"` when step 5.5's narrow tests hit their 300000 ms Bash `timeout` budget and then hit the 600000 ms re-run too, leaving no verdict, per `work/references/subagent-dispatch.md` § Foreground command budgets. `<command>` names the command that timed out. Two neighbouring timeouts are never stamped here: a step-2.95 red-check takes `red_check: "skipped:<cause>"` from its own ladder, and a step-7 timeout is recorded in the phase report, that suite running after every attempt entry has been appended. Absent when the task's tests ran). See `work/references/attempt-logging.md` for field semantics, the atomic write procedure, and the attribution row-ownership table. Outcome upgraded later by /autopilot:run-autopilot Phase 6: `review_flagged` at the start of escalation (step 2), then `rework_failed` if the chain exhausts at `opus` (or at `fable`, when a rescue attempt was spent — step 3's escalation-exhausted branch). Rework reads the last entry's `model` to determine the next tier. Absent on plans created before PRD 00025; `implementor`/`preflight_outcome` absent on attempts written before PRD 00031; `self_deslop` absent on attempts written before PRD 00041; `pipeline` absent on attempts written before PRD 00044; the six escalation fields and the `"escalated"` outcome value absent on attempts written before PRD 00065; the attempt-level `qwen_excluded_reason` absent on attempts written before PRD 00075; `codex_no_edit` and `codex_no_edit_probe_exit` absent on attempts written before PRD 00077. |
++| `tasks[].attempts[].cause` | string? | Qwen pre-commit output causes: `"qwen_no_edit"` (no task-owned implementation diff) and `"qwen_test_mutation"` (Tess-owned tests differ from the test commit). Both record a rejected Qwen row with `outcome: "escalated"`, `qwen_gate_failed: true`; the new Sonnet row carries `escalation_reason: "gate_failure"`, `escalated_from: "qwen"`. Existing abort causes are unchanged; successful attempts use null. |
++| `tasks[].attempts[].qwen_excluded_reason` | string? | Runtime exclusion: `"files"` for zero or stale multi-file `FILE_PATHS`, `"memory_pressure"` or `"memory_probe_failed"` for row 4. A write-set exclusion records `preflight_outcome: null` and preserves the plan-time task fields. Absent when no runtime exclusion fired. |
+ | `tasks[].attempts[].self_deslop` | string? | Outcome of the per-task self-deslop pass that `/autopilot:work` runs as step 5.6 between test-pass (5.5) and per-task code review (5.7). Allowed values: `"committed:{sha}"` (the self-deslop subagent committed a `chore: prune slop from ...` cleanup), `"noop"` (subagent ran but found no slop, no commit), `"skipped:trivial"` (skip rule fired — diff added <30 net lines OR touched <2 files), `"skipped:test-only"` (PRD 00159; every path in `<task_base_sha>..HEAD` is test or fixture code, checked before the trivial rule), `"timeout"` (subagent watchdog killed it), `"errored:{cause}"` (dispatch failed; `{cause}` is a short tag). Optional; absent on legacy attempts (pre-PRD-00041) and on attempts the writer never updated. Self-deslop is best-effort: it never blocks a task, never triggers retries, and never modifies the `outcome` field. The per-task review at step 5.7 runs against the post-cleanup diff when a cleanup committed; against the original diff otherwise. |
+ | `tasks[].estimated_tokens` | int? | Per-task input-token budget estimate. Set by plan-tasks step 4.7's tier classifier; persisted directly in `state.tasks[]`. Absent when plan-tasks did not record a budget estimate. |
+ | `tasks[].est_context_peak` | int? | Per-task estimated peak working-context size. Used to predict subagent dispatch budget headroom. Set by plan-tasks step 4.7's tier classifier; persisted directly in `state.tasks[]`. Absent when plan-tasks did not record a context estimate. |
+-| `tasks[].qwen_eligible` | bool? | Qwen routing eligibility (PRD 00032, widened by PRD 00019): backend (not UI) AND tier ∈ {`haiku`, `sonnet`} AND `files_touched <= 3` AND no public-contract edit. Set by plan-tasks step 4.7's tier classifier; persisted directly in `state.tasks[]`. `/autopilot:work` reads this field for routing; absent (legacy plans) is treated as `false`. |
+-| `tasks[].qwen_excluded_reason` | string? | Why plan-tasks step 4.7 excluded the task from qwen routing: `"ui"`, `"tier"`, `"files"`, or `"contract"` (first failing condition in that order). Set by plan-tasks step 4.7's tier classifier on every ineligible task (PRD 00019); persisted directly in `state.tasks[]`. Absent on eligible tasks and legacy plans — the Phase 9 Implementor Mix render counts an ineligible task with no reason as `unknown`, never an error. |
++| `tasks[].qwen_eligible` | bool? | Qwen routing eligibility (PRD 00174): backend (not UI) AND tier ∈ {`haiku`, `sonnet`} AND exactly one non-empty expected implementor-writable file AND no public-contract edit. Empty or missing file slices are ineligible. Set by plan-tasks step 4.7's tier classifier; persisted directly in `state.tasks[]`. `/autopilot:work` reconciles this flag against concrete `FILE_PATHS` before routing, without rewriting the plan; absent (legacy plans) is treated as `false`. |
++| `tasks[].qwen_excluded_reason` | string? | Why plan-tasks step 4.7 excluded the task from qwen routing: `"ui"`, `"tier"`, `"contract"`, or `"files"` (first failing condition in that order; `files` includes zero and two-or-more writable files). Set by plan-tasks step 4.7's tier classifier on every ineligible task (PRD 00019); persisted directly in `state.tasks[]`. Absent on eligible tasks and legacy plans — the Phase 9 Implementor Mix render counts an ineligible task with no reason as `unknown`, never an error. |
+ | `tasks[].tier_reason` | string? | Why the planner assigned the task its tier **at plan time**. Legal values: `"test_port"` (every path in the task's slice is a test path, pinned to `sonnet`), `"packaging"` (every path is a test or packaging path, pinned to `sonnet`), `"contract"` (the task itself edits a public contract, so `opus`), `"algorithmic_risk"` (the task's own Details name a new algorithm, shared mutable state, or a migration, so `opus`), `"mechanical"` (the haiku row), `"default"` (the `sonnet` fallback), and `"floor"` (the PRD frontmatter `default_model` floor raised the classified tier). Written once by `/autopilot:plan-tasks` step 4.7 from `classify_tier.py`'s output; persisted directly in `state.tasks[]` and **never rewritten afterwards**: a later escalation rewrites `model` only, and `attempts[]` carries that history, so `model: "opus"` with `tier_reason: "mechanical"` is an escalated task, not a corrupt record. No reason maps to `fable` (see the `tasks[].model` row). Absent on plans created before PRD 00160. |
+ | `tasks[].description` | string? | Free-form detail about what the task must achieve, beyond the one-line `name`. Validated by `cli/schema.py`: optional, and when present must be a `str` (any other type — including `bool` — is rejected as `tasks[<i>].description`). Absent on tasks that carry only a `name`. |
+ | `tasks[].blocked_by` | int[]? | Integer references to the tasks this one waits on. Validated by `cli/schema.py`: optional, and when present must be a `list` whose every element is a plain `int` — `bool` elements are rejected, matching the bool-is-not-int rule the int fields already use. An empty list is valid. Absent on tasks with no dependencies. |
+@@ -193,7 +195,7 @@ State file location: `dev/local/autopilot/state.json`
+ | `work_start_sha` | string? | Git `HEAD` SHA captured at Phase 3 start, immediately before `/autopilot:work` is dispatched. Bounds the commit range `work_start_sha..HEAD` produced by this PRD's `/autopilot:work` dispatches — read by Phase 8 to scope the codex doubt review's diff (`<work_start_sha>..HEAD`). Captured once per PRD; in a multi-PRD batch each PRD overwrites it with current HEAD at Phase 3 start, so ranges never overlap. **Empty-tree fallback (PRD 00084):** when `git rev-parse HEAD` fails at capture (unborn branch / no commits yet), this is set to the git empty-tree sentinel `4b825dc642cb6eb9a060e54bf8d69288fbee4904` so the review range spans the whole tree instead of being undefined (core `SKILL.md` § Phase 3 invariants). Cleared by Phase 9 step 10 on PRD-to-PRD reset. Optional: absent on plans created before this field was introduced, and on PRDs where Phase 3 has not yet run. |
+ | `repo_root` | string? | Absolute path to the git repo containing the work commits (`git rev-parse --show-toplevel`), captured at Phase 3 start alongside `work_start_sha`. Usually equals the project root; differs when the work repo is nested under a non-git project root (e.g. `${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot` under `~/.claude`). Read by the review session to run `git` (diff gathering, `head_sha` capture) in the right repo. Cleared by Phase 9 step 10 on PRD-to-PRD reset. Optional: absent on older plans; consumers fall back to the project root. |
+ | `rework_task_ids` | string[]? | Set by `/autopilot:run-autopilot` Phase 6 (rework) to instruct `/autopilot:work` to process only those task IDs at their escalated tier. Non-empty puts `/autopilot:work` in rework mode (skip completed-not-flagged tasks; re-iterate the listed IDs). Cleared (set to `[]`) by `/autopilot:run-autopilot` after the rework `/autopilot:work` pass finishes. Empty/absent means full-plan dispatch — the default Phase 3 behavior. |
+-| `qwen_gate_failures_consecutive` | int? | Consecutive qwen step-5.5 gate failures, counted among qwen attempts ONLY (PRD 00065) — a non-qwen task (Claude/Gemini) between two qwen failures leaves it UNCHANGED (neither reset nor incremented). Only a qwen gate PASS resets it to 0; batch rollover also resets it. Incremented per qwen gate failure. Latches the breaker at 2. Owned entirely by `/autopilot:work`. Legacy state lacking the field: readers treat it as 0. |
++| `qwen_gate_failures_consecutive` | int? | Consecutive qwen capability failures (pre-commit output rejection or step-5.5 gate failure), counted among qwen attempts ONLY (PRD 00065) — a non-qwen task (Claude/Gemini) between two qwen failures leaves it UNCHANGED (neither reset nor incremented). Only a qwen gate PASS resets it to 0; batch rollover also resets it. Incremented per qwen gate failure. Latches the breaker at 2. Owned entirely by `/autopilot:work`. Legacy state lacking the field: readers treat it as 0. |
+ | `qwen_breaker` | object? | Qwen capability breaker state (PRD 00065): `{"tripped": bool, "after_task": "<task-id>"\|null, "failed_tasks": ["<id>", ...], "batch_id": "<batch.id>"}`. `tripped:true` once the counter reaches 2. `after_task` = the task id whose failure tripped it; `failed_tasks` = the two consecutive failing ids; `batch_id` = the batch this breaker state belongs to. Batch-scoped: `/autopilot:work` resets the breaker lazily when `qwen_breaker.batch_id != state.batch.id` (fallback id `"no-batch"` for a manual `/autopilot:work` run with no `state.batch`). Once tripped, stays tripped for the rest of the batch. Legacy state lacking the field: readers treat it as `{tripped:false}`. |
+ | `codex_probe` | object? | Batch-scoped codex health probe result (PRD 00077): `{"batch_id": "<state.batch.id>"\|"no-batch", "verdict": "healthy"\|"unhealthy", "backend": "codex"\|"copilot", "detail": "<one-line cause>"\|null, "checked_at": "<ISO 8601>", "hook_doctor?": "ok"\|"stale: <basenames>"\|"<doctor summary line>"\|"doctor error: <config path>"}`. Written once per batch by the codex batch health probe (`work` SKILL.md § Batch codex health probe) and read by the step-3 routing interception before any codex dispatch. Batch-scoped with the same LAZY reset `qwen_breaker` uses: `/autopilot:work` re-probes and overwrites the slice when `codex_probe.batch_id != state.batch.id` (fallback id `"no-batch"` for a manual run with no `state.batch`); a match reuses the cached verdict and never re-probes. Writers MAY carry additional descriptive keys beyond these five (the live probe also stamps `model` and `note`); readers ignore unknown keys. Absent on legacy state files: readers treat absence as "not yet probed", never an error. **`hook_doctor`** (optional): the doctor-first sub-probe's own verdict (`work/references/codex-implementor.md` § Codex batch health probe), from `codex_hook_doctor.py check` run before the live probe. `"ok"` when the doctor exits 0; `"stale: <basenames>"` when it exits 3 (the stale/no_canonical targets' basenames). On doctor exit 1 or 2 the live probe is skipped entirely and `verdict` is forced `"unhealthy"`, but the two exits document DIFFERENT `detail`/`hook_doctor` shapes because the doctor's own output differs on each path: on **exit 1** (a broken target exists) `hook_doctor` carries the doctor's own summary line (`"<n> ok, <n> stale, <n> broken"`) and `detail` carries `"hook_doctor: <the first broken TSV line>"`; on **exit 2** (the doctor itself could not run: the config is missing, unreadable, not JSON, or has no `hooks` object; an event entry is malformed; a command does not tokenize; the plugin manifest has no `aegis@buvis-plugins` entry; or a target I/O call failed. On this path it emits neither a TSV line nor a summary line, only a single `error: <reason>` line to stderr that names the cause) `hook_doctor` carries `"doctor error: <config path>"` and `detail` carries `"hook_doctor: <the doctor's stderr error line>"`. Absent on state files written before the doctor-first probe existed. |
+ | `qwen_preflight` | object? | Batch-scoped qwen preflight probe result (PRD 00093), mirroring `codex_probe`'s shape and idiom: `{"batch_id": "<state.batch.id>"\|"no-batch", "verdict": "healthy"\|"pi_missing"\|"endpoint_unreachable"\|"model_id_missing"\|"completion_failed", "detail": "<the failing check's own detail string>"\|null, "checked_at": "<ISO 8601>"}`. `verdict` reuses the four existing `preflight_outcome` strings directly — no separate `"unhealthy"` wrapper. Written once per batch by `work` SKILL.md § Qwen infra preflight (step 3 routing row 5) and read there before every qwen-eligible dispatch. Batch-scoped with the same LAZY reset `codex_probe`/`qwen_breaker` use: `/autopilot:work` re-probes and overwrites the slice when `qwen_preflight.batch_id != state.batch.id` (fallback id `"no-batch"`); a match reuses the cached verdict and never re-probes. **Re-probe trigger is scoped to backend-health signals, not task-outcome signals** — an ordinary step-5.5 gate failure on a qwen attempt does NOT invalidate the cache (that is the one-shot-to-Sonnet escalation's job); only a Subagent Watchdog hang/lost-result on the qwen dispatch itself, or an infra-shaped exit from `qwen-run.sh` at real dispatch time despite a cached `"healthy"` verdict, deletes the field via `statectl del qwen_preflight`, so the next qwen-eligible task's batch-scope check re-probes. Absent on legacy state files: readers treat absence as "not yet probed", never an error. |
+diff --git a/skills/work/SKILL.md b/skills/work/SKILL.md
+index a4b43fd..8a2b213 100644
+--- a/skills/work/SKILL.md
++++ b/skills/work/SKILL.md
+@@ -300,7 +300,9 @@ When architecture context spans more than one file, use the same `--set-cmd ARCH
+ 
+ **If the task description is ambiguous** (multiple interpretations, unclear scope, unstated format/fields/location), stop before dispatching Ivan and surface the ambiguity to the user. See Example 1 in `references/code-quality-examples.md`. Do not dispatch with guessed-at requirements.
+ 
+-**Deterministic routing table.** Pick the implementor by reading the claimed task's tier (`state.tasks[i].model`) and qwen-eligibility flag (`state.tasks[i].qwen_eligible`), then cross-referencing against the "Gemini-first tasks" UI definition in **Implementor Selection** above. No re-judging here — `qwen_eligible` is computed upstream by `/autopilot:plan-tasks` and already encodes backend (not UI) + `haiku`/`sonnet` tier + `<=3`-files + no public-contract edit (exported API signature, schema, wire format, hook registration shape); ineligible tasks carry `state.tasks[i].qwen_excluded_reason` (`ui`/`tier`/`files`/`contract`) for the batch-report telemetry. If the field is absent (legacy plans), treat it as `false`.
++**Deterministic routing table.** Read the claimed task's tier (`state.tasks[i].model`) and qwen-eligibility flag (`state.tasks[i].qwen_eligible`), then cross-reference the "Gemini-first tasks" UI definition in **Implementor Selection** above. The planner flag encodes backend + Haiku/Sonnet + exactly one writable file + no public-contract edit; missing eligibility is false. Preserve the existing `ui` → `tier` → `contract` → `files` exclusion precedence.
++
++**Runtime write-set reconciliation (before implementor selection).** Read the exact newline-delimited `FILE_PATHS` scratch file rendered for Ivan; ignore blank lines and count distinct paths. Tess-owned read-only tests are not in this list. After the `fable` override, zero paths fail closed to Claude at the task tier (no Codex interception, `preflight_outcome: null`, attempt `qwen_excluded_reason: "files"`). A test-only write set keeps the non-Qwen Claude path at its task tier. For an otherwise Qwen-eligible backend Haiku/Sonnet task, two or more paths replace eligibility with false and exclusion with `files` **in a per-task effective copy only**; stamp the eventual attempt `qwen_excluded_reason: "files"`, `preflight_outcome: null`. Apply the table and all six Codex interception fences to that effective copy: two/three-file tasks can still take Codex, otherwise Claude at tier. Exactly one non-empty path may reach row 5. Do not rewrite planner metadata or unrelated state, and do not replace an existing UI, tier, or contract exclusion. This fence also applies under `legacy`.
+ 
+ Apply the rows in this order — the first match wins (in practice `qwen_eligible == true` already excludes UI and `opus`, so the order resolves any apparent overlap deterministically):
+ 
+@@ -312,13 +314,11 @@ Apply the rows in this order — the first match wins (in practice `qwen_eligibl
+ | 4 | Backend, `qwen_eligible == true`, row 3 did not fire, and `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_memory_pressure.py --max-level <ladder § Memory gate value>` exits non-zero | Claude at the task's ORIGINAL tier (`haiku` → Haiku, `sonnet` → Sonnet) — **skip the preflight probe**; stamp the attempt `preflight_outcome: null` and `qwen_excluded_reason: "memory_pressure"` (exit 1) or `"memory_probe_failed"` (exit 2) | `scripts/check_memory_pressure.py` |
+ | 5 | Backend, `qwen_eligible == true`, row 3 did not fire, row 4 did not fire, healthy qwen infra | Local qwen via `use-qwen` helper | `references/qwen-integration.md` |
+ | 6 | Backend, `qwen_eligible == true`, row 3 did not fire, row 4 did not fire, **unhealthy** qwen infra | Claude at the task's original tier (`haiku` → Haiku, `sonnet` → Sonnet) | `references/qwen-integration.md` (Preflight) |
+-| 7 | Backend, `qwen_eligible == false` (or absent) | Claude at the task's tier (e.g. a `>=4`-file `sonnet` task → Claude Sonnet) | — |
++| 7 | Backend, effective `qwen_eligible == false` (or absent) | Claude at the task's tier (e.g. a two-file `sonnet` task → Claude Sonnet, subject to Codex interception) | — |
+ 
+ **Codex rung interception.** After the table above yields its verdict, dispatch **codex** instead of the Claude implementor the table named when all six fences hold (verdict is "Claude at the task's tier"/"ORIGINAL tier", `codex_eligible(task)`, `_WORK_CODEX_RUNG != "off"`, `_AUTOPILOT_ESCALATION != "legacy"`, a `"healthy"` batch probe, and a terminal attempt that was not itself codex). **Read `references/codex-implementor.md` § Codex rung interception before the first codex dispatch of a batch** — it states each fence exactly and why fence 4 is not optional.
+ 
+-`scripts/work_routing.py` is a decision model of the table and this interception, kept in sync with this prose by review (`references/design-rationale.md` § routing model); only the `codex_eligible` fence is bound live to `model-ladder.md` by `scripts/test_work_routing.py`.
+-
+-The memory-pressure gate (row 4) runs only when the table would otherwise reach qwen (now row 5) — it never runs for UI, `opus`, `qwen_eligible == false`, or breaker-skipped tasks.
++**Before a Qwen dispatch**, read `references/qwen-integration.md` § Output guards and run its `check_qwen_output.py before` command. It requires a clean implementation slice and canonical Tess tests, and captures this dispatch's baseline. A failed preparation skips Qwen and uses Claude at tier without spending a Qwen attempt; do not let pre-existing task edits masquerade as Qwen output.
+ 
+ **`fable` overrides this table outright.** A task carrying `state.tasks[i].model: "fable"` — set only by the Fable rescue gate (`run-autopilot/references/recovery.md` § Rework escalation exhausted) — never routes to qwen and never to Gemini: dispatch a Claude Agent at `model: "fable"`, whatever the rows above would pick. `fable` is never a session model and is never selected autonomously, so the human rescue gate is the only way in (`run-autopilot/references/model-ladder.md` § Fable rescue).
+ 
+@@ -336,7 +336,7 @@ A helper that does not resolve, or fails at runtime, falls back to Claude at the
+ 
+ ### 4. Handle result
+ 
+-A **Success** continues to step 5. Anything else — timeout, context exceeded, error, lost/hung result, or a codex dispatch that timed out or wrote nothing — is a failure branch: **read `references/gate-failure.md` § Step 4 result table before acting on it.** It carries the per-result actions (attempt-log `cause`, task splitting, `debug-stuck-agent`, the step-4.2 breaker) and the codex carve-out that routes every codex infra failure to arm 1 with kill-before-fallback.
++A **Success** from Qwen must first run `check_qwen_output.py after` per `references/qwen-integration.md` § Output guards, **before staging, committing, or running step 5.5**. Only exit 0 continues to step 5; exit 1 enters `references/gate-failure.md` § Qwen output rejection; exit 2 stops acceptance until the guard/canonical tests can be verified. Other successful implementors continue to step 5. Anything else — timeout, context exceeded, error, lost/hung result, or a codex dispatch that timed out or wrote nothing — is a failure branch: **read `references/gate-failure.md` § Step 4 result table before acting on it.** It carries the per-result actions (attempt-log `cause`, task splitting, `debug-stuck-agent`, the step-4.2 breaker) and the codex carve-out that routes every codex infra failure to arm 1 with kill-before-fallback.
+ 
+ ### 4.2. Infrastructure-failure circuit breaker
+ 
+diff --git a/skills/work/references/attempt-logging.md b/skills/work/references/attempt-logging.md
+index 77877db..0851b8c 100644
+--- a/skills/work/references/attempt-logging.md
++++ b/skills/work/references/attempt-logging.md
+@@ -42,17 +42,17 @@ At every task exit — success in `SKILL.md` step 6, abort in step 4 (timeout /
+ - `model`: the tier `/autopilot:work` used for this pass. Read from `state.tasks[i].model` when set. On legacy plans where `state.tasks[i].model` is absent, record the effective session-inherited tier as a string (e.g. `"sonnet"` for a Work-phase Sonnet 4.6 launch). Always a string — never `null`.
+ - `outcome`: `/autopilot:work` writes `"completed"`, `"aborted"`, or `"escalated"`. The `"escalated"` value (PRD 00065) is stamped on the entry for a rung the task was reset away from and escalated up; the final rung's entry carries the real terminal outcome (`completed`/`aborted`), and the escalated-away entry keeps its true `implementor` (a qwen rung escalated to Sonnet keeps `implementor:"qwen"`). Later phases upgrade earlier entries — `/autopilot:run-autopilot` Phase 6 (Rework) step 2 rewrites a `"completed"` entry's outcome to `"review_flagged"` at the start of escalation, then later rewrites a flagged entry's outcome to `"rework_failed"` when the rework pass also fails at the top of the chain.
+ - `review_cycle`: `null` on a first/Phase-3 attempt; set to the current `state.cycle` integer when the pass is a rework re-dispatch (see `SKILL.md` step 1.5 "Rework-mode task filter (PRD 00025)").
+-- `cause`: `null` on success; on abort, the reason — `"context_overrun"`, `"subagent_prompt_overrun"`, `"timeout"`, `"error"`, `"subagent_infra_failure"`, `"commit_rejected"` (a commit blocked by `validate_commit_msg`/warden that the one-retry repair could not fix — `SKILL.md` step 5), `"codex_no_edit"` (PRD 00077; the no-edit infra arm, stamped when the codex helper exited 0 with a non-empty output file but produced no working-tree change — the hook-blocked, prose-only case; classified as INFRA, so the attempt falls back to Claude at the task's own tier with no `escalation_reason` stamp).
+-- `implementor`: which agent actually ran the attempt — `"claude"` (Agent dispatch at any Claude tier, including a Claude fallback when qwen preflight failed), `"gemini"` (UI task via `use-gemini` helper), `"qwen"` (backend qwen-eligible task with healthy preflight, dispatched via `use-qwen` helper), `"codex"` (a codex-eligible backend task the step-3 interception routed to the codex rung, dispatched via the `use-codex` helper), or `"orchestrator"` (PRD 00148; a rework task the micro lane kept in-session — the orchestrator edited it with the Edit tool and no implementor subagent dispatched at all). Sourced from the routing decision in `work` SKILL.md step 3 — the value reflects what dispatched, not what the routing table initially picked: a qwen-eligible task that preflight-failed and fell back to Claude records `"claude"`; likewise, a codex-eligible task whose batch health probe came back unhealthy and fell back to Claude records `"claude"`, not `"codex"`. **Multi-implementor pass (qwen → Claude retry):** when step 3 dispatches qwen and step 5.5 then fails and re-dispatches Claude Sonnet (per the one-shot qwen attempt budget), exactly one entry is appended at task exit. Record `implementor: "qwen"` — qwen DID dispatch and DID commit code at step 5 (commits precede the step-5.5 gate), so the qwen-implemented commit range remains in HEAD and the `_collect_qwen_task_ids` consumer of this field needs the qwen flag to scope the batched de-slop pass over it. The Sonnet retry's success is reflected by `outcome: "completed"`; the carve-out's existence is implicit (only qwen-routed tasks can produce a Sonnet retry of a qwen attempt). Tess / Devon / code reviewer dispatches do not write attempt entries themselves; this field labels the Ivan-implementor pass.
+-- `preflight_outcome`: only meaningful for attempts on qwen-eligible tasks (those with `state.tasks[i].qwen_eligible == true` at attempt start). For qwen-eligible attempts: one of `"healthy"`, `"pi_missing"`, `"endpoint_unreachable"`, `"model_id_missing"`, `"completion_failed"` — the verdict of the four-check probe defined in `references/qwen-integration.md` (Preflight section). For non-qwen-eligible attempts: `null`. A qwen-eligible attempt that the breaker (row 3) or the memory-pressure gate (row 4) rerouted also records `null`, because the probe never ran. Sourced from the preflight probe in `work` SKILL.md step 3.
++- `cause`: `null` on success; on abort or output rejection, the reason — `"context_overrun"`, `"subagent_prompt_overrun"`, `"timeout"`, `"error"`, `"subagent_infra_failure"`, `"commit_rejected"` (a commit blocked by `validate_commit_msg`/warden that the one-retry repair could not fix — `SKILL.md` step 5), `"codex_no_edit"` (PRD 00077; the no-edit infra arm, stamped when the codex helper exited 0 with a non-empty output file but produced no working-tree change — the hook-blocked, prose-only case; classified as INFRA, so the attempt falls back to Claude at the task's own tier with no `escalation_reason` stamp). Qwen output rejections use `"qwen_no_edit"` (no task-owned implementation diff) or `"qwen_test_mutation"` (Tess tests differ from their test commit), with `outcome: "escalated"` on the rejected Qwen row; both are capability failures before staging/gating, never infra.
++- `implementor`: which agent actually ran the attempt — `"claude"` (Agent dispatch at any Claude tier, including a Claude fallback when qwen preflight failed), `"gemini"` (UI task via `use-gemini` helper), `"qwen"` (backend qwen-eligible task with healthy preflight, dispatched via `use-qwen` helper), `"codex"` (a codex-eligible backend task the step-3 interception routed to the codex rung, dispatched via the `use-codex` helper), or `"orchestrator"` (PRD 00148; a rework task the micro lane kept in-session — the orchestrator edited it with the Edit tool and no implementor subagent dispatched at all). Sourced from the routing decision in `work` SKILL.md step 3 — the value reflects what dispatched, not what the routing table initially picked: a qwen-eligible task that preflight-failed and fell back to Claude records `"claude"`; likewise, a codex-eligible task whose batch health probe came back unhealthy and fell back to Claude records `"claude"`, not `"codex"`. **Multi-implementor pass (qwen → Claude retry):** under default escalation, each rung writes its own entry: the rejected Qwen row stays `implementor: "qwen"`, `outcome: "escalated"`, and the Sonnet row records `implementor: "claude"`, `escalation_reason: "gate_failure"`, `escalated_from: "qwen"`. This also applies to pre-commit output rejections under `legacy`, which must retain their failure cause. The old single task-exit row applies only to legacy test-gate retries that committed Qwen code, not output rejections. Tess / Devon / code reviewer dispatches do not write attempt entries themselves; this field labels the Ivan-implementor pass.
++- `preflight_outcome`: only meaningful for attempts on qwen-eligible tasks (those whose effective eligibility remains true after write-set reconciliation). For qwen-eligible attempts: one of `"healthy"`, `"pi_missing"`, `"endpoint_unreachable"`, `"model_id_missing"`, `"completion_failed"` — the verdict of the four-check probe defined in `references/qwen-integration.md` (Preflight section). For non-qwen-eligible attempts: `null`. A qwen-eligible attempt that the breaker (row 3) or the memory-pressure gate (row 4) rerouted also records `null`, because the probe never ran. Sourced from the preflight probe in `work` SKILL.md step 3.
+ - `pipeline`: which pipeline depth this attempt ran, keyed on the task tier (PRD 00044) — `"minimal"` (haiku: Tess + Ivan, 2 subagents), `"lean"` (sonnet: + step-5.7 reviewer, 3 subagents), or `"full"` (opus: + Devon at step 2.85, 4 subagents). Mapped from `state.tasks[i].model`: `haiku` → `"minimal"`, `sonnet` → `"lean"`, `opus` → `"full"`; absent/legacy `state.tasks[i].model` is treated as `sonnet` → `"lean"` (matching the step-2.85 and step-5.7 tier gates). Written at every task exit alongside `implementor`. A Phase-6 escalation to `opus` therefore records `"full"` for the rework attempt. Always a string — never `null`. **In-loop escalation (PRD 00065):** an escalation re-dispatches the implementor for the higher rung and re-runs the tier-appropriate post-implementor gates (step 5.7 reviewer for sonnet+, plus the step-5.5 gate); Devon (step 2.85, pre-implementation adversarial tests) is NOT re-run mid-task. So an in-loop opus escalation stamps `pipeline:"lean"` (implementor+reviewer), reserving `"full"` for a from-scratch opus task/rework that actually ran Devon.
+ - `escalation_reason` (PRD 00065): string?; `"gate_failure"` stamped directly by `/autopilot:work` on the entry of the rung it escalated INTO (in-loop diagnosis). `"review_flag"` reaches the entry a different way: phase-review Phase 6 writes it (with `escalated_from`) into `state.tasks[i]` via `task-set-meta`, and `/autopilot:work`'s attempt write copies both from `state.tasks[i]` onto the rework entry (`SKILL.md` step 6 point 1 / step 1.5) — the task entry is the carrier, the copy is the wiring. Compound path: if that review-flagged rung then escalates in-loop, the copy happens at `SKILL.md` step 5.5 ESCALATE point 2 (onto the escalate-away entry) and `state.tasks[i]`'s `escalation_reason`/`escalated_from` are cleared at point 3, so the higher in-loop rung records its own `gate_failure` (not a leaked `review_flag`). Absent = neither (legacy / no escalation).
+ - `escalated_from` (PRD 00065): string?; a tier (`"qwen"`|`"codex"`|`"haiku"`|`"sonnet"`|`"opus"`) — on the entry of the rung escalated INTO, the immediate-prior rung it came from. Set directly by `/autopilot:work` on the in-loop `gate_failure` path; carried from `state.tasks[i]` (as above) on the `review_flag` path. Absent on non-escalated entries.
+ - `diagnosis` (PRD 00065): string?; `"spec_gap"`|`"solid_spec"` — the 2nd-failure diagnosis verdict, stamped on the entry of the rung that was diagnosed.
+ - `repair_used` (PRD 00065): bool?; `true` stamped on the entry of the same-tier attempt that ran after a task-description repair; absent otherwise (never written `false`).
+ - `breaker_skipped` (PRD 00065): bool?; `true` stamped on a qwen-eligible attempt the breaker rerouted off qwen — to codex (PRD 00077) or to Claude at original tier (no preflight probe). Absent otherwise.
+-- `qwen_excluded_reason` (PRD 00075): string?; `"memory_pressure"` (row 4's `check_memory_pressure.py` exited 1) or `"memory_probe_failed"` (exited 2) — stamped on the entry when `work` SKILL.md step 3 row 4 fired; key omitted otherwise. This is an attempt-scoped RUNTIME field, distinct from the plan-time `state.tasks[i].qwen_excluded_reason` (`"ui"`/`"tier"`/`"files"`/`"contract"`) that `/autopilot:plan-tasks` writes — `/autopilot:work` never rewrites planner metadata. Absent on every attempt written before PRD 00075; readers treat absence as "no pressure exclusion", never an error — the same absence tolerance the neighbouring PRD-00065 fields (`breaker_skipped`, `qwen_gate_failed`) get.
+-- `qwen_gate_failed` (PRD 00065): bool?; `true` stamped on an `implementor:"qwen"` entry whose step-5.5 gate FAILED — the durable signal the qwen capability breaker keys on. Absent otherwise.
++- `qwen_excluded_reason` (PRD 00075): string?; `"memory_pressure"` (row 4's `check_memory_pressure.py` exited 1) or `"memory_probe_failed"` (exited 2) — stamped on the entry when `work` SKILL.md step 3 row 4 fired; or `"files"` when runtime write-set reconciliation excludes Qwen; key omitted otherwise. This is an attempt-scoped RUNTIME field, distinct from the plan-time `state.tasks[i].qwen_excluded_reason` (`"ui"`/`"tier"`/`"files"`/`"contract"`) that `/autopilot:plan-tasks` writes — `/autopilot:work` never rewrites planner metadata. Absent on every attempt written before PRD 00075; readers treat absence as "no runtime exclusion", never an error — the same absence tolerance the neighbouring PRD-00065 fields (`breaker_skipped`, `qwen_gate_failed`) get.
++- `qwen_gate_failed` (PRD 00065): bool?; `true` stamped on an `implementor:"qwen"` entry whose pre-commit output guard or step-5.5 gate FAILED — the durable signal the qwen capability breaker keys on. Absent otherwise.
+ - `codex_no_edit` (PRD 00077): bool?; the LATCHED detector result, captured at the dispatch boundary (`work/SKILL.md` step 4, before step 5's `git add`) by comparing the task's own file-slice porcelain before and after the codex dispatch; step 5.5 reads the latched flag and never re-runs the detector. Absent on non-codex attempts and on attempts written before PRD 00077.
+ - `codex_no_edit_probe_exit` (PRD 00077): int?; the detector's own exit code, recorded ONLY when the detector exited non-zero — a non-zero exit means the probe is INDETERMINATE, not "no change": `codex_no_edit` is NOT latched and the attempt continues on the capability path normally. Exists so a broken detector is visible in the record instead of silently reclassifying every real codex capability failure as infra. Absent when the detector ran cleanly and on attempts written before PRD 00077.
+ 
+@@ -98,7 +98,7 @@ Cross-reference: `run-autopilot/references/state-schema.md` `tasks[].attempts` r
+ 
+ - **`implementor`** — `"claude"`, `"gemini"`, `"qwen"`, `"codex"`, or `"orchestrator"`, reflecting what actually dispatched, NOT what the step-3 routing table initially picked (a qwen pick that fell back to Claude on preflight failure records `"claude"`). `"orchestrator"` is the one value meaning nothing dispatched: the micro lane (`references/rework-mode.md`) edited in-session. A micro-lane attempt that overran and fell through to a real dispatch records that dispatcher instead, with `micro_lane: "overrun"` alongside.
+ - **`preflight_outcome`** — from the step-3 preflight probe. Always written explicitly — never omit the key. Qwen-eligible attempts record one of `"healthy"`, `"pi_missing"`, `"endpoint_unreachable"`, `"model_id_missing"`, `"completion_failed"`; non-qwen-eligible attempts record the literal JSON `null`. A pressure-gated attempt (row 4 fired, the probe never ran) also records the literal JSON `null` — the same carve-out already granted to a breaker-skipped attempt (row 3).
+-- **`qwen_excluded_reason`** — `"memory_pressure"` (row 4 fired, `check_memory_pressure.py` exited 1) or `"memory_probe_failed"` (row 4 fired, exited 2); key omitted when row 4 did not fire. Attempt-scoped RUNTIME field — distinct from the plan-time `state.tasks[i].qwen_excluded_reason` (`"ui"`/`"tier"`/`"files"`/`"contract"`) that `/autopilot:plan-tasks` writes; `/autopilot:work` never rewrites planner metadata. Absent on every attempt written before PRD 00075 — readers treat absence as "no pressure exclusion", never an error.
++- **`qwen_excluded_reason`** — `"memory_pressure"` (row 4 fired, `check_memory_pressure.py` exited 1) or `"memory_probe_failed"` (row 4 fired, exited 2); or `"files"` when runtime write-set reconciliation excludes Qwen; key omitted when neither exclusion fires. Attempt-scoped RUNTIME field — distinct from the plan-time `state.tasks[i].qwen_excluded_reason` (`"ui"`/`"tier"`/`"files"`/`"contract"`) that `/autopilot:plan-tasks` writes; `/autopilot:work` never rewrites planner metadata. Absent on every attempt written before PRD 00075 — readers treat absence as "no runtime exclusion", never an error.
+ 
+ ## task-done semantics (moved from SKILL.md step 6, PRD 00119-v2)
+ 
+diff --git a/skills/work/references/gate-failure.md b/skills/work/references/gate-failure.md
+index ed3f529..d520c0d 100644
+--- a/skills/work/references/gate-failure.md
++++ b/skills/work/references/gate-failure.md
+@@ -127,6 +127,48 @@ For codex attribution, `attempts[].model` records the task's own tier (for examp
+ - **Routing-time** (step 3, per task): qwen breaker consult → memory-pressure gate → qwen infra preflight → dispatch.
+ - **Failure-classification** (here, or on a lost result per step 4.2): an infra failure (preflight fail, watchdog/lost result) falls back at the SAME tier and never enters diagnosis or touches the breaker; a capability failure (a real test-gate failure, this section) enters diagnosis, where repair precedes escalate.
+ 
++## Qwen output rejection
++
++Before step 5, the output guard can reject an exit-zero Qwen attempt with
++`qwen_no_edit` (no task-owned implementation diff; foreign dirt does not count)
++or `qwen_test_mutation` (any Tess-owned index/worktree difference from this
++task's `<test_commit_sha>`). Mutation wins when both apply. Do not stage,
++commit, accept Qwen's report, or run the altered tests as an oracle.
++
++Use the existing one-shot `qwen -> sonnet` capability edge, never a Qwen retry
++or a Codex interception. Record the rejected Qwen entry with its guard cause,
++`outcome: "escalated"`, `qwen_gate_failed: true`, and the diagnosis from the
++existing DIAGNOSE flow (Qwen never repairs). Update the breaker exactly once
++as a capability failure under the default mode; preserve the healthy preflight
++cache. Under `legacy`, retain the guard, cause and separate escalation rows,
++but leave diagnosis and the breaker disabled. Neither failure consumes a
++Sonnet retry slot.
++
++**Restore the oracle before Sonnet.** The attempt has no step-5 implementation
++commit, so uncommitted output normally fails the existing ESCALATE reset guard;
++use its fix-forward path and leave foreign files/commits untouched. For a test
++mutation, first confirm the Qwen helper has exited and that the captured test
++paths were exclusively task-owned throughout dispatch. With no concurrent
++writer to those paths and HEAD still at the guard snapshot, re-run:
++
++```bash
++python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_qwen_output.py after --snapshot dev/local/tmp/qwen-<task-id>-snapshot.json --restore-tests
++```
++
++Exit 1 with `tests_restored: true` restores only the captured Tess paths in
++index and worktree from `<test_commit_sha>`, retaining the rejection verdict.
++It never resets the branch or implementation/foreign paths. HEAD movement or
++ambiguous ownership prohibits this restoration: preserve the live tree and
++use an isolated checkout of the canonical test commit for the Sonnet
++fix-forward attempt, or stop until ownership can be resolved. Never dispatch
++Sonnet against mutated tests; never weaken the oracle to unblock escalation.
++
++Then follow ESCALATE points 2–6: update this task's model to Sonnet, dispatch
++Claude Sonnet directly with the guard cause and original committed tests,
++and stamp the new Sonnet row `escalation_reason: "gate_failure"`,
++`escalated_from: "qwen"`. Skip the routing table on this re-dispatch. Test-only
++tasks intentionally editing named tests never take this Qwen path.
++
+ ## Retry render (step 5.5)
+ 
+ Moved verbatim out of SKILL.md step 5.5 (PRD 00119-v2). Every re-dispatch in
+diff --git a/skills/work/references/qwen-integration.md b/skills/work/references/qwen-integration.md
+index f16dad2..ebbda3d 100644
+--- a/skills/work/references/qwen-integration.md
++++ b/skills/work/references/qwen-integration.md
+@@ -1,8 +1,21 @@
+ # Qwen Integration
+ 
+-How to invoke local qwen for task implementation via the `~/.agents/skills/use-qwen/scripts/qwen-run.sh` helper, which wraps the `pi` agent against a llama.cpp-served model. Always pass the prompt with `-f <file>`. The helper defaults to `unsloth/Qwen3.6-27B-MTP-GGUF:UD-Q6_K_XL`; `-m` overrides it, but an autopilot dispatch runs under `--approved-only`, so any id it names must be in the approved registry or the run is refused. Inference is local and free — no API cost, no token billing.
+-
+-Qwen routing is gated by `state.tasks[i].qwen_eligible` (written upstream by `/autopilot:plan-tasks`) and by the **Preflight** below. `work`'s step 3 routing table picks qwen only when the flag is `true` AND preflight is healthy; otherwise it falls back to Claude at the task's original tier.
++How to invoke local qwen for task implementation via the `~/.agents/skills/use-qwen/scripts/qwen-run.sh` helper, which wraps the `pi` agent against a llama.cpp-served model. Always pass the prompt with `-f <file>`. The qualified Qwen3.8 model is `unsloth/Qwen3.8-27B-GGUF:UD-Q6_K_XL`. An autopilot dispatch runs under `--approved-only`; preflight selects a live approved id and the dispatch must pass that same id with `-m`, so it does not rely on the external helper's default. Inference is local and free — no API cost, no token billing.
++
++Qwen is a speculative one-shot implementor. The last valid qualification is
++Qwen3.8's 6/6 single-file round; autonomous trust remains `single-file-only`.
++The 2026-09-03 multi-file eval in agent-skills reported Qwen 4/6 versus Sonnet
++6/6, but its first completion review found contaminated baselines and missing
++line-history checks. That comparison remains pending review and a clean rerun;
++it is not decision-grade evidence for widening trust. Sonnet remains the
++correctness fallback and reviewer.
++
++Planning and dispatch both require exactly one expected implementor-writable
++file, in addition to the backend, tier and no-public-contract predicates.
++Two-or-more-file tasks route above Qwen through the existing Codex/Claude
++fences; `work` reconciles stale planner flags against the concrete `FILE_PATHS`
++before selection. Empty write sets fail closed to Claude. Healthy preflight
++alone does not grant task eligibility.
+ 
+ ## Preflight
+ 
+@@ -52,15 +65,51 @@ live here. **Read this section before the first qwen dispatch of a batch.**
+ 
+ ## One-shot attempt budget — and why it always escalates to Sonnet
+ 
+-A qwen-routed task gets exactly one qwen attempt. If qwen's output fails the step-5.5 per-task test gate, the re-dispatch targets **Claude Sonnet** regardless of the task's original tier (`haiku` → Sonnet, `sonnet` → Sonnet). qwen never re-runs for the same task.
++A qwen-routed task gets exactly one qwen attempt. If qwen's output fails the output guards below or the step-5.5 per-task test gate, the re-dispatch targets **Claude Sonnet** regardless of the task's original tier (`haiku` → Sonnet, `sonnet` → Sonnet). qwen never re-runs for the same task.
+ 
+ The fixed-Sonnet target is intentional and asymmetric vs. the **preflight-failure** fallback (which keeps the original tier: `haiku` → Haiku, `sonnet` → Sonnet). Two different failure shapes, two different recoveries:
+ 
+ - **Preflight failure** is an *infrastructure* signal — qwen was unreachable, couldn't spawn its inference worker, was missing a model, or had no resolvable `pi`. The task itself was never attempted; nothing observable suggests the task is harder than its plan-time tier said. Preserve the tier the planner picked.
+-- **Step-5.5 gate failure after a qwen attempt** is a *correctness* signal — qwen produced code that did not pass the tests Tess wrote. The empirical evidence from this attempt says the task is harder than its qwen-eligible classification implied (qwen-eligible = non-UI + `≤3`-file + `haiku`/`sonnet` + no public-contract edit). A retry at the same tier on the same model family would be cheap but risk under-powering the retry; Sonnet is the conservative floor that any qwen-eligible task can re-run at. Escalating from `haiku` to `sonnet` here is the price of having tried qwen in the first place.
++- **Step-5.5 gate failure after a qwen attempt** is a *correctness* signal — qwen produced code that did not pass the tests Tess wrote. The empirical evidence from this attempt says the task is harder than its qwen-eligible classification implied (qwen-eligible = non-UI + single-file + `haiku`/`sonnet` + no public-contract edit). A retry at the same tier on the same model family would be cheap but risk under-powering the retry; Sonnet is the conservative floor that any qwen-eligible task can re-run at. Escalating from `haiku` to `sonnet` here is the price of having tried qwen in the first place.
+ 
+ The normal max-2 step-5.5 retry budget then applies to the Sonnet re-dispatches (not qwen). The qwen attempt does NOT consume a slot in that budget — it consumed the (single) qwen attempt instead.
+ 
++## Output guards
++
++`scripts/work_routing.py` is the pure decision model of step 3: pass Ivan's
++scratch file text as `route(..., file_paths=...)`; missing input fails closed.
++The executable output guard calls its `qwen_attempt_outcome` classifier.
++
++Before dispatch, write the exact Tess-owned test paths to
++`dev/local/tmp/qwen-<task-id>-tests.txt` (one absolute path per line), and run:
++
++```bash
++python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_qwen_output.py before --repo-root <git-work-tree> --test-commit <test_commit_sha> --files-file dev/local/tmp/ivan-<task-id>-files.txt --tests-file dev/local/tmp/qwen-<task-id>-tests.txt --snapshot dev/local/tmp/qwen-<task-id>-snapshot.json
++```
++
++For a bare-backed project, also pass `--git-dir <bare-git-dir>`; the root is
++the Git work tree, not necessarily the project directory. For docs/config
++tasks without Tess, use an empty tests file and `<task_base_sha>` as the test
++commit. Test-only tasks retain the non-Qwen path. The guard requires a clean
++implementation slice and tests matching the canonical commit in both index
++and worktree. Preparation failure skips Qwen for Claude at tier without
++consuming an attempt. Foreign dirty paths are allowed and remain untouched.
++Qwen may edit only its named implementation file; it must not stage or commit.
++
++Immediately after Qwen exits 0, **before staging, committing, or step 5.5**, run:
++
++```bash
++python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_qwen_output.py after --snapshot dev/local/tmp/qwen-<task-id>-snapshot.json
++```
++
++Exit 0 means a task-owned implementation diff exists and all Tess-owned paths
++match `<test_commit_sha>` in both index and worktree; proceed to the normal
++commit/test gate. Foreign edits never satisfy this check. Exit 1 prints the
++capability verdict: `qwen_test_mutation` takes precedence over `qwen_no_edit`.
++Consume the attempt and follow `gate-failure.md` § Qwen output rejection.
++Exit 2 is indeterminate: do not stage, commit, or execute the potentially
++modified tests; resolve the guard failure before accepting any work.
++
+ ## Prompt Template
+ 
+ The task placeholders below are sourced from the task's `state.tasks` entry, read
+@@ -152,7 +201,7 @@ The task's acceptance criteria prose is intentionally omitted. Tests ARE the spe
+ 
+ Qwen finishes one file and silently drops the rest of a multi-file task.
+ 
+-**Fix**: `state.tasks[i].qwen_eligible` already restricts qwen to `≤3`-file backend tasks at planning time (see PRD 00032, widened by PRD 00019). If a wider task slips through, the step-5.5 per-task test gate catches it — the one-shot qwen attempt budget then escalates the next attempt to Claude Sonnet.
++**Fix**: the single-file predicate and dispatch-time `FILE_PATHS` fence reject multi-file tasks before Qwen runs. Only a clean multi-file eval and review can justify widening this boundary.
+ 
+ ### Over-claims completeness
+ 
+diff --git a/skills/work/scripts/test_work_routing.py b/skills/work/scripts/test_work_routing.py
+index ffd4835..2c80835 100644
+--- a/skills/work/scripts/test_work_routing.py
++++ b/skills/work/scripts/test_work_routing.py
+@@ -145,6 +145,7 @@ def _route(
+         _env() if env is None else env,
+         _state() if state is None else state,
+         _probes() if probes is None else probes,
++        file_paths="src/implementation.py",
+     )
+ 
+ 
+diff --git a/skills/work/scripts/work_routing.py b/skills/work/scripts/work_routing.py
+index faf40a6..fea52bd 100644
+--- a/skills/work/scripts/work_routing.py
++++ b/skills/work/scripts/work_routing.py
+@@ -1,6 +1,6 @@
+ """Implementor routing for /work step 3 — the deterministic table plus the codex rung.
+ 
+-Pure decision core: three functions over plain dicts, no I/O, no env reads of its
++Pure decision core over plain dicts, no I/O, no env reads of its
+ own, no side effects. It pins the step-3 routing table (the `fable` override,
+ rows 1-7, first match wins), the codex interception, and codex attempt outcomes
+ so the SKILL.md prose cannot drift from the rules silently.
+@@ -105,15 +105,45 @@ def _tier(task: dict) -> str:
+     return task.get("model") or "sonnet"
+ 
+ 
+-def route(task: dict, env: dict, state: dict, probes: dict) -> dict:
++def route(
++    task: dict, env: dict, state: dict, probes: dict, *, file_paths: str | None = None
++) -> dict:
+     """Pick the implementor for one claimed task."""
+     tier = _tier(task)
+     if tier == "fable":
+         return {"implementor": "claude", "tier": tier, "rule": "fable_override"}
+ 
++    paths = list(dict.fromkeys(p for p in (file_paths or "").splitlines() if p.strip()))
++    if not paths:
++        return {
++            "implementor": "claude",
++            "tier": tier,
++            "rule": "empty_write_set",
++            "qwen_excluded_reason": "files",
++        }
++    if test_only_diff(paths):
++        return {"implementor": "claude", "tier": tier, "rule": "test_only"}
++
++    exclusion = {}
++    if task.get("qwen_excluded_reason") in {"ui", "tier", "contract"}:
++        task = {**task, "qwen_eligible": False}
++    if (
++        len(paths) >= 2
++        and task.get("qwen_eligible")
++        and not _is_ui(task)
++        and tier != "opus"
++    ):
++        task = {**task, "qwen_eligible": False, "qwen_excluded_reason": "files"}
++        exclusion = {"qwen_excluded_reason": "files"}
++
+     rule = _table_row(task, env, state, probes)
+     if rule in _INTERCEPTION_ROWS and _intercepted_by_codex(task, env, state):
+-        return {"implementor": "codex", "tier": tier, "rule": "codex_interception"}
++        return {
++            "implementor": "codex",
++            "tier": tier,
++            "rule": "codex_interception",
++            **exclusion,
++        }
+ 
+     if rule == "row1":
+         implementor = "gemini" if probes["gemini_available"] else "claude"
+@@ -121,7 +151,22 @@ def route(task: dict, env: dict, state: dict, probes: dict) -> dict:
+         implementor = "qwen"
+     else:
+         implementor = "claude"
+-    return {"implementor": implementor, "tier": tier, "rule": rule}
++    return {"implementor": implementor, "tier": tier, "rule": rule, **exclusion}
++
++
++def qwen_attempt_outcome(implementation_changed: bool, tests_changed: bool) -> dict:
++    """Reject untrustworthy exit-zero output before commit or gate execution."""
++    if not tests_changed and implementation_changed:
++        return {"arm": "pass", "next": "proceed", "cause": None}
++    return {
++        "arm": "capability",
++        "next": "sonnet",
++        "cause": "qwen_test_mutation" if tests_changed else "qwen_no_edit",
++        "outcome": "escalated",
++        "qwen_gate_failed": True,
++        "escalation_reason": "gate_failure",
++        "escalated_from": "qwen",
++    }
+ 
+ 
+ def micro_lane_eligible(
+diff --git a/skills/work/scripts/check_qwen_output.py b/skills/work/scripts/check_qwen_output.py
+new file mode 100644
+index 0000000..f929c2a
+--- /dev/null
++++ b/skills/work/scripts/check_qwen_output.py
+@@ -0,0 +1,154 @@
++"""Snapshot Qwen's clean write slice, then check it before staging or testing.
++
++Exit 0: ready/proceed; 1: rejected capability attempt; 2: indeterminate, stop.
++Restoration is opt-in after the caller establishes exclusive test ownership.
++"""
++
++from __future__ import annotations
++
++import argparse
++import json
++import subprocess
++import sys
++from pathlib import Path
++
++from work_routing import qwen_attempt_outcome, test_only_diff
++
++
++def git(snapshot: dict, *args: str) -> str:
++    command = ["git", "--literal-pathspecs"]
++    if snapshot.get("git_dir"):
++        command += [
++            f"--git-dir={snapshot['git_dir']}",
++            f"--work-tree={snapshot['root']}",
++        ]
++    return subprocess.run(
++        [*command, *args],
++        cwd=snapshot["root"],
++        check=True,
++        capture_output=True,
++        text=True,
++    ).stdout
++
++
++def paths_from_file(source: Path, root: Path) -> list[str]:
++    paths = []
++    for line in source.read_text().splitlines():
++        if not line.strip():
++            continue
++        path = Path(line)
++        path = path if path.is_absolute() else root / path
++        # A symlink would let the helper write outside the owned Git path.
++        if path.is_symlink() or path.absolute() != path.resolve():
++            raise ValueError(f"non-canonical path: {line}")
++        relative = str(path.relative_to(root))
++        if path.is_dir() or relative == ".":
++            raise ValueError(f"expected a file: {line}")
++        paths.append(relative)
++    return list(dict.fromkeys(paths))
++
++
++def changed(snapshot: dict, base: str, paths: list[str], *, index: bool = True) -> bool:
++    if not paths:
++        return False
++    return any(
++        [
++            bool(git(snapshot, "diff", "--name-only", base, "--", *paths)),
++            index
++            and bool(
++                git(snapshot, "diff", "--cached", "--name-only", base, "--", *paths)
++            ),
++            bool(
++                git(
++                    snapshot, "ls-files", "--others", "--exclude-standard", "--", *paths
++                )
++            ),
++        ]
++    )
++
++
++def before(args: argparse.Namespace) -> dict:
++    root = args.repo_root.resolve()
++    snapshot = {
++        "root": str(root),
++        "git_dir": str(args.git_dir.resolve()) if args.git_dir else None,
++        "files": paths_from_file(args.files_file, root),
++        "tests": paths_from_file(args.tests_file, root),
++    }
++    if len(snapshot["files"]) != 1 or test_only_diff(snapshot["files"]):
++        raise ValueError("Qwen requires exactly one implementation file")
++    if set(snapshot["files"]) & set(snapshot["tests"]):
++        raise ValueError("implementation and Tess paths overlap")
++    snapshot["head"] = git(snapshot, "rev-parse", "HEAD").strip()
++    snapshot["test_commit"] = git(
++        snapshot,
++        "rev-parse",
++        "--verify",
++        f"{args.test_commit}^{{commit}}",
++    ).strip()
++    for path in snapshot["tests"]:
++        git(snapshot, "cat-file", "-e", f"{snapshot['test_commit']}:{path}")
++    if changed(snapshot, snapshot["head"], snapshot["files"]):
++        raise ValueError(
++            "implementation slice is already dirty; cannot attribute Qwen edits"
++        )
++    if changed(snapshot, snapshot["test_commit"], snapshot["tests"]):
++        raise ValueError(
++            "Tess tests differ from the canonical test commit before dispatch"
++        )
++    args.snapshot.write_text(json.dumps(snapshot) + "\n")
++    return {"next": "dispatch"}
++
++
++def after(args: argparse.Namespace) -> dict:
++    snapshot = json.loads(args.snapshot.read_text())
++    tests_changed = changed(snapshot, snapshot["test_commit"], snapshot["tests"])
++    verdict = qwen_attempt_outcome(
++        changed(snapshot, snapshot["head"], snapshot["files"], index=False),
++        tests_changed,
++    )
++    if tests_changed:
++        verdict["tests_restored"] = False
++        if args.restore_tests:
++            if git(snapshot, "rev-parse", "HEAD").strip() != snapshot["head"]:
++                raise ValueError("HEAD moved; do not restore tests in the live tree")
++            git(
++                snapshot,
++                "restore",
++                f"--source={snapshot['test_commit']}",
++                "--staged",
++                "--worktree",
++                "--",
++                *snapshot["tests"],
++            )
++            if changed(snapshot, snapshot["test_commit"], snapshot["tests"]):
++                raise ValueError("canonical tests could not be restored")
++            verdict["tests_restored"] = True
++    return verdict
++
++
++def main() -> int:
++    parser = argparse.ArgumentParser(description=__doc__)
++    commands = parser.add_subparsers(dest="action", required=True)
++    prepare = commands.add_parser("before")
++    prepare.add_argument("--snapshot", type=Path, required=True)
++    prepare.add_argument("--repo-root", type=Path, required=True)
++    prepare.add_argument("--git-dir", type=Path)
++    prepare.add_argument("--files-file", type=Path, required=True)
++    prepare.add_argument("--tests-file", type=Path, required=True)
++    prepare.add_argument("--test-commit", required=True)
++    check = commands.add_parser("after")
++    check.add_argument("--snapshot", type=Path, required=True)
++    check.add_argument("--restore-tests", action="store_true")
++    args = parser.parse_args()
++    try:
++        verdict = before(args) if args.action == "before" else after(args)
++    except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
++        print(f"Qwen guard indeterminate: {error}", file=sys.stderr)
++        return 2
++    print(json.dumps(verdict))
++    return 1 if verdict.get("arm") == "capability" else 0
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/skills/work/scripts/test_check_qwen_output.py b/skills/work/scripts/test_check_qwen_output.py
+new file mode 100644
+index 0000000..3d3544f
+--- /dev/null
++++ b/skills/work/scripts/test_check_qwen_output.py
+@@ -0,0 +1,183 @@
++"""Exercise the actual Qwen guard in isolated Git repositories."""
++
++from __future__ import annotations
++
++import json
++import subprocess
++import sys
++from pathlib import Path
++
++import pytest
++
++_SCRIPT = Path(__file__).with_name("check_qwen_output.py")
++
++
++def git(repo: Path, *args: str) -> str:
++    return subprocess.run(
++        ["git", "-C", str(repo), *args],
++        check=True,
++        capture_output=True,
++        text=True,
++    ).stdout.strip()
++
++
++@pytest.fixture
++def repo(tmp_path: Path) -> Path:
++    git(tmp_path, "init", "-q")
++    git(tmp_path, "config", "user.email", "test@example.invalid")
++    git(tmp_path, "config", "user.name", "Test")
++    git(tmp_path, "config", "core.hooksPath", "/dev/null")
++    (tmp_path / "impl.py").write_text("answer = 0\n")
++    (tmp_path / "test_impl.py").write_text("assert answer == 42\n")
++    (tmp_path / "foreign.txt").write_text("original\n")
++    git(tmp_path, "add", ".")
++    git(tmp_path, "commit", "-qm", "baseline")
++    return tmp_path
++
++
++def guard(repo: Path, action: str, *extra: str) -> subprocess.CompletedProcess[str]:
++    return subprocess.run(
++        [
++            sys.executable,
++            str(_SCRIPT),
++            action,
++            "--snapshot",
++            str(repo / ".git/qwen.json"),
++            *extra,
++        ],
++        capture_output=True,
++        text=True,
++        cwd=repo,
++        check=False,
++    )
++
++
++def prepare(repo: Path, implementation: str = "impl.py") -> None:
++    (repo / ".git/files.txt").write_text(str(repo / implementation) + "\n")
++    (repo / ".git/tests.txt").write_text(str(repo / "test_impl.py") + "\n")
++    result = guard(
++        repo,
++        "before",
++        "--repo-root",
++        str(repo),
++        "--test-commit",
++        git(repo, "rev-parse", "HEAD"),
++        "--files-file",
++        str(repo / ".git/files.txt"),
++        "--tests-file",
++        str(repo / ".git/tests.txt"),
++    )
++    assert result.returncode == 0, result.stderr
++
++
++def test_foreign_dirty_paths_do_not_count_as_qwen_edits(repo: Path) -> None:
++    (repo / "foreign.txt").write_text("user edit\n")
++    git(repo, "add", "foreign.txt")
++    prepare(repo)
++    head = git(repo, "rev-parse", "HEAD")
++    result = guard(repo, "after")
++    assert result.returncode == 1, result.stderr
++    verdict = json.loads(result.stdout)
++    assert verdict["cause"] == "qwen_no_edit"
++    assert verdict["outcome"] == "escalated"
++    assert verdict["next"] == "sonnet"
++    assert git(repo, "rev-parse", "HEAD") == head
++    assert (repo / "foreign.txt").read_text() == "user edit\n"
++    assert git(repo, "diff", "--cached", "--name-only") == "foreign.txt"
++
++
++@pytest.mark.parametrize("staged", [False, True])
++def test_test_mutation_rejects_attempt_and_restores_only_canonical_tests(
++    repo: Path, staged: bool
++) -> None:
++    prepare(repo)
++    (repo / "impl.py").write_text("answer = 42\n")
++    (repo / "test_impl.py").write_text("assert True\n")
++    (repo / "foreign.txt").write_text("user edit\n")
++    if staged:
++        git(repo, "add", "test_impl.py")
++    result = guard(repo, "after", "--restore-tests")
++    assert result.returncode == 1, result.stderr
++    verdict = json.loads(result.stdout)
++    assert verdict["cause"] == "qwen_test_mutation"
++    assert verdict["next"] == "sonnet"
++    assert verdict["tests_restored"] is True
++    assert (repo / "test_impl.py").read_text() == "assert answer == 42\n"
++    assert git(repo, "diff", "--cached") == ""
++    assert (repo / "foreign.txt").read_text() == "user edit\n"
++    assert (repo / "impl.py").read_text() == "answer = 42\n"
++
++
++def test_staged_mutation_cannot_hide_behind_clean_worktree_content(repo: Path) -> None:
++    prepare(repo)
++    (repo / "test_impl.py").write_text("assert True\n")
++    git(repo, "add", "test_impl.py")
++    (repo / "test_impl.py").write_text("assert answer == 42\n")
++    result = guard(repo, "after")
++    assert result.returncode == 1
++    assert json.loads(result.stdout)["cause"] == "qwen_test_mutation"
++
++
++@pytest.mark.parametrize("implementation", ["impl.py", "new.py"])
++def test_real_implementation_edit_proceeds_without_staging(
++    repo: Path, implementation: str
++) -> None:
++    prepare(repo, implementation)
++    (repo / implementation).write_text("answer = 42\n")
++    result = guard(repo, "after")
++    assert result.returncode == 0, result.stderr
++    assert json.loads(result.stdout)["next"] == "proceed"
++    assert git(repo, "diff", "--cached") == ""
++
++
++def test_foreign_commit_prevents_test_restoration(repo: Path) -> None:
++    prepare(repo)
++    (repo / "foreign.txt").write_text("user commit\n")
++    git(repo, "add", "foreign.txt")
++    git(repo, "commit", "-qm", "foreign")
++    head = git(repo, "rev-parse", "HEAD")
++    (repo / "test_impl.py").write_text("assert True\n")
++    result = guard(repo, "after", "--restore-tests")
++    assert result.returncode == 2
++    assert "HEAD moved" in result.stderr
++    assert (repo / "test_impl.py").read_text() == "assert True\n"
++    assert git(repo, "rev-parse", "HEAD") == head
++
++
++def test_guard_error_never_reports_success(repo: Path) -> None:
++    result = guard(repo, "after")
++    assert result.returncode == 2
++    assert result.stdout == ""
++    assert "Qwen guard indeterminate" in result.stderr
++
++
++def test_index_only_implementation_change_is_not_a_worktree_edit(repo: Path) -> None:
++    prepare(repo)
++    (repo / "impl.py").write_text("answer = 42\n")
++    git(repo, "add", "impl.py")
++    (repo / "impl.py").write_text("answer = 0\n")
++    result = guard(repo, "after")
++    assert result.returncode == 1
++    assert json.loads(result.stdout)["cause"] == "qwen_no_edit"
++
++
++@pytest.mark.parametrize("path", ["impl.py", "test_impl.py"])
++def test_dirty_owned_path_prevents_dispatch(repo: Path, path: str) -> None:
++    (repo / path).write_text("pre-existing work\n")
++    (repo / ".git/files.txt").write_text(str(repo / "impl.py"))
++    (repo / ".git/tests.txt").write_text(str(repo / "test_impl.py"))
++    result = guard(
++        repo,
++        "before",
++        "--repo-root",
++        str(repo),
++        "--test-commit",
++        git(repo, "rev-parse", "HEAD"),
++        "--files-file",
++        str(repo / ".git/files.txt"),
++        "--tests-file",
++        str(repo / ".git/tests.txt"),
++    )
++    assert result.returncode == 2
++    assert not (repo / ".git/qwen.json").exists()
++    assert (repo / path).read_text() == "pre-existing work\n"
+diff --git a/skills/work/scripts/test_qwen_trust.py b/skills/work/scripts/test_qwen_trust.py
+new file mode 100644
+index 0000000..d5c74bf
+--- /dev/null
++++ b/skills/work/scripts/test_qwen_trust.py
+@@ -0,0 +1,130 @@
++"""Single-file dispatch and pre-commit Qwen capability boundaries."""
++
++from __future__ import annotations
++
++import importlib.util
++from pathlib import Path
++
++import pytest
++
++_SPEC = importlib.util.spec_from_file_location(
++    "work_routing", Path(__file__).with_name("work_routing.py")
++)
++assert _SPEC is not None and _SPEC.loader is not None
++routing = importlib.util.module_from_spec(_SPEC)
++_SPEC.loader.exec_module(routing)
++
++
++@pytest.mark.parametrize("tier", ["haiku", "sonnet"])
++@pytest.mark.parametrize("paths", ["src/a.py\nsrc/b.py", "a.py\nb.py\nc.py"])
++@pytest.mark.parametrize("fence", [None, "off", "legacy", "unhealthy", "terminal"])
++def test_stale_multifile_uses_existing_codex_fences(
++    tier: str, paths: str, fence: str | None
++) -> None:
++    task = {"model": tier, "qwen_eligible": True}
++    env = {}
++    state = {"codex_probe": {"verdict": "healthy"}}
++    if fence == "off":
++        env["_WORK_CODEX_RUNG"] = "off"
++    elif fence == "legacy":
++        env["_AUTOPILOT_ESCALATION"] = "legacy"
++    elif fence == "unhealthy":
++        state["codex_probe"]["verdict"] = "unhealthy"
++    elif fence == "terminal":
++        task["attempts"] = [{"implementor": "codex"}]
++    original = task.copy()
++    verdict = routing.route(task, env, state, {}, file_paths=paths)
++    assert verdict == {
++        "implementor": "codex" if fence is None else "claude",
++        "tier": tier,
++        "rule": "codex_interception" if fence is None else "row7",
++        "qwen_excluded_reason": "files",
++    }
++    assert task == original
++
++
++@pytest.mark.parametrize("paths", ["", "\n \n", None])
++@pytest.mark.parametrize("eligible", [True, False])
++def test_empty_write_set_fails_closed_even_with_files_exclusion(
++    paths: str | None, eligible: bool
++) -> None:
++    verdict = routing.route(
++        {"model": "haiku", "qwen_eligible": eligible, "qwen_excluded_reason": "files"},
++        {},
++        {"codex_probe": {"verdict": "healthy"}},
++        {},
++        file_paths=paths,
++    )
++    assert verdict == {
++        "implementor": "claude",
++        "tier": "haiku",
++        "rule": "empty_write_set",
++        "qwen_excluded_reason": "files",
++    }
++
++
++@pytest.mark.parametrize("paths", ["src/a.py", "\nsrc/a.py\n\n", "src/a.py\nsrc/a.py"])
++def test_exactly_one_distinct_nonempty_path_reaches_qwen(paths: str) -> None:
++    assert routing.route(
++        {"model": "sonnet", "qwen_eligible": True},
++        {},
++        {},
++        {"memory_gate_exit": 0, "qwen_preflight": "healthy"},
++        file_paths=paths,
++    ) == {"implementor": "qwen", "tier": "sonnet", "rule": "row5"}
++
++
++def test_named_test_only_task_never_dispatches_qwen() -> None:
++    assert routing.route(
++        {"model": "sonnet", "qwen_eligible": True},
++        {},
++        {},
++        {},
++        file_paths="tests/test_a.py",
++    ) == {"implementor": "claude", "tier": "sonnet", "rule": "test_only"}
++
++
++@pytest.mark.parametrize("reason", ["ui", "tier", "contract"])
++@pytest.mark.parametrize("eligible", [False, True])
++def test_multifile_does_not_replace_prior_exclusion(
++    reason: str, eligible: bool
++) -> None:
++    verdict = routing.route(
++        {"model": "sonnet", "qwen_eligible": eligible, "qwen_excluded_reason": reason},
++        {},
++        {"codex_probe": {"verdict": "healthy"}},
++        {"gemini_available": True},
++        file_paths="a.py\nb.py",
++    )
++    assert verdict["implementor"] == ("gemini" if reason == "ui" else "claude")
++    assert "qwen_excluded_reason" not in verdict
++
++
++@pytest.mark.parametrize(
++    "edited,mutated,cause",
++    [
++        (False, False, "qwen_no_edit"),
++        (True, True, "qwen_test_mutation"),
++        (False, True, "qwen_test_mutation"),
++    ],
++)
++def test_qwen_output_failure_consumes_one_shot_and_selects_sonnet(
++    edited: bool, mutated: bool, cause: str
++) -> None:
++    assert routing.qwen_attempt_outcome(edited, mutated) == {
++        "arm": "capability",
++        "next": "sonnet",
++        "cause": cause,
++        "outcome": "escalated",
++        "qwen_gate_failed": True,
++        "escalation_reason": "gate_failure",
++        "escalated_from": "qwen",
++    }
++
++
++def test_clean_qwen_implementation_proceeds_to_commit_and_gate() -> None:
++    assert routing.qwen_attempt_outcome(True, False) == {
++        "arm": "pass",
++        "next": "proceed",
++        "cause": None,
++    }
+diff --git a/skills/work/scripts/test_qwen_trust_prose.py b/skills/work/scripts/test_qwen_trust_prose.py
+new file mode 100644
+index 0000000..93b33a0
+--- /dev/null
++++ b/skills/work/scripts/test_qwen_trust_prose.py
+@@ -0,0 +1,81 @@
++"""Pin the model-followed call sites and attempt contract for Qwen guards."""
++
++from pathlib import Path
++
++import pytest
++
++_WORK = Path(__file__).resolve().parents[1]
++_LADDER = _WORK.parent / "run-autopilot/references/model-ladder.md"
++_SCHEMA = _LADDER.with_name("state-schema.md")
++
++
++def test_runtime_fence_precedes_the_routing_table() -> None:
++    text = (_WORK / "SKILL.md").read_text()
++    fence = text.split("**Runtime write-set reconciliation", 1)[1].split(
++        "Apply the rows", 1
++    )[0]
++    assert "`FILE_PATHS`" in fence
++    assert "zero paths fail closed to Claude" in fence
++    assert "two or more paths replace eligibility with false" in fence
++    assert "all six Codex interception fences" in fence
++    assert "Do not rewrite planner metadata" in fence
++    assert "test-only write set keeps the non-Qwen Claude path" in fence
++
++
++def test_guard_is_required_before_dispatch_and_before_staging() -> None:
++    text = (_WORK / "SKILL.md").read_text()
++    dispatch = text.split("### 3. Implement", 1)[1].split("### 4. Handle result", 1)[0]
++    result = text.split("### 4. Handle result", 1)[1].split("### 4.2.", 1)[0]
++    assert "run its `check_qwen_output.py before` command" in dispatch
++    assert "must first run `check_qwen_output.py after`" in result
++    assert "before staging, committing, or running step 5.5" in result
++    assert "Only exit 0 continues to step 5" in result
++    assert "exit 2 stops acceptance" in result
++
++
++@pytest.mark.parametrize(
++    "path,start,end",
++    [
++        (_WORK / "references/attempt-logging.md", "- `cause`:", "\n- `implementor`:"),
++        (
++            _WORK / "references/gate-failure.md",
++            "## Qwen output rejection",
++            "## Retry render",
++        ),
++        (
++            _SCHEMA,
++            "| `tasks[].attempts[].cause`",
++            "\n| `tasks[].attempts[].qwen_excluded_reason`",
++        ),
++        (_LADDER, "## Capability ladders", "## Fable rescue"),
++    ],
++)
++def test_authorities_name_each_output_cause_once(
++    path: Path, start: str, end: str
++) -> None:
++    section = path.read_text().split(start, 1)[1].split(end, 1)[0]
++    assert section.count("qwen_no_edit") == 1
++    assert section.count("qwen_test_mutation") == 1
++
++
++def test_mutation_recovery_retains_safe_reset_and_sonnet_edge() -> None:
++    text = (_WORK / "references/gate-failure.md").read_text()
++    section = text.split("## Qwen output rejection", 1)[1].split("## Retry render", 1)[
++        0
++    ]
++    assert "`qwen -> sonnet`" in section
++    assert "--restore-tests" in section
++    assert "HEAD movement or\nambiguous ownership prohibits this restoration" in section
++    assert "Never dispatch\nSonnet against mutated tests" in section
++    assert "Skip the routing table" in section
++
++
++def test_qwen_guidance_names_qualified_scope_and_pending_multifile_evidence() -> None:
++    text = (_WORK / "references/qwen-integration.md").read_text()
++    assert "Qwen3.8" in text
++    assert "single-file-only" in text
++    assert "2026-09-03" in text
++    assert "pending review and a clean rerun" in text
++    assert "## Preflight" in text
++    assert "## One-shot attempt budget" in text
++    assert "Qwen3.6" not in text

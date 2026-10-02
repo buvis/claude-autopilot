@@ -1,0 +1,19 @@
+[BOB] 🟡 FIX: Orphan stat failures produce duplicate repair rows when `_repair_target` already reported the target. Coordinator reproduction confirmed two `unrepairable` rows for an unregistered dangling `.py` symlink, followed by successful removal of a later orphan. Merge the cleanup error into the existing target row, preserving OSError detail, and add end-to-end coverage asserting one row per target. | File: skills/use-codex/scripts/codex_hook_doctor.py:346 | Task: 2
+R1: fail
+R2: pass
+R3: pass
+R4: fail
+R6: pass
+R7: pass
+R8: pass
+R9: fail
+R10: pass
+R11: pass
+R12: pass
+R13: pass
+D1: pass
+D2: pass
+D3: pass
+D4: pass
+D5: pass
+

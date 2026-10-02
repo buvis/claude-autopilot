@@ -1,0 +1,30 @@
+{
+  "fixture": "claude-autopilot",
+  "authorization": {"route": "invocation", "source": "autoclaude-drain"},
+  "findings": [
+    {"domain": "security", "severity": "HIGH", "paths": ["hooks/guard_push_on_critical.py"], "status": "verified", "title": "A git alias pushes past the critical-finding push block"},
+    {"domain": "integration", "severity": "HIGH", "paths": ["skills/run-autopilot/cli/lane_check.py", "skills/run-autopilot/cli/store_tree.py"], "status": "verified", "title": "On a nested or bare-backed store, any store commit escalates a solo build to the full review"},
+    {"domain": "integration", "severity": "HIGH", "paths": ["skills/run-autopilot/cli/store_tree.py", "skills/run-autopilot/cli/__main__.py"], "status": "verified", "title": "ensure-store silently erases operator .gitignore lines and record-store then commits the hidden files"},
+    {"domain": "journey", "severity": "HIGH", "paths": ["skills/run-autopilot/cli/store_tree.py", "skills/run-autopilot/cli/__main__.py", "skills/run-autopilot/cli/custody.py"], "status": "verified", "title": "A store below git's top folder: dirty calls the store foreign and record-store fails but exits 0"},
+    {"domain": "security", "severity": "MEDIUM", "paths": ["hooks/guard_push_on_critical.py"], "status": "verified", "title": "From another folder the push guard misses ~, $VAR and bash -c targets"},
+    {"domain": "security", "severity": "MEDIUM", "paths": ["hooks/enforce_prd_location.py"], "status": "verified", "title": "MultiEdit bypasses the PRD-location gate entirely"},
+    {"domain": "security", "severity": "MEDIUM", "paths": ["hooks/enforce_prd_location.py"], "status": "verified", "title": "Bash moves into a root lifecycle folder pass with absolute, ../ or $PWD paths"},
+    {"domain": "journey", "severity": "MEDIUM", "paths": ["skills/fast-track/scripts/card.py", "skills/fast-track/references/spec-card.md"], "status": "verified", "title": "A fast-track gate line can pass without running its check"},
+    {"domain": "integration", "severity": "MEDIUM", "paths": ["skills/run-autopilot/cli/store_tree.py"], "status": "verified", "title": "record-store says nothing when the store is gitignored"},
+    {"domain": "integration", "severity": "MEDIUM", "paths": ["skills/run-autopilot/cli/records.py", "skills/run-autopilot/cli/__main__.py"], "status": "verified", "title": "Several CLI failures exit with a bare code and no message"},
+    {"domain": "release", "severity": "MEDIUM", "paths": ["skills/work/references/task-boundary-handoff.md", "skills/run-autopilot/SKILL.md", "skills/fast-track/SKILL.md"], "status": "verified", "title": "Docs read autopilot dirty by its output alone, so a failed check passes as clean"},
+    {"domain": "release", "severity": "MEDIUM", "paths": ["dev/bin/release-checks", "skills/run-autopilot/cli/test_store_tree_legibility.py"], "status": "verified", "title": "Release gate claims store suites are gated but test_store_tree_legibility.py is not"},
+    {"domain": "release", "severity": "MEDIUM", "paths": ["CHANGELOG.md", "skills/run-autopilot/cli/__main__.py"], "status": "verified", "title": "CHANGELOG never mentions ensure-store, dirty, record-store or exit 13"},
+    {"domain": "security", "severity": "LOW", "paths": ["hooks/enforce_prd_location.py"], "status": "verified", "title": "Case variants and a symlink slip past the PRD-location gate"},
+    {"domain": "security", "severity": "LOW", "paths": ["skills/run-autopilot/scripts/validate_state_json_hook.py", "skills/run-autopilot/scripts/review_coverage_hook.py", "skills/run-autopilot/cli/wave.py"], "status": "verified", "title": "Two hooks crash on hostile input and wave status trusts a crafted wave.json"},
+    {"domain": "performance", "severity": "LOW", "paths": ["hooks/guard_push_on_critical.py", "hooks/_common.py"], "status": "verified", "title": "Push guard exceeds its 10s budget on long multi-push commands"},
+    {"domain": "performance", "severity": "LOW", "paths": ["skills/run-autopilot/scripts/autopilot_context_cap_hook.py"], "status": "verified", "title": "Cap hook re-parses the transcript tail quadratically, 4x over its stated ceiling"},
+    {"domain": "release", "severity": "LOW", "paths": ["skills/run-autopilot/cli/wave_launch.py", "skills/run-autopilot/cli/test_wave_launch_abort.py", "skills/run-autopilot/cli/test_wave_launch_abort_kill.py"], "status": "verified", "title": "Two abort tests spend 131s in real sleeps"},
+    {"domain": "performance", "severity": "LOW", "paths": ["skills/run-autopilot/scripts/_cap_turn_counts.py"], "status": "verified", "title": ".turn-counts.json grows one entry per session forever"},
+    {"domain": "release", "severity": "LOW", "paths": ["CHANGELOG.md"], "status": "verified", "title": "Two fix commits have no changelog line"},
+    {"domain": "release", "severity": "LOW", "paths": ["README.md", "hooks/hooks.json"], "status": "verified", "title": "README says Two hooks but seven are registered"},
+    {"domain": "release", "severity": "LOW", "paths": ["plugin.json"], "status": "verified", "title": "Root plugin.json still says 0.1.0 and ships in every release"},
+    {"domain": "journey", "severity": "LOW", "paths": ["skills/fast-track/scripts/card.py"], "status": "verified", "title": "A spec card with two Goal sections silently keeps only the last"},
+    {"domain": "journey", "severity": "LOW", "paths": ["skills/run-autopilot/cli/wave.py"], "status": "verified", "title": "wave plan on an empty backlog says every PRD is held back"}
+  ]
+}

@@ -1,0 +1,10 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "Intermediate commit 5235090 (\"test(run-autopilot-cli): pin the cli.loop compat surface (00192 seam 4)\") adds test_loop_exports.py alone, before loop_act.py exists and before __all__ is added to loop.py; `from cli import loop, loop_act, loop_decision, loop_gates` fails with ImportError, so pytest collection errors out and the ENTIRE CLI suite fails at that commit (verified independently in an isolated `git worktree add --detach` checkout of 5235090: `ImportError: cannot import name 'loop_act' from 'cli'`, \"1 error during collection\"). This directly violates the PRD's Phase 1 task acceptance criterion (\"after each commit, [the CLI suite] passes\") and the Success Metric (\"After every seam commit, the CLI suite passes\"). The very next commit (3712430, ~10 min later) does the actual loop_act.py move and fixes it, and HEAD is fully green, but the per-commit invariant the PRD explicitly requires (git-bisectable, always-green history through a refactor of the loop core) was broken for one real commit in the merged history.",
+    "file": "skills/run-autopilot/cli/test_loop_exports.py (commit 5235090)",
+    "reason": "confirmed (git ls-tree 5235090: the test file is present, loop_act.py absent). Not fixable forward: HEAD and every seam implementation commit are green; the red commit is the work skill's tests-first pipeline landing Tess's red test before Ivan's implementation, the standard shape of every tests-first task in this batch. The only remedy is a rewrite of unpushed master history (fixup 5235090 into 3712430), which an unattended session must not perform on a shared checkout. Deferred to batch end in state.deferred_decisions and the batch deferred JSON for the human to decide: squash, or read the PRD's per-commit criterion as per seam implementation commit. Upstream question: should the work skill's tests-first path commit test and implementation together when a PRD requires an always-green history."
+  }
+]

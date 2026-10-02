@@ -1,0 +1,187 @@
+{
+  "prd": "00236-track-the-store-without-tripping-the-loop-v1.md",
+  "phase": "done",
+  "next_phase": "",
+  "schema_version": 1,
+  "catchup_mode": "skipped",
+  "doubt_reviewer": "codex",
+  "consensus_engine": "legacy",
+  "session_model": "sonnet",
+  "rework_cap": 2,
+  "lane": "full",
+  "lane_reason": "design",
+  "lane_effective": "full",
+  "batch": {
+    "id": "202609252154",
+    "mode": "autopilot",
+    "completed_prds": [
+      {
+        "filename": "00213-hold-the-loop-session-open-while-cli-reviewer-lanes-run-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 8,
+        "escalated_decisions": 0,
+        "tasks_completed": 7,
+        "tasks_total": 7,
+        "lane": "full",
+        "lane_reason": "hook",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00214-plan-and-launch-a-wave-of-lanes-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 21,
+        "escalated_decisions": 0,
+        "tasks_completed": 7,
+        "tasks_total": 7,
+        "lane": "full",
+        "lane_reason": "design",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00215-assemble-a-drained-wave-onto-one-branch-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 14,
+        "escalated_decisions": 0,
+        "tasks_completed": 13,
+        "tasks_total": 13,
+        "lane": "full",
+        "lane_reason": "design",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 7,
+        "escalated_decisions": 0,
+        "tasks_completed": 13,
+        "tasks_total": 13,
+        "lane": "full",
+        "lane_reason": "design",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00217-bound-concurrent-review-sessions-with-a-slot-semaphore-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 21,
+        "escalated_decisions": 0,
+        "tasks_completed": 5,
+        "tasks_total": 5,
+        "lane": "fast-track",
+        "lane_reason": "uncardable",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00218-leave-sessions-at-task-boundaries-and-run-one-devon-round-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 19,
+        "escalated_decisions": 0,
+        "tasks_completed": 14,
+        "tasks_total": 14,
+        "lane": "full",
+        "lane_reason": "hook",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00223-enter-the-build-gate-in-one-cli-call-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 12,
+        "escalated_decisions": 0,
+        "tasks_completed": 13,
+        "tasks_total": 13,
+        "lane": "full",
+        "lane_reason": "design",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00231-route-rework-fixes-on-their-own-tier-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 7,
+        "escalated_decisions": 0,
+        "tasks_completed": 6,
+        "tasks_total": 6,
+        "lane": "fast-track",
+        "lane_reason": "uncardable",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00232-keep-subagent-test-runs-narrow-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 6,
+        "escalated_decisions": 0,
+        "tasks_completed": 6,
+        "tasks_total": 6,
+        "lane": "fast-track",
+        "lane_reason": "uncardable",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00233-run-the-test-suites-in-parallel-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 13,
+        "escalated_decisions": 0,
+        "tasks_completed": 7,
+        "tasks_total": 7,
+        "lane": "full",
+        "lane_reason": "design",
+        "lane_effective": "full",
+        "lane_escalated": null
+      }
+    ],
+    "plugin_versions": {
+      "aegis@buvis-plugins": "0.3.2",
+      "warden@buvis-plugins": "0.14.0"
+    },
+    "parks_consecutive": 0,
+    "minted_stubs": [
+      "00219-triage-wave-json-s-hand-editable-pid-field-is-v-v1.md",
+      "00220-triage-wave-json-s-hand-editable-pid-is-validat-v1.md",
+      "00221-triage-h1-test-wave-assemble-summary-py-is-abse-v1.md",
+      "00222-triage-h2-teardown-is-still-crash-unsafe-on-the-v1.md",
+      "00224-triage-autopilot-wave-run-crashes-on-every-real-v1.md",
+      "00225-triage-the-wave-feature-family-assumes-docs-dev-v1.md",
+      "00226-triage-land-still-cannot-land-after-a-hand-revi-v1.md",
+      "00227-triage-the-reclaim-can-still-hand-one-slot-to-t-v1.md",
+      "00228-triage-time-term-never-wired-into-the-context-c-v1.md",
+      "00229-triage-trusted-last-wall-stops-at-the-first-com-v1.md",
+      "00230-triage-r13-regression-the-rework-grew-this-test-v1.md",
+      "00234-triage-enter-py-is-414-lines-against-the-prd-ph-v1.md",
+      "00235-triage-the-enter-stop-table-rows-for-fs-error-a-v1.md",
+      "00237-triage-gather-context-sh-full-review-path-produ-v1.md"
+    ]
+  },
+  "tasks_total": 0,
+  "tasks_completed": 0,
+  "cycle": 1,
+  "phases_completed": [],
+  "replan_count": 0,
+  "codex_probe": {
+    "batch_id": "202609252154",
+    "verdict": "unhealthy",
+    "backend": "codex",
+    "detail": "hook_doctor: stale\thooks/protect_config.py",
+    "hook_doctor": "4 ok, 7 stale, 2 broken",
+    "checked_at": "2026-09-28T07:24:24.196985+00:00"
+  },
+  "qwen_breaker": {
+    "tripped": false,
+    "after_task": null,
+    "failed_tasks": [],
+    "batch_id": "202609252154"
+  },
+  "qwen_gate_failures_consecutive": 0,
+  "qwen_preflight": {
+    "batch_id": "202609252154",
+    "verdict": "healthy",
+    "detail": null,
+    "checked_at": "2026-09-30T22:14:30+00:00"
+  }
+}

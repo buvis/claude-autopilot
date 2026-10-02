@@ -1,0 +1,23 @@
+[BLAKE] 🟠 `target.is_symlink()` remains unguarded. An `OSError` from its metadata read still aborts `repair` with exit 2 and no TSV rows; reproduced on Python 3.12 by injecting `EACCES` into `lstat()`. Guard this operation and report `unrepairable` while continuing. | File: skills/use-codex/scripts/codex_hook_doctor.py:198 | Task: general
+[BLAKE] 🟡 Failed writes unconditionally delete the predictable `.tmp` path, even when this attempt never created it. A pre-existing read-only `.tmp` in a writable directory fails to open, then gets deleted by cleanup. Reserve a temporary file owned by this attempt and clean up only that file. | File: skills/use-codex/scripts/codex_hook_doctor.py:240 | Task: 2
+
+B1: fail
+B2: pass
+B3: fail
+B4: pass
+B5: fail
+B6: pass
+B7: pass
+B8: pass
+B9: pass
+B10: pass
+B11: pass
+B12: fail
+B13: pass
+B14: fail
+B15: pass
+B16: pass
+B17: pass
+B18: pass
+B19: pass
+

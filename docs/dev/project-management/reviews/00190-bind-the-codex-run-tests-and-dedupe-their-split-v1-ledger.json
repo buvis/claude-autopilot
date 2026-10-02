@@ -1,0 +1,26 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "F6: New leading-dash cases remove output files before use even though their unique paths are inside a freshly created temporary directory; remove these redundant cleanup commands.",
+    "file": "skills/use-codex/scripts/test_codex_run.sh",
+    "reason": "The two new cases copy the `rm -f <outfile>` pattern every sibling case in both harnesses already uses (test_codex_run_resume.sh:22, the --emit-thread-id block in test_codex_run.sh); deleting it from the new cases alone leaves the harness inconsistent, and touching pre-existing cases is outside the PRD's 'preserve all baseline cases' contract. Cost is two no-op rm -f calls. Batch-end review may overrule."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "Unchecked negative array index on empty ARGV_ARR causes bad array subscript in bash 3.2",
+    "file": "skills/use-codex/scripts/test_codex_run.sh",
+    "reason": "Confirmed on /bin/bash 3.2.57: an empty ARGV_ARR makes `${ARGV_ARR[$last]:-}` print 'bad array subscript' on stderr and take the FAIL branch; the script continues. The pattern is baseline (case 14 at test_codex_run_resume.sh:31 and the old case 45 use it unchanged) and only fires when codex was never invoked, which the case already reports as FAIL, so the verdict is correct and only the diagnostic gains a stderr line. A guard would touch pre-existing cases, outside the PRD's contract. Batch-end review may overrule."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "PRD file still sits in dev/local/prds/wip/ rather than dev/local/prds/done/ despite implementation being verified complete",
+    "file": "dev/local/prds/wip/00190-bind-the-codex-run-tests-and-dedupe-their-split-v1.md",
+    "reason": "Not a defect in the reviewed work: the PRD lifecycle (rules/working-documents.md, run-autopilot Phase 9 invariants) keeps a PRD in wip/ until the finalize session performs the verified wip->done move, which happens only AFTER the review loop converges. At review time wip/ is the correct location by construction, and no rework task may move it early (Phase 9 owns the verified move). Verified: state.phase == review, phases_completed lacks 'review', so Phase 9 has not run yet."
+  }
+]

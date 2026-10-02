@@ -1,0 +1,50 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "FIX: The prose tests do not pin ledger closure/outcomes, the ALL-THREE conjunction, exact inlined blocks, output-path reuse, or omission of `--resume-thread`, so several introduced behaviors can regress while all tests pass",
+    "file": "skills/review-work-completion/scripts/test_retry_policy_prose.py",
+    "reason": "PRD 00178 Phase 2 enumerates the exact assertion list test_retry_policy_prose.py must carry, and every listed assertion is present. Deepening the pins beyond that list is new test scope this PRD did not specify."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "FIX: The unrelated Python-first UUID fallback is not pinned; the existing test checks only that `pat_session_id` exists, so reversing the fallback order would pass",
+    "file": "skills/work/SKILL.md",
+    "reason": "Concerns commit fda6abd, which landed inside the reviewed range but is not one of PRD 00178's four tasks. Real gap, wrong PRD; needs its own PRD against skills/work."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "FIX: Eleven single-assert methods carry comments that largely repeat their descriptive names and assertions; use table-driven `subTest` cases and retain only comments explaining non-obvious invariants",
+    "file": "skills/review-work-completion/scripts/test_retry_policy_prose.py",
+    "reason": "PRD 00178 Phase 2 mandates mirroring the _section helper pattern of test_codex_resume_contract.py, which is what shipped; Alice verified the helper bounds every section correctly. Restructuring to subTest is a behavior-preserving refactor of a file whose assertions are the PRD contract."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "FIX: The refusal predicate and retry assembly are dense single paragraphs; replace them with three numbered gates and ordered assembly steps while preserving every required literal",
+    "file": "skills/review-work-completion/references/retry-policy.md",
+    "reason": "PRD 00178 specifies both section bodies as verbatim Outputs, and test_retry_policy_prose.py plus the acceptance rg -c commands pin literals inside them. Reformatting mandated prose risks the pinned counts for no behavior change."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Cannot statically verify: VERIFY — `bash dev/bin/release-checks` passes at the reviewed HEAD; run that exact command",
+    "file": null,
+    "reason": "Already answered by the recorded verification: dev/local/autopilot/last-verification.json holds `bash dev/bin/release-checks` exit 0 with 235 passed / 0 failed / 0 skipped at sha fa95ae09e04e6c6f82cefbad329f74f16924d127, which is exactly the reviewed HEAD. Blake and Carl also ran the suite live this cycle and reported it green."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "FIX: The new exit-routing rule compresses four branches and prompt-selection behavior into one dense paragraph; replace it with a trigger/routing/retry-prompt table while preserving the pinned cross-reference count",
+    "file": "skills/review-work-completion/references/agent-invocation.md:47",
+    "reason": "Same class as the cycle-1 settled deferral on retry-policy.md dense prose. Behavior-preserving reformat with zero functional change, in a file carrying a hard pinned count (`rg -c 'Lack-of-input refusal'` must stay exactly 1) that a table rewrite could break. Alice and Carl both read the same paragraph and found it consistent with SKILL.md step 5; only Bob judged it too dense. Not worth risking a pinned acceptance criterion for a presentational change."
+  }
+]

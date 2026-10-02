@@ -1,0 +1,21 @@
+[BLAKE] 🟡 Medium: On Python 3.14.6, create a readable registered target inside a directory, then chmod its parent to 000. Direct target.stat() raises PermissionError, but target.exists() suppresses that error, causing `missing` with empty detail instead of the required `syntax_error` with OSError text. Reproduced: exit 1, remaining target processed. | File: skills/use-codex/scripts/codex_hook_doctor.py:54 | Task: 1
+
+B1: fail
+B2: pass
+B3: pass
+B4: pass
+B5: fail
+B6: pass
+B7: pass
+B8: pass
+B9: pass
+B10: pass
+B11: pass
+B12: pass
+B13: pass
+B14: pass
+B15: pass
+B16: pass
+B17: pass
+B18: pass
+B19: pass

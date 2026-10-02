@@ -1,0 +1,66 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Commit 1f045ca (task 2, \"close open dispatch rows as lost at handoff\") also reflows two unrelated spots with no functional link to the task: the `open_ids` boolean condition and the `--prompt-file` argparse call, both wrapped across extra lines. Incidental formatter churn, not requested by the task.",
+    "file": "skills/work/scripts/record_dispatch.py",
+    "reason": "Those wraps are the repo's own style gate's output, not stray churn: task 2's attempt record carries style_gate: fixed:0647aa4, and task 1's carries style_gate: fixed:bc49cf9. Reverting them would re-trip the same gate on the next pass."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`dev/bin/release-checks` (Phase 2's stated Exit Criteria) never invokes `test_record_dispatch*.py`, so \"release-checks passes\" is a vacuous gate for this PRD's changes — it would pass identically whether or not the new `open_ids`/`handoff`/`end` behavior worked at all. Pre-existing gap (not introduced by this PRD), but the PRD leans on this command as its closing check.",
+    "file": "dev/bin/release-checks",
+    "reason": "Blake states it himself: pre-existing and not introduced by this PRD. Changing what the repo's release gate runs is a repo-wide decision outside PRD 00182's scope (its Structural Decomposition names only record_dispatch.py, its tests, subagent-dispatch.md and CHANGELOG.md). Deferred to batch end."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "VERIFY — Cannot statically verify the full test suite; run `uv run --no-project --with pytest python -m pytest`.",
+    "file": null,
+    "reason": "Already answered at this exact HEAD (095431e). dev/local/autopilot/last-verification.json records 895 passed / 0 failed / 0 skipped across the five record_dispatch test files plus skills/run-autopilot/cli/; Blake independently ran all of skills/work/scripts (594 passed, 1 skipped) and Carl ran the same directory. Bob's sandbox blocks execution by design, so this is a sandbox limitation, not a defect."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "VERIFY — Cannot statically verify the release gate; run `bash dev/bin/release-checks`.",
+    "file": null,
+    "reason": "Already answered at this exact HEAD (095431e): last-verification.json records `bash dev/bin/release-checks` exit 0, and Alice, Blake and Carl each ran it green independently this cycle. Bob's sandbox blocks execution by design."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "4 touched test(s) pass against the pre-change code: test_open_ids_lists_only_unclosed_starts, test_handoff_closes_open_rows_as_lost, test_handoff_resume_closes_open_rows_as_lost, test_handoff_leaves_closed_rows_alone",
+    "file": "skills/work/scripts/test_record_dispatch.py",
+    "reason": "Task 6's whole contract was to MOVE these tests between modules unchanged (\"changes NO production code\", \"move test bodies verbatim\"). They pin behavior that landed in cycle 1, before this range's base 095431e, so passing against that base is what a correct verbatim relocation looks like. The replay block itself states a behavior-preserving change's tests pass by design. test_handoff_resume_closes_open_rows_as_lost is the one genuinely new test among them and it pins the resume edge, which cycle 1 asked for."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "1 touched test(s) pass against the pre-change code: test_handoff_writes_its_site_edge_stamp_phase_and_prd",
+    "file": "skills/work/scripts/test_record_dispatch_handoff.py",
+    "reason": "Same cause as the four above: a cycle-1 test that task 6 relocated out of test_record_dispatch.py to keep that file under the 800-line cap dev/bin/release-checks enforces. Its behavior predates this range's base."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "PRD's Success Metrics says \"the four new tests named below\" but the Phase 0/1 tasks actually name five (open_ids, handoff_closes_open_rows_as_lost, handoff_leaves_closed_rows_alone, end_after_handoff_reports_null_elapsed, end_without_handoff_keeps_elapsed); a PRD-text miscount, not an implementation gap since all five exist and pass",
+    "file": "dev/local/prds/wip/00182-close-open-dispatch-rows-at-session-handoffs-v1.md",
+    "reason": "Blake says himself it is not an implementation gap: all five tests exist and pass. Editing a PRD's Success Metrics after implementation so the prose matches what was built is exactly the move the blind lens exists to catch, and it would destroy the spec's value as an independent record. The miscount is in the spec's prose, both readings are satisfied by the code, and the PRD closes with this cycle."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "PRD 00182 is still in dev/local/prds/wip/ with every task checkbox unchecked even though the code, tests, docs and release-checks are all in place and passing; a housekeeping gap, not a code defect",
+    "file": "dev/local/prds/wip/00182-close-open-dispatch-rows-at-session-handoffs-v1.md",
+    "reason": "The expected mid-flight state, and an artifact of the blind lens having no view of the orchestration. A PRD under review is by definition still in wip/; autopilot's Phase 9 performs the verified wip/ -> done/ move after this review converges. Blake labels it a housekeeping gap rather than a defect himself."
+  }
+]

@@ -1,0 +1,57 @@
+## Mechanical facts (computed, do not re-count)
+
+Function line counts from `ast`. Cite these for countable claims; a
+finding that contradicts this block is discarded at the review gate.
+
+- `CHANGELOG.md` — skipped (non-python)
+- `skills/use-codex/scripts/codex_hook_doctor.py`
+  - `_iter_commands` — line 31, 8 lines
+  - `_resolve_target` — line 41, 6 lines
+  - `_verdict_for` — line 49, 44 lines
+  - `_load_hooks` — line 95, 5 lines
+  - `check` — line 102, 29 lines
+  - `_missing_common_import_names` — line 133, 39 lines
+  - `_repair_unknown` — line 174, 9 lines
+  - `_repair_known` — line 185, 45 lines
+  - `_write_repair` — line 232, 22 lines
+  - `_repair_target` — line 256, 38 lines
+  - `_remove_orphaned_empty` — line 296, 22 lines
+  - `repair` — line 320, 38 lines
+  - `_default_config` — line 360, 5 lines
+  - `_default_aegis_root` — line 367, 4 lines
+  - `_default_autopilot_root` — line 373, 2 lines
+  - `_build_parser` — line 377, 13 lines
+  - `_resolve_roots` — line 392, 13 lines
+  - `_run_subcommand` — line 407, 21 lines
+  - `_report` — line 430, 21 lines
+  - `main` — line 453, 20 lines
+- `skills/use-codex/scripts/test_codex_hook_doctor_parse_errors.py`
+  - `test_bare_value_error_from_parse_marks_sibling_and_canonical_unreadable` — line 48, 23 lines
+  - `test_bare_value_error_from_parse_marks_sibling_and_canonical_unreadable.fake_parse` — line 60, 4 lines
+  - `test_check_directory_target_reports_error_and_remaining_rows` — line 73, 32 lines
+  - `test_target_deleted_after_stat_is_verdicted` — line 107, 23 lines
+  - `test_target_deleted_after_stat_is_verdicted.disappearing_stat` — line 116, 7 lines
+  - `test_staleness_uses_the_target_bytes_that_compiled` — line 132, 24 lines
+  - `test_staleness_uses_the_target_bytes_that_compiled.disappearing_read` — line 144, 5 lines
+  - `unreadable_target` — line 159, 11 lines
+  - `test_unreadable_target_is_verdicted` — line 172, 10 lines
+  - `repair_targets` — line 185, 19 lines
+  - `readonly_hooks` — line 207, 13 lines
+  - `test_readonly_repair_reports_all_targets_without_tmp_litter` — line 222, 22 lines
+  - `test_failed_repair_cleans_tmp_and_repairs_next_target` — line 247, 46 lines
+  - `test_failed_repair_cleans_tmp_and_repairs_next_target.partial_open` — line 260, 11 lines
+  - `test_failed_repair_cleans_tmp_and_repairs_next_target.partial_open.failed_write` — line 265, 3 lines
+  - `test_failed_repair_cleans_tmp_and_repairs_next_target.failed_replace` — line 272, 4 lines
+  - `test_cleanup_failure_is_reported_without_losing_remaining_rows` — line 295, 38 lines
+  - `test_cleanup_failure_is_reported_without_losing_remaining_rows.failed_replace` — line 306, 4 lines
+  - `test_cleanup_failure_is_reported_without_losing_remaining_rows.failed_unlink` — line 311, 4 lines
+  - `test_orphan_cleanup_error_still_processes_next_target` — line 336, 35 lines
+  - `test_orphan_cleanup_error_still_processes_next_target.failed_stat` — line 349, 4 lines
+  - `test_orphan_cleanup_error_still_processes_next_target.failed_unlink` — line 354, 4 lines
+  - `test_symlink_status_error_keeps_remaining_repair_rows` — line 373, 25 lines
+  - `test_symlink_status_error_keeps_remaining_repair_rows.failed_is_symlink` — line 383, 4 lines
+  - `test_repair_preserves_preexisting_temp_and_processes_next_target` — line 401, 30 lines
+  - `test_dangling_orphan_gets_one_row_and_later_orphan_is_removed` — line 433, 29 lines
+  - `test_exists_suppressing_permission_error_does_not_hide_target_detail` — line 464, 31 lines
+  - `test_exists_suppressing_permission_error_does_not_hide_target_detail.suppressing_exists` — line 475, 3 lines
+  - `test_exists_suppressing_permission_error_does_not_hide_target_detail.denied_stat` — line 479, 4 lines

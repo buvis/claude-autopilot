@@ -1,0 +1,93 @@
+{
+  "batch_id": "202609011951",
+  "items": [
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "high",
+      "consensus": "1/3",
+      "found_by": "BOB",
+      "file": "skills/use-codex/scripts/codex_hook_doctor.py:171",
+      "issue": "The verdict-ordering fix creates a repair gap: a known hook now verdicted `syntax_error` is ignored by `_repair_known`, so `repair` emits no action and leaves the exact newly-gated failure broken. Confirmed by the orchestrator against the code: _repair_known returns None for syntax_error (line 171), while _repair_unknown does emit unrepairable for it (line 155) and is reached only when the target is unknown. So a KNOWN syntax-broken hook gets no TSV line and no repair even though its canonical source exists. This is a regression the cycle-1 verdict-ordering fix introduced: such a hook used to verdict stale and be repaired from canonical. Fix: add syntax_error to the _repair_known verdict tuple (repair from canonical when present, else unrepairable) plus a repair regression test.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00161-doctor-codex-host-hooks-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "high",
+      "consensus": "1/3",
+      "found_by": "BOB",
+      "file": "skills/use-codex/scripts/codex_hook_doctor.py:66",
+      "issue": "Reading source with forced UTF-8 rejects valid Python hooks using another PEP 263 encoding, although `py_compile` would accept them; such hooks are falsely reported `syntax_error` and gate Codex. Confirmed by the orchestrator: line 66 is compile(target.read_text(encoding=utf-8), str(target), exec), which decodes before compiling, so a valid file carrying a PEP 263 coding declaration in another encoding raises UnicodeDecodeError and is verdicted syntax_error (exit 1, rung gates off). The PRD specifies this verdict as py_compile fails, and py_compile honors the coding cookie. Fix: pass target.read_bytes() to compile(), which restores PEP 263 handling and keeps the read-only property the cycle-1 fix was for; add a latin-1 fixture.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00161-doctor-codex-host-hooks-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "2/3",
+      "found_by": "ALICE, BOB",
+      "file": "skills/use-codex/scripts/codex_hook_doctor.py:138",
+      "issue": "The canonical-source read in _missing_common_import_names only catches `SyntaxError`, not `UnicodeDecodeError`/`OSError` (unlike the sibling loop the same task fixed a few lines above); a non-UTF-8 canonical `_common.py` under the aegis root still aborts the whole `repair` run (exit 2, no TSV output for any target, including healthy ones) instead of reporting that target `unrepairable` and continuing. Alice reproduced it directly; no test exercises it. Highest-consensus finding of the cycle.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00161-doctor-codex-host-hooks-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "1/3",
+      "found_by": "ALICE",
+      "file": "skills/use-codex/scripts/codex_hook_doctor.py:278",
+      "issue": "repair() parses `hooks.json` with the identical json.loads(config.read_text(encoding=utf-8))[hooks] expression twice (lines 278 and 297); extracting a small _load_hooks(config) helper would remove the duplication while preserving the deliberate re-read-before-cleanup behavior.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00161-doctor-codex-host-hooks-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "1/3",
+      "found_by": "BOB",
+      "file": "skills/work/references/codex-implementor.md:74",
+      "issue": "Exit 2 is documented exclusively as an unreadable config and recorded as `config unreadable`, but the CLI also returns 2 for malformed event entries, command tokenization, unresolved plugin roots, and target I/O failures; those paths are now misdiagnosed in state and reports. Fix direction: either a neutral doctor-error state value, or document the distinct structural, root-resolution and target-I/O mappings.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00161-doctor-codex-host-hooks-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "1/3",
+      "found_by": "BOB",
+      "file": "skills/use-codex/scripts/test_codex_hook_doctor_repair.py:646",
+      "issue": "The non-UTF-8 sibling regression test accepts any non-error return code and never asserts that `_common.py` was refused and left untouched, so an unsafe rewrite would still pass. Fix: assert exit 1, an unrepairable `_common.py` record, and unchanged `_common.py` bytes.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00161-doctor-codex-host-hooks-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "1/3",
+      "found_by": "BOB",
+      "file": "skills/use-codex/scripts/test_codex_hook_doctor.py:68",
+      "issue": "_snapshot claims to prove byte-identical read-only behavior but records only paths and sizes; an existing bytecode or config file can be rewritten with the same size without failing the test. Fix: snapshot file bytes plus relevant metadata so same-size rewrites fail.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00161-doctor-codex-host-hooks-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "1/3",
+      "found_by": "BOB",
+      "file": "skills/use-codex/scripts/test_codex_hook_doctor_extra.py:206",
+      "issue": "Two newly moved tests still explain multiline `py_compile` diagnostics even though the implementation removed `py_compile`; replace the stale multi-paragraph commentary with the actual one-line compile() contract.",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00161-doctor-codex-host-hooks-v1.md"
+    }
+  ]
+}

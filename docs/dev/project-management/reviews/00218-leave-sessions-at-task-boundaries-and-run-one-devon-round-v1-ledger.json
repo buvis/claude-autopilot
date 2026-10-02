@@ -1,0 +1,146 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Note for the gate on the [MECH] lines. `test_prd_without_stamps_prints_none_stamped` is a subTest reporting artefact. I ran the HEAD test against the base code and it fails (`SUBFAILED` on all 3 states, plus 3 plain failures in the same file). `test_total_tess_budget_is_four` is a pre-existing, unchanged test in a touched file. Neither needs rework.",
+    "file": "skills/run-autopilot/cli/test_render_report.py:66",
+    "reason": "Not a defect: this is Alice's adjudication of the two fail-first replay rows, submitted as evidence. Her verified fact (the HEAD test does fail against base) is recorded in the review file and narrows the surviving defect to the subTest shape, which task 9 carries. The test_total_tess_budget_is_four replay row is carried by task 13 because that test's file was deleted, which is a separate concern from this note."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Phase-number mismatch. The rubric speaks of Phases 1-3 but the PRD has Phases 0, 1 and 2. The B15/B16 fails below rest on PRD Phase 1 (Core) not meeting its acceptance, which is B15 by literal numbering and B16 under a shifted numbering. PRD Phase 2 (Devon prose, `test_devon_round_prose.py`, release-checks wiring, CHANGELOG) meets its criteria. The spec'd node ids there are module-level and resolve",
+    "file": "N/A",
+    "reason": "An artefact of the blind rubric's fixed Phase 1-3 wording meeting a PRD that numbers its phases 0-2; the reviewer flags it himself as a numbering note. No code or spec defect is asserted. The substantive half (PRD Phase 1 Core not meeting acceptance) is already the \ud83d\udd34 row and tasks 8-12."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Cannot statically verify: the targeted suites and `bash dev/bin/release-checks` pass; VERIFY by running both after rework.",
+    "file": "N/A",
+    "reason": "This is Bob's declared sandbox limit, not a finding about the code, and it is discharged: the orchestrator ran the project suite in the foreground this cycle (2 failed, 3664 passed, 1 skipped) and recorded both the counts and the two failure names in the review file's Tests: line. The two red tests it would have found are tasks 8's content."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "low",
+    "file": "skills/work/SKILL.md:267",
+    "issue": "The PRD's quoted step 2.9 replacement text contains \"no second Devon dispatch\". Its own acceptance test forbids that phrase in `### 2.9`. The implementer reworded to \"Devon never dispatched again\", which is the right way to resolve the spec's self-contradiction.",
+    "reason": "Not a defect: the reviewer who raised it states in the same line that the implementation is the correct resolution. The PRD is self-contradictory (its quoted replacement text contains a phrase its own acceptance test forbids in that section), and the implementation resolves it the only way both can hold. Nothing to fix."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "low",
+    "file": "N/A",
+    "issue": "Cannot statically verify: targeted suites pass and release checks pass; VERIFY: run the PRD Success Metrics pytest command and `bash dev/bin/release-checks`.",
+    "reason": "Bob's declared sandbox limit, not a finding about the code, and discharged this cycle: the orchestrator ran the full suite in the foreground (3721 passed, 0 failed, 1 skipped) and `bash dev/bin/release-checks` green end to end. Both counts and the commands are recorded in the review file's Tests: block."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "file": "skills/run-autopilot/scripts/test_autopilot_cap_headroom_margin.py",
+    "issue": "13 touched test(s) pass against the pre-change code: test_calls_margin_boundary_pins_the_exact_multiplier, test_calls_margin_fires_below_the_margined_threshold, test_time_term_boundary_pins_strict_less_than, test_time_term_is_false_when_plenty_of_time_remains, test_a_cheaper_last_task_keeps_working_under_the_same_deadline, test_a_malformed_cap_rotations_never_matches +7 more",
+    "reason": "Verified benign. The orchestrator checked HEAD's test file out over a base worktree at e5a8479 and ran it: every POSITIVE end-to-end pin fails there (test_time_term_hands_off_when_the_deadline_is_near, test_deadline_already_past_hands_off, test_an_honest_long_wall_still_fires_the_time_term, test_a_rotation_of_another_task_still_fires_the_time_term, test_deadline_env_name_matches_the_runner). The 13 that pass are the inert/negative assertions (a term that must NOT fire cannot fail against code where nothing fires) plus the HeadroomMarginTests pure-predicate tests, which already existed at base. The change is pinned."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "file": "skills/run-autopilot/cli/test_render_report.py",
+    "issue": "3 touched test(s) pass against the pre-change code: test_all_unstamped_tasks_print_none_stamped, test_empty_task_list_prints_none_stamped, test_missing_tasks_key_prints_none_stamped",
+    "reason": "Benign: these three pin the 'none stamped' fallback that task 6 already shipped at base and task 9 deliberately preserved. Task 9's new behaviour (int guard, negative span, missing model) is pinned by test_string_stamp_alongside_valid_task_renders_not_stamped, test_all_string_stamped_tasks_print_none_stamped, test_negative_span_prints_not_stamped and test_task_with_missing_model_does_not_print_none, which the same replay reports as failing at base."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "file": "skills/run-autopilot/cli/test_watchdog.py",
+    "issue": "1 touched test(s) pass against the pre-change code: test_idle_guard_waits_for_an_active_session_past_the_cap",
+    "reason": "Benign: that test shipped with task 2 at base and task 10 only widened its timing slack (the cycle-1 flakiness finding), so it is expected to pass at base. Task 10's actual change is pinned by test_idle_guard_fires_on_the_first_poll_when_already_stale_at_the_cap and test_idle_reason_wins_over_ceiling_when_both_hold_at_the_same_poll, both of which fail at base."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "file": "skills/run-autopilot/scripts/test_autopilot_cap_headroom.py",
+    "issue": "2 touched test(s) pass against the pre-change code: test_bound_fields_excludes_the_stamps_so_last_task_cost_ignores_them, test_done_at_survives_a_second_session",
+    "reason": "Benign: both pin invariants that held at base too. BOUND_FIELDS excluded the stamps before task 11 as well (the PRD says it is unchanged), and done_at already followed the never-rewrite rule when it was stamped outside record_pair. Task 11's actual change (three-tuples, the _warn_non_int path, the scan-back) is pinned by tests the same replay reports as failing at base."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "file": "skills/work/scripts/test_devon_round_prose.py",
+    "issue": "1 touched test(s) pass against the pre-change code: test_tess_answers_each_weak_point",
+    "reason": "Benign, verified by reading the test at skills/work/scripts/test_devon_round_prose.py:127-150: task 13 scoped it to the '## Feedback to Tess (when Devon succeeds)' section, and that section already carried the three needles at base (task 7 wrote them). The scoping pins WHERE the wording lives, so it cannot fail at base, where the wording was already in the right section. The cycle-1 complaint (the whole-file needle was satisfied by the Outcomes row) is genuinely closed."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "`trusted_last_wall` stops at the first completed task whose stamps are missing, non-int or negative and returns None, instead of scanning back. Its tests pin that shape (`test_stamps_that_are_not_both_ints_give_no_span`, `test_a_negative_span_gives_nothing`). The PRD wording, the design doc (\"finds the last completed entry whose stamps are both ints\") and task 11's widening of `last_task_wall` all say scan back. Since the hook never calls `last_task_wall`, task 11's fix has no runtime effect. Any completed task that was never seen in progress now drops the time term for the next fire. This is conservative, and the rotated-task and over-ceiling stops are deliberate, but the unstamped case is undocumented as a deviation. Either skip unstamped or negative entries and stop only on rotated or over-ceiling ones, or record the deviation. The design's `test_trusted_last_wall_agrees_with_last_task_wall` pin is also missing (`rg` finds no such test), so the two walks can silently disagree. ALSO FOLDED INTO THIS ROW BY THE CONSOLIDATOR (three distinct defects, see the review file's consolidation caveat): (a) no `isinstance(task, dict)` guard at _cap_headroom.py:77, so a non-dict entry in state.tasks raises AttributeError inside a PostToolUse hook with no except around it; (b) booleans satisfy `isinstance(..., int)` at _cap_headroom.py:81, so started_at/done_at of True yields a bogus span where `int_field` would reject it; (c) Blake's separate HIGH that the hook substitutes `trusted_last_wall` for the PRD's `last_task_wall(state)`, and its rotation and 10800s stops invert the PRD's own edge case (\"a rotated task's wall spans both sessions and the next session hands off earlier, never later\").",
+    "file": "skills/run-autopilot/scripts/_cap_headroom.py:61",
+    "reason": "cap-overflow at cycle 2 of rework_cap 2: rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "R13 regression: the rework grew this test file from 782 to 923 lines, and the project's own style gate (`check_style_limits.py`, \"files the diff pushed over 800\") flags it (verified by the orchestrator: exit 1, `FILE | skills/run-autopilot/scripts/test_autopilot_cap_headroom.py | 923 lines`). The earlier split existed to stay under 800. Move the new `TaskBoundsWallTests` additions into a sibling file such as `test_cap_task_record_wall.py`, and add it to `dev/bin/release-checks`.",
+    "file": "skills/run-autopilot/scripts/test_autopilot_cap_headroom.py:735",
+    "reason": "cap-overflow at cycle 2 of rework_cap 2: rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "`record_task_bounds` withholds `done_at` when the task has no `started_at`. The PRD says `now` is passed as the third value of each pair. This is defensible (a lone `done_at` gives no usable span) but it is an undocumented deviation from the contract. Note that `MAX_CREDIBLE_WALL_SECS` and this guard are extra behavior beyond the PRD.",
+    "file": "skills/run-autopilot/scripts/_cap_task_record.py:111",
+    "reason": "cap-overflow at cycle 2 of rework_cap 2: rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "Adding `started_at` to `START_FIELDS` lets `record_pair` replace an existing timestamp when it exceeds `now`, breaking the write-once contract. Limit the stale-start replacement rule to usage and calls.",
+    "file": "skills/run-autopilot/scripts/_cap_task_record.py:65",
+    "reason": "cap-overflow at cycle 2 of rework_cap 2: rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "A correction retry requires another Tess dispatch, but the four-dispatch budget allocates only one adversarial strengthen dispatch. The new prose still permits an unanswered weak point when that budget is spent. Reconcile the budget and retry rule; the test's check for the word \"correction\" does not pin dispatch counts.",
+    "file": "skills/work/SKILL.md:243",
+    "reason": "cap-overflow at cycle 2 of rework_cap 2: rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "The expanded module introduction still repeats the assertions and test mechanics. Replace it with a short purpose statement, as requested in cycle 1.",
+    "file": "skills/work/scripts/test_devon_round_prose.py:1",
+    "reason": "cap-overflow at cycle 2 of rework_cap 2: rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`record_pair`'s annotation says `values: tuple[int, int | None, int]`, but `record_task_bounds` passes `done_now`, which is `int | None`, in the third slot. The code handles it (`None` is skipped). Only the type is wrong.",
+    "file": "skills/run-autopilot/scripts/_cap_task_record.py:43",
+    "reason": "cap-overflow at cycle 2 of rework_cap 2: rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The PRD says step 2.8's Tess budget line is unchanged. The implementation rewrote it to say the strengthen \"also covers Devon's one weak-point correction retry\". This resolves a real tension in the spec (a correction retry versus a fixed budget of 4), but it edits a line the spec said to leave alone.",
+    "file": "skills/work/SKILL.md:243",
+    "reason": "cap-overflow at cycle 2 of rework_cap 2: rework cap reached with this finding unresolved"
+  }
+]

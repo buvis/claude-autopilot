@@ -1,0 +1,114 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "The store is still untracked in this checkout, because `/docs/` is still in `.git/info/exclude`. With that line present, `git add -- :(top)docs/dev/project-management` exits 1 (\"paths are ignored\"). So `record_store` prints a failure line at every handoff and commits nothing. The design doc says git \"silently skips\" an excluded path, which is wrong. The PRD's post-release metric cannot be exercised until the operator removes the line here and in claude-plugins. The PRD does not task this explicitly; the design does.",
+    "file": ".git/info/exclude",
+    "reason": "Design site 10 was deferred to the operator before this review and is already recorded in the batch deferred JSON; `.git/info/exclude` is per-checkout and not version-controlled, so no commit here can flip it. The NEW fact the reviewers added - that git exits 1 rather than silently skipping, so every handoff prints a failure line - is NOT deferred: it is queued as rework task [D1] T4."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "`STORE_GITIGNORE` has 23 patterns, but the PRD lists 18 and says \"the pattern list above, in order\". The extras are `.review-gate-blocks`, `.review-gate-failed`, `.lane-guard-blocks`, `wave.json` and `review-paths`. They came from the existing Disposable bullet, which already named them at f550a2e. The parity test forces the superset, so the PRD contradicts itself.",
+    "file": "skills/run-autopilot/cli/store_tree.py:19",
+    "reason": "Requirements ambiguity, resolved in the design doc (section `docs/dev/project-management/.gitignore`), which states the 23-pattern body IS the union of the PRD's draft list and the live Retention Disposable bullet, and that the two sources disagreeing was the defect. The shipped superset is the correct answer; the PRD text is the stale side. Amending PRD prose is a doc change for the operator, not code rework."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "PRD wording and the implementation disagree on the record-store placement, and the test name is inverted. The PRD Behavior bullet puts the step \"between the brief and the leave row\". The code, SKILL.md step 2 and task-boundary step h put it after the row. `test_handoff_procedure_records_the_store_before_the_leave_row` asserts after, and its name is PRD-mandated. Amend the PRD text, or rename the test.",
+    "file": "skills/run-autopilot/scripts/test_store_tree_prose.py:84",
+    "reason": "Requirements ambiguity the design doc already adjudicated (prose-site contract 2): placing the commit BEFORE the leave row cannot satisfy the PRD's own success metric, because the leave row itself appends to the tracked `dispatch-metrics.jsonl`. The implementation is right and the PRD sentence is wrong. The test name is PRD-mandated verbatim, so renaming it would break the named acceptance criterion; its docstring and body both state the asserted order correctly. Doc fix for the operator, not code rework."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "The PRD says every prose site that runs `git status --porcelain` for a gate is rewritten. Several gates are still on raw porcelain: gate-failure.md:53 (the \"uncommitted:\" reset guard), rework-mode.md:20, wave_launch.py:441, wave_review.py:406. The test goes green only through a 10-entry allowlist and scans `.md` files only.",
+    "file": "skills/work/references/gate-failure.md:53",
+    "reason": "Settled by the design doc's destructive-step rule (Risks & edge cases, and interface sites 11 and 12), reached after three review dispatches: a destructive step's precondition check is never relaxed to ignore the store, only a non-destructive refusal gate may be. Relaxing these three would let `git reset --hard`, `worktree remove --force` and an abort discard real uncommitted store work. `rework-mode.md` is a per-file check, not a whole-tree gate. The allowlist is the auditable form of that decision, exactly as the design prescribes."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`__main__.py` is 1278 lines against the 800-line limit. It was already over (pre-existing debt), but this diff adds 80 lines to it, against the design's estimate of about 25.",
+    "file": "skills/run-autopilot/cli/__main__.py",
+    "reason": "Confirmed by measurement (1278 lines). Pre-existing debt named in the design doc and in PRD 00223's batch report; the doubt lens itself filed it as KNOWN/out-of-scope. Splitting the dispatcher is its own PRD, not store-tracking rework."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Out-of-PRD change in range: the `intake` entry in `KNOWN_DIRS`, its test file, the CHANGELOG \"Fixed\" bullet and the release-checks line are unrelated to PRD 00236, which says the hook's refusal \"stays as is\". They are a deliberate stall fix and harmless, but they belong in their own PRD or commit.",
+    "file": "hooks/enforce_prd_location.py:45",
+    "reason": "Accurate observation. The commits (9815f62, 0fdfe71) are the operator-sanctioned fix for the `tooling_conflict` stall that forced this PRD's replan - they are why the PRD could proceed at all. Already landed and green; unpicking them into a separate PRD now buys nothing."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The PRD says paths are \"compared on the repo-relative, normalized path\". The code does a raw `startswith` on git's own output and never normalizes. It is correct for porcelain `-z`, but it is not the stated contract. The three new verbs also take an optional `--state` flag the PRD does not list.",
+    "file": "skills/run-autopilot/cli/store_tree.py:72",
+    "reason": "The reviewer concedes the behavior is correct for porcelain `-z` output, which is the only input this function takes. A wording gap in the PRD, not a defect. `--state` matches every other verb in the CLI and is the established convention; the PRD not enumerating it is not a prohibition."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Cannot statically verify: a tracked-store batch produces no store-caused dirty_tree stand-downs and finishes each handoff with clean Git status (doubt lens VERIFY: after the operator completes the deferred tracking configuration, run a batch with the store tracked; check telemetry for store-caused `dirty_tree` stand-downs and capture Git status after session and wrapper recording).",
+    "file": null,
+    "reason": "Not queued: command shape. The check names no single runnable command - it is a post-release batch observation, which is the PRD's own third Success Metric and is gated on the deferred operator step (site 10). It cannot run in this cycle's work phase and is recorded here so it stays visible at batch end."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Cannot statically verify: release-checks pass at revision 1daea55509ef17d8eb7703b905273b15d0bcaa9e",
+    "file": null,
+    "reason": "Answered, not deferred: the cycle-2 review gate ran `bash dev/bin/release-checks` at exactly that revision and it exited 0 (2032 pytest passes across 22 blocks plus 124 bash-harness assertions, 0 failed, 0 skipped). The sandbox could not run it; the gate could. Queued in `-checks-2.json` with `result.exit: 0`."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "`record-store` silently does nothing inside a wave lane (`in_wave_lane()` returns 0 early) and `loop.py` and `loop_act.py` skip it there too. The PRD specifies no lane exception, so this is added behaviour. Lane store writes now stay uncommitted in the lane worktree, which the CHANGELOG discloses.",
+    "file": "skills/run-autopilot/cli/__main__.py:1216",
+    "reason": "Settled by the cycle-1 review gate on its own authority and recorded in `autonomous_decisions`: of the two options Alice escalated (skip store recording inside wave lanes, or define how lane store commits merge), the gate chose skip as additive, non-destructive and incapable of losing work, since a lane's store writes stay in its worktree exactly as they do today. Task 10 implemented that decision and the CHANGELOG discloses it. The wave-lane exception is therefore a taken decision, not unrequested behaviour. Note: the `review-once` site missing that same guard is NOT settled - it is this cycle's confirmed HIGH."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "The loop calls `record_store` on its own at three sites: after each session in `loop.py`, in `_record_review_once_store`, and at the drained exit in `loop_act.py`. The PRD names only the handoff procedure, the task-boundary handoff, the rotation commit and the drained exit.",
+    "file": "skills/run-autopilot/cli/loop.py:509",
+    "reason": "Same class as the record-store placement deferral already in this ledger: the design doc placed the loop-driver site and the drained exit, and the PRD site list is the stale side. A session that dies, pauses or stands down is already excluded - the loop site is gated on `signal == continue` and `state_touched`, which is the cycle-1 finding task 10 closed. The `except Exception: pass` half of this finding is explicitly NOT settled: it is deferred live this cycle at 3/4 consensus."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Raw `status --porcelain` remains in `wave_launch.py` and `wave_review.py` on lane and assembly worktrees. The `wave_review.py` call guards a destructive worktree removal and excludes only the migrated stub. But the PRD says the wave modules import `foreign_dirty` instead of parsing porcelain themselves.",
+    "file": "skills/run-autopilot/cli/wave_review.py:403",
+    "reason": "Already settled in cycle 1 (see the gate-failure.md entry in this ledger) by the design doc's destructive-step rule: a destructive step's precondition check is never relaxed to ignore the store, only a non-destructive refusal gate may be. Relaxing these would let `git worktree remove --force` and an abort discard real uncommitted store work. Blake cites a different file this cycle, the same decision."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`pause.py` does not import `foreign_dirty`. The PRD lists it as a site, but the file contains no porcelain parsing, so nothing needed switching. This is a PRD premise mismatch, not a defect.",
+    "file": "skills/run-autopilot/cli/pause.py:46",
+    "reason": "The reviewer states himself it is not a defect. The design doc records that `pause.py` has no git call, so the PRD's site list was wrong about it. Nothing to change in code; the PRD text is the stale side, same class as the other PRD-premise deferrals here."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`record-store` and `dirty` take an extra `--state` flag the PRD does not list, and `foreign_dirty` and `record_store` gain a `store_dir` parameter. `autopilot enter` also now calls `ensure_store_gitignore` itself (`enter.py:153`). That matches the SKILL.md prose but goes beyond the PRD.",
+    "file": "skills/run-autopilot/cli/__main__.py:1186",
+    "reason": "Three parts, all settled. `--state` was settled in cycle 1 in this ledger (it matches every other verb in the CLI and the PRD not enumerating it is not a prohibition). `store_dir` IS the task-9 fix the panel itself demanded for the bare-backed boundary, so objecting to it would reverse a delivered rework item. The `enter.py` call was task 2's explicit written scope, because `autopilot enter` is what actually runs the Phase 0 lifecycle step in a loop session."
+  }
+]

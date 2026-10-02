@@ -1,0 +1,81 @@
+Base HEAD with only newly added tests overlaid; no production changes.
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF [ 94%]
+FFFF                                                                     [100%]
+=========================== short test summary info ============================
+FAILED skills/plan-tasks/scripts/test_plan_tasks_prose.py::test_qwen_predicate_is_exactly_one_nonempty_writable_file
+FAILED skills/plan-tasks/scripts/test_plan_tasks_prose.py::test_eligibility_split_requires_independently_gated_one_file_tasks
+FAILED skills/plan-tasks/scripts/test_plan_tasks_prose.py::test_split_examples_keep_the_correlated_export_above_qwen
+FAILED skills/run-autopilot/cli/test_qwen_exclusion_report.py::test_stale_eligible_task_reports_files_once_across_multiple_attempts
+FAILED skills/run-autopilot/cli/test_qwen_exclusion_report.py::test_plan_and_runtime_exclusions_remain_separate_populations
+FAILED skills/work/scripts/test_check_qwen_output.py::test_foreign_dirty_paths_do_not_count_as_qwen_edits
+FAILED skills/work/scripts/test_check_qwen_output.py::test_test_mutation_rejects_attempt_and_restores_only_canonical_tests[False]
+FAILED skills/work/scripts/test_check_qwen_output.py::test_test_mutation_rejects_attempt_and_restores_only_canonical_tests[True]
+FAILED skills/work/scripts/test_check_qwen_output.py::test_staged_mutation_cannot_hide_behind_clean_worktree_content
+FAILED skills/work/scripts/test_check_qwen_output.py::test_real_implementation_edit_proceeds_without_staging[impl.py]
+FAILED skills/work/scripts/test_check_qwen_output.py::test_real_implementation_edit_proceeds_without_staging[new.py]
+FAILED skills/work/scripts/test_check_qwen_output.py::test_foreign_commit_prevents_test_restoration
+FAILED skills/work/scripts/test_check_qwen_output.py::test_guard_error_never_reports_success
+FAILED skills/work/scripts/test_check_qwen_output.py::test_index_only_implementation_change_is_not_a_worktree_edit
+FAILED skills/work/scripts/test_check_qwen_output.py::test_dirty_owned_path_prevents_dispatch[impl.py]
+FAILED skills/work/scripts/test_check_qwen_output.py::test_dirty_owned_path_prevents_dispatch[test_impl.py]
+FAILED skills/work/scripts/test_check_qwen_output.py::test_git_index_shortcuts_cannot_hide_mutated_test_content[False---assume-unchanged]
+FAILED skills/work/scripts/test_check_qwen_output.py::test_git_index_shortcuts_cannot_hide_mutated_test_content[False---skip-worktree]
+FAILED skills/work/scripts/test_check_qwen_output.py::test_git_index_shortcuts_cannot_hide_mutated_test_content[True---assume-unchanged]
+FAILED skills/work/scripts/test_check_qwen_output.py::test_git_index_shortcuts_cannot_hide_mutated_test_content[True---skip-worktree]
+FAILED skills/work/scripts/test_check_qwen_output.py::test_failed_helper_still_checks_tests_but_never_claims_no_edit[False]
+FAILED skills/work/scripts/test_check_qwen_output.py::test_failed_helper_still_checks_tests_but_never_claims_no_edit[True]
+FAILED skills/work/scripts/test_qwen_trust.py::test_stale_multifile_uses_existing_codex_fences[None-src/a.py\nsrc/b.py-haiku]
+FAILED skills/work/scripts/test_qwen_trust.py::test_stale_multifile_uses_existing_codex_fences[None-src/a.py\nsrc/b.py-sonnet]
+FAILED skills/work/scripts/test_qwen_trust.py::test_stale_multifile_uses_existing_codex_fences[None-a.py\nb.py\nc.py-haiku]
+FAILED skills/work/scripts/test_qwen_trust.py::test_stale_multifile_uses_existing_codex_fences[None-a.py\nb.py\nc.py-sonnet]
+FAILED skills/work/scripts/test_qwen_trust.py::test_stale_multifile_uses_existing_codex_fences[off-src/a.py\nsrc/b.py-haiku]
+FAILED skills/work/scripts/test_qwen_trust.py::test_stale_multifile_uses_existing_codex_fences[off-src/a.py\nsrc/b.py-sonnet]
+FAILED skills/work/scripts/test_qwen_trust.py::test_stale_multifile_uses_existing_codex_fences[off-a.py\nb.py\nc.py-haiku]
+FAILED skills/work/scripts/test_qwen_trust.py::test_stale_multifile_uses_existing_codex_fences[off-a.py\nb.py\nc.py-sonnet]
+FAILED skills/work/scripts/test_qwen_trust.py::test_stale_multifile_uses_existing_codex_fences[legacy-src/a.py\nsrc/b.py-haiku]
+FAILED skills/work/scripts/test_qwen_trust.py::test_stale_multifile_uses_existing_codex_fences[legacy-src/a.py\nsrc/b.py-sonnet]
+FAILED skills/work/scripts/test_qwen_trust.py::test_stale_multifile_uses_existing_codex_fences[legacy-a.py\nb.py\nc.py-haiku]
+FAILED skills/work/scripts/test_qwen_trust.py::test_stale_multifile_uses_existing_codex_fences[legacy-a.py\nb.py\nc.py-sonnet]
+FAILED skills/work/scripts/test_qwen_trust.py::test_stale_multifile_uses_existing_codex_fences[unhealthy-src/a.py\nsrc/b.py-haiku]
+FAILED skills/work/scripts/test_qwen_trust.py::test_stale_multifile_uses_existing_codex_fences[unhealthy-src/a.py\nsrc/b.py-sonnet]
+FAILED skills/work/scripts/test_qwen_trust.py::test_stale_multifile_uses_existing_codex_fences[unhealthy-a.py\nb.py\nc.py-haiku]
+FAILED skills/work/scripts/test_qwen_trust.py::test_stale_multifile_uses_existing_codex_fences[unhealthy-a.py\nb.py\nc.py-sonnet]
+FAILED skills/work/scripts/test_qwen_trust.py::test_stale_multifile_uses_existing_codex_fences[terminal-src/a.py\nsrc/b.py-haiku]
+FAILED skills/work/scripts/test_qwen_trust.py::test_stale_multifile_uses_existing_codex_fences[terminal-src/a.py\nsrc/b.py-sonnet]
+FAILED skills/work/scripts/test_qwen_trust.py::test_stale_multifile_uses_existing_codex_fences[terminal-a.py\nb.py\nc.py-haiku]
+FAILED skills/work/scripts/test_qwen_trust.py::test_stale_multifile_uses_existing_codex_fences[terminal-a.py\nb.py\nc.py-sonnet]
+FAILED skills/work/scripts/test_qwen_trust.py::test_empty_write_set_fails_closed_even_with_files_exclusion[True-]
+FAILED skills/work/scripts/test_qwen_trust.py::test_empty_write_set_fails_closed_even_with_files_exclusion[True-\n \n]
+FAILED skills/work/scripts/test_qwen_trust.py::test_empty_write_set_fails_closed_even_with_files_exclusion[True-None]
+FAILED skills/work/scripts/test_qwen_trust.py::test_empty_write_set_fails_closed_even_with_files_exclusion[False-]
+FAILED skills/work/scripts/test_qwen_trust.py::test_empty_write_set_fails_closed_even_with_files_exclusion[False-\n \n]
+FAILED skills/work/scripts/test_qwen_trust.py::test_empty_write_set_fails_closed_even_with_files_exclusion[False-None]
+FAILED skills/work/scripts/test_qwen_trust.py::test_exactly_one_distinct_nonempty_path_reaches_qwen[src/a.py]
+FAILED skills/work/scripts/test_qwen_trust.py::test_exactly_one_distinct_nonempty_path_reaches_qwen[\nsrc/a.py\n\n]
+FAILED skills/work/scripts/test_qwen_trust.py::test_exactly_one_distinct_nonempty_path_reaches_qwen[src/a.py\nsrc/a.py]
+FAILED skills/work/scripts/test_qwen_trust.py::test_named_test_only_task_never_dispatches_qwen
+FAILED skills/work/scripts/test_qwen_trust.py::test_repository_ancestors_do_not_change_task_classification[/srv/project]
+FAILED skills/work/scripts/test_qwen_trust.py::test_repository_ancestors_do_not_change_task_classification[/srv/tests/project]
+FAILED skills/work/scripts/test_qwen_trust.py::test_repository_ancestors_do_not_change_task_classification[/srv/fixtures/project]
+FAILED skills/work/scripts/test_qwen_trust.py::test_multifile_does_not_replace_prior_exclusion[False-ui]
+FAILED skills/work/scripts/test_qwen_trust.py::test_multifile_does_not_replace_prior_exclusion[False-tier]
+FAILED skills/work/scripts/test_qwen_trust.py::test_multifile_does_not_replace_prior_exclusion[False-contract]
+FAILED skills/work/scripts/test_qwen_trust.py::test_multifile_does_not_replace_prior_exclusion[True-ui]
+FAILED skills/work/scripts/test_qwen_trust.py::test_multifile_does_not_replace_prior_exclusion[True-tier]
+FAILED skills/work/scripts/test_qwen_trust.py::test_multifile_does_not_replace_prior_exclusion[True-contract]
+FAILED skills/work/scripts/test_qwen_trust.py::test_qwen_output_failure_consumes_one_shot_and_selects_sonnet[False-False-qwen_no_edit]
+FAILED skills/work/scripts/test_qwen_trust.py::test_qwen_output_failure_consumes_one_shot_and_selects_sonnet[True-True-qwen_test_mutation]
+FAILED skills/work/scripts/test_qwen_trust.py::test_qwen_output_failure_consumes_one_shot_and_selects_sonnet[False-True-qwen_test_mutation]
+FAILED skills/work/scripts/test_qwen_trust.py::test_clean_qwen_implementation_proceeds_to_commit_and_gate
+FAILED skills/work/scripts/test_qwen_trust_prose.py::test_runtime_fence_precedes_the_routing_table
+FAILED skills/work/scripts/test_qwen_trust_prose.py::test_guard_is_required_before_dispatch_and_before_staging
+FAILED skills/work/scripts/test_qwen_trust_prose.py::test_watchdog_does_not_run_mutated_tests_before_result_handling
+FAILED skills/work/scripts/test_qwen_trust_prose.py::test_dispatch_self_check_accepts_the_effective_fences
+FAILED skills/work/scripts/test_qwen_trust_prose.py::test_state_schema_attempt_shape_admits_runtime_files_exclusion
+FAILED skills/work/scripts/test_qwen_trust_prose.py::test_authorities_name_each_output_cause_once[path0-- `cause`:-\n- `implementor`:]
+FAILED skills/work/scripts/test_qwen_trust_prose.py::test_authorities_name_each_output_cause_once[path1-## Qwen output rejection-## Retry render]
+FAILED skills/work/scripts/test_qwen_trust_prose.py::test_authorities_name_each_output_cause_once[path2-| `tasks[].attempts[].cause`-\n| `tasks[].attempts[].qwen_excluded_reason`]
+FAILED skills/work/scripts/test_qwen_trust_prose.py::test_authorities_name_each_output_cause_once[path3-## Capability ladders-## Fable rescue]
+FAILED skills/work/scripts/test_qwen_trust_prose.py::test_mutation_recovery_retains_safe_reset_and_sonnet_edge
+FAILED skills/work/scripts/test_qwen_trust_prose.py::test_qwen_guidance_names_qualified_scope_and_pending_multifile_evidence
+76 failed in 3.55s

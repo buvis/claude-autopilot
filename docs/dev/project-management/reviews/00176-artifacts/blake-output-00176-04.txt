@@ -1,0 +1,21 @@
+[BLAKE] 🟡 Phase 0 acceptance remains unverified: `PYTHONDONTWRITEBYTECODE=1 PYTEST_ADDOPTS='-p no:cacheprovider' mise exec -- uv run --no-project --with pytest python -m pytest -q skills/use-codex/scripts` was blocked opening `/Users/bob/.cache/uv/sdists-v9/.git` (Operation not permitted); `bash dev/bin/release-checks` was not run. Static inspection found no implementation defects. | File: dev/bin/release-checks | Task: general
+
+B1: pass
+B2: pass
+B3: pass
+B4: pass
+B5: pass
+B6: pass
+B7: pass
+B8: pass
+B9: pass
+B10: pass
+B11: pass
+B12: pass
+B13: pass
+B14: pass
+B15: fail
+B16: pass
+B17: pass
+B18: pass
+B19: pass

@@ -1,0 +1,34 @@
+[
+  {
+    "cycle": 3,
+    "disposition": "discarded",
+    "severity": "Medium",
+    "issue": "Both changed partial-write/replace test cases pass the incremental baseline, leaving the mandatory changed-test fail-first requirement unmet.",
+    "file": "skills/use-codex/scripts/test_codex_hook_doctor_parse_errors.py",
+    "reason": "Partial-write and failed-replace behavior is intentionally unchanged. The existing regression test moved its I/O injection from Path.write_bytes to Path.open/stream.write because exclusive creation must retain one handle. Both cases retain the original error-path assertions; all five actual new behavior cases fail against the incremental base. Passing the rework base is expected behavior-preserving regression maintenance, not unpinned new behavior. Parent decision gate accepted this dismissal."
+  },
+  {
+    "cycle": 3,
+    "disposition": "discarded",
+    "severity": "Medium",
+    "issue": "KNOWN Mechanical replay reports two touched partial-write/replace cases passing against the incremental base. These preserve existing error-handling coverage while adapting its I/O patch; forcing them to discriminate an unchanged behavior is outside this rework.",
+    "file": "skills/use-codex/scripts/test_codex_hook_doctor_parse_errors.py",
+    "reason": "Partial-write and failed-replace behavior is intentionally unchanged. The existing regression test moved its I/O injection from Path.write_bytes to Path.open/stream.write because exclusive creation must retain one handle. Both cases retain the original error-path assertions; all five actual new behavior cases fail against the incremental base. Passing the rework base is expected behavior-preserving regression maintenance, not unpinned new behavior. Parent decision gate accepted this dismissal."
+  },
+  {
+    "cycle": 3,
+    "disposition": "discarded",
+    "severity": "Medium",
+    "issue": "2 touched test(s) pass against the pre-change code: test_failed_repair_cleans_tmp_and_repairs_next_target",
+    "file": "skills/use-codex/scripts/test_codex_hook_doctor_parse_errors.py",
+    "reason": "Partial-write and failed-replace behavior is intentionally unchanged. The existing regression test moved its I/O injection from Path.write_bytes to Path.open/stream.write because exclusive creation must retain one handle. Both cases retain the original error-path assertions; all five actual new behavior cases fail against the incremental base. Passing the rework base is expected behavior-preserving regression maintenance, not unpinned new behavior. Parent decision gate accepted this dismissal."
+  },
+  {
+    "cycle": 4,
+    "disposition": "discarded",
+    "severity": "Medium",
+    "issue": "1 touched test(s) pass against the pre-change code: test_target_deleted_after_stat_is_verdicted",
+    "file": "skills/use-codex/scripts/test_codex_hook_doctor_parse_errors.py",
+    "reason": "The pre-existing disappearance regression moved its fault injection from exists/stat to stat/read because this rework removes exists(). It preserves the same disappearance and error-detail behavior. Passing the incremental base is expected for this behavior-preserving test maintenance; the genuinely new permission-suppression regression fails there. Alice and Bob independently verified this rationale, and the parent decision gate explicitly accepted the dismissal. Raw mechanical evidence remains in review-04."
+  }
+]

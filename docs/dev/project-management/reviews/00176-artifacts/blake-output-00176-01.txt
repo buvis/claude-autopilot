@@ -1,0 +1,21 @@
+[BLAKE] 🟠 Repair still exits 2 without TSV rows when a read-only hooks directory contains an unregistered empty `*.py`: guarded writes accumulate `unrepairable` results, but `_remove_orphaned_empty` then raises from unguarded `unlink()` before reporting them. Its unguarded `stat()` similarly aborts on dangling or disappearing targets. Guard both cleanup operations and extend regression coverage. | File: skills/use-codex/scripts/codex_hook_doctor.py:289 | Task: general
+
+B1: fail
+B2: pass
+B3: pass
+B4: pass
+B5: fail
+B6: pass
+B7: pass
+B8: pass
+B9: pass
+B10: pass
+B11: pass
+B12: pass
+B13: pass
+B14: fail
+B15: pass
+B16: pass
+B17: pass
+B18: pass
+B19: pass

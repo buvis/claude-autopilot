@@ -1,0 +1,66 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "Exit criterion missed: `skills/work/SKILL.md` is 683 lines; `validate_skill.py` still emits `[WARN] SKILL.md is 684 lines (recommended max 500)`, so Success Metric 1 and the Phase-1 \"no size WARN\" acceptance both fail",
+    "file": "skills/work/SKILL.md",
+    "reason": "Requirements ambiguity deferred to batch end for an operator decision. The PRD's <=500 ceiling is arithmetically unreachable inside its own Non-Goals: both scoped extractions shipped complete and verbatim (independently verified), removing 130 lines (813 -> 683), and the PRD's own baseline math (737 - ~140 = ~597) already missed the target before the true 813 baseline is accounted for. Closing the remaining 183 lines needs a third extraction the Non-Goals forbid. Recorded HIGH rather than CRITICAL: nothing is broken or unsafe, and the three implementation-aware lenses all rated it below critical; Blake (blind, spec-only, could not see the baseline history) rated it CRITICAL and his dissent is recorded in the batch deferred record."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "The two specified extractions cannot reach the ceiling by arithmetic (813 -> 697 -> 683 lines actually shipped; even the PRD's own 737 - ~140 = ~597), so the PRD is internally unachievable and nothing in the tree records that the goal was abandoned 183 lines short",
+    "file": "N/A",
+    "reason": "Same settled deferral as the entry above (the unreachable size metric), deferred to batch end for an operator decision. The second half of this finding - that nothing records the shortfall - was NOT deferred: it is fixed in cycle 1 rework by task [D1] 6, which records the shortfall in the PRD and points at the deferred record."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "PRD exit criterion is unmet: SKILL.md is 683 lines, 183 above the mandatory <=500 ceiling; the impossible original arithmetic does not waive the requirement",
+    "file": ".claude/skills/work/SKILL.md",
+    "reason": "Bob's wording of the same settled deferral as the entries above. Bob is right that impossibility does not waive a requirement - which is exactly why this is deferred to the operator rather than silently closed, and why the shortfall is being recorded in the PRD in cycle-1 rework."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "Success Metric 1 (SKILL.md <= 500 lines) is mathematically unreachable given the PRD's restriction to only extract step 5.5 and 2.85 (~140 lines) from an 813-line baseline.",
+    "file": "N/A",
+    "reason": "Carl's wording of the same settled deferral as the entries above."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "PRD Success Metric 1 and Exit Criteria unmet: validator still WARNs, SKILL.md is 683 lines (`wc -l`) / 684 (validator's `count(\"\\n\")+1`) against <=500; the builder's unreachability arithmetic checks out (813 true baseline - 130 actually removed), so this needs operator re-baselining or a follow-up extraction PRD, not silence",
+    "file": "/Users/bob/.claude/skills/work/SKILL.md",
+    "reason": "Alice's wording of the same settled deferral as the entries above. Her 'not silence' clause is honoured by cycle-1 rework task [D1] 6, which records the shortfall; the re-baselining decision itself is the operator's."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Rubric B17 has no counterpart in the spec: the PRD defines Phase 0 and Phase 1 only, so no Phase-3 acceptance criteria exist to evaluate",
+    "file": "N/A",
+    "reason": "Not a defect in the work under review - an artefact of the fixed 19-rule blind rubric being applied to a two-phase PRD. Blake was told in his own prompt to expect this. No action."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Cannot statically verify: the recorded four-suite green run and toy live work-phase smoke succeeded",
+    "file": "N/A",
+    "reason": "Bob's sandbox is static-only and his persona instructs him to emit this line for anything needing runtime verification. The claim was independently verified at runtime this cycle by the orchestrator (196 passed, 0 failed, 0 skipped across all four suites), by Alice (48 + 148, plus 268 and 696 on the wider dirs) and by Blake (48/101 subtests + 148). Not an open finding."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "File-size limit: `test_fablectl.py` is 1776 lines at HEAD against the 800-line max in rules/coding-style.md, and this diff added +150 to an already 2x-over file",
+    "file": "/Users/bob/.claude/skills/run-autopilot/scripts/test_fablectl.py",
+    "reason": "Pre-existing violation, not introduced by this PRD (the file was already ~1626 lines before it) - rules/operating-principles.md 'Surgical Changes' says leave pre-existing problems alone rather than widening the diff. The discretionary part of the increase (the 77-line Phase-0 anchor inventory) IS addressed in cycle-1 rework task [D1] 5, which trims it to its durable content. Splitting the test module itself is out of scope for this PRD and belongs in its own PRD."
+  }
+]

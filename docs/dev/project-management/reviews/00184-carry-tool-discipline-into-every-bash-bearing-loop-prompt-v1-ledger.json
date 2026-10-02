@@ -1,0 +1,18 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Cannot statically verify: V1: HEAD contract tests, existing SKILL.md prose pins, and release checks pass.",
+    "file": null,
+    "reason": "Answered by the recorded verification at this exact HEAD: dev/local/autopilot/last-verification.json sha=1bb37251c1bd302bcf6afffa34c375fa0cd9d433 records `python3 -m pytest -q skills/run-autopilot/scripts` exit 0 and `bash dev/bin/release-checks` exit 0, 1056 passed / 0 failed / 31 skipped. Blake independently re-ran both suites green this cycle. Bob's sandbox forbids execution, so this is a lens limitation, not a defect."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Cannot statically verify: V2: all changed files satisfy the 800-line limit; complete file contents or counts were not supplied.",
+    "file": null,
+    "reason": "Contradicts computed facts. Measured at review time: CHANGELOG.md 498, agents/alice.md 29, agents/blake.md 53, agents/eve.md 93, agents/victor.md 20, skills/run-autopilot/SKILL.md 333, skills/run-autopilot/scripts/test_review_prompt_contracts.py 196. Largest is 498, well inside the 800-line limit, so R13 holds."
+  }
+]

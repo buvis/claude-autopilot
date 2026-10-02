@@ -1,0 +1,13 @@
+[
+  {
+    "cycle": 2,
+    "finding": "Cannot statically verify: the recorded tests and release checks pass at HEAD.",
+    "file": null,
+    "command": "bash dev/bin/release-checks",
+    "source": "bob",
+    "result": {
+      "exit": 0,
+      "note": "Answered at this cycle's reviewed HEAD 83165038f9dfd92ebf64ae94f38f61b946a17ee3 by two independent runs: dev/local/autopilot/last-verification.json records this exact command at exit 0 at that sha, and Carl re-ran it this cycle under `env -u AUTOPILOT_DISPATCH_DEPTH -u COPILOT_CLI -u _AUTOPILOT_LOOP` and it completed. The cap-out path runs no work pass, so no step-7 run executed it; this entry records the evidence that answers it instead."
+    }
+  }
+]

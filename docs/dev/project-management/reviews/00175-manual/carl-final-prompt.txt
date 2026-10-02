@@ -1,0 +1,788 @@
+Independent correctness review of PRD00175. All inputs below are inline; do not use tools, edit files, or dispatch agents. Review source behavior and prose integration, not patch applicability. Generalist review: there is no frontend surface. Return concrete correctness/integration findings with file/line and consequence, or no findings. The packet includes a diff of changed tracked files, the proper new-file diff, and exact current schema rows and Unreleased changelog separately because those two files contain unrelated Qwen changes. The work/Qwen changelog entry is outside this review's scope. Do not assume separately supplied artifacts are missing.
+
+## PRD
+---
+catchup: skip
+design: skip
+---
+
+# Restore the gemini reviewer lane
+
+Source: PRD 00173's review cycle 1 (`dev/local/reviews/00173-guard-the-canonical-read-in-the-doctor-verdict-v1-review-1.md`, Carl's section). Filed 2026-09-05.
+
+## Overview
+
+### Problem Statement
+
+Carl, the panel's frontend and design specialist, cannot run on this host. Both backends `gemini-run.sh` supports fail, and neither failure is transient:
+
+1. **copilot** (the preferred backend): `DEFAULT_COPILOT_MODEL="gemini-3.1-pro-preview"` at `skills/use-gemini/scripts/gemini-run.sh:73` is no longer served. Live: `Error: Model "gemini-3.1-pro-preview" from --model flag is not available.`, exit 1.
+2. **native gemini** (the fallback, forced with `GEMINI_BACKEND=gemini`): `IneligibleTierError: This client is no longer supported for Gemini Code Assist for individuals`, `reasonCode: UNSUPPORTED_CLIENT`, `tierId: free-tier`, pointing at the Antigravity suite. Exit 1.
+
+So `review-work-completion` silently degrades from five lenses to four on every cycle, and the only trace is one line in each review file. `references/agent-invocation.md` treats a non-zero `gemini-run.sh` as graceful degradation, which is right for a quota trip and wrong for a permanently dead pin.
+
+The pack's own gate cannot catch it. `skills/use-gemini/scripts/test_gemini_run.sh` stubs the backend binary and asserts argv construction only, so `dev/bin/release-checks` prints `PASS: plain -f argv is exactly: --model gemini-3.1-pro-preview --allow-all-tools --deny-tool=write -p <PROMPT>` while that exact model is unavailable. A green suite certifies a dead configuration.
+
+### Target Users
+
+Anyone running `/autopilot:review-work-completion` or `/autopilot:run-autopilot`, who currently loses a reviewer without being told it is permanent.
+
+### Success Metrics
+
+- `gemini-run.sh -f <prompt> -o <out>` exits 0 and writes reviewer output on at least one backend on this host.
+- A backend that rejects the pinned model, or refuses the client's tier, exits with a code distinct from a generic runtime failure, and the caller can tell "permanently unavailable" from "failed this once".
+- The model pin has exactly one definition, and a documented command reports whether the backend still serves it.
+- Once a cycle records the reserved exit code, every later cycle and PRD in the same batch skips Carl without a dispatch or retry, and each later review file says so in one line (added 2026-09-05 from discovery 00177).
+
+## Functional Decomposition
+
+### Capability: Gemini backend selection
+
+#### Feature: A served model
+- **Description**: the copilot default model names something copilot actually serves.
+- **Inputs**: the backend's own model listing.
+- **Outputs**: `DEFAULT_COPILOT_MODEL` set to a served id; `test_gemini_run.sh`'s argv assertion updated to match.
+- **Behavior**: probe the installed copilot for its served models, pick the closest equivalent to Gemini 3.1 Pro, and repoint the single constant. If copilot serves no Gemini model at all, decide and record whether Carl moves to a different backend or is retired from the roster.
+
+#### Feature: Unavailability is a distinct exit code
+- **Description**: an unavailable model or ineligible tier is reported as its own failure class, not folded into "the CLI exited non-zero".
+- **Inputs**: backend stderr matching the model-unavailable and ineligible-tier shapes.
+- **Outputs**: a reserved exit code (mirroring `codex-run.sh`'s exit 3 for "unavailable"), with the reason on stderr.
+- **Behavior**: `gemini-run.sh` classifies these two stderr shapes before propagating the child's exit code. `review-work-completion` step 1/5 records the reviewer as permanently unavailable rather than a one-off skip.
+
+#### Feature: The pin's staleness is detectable
+- **Description**: an operator can check the pin without reading a review file.
+- **Inputs**: none beyond an installed backend CLI.
+- **Outputs**: a documented command reporting whether the pinned model is served.
+- **Behavior**: add a probe subcommand or documented one-liner to `skills/use-gemini/SKILL.md`. It must NOT run inside `dev/bin/release-checks` — that suite is hermetic and stubs its binaries, and a network call there would make releases fail on an offline machine.
+
+### Capability: A dead lane stays off for the batch
+
+#### Feature: A permanently unavailable Carl is skipped for the rest of the batch
+- **Description**: after one cycle records the reserved exit code, no later cycle or PRD in the same batch dispatches or retries Carl.
+- **Inputs**: the reserved exit code from `gemini-run.sh` in any cycle's step 5.
+- **Outputs**: `state.batch.unavailable_reviewers: ["carl"]`, written once when the code fires (merge into `state.json` with sibling fields untouched, the way step 5 stamps `review_lenses`); `state.batch` survives the per-PRD reset (`cli/records.py` `PER_PRD_RESET_FIELDS` preserves `batch` in full) and dies with the batch, so a repaired Carl returns on the next batch. Step 1's optional-Carl check reads the field before probing any binary and, when `carl` is listed, skips him with no dispatch, no retry and no `ui` key in `state.review_lenses`. Every later review file carries the line `carl: skipped (permanently unavailable since cycle {n} of {prd})` and its `reviewers:` field omits him. `skills/run-autopilot/references/state-schema.md` documents the field.
+- **Behavior**: on a standalone run with no `state.json` the field cannot exist, so the check falls through to today's binary probe. `check_review_file.py` needs no change: `reviewers:` already omits lanes that did not run.
+
+## Structural Decomposition
+
+### Repository Structure
+
+```
+skills/use-gemini/scripts/gemini-run.sh        # Maps to: all three features
+skills/use-gemini/scripts/test_gemini_run.sh   # Maps to: argv pin, new exit-code cases
+skills/use-gemini/SKILL.md                     # Maps to: the probe command, exit codes
+skills/review-work-completion/SKILL.md         # Maps to: the batch-scoped skip (step 1, steps 5/6)
+skills/run-autopilot/references/state-schema.md            # Maps to: batch.unavailable_reviewers
+skills/review-work-completion/scripts/test_carl_skip_prose.py  # Maps to: pins the field and the skip line
+CHANGELOG.md
+```
+
+### Module: gemini-runner
+- **Maps to capability**: Gemini backend selection
+- **Responsibility**: model pin, backend fallback, failure classification.
+- **Exports**: none new; the script's flags stay as they are.
+
+### Module: review-roster
+- **Maps to capability**: A dead lane stays off for the batch
+- **Responsibility**: the step-1 read of `state.batch.unavailable_reviewers`, the one-time write when the reserved code fires, the review-file skip line, and the schema entry.
+- **Exports**: none (skill prose plus a prose contract test).
+
+## Dependency Graph
+
+### Foundation Layer (Phase 0)
+No dependencies.
+
+- **gemini-runner**: the pin and the exit-code classification.
+
+### Core Layer (Phase 2)
+- **review-roster**: Depends on [gemini-runner] (it reads the reserved exit code Phase 0 defines).
+
+## Implementation Phases
+
+### Phase 0: Repoint the pin and classify unavailability
+**Goal**: Carl runs again, and a dead backend says so distinctly.
+
+**Tasks**:
+- [ ] Probe the installed copilot for served models, repoint `DEFAULT_COPILOT_MODEL`, and update the argv assertion in `test_gemini_run.sh` to the new id (no deps) - Acceptance: `bash skills/use-gemini/scripts/test_gemini_run.sh` green, and a real `gemini-run.sh -f <prompt> -o <out>` exits 0 writing non-empty output.
+- [ ] Classify model-unavailable and ineligible-tier stderr as a reserved exit code, with stub-driven cases in `test_gemini_run.sh` (depends on task 1) - Acceptance: `bash dev/bin/release-checks` green with the two new cases present.
+
+### Phase 1: Make the pin auditable
+**Goal**: nobody learns the pin is dead from a review file again.
+
+**Tasks**:
+- [ ] Document a probe command in `skills/use-gemini/SKILL.md`, listing the new exit code alongside the existing ones; CHANGELOG `**use-gemini**` under Fixed (depends on Phase 0) - Acceptance: the doc names the probe and every exit code the script can return.
+
+**Exit Criteria**: `bash dev/bin/release-checks` green; a live Carl dispatch produces reviewer output.
+
+### Phase 2: Keep a dead Carl off for the batch
+**Goal**: one reserved exit code silences Carl until the batch ends, instead of a dispatch and a retry every cycle.
+
+**Tasks**:
+- [ ] In `skills/review-work-completion/SKILL.md`: step 1's optional-Carl paragraph reads `state.batch.unavailable_reviewers` first and skips Carl when `carl` is listed (no dispatch, no retry, no `ui` lens key); step 5 writes the field once when `gemini-run.sh` returns the reserved code (merge into `state.json`, sibling fields untouched, as step 5 does for `review_lenses`); step 6 writes the review-file line `carl: skipped (permanently unavailable since cycle {n} of {prd})` on every later cycle and leaves him out of `reviewers:`; document `batch.unavailable_reviewers` in `skills/run-autopilot/references/state-schema.md`; add `skills/review-work-completion/scripts/test_carl_skip_prose.py` (pattern of `test_codex_resume_contract.py`) asserting `unavailable_reviewers` appears in SKILL.md step 1 and in `state-schema.md`, and the literal `carl: skipped (permanently unavailable` appears in SKILL.md; CHANGELOG `**review-work-completion**` under Added (depends on Phase 0) - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/review-work-completion/scripts/test_carl_skip_prose.py` green; `rg -c 'unavailable_reviewers' skills/run-autopilot/references/state-schema.md` prints at least 1; `rg -c 'carl: skipped \(permanently unavailable' skills/review-work-completion/SKILL.md` prints at least 1; `bash dev/bin/release-checks` green.
+
+**Exit Criteria**: a cycle after one that recorded the reserved code writes the skip line and dispatches no `gemini-run.sh`.
+
+## Test Strategy
+
+### Critical Scenarios
+- **Happy path**: `gemini-run.sh -f prompt -o out` on the repointed model → Expected: exit 0, `out` holds the backend's text.
+- **Edge case**: backend reports the model unavailable → Expected: the reserved exit code, reason on stderr, no partial output file.
+- **Edge case**: cycle 1 of PRD A records the reserved exit code, then cycle 2 and PRD B's cycle 1 run in the same batch → Expected: no `gemini-run.sh` call, both later review files carry the skip line, `reviewers:` omits carl.
+- **Error case**: backend reports an ineligible tier → Expected: the same reserved exit code, and the fallback backend is still attempted first.
+
+## Risks
+
+- The replacement model may behave differently enough to change Carl's review quality; the argv pin makes the swap visible in one place, and the review file records which model ran.
+- A probe that calls the network must stay out of `release-checks`, or releases break offline. This is why Phase 1 is documentation plus an opt-in command, not a suite leg.
+- A batch-scoped skip outlives a mid-batch repair of the pin; the field dies with the batch, and an operator can delete it from `state.json` at a session boundary to bring Carl back sooner.
+
+## Tracked diff
+```diff
+diff --git a/dev/bin/release-checks b/dev/bin/release-checks
+index 9c62efe..b306404 100755
+--- a/dev/bin/release-checks
++++ b/dev/bin/release-checks
+@@ -10,7 +10,8 @@ set -euo pipefail
+ 
+ echo "[checks] reviewer registry"
+ uv run --no-project --with pytest python -m pytest -q \
+-  skills/review-work-completion/scripts/test_agent_registry.py
++  skills/review-work-completion/scripts/test_agent_registry.py \
++  skills/review-work-completion/scripts/test_carl_skip_prose.py
+ 
+ echo "[checks] hook registration"
+ uv run --no-project --with pytest python -m pytest -q \
+diff --git a/skills/review-work-completion/SKILL.md b/skills/review-work-completion/SKILL.md
+index fe26ee3..5ff7345 100644
+--- a/skills/review-work-completion/SKILL.md
++++ b/skills/review-work-completion/SKILL.md
+@@ -69,7 +69,16 @@ Check these exist:
+ 
+ Under autopilot, `state.prd` names the PRD, so this guard does not apply — review that PRD's work. A single wip PRD is unambiguous and passes straight through.
+ 
+-**Optional - Carl (Gemini):** check `${CLAUDE_PLUGIN_ROOT}/skills/use-gemini/scripts/gemini-run.sh` is executable AND a backend CLI resolves - `copilot` (preferred; serves `gemini-3.1-pro-preview`) OR native `gemini` (`mise which`/`command -v` succeeds for either). If both pass, Carl is active. If neither CLI resolves, skip Carl and proceed with the three remaining reviewers - this is graceful degradation, not a failure. Note in the final review file which reviewers ran. (Carl on the copilot backend spends Copilot AI credits; a "monthly quota exceeded" error from the helper is a runtime skip, not a prerequisite failure.)
++**Optional - Carl (Gemini), batch check first:** read
++`state.batch.unavailable_reviewers` before probing any binary. Missing field
++means `[]`. When it contains `carl`, Carl is inactive for this cycle: no dispatch,
++no retry, and no `ui` key in `state.review_lenses` when step 5 replaces the lens
++roster. Retain `state.batch.unavailable_reviewer_details.carl` as the skip origin
++for step 6 and omit Carl from `reviewers:`. This applies to every later cycle
++and PRD in the same batch. On a standalone run with no `state.json`, do not
++create state; fall through to the binary check below.
++
++**Carl binary check (only when not batch-skipped):** check `${CLAUDE_PLUGIN_ROOT}/skills/use-gemini/scripts/gemini-run.sh` is executable AND a backend CLI resolves - `copilot` (preferred; pin owned by the helper) OR native `gemini` (`mise which`/`command -v` succeeds for either). If both pass, Carl is active; binary presence alone does not establish model availability. If neither CLI resolves, skip Carl and record `Carl: unavailable (no backend CLI)` in the final review file. Do not run a live probe here; the opt-in operator probe lives in `use-gemini/SKILL.md`. Step 5 classifies dispatch results: exit 4 records `Carl: permanently unavailable` with the stderr reason; a quota or other runtime failure records a one-off failure. Carl on copilot spends Copilot AI credits.
+ 
+ Create if missing: `dev/local/tmp/`, `dev/local/reviews/`
+ 
+@@ -260,12 +269,34 @@ With 1M context, agent prompts can include more background — full PRD, archite
+ 
+ > Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/await_reviewer_outputs.py --budget 100 <absolute -o output path of each CLI reviewer dispatched>` as a foreground Bash call. If the last stdout line is `WAITING`, run the same command again — up to 30 times total. Return the script's final output verbatim (`DONE`, or `WAITING` plus the pending files after 30 runs). Do nothing else: no reading the output files, no review commentary.
+ 
+-The Watcher is scaffolding, not a reviewer: its return is never saved, consolidated, or counted by the retry policy. Once every reviewer's output is in hand (including a Bob fallback's), `TaskStop` the Watcher if it is still running, then proceed to step 6. A `WAITING` return after 30 runs (~50 min) means a CLI reviewer stalled — treat that reviewer as failed per `references/retry-policy.md`.
++The Watcher is scaffolding, not a reviewer: its return is never saved, consolidated, or counted by the retry policy. Once every reviewer has either produced output (including a Bob fallback's) or reached a terminal failure/unavailability result, `TaskStop` the Watcher if it is still running, then proceed to step 6. A rejected Carl deliberately publishes no output file; classify his process exit and do not wait for that missing file. A `WAITING` return after 30 runs (~50 min) means a still-running CLI reviewer stalled — treat that reviewer as failed per `references/retry-policy.md`.
+ 
+ **Do not Write or Edit ANY reviewer output (Alice's and Blake's included) until ALL reviewers have reported.** The CLIs self-write via `-o`; subagent-returned text is saved only in step 6, after every reviewer has completed - even if a subagent returns first.
+ 
+ **Bob fallback (the doubt lens never drops).** If `codex-run.sh` exits non-zero with exit 3 (codex unavailable), dispatch a Claude Task subagent with Bob's exact assembled prompt (doubt lens + rubric included) and use its output as Bob's. On exit 4 (codex ran but failed, e.g. quota), FIRST check the wrapper's `codex-review-last.jsonl` sidecar: exit 4 has a documented false-positive mode (quota markers matched in codex's own command args or gateguard noise) where codex actually finished — if the sidecar holds a complete review (findings plus all `D{n}:` verdict lines), salvage it as Bob's output and skip the fallback entirely. Only when no complete review is salvageable dispatch the Claude fallback; only if that also fails does Bob count as a failed reviewer per `references/retry-policy.md`.
+ 
++**Carl availability.** Apply `references/agent-invocation.md`'s Carl exit-code
++contract before retry policy. Exit 4 is permanent configuration unavailability,
++not a one-off skip: record `Carl: permanently unavailable` and the backend/model
++and stderr reason in the review file and user summary; do not retry unchanged
++configuration or consolidate a pre-existing output file. Exit 3 is a dispatch
++guard refusal. Other non-zero results are runtime failures (including quota),
++recorded with their code and reason. Continue with the remaining reviewers.
++On success, record the selected backend/model from the runner's stderr, including
++any fallback, and require non-empty reviewer text before counting Carl as run.
++
++**Latch Carl for the batch (autopilot only).** On exit 4 and when `state.json`
++exists, append `carl` once to `state.batch.unavailable_reviewers` (default `[]`)
++and set `state.batch.unavailable_reviewer_details.carl` to
++`{"cycle": state.cycle, "prd": state.prd}`. Merge both into `state.json` in one
++write, sibling fields untouched (including other batch fields and reviewer
++entries); never overwrite the first failure's origin on subsequent cycles.
++Do not latch exit 3, quota, transient failures, or a successful native fallback.
++Standalone reviews create no state. The latch survives per-PRD reset because
++`cli/records.py` preserves `batch` in full, and expires with the batch. A new
++batch tries Carl again; an operator can remove his list entry and detail at a
++session boundary after repair to re-enable him within this batch.
++
+ **Alice on the workflow engine** (`CONSENSUS_ENGINE` is `workflow` or `shadow`; skip this whole block on `legacy`). The workflow call goes in the SAME single dispatch message as the other reviewers — it is a foreground tool call whose inner agents are live subagents, so it holds a headless session open exactly as a Task subagent does. The Watcher rule above is unchanged: it exists for the background-Bash CLI reviewers.
+ 
+ ```
+@@ -314,6 +345,18 @@ Read these before proceeding:
+ 
+ ### 6. Consolidate findings
+ 
++**Report the batch skip.** When step 1 batch-skipped Carl, write this line in
++the review file's top matter, using the first failure's `cycle` and `prd` from
++`state.batch.unavailable_reviewer_details.carl`, not this cycle's values:
++
++`carl: skipped (permanently unavailable since cycle {n} of {prd})`
++
++Write it on every later cycle, including cycle 1 of later PRDs in the batch;
++omit Carl from `reviewers:` and the consolidation inputs. He has no `ui` lens
++key this cycle. A manually populated legacy list without origin still suppresses
++dispatch: use `unknown` for each missing origin value rather than inventing one.
++The cycle that first receives exit 4 records the failure per step 5 instead.
++
+ **Close out the lens roster (autopilot runs).** When `state.review_lenses` was stamped in step 5, set each lens to `"done"`, or `"failed"` for a reviewer that failed per `references/retry-policy.md` (a lens rescued by a fallback — e.g. Bob's Claude fallback — is `"done"`). Skip on standalone runs.
+ 
+ Save each subagent reviewer's returned text to `dev/local/tmp/` — **Alice** to `alice-output-{id}.txt`, **Blake** to `blake-output-{id}.txt`, **Eve** (when she ran) or her Claude substitute (when it ran instead) to `eve-output-{id}.txt`, and Bob's Claude fallback (when it ran) to `bob-output-{id}.txt`. Bob's and Carl's CLI outputs are already on disk - their `-o` flag wrote them straight to `bob-output-{id}.txt` / `carl-output-{id}.txt` in step 5. Then run:
+diff --git a/skills/review-work-completion/references/agent-invocation.md b/skills/review-work-completion/references/agent-invocation.md
+index 6e02907..efb556b 100644
+--- a/skills/review-work-completion/references/agent-invocation.md
++++ b/skills/review-work-completion/references/agent-invocation.md
+@@ -55,7 +55,18 @@ Bash tool (run_in_background: true):
+   ${CLAUDE_PLUGIN_ROOT}/skills/use-gemini/scripts/gemini-run.sh -f "{carl_prompt_file_absolute_path}" -o "{abs_repo_path}/dev/local/tmp/carl-output-{id}.txt"
+ ```
+ 
+-`-o` writes Carl's output straight to the file step 6 consolidates. When the background command completes, read `carl-output-{id}.txt`. If `gemini-run.sh` exits non-zero (e.g. monthly quota exceeded), skip Carl and proceed with the other reviewers (graceful degradation).
++`-o` saves Carl's stdout after failure classification; capture stderr separately
++in the background command's log for backend/model selection and failure reasons.
++On exit 0, read `carl-output-{id}.txt`, require non-empty reviewer text, and record
++the backend/model from stderr in Carl's review section (including any native
++fallback). On exit 4, record **Carl: permanently unavailable** with the rejected
++backend/model and stderr reason in the review file and user summary. Do not
++retry unchanged configuration: the helper already attempted an eligible native
++fallback. Exit 3 means nested dispatch refused. Other non-zero exits, including
++quota, are one-off runtime failures; record the code/reason and follow
++`retry-policy.md`. All failures let the other reviewers proceed, but none counts
++as a completed Carl review. On exit 4 no new `-o` file is published; an existing
++file is untouched and must never be consolidated as this run's result.
+ 
+ ## Blake: Filesystem notes
+ 
+diff --git a/skills/use-gemini/SKILL.md b/skills/use-gemini/SKILL.md
+index 8af4bcb..d0203c1 100644
+--- a/skills/use-gemini/SKILL.md
++++ b/skills/use-gemini/SKILL.md
+@@ -9,9 +9,9 @@ compatibility: "Host-independent dispatch recipe requiring the named external mo
+ Gemini runs through the helper script `scripts/gemini-run.sh`, which maps a
+ stable flag interface onto two backends and resolves the mise-managed binary.
+ 
+-> **Backend:** The helper prefers the GitHub Copilot CLI (it is the only
+-> backend that serves the `gemini-3.1-pro-preview` model) and falls back to the
+-> native `gemini` CLI when copilot is absent. Force a backend with
++> **Backend:** The helper prefers the GitHub Copilot CLI and falls back to the
++> native `gemini` CLI when copilot is absent, or when its default prompt run
++> reports a permanently unavailable model. Force a backend with
+ > `GEMINI_BACKEND=copilot` or `GEMINI_BACKEND=gemini`. Both CLIs are
+ > mise-managed and may not be on PATH; the helper resolves them via `mise which`.
+ 
+@@ -20,8 +20,7 @@ stable flag interface onto two backends and resolves the mise-managed binary.
+ - Files read from other skill dirs:
+   `${CLAUDE_PLUGIN_ROOT}/skills/use-codex/references/dispatch-contract.md` - mandatory,
+   applies verbatim (see below)
+-- CLIs: `copilot` (preferred - the only backend serving
+-  `gemini-3.1-pro-preview`) or the native `gemini` CLI; `mise which` for
++- CLIs: `copilot` (preferred) or the native `gemini` CLI; `mise which` for
+   resolution of either
+ 
+ ## Dispatch Contract (shared)
+@@ -30,19 +29,68 @@ Background dispatch and waiting (TaskOutput-only waiting), following up, error h
+ 
+ Gemini-specific delta: if the helper reports no backend CLI found, or the Copilot monthly quota is exhausted, report that and stop - do not silently fall back to another tool. For a quota error you may offer `GEMINI_BACKEND=gemini` (native CLI) as an alternative.
+ 
++Permanent rejection is different: the helper tries native Gemini once for an
++unforced prompt run with no `-m`. Explicit backends, model overrides, interactive
++and resumed sessions never switch CLIs after rejection. Exit 4 means permanently
++unavailable after any eligible fallback; report the stderr reason without
++retrying the same configuration. If fallback fails transiently, its runtime
++exit code is returned instead; stderr retains both backend reasons.
++
+ ## Model Selection
+ 
+ - **Copilot backend (default):** spends Copilot AI credits per call (multiplier
+   set by the model; not exposed headlessly - check the interactive `/model`
+-  picker). Default model is `gemini-3.1-pro-preview` ("Gemini 3.1 Pro
+-  (Preview)"). Per policy, Gemini-via-Copilot is allowed because Claude does not
++  picker). `DEFAULT_COPILOT_MODEL` in `scripts/gemini-run.sh` is the single
++  production pin; `--help` prints its current value. The 2026-09-05 picker
++  offered Gemini Flash successors but rejected the former Pro Preview pin;
++  Carl stays on Gemini using the newest offered Flash model. Per policy,
++  Gemini-via-Copilot is allowed because Claude does not
+   provide Gemini.
+ - **Native gemini backend** (`GEMINI_BACKEND=gemini`): bills your Google/Gemini
+-  API account, no Copilot multiplier; cannot serve the 3.1 Pro Preview model.
++  API account, no Copilot multiplier.
+   With no `-m`, the CLI picks its own default.
+ 
+ Pass `-m MODEL` only when the user asks for a specific model.
+ 
++### Check the pin (opt-in, live)
++
++Run `mise exec -- copilot`, then `/model` to inspect the installed backend's
++authenticated model picker. A listing alone does not prove inference works.
++Use this probe to check the runner's actual pin without duplicating it:
++
++```bash
++prompt_file=$(mktemp)
++printf '%s\n' 'Reply with exactly GEMINI_PIN_OK. Do not use tools.' > "$prompt_file"
++GEMINI_BACKEND=copilot bash ${CLAUDE_PLUGIN_ROOT}/skills/use-gemini/scripts/gemini-run.sh -s -f "$prompt_file"
++probe_status=$?
++rm -f "$prompt_file"
++printf 'Gemini pin probe exit: %s\n' "$probe_status"
++```
++
++Exit 0 plus `GEMINI_PIN_OK` confirms that the pinned model served the probe;
++exit 4 reports permanent rejection. Other failures leave availability
++unverified. Forcing copilot prevents a native fallback from hiding a stale pin.
++This command uses the network, existing login, and Copilot credits. Never add
++it to `dev/bin/release-checks`; that suite remains hermetic with stub binaries.
++
++### Exit codes and output
++
++| Code | Meaning |
++| --- | --- |
++| 0 | Backend succeeded (or `--help` printed); verify review output is non-empty. |
++| 1 | Usage, setup, temporary/output file error, or ordinary backend failure with code 1, 3, or 4. |
++| 3 | Nested dispatch refused; no backend ran. |
++| 4 | Model unavailable or client tier ineligible after any eligible fallback. |
++| Other non-zero | Backend/tool status propagated, including signal exits such as 130 or 143; a runtime failure, not classified permanent rejection. |
++
++Child codes 3 and 4 without a recognized stderr rejection map to 1 to keep the
++reserved codes unambiguous. Original backend errors and backend/model selection
++are on stderr; record them in the review file. `-o` saves stdout after
++classification and also streams stdout to the terminal. On exit 4 it creates
++no partial output file and leaves any existing destination untouched; never
++reuse that old file as this run's review. Ordinary failed runs retain partial
++stdout for salvage. Diagnostics stay on stderr, outside the review text.
++
+ ## Running a Task
+ 
+ 1. Select the permission mode required for the task; default to no special flags (interactive approval) unless edits are necessary.
+diff --git a/skills/use-gemini/scripts/gemini-run.sh b/skills/use-gemini/scripts/gemini-run.sh
+index 839ee39..bc18108 100755
+--- a/skills/use-gemini/scripts/gemini-run.sh
++++ b/skills/use-gemini/scripts/gemini-run.sh
+@@ -1,9 +1,9 @@
+ #!/bin/bash
+ # Run Gemini for code analysis/editing.
+ #
+-# Backend: prefers the GitHub Copilot CLI (serves Gemini 3.1 Pro Preview, which
+-# the native Gemini CLI cannot), falls back to the native `gemini` CLI when
+-# copilot is absent. Override with GEMINI_BACKEND=copilot|gemini.
++# Backend: prefers GitHub Copilot; falls back to native `gemini` when absent
++# or permanently unavailable for a default prompt run.
++# Override with GEMINI_BACKEND=copilot|gemini.
+ #
+ # Copilot billing note: every call spends Copilot AI credits (multiplier set by
+ # the model). The native gemini backend bills your Google/Gemini account with no
+@@ -42,9 +42,12 @@ resolve_bin() {
+     echo "$p"
+ }
+ 
+-# Backend selection. copilot preferred (it is the only backend that serves the
+-# gemini-3.1-pro-preview model); native gemini is the fallback.
++# Backend selection. Explicit backend/model/session choices never switch CLIs.
+ BACKEND="${GEMINI_BACKEND:-}"
++case "$BACKEND" in
++    ""|copilot|gemini) ;;
++    *) echo "ERROR: invalid GEMINI_BACKEND: $BACKEND" >&2; exit 1 ;;
++esac
+ COPILOT_BIN="$(resolve_bin copilot)"
+ GEMINI_BIN="$(resolve_bin gemini)"
+ if [ -z "$BACKEND" ]; then
+@@ -68,9 +71,9 @@ if [ -z "$BACKEND" ]; then
+     exit 1
+ fi
+ 
+-# Copilot default model. gemini-3.1-pro-preview = "Gemini 3.1 Pro (Preview)".
++# Single production pin, verified in copilot /model on 2026-09-05.
+ # Override with -m. The native gemini backend keeps the CLI default unless -m.
+-DEFAULT_COPILOT_MODEL="gemini-3.1-pro-preview"
++DEFAULT_COPILOT_MODEL="gemini-3.8-flash"
+ 
+ MODEL=""          # empty = backend default
+ MODE="prompt"     # prompt, interactive, resume, continue
+@@ -96,7 +99,7 @@ usage() {
+     echo "  -s, --silent           Quiet output (copilot only; gemini -p is already clean)"
+     echo "  -d, --dir DIR          Include extra directory in the workspace (can repeat)"
+     echo "  -f, --file FILE        Read prompt from file"
+-    echo "  -o, --output FILE      Write output to file (via tee)"
++    echo "  -o, --output FILE      Save stdout after classification (also streams to stdout)"
+     echo "  -r, --resume [ID]      Resume session ('latest' or index; default: latest)"
+     echo "  -c, --continue         Resume most recent session"
+     echo "  -h, --help             Show this help"
+@@ -174,17 +177,46 @@ if [ -n "$PROMPT_FILE" ]; then
+     PROMPT=$(cat "$PROMPT_FILE")
+ fi
+ 
+-# Build and run command
++# Keep stderr separate for classification; never classify the model's prose.
++RUN_TMP=$(mktemp -d) || exit 1
++trap 'rm -rf "$RUN_TMP"' EXIT
++mkfifo "$RUN_TMP/stderr.pipe" || exit 1
++
++permanently_unavailable() {
++    grep -Eiq 'Model "[^"]+" from --model flag is not available|IneligibleTierError|reasonCode[^[:alnum:]]+UNSUPPORTED_CLIENT' "$RUN_TMP/stderr"
++}
++
++# Preserve ordinary failure output for salvage, but do not publish a rejected
++# backend's partial output. An existing destination is left untouched on exit 4.
+ run_cmd() {
++    local rc=0 stderr_pid
++    # Stream prompts/diagnostics immediately, then wait for tee to finish before
++    # classifying. Merely redirecting stderr to a file hides interactive prompts.
++    tee "$RUN_TMP/stderr" < "$RUN_TMP/stderr.pipe" >&2 &
++    stderr_pid=$!
+     if [ -n "$OUTPUT_FILE" ]; then
+-        "$@" 2>&1 | tee "$OUTPUT_FILE"
++        "$@" 2> "$RUN_TMP/stderr.pipe" | tee "$RUN_TMP/stdout" || rc=$?
+     else
+-        "$@"
++        "$@" 2> "$RUN_TMP/stderr.pipe" || rc=$?
+     fi
++    wait "$stderr_pid" || return 1
++    if [ "$rc" -ne 0 ] && permanently_unavailable; then
++        echo "ERROR: $BACKEND permanently unavailable (model/client tier rejected)." >&2
++        return 4
++    fi
++    if [ -n "$OUTPUT_FILE" ]; then
++        cat "$RUN_TMP/stdout" > "$OUTPUT_FILE" || return 1
++    fi
++    # Reserve 3 for the recursion guard and 4 for classified unavailability.
++    case "$rc" in
++        3|4) echo "ERROR: $BACKEND exited $rc (runtime failure)." >&2; return 1 ;;
++    esac
++    return "$rc"
+ }
+ 
+ run_copilot() {
+     local model="${MODEL:-$DEFAULT_COPILOT_MODEL}"
++    echo "gemini-run: backend=copilot model=$model" >&2
+     local dirs=()
+     local d
+     for d in "${RAW_DIRS[@]}"; do dirs+=(--add-dir "$d"); done
+@@ -232,6 +264,7 @@ run_copilot() {
+ }
+ 
+ run_gemini() {
++    echo "gemini-run: backend=gemini model=${MODEL:-CLI-default}" >&2
+     # Flags common to every invocation. --skip-trust avoids the workspace-trust
+     # prompt blocking headless (-p) runs.
+     local common=(--skip-trust)
+@@ -269,7 +302,16 @@ run_gemini() {
+ }
+ 
+ if [ "$BACKEND" = "copilot" ]; then
+-    run_copilot
++    rc=0
++    run_copilot || rc=$?
++    if [ "$rc" -eq 4 ] && [ -z "${GEMINI_BACKEND:-}" ] &&
++       [ -z "$MODEL" ] && [ "$MODE" = "prompt" ] && [ -n "$GEMINI_BIN" ]; then
++        echo "gemini-run: trying native gemini fallback after permanent rejection." >&2
++        BACKEND=gemini
++        run_gemini
++    else
++        exit "$rc"
++    fi
+ else
+     run_gemini
+ fi
+diff --git a/skills/use-gemini/scripts/test_gemini_run.sh b/skills/use-gemini/scripts/test_gemini_run.sh
+index 604d6c0..785e309 100755
+--- a/skills/use-gemini/scripts/test_gemini_run.sh
++++ b/skills/use-gemini/scripts/test_gemini_run.sh
+@@ -47,9 +47,20 @@ mkdir -p "$STUBDIR"
+ cat > "$STUBDIR/copilot" <<'STUB'
+ #!/bin/bash
+ printf '%s\n' "$@" > "${COPILOT_ARGV_FILE:?}"
++if [ -n "${LIVE_STDERR_FILE:-}" ]; then
++    printf '%s\n' 'APPROVAL_PROMPT' >&2
++    attempts=0
++    until grep -qF 'APPROVAL_PROMPT' "$LIVE_STDERR_FILE"; do
++        attempts=$((attempts + 1))
++        [ "$attempts" -lt 100 ] || exit 91
++        sleep 0.02
++    done
++fi
+ cat > "${COPILOT_STDIN_FILE:?}"
+ echo "stub-copilot-ran"
+-exit "${STUB_EXIT_CODE:-0}"
++[ -z "${COPILOT_STDOUT:-}" ] || printf '%s\n' "$COPILOT_STDOUT"
++[ -z "${COPILOT_STDERR:-}" ] || printf '%s\n' "$COPILOT_STDERR" >&2
++exit "${COPILOT_EXIT_CODE:-${STUB_EXIT_CODE:-0}}"
+ STUB
+ chmod +x "$STUBDIR/copilot"
+ 
+@@ -58,7 +69,8 @@ cat > "$STUBDIR/gemini" <<'STUB'
+ printf '%s\n' "$@" > "${GEMINI_ARGV_FILE:?}"
+ cat > "${GEMINI_STDIN_FILE:?}"
+ echo "stub-gemini-ran"
+-exit "${STUB_EXIT_CODE:-0}"
++[ -z "${GEMINI_STDERR:-}" ] || printf '%s\n' "$GEMINI_STDERR" >&2
++exit "${GEMINI_EXIT_CODE:-${STUB_EXIT_CODE:-0}}"
+ STUB
+ chmod +x "$STUBDIR/gemini"
+ 
+@@ -104,11 +116,12 @@ fi
+ # 2. Argv regression lock for the plain -f run (adding the stdin guard must
+ #    not perturb argv): --model <default> + read-review perms + -p <prompt>.
+ EXPECTED_ARGV_FILE="$WORK/t1.expected"
+-printf '%s\n' "--model" "gemini-3.1-pro-preview" "--allow-all-tools" "--deny-tool=write" "-p" "$GEMINI_PROMPT" > "$EXPECTED_ARGV_FILE"
++EXPECTED_MODEL="gemini-3.8-flash"
++printf '%s\n' "--model" "$EXPECTED_MODEL" "--allow-all-tools" "--deny-tool=write" "-p" "$GEMINI_PROMPT" > "$EXPECTED_ARGV_FILE"
+ if diff -q "$EXPECTED_ARGV_FILE" "$COPILOT_ARGV_FILE" >/dev/null 2>&1; then
+-    PASS "plain -f argv is exactly: --model gemini-3.1-pro-preview --allow-all-tools --deny-tool=write -p <PROMPT>"
++    PASS "plain -f argv is exactly: --model $EXPECTED_MODEL --allow-all-tools --deny-tool=write -p <PROMPT>"
+ else
+-    FAIL "plain -f argv is exactly: --model gemini-3.1-pro-preview --allow-all-tools --deny-tool=write -p <PROMPT>" \
++    FAIL "plain -f argv is exactly: --model $EXPECTED_MODEL --allow-all-tools --deny-tool=write -p <PROMPT>" \
+          "got: $(tr '\n' ' ' < "$COPILOT_ARGV_FILE" 2>/dev/null || echo '<no copilot invocation>')"
+ fi
+ 
+@@ -276,6 +289,146 @@ guard_case t9a "AUTOPILOT_DISPATCH_DEPTH=1: refuses with exit 3, no backend call
+ guard_case t9b "CODEX_SESSION_ID set: refuses with exit 3, no backend call" CODEX_SESSION_ID=deadbeef
+ guard_case t9c "COPILOT_CLI set: refuses with exit 3, no backend call" COPILOT_CLI=1
+ 
++# ══ T10: permanent rejection, fallback, and output isolation ════════════════
++export COPILOT_EXIT_CODE=1
++export COPILOT_STDERR="Error: Model \"$EXPECTED_MODEL\" from --model flag is not available."
++export GEMINI_BACKEND=copilot
++run_gemini t10 -f "$PROMPT_FILE_T" -o "$WORK/t10.out"
++if [ "$RC" -eq 4 ] && grep -qF "$COPILOT_STDERR" "$STDERR_F" &&
++   [ ! -e "$WORK/t10.out" ] && [ ! -f "$GEMINI_ARGV_FILE" ]; then
++    PASS "forced unavailable model: exit 4, stderr reason, no output or fallback"
++else
++    FAIL "forced unavailable model" "rc=$RC; stderr: $(cat "$STDERR_F")"
++fi
++
++printf '%s\n' 'existing review' > "$WORK/existing.out"
++run_gemini t10_existing -f "$PROMPT_FILE_T" -o "$WORK/existing.out"
++if [ "$RC" -eq 4 ] && [ "$(cat "$WORK/existing.out")" = 'existing review' ]; then
++    PASS "unavailability preserves an existing output file"
++else
++    FAIL "unavailability preserves an existing output file" "rc=$RC"
++fi
++unset GEMINI_BACKEND
++
++run_gemini t11 -f "$PROMPT_FILE_T" -o "$WORK/t11.out"
++if [ "$RC" -eq 0 ] && [ -f "$COPILOT_ARGV_FILE" ] &&
++   [ -f "$GEMINI_ARGV_FILE" ] && [ ! -s "$GEMINI_STDIN_FILE" ] &&
++   [ "$(cat "$WORK/t11.out")" = 'stub-gemini-ran' ] &&
++   grep -qF 'trying native gemini fallback' "$STDERR_F"; then
++    PASS "default rejection falls back successfully; output contains only native result"
++else
++    FAIL "default rejection fallback" "rc=$RC; stderr: $(cat "$STDERR_F")"
++fi
++
++export GEMINI_EXIT_CODE=1
++export GEMINI_STDERR='IneligibleTierError: This client is no longer supported for Gemini Code Assist for individuals'
++run_gemini t12 -f "$PROMPT_FILE_T" -o "$WORK/t12.out"
++if [ "$RC" -eq 4 ] && [ -f "$COPILOT_ARGV_FILE" ] &&
++   [ -f "$GEMINI_ARGV_FILE" ] && [ ! -e "$WORK/t12.out" ] &&
++   grep -qF "$COPILOT_STDERR" "$STDERR_F" && grep -qF "$GEMINI_STDERR" "$STDERR_F"; then
++    PASS "both backends rejected: native tried before exit 4, both reasons, no output"
++else
++    FAIL "both backends rejected" "rc=$RC; stderr: $(cat "$STDERR_F")"
++fi
++
++export GEMINI_BACKEND=gemini
++export GEMINI_STDERR='{"reasonCode":"UNSUPPORTED_CLIENT","tierId":"free-tier"}'
++run_gemini t13 -f "$PROMPT_FILE_T"
++if [ "$RC" -eq 4 ] && [ ! -f "$COPILOT_ARGV_FILE" ] &&
++   grep -qF "$GEMINI_STDERR" "$STDERR_F"; then
++    PASS "native reasonCode rejection is classified without -o"
++else
++    FAIL "native reasonCode rejection" "rc=$RC"
++fi
++unset GEMINI_BACKEND GEMINI_EXIT_CODE GEMINI_STDERR
++
++run_gemini t14 -m custom-model -f "$PROMPT_FILE_T"
++if [ "$RC" -eq 4 ] && [ ! -f "$GEMINI_ARGV_FILE" ] &&
++   argv_has_pair "$COPILOT_ARGV_FILE" --model custom-model; then
++    PASS "explicit model never switches backends on rejection"
++else
++    FAIL "explicit model never switches backends" "rc=$RC"
++fi
++
++run_gemini t15 -r existing-session -f "$PROMPT_FILE_T"
++if [ "$RC" -eq 4 ] && [ ! -f "$GEMINI_ARGV_FILE" ]; then
++    PASS "resume never switches backends on rejection"
++else
++    FAIL "resume never switches backends" "rc=$RC"
++fi
++
++export COPILOT_STDERR='monthly quota exceeded'
++export COPILOT_EXIT_CODE=7
++run_gemini t16 -f "$PROMPT_FILE_T" -o "$WORK/t16.out"
++if [ "$RC" -eq 7 ] && [ ! -f "$GEMINI_ARGV_FILE" ] &&
++   [ "$(cat "$WORK/t16.out")" = 'stub-copilot-ran' ] &&
++   grep -qF "$COPILOT_STDERR" "$STDERR_F"; then
++    PASS "quota retains exit code and partial stdout without fallback"
++else
++    FAIL "quota retains exit code and partial stdout" "rc=$RC"
++fi
++
++export COPILOT_EXIT_CODE=0
++export COPILOT_STDERR='IneligibleTierError mentioned in a successful diagnostic'
++run_gemini t17 -f "$PROMPT_FILE_T"
++if [ "$RC" -eq 0 ] && [ ! -f "$GEMINI_ARGV_FILE" ]; then
++    PASS "successful stderr mentioning rejection is not classified as failure"
++else
++    FAIL "successful stderr mentioning rejection" "rc=$RC"
++fi
++
++export COPILOT_STDERR='generic failure'
++for code in 3 4; do
++    export COPILOT_EXIT_CODE="$code"
++    run_gemini "t18_$code" -f "$PROMPT_FILE_T"
++    if [ "$RC" -eq 1 ] && [ ! -f "$GEMINI_ARGV_FILE" ] &&
++       grep -qF "exited $code (runtime failure)" "$STDERR_F"; then
++        PASS "unclassified child exit $code cannot impersonate a reserved status"
++    else
++        FAIL "unclassified child exit $code" "rc=$RC"
++    fi
++done
++unset COPILOT_EXIT_CODE COPILOT_STDERR
++
++export GEMINI_BACKEND=typo
++run_gemini t19 -f "$PROMPT_FILE_T"
++if [ "$RC" -eq 1 ] && [ ! -f "$COPILOT_ARGV_FILE" ] &&
++   [ ! -f "$GEMINI_ARGV_FILE" ] && grep -qF 'invalid GEMINI_BACKEND' "$STDERR_F"; then
++    PASS "invalid backend fails before dispatch"
++else
++    FAIL "invalid backend" "rc=$RC"
++fi
++unset GEMINI_BACKEND
++
++# ══ T20: interactive stderr must reach caller while backend is still running ═
++export LIVE_STDERR_FILE="$WORK/t20.stderr"
++run_gemini t20 -i "$GEMINI_PROMPT"
++unset LIVE_STDERR_FILE
++if [ "$RC" -eq 0 ] && grep -qF 'SENTINEL_STDIN_DATA' "$COPILOT_STDIN_FILE"; then
++    PASS "interactive approval prompt is visible before child exits; stdin preserved"
++else
++    FAIL "interactive stderr visibility" "rc=$RC"
++fi
++
++export LIVE_STDERR_FILE="$WORK/t21.stderr"
++run_gemini t21 -r existing-session
++unset LIVE_STDERR_FILE
++if [ "$RC" -eq 0 ] && grep -qF 'SENTINEL_STDIN_DATA' "$COPILOT_STDIN_FILE"; then
++    PASS "bare resume approval prompt is visible before child exits; stdin preserved"
++else
++    FAIL "bare resume stderr visibility" "rc=$RC"
++fi
++
++export COPILOT_STDOUT='IneligibleTierError is a finding in the reviewed source'
++export COPILOT_EXIT_CODE=7
++run_gemini t22 -f "$PROMPT_FILE_T"
++if [ "$RC" -eq 7 ] && [ ! -f "$GEMINI_ARGV_FILE" ]; then
++    PASS "rejection words in model stdout cannot trigger classification or fallback"
++else
++    FAIL "stdout rejection words" "rc=$RC"
++fi
++unset COPILOT_STDOUT COPILOT_EXIT_CODE
++
+ # ══ summary ═══════════════════════════════════════════════════════════════════
+ echo ""
+ echo "SUMMARY: $PASS_COUNT passed, $FAIL_COUNT failed"
+
+```
+
+## New test diff
+```diff
+diff --git a/skills/review-work-completion/scripts/test_carl_skip_prose.py b/skills/review-work-completion/scripts/test_carl_skip_prose.py
+new file mode 100644
+index 0000000..da9a529
+--- /dev/null
++++ b/skills/review-work-completion/scripts/test_carl_skip_prose.py
+@@ -0,0 +1,64 @@
++"""Pin PRD 00175's batch skip at its read, write, and reporting steps."""
++
++from pathlib import Path
++
++ROOT = Path(__file__).resolve().parents[3]
++SKILL = (ROOT / "skills/review-work-completion/SKILL.md").read_text(encoding="utf-8")
++SCHEMA = (ROOT / "skills/run-autopilot/references/state-schema.md").read_text(
++    encoding="utf-8"
++)
++
++
++def step(number: int) -> str:
++    return SKILL.split(f"### {number}. ", 1)[1].split("\n### ", 1)[0]
++
++
++def test_step_one_checks_batch_before_binary_probe() -> None:
++    prerequisite = " ".join(step(1).split())
++    assert prerequisite.index("state.batch.unavailable_reviewers") < prerequisite.index(
++        "AND a backend CLI resolves"
++    )
++    assert "no dispatch, no retry" in prerequisite
++    assert "no `ui` key" in prerequisite
++    assert "no `state.json`" in prerequisite
++
++
++def test_step_five_latches_only_permanent_rejection_with_provenance() -> None:
++    dispatch = step(5)
++    assert "On exit 4" in dispatch
++    assert "state.batch.unavailable_reviewers" in dispatch
++    assert "state.batch.unavailable_reviewer_details.carl" in dispatch
++    assert '"cycle": state.cycle, "prd": state.prd' in dispatch
++    assert "sibling fields untouched" in dispatch
++    assert "never overwrite the first failure" in dispatch
++    assert "Do not latch" in dispatch
++
++
++def test_step_six_emits_skip_and_omits_carl() -> None:
++    consolidation = step(6)
++    assert (
++        "carl: skipped (permanently unavailable since cycle {n} of {prd})"
++        in consolidation
++    )
++    assert "unavailable_reviewer_details.carl" in consolidation
++    assert "reviewers:" in consolidation
++    assert "omit Carl" in consolidation
++
++
++def test_schema_defines_batch_lifetime_and_origin() -> None:
++    assert "`batch.unavailable_reviewers` | string[]?" in SCHEMA
++    assert "`batch.unavailable_reviewer_details` | object?" in SCHEMA
++    row = next(
++        line
++        for line in SCHEMA.splitlines()
++        if line.startswith("| `batch.unavailable_reviewers`")
++    )
++    assert "per-PRD reset" in row
++    assert "next batch" in row
++    assert "[]" in row
++
++
++def test_watcher_finishes_when_reviewer_produces_no_file_on_exit_four() -> None:
++    dispatch = " ".join(step(5).split())
++    assert "or reached a terminal failure/unavailability result" in dispatch
++    assert "do not wait for that missing file" in dispatch
+
+```
+
+## Current state-schema.md additions
+| `batch.unavailable_reviewers` | string[]? | Reviewers permanently rejected this batch, currently `["carl"]`. Absent means `[]`. Review step 5 appends once only when `gemini-run.sh` exits 4; step 1 reads before any binary probe and suppresses dispatch/retry and the `ui` lens. Preserved in full across per-PRD reset with `batch`; removed with the batch so the next batch retries Carl. An operator may remove Carl's entry and paired detail at a session boundary after repair. |
+| `batch.unavailable_reviewer_details` | object? | First-failure provenance paired with `unavailable_reviewers`: `{"carl": {"cycle": 1, "prd": "00175-example.md"}}`. Review step 5 writes it alongside the list in the same merge, never overwriting an existing origin. Step 6 uses these original values for `carl: skipped (permanently unavailable since cycle {n} of {prd})` in every subsequent review; missing legacy origin renders `unknown`. Same batch lifetime as the list; sibling entries are preserved. |
+## Current CHANGELOG.md Unreleased
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+
+- **review-work-completion**: persist Carl's permanent unavailability for the
+  batch, skip later dispatches and retries across cycles and PRDs, and record
+  the original failure's cycle and PRD in each skipped review.
+
+### Fixed
+
+- **use-gemini**: restore Carl's Copilot lane with a served Gemini Flash pin,
+  distinguish permanent model/client-tier rejection (exit 4) from runtime
+  failures, try native Gemini for rejected default prompt runs, and keep
+  rejected output out of review files. Document an opt-in live pin probe and
+  make permanent reviewer unavailability visible in reviews and user summaries.
+- **work**: limit Qwen planning and dispatch to its qualified single-file scope, preserve Codex routing for wider tasks, and escalate no-edit or test-mutating Qwen attempts to Sonnet before committing or testing.

@@ -1,0 +1,42 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "2 touched test(s) pass against the pre-change code: test_review_exit_to_review_writes_no_convergence_row, test_build_exit_writes_no_convergence_row",
+    "file": "skills/run-autopilot/cli/test_loop.py",
+    "reason": "by-design negative pins of preserved behavior: the PRD's first must-have says exits to review/build/paused write no event row, and the base emits no event rows at all, so these two tests pass at base by construction; the positive pin (test_review_exit_to_done_writes_the_convergence_row) fails at base. Not a tautology."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "touched test passes against the pre-change code: test_tasks_line_falls_back_to_the_event_row_when_record_reads_zero",
+    "file": "skills/run-autopilot/cli/test_render_run_conditions.py",
+    "reason": "refuted by measurement: the orchestrator re-ran this test against a fresh base worktree at e718214 and it FAILS there (3 SUBFAILED, TypeError: unexpected keyword argument 'convergence'); the replay script misreads unittest.subTest failures as passes. The other half of the same [MECH] line (test_convergence_is_keyword_only) is real and is reworked under Bob's finding in the [D1] test-hygiene task, not discarded."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "3 touched test(s) pass against the pre-change code: test_review_exit_to_review_writes_no_convergence_row, test_build_exit_writes_no_convergence_row, test_review_exit_to_paused_writes_no_convergence_row",
+    "file": "skills/run-autopilot/cli/test_loop.py",
+    "reason": "the first two are the cycle-1 settled discard above (replay base moved to 7f51b0f, same reasoning); the paused test is the same class: a negative pin of the must-have 'exits to review, build or paused write none', and the emission branch at 7f51b0f already fires only on phase_end == done, so a review-to-paused exit wrote no row there either. It pins the exclusion against a future loosening of the trigger (the Devon shortcut `phase_end not in (review, )` the cycle-1 assumptions ledger names), which is exactly what a preservation pin is for. Not a tautology."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "1 touched test(s) pass against the pre-change code: test_partially_parsed_review_file_keeps_its_counts",
+    "file": "skills/run-autopilot/cli/test_convergence.py",
+    "reason": "preservation pin by construction: the test asserts that a review file the parser accepts (a reviewers: line or a Verdict: line) keeps its zero/counted findings dict, which is what 7f51b0f already did for every readable file; the paired fail-first pin is test_unparseable_review_file_reads_null_not_zero, which the replay reports failing at 7f51b0f. Discarded as a replay row only; Bob's cycle-2 High argues that one of this test's expectations (Verdict: 1 finding with no table -> zeros) is itself wrong, and that finding is recorded separately as a cap-overflow deferral, not discarded."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "2 touched test(s) pass against the pre-change code: test_convergence_is_keyword_only, test_run_conditions_line_marks_nulls_with_question_marks",
+    "file": "skills/run-autopilot/cli/test_render_run_conditions.py",
+    "reason": "refuted by measurement against the PRD base: the replay base this cycle is 7f51b0f (the cycle-1 head), where prd_section already accepts convergence= and run_conditions_line already renders nulls as ?, so a test-only rework passes there by construction. Re-run against e718214 (the PRD base) with `replay_tests_against_base.py --base e718214`, both tests FAIL (the run reports 14 of 15 touched tests failing at base; only the ledgered subTest misread above is reported passing). The keyword-only test now proves keyword acceptance, which is what the cycle-1 finding asked for; the null-marks test changed only its fixture from json.loads to a dict literal."
+  }
+]

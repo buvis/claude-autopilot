@@ -1,0 +1,115 @@
+[checks] reviewer registry
+........................................................................ [ 61%]
+..............................................                           [100%]
+118 passed in 0.15s
+[checks] hook registration
+.....                                                                    [100%]
+5 passed in 0.01s
+[checks] runner recursion guard
+PASS: codex child stdin is /dev/null
+PASS: no-flag argv is exactly: codex exec --skip-git-repo-check --sandbox read-only <PROMPT>
+PASS: --emit-thread-id: codex argv contains --json
+PASS: --emit-thread-id: codex argv --output-last-message value is the -o target
+PASS: --emit-thread-id: THREADFILE contains exactly the thread.started uuid
+PASS: --emit-thread-id: OUTFILE contains the review text
+PASS: --emit-thread-id: codex-run.sh stdout contains the review text
+PASS: --emit-thread-id: raw JSONL does not leak onto stdout
+PASS: --emit-thread-id: stderr carries a codex-event marker per JSONL event
+PASS: --emit-thread-id: codex child stdin is /dev/null
+PASS: --emit-thread-id without -o exits 1
+PASS: --emit-thread-id without -o: error message names the -o requirement
+PASS: --emit-thread-id without -o: codex is never invoked
+PASS: --resume-thread: argv starts with 'exec resume <uuid>'
+PASS: --resume-thread: argv contains --json
+PASS: --resume-thread: argv contains --output-last-message <-o target>
+PASS: --resume-thread: argv contains '-c sandbox_mode=read-only'
+PASS: --resume-thread: argv has neither -s, --sandbox, nor --add-dir
+PASS: --resume-thread <FILE>: resumes with the uuid read from the file's first line
+PASS: --resume-thread '': falls back to the fresh JSON path
+PASS: --resume-thread '': stderr warns about the empty/unreadable id
+PASS: --resume-thread <empty file>: falls back to the fresh JSON path
+PASS: --resume-thread <empty file>: stderr warns about the empty/unreadable id
+PASS: -d DIR + --resume-thread: runs fresh with --add-dir, not resume
+PASS: -d DIR + --resume-thread: stderr warns --add-dir is unsupported on resume
+PASS: resume failure: exactly one resume call and one fresh call happened
+PASS: resume failure: overall exit code is the fresh run's (0)
+PASS: resume failure: stderr names the real resume exit code
+PASS: fresh JSON path: codex-run.sh exit code equals codex's non-zero exit code
+PASS: --resume-thread without -o exits 1
+PASS: --resume-thread without -o: error message names the -o requirement
+PASS: --resume-thread without -o: codex is never invoked
+PASS: resume with no thread.started: THREADFILE holds the resume uuid
+PASS: failed resume + emit: no spurious 'thread id not captured' warning
+PASS: failed resume + emit: the single resume-failed fallback warning is present
+PASS: failed resume + emit: fresh fallback captured the thread id into THREADFILE
+PASS: --resume-thread: codex child stdin is /dev/null
+PASS: missing prompt file: non-zero exit with the error on stderr, not stdout
+PASS: AUTOPILOT_DISPATCH_DEPTH=1: refuses with exit 3, no codex call
+PASS: CODEX_SESSION_ID set: refuses with exit 3, no codex call
+PASS: COPILOT_CLI set: refuses with exit 3, no codex call
+
+SUMMARY: 41 passed, 0 failed
+PASS: copilot child stdin is /dev/null
+PASS: plain -f argv is exactly: --model gemini-3.8-flash --allow-all-tools --deny-tool=write -p <PROMPT>
+PASS: copilot preferred: native gemini CLI is not invoked when copilot exists
+PASS: plain -f run exits 0 and passes backend stdout through
+PASS: -o: output file contains the backend output
+PASS: GEMINI_BACKEND=gemini: native argv is exactly --skip-trust -p <PROMPT>
+PASS: GEMINI_BACKEND=gemini: copilot is not invoked
+PASS: native gemini child stdin is /dev/null
+PASS: copilot absent: falls back to the native gemini CLI
+PASS: -s is accepted and forwarded to copilot
+PASS: missing prompt file exits non-zero
+PASS: missing prompt file: error text is on stderr
+PASS: missing prompt file: no backend CLI is invoked
+PASS: missing prompt exits non-zero with the error on stderr
+PASS: child exit code (7) propagates as gemini-run.sh's own exit code
+PASS: AUTOPILOT_DISPATCH_DEPTH=1: refuses with exit 3, no backend call
+PASS: CODEX_SESSION_ID set: refuses with exit 3, no backend call
+PASS: COPILOT_CLI set: refuses with exit 3, no backend call
+PASS: forced unavailable model: exit 4, stderr reason, no output or fallback
+PASS: unavailability preserves an existing output file
+PASS: default rejection falls back successfully; output contains only native result
+PASS: both backends rejected: native tried before exit 4, both reasons, no output
+PASS: native reasonCode rejection is classified without -o
+PASS: explicit model never switches backends on rejection
+PASS: resume never switches backends on rejection
+PASS: quota retains exit code and partial stdout without fallback
+PASS: successful stderr mentioning rejection is not classified as failure
+PASS: unclassified child exit 3 cannot impersonate a reserved status
+PASS: unclassified child exit 4 cannot impersonate a reserved status
+PASS: invalid backend fails before dispatch
+PASS: interactive approval prompt is visible before child exits; stdin preserved
+PASS: bare resume approval prompt is visible before child exits; stdin preserved
+PASS: rejection words in model stdout cannot trigger classification or fallback
+
+SUMMARY: 33 passed, 0 failed
+PASS: claude child stdin is exactly the prompt, never the wrapper's stdin
+PASS: plain -f argv is exactly: --print --model sonnet
+PASS: plain -f run exits 0 and passes claude stdout through
+PASS: -m opus: argv carries --print and --model opus
+PASS: -a: argv carries --permission-mode acceptEdits
+PASS: -y: argv carries --permission-mode bypassPermissions
+PASS: -d DIR: argv carries --add-dir DIR
+PASS: -o: output file contains the claude output
+PASS: -s is accepted as a no-op (no -s token in claude argv)
+PASS: missing prompt file exits non-zero
+PASS: missing prompt file: error text is on stderr
+PASS: missing prompt file: claude is never invoked
+PASS: missing prompt exits non-zero with the error on stderr
+PASS: child exit code (7) propagates as sonnet-run.sh's own exit code
+PASS: -t "": argv carries the single token --tools=
+PASS: -t "": prompt is exact on stdin and absent from argv
+PASS: -t Read: argv carries --tools=Read and prompt is only on stdin
+PASS: bare -t exits non-zero on stderr with no claude invocation
+PASS: -S UUID: flags stay on argv and prompt is only on stdin
+PASS: -R ID: flags stay on argv and prompt is only on stdin
+PASS: bare -S exits non-zero on stderr with no claude invocation
+PASS: bare -R exits non-zero on stderr with no claude invocation
+PASS: -R with -r exits non-zero with no claude invocation
+PASS: option-looking prompt is exact on stdin and absent from argv
+PASS: empty prompt file exits 1 with Prompt required and no claude invocation
+PASS: -f prompt ending in newline is delivered minus its final newline
+PASS: prompt larger than 64 KiB exits 0 and is delivered byte-exact
+
+SUMMARY: 27 passed, 0 failed

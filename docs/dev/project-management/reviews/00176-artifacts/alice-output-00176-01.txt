@@ -1,0 +1,14 @@
+[ALICE] 🟠 Repair still loses every row when a read-only hooks directory contains an unregistered empty `.py` file: reproduced exit 2 with empty stdout after both guarded writes failed. `_remove_orphaned_empty` then raises from `unlink()`. Guard its stat/unlink operations per target and extend the read-only regression fixture with an empty orphan. | File: skills/use-codex/scripts/codex_hook_doctor.py:296 | Task: 2
+[ALICE] 🟡 `_repair_known` is now 53 lines, exceeding the 50-line limit. Extract its guarded write/replace/cleanup operation into a focused helper, preserving the original and cleanup error details. | File: skills/use-codex/scripts/codex_hook_doctor.py:184 | Task: 2
+R1: fail
+R2: pass
+R3: pass
+R4: fail
+R6: pass
+R7: pass
+R8: pass
+R9: fail
+R10: fail
+R11: pass
+R12: fail
+R13: pass

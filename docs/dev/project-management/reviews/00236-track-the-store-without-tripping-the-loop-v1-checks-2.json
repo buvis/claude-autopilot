@@ -1,0 +1,10 @@
+[
+  {
+    "cycle": 2,
+    "finding": "Cannot statically verify: release-checks pass at revision 1daea55509ef17d8eb7703b905273b15d0bcaa9e",
+    "file": null,
+    "command": "bash dev/bin/release-checks",
+    "source": "bob",
+    "result": {"exit": 0}
+  }
+]

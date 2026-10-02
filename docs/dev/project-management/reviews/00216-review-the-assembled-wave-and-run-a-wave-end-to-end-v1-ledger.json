@@ -1,0 +1,26 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "Cross-cutting: the store is tracked, but every dirty-tree check assumes it is ignored. `docs/dev/project-management/` is not gitignored in this repo (`git check-ignore` returns nothing, and `git status` currently shows `?? docs/`). `wave.json` and the reports `assemble` writes into the main checkout would make `git status --porcelain` non-empty, so `_check_reviewable` refuses with `ValueError`. `launch`'s existing dirty check (`wave_launch.py:141`) would trip the same way. The tests hide this because the fixture writes `.gitignore` with `docs/dev/project-management/`.",
+    "file": "skills/run-autopilot/cli/wave_review.py:244",
+    "reason": "Deferred to batch end as a requirements ambiguity spanning PRDs 00214/00215/00216. The design doc's `## Architecture fit` deliberately corrected the premise to \"gitignored everywhere\" and dissolved two codex blockers with it; commit 5d9036a in this same range states the opposite (\"the store is tracked and never age-purged\"). Which one governs a managed repo is an operator decision, not a simplest-safe-assumption call: one answer changes the dirty-tree gate, the other changes worktree seeding across three shipped PRDs."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "Two changed tests pass against the pre-change code, so they do not pin their stated migration claims (test_custody_prose_schema.py:105, test_codex_hook_doctor_extra.py:32), and test_null_byte_blocks_common_repair_without_aborting (test_codex_hook_doctor_extra.py:641) hedges with `or` so either outcome satisfies it.",
+    "file": "skills/run-autopilot/cli/test_custody_prose_schema.py:105",
+    "reason": "Out of PRD 00216's scope. All three live in files touched only by commit 5d9036a (the tracked-store migration), which landed inside the review range but is not part of this PRD's task plan. The mechanical replay reports them as computed facts, so they are recorded rather than dropped; fixing them belongs to whoever owns that commit."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "critical",
+    "issue": "`autopilot wave run` crashes on every real invocation: `run_p` registers no `--state`, but `__main__._run_wave` reads `args.state` first, so the verb exits 1 with `AttributeError: 'Namespace' object has no attribute 'state'` before `wave_run.run` is reached.",
+    "file": "skills/run-autopilot/cli/wave_cli.py:29",
+    "reason": "Recorded as a deferral because Classification routes \"Critical severity, always\" to batch end for the audit trail. This is NOT a decision to ship it: a CRITICAL blocks convergence until fixed, and the fix task is created in Phase 6 behind a rework design in the same cycle."
+  }
+]
