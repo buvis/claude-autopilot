@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: the release gate's `skills/run-autopilot/cli` test blocks now run in parallel (`pytest-xdist`), cutting their wall-clock time roughly in half.
 - **run-autopilot**: the tracked `docs/dev/project-management` store no longer trips clean-tree gates or the stand-down procedure; each session commits its own store writes before handing off
 - **run-autopilot**: the store boundary follows the project instead of assuming a top-level `docs/`, so a bare-repo-backed root whose store sits below git's work-tree root (`$HOME/.claude` under `$HOME`) no longer reads as foreign dirt; the dirty check also honours the repository's own `status.showUntrackedFiles` rather than forcing `--untracked-files=all`
+- **run-autopilot**: store commits are no longer lane-routing evidence, so a solo-lane PRD stops escalating to the full lane just because its own store writes were committed; a wave lane records no store commits at all (its writes stay in the lane worktree, where they cannot conflict at assembly), and the loop's per-session record now fires only after a session that made progress, not after one that died, paused or stood down
 
 ## [0.6.0] - 2026-09-30
 

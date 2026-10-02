@@ -1211,6 +1211,10 @@ def _add_record_store(subparsers) -> None:
 
 
 def _run_record_store(args: argparse.Namespace) -> int:
+    # A wave lane branch carries no store commits: its writes stay in the
+    # lane worktree, since two lanes appending one ledger would conflict.
+    if store_tree.in_wave_lane():
+        return 0
     repo, store_dir, run_git = _store_repo(args.state)
     sha = store_tree.record_store(
         repo, args.site, args.prd, store_dir, run_git=run_git

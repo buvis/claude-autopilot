@@ -12,13 +12,19 @@ project puts the project root below git's work-tree root (`$HOME/.claude` under
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 STORE_SUBDIR = "docs/dev/project-management"
 STORE_PREFIXES = (f"{STORE_SUBDIR}/", "docs/dev/tmp/")
 STORE_PATHSPEC = f":(top){STORE_SUBDIR}"
+# One exclude pathspec per store root, derived so a new root needs no edit here.
+STORE_EXCLUDE_PATHSPECS = tuple(
+    ":(exclude)" + prefix.removesuffix("/") for prefix in STORE_PREFIXES
+)
 GIT_TIMEOUT_SECS = 30
 
 STORE_GITIGNORE = "".join(
@@ -64,6 +70,15 @@ def run_git(args: list[str], cwd: Path | None = None) -> subprocess.CompletedPro
         check=True,
         timeout=GIT_TIMEOUT_SECS,
     )
+
+
+def in_wave_lane(env: Mapping[str, str] | None = None) -> bool:
+    """True inside a wave lane worktree, where `_AUTOPILOT_REVIEW_SLOTS_DIR`
+    carries the lane's (opaque) slots directory. A mapping that was passed
+    answers for itself; only `None` falls back to os.environ, read now."""
+    if env is None:
+        env = os.environ
+    return bool(env.get("_AUTOPILOT_REVIEW_SLOTS_DIR"))
 
 
 def _store_prefix(repo: Path, store_dir: Path | None) -> str:

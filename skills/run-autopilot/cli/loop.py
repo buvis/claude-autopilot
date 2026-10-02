@@ -589,14 +589,22 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
                 plan.model,
                 plan.effort,
             )
-            store_repo, store_run_git = store_git(ap_dir)
-            store_tree.record_store(
-                store_repo,
-                "loop",
-                decision.get("prd", ""),
-                ap_dir.parent,
-                run_git=store_run_git,
-            )
+            # Only a session that made progress, and never inside a wave lane
+            # (a lane branch carries no store commits). state_touched is not
+            # redundant: the first death continues as a retry.
+            if (
+                decision["signal"] == "continue"
+                and decision.get("state_touched")
+                and not store_tree.in_wave_lane(self.env)
+            ):
+                store_repo, store_run_git = store_git(ap_dir)
+                store_tree.record_store(
+                    store_repo,
+                    "loop",
+                    decision.get("prd", ""),
+                    ap_dir.parent,
+                    run_git=store_run_git,
+                )
 
             code = self._act_branch(decision, ap_dir)
             if code is not None:

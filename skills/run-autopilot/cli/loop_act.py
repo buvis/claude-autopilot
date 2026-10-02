@@ -235,13 +235,14 @@ class ActMixin:
             self.out,
             claude_bin=self.runner_bin,
         )
-        store_tree.record_store(
-            store_repo,
-            "drained",
-            decision.get("prd", ""),
-            ap_dir.parent,
-            run_git=store_run_git,
-        )
+        if not store_tree.in_wave_lane(self.env):
+            store_tree.record_store(
+                store_repo,
+                "drained",
+                decision.get("prd", ""),
+                ap_dir.parent,
+                run_git=store_run_git,
+            )
         return 0
 
     def _act_park(self, decision: dict, ap_dir: Path) -> int | None:
