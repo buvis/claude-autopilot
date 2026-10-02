@@ -16,6 +16,35 @@ STORE_PREFIXES = ("docs/dev/project-management/", "docs/dev/tmp/")
 STORE_PATHSPEC = ":(top)docs/dev/project-management"
 GIT_TIMEOUT_SECS = 30
 
+STORE_GITIGNORE = "".join(
+    f"{pattern}\n"
+    for pattern in (
+        "autopilot/state.json",
+        "autopilot/state.json.bak",
+        "autopilot/*.lock",
+        "autopilot/.turn-counts.json",
+        "autopilot/.handoff-requested",
+        "autopilot/.cap-fired",
+        "autopilot/.session-left",
+        "autopilot/.review-gate-blocks",
+        "autopilot/.review-gate-failed",
+        "autopilot/.lane-guard-blocks",
+        "autopilot/lanes/",
+        "autopilot/wave-slots/",
+        "autopilot/wave.json",
+        "autopilot/review-paths",
+        "autopilot/last-session.log",
+        "autopilot/wrapper.log",
+        "autopilot/pause-requested",
+        "autopilot/paused-by-operator",
+        "autopilot/park-requested",
+        "autopilot/session-brief.md",
+        "autopilot/contract-card.md",
+        "autopilot/replan-context.md",
+        "autopilot/last-verification.json",
+    )
+)
+
 
 def run_git(args: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(
@@ -41,6 +70,20 @@ def foreign_dirty(repo: Path, run_git=run_git) -> list[str]:
         if "R" in code or "C" in code:
             paths.append(next(fields))
     return [p for p in paths if not p.startswith(STORE_PREFIXES)]
+
+
+def ensure_store_gitignore(store_dir: Path) -> bool:
+    """Write STORE_GITIGNORE into store_dir unless the file already holds it;
+    True when it was written. A body that cannot be read counts as differing."""
+    path = store_dir / ".gitignore"
+    try:
+        if path.read_text(encoding="utf-8") == STORE_GITIGNORE:
+            return False
+    except (OSError, UnicodeDecodeError):
+        pass
+    store_dir.mkdir(parents=True, exist_ok=True)
+    path.write_text(STORE_GITIGNORE, encoding="utf-8")
+    return True
 
 
 def record_store(repo: Path, site: str, prd: str, run_git=run_git) -> str | None:
