@@ -118,9 +118,7 @@ def _status(args: list[str], repo: Path, run_git) -> list[tuple[str, str]]:
 
 
 def foreign_dirty(
-    repo: Path,
-    store_dir: Path | None = None,
-    run_git=run_git,
+    repo: Path, store_dir: Path | None = None, run_git=run_git
 ) -> list[str]:
     """Dirty paths (either side of a rename or copy) outside the store roots as
     they read from `repo`, git's work-tree root. The repository's own
@@ -163,11 +161,7 @@ def ensure_store_gitignore(store_dir: Path) -> bool:
 
 
 def record_store(
-    repo: Path,
-    site: str,
-    prd: str,
-    store_dir: Path | None = None,
-    run_git=run_git,
+    repo: Path, site: str, prd: str, store_dir: Path | None = None, run_git=run_git
 ) -> str | None:
     """Commit the store pathspec only; the new HEAD sha, or None when nothing
     changed or git failed (the reason on one stderr line)."""
@@ -182,10 +176,7 @@ def record_store(
         return run_git(["rev-parse", "HEAD"], cwd=repo).stdout.strip()
     except (OSError, RuntimeError, subprocess.SubprocessError) as err:
         stderr = getattr(err, "stderr", None)
-        if (
-            isinstance(stderr, str)
-            and "ignored by one of your .gitignore files" in stderr
-        ):
+        if isinstance(stderr, str) and "ignored by one of your .gitignore files" in stderr:
             # Refused because the pathspec is itself gitignored/excluded:
             # nothing to record, not a reportable failure.
             return None
