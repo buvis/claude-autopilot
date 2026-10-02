@@ -31,6 +31,7 @@ _TEXT = _SKILL.read_text(encoding="utf-8")
 _HOOK = Path(__file__).resolve().parent / "autopilot_context_cap_hook.py"
 _HANDOFF = _SKILLS / "work" / "references" / "task-boundary-handoff.md"
 _HANDOFF_TEXT = _HANDOFF.read_text(encoding="utf-8")
+_WORK_SKILL_TEXT = (_SKILLS / "work" / "SKILL.md").read_text(encoding="utf-8")
 
 
 def _load_hook_module():
@@ -104,6 +105,17 @@ def test_handoff_procedure_records_the_store_before_the_leave_row() -> None:
     assert procedure.index("record_dispatch.py handoff") < procedure.index(
         "`autopilot record-store`"
     )
+
+
+def test_work_skill_step5_names_the_store_write_carve_out() -> None:
+    """Step 5's foreign-dirt rule carries the store-write carve-out: a
+    tracked store write (ledger append, review file) is not foreign dirt,
+    named right after the rule it clarifies, not merely somewhere in the
+    file."""
+    anchor = "Any other dirty path is **foreign**"
+    start = _WORK_SKILL_TEXT.index(anchor)
+    window = _WORK_SKILL_TEXT[start : start + 400]
+    assert "store write" in window.lower(), window
 
 
 def test_store_gitignore_matches_the_disposable_list() -> None:

@@ -715,6 +715,15 @@ def test_review_refuses_foreign_dirt_beside_dirt_inside_the_store(
     assert spawn.calls == []
 
 
+def test_check_reviewable_docstring_names_the_store_exemption() -> None:
+    """The docstring's dirty-check language matches what `foreign_dirty`
+    actually enforces: store churn is exempt, so the function no longer
+    claims to refuse on "any" uncommitted change."""
+    doc = wave_review._check_reviewable.__doc__
+    assert "any uncommitted change." not in doc, doc
+    assert "outside the store" in doc, doc
+
+
 def test_review_releases_the_lock_during_the_wait(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

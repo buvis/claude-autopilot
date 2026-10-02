@@ -204,7 +204,9 @@ class RecordStoreTests(unittest.TestCase):
         git = FakeGit(
             {"diff": STAGED_STORE_FILE},
             fail_on="commit",
-            error=RuntimeError("boom first\nboom second"),
+            error=subprocess.CalledProcessError(
+                1, ["git", "commit"], stderr="boom first\nboom second"
+            ),
         )
         err = io.StringIO()
 

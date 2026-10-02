@@ -72,6 +72,16 @@ def _fingerprint(path: Path) -> tuple:
     return (path.read_bytes(), stat.st_ino, stat.st_mtime_ns, stat.st_ctime_ns)
 
 
+def test_store_gitignore_is_a_literal_not_a_join_call() -> None:
+    """STORE_GITIGNORE is a readable multiline string literal, not built via
+    `"".join(...)` over a tuple - a readability change only; the byte-exact
+    rendered body is pinned by the tests below, untouched."""
+    source = (Path(__file__).resolve().parent / "store_tree.py").read_text(
+        encoding="utf-8",
+    )
+    assert 'STORE_GITIGNORE = "".join(' not in source, source
+
+
 def test_ensure_store_gitignore_writes_the_pattern_list(tmp_path: Path) -> None:
     store_dir = _store_dir(tmp_path)
 
