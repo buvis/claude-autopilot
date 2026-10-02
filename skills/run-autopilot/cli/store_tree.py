@@ -173,6 +173,10 @@ def record_store(
         return run_git(["rev-parse", "HEAD"], cwd=repo).stdout.strip()
     except (OSError, RuntimeError, subprocess.SubprocessError) as err:
         stderr = getattr(err, "stderr", None)
+        if isinstance(stderr, str) and "ignored by one of your .gitignore files" in stderr:
+            # Refused because the pathspec is itself gitignored/excluded:
+            # nothing to record, not a reportable failure.
+            return None
         reason = (stderr if isinstance(stderr, str) else None) or str(err)
         print(
             f"autopilot: store record failed: {' '.join(reason.split())}",

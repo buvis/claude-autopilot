@@ -147,9 +147,15 @@ def _prepare_tree(state_path: Path, prds_dir: Path, autopilot_dir: Path) -> None
     (autopilot_dir / "reports").mkdir(parents=True, exist_ok=True)
     (autopilot_dir / "deferred").mkdir(parents=True, exist_ok=True)
     # Best-effort: a store .gitignore that cannot be written is not worth
-    # halting Phase 0 over, so it is suppressed rather than an fs_error.
-    with contextlib.suppress(OSError):
+    # halting Phase 0 over, so it is reported on stderr rather than raised
+    # as an fs_error.
+    try:
         store_tree.ensure_store_gitignore(prds_dir.parent)
+    except OSError as err:
+        print(
+            f"autopilot: enter: {prds_dir.parent} .gitignore write failed: {err}",
+            file=sys.stderr,
+        )
     if not state_path.exists():
         state.init(state_path, {"phase": "build", "next_phase": "build"})
     for name in handoff.MARKERS:

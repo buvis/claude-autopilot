@@ -116,6 +116,11 @@ Subcommands:
         stderr note. Exit 2 on a present but unreadable, undecodable or
         invalid ledger, 9 on a failed stub or state write (the stubs already
         published stay and own their keys, so the retry mints only the rest).
+    dirty     --state
+        store_tree.foreign_dirty(): lists the dirty paths outside the
+        autopilot store roots, one per line. Exit 1 means paths were
+        found; exit 13 means the git status probe itself failed (see
+        Exit codes below).
     record-store --state --site [--prd]
         store_tree.record_store() over the store pathspec alone: one commit of
         the autopilot state tree for `site` (the PRD named when given). Prints
@@ -154,12 +159,14 @@ Exit codes:
     11  init's parent directory does not exist (init)
     12  a pending deferred-JSON item is missing from the rendered PRD
         section (render report; the section was still written)
+    13  dirty's git status probe itself failed (StoreGitError or any
+        other error foreign_dirty raised), not that foreign paths were
+        found
 """
 
 from __future__ import annotations
 
 import argparse
-import contextlib
 import json
 import os
 import subprocess
@@ -1197,7 +1204,16 @@ def _add_dirty(subparsers) -> None:
 
 def _run_dirty(args: argparse.Namespace) -> int:
     repo, store_dir, run_git = _store_repo(args.state)
-    paths = store_tree.foreign_dirty(repo, store_dir, run_git=run_git)
+    try:
+        paths = store_tree.foreign_dirty(repo, store_dir, run_git=run_git)
+    except (OSError, RuntimeError, subprocess.SubprocessError) as err:
+        stderr = getattr(err, "stderr", None)
+        reason = (stderr if isinstance(stderr, str) else None) or str(err)
+        print(
+            f"autopilot: dirty failed: {' '.join(reason.split())}",
+            file=sys.stderr,
+        )
+        return 13
     for path in paths:
         print(path)
     return 1 if paths else 0
@@ -1233,9 +1249,14 @@ def _run_ensure_store(args: argparse.Namespace) -> int:
     # state.json itself is never read, so a from-empty batch can call this first.
     store_dir = _resolve_state_path(args.state).parents[1]
     # Phase 0 calls this on every session: a read-only store may not halt it.
-    with contextlib.suppress(OSError):
+    try:
         if store_tree.ensure_store_gitignore(store_dir):
             print(store_dir / ".gitignore")
+    except OSError as err:
+        print(
+            f"autopilot: ensure-store: {store_dir} .gitignore write failed: {err}",
+            file=sys.stderr,
+        )
     return 0
 
 
