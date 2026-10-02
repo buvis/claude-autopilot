@@ -27,34 +27,31 @@ STORE_EXCLUDE_PATHSPECS = tuple(
 )
 GIT_TIMEOUT_SECS = 30
 
-STORE_GITIGNORE = "".join(
-    f"{pattern}\n"
-    for pattern in (
-        "autopilot/state.json",
-        "autopilot/state.json.bak",
-        "autopilot/*.lock",
-        "autopilot/.turn-counts.json",
-        "autopilot/.handoff-requested",
-        "autopilot/.cap-fired",
-        "autopilot/.session-left",
-        "autopilot/.review-gate-blocks",
-        "autopilot/.review-gate-failed",
-        "autopilot/.lane-guard-blocks",
-        "autopilot/lanes/",
-        "autopilot/wave-slots/",
-        "autopilot/wave.json",
-        "autopilot/review-paths",
-        "autopilot/last-session.log",
-        "autopilot/wrapper.log",
-        "autopilot/pause-requested",
-        "autopilot/paused-by-operator",
-        "autopilot/park-requested",
-        "autopilot/session-brief.md",
-        "autopilot/contract-card.md",
-        "autopilot/replan-context.md",
-        "autopilot/last-verification.json",
-    )
-)
+STORE_GITIGNORE = """\
+autopilot/state.json
+autopilot/state.json.bak
+autopilot/*.lock
+autopilot/.turn-counts.json
+autopilot/.handoff-requested
+autopilot/.cap-fired
+autopilot/.session-left
+autopilot/.review-gate-blocks
+autopilot/.review-gate-failed
+autopilot/.lane-guard-blocks
+autopilot/lanes/
+autopilot/wave-slots/
+autopilot/wave.json
+autopilot/review-paths
+autopilot/last-session.log
+autopilot/wrapper.log
+autopilot/pause-requested
+autopilot/paused-by-operator
+autopilot/park-requested
+autopilot/session-brief.md
+autopilot/contract-card.md
+autopilot/replan-context.md
+autopilot/last-verification.json
+"""
 
 
 class StoreGitError(RuntimeError):
@@ -174,7 +171,7 @@ def record_store(
             return None
         run_git(["commit", "-m", message, "--", pathspec], cwd=repo)
         return run_git(["rev-parse", "HEAD"], cwd=repo).stdout.strip()
-    except (OSError, RuntimeError, subprocess.SubprocessError) as err:
+    except (OSError, subprocess.SubprocessError) as err:
         stderr = getattr(err, "stderr", None)
         if isinstance(stderr, str) and "ignored by one of your .gitignore files" in stderr:
             # Refused because the pathspec is itself gitignored/excluded:

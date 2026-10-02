@@ -273,7 +273,8 @@ def _check_reviewable(
     run_git: Callable[..., subprocess.CompletedProcess] = _default_run_git,
 ) -> Path:
     """The assembly worktree; ValueError when the wave is not assembled, the
-    worktree is gone, or `repo` has any uncommitted change."""
+    worktree is gone, or `repo` has any uncommitted change outside the store
+    (store churn is exempt)."""
     if not _is_basename(wave.get("id")):
         raise ValueError("wave.json: malformed top-level field id")
     if "assembly" not in wave:

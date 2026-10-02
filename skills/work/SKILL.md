@@ -361,7 +361,7 @@ git add <path> [<path> ...]
 git commit -m "<type>(<scope>): <description>"
 ```
 
-Any other dirty path is **foreign**: leave it unstaged and untouched, and name it in the phase report (fail loud) — the same never-commit-foreign-work rule the step-5.5 ESCALATE reset guard enforces.
+Any other dirty path is **foreign**: leave it unstaged and untouched, and name it in the phase report (fail loud) — the same never-commit-foreign-work rule the step-5.5 ESCALATE reset guard enforces. A store write (state.json, a ledger append, a review file) is never foreign dirt here: `autopilot dirty` is store-exempt, and that is the check this rule means.
 
 Never chain these with `&&` in a single Bash call. Commit message rules: conventional commit format, one line, no period, reference the task ID if available.
 
