@@ -493,6 +493,17 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
             plan.model,
             plan.effort,
         )
+        try:
+            store_repo, store_run_git = store_git(ap_dir)
+            store_tree.record_store(
+                store_repo,
+                "review_once",
+                decision.get("prd", ""),
+                ap_dir.parent,
+                run_git=store_run_git,
+            )
+        except Exception:
+            pass
         print(
             f"autopilot review-once: signal {decision['signal']} · next phase "
             f"'{decision['next']}' · {decision['detail']}",
