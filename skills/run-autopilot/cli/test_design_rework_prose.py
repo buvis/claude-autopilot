@@ -380,7 +380,8 @@ def test_critical_d_task_carries_design_then_contract_then_findings() -> None:
     # source 2, so its `### Findings (verbatim)` mention lands before the
     # transcribe bullet's — a sub-bullet placed after it fails the order.
     blocks = (_DESIGN_LINE, "### Contract", "### Findings (verbatim)")
-    _assert_in_order(_DISPATCH, _PHASE_REVIEW, _DISPATCH_WHERE, blocks)
+    critical_scope = _DISPATCH[_DISPATCH.index(_CRITICAL_BULLET_LEAD):]
+    _assert_in_order(critical_scope, _PHASE_REVIEW, _DISPATCH_WHERE, blocks)
     _assert_in_order(
         _DISPATCH,
         _PHASE_REVIEW,
