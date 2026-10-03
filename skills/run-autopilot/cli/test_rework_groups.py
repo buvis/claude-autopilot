@@ -16,7 +16,6 @@ import json
 import sys
 import unittest
 from pathlib import Path
-
 from unittest.mock import patch
 
 import pytest
@@ -95,6 +94,23 @@ class CriticalTests(GroupTestCase):
         self.assertEqual(groups[:6], critical_groups)
         self.assert_every_finding_kept_once(findings, groups)
 
+    def test_a_critical_markdown_finding_keeps_its_own_group(self) -> None:
+        """A CRITICAL in a spec or doc is a task, not a line in `prose`."""
+        crit_md = _f("docs/a.md:3", CRIT)
+        prose = [_f("docs/b.md"), _f("README.md:2")]
+        code = _f("x/a.py:1")
+        findings = [prose[0], crit_md, code, prose[1]]
+
+        groups = rework_groups.group(findings)
+
+        held = _group_holding(groups, crit_md)
+        self.assertTrue(held["critical"])
+        self.assertEqual(held["name_hint"], "docs/a.md")
+        self.assertEqual(held["findings"], [crit_md])
+        self.assertEqual(_by_key(groups)["prose"]["findings"], prose)
+        self.assertEqual(_by_key(groups)["x/a.py"]["findings"], [code])
+        self.assert_every_finding_kept_once(findings, groups)
+
 
 class FileKeyTests(GroupTestCase):
     def test_line_suffixes_share_one_file_key(self) -> None:
@@ -125,6 +141,11 @@ class FileKeyNormalizationTests(GroupTestCase):
             with self.subTest(raw):
                 self.assertEqual(rework_groups.file_key(raw), "general")
 
+    def test_a_path_that_merely_contains_the_marker_keeps_its_own_key(self) -> None:
+        # Only the bare marker maps to `general`; these are real files.
+        self.assertEqual(rework_groups.file_key("src/gen/a.py"), "src/gen/a.py")
+        self.assertEqual(rework_groups.file_key("n/apply.py:3"), "n/apply.py")
+
     def test_not_applicable_wrapping_a_path_is_the_general_key(self) -> None:
         self.assertEqual(rework_groups.file_key("N/A (skills/x/y.py:77)"), "general")
         self.assertEqual(rework_groups.file_key("n/a (a/b.py:3-9)"), "general")
@@ -132,7 +153,17 @@ class FileKeyNormalizationTests(GroupTestCase):
     def test_line_range_and_anchor_citations_share_the_plain_file_key(self) -> None:
         self.assertEqual(rework_groups.file_key("a/b.py (lines 3-4)"), "a/b.py")
         self.assertEqual(rework_groups.file_key("a/b.py#L12"), "a/b.py")
+        # Any anchor line, not only the one the finding happened to name.
+        self.assertEqual(rework_groups.file_key("a/b.py#L7"), "a/b.py")
+        self.assertEqual(rework_groups.file_key("a/b.py#L1234"), "a/b.py")
         self.assertEqual(rework_groups.file_key("docs/g.md (lines 1-2)"), "docs/g.md")
+        self.assertEqual(rework_groups.file_key("docs/g.md (lines 9-120)"), "docs/g.md")
+        # A space inside a path is not a separator: only the suffix is cut.
+        self.assertEqual(rework_groups.file_key("my docs/a.py:3"), "my docs/a.py")
+        self.assertEqual(
+            rework_groups.file_key("my docs/a.py (lines 3-4)"),
+            "my docs/a.py",
+        )
         # Stripping repeats until the key stops changing.
         self.assertEqual(rework_groups.file_key("a/b.py#L12:7"), "a/b.py")
 
@@ -191,7 +222,8 @@ class ProseTests(GroupTestCase):
 
         by_key = _by_key(groups)
         self.assertEqual(
-            set(by_key), {"prose", "src/app.py", "src/cmd.mdx.py", "a.md.bak"}
+            set(by_key),
+            {"prose", "src/app.py", "src/cmd.mdx.py", "a.md.bak"},
         )
         self.assertEqual(by_key["prose"]["findings"], md)
         self.assertEqual(by_key["src/app.py"]["findings"], [code])
@@ -302,15 +334,33 @@ class ProseFoldTests(GroupTestCase):
     cap down to 1 is the only way to drive it."""
 
     def test_prose_folds_into_the_last_code_group_under_a_cap_of_one(self) -> None:
+        # One code group, so "the last remaining code group" is a named file:
+        # the surviving task must still point at it.
+        code = _f("y/b.py")
         md = [_f("docs/a.md"), _f("docs/b.md:2")]
-        code = [_f("x/a.py:1"), _f("y/b.py")]
-        findings = md + code
+        findings = [code] + md
 
         with patch.object(rework_groups, "NON_CRITICAL_CAP", 1):
             groups = rework_groups.group(findings)
 
         self.assertEqual(len(_non_critical(groups)), 1)
         self.assertNotIn("prose", _by_key(groups))
+        self.assertEqual(_by_key(groups)["y/b.py"]["findings"], findings)
+        self.assert_every_finding_kept_once(findings, groups)
+
+    def test_two_code_groups_and_prose_under_a_cap_of_one_keep_every_finding(
+        self,
+    ) -> None:
+        code = [_f("x/a.py:1"), _f("y/b.py")]
+        md = [_f("docs/a.md"), _f("docs/b.md:2")]
+        findings = code + md
+
+        with patch.object(rework_groups, "NON_CRITICAL_CAP", 1):
+            groups = rework_groups.group(findings)
+
+        self.assertEqual(len(_non_critical(groups)), 1)
+        self.assertNotIn("prose", _by_key(groups))
+        self.assertEqual(_non_critical(groups)[0]["findings"], findings)
         self.assert_every_finding_kept_once(findings, groups)
 
     def test_prose_only_findings_under_a_cap_of_one_keep_every_finding(self) -> None:
@@ -348,6 +398,21 @@ class OrderTests(GroupTestCase):
             [g["name_hint"] for g in groups[1:]],
             ["y.py", "c.py", "b.py", "z.py"],
         )
+
+    def test_the_worst_severity_in_a_group_decides_its_order(self) -> None:
+        """A group's rank is its worst finding, not its average: the 🟠 must
+        be worked before three 🟡, at equal size."""
+        worst_is_high = [_f("z.py", HIGH), _f("z.py", LOW), _f("z.py", LOW)]
+        all_medium = [_f("a.py", MED), _f("a.py", MED), _f("a.py", MED)]
+        findings = all_medium + worst_is_high
+
+        groups = rework_groups.group(findings)
+
+        # Equal size, and both the key order and the average severity would
+        # put `a.py` first.
+        self.assertEqual([g["name_hint"] for g in groups], ["z.py", "a.py"])
+        self.assertEqual(_by_key(groups)["z.py"]["findings"], worst_is_high)
+        self.assertEqual(_by_key(groups)["a.py"]["findings"], all_medium)
 
     def test_equal_severity_and_size_order_by_key(self) -> None:
         findings = [_f("b.py"), _f("b.py"), _f("a.py"), _f("a.py")]
@@ -406,30 +471,63 @@ REVIEW_00223_CYCLE_1 = [
 
 
 class Review00223FixtureTests(GroupTestCase):
-    def test_the_00223_cycle_one_set_yields_at_most_four_non_critical_tasks(
-        self,
-    ) -> None:
-        findings = [
+    @staticmethod
+    def _rows() -> list[dict]:
+        return [
             {"severity": sev, "file": file, "text": f"row {i}", "consensus": "[1/4]"}
             for i, (sev, file) in enumerate(REVIEW_00223_CYCLE_1, 1)
         ]
+
+    def test_the_00223_cycle_one_set_yields_four_non_critical_tasks(self) -> None:
+        findings = self._rows()
 
         groups = rework_groups.group(findings)
 
         self.assertEqual(len(findings), 40)
         self.assertEqual([g for g in groups if g["critical"]], [])
-        self.assertGreater(len(groups), 1)  # several groups, not one dump
-        self.assertLessEqual(len(groups), rework_groups.NON_CRITICAL_CAP)
+        self.assertEqual(len(groups), rework_groups.NON_CRITICAL_CAP)
 
-        # The prose rule survives on the real data, and the table's own
-        # "no file" marker never becomes a task of its own.
+        # Four real tasks, four distinct keys, no junk `N/A` key: the five
+        # `phase-build.md` rows are the prose task, the `N/A` row rides with
+        # the single `dev/bin` row (the smallest code task), and the `cli/`
+        # rows split in two rather than landing in one 35-row dump.
         by_key = _by_key(groups)
-        self.assertIn("prose", by_key)
+        self.assertEqual(len(by_key), 4)
         self.assertNotIn("N/A", by_key)
+        self.assertEqual(
+            sorted(len(g["findings"]) for g in _non_critical(groups)),
+            [2, 5, 12, 21],
+        )
         prose_rows = [f for f in findings if f["file"].split(":")[0].endswith(".md")]
         self.assertEqual(len(prose_rows), 5)
         self.assertEqual(by_key["prose"]["findings"], prose_rows)
+        sweep = _group_holding(groups, findings[-1])  # the `N/A` row
+        self.assertEqual(
+            [f["file"] for f in sweep["findings"]],
+            ["dev/bin/release-checks:138", "N/A"],
+        )
         self.assert_every_finding_kept_once(findings, groups)
+
+    def test_every_00223_code_task_names_one_file_or_one_directory(self) -> None:
+        """The 21 `enter.py` rows are their own task and the rest of `cli/`
+        is one directory task: no task mixes unrelated trees."""
+        findings = self._rows()
+
+        groups = rework_groups.group(findings)
+
+        by_key = _by_key(groups)
+        enter = "skills/run-autopilot/cli/enter.py"
+        enter_rows = [f for f in findings if f["file"].startswith(enter)]
+        self.assertEqual(len(enter_rows), 21)
+        self.assertEqual(by_key[enter]["findings"], enter_rows)
+
+        rest = by_key["skills/run-autopilot/cli/"]["findings"]
+        self.assertEqual(len(rest), 12)
+        for finding in rest:
+            self.assertTrue(
+                finding["file"].startswith("skills/run-autopilot/cli/"),
+                f"{finding['file']} does not belong to the cli/ task",
+            )
 
 
 # ── CLI wrapper: group-rework ────────────────────────────────────────────
@@ -440,7 +538,8 @@ class Review00223FixtureTests(GroupTestCase):
 
 
 def test_cli_prints_one_json_array(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     crit = {"severity": CRIT, "file": "a.py:1", "text": "boom", "consensus": "[4/4]"}
     gen = {"severity": MED, "file": "general", "text": "sweep", "consensus": "[2/4]"}
@@ -461,7 +560,8 @@ def test_cli_prints_one_json_array(
 
 
 def test_cli_output_keeps_non_ascii_literal(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     # Phase 6 copies this output verbatim into a findings block, so an
     # escaped emoji or dash would have to be decoded by hand.
@@ -479,6 +579,35 @@ def test_cli_output_keeps_non_ascii_literal(
     assert "\\u" not in out
 
 
+def test_cli_groups_a_valid_finding_that_carries_no_consensus(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Only `severity` and `file` are required; every other key rides along.
+    finding = {"severity": MED, "file": "a.py:4", "text": "t"}
+    findings_path = tmp_path / "findings.json"
+    findings_path.write_text(json.dumps([finding]), encoding="utf-8")
+
+    exit_code = main(["group-rework", "--findings", str(findings_path)])
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out) == [
+        {"name_hint": "a.py", "critical": False, "findings": [finding]},
+    ]
+
+
+def test_cli_without_the_findings_flag_exits_on_usage(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # No implicit default path: the orchestrator must name the file.
+    with pytest.raises(SystemExit):
+        main(["group-rework"])
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "--findings" in captured.err
+
+
 @pytest.mark.parametrize(
     "payload",
     [
@@ -487,6 +616,21 @@ def test_cli_output_keeps_non_ascii_literal(
         pytest.param([{"file": "a.py", "text": "t"}], id="element_has_no_severity"),
         pytest.param([{"severity": MED, "file": 3}], id="file_is_not_a_string"),
         pytest.param([{"severity": 3, "file": "a.py"}], id="severity_is_not_a_string"),
+        # Every element is checked, not just the first.
+        pytest.param(
+            [{"severity": MED, "file": "a.py", "text": "t"}, "junk"],
+            id="second_element_is_not_a_dict",
+        ),
+        pytest.param(
+            [{"severity": MED, "file": "a.py"}, {"severity": MED, "file": None}],
+            id="second_element_has_a_null_file",
+        ),
+        # A finding can carry `consensus` and still be malformed: the types of
+        # `severity` and `file` are what decide.
+        pytest.param(
+            [{"severity": 3, "file": "a.py", "consensus": "[1/4]"}],
+            id="malformed_element_carrying_consensus",
+        ),
     ],
 )
 def test_cli_malformed_element_exits_two(
@@ -505,12 +649,21 @@ def test_cli_malformed_element_exits_two(
     assert len(captured.err.splitlines()) == 1
 
 
+# JSON bodies that parse but are not an array of findings.
+NOT_AN_ARRAY = {
+    "object_json": '{"not": "an array"}',
+    "number_json": "3",
+    "null_json": "null",
+    "string_json": '"x"',
+}
+
+
 @pytest.mark.parametrize(
     "setup",
     [
         "missing_file",
         "unreadable_file",
-        "non_array_json",
+        *NOT_AN_ARRAY,
         "invalid_json",
         "non_utf8_bytes",
     ],
@@ -524,9 +677,9 @@ def test_cli_malformed_input_exits_two(
         findings_path = tmp_path / "does-not-exist.json"
     elif setup == "unreadable_file":
         findings_path = tmp_path  # a directory cannot be read as a file
-    elif setup == "non_array_json":
+    elif setup in NOT_AN_ARRAY:
         findings_path = tmp_path / "findings.json"
-        findings_path.write_text(json.dumps({"not": "an array"}), encoding="utf-8")
+        findings_path.write_text(NOT_AN_ARRAY[setup], encoding="utf-8")
     elif setup == "invalid_json":
         findings_path = tmp_path / "findings.json"
         findings_path.write_text('[{"severity": ', encoding="utf-8")
