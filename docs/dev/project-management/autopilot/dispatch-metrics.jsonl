@@ -2722,3 +2722,5 @@
 {"id":"21f2b3cc","ended_at":1790980828,"elapsed_s":794,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"review","edge":"leave","at":1790981353,"phase":"done","prd":"00236-track-the-store-without-tripping-the-loop-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1790981391,"phase":"done","prd":"00236-track-the-store-without-tripping-the-loop-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791033103,"phase":"build","prd":"00240-ignore-nested-store-lock-files-v1.md"}
+{"id":"2b8b3b54","kind":"ivan","task":"1","queued_at":1791033375,"prompt_bytes":4845}
