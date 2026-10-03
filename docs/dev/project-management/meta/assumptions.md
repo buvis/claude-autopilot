@@ -32,3 +32,30 @@
 ## 7: Document the hand-review route and changelog the six fixes
 
 - (Ivan) The "existing sentence" ends with its parenthetical "(no git write).", so the new sentence goes after that and not in the middle of the parenthetical.
+
+## 8: [D1] Save converged on the hand-review land route (00226) (S)
+
+- (Ivan) The brief's description of `_land_review_failed`'s new behavior ("gains a wave_path param... returns None and saves converged on the hand-reviewed path") meant the hand-reviewed-stub-exists check itself moves inside `_land_review_failed`, rather than staying in `land()` with `_land_review_failed` only ever handling the no-stub case. Both constructions are observably equivalent against the given tests, but the docstring's phrasing only makes sense if `_land_review_failed` owns that branch, so this was not treated as a real ambiguity.
+
+## 9: [D1] Retry the branch delete on rerun and widen the OSError guard (00222) (S)
+
+- (Tess) "Re-run the SAME single-lane scenario fresh" read literally as pytest's own `tmp_path_factory.mktemp(...)` mechanism for a genuinely fresh temp directory, rather than reusing the same `tmp_path`.
+- (Tess) Used a named nested function `boom` to raise the OSError (matching this file's own existing idiom), rather than the generator-lambda form the brief offered as an alternative - the brief allowed either.
+- (Tess) Exact test/helper names and placement within each file were her own choice; the brief specified required behavior and conventions to follow, not exact names or line position.
+- (Ivan) The fix for the branch-delete retry belongs in `_drain_lane`'s early-return branch itself (duplicating the two-line branch-delete check rather than extracting a helper), since that is the only place that can see "worktree already gone, branch maybe not" on a rerun, and there are only two call sites.
+- (Ivan) No `lane["status"] == "assembled"` guard was added before the early-return branch-delete check, since `worktree_removed` is only ever set inside the `status == "assembled"` block, so status is already guaranteed assembled whenever that early return is reached.
+
+## 10: [D1] Restore the PRD's acceptance test ids and make them fail-first (00221, 00225) (M)
+
+- (Ivan) Items 2 and 3's hand demonstrations both needed the same temporary `wave_review.py` edit (disabling the `_hold_backlog` call site), so they were combined into one sequence instead of two separate edit/restore cycles - the net effect and evidence gathered are identical.
+- (Ivan) Treated the task's own explicit "Verify (run exactly these, in order, as your final check before reporting)" section, which names `bash dev/bin/release-checks` as a required final command, as superseding the generic rule against running the full suite inside a task dispatch - this task's brief is more specific and one of its sub-items depends on that command's output.
+
+## 11: [D1] Make _hold_backlog safe under partial failure (00225) (S)
+
+- (Tess) Simulated the commit failure via `subprocess.CalledProcessError` raised directly by a monkeypatched `_default_run_git` (one of two exception types the brief offered as equally valid) rather than `RuntimeError`.
+- (Tess) Asserted a generic `Exception` type for the collision refusal (the brief explicitly offered either `Exception` or `ValueError` as defensible) and asserted the exception message contains the full absolute paths of both the backlog and hold files.
+- (Tess) Both new tests call `_hold_backlog` directly rather than through `seed_state`, per the brief's explicit "your choice" - this keeps each test isolated to the function under test.
+- (Tess) Added `(pm / "prds" / "hold").mkdir(parents=True, exist_ok=True)` to test 1's setup, mirroring the precondition `seed_state`'s earlier steps already guarantee for the other tests in this file - calling `_hold_backlog` directly bypasses that guarantee.
+- (Ivan, review retry 1) Added a new git subcommand (`ls-files --others --exclude-standard`) to detect held-but-uncommitted files on disk, since `diff --cached` alone cannot see untracked files - necessary to cover a failure at `rm --cached` before anything is staged.
+- (Ivan, review retry 1) Kept `names` in the three-way union (`names | staged | untracked`) defensively, even though `untracked` alone already covers freshly-renamed files once the rename loop has run.
+- (Ivan, review retry 1) Moved the no-op guard to run after the rename loop and the staged/untracked recomputation (rather than before, as in the original code), since the fix requires detection to happen after renaming - this costs two extra git calls in the true-no-op case but is otherwise behavior-equivalent.
