@@ -438,7 +438,7 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
             )
         finally:
             if slot is not None:
-                wave_slots.release(slot)
+                wave_slots.release(slot, self.loop_pid)
         self._proc_slot[0] = None
         self._cleanup_orphans()
         return ts_start

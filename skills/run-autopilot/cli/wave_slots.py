@@ -11,6 +11,8 @@ Allowed imports: stdlib, `cli.loop_gates`.
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import os
 import shutil
 import sys
@@ -37,6 +39,18 @@ def _remove(path: Path) -> None:
         pass
     except OSError as exc:
         print(f"could not remove {path}: {exc}", file=sys.stderr)
+
+
+@contextlib.contextmanager
+def _slot_lock(slot: Path):
+    """Hold an exclusive flock on `<slot>.lock` for the body. The lock file
+    is a permanent sibling, never removed - removing it would race a second
+    opener between close and unlink, defeating the lock."""
+    lock_path = slot.with_name(f"{slot.name}.lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        yield
 
 
 def _owner(slot: Path) -> str:
@@ -74,14 +88,15 @@ def _claim(slot: Path, pid: int) -> bool:
     `acquire` reads only `<dir>/<n>`, so a non-digit name is invisible to
     every code path and to the reclaim rule every peer applies.
     """
-    staged = Path(tempfile.mkdtemp(dir=slot.parent, prefix=f"{slot.name}.tmp-"))
-    (staged / "owner").write_text(str(pid))
-    try:
-        os.rename(staged, slot)
-    except OSError:
-        _remove(staged)
-        return False
-    return True
+    with _slot_lock(slot):
+        staged = Path(tempfile.mkdtemp(dir=slot.parent, prefix=f"{slot.name}.tmp-"))
+        (staged / "owner").write_text(str(pid))
+        try:
+            os.rename(staged, slot)
+        except OSError:
+            _remove(staged)
+            return False
+        return True
 
 
 def _discard(slot: Path, pid: int, judged: str) -> bool:
@@ -99,30 +114,28 @@ def _discard(slot: Path, pid: int, judged: str) -> bool:
     one gets its own question, and a live answer puts the claim back and
     reads the slot as taken.
 
-    One residual stays open: the slot name is vacant while the claim sits
-    aside, so a third acquirer can take it in that window and the put-back
-    then fails, stranding a live claim. Closing it needs a primitive the
-    kernel releases (a per-slot `fcntl.flock`) rather than a name; until
-    then the loss is reported on stderr rather than papered over.
+    The per-slot <slot>.lock (_slot_lock) now closes this window: _claim
+    cannot take the vacated name while _discard holds it aside.
     """
-    aside = slot.parent / f"{slot.name}.stale-{pid}"
-    try:
-        os.rename(slot, aside)
-    except OSError:
-        return False
-    moved = _owner(aside)
-    if moved != judged and not _is_stale(moved):
+    with _slot_lock(slot):
+        aside = slot.parent / f"{slot.name}.stale-{pid}"
         try:
-            os.rename(aside, slot)
-        except OSError as exc:
-            print(
-                f"another claimant took {slot} while it was moved aside, so a"
-                f" live claim is left stranded in {aside}: {exc}",
-                file=sys.stderr,
-            )
-        return False
-    _remove(aside)
-    return True
+            os.rename(slot, aside)
+        except OSError:
+            return False
+        moved = _owner(aside)
+        if moved != judged and not _is_stale(moved):
+            try:
+                os.rename(aside, slot)
+            except OSError as exc:
+                print(
+                    f"another claimant took {slot} while it was moved aside, so a"
+                    f" live claim is left stranded in {aside}: {exc}",
+                    file=sys.stderr,
+                )
+            return False
+        _remove(aside)
+        return True
 
 
 def acquire(
@@ -160,6 +173,10 @@ def acquire(
             noted = periods
 
 
-def release(slot: Path) -> None:
-    """Free a claimed slot; a missing slot is a no-op."""
-    _remove(slot)
+def release(slot: Path, owner_pid: int) -> None:
+    """Free a claimed slot IF `owner_pid` still owns it; a missing slot or a
+    slot some other pid now owns is a no-op (a crash-and-reclaim cycle
+    already moved it on)."""
+    with _slot_lock(slot):
+        if _owner(slot) == str(owner_pid):
+            _remove(slot)
