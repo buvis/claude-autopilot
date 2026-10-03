@@ -209,3 +209,93 @@ def test_retrying_seed_state_does_not_recommit_the_held_backlog(
 
     retry_head = _git(worktree, "rev-parse", "HEAD").stdout.strip()
     assert retry_head == head_after_first_hold
+
+
+# ── _hold_backlog: partial-failure safety on retry and name collisions ─────
+
+
+def _crash_on_hold_backlog_commit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`_hold_backlog`'s `rm --cached` and `add -f` run for real; only the
+    `commit` call raises, exactly as a real `check=True` git failure would -
+    so the rename survives on disk and staged in the index, uncommitted."""
+    real_run_git = wave_assemble._default_run_git
+
+    def dies_at_commit(
+        args: list[str],
+        cwd: Path | None = None,
+        check: bool = True,
+    ) -> subprocess.CompletedProcess:
+        if "commit" in args:
+            raise subprocess.CalledProcessError(
+                1,
+                args,
+                output="",
+                stderr="disk went away",
+            )
+        return real_run_git(args, cwd=cwd, check=check)
+
+    monkeypatch.setattr(wave_review, "_default_run_git", dies_at_commit)
+
+
+def test_retrying_hold_backlog_after_a_failed_commit_converges_to_one_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, _, wave_dict = _assembled(tmp_path, monkeypatch)
+    worktree = Path(wave_dict["assembly"]["worktree"])
+    pm = _pm(worktree)
+    backlog = pm / "prds" / "backlog"
+    backlog.mkdir(parents=True, exist_ok=True)
+    (pm / "prds" / "hold").mkdir(parents=True, exist_ok=True)
+    (backlog / "00050-already-seeded.md").write_text("# stub\n", encoding="utf-8")
+    real_run_git = wave_assemble._default_run_git
+    _crash_on_hold_backlog_commit(monkeypatch)
+    before_head = _git(worktree, "rev-parse", "HEAD").stdout.strip()
+
+    with pytest.raises(subprocess.CalledProcessError):
+        wave_review._hold_backlog(worktree, pm, wave_dict)
+
+    # The retry runs with working git: the earlier failure must not have
+    # discarded the pending move, so this call has to actually commit it.
+    monkeypatch.setattr(wave_review, "_default_run_git", real_run_git)
+    wave_review._hold_backlog(worktree, pm, wave_dict)
+
+    hold = pm / "prds" / "hold"
+    after_head = _git(worktree, "rev-parse", "HEAD").stdout.strip()
+    assert list(backlog.glob("*.md")) == []
+    assert (hold / "00050-already-seeded.md").exists()
+    assert after_head != before_head
+    commit_count = _git(
+        worktree,
+        "rev-list",
+        "--count",
+        f"{before_head}..{after_head}",
+    ).stdout.strip()
+    assert commit_count == "1", commit_count
+    message = _git(worktree, "log", "-1", "--pretty=%B", after_head).stdout
+    assert message.count("00050-already-seeded.md") == 1, message
+
+
+def test_hold_backlog_refuses_a_name_collision_without_overwriting(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, _, wave_dict = _assembled(tmp_path, monkeypatch)
+    worktree = Path(wave_dict["assembly"]["worktree"])
+    pm = _pm(worktree)
+    backlog = pm / "prds" / "backlog"
+    hold = pm / "prds" / "hold"
+    backlog.mkdir(parents=True, exist_ok=True)
+    hold.mkdir(parents=True, exist_ok=True)
+    name = "00050-already-seeded.md"
+    (hold / name).write_text("original held content\n", encoding="utf-8")
+    (backlog / name).write_text("colliding backlog content\n", encoding="utf-8")
+
+    with pytest.raises(Exception) as excinfo:
+        wave_review._hold_backlog(worktree, pm, wave_dict)
+
+    message = str(excinfo.value)
+    assert str(backlog / name) in message, message
+    assert str(hold / name) in message, message
+    assert (hold / name).read_text(encoding="utf-8") == "original held content\n"
+    assert (backlog / name).exists()
