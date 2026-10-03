@@ -235,10 +235,9 @@ def _seed_steps(
 def _hold_backlog(worktree: Path, pm: Path, wave: dict) -> None:
     """Move every backlog PRD the assembly worktree inherited into prds/hold/
     and commit the move, so the nested loop never picks one up. Resumes a
-    move an earlier call staged but whose commit failed, and no-ops once
-    that commit has landed and the backlog holds no `.md` file. Raises
-    without touching either file when a backlog name already exists in
-    hold/."""
+    move an earlier call staged but whose rm, add, or commit failed, and
+    no-ops once nothing under hold/ is left uncommitted. Raises without
+    touching either file when a backlog name already exists in hold/."""
     prds = pm / "prds"
     names = sorted(path.name for path in (prds / "backlog").glob("*.md"))
     for name in names:
@@ -247,23 +246,43 @@ def _hold_backlog(worktree: Path, pm: Path, wave: dict) -> None:
             raise FileExistsError(
                 f"{prds / 'backlog' / name} collides with already-held {target}",
             )
-    staged = _default_run_git(
-        ["diff", "--cached", "--name-only", "--", str(prds)],
-        cwd=worktree,
-    ).stdout.split()
-    if not names and not staged:
-        return
     for name in names:
         (prds / "backlog" / name).rename(prds / "hold" / name)
-    if names:
-        backlog = [str(prds / "backlog" / name) for name in names]
-        held = [str(prds / "hold" / name) for name in names]
-        _default_run_git(
-            ["rm", "--cached", "--ignore-unmatch", "-q", "--", *backlog],
-            cwd=worktree,
-        )
-        _default_run_git(["add", "-f", "--", *held], cwd=worktree)
-    all_names = sorted({Path(path).name for path in staged} | set(names))
+    staged = _default_run_git(
+        [
+            "diff",
+            "--cached",
+            "--name-only",
+            "--",
+            str(prds / "backlog"),
+            str(prds / "hold"),
+        ],
+        cwd=worktree,
+    ).stdout.split()
+    untracked = _default_run_git(
+        [
+            "ls-files",
+            "--others",
+            "--exclude-standard",
+            "--",
+            str(prds / "hold" / "*.md"),
+        ],
+        cwd=worktree,
+    ).stdout.split()
+    all_names = sorted(
+        set(names)
+        | {Path(path).name for path in staged}
+        | {Path(path).name for path in untracked},
+    )
+    if not all_names:
+        return
+    backlog = [str(prds / "backlog" / name) for name in all_names]
+    held = [str(prds / "hold" / name) for name in all_names]
+    _default_run_git(
+        ["rm", "--cached", "--ignore-unmatch", "-q", "--", *backlog],
+        cwd=worktree,
+    )
+    _default_run_git(["add", "-f", "--", *held], cwd=worktree)
     message = "\n".join(
         [
             f"chore(autopilot): hold seeded backlog PRDs for wave {wave['id']} review",
