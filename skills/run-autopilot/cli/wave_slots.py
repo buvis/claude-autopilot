@@ -6,6 +6,10 @@ and published with a single `os.rename`, so a peer never sees a numbered slot
 without an owner. A slot whose owner file is missing, malformed, or names a
 dead pid is stale and gets reclaimed.
 
+Each slot N also has a `<slots_dir>/N.lock` sibling, used to serialize claim,
+reclaim and release of that slot. The lock files are permanent and never
+removed - removing one would race a second opener between close and unlink.
+
 Allowed imports: stdlib, `cli.loop_gates`.
 """
 
@@ -176,7 +180,19 @@ def acquire(
 def release(slot: Path, owner_pid: int) -> None:
     """Free a claimed slot IF `owner_pid` still owns it; a missing slot or a
     slot some other pid now owns is a no-op (a crash-and-reclaim cycle
-    already moved it on)."""
-    with _slot_lock(slot):
-        if _owner(slot) == str(owner_pid):
-            _remove(slot)
+    already moved it on).
+
+    Runs in the caller's `finally:`, so this never raises: an `OSError` from
+    the lock is reported on stderr instead, exactly as `_remove` reports a
+    failed removal. A slot whose parent dir is already gone (torn down by
+    `land`/`abort`) skips the lock entirely rather than recreating it - a
+    missing slot is a no-op, not a reason to resurrect the slots directory.
+    """
+    if not slot.parent.is_dir():
+        return
+    try:
+        with _slot_lock(slot):
+            if _owner(slot) == str(owner_pid):
+                _remove(slot)
+    except OSError as exc:
+        print(f"could not release {slot}: {exc}", file=sys.stderr)
