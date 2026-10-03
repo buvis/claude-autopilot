@@ -78,5 +78,37 @@
     "issue": "[MECH] 2 touched test(s) pass against the pre-change code: test_one_slot_is_never_handed_to_two_holders, test_a_reclaim_never_steals_a_claim_that_went_live_first | File: skills/run-autopilot/cli/test_wave_slots.py | Task: general",
     "file": "skills/run-autopilot/cli/test_wave_slots.py",
     "reason": "Discarded: both tests pre-date this PRD and pin invariants the 00227 lock must preserve, not behaviour it introduces. They appear in the replay only because the diff touches their file. The 00227 fail-first evidence lives in the two new tests the PRD names, test_reclaim_put_back_race_admits_one_holder and test_release_never_removes_another_holders_slot, which the replay reports as failing against base."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "`_hold_backlog` calls `_default_run_git` directly instead of an injected `run_git`. `seed_state` has no `run_git` parameter, so the step cannot be faked in tests or crash-simulated. Behaviour is correct; this is a testability gap.",
+    "file": "skills/run-autopilot/cli/wave_review.py:251",
+    "reason": "Behaviour is correct by the raising reviewer's own words, so nothing is broken today. Adding a run_git parameter changes seed_state's signature purely for testability that neither the PRD nor the design doc asks for, and seed_state is on the wave review path a nested loop depends on. Deferred to batch end for the operator's call rather than widening an interface mid-rework."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "Scope creep in `_hold_backlog`. It raises FileExistsError when a backlog name already exists in `hold/`. It also adds multi-step retry and resume logic (staged/untracked/ignored detection, `rm --cached`, `add -f`). The PRD asked only to move `backlog/*.md` into `hold/` and commit. The collision refusal can block a review with a new error path the spec never mentions.",
+    "file": "skills/run-autopilot/cli/wave_review.py:235",
+    "reason": "Discarded: both halves were mandated by this same review. Cycle 1's [2/4] finding required closing the uncommitted-move retry gap AND the silent hold/<name> overwrite (Path.rename overwriting silently), and the PRD's 00225 Risks mitigation promises the held PRDs are named rather than lost. Task 11 implemented exactly that. Blake is blind by design and cannot see the prior cycle, so his scope-creep reading is expected; reverting it would reopen the cycle-1 finding."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "`_drain_lane` adds a rerun path that deletes the branch when `worktree_removed` is already set. This is beyond the spec but harmless, since it guards with `branch --list`.",
+    "file": "skills/run-autopilot/cli/wave_assemble.py:519",
+    "reason": "Discarded on the raising reviewer's own evidence (he calls it harmless and notes the `branch --list` guard). That rerun path is precisely what cycle 1's [3/4] branch-leak finding required: without it a crash between the second save and `branch -D` leaked `wave/<id>/lN` forever."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "[MECH] 2 touched test(s) pass against the pre-change code: test_store_churn_in_the_assembly_worktree_does_not_refuse, test_retrying_seed_state_does_not_recommit_the_held_backlog",
+    "file": "skills/run-autopilot/cli/test_wave_review_cleanup.py",
+    "reason": "Discarded: both passes are explained. The first test is cycle 1's renamed acceptance test (task 10 restored the PRD's id); the behaviour it pins landed in cycle 1, so it passes at this cycle's base by construction. The second gained asserts in task 10 that the first attempt moved HEAD and the file reached hold/, which is what removed its vacuity; it still passes at base because the base already had the non-recommit behaviour. Five of the seven replayed tests fail against base, which is where this cycle's fail-first evidence lives."
   }
 ]

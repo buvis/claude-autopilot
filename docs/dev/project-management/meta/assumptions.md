@@ -59,3 +59,13 @@
 - (Ivan, review retry 1) Added a new git subcommand (`ls-files --others --exclude-standard`) to detect held-but-uncommitted files on disk, since `diff --cached` alone cannot see untracked files - necessary to cover a failure at `rm --cached` before anything is staged.
 - (Ivan, review retry 1) Kept `names` in the three-way union (`names | staged | untracked`) defensively, even though `untracked` alone already covers freshly-renamed files once the rename loop has run.
 - (Ivan, review retry 1) Moved the no-op guard to run after the rename loop and the staged/untracked recomputation (rather than before, as in the original code), since the fix requires detection to happen after renaming - this costs two extra git calls in the true-no-op case but is otherwise behavior-equivalent.
+
+## 13: [D2] Tail sweep: close the cycle-2 medium/low tail on the wave slot lock, hold-backlog and drain-lane paths (M)
+
+- (Tess) Took the lock through the module-level `_slot_lock` seam rather than patching `builtins.open`, because the brief offered either and the lock's file-opening shape was not visible from the interface notes; the vanish-before-lock test wraps it with a `*args, **kwargs` shim. Both tests ran as intended against the pre-fix code.
+- (Tess) For the vanish-before-lock case, asserted only "no raise and nothing created", not stderr content, since the brief is silent on output there.
+- (Tess) `_crash_on_hold_backlog_step` matches the first git call carrying `rm` or `add` as a list element and then restores real git; this assumes `_hold_backlog` renames before its first `rm`, which the brief states.
+- (Tess) The space-in-name tests pre-create `prds/hold/`, mirroring the existing retry test; whether `_hold_backlog` creates it itself is untested.
+- (Tess) A filename containing a space appears unquoted in `git show --name-only`, which held when run.
+- (Ivan) The `-z` queries need no `core.quotePath` handling, because `-z` output is unquoted.
+- (Ivan) Placed `_delete_lane_branch` directly above `_drain_lane` and `_pending_hold_names` directly above `_hold_backlog`.

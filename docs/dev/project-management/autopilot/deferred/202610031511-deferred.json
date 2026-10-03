@@ -231,6 +231,15 @@
       "reason": "Spec-directed and labelled not-a-bug by the reviewer who raised it; the PRD requires this widening so store churn stops refusing a review. Recorded so the residual discard stays visible rather than narrowing the gate the PRD just widened.",
       "cycle": 1,
       "prd": "00242-harden-the-wave-verbs-v1.md"
+    },
+    {
+      "type": "requirements-ambiguity",
+      "cycle": 2,
+      "issue": "_hold_backlog calls _default_run_git directly; seed_state has no injectable run_git, so the held-backlog git step cannot be faked or crash-simulated in tests (Blake, medium). Behaviour is correct.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "Adding a run_git parameter changes seed_state signature for testability neither the PRD nor the design doc asks for; operator call.",
+      "prd": "00242-harden-the-wave-verbs-v1.md"
     }
   ]
 }
