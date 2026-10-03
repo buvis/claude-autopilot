@@ -47,6 +47,10 @@ Generated: 2026-09-14
 ### Batch 202610031511
 - [x] 00240-ignore-nested-store-lock-files-v1 (1 cycle)
 - [x] 00241-bound-rework-batches-by-file-v1 (2 cycles)
+- [x] 00242-harden-the-wave-verbs-v1 (2 cycles)
+- [ ] 00243-make-the-headroom-wall-scan-match-its-contract-v1
+- [ ] 00244-tidy-the-enter-verb-and-the-review-diff-plumbing-v1
+- [ ] 00248-keep-phase-skills-in-the-session-v1
 
 Observations: 00240 was a clean single-PRD cycle, no deferred decisions or
 doubts, full suite green at merge (2150 passed). 00241 cap-out at cycle 2
@@ -60,7 +64,14 @@ step-2/Split-rule contradiction left partially unresolved, and the
 failed exit 1 twice in both cycles (`turn.failed`, no sidecar); the doubt
 lens ran on the Claude fallback both times, all five D1-D5 rubric rules
 passing. `engram pack` unavailable (repo not gita-registered) - every review
-prompt carried the documented sentinel.
+prompt carried the documented sentinel. 00242 converged at cycle 2 with 13
+consolidated findings, all medium/low, zero CRITICAL/HIGH across Alice,
+Blake, Bob and Carl; the medium/low tail was swept in one `[D2]` task
+(Tess/Ivan/Pat) rather than per-finding tasks. `bash dev/bin/release-checks`
+green at cb9be6b (2267 passed, 0 failed, 0 skipped). One deferral recorded
+(`_hold_backlog`'s non-injectable `run_git`, an operator call on test
+testability vs. scope) plus three cycle-1 deferrals carried from the design
+phase; `mint-stubs` minted nothing (all 28 open ledger rows medium/low).
 
 ### Batch 202610021244
 - [x] 00236-track-the-store-without-tripping-the-loop-v1 (2 cycles)

@@ -240,6 +240,42 @@
       "consensus": "1/4",
       "reason": "Adding a run_git parameter changes seed_state signature for testability neither the PRD nor the design doc asks for; operator call.",
       "prd": "00242-harden-the-wave-verbs-v1.md"
+    },
+    {
+      "type": "deferred_decision",
+      "cycle": 1,
+      "issue": "00225: the PRD Risks promise that the wave report names every PRD moved to hold/, but only the git commit body names them; and landing may park master backlog PRDs in hold/ against waves.md:22",
+      "severity": "medium",
+      "action": "deferred to batch end",
+      "reason": "Requirements ambiguity between the PRD Outputs and the PRD Risks (cycle 1). The design doc already flagged the report-surfacing gap as an explicit planner task. The land-routing half is suspected, not confirmed by an end-to-end land run, so a blind fix could change land semantics.",
+      "prd": "00242-harden-the-wave-verbs-v1.md"
+    },
+    {
+      "type": "deferred_decision",
+      "cycle": 1,
+      "issue": "00222: a pre-existing crash window remains before _drain_lane first save - held_prds and migrated_at are in memory only while migrate_lane moves PRDs and appends jsonl rows",
+      "severity": "low",
+      "action": "deferred to batch end",
+      "reason": "Both raising reviewers call it pre-existing and matching the PRD literal wording (cycle 1). 00222 scope is the window around the two destructive git calls, which is now closed.",
+      "prd": "00242-harden-the-wave-verbs-v1.md"
+    },
+    {
+      "type": "deferred_decision",
+      "cycle": 1,
+      "issue": "00225: _land_cleanup exempts every store path then runs worktree remove --force, discarding uncommitted store files _land_migrate does not copy",
+      "severity": "low",
+      "action": "deferred to batch end",
+      "reason": "Spec-directed and labelled not-a-bug by the reviewer who raised it (cycle 1); the PRD requires this widening. Recorded so the residual discard stays visible.",
+      "prd": "00242-harden-the-wave-verbs-v1.md"
+    },
+    {
+      "type": "deferred_decision",
+      "cycle": 2,
+      "issue": "_hold_backlog calls _default_run_git directly; seed_state has no injectable run_git, so the held-backlog git step cannot be faked or crash-simulated in tests (Blake, medium). Behaviour is correct.",
+      "severity": "medium",
+      "action": "deferred to batch end",
+      "reason": "Adding a run_git parameter changes seed_state signature for testability neither the PRD nor the design doc asks for; operator call. Recorded via autopilot defer into 202610031511-deferred.json and the ledger.",
+      "prd": "00242-harden-the-wave-verbs-v1.md"
     }
   ]
 }
