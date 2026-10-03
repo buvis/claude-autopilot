@@ -272,29 +272,58 @@ def test_review_failed_appends_the_summary_line_with_no_review_file(
         assert expected_line in text.splitlines()
 
 
-def test_hand_reviewed_stub_in_done_lands(
+HAND_STUB_TEXT = "hand-reviewed stub prd\n"
+
+
+def _hand_reviewed(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """An operator who hand-reviewed a review_failed assembly moves the stub
-    into the worktree's prds/done/; land() must then take the converged path
-    and actually land instead of exiting 4. The stub is left uncommitted -
+) -> tuple[Path, Path, dict, Path, str]:
+    """A `review_failed` `_landable` wave whose assembly branch carries one
+    real rework commit past base_sha (so a fast-forward is observable), a
+    lane record to migrate, and the operator's hand-moved stub in the
+    worktree's prds/done/. The stub is left uncommitted -
     docs/dev/project-management/ is store-exempt from the worktree dirty
-    check, so this models the operator's own hand-moved file faithfully."""
+    check, so this models the operator's own hand-moved file faithfully.
+    Returns (repo, wave_path, wave_dict, worktree, assembly_tip)."""
     repo, wave_path, wave_dict = _landable(
         tmp_path,
         monkeypatch,
         status="review_failed",
     )
     worktree = Path(wave_dict["assembly"]["worktree"])
+    (worktree / "rework.txt").write_text("rework\n", encoding="utf-8")
+    _git(worktree, "add", "rework.txt")
+    _git(worktree, "commit", "-m", "test: rework before the hand review")
+    (_autopilot(worktree) / "loop-metrics.jsonl").write_text(
+        json.dumps({"event": "cycle_done"}) + "\n",
+        encoding="utf-8",
+    )
     stub = _pm(worktree) / "prds" / "done" / STUB
     stub.parent.mkdir(parents=True, exist_ok=True)
-    stub.write_text("stub prd\n", encoding="utf-8")
+    stub.write_text(HAND_STUB_TEXT, encoding="utf-8")
     assembly_tip = _git_out(worktree, "rev-parse", "HEAD")
+    return repo, wave_path, wave_dict, worktree, assembly_tip
+
+
+def test_hand_reviewed_stub_in_done_lands(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An operator who hand-reviewed a review_failed assembly moves the stub
+    into the worktree's prds/done/; land() must then take the SAME converged
+    path (fast-forward, lane migration, summary line, head_sha refresh) and
+    actually land instead of exiting 4."""
+    repo, wave_path, wave_dict, worktree, assembly_tip = _hand_reviewed(
+        tmp_path,
+        monkeypatch,
+    )
+    assert assembly_tip != wave_dict["base_sha"]
 
     assert wave_review.land(repo, wave_dict) == 0
 
     assert _git_out(repo, "rev-parse", "HEAD") == assembly_tip
+    assert (repo / "rework.txt").read_text(encoding="utf-8") == "rework\n"
     assert not worktree.exists()
     assert not _branch_exists(repo, f"wave/{WAVE_ID}/assembly")
     assert not wave_path.exists()
@@ -304,7 +333,59 @@ def test_hand_reviewed_stub_in_done_lands(
         ),
     )
     assert archived["status"] == "done"
-    assert (_pm(repo) / "prds" / "done" / STUB).exists()
+    assert archived["assembly"]["status"] == "assembled"
+    assert archived["assembly"]["head_sha"] == assembly_tip
+    stub_text = (_pm(repo) / "prds" / "done" / STUB).read_text(encoding="utf-8")
+    assert stub_text == HAND_STUB_TEXT
+    ledger = (_autopilot(repo) / "loop-metrics.jsonl").read_text(encoding="utf-8")
+    [row] = [json.loads(line) for line in ledger.splitlines()]
+    assert row == {"event": "cycle_done", "lane": "assembly", "wave": WAVE_ID}
+    expected_line = f"## Assembly review: converged (1 cycle(s)), landed {assembly_tip}"
+    for folder in ("reports", "ledger"):
+        text = (_autopilot(repo) / folder / f"{WAVE_ID}-wave.md").read_text(
+            encoding="utf-8",
+        )
+        assert text.count("## Assembly review:") == 1
+        assert expected_line in text.splitlines()
+
+
+def test_hand_reviewed_land_refuses_when_master_moved(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A hand-reviewed wave keeps the converged path's base_sha drift guard:
+    master moved since assembly means exit 5 and nothing landed or removed."""
+    repo, _, wave_dict, worktree, _ = _hand_reviewed(tmp_path, monkeypatch)
+    (repo / "unrelated.txt").write_text("x\n", encoding="utf-8")
+    _git(repo, "add", "unrelated.txt")
+    _git(repo, "commit", "-m", "test: land unrelated work on master meanwhile")
+    master_tip = _git_out(repo, "rev-parse", "HEAD")
+
+    assert wave_review.land(repo, wave_dict) == 5
+
+    assert _git_out(repo, "rev-parse", "HEAD") == master_tip
+    assert worktree.exists()
+    assert _branch_exists(repo, f"wave/{WAVE_ID}/assembly")
+    assert not (_pm(repo) / "prds" / "done" / STUB).exists()
+    assert not (_autopilot(repo) / "reports" / f"{WAVE_ID}-wave.json").exists()
+
+
+def test_hand_reviewed_land_refuses_to_discard_a_dirty_worktree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A hand-reviewed wave keeps the converged path's pre-removal dirty
+    check: an unrelated uncommitted file in the worktree raises ValueError
+    and the worktree, the file and the branch all survive."""
+    repo, _, wave_dict, worktree, _ = _hand_reviewed(tmp_path, monkeypatch)
+    (worktree / "dirty.txt").write_text("uncommitted rework\n", encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        wave_review.land(repo, wave_dict)
+
+    assert worktree.exists()
+    assert (worktree / "dirty.txt").exists()
+    assert _branch_exists(repo, f"wave/{WAVE_ID}/assembly")
 
 
 def test_review_failed_without_hand_review_still_exits_four(
