@@ -1,0 +1,49 @@
+{
+  "batch_id": "202610031511",
+  "items": [
+    {
+      "type": "review-deferral",
+      "cycle": 1,
+      "severity": "high",
+      "issue": "The store .gitignore recursive lock pattern will be reverted again by ensure-store on every build gate until a release carrying PRD 00240 reaches the installed plugin cache",
+      "file": "docs/dev/project-management/.gitignore:3",
+      "consensus": "3/4",
+      "reason": "release-gated: the batch runs the installed cache v0.7.0, whose store_tree.STORE_GITIGNORE predates 00240; the cycle-1 rework fix restores the line and untracks the four lock files, but only a release makes it stick",
+      "found_by": "alice, bob, carl",
+      "prd": "00241-bound-rework-batches-by-file-v1.md"
+    },
+    {
+      "type": "review-deferral",
+      "cycle": 1,
+      "severity": "medium",
+      "issue": "_RANK in rework_groups.py re-declares consolidate_findings.SEVERITY_ORDER with different numbers and an implicit unknown rank; one severity table, two copies free to drift",
+      "file": "skills/run-autopilot/cli/rework_groups.py:22",
+      "consensus": "1/4",
+      "reason": "de-duplicating needs an import across the review-work-completion to run-autopilot skill boundary, coupling PRD 00241 never sanctioned; Bob filed it in his own KNOWN bucket with this reason",
+      "found_by": "bob",
+      "prd": "00241-bound-rework-batches-by-file-v1.md"
+    },
+    {
+      "type": "review-deferral",
+      "cycle": 1,
+      "severity": "low",
+      "issue": "Stale neighbouring prose: the Phase 5 scope-alarm row and the Phase 6 becomes-or-joins sentence still assume hand-chosen task counts now that grouping caps non-CRITICAL tasks at 4",
+      "file": "skills/run-autopilot/references/phase-review.md:101",
+      "consensus": "1/4",
+      "reason": "Blake classified it himself as drift rather than a defect, and both sentences sit outside the PRD explicit edit list; rewriting unrelated gate prose in a review cycle is scope creep",
+      "found_by": "blake",
+      "prd": "00241-bound-rework-batches-by-file-v1.md"
+    },
+    {
+      "type": "review-deferral",
+      "cycle": 1,
+      "severity": "low",
+      "issue": "__main__.py is 1315 lines, over the 800-line limit, and this diff adds 23 more",
+      "file": "skills/run-autopilot/cli/__main__.py:771",
+      "consensus": "1/4",
+      "reason": "pre-existing breach already settled as a deferral in the 00223 review, and the PRD Repository Structure section directs the group-rework subparser into this file; splitting the module is its own PRD",
+      "found_by": "alice",
+      "prd": "00241-bound-rework-batches-by-file-v1.md"
+    }
+  ]
+}

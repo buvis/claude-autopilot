@@ -1,0 +1,34 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "`_RANK` re-declares `consolidate_findings.SEVERITY_ORDER` with different numbers and an implicit unknown rank (`len(_RANK)` against the named `UNKNOWN_SEVERITY_RANK`); one severity table, two copies free to drift",
+    "file": "skills/run-autopilot/cli/rework_groups.py:22",
+    "reason": "De-duplicating requires an import across the `review-work-completion/scripts/` to `run-autopilot/cli/` skill boundary, coupling PRD 00241 never sanctioned and that `release-checks` runs as separate blocks. Bob raised it and placed it in his own KNOWN bucket with this same reason. Deferred to batch end."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Stale neighbouring prose. The Phase 5 scope-alarm row \">10 follow-up tasks from review\" and Phase 6's \"becomes (or joins) a `[D{cycle}]` task\" for CRITICAL rows assume hand-chosen task counts. With 4 or fewer non-CRITICAL groups plus one task per critical row, a critical never joins another task. Neither was in the spec's edit list, so I'm flagging drift, not a defect.",
+    "file": "skills/run-autopilot/references/phase-review.md:101",
+    "reason": "Blake raised it and classified it himself as drift rather than a defect; both sentences are outside PRD 00241's explicit edit list (which names only the Phase 6 Group-first bullet and the Tail sweep Split rule). Rewriting unrelated gate prose inside a review cycle is scope creep. Deferred to batch end."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`__main__.py` is 1315 lines, over the 800-line limit, and this diff adds 23 more. The overage is pre-existing and was deferred in the 00223 review. The task prescribed putting the subparser there, so this is for the gate to defer again.",
+    "file": "skills/run-autopilot/cli/__main__.py:771",
+    "reason": "Pre-existing breach already settled as a deferral in the 00223 review, and PRD 00241's own Repository Structure section directs the `group-rework` subparser into this file (\"__main__.py # Maps to: the group-rework subparser (thin)\"). Splitting the module is its own PRD. Alice raised it and routed it to the gate for exactly this. Deferred again, unchanged."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "Expect a repeat until the 00240 release reaches the installed cache.",
+    "file": "docs/dev/project-management/.gitignore:3",
+    "reason": "The recurrence, not the current regression. The batch runs the installed plugin cache (v0.7.0), whose `cli/store_tree.STORE_GITIGNORE` predates PRD 00240, so every build-gate `ensure-store` rewrites the tracked store `.gitignore` back to `autopilot/*.lock`. Restoring the line and untracking the four lock files is queued as a cycle-1 rework fix; making the fix stick needs a release carrying 00240, which no PRD in this repo can do for itself. Deferred to batch end as a release-gated item."
+  }
+]
