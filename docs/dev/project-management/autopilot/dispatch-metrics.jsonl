@@ -2784,3 +2784,19 @@
 {"id":"a6417f33","ended_at":1791039506,"elapsed_s":97,"outcome":"error","detail":"exit 1"}
 {"id":"0997e7d1","ended_at":1791039937,"elapsed_s":524,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"review","edge":"leave","at":1791040972,"phase":"review","prd":"00241-bound-rework-batches-by-file-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1791041044,"phase":"review","prd":"00241-bound-rework-batches-by-file-v1.md"}
+{"id":"4d277db1","kind":"tess","task":"7","queued_at":1791041276,"prompt_bytes":36970}
+{"id":"4d277db1","ended_at":1791041811,"elapsed_s":535,"outcome":"ok","detail":null}
+{"id":"852825db","kind":"devon","task":"7","queued_at":1791041948,"prompt_bytes":4932}
+{"id":"852825db","ended_at":1791042814,"elapsed_s":866,"outcome":"ok","detail":null}
+{"id":"2b15ee7e","kind":"tess","task":"7","queued_at":1791042860,"prompt_bytes":25935}
+{"id":"2b15ee7e","ended_at":1791043526,"elapsed_s":666,"outcome":"ok","detail":null}
+{"id":"e355c2cc","kind":"ivan","task":"7","queued_at":1791043634,"prompt_bytes":46767}
+{"id":"e355c2cc","ended_at":1791043859,"elapsed_s":225,"outcome":"ok","detail":null}
+{"id":"8980dc9f","kind":"deslop","task":"7","queued_at":1791043973,"prompt_bytes":8461}
+{"id":"8980dc9f","ended_at":1791044164,"elapsed_s":191,"outcome":"ok","detail":"no slop found"}
+{"id":"52882002","kind":"pat","task":"7","queued_at":1791044235,"prompt_bytes":50089}
+{"id":"c1d92eea","kind":"pat","task":"7","queued_at":1791044255,"prompt_bytes":49508}
+{"id":"c1d92eea","ended_at":1791044311,"elapsed_s":56,"outcome":"ok","detail":null}
+{"id":"52882002","ended_at":1791044418,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"kind":"handoff","site":"review","edge":"leave","at":1791044418,"phase":"review","prd":"00241-bound-rework-batches-by-file-v1.md"}

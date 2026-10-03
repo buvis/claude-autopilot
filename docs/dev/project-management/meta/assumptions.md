@@ -61,3 +61,49 @@ each plan, then appended to per task.
   under `[Unreleased]`) follows the Added/Changed/Fixed ordering convention
   visible elsewhere in the file; the task only said to create it if absent,
   without specifying position relative to `### Fixed`.
+
+## 7: [D1] Harden group-rework input handling, file_key normalization and the cap tests
+
+- **Critical groups come out in input order, and that is deliberate** (the
+  decision gate's ruling 3, recorded here as the ruling required). Rule 6's
+  "then by severity, count, key" clauses order the non-critical groups only;
+  "critical groups first" says nothing about their internal order, so the
+  critical groups are never sorted. The existing test pins input order on
+  purpose.
+- The ` (lines a-b)` suffix is matched with a literal single space inside the
+  parens, as every test case spells it. Other spellings (`(line 3)`,
+  `(lines 3)`) are not stripped because no test names them.
+- `N/A`-wrapping is accepted with any parenthesized tail, not only a
+  path-looking one: the findings give two shapes and no counterexample of a
+  non-general `n/a (...)`.
+- `#L12-L14` style anchor ranges are not handled; the acceptance criteria name
+  only `#L<digits>`.
+- Ruling 2's "loops until the key is stable" is bound by
+  `file_key("a/b.py#L12:7") == "a/b.py"`; the criteria never named a
+  doubled-suffix form, so an anchor-plus-line pair was chosen.
+- Error wording is the implementor's: `cannot read` for `OSError`,
+  `cannot parse` for `ValueError`/`UnicodeDecodeError`, and one line naming a
+  finding without a string `severity` and `file` for a malformed element. The
+  tests assert only exit 2, empty stdout and exactly one stderr line.
+- A usage error from a missing `--findings` exits via `SystemExit` with an
+  unspecified code (observed 1, not argparse's default 2), so the test asserts
+  the raise plus empty stdout rather than a specific code. Demanding 2 would
+  have been an unrequested behavior change.
+- Ruling 6's `IndexError` guard is **not reachable through the public API**:
+  prose-only input always collapses to one group, so the fold branch needs a
+  cap of 0 to reach an empty `code` list. The branch itself is driven by a test
+  at a patched cap of 1; the guard is defensive and deliberately untested.
+- The 00223 fixture's expected shape (4 tasks, sizes 2/5/12/21, `enter.py`
+  separate, the rest of `cli/` under one directory key) is derived from the
+  current tree plus ruling 1, not documented anywhere.
+- Nothing pins whether a `general` merge keeps its target group's key or
+  relabels it, so the tests locate that group by a finding it holds rather than
+  by key.
+- `test_design_rework_prose.py`'s unguarded `.index` lookup was removed with the
+  redundant assertion that used it, rather than guarded in place. Deleting the
+  line eliminates the bare-`ValueError` path the finding named; no other
+  unguarded `.index` remains in that file.
+- Duplicate merged `name_hint`s remain reachable in production (six
+  single-finding files under one directory can yield two groups keyed the same).
+  This task made the tests able to see a cap breach but did not change the
+  merge rule, which no finding asked for.
