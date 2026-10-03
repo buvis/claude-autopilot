@@ -2899,3 +2899,22 @@
 {"id":"27778613","ended_at":1791057388,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"id":"4e3671d0","ended_at":1791057388,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791057388,"phase":"build","prd":"00242-harden-the-wave-verbs-v1.md"}
+{"id":"1968fc74","kind":"tess","task":"6","queued_at":1791057915,"prompt_bytes":87998}
+{"id":"5ed52e7b","kind":"tess","task":"6","queued_at":1791057966,"prompt_bytes":28806}
+{"id":"04498964","kind":"devon","task":"6","queued_at":1791058239,"prompt_bytes":11033}
+{"id":"04498964","ended_at":1791058323,"elapsed_s":84,"outcome":"ok","detail":null}
+{"id":"4d29744e","kind":"tess","task":"6","queued_at":1791058332,"prompt_bytes":11783}
+{"id":"e7b05579","kind":"ivan","task":"6","queued_at":1791058493,"prompt_bytes":41072}
+{"id":"8b4ac30b","kind":"pat","task":"6","queued_at":1791058651,"prompt_bytes":20152}
+{"id":"e1c1a43c","kind":"ivan","task":"7","queued_at":1791058812,"prompt_bytes":6912}
+{"id":"f03011b9","kind":"ivan","task":"5","queued_at":1791059273,"prompt_bytes":25681}
+{"id":"59a237ac","kind":"ivan","task":"3","queued_at":1791059346,"prompt_bytes":13570}
+{"id":"1968fc74","ended_at":1791059562,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"5ed52e7b","ended_at":1791059562,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"4d29744e","ended_at":1791059562,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"e7b05579","ended_at":1791059562,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"8b4ac30b","ended_at":1791059562,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"e1c1a43c","ended_at":1791059562,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"f03011b9","ended_at":1791059562,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"59a237ac","ended_at":1791059562,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791059562,"phase":"review","prd":"00242-harden-the-wave-verbs-v1.md"}
