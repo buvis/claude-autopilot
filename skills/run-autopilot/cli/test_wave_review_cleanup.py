@@ -40,6 +40,7 @@ def test_store_only_churn_in_the_assembly_worktree_does_not_refuse(
     # them uncommitted: a plain untracked file would be masked by the
     # fixture's own store `.gitignore` regardless of the gate under test.
     _track_store_file(worktree)
+    _git(repo, "merge", "--ff-only", f"wave/{WAVE_ID}/assembly")
     _dirty_store_only(worktree)
 
     wave_review._land_cleanup(
