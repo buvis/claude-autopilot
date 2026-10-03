@@ -1,0 +1,82 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "PRD 00225 Risks promise that \"the commit message and the wave report name every PRD moved to hold/\". Only the commit body names them (wave_review.py:252-259); no report or summary line is written, and the design doc flagged this as an explicit planner task that no task picked up. The fix also has an unaddressed side effect. The hold commit sits on the assembly branch, and `land` fast-forwards master onto that branch (wave_review.py:392, 460-465). Per the design's own data-flow note, master's backlog PRDs end up in `hold/`. Held-back PRDs that waves.md:22 documents as \"left in the main backlog\" would land in `hold/`. Lane-completed PRDs that `migrate_lane` already put in `done/` would also appear in `hold/`. This is suspected from the design text and code reading, not confirmed by an end-to-end land run. Add the report line (or surface the names in `land`'s summary) and document the behaviour in waves.md's `wave review` section",
+    "file": "skills/run-autopilot/cli/wave_review.py:235",
+    "reason": "Requirements ambiguity between the PRD's own sections, deferred to batch end rather than guessed. The 00225 Outputs bullet asks only to move the PRDs to hold/ and commit that move, which the code does; the stronger promise lives in the Risks mitigation. The design doc already recorded the report-surfacing gap as an explicit planner task, so this is a known open decision, not a missed fix. The second half (backlog PRDs landing in master's hold/ after land, against waves.md:22's 'left in the main backlog') is marked suspected by the reviewer and not confirmed by an end-to-end land run; changing land's PRD routing on an unconfirmed reading could alter land semantics, so it needs the operator's call."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "A crash window remains before the new first save in `_drain_lane`. `migrate_lane` moves the lane's PRDs out of its worktree via `_route_prds` and appends the jsonl rows before the first `save` (wave_assemble.py:521-524). `held_prds` and `migrated_at` are therefore still in memory only. A crash there loses the non-roster PRD names the PRD wants kept and duplicates ledger rows on rerun. This is pre-existing and outside the PRD's literal git-teardown scope; saving `held_prds` before `migrate_lane` would close it",
+    "file": "skills/run-autopilot/cli/wave_assemble.py:523",
+    "reason": "Both reviewers that raised it (Alice, Blake) state it is pre-existing and matches the PRD's literal wording, which places the save after migrate_lane. 00222's scope is the window around the two destructive git calls, and that window is now closed. Moving the save earlier than the PRD specifies is a separate ordering change with its own crash analysis, out of scope for this PRD."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`_land_cleanup` now exempts all store paths via `foreign_dirty`, as the spec requires. It then runs `worktree remove --force`, which silently discards any uncommitted store files in the assembly worktree that `migrate_lane` does not copy (designs, plans, meta). The old gate refused on those. This is spec-directed, not a bug.",
+    "file": "skills/run-autopilot/cli/wave_review.py:430",
+    "reason": "Spec-directed and labelled 'not a bug' by the reviewer who raised it. The PRD's 00225 Outputs require exactly this swap so store churn stops refusing a review, and the assembly worktree is a disposable review worktree whose durable records _land_migrate copies out first. The residual risk (an uncommitted store file that migrate_lane does not copy is discarded by --force) is recorded here so it stays visible at batch end rather than being fixed by narrowing the gate the PRD just widened."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "The 00227 race test uses threads, not the \"three processes\" the PRD names. flock is per open file description, so mutual exclusion is still exercised. Cross-process behaviour through real `acquire` callers is not covered.",
+    "file": "skills/run-autopilot/cli/test_wave_slots.py:573",
+    "reason": "Discarded on the raising reviewer's own evidence: fcntl.flock is per open file description, so two threads each opening <slot>.lock exercise the same mutual exclusion a two-process test would. The PRD's 'three processes' describes the scenario, not a mandated harness, and the test does drive three concurrent acquirers at count=1 with a forced interleave at the rename."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "`release(slot, owner_pid)` now has a required second argument, while the PRD says exports are \"unchanged\". The ownership check needs the pid, and the only production caller (loop.py:441) passes the same `loop_pid` used for `acquire`, so nothing breaks. It is still a signature change.",
+    "file": "skills/run-autopilot/cli/wave_slots.py:176",
+    "reason": "Discarded: the design doc decided this breaking signature change explicitly, documented it in both Interfaces & contracts and Risks, and required the one production call site to pass self.loop_pid, which loop.py:441 does. The PRD's 'Exports: unchanged (acquire, release)' names the export set, not the signatures, and the PRD's own 00227 Outputs require the ownership check that the pid argument exists to serve."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "`release-checks` also gained `test_wave_cli_refusals.py`, beyond the single file the PRD names. This is needed for the new parity test and for the PRD's own 00222 acceptance test, so it is minor and justified.",
+    "file": "dev/bin/release-checks:159",
+    "reason": "Discarded on the raising reviewer's own justification. The PRD's 00222 acceptance test test_assemble_os_error_is_one_line_exit_one lives in test_wave_cli_refusals.py, and the PRD requires release-checks to be green with that test counted, so gating the file is required by the PRD rather than scope creep beyond it."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Cannot statically verify: tests pass at reviewed HEAD (VERIFY: run `bash dev/bin/release-checks` and `uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n 4 skills/run-autopilot/cli -k \"wave or review_once\"`). Recorded verification reports 2247 passing tests.",
+    "file": "N/A",
+    "reason": "Answered by this cycle's own evidence, so it is not an open finding. The orchestrator ran `bash dev/bin/release-checks` at the reviewed HEAD 11b2815: exit 0, 2247 passed, 0 failed, 0 skipped. Blake independently ran the -k selection and reported 435 passed. Bob raised this only because his codex sandbox cannot execute, which his persona mandates he declare."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "[MECH] 1 touched test(s) pass against the pre-change code: test_assemble_lets_a_non_os_error_propagate | File: skills/run-autopilot/cli/test_wave_cli_refusals.py | Task: general",
+    "file": "skills/run-autopilot/cli/test_wave_cli_refusals.py",
+    "reason": "Discarded: this is the complement test for 00222's OSError catch. It asserts that a non-OSError still propagates rather than being swallowed, which is correct both before and after the change, so passing against base is the intended result. A complement test that failed at base would mean the pre-change code already swallowed non-OSError exceptions."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "[MECH] 1 touched test(s) pass against the pre-change code: test_review_failed_without_hand_review_still_exits_four | File: skills/run-autopilot/cli/test_wave_review_land.py | Task: general",
+    "file": "skills/run-autopilot/cli/test_wave_review_land.py",
+    "reason": "Discarded: the design doc names this test a 'Regression guard for 00226's else-branch', whose whole purpose is to pin behaviour the change must leave alone (a review_failed wave with no hand-reviewed stub still exits 4). A regression guard for unchanged behaviour passes against the pre-change code by construction."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "[MECH] 2 touched test(s) pass against the pre-change code: test_one_slot_is_never_handed_to_two_holders, test_a_reclaim_never_steals_a_claim_that_went_live_first | File: skills/run-autopilot/cli/test_wave_slots.py | Task: general",
+    "file": "skills/run-autopilot/cli/test_wave_slots.py",
+    "reason": "Discarded: both tests pre-date this PRD and pin invariants the 00227 lock must preserve, not behaviour it introduces. They appear in the replay only because the diff touches their file. The 00227 fail-first evidence lives in the two new tests the PRD names, test_reclaim_put_back_race_admits_one_holder and test_release_never_removes_another_holders_slot, which the replay reports as failing against base."
+  }
+]
