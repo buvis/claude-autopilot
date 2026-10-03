@@ -524,8 +524,10 @@ def land(
     ledger, save status "done" and the refreshed head_sha, then drop the
     worktree, branch and wave-slots and archive wave.json into reports/. A
     wave already at "done" (a retry after a crash between that save and the
-    destructive cleanup) resumes at the cleanup step only. Returns 4 when the
-    wave failed review (nothing to land, but the outcome is still recorded)
+    destructive cleanup) resumes at the cleanup step only. A review_failed
+    wave whose stub the operator hand-moved into the worktree's prds/done/
+    lands like a converged one. Returns 4 when the wave failed review and
+    was not hand-reviewed (nothing to land, but the outcome is still recorded)
     and 5 when `repo` has moved past `wave["base_sha"]` since assembly
     (refuses rather than merge over new history); raises ValueError when the
     wave was never reviewed, or when the assembly worktree holds uncommitted
@@ -539,11 +541,15 @@ def land(
 
     status = wave.get("status")
     if status == "review_failed":
-        return _land_review_failed(repo, wave)
-    if status not in ("converged", "done"):
+        # An operator who hand-reviewed the assembly moves the stub into the
+        # worktree's prds/done/; that wave lands exactly like a converged one.
+        worktree_pm = Path(wave["assembly"]["worktree"]) / "docs/dev/project-management"
+        if not (worktree_pm / "prds/done" / _stub_name(wave)).exists():
+            return _land_review_failed(repo, wave)
+    elif status not in ("converged", "done"):
         raise ValueError(f"wave status {status!r} is not landable")
 
-    if status == "converged":
+    if status != "done":
         updated = _land_converged(repo, wave_path, wave, run_git)
         if updated is None:
             print(
