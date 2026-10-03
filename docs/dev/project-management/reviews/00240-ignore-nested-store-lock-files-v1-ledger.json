@@ -1,0 +1,26 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Process note, no code change needed: the PRD asked for the fail-first to be recorded in the task 2 attempt entry, but the entry says `red_check: \"n/a:test-only-task\"`, which is not that evidence. I checked the substance. The computed replay shows `test_nested_lock_files_are_ignored` failing at 59e3529. I also reproduced it by hand: with `autopilot/*.lock` in a fresh git repo, `git status --porcelain --untracked-files=all` still lists `autopilot/deferred/b.json.lock`. So the test fails for the right reason, not an import or collection error.",
+    "file": "N/A",
+    "reason": "No code defect and nothing to fix in the diff: the reviewer says so himself. The substance the acceptance criterion protects is independently confirmed three ways this cycle - the computed fail-first replay (1 touched test ran against base 59e352937f35, 1 failed, 0 passed), Alice's own hand reproduction, and Blake's. The weak `red_check` value is a build-phase bookkeeping artifact in an already-closed attempt entry; rewriting history in `state.tasks[].attempts[]` would falsify the record rather than improve it. Any change to how `red_check` is recorded belongs to the work skill's attempt-logging contract, not to this PRD's diff."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "\"Fail-first recorded in the attempt entry\" is not yet verifiable. `docs/dev/project-management/autopilot/ledger/attempts.jsonl` has no 00240 row, and the PRD is still in `prds/wip`. I confirmed independently that a real-git repo with the old `autopilot/*.lock` lists `deferred/b-deferred.json.lock` in `git status --porcelain --untracked-files=all`, so the new test is red against the old pattern. The row is a process artifact due at PRD close, not a code defect.",
+    "file": "docs/dev/project-management/autopilot/ledger/attempts.jsonl",
+    "reason": "Correct observation, not a defect, and the reviewer classifies it that way himself. Per-attempt rows are appended to `ledger/attempts.jsonl` at every PRD close (run-autopilot SKILL.md Retention), so a PRD still in `wip/` having no row is the designed state, not a gap. Writing the row now would pre-empt Phase 9. Blake also independently confirmed the fail-first substance, which is what the criterion protects."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Cannot statically verify: release checks pass, working tree is clean, and the repository ignores nested lock files.",
+    "file": "N/A",
+    "reason": "Bob's documented sandbox limitation, not a finding about the code: `agents/bob.md` instructs him to emit this line for any criterion needing runtime verification. All three checks were run this cycle in a clean environment and recorded in the review file: `bash dev/bin/release-checks` exit 0 (2149 passed, 0 failed, 0 skipped); `git check-ignore -q docs/dev/project-management/autopilot/deferred/x.json.lock` exit 0, hitting `docs/dev/project-management/.gitignore:3 autopilot/**/*.lock`; `git status --porcelain` non-empty only for this review session's own dispatch-ledger appends, which the hand-off's record-store step commits."
+  }
+]

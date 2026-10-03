@@ -2726,3 +2726,13 @@
 {"id":"2b8b3b54","kind":"ivan","task":"1","queued_at":1791033375,"prompt_bytes":4845}
 {"id":"2b8b3b54","ended_at":1791034150,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791034150,"phase":"review","prd":"00240-ignore-nested-store-lock-files-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1791034213,"phase":"review","prd":"00240-ignore-nested-store-lock-files-v1.md"}
+{"id":"03e44d9e","kind":"bob","task":"review-00240c1","queued_at":1791034650,"prompt_bytes":9482}
+{"id":"328e7e6f","kind":"carl","task":"review-00240c1","queued_at":1791034652,"prompt_bytes":6957}
+{"id":"03e44d9e","ended_at":1791035121,"elapsed_s":471,"outcome":"ok","detail":null}
+{"id":"328e7e6f","ended_at":1791035122,"elapsed_s":470,"outcome":"ok","detail":null}
+{"id":"f381b2b1","kind":"ivan","task":"4","queued_at":1791035645,"prompt_bytes":25067}
+{"id":"f381b2b1","ended_at":1791035705,"elapsed_s":60,"outcome":"ok","detail":null}
+{"id":"d93a29e6","kind":"pat","task":"4","queued_at":1791035854,"prompt_bytes":18420}
+{"id":"d93a29e6","ended_at":1791035879,"elapsed_s":25,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"review","edge":"leave","at":1791036115,"phase":"done","prd":"00240-ignore-nested-store-lock-files-v1.md"}
