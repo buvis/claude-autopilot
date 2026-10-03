@@ -71,7 +71,7 @@ def run(args: argparse.Namespace, repo: Path, wave_path: Path) -> int:
     if args.verb == "assemble":
         return _guarded(
             lambda: wave_assemble.assemble(repo, wave_path),
-            (subprocess.CalledProcessError, wave.WaveCorruptError),
+            (subprocess.CalledProcessError, wave.WaveCorruptError, OSError),
         )
     if args.verb == "run":
         return _guarded(

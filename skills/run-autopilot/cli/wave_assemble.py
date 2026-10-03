@@ -502,6 +502,7 @@ def _drain_lane(
     repo: Path,
     wave: dict,
     lane: dict,
+    wave_path: Path,
     *,
     run_git: Callable[..., subprocess.CompletedProcess],
 ) -> set[str]:
@@ -509,22 +510,25 @@ def _drain_lane(
     it held when the migration started. A lane whose worktree a previous call
     already removed has nothing left to scan, so it is skipped - what it held is
     read back from `lane["held_prds"]`, the only record left of PRDs no lane
-    listed in its own `prds`. The removal flag is set WITH the removal: a crash
-    between the two still reads as not removed, so the git calls that follow
-    check what is actually still there rather than assume the flag's absence
-    means their target still exists."""
+    listed in its own `prds`. held_prds, status and the migration guard are
+    saved BEFORE any destructive git call, and the removal flag right after the
+    worktree remove, before branch -D: a rerun after a crash anywhere in here
+    finds the lane still assembled, and the git calls check what is actually
+    still there rather than assume their target exists."""
     names = set(lane.get("held_prds") or [])
     if lane.get("worktree_removed"):
         return names
     names |= _lane_prd_names(Path(lane["worktree"]))
     lane["held_prds"] = sorted(names)
     migrate_lane(repo, wave["id"], lane)
+    save(wave_path, wave)
     if lane["status"] == "assembled":
         if Path(lane["worktree"]).exists():
             run_git(["worktree", "remove", "--force", lane["worktree"]], cwd=repo)
+        lane["worktree_removed"] = True
+        save(wave_path, wave)
         if run_git(["branch", "--list", lane["branch"]], cwd=repo).stdout.strip():
             run_git(["branch", "-D", lane["branch"]], cwd=repo)
-        lane["worktree_removed"] = True
     return names
 
 
@@ -586,7 +590,7 @@ def assemble(
                 run_git=run_git,
                 run_checks=run_checks,
             )
-            held = _drain_lane(repo, wave, lane, run_git=run_git)
+            held = _drain_lane(repo, wave, lane, wave_path, run_git=run_git)
             prd_names[lane["name"]] = set(lane["prds"]) | held
             save(wave_path, wave)
         kept = [each["name"] for each in ordered if each["status"] != "assembled"]
