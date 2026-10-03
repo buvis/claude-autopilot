@@ -188,6 +188,36 @@ def test_assemble_lets_a_non_os_error_propagate(
         wave_cli.run(_parse(["wave", "assemble"]), repo, wave_path)
 
 
+def test_run_wave_run_reports_an_os_error_from_assemble_instead_of_raising(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # `wave run` chains plan -> launch -> wait -> assemble -> review -> land.
+    # A genuinely drained, assemble-ready lane is already past plan/launch, so
+    # both are short-circuited to a no-op success and the chain proceeds
+    # straight to the `assemble()` step this task's OSError guard covers.
+    repo, wave_path, _, _ = _drained_lane(tmp_path, monkeypatch)
+    monkeypatch.setattr(wave, "plan", lambda *a, **k: 0)
+    monkeypatch.setattr(wave_launch, "launch", lambda *a, **k: 0)
+
+    def boom(*_args: object, **_kwargs: object) -> int:
+        raise OSError("simulated disk error")
+
+    monkeypatch.setattr(wave_assemble, "assemble", boom)
+    capsys.readouterr()
+
+    exit_code = wave_cli.run(_parse(["wave", "run", "--yes"]), repo, wave_path)
+
+    assert exit_code == 1
+    printed = capsys.readouterr()
+    combined = printed.out + printed.err
+    lines = [line for line in combined.splitlines() if line.startswith("autopilot: ")]
+    assert len(lines) == 1, printed
+    assert "simulated disk error" in lines[0], lines
+    assert _no_traceback(combined)
+
+
 def test_run_land_prints_a_reason_when_review_failed(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

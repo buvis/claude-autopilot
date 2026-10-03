@@ -578,6 +578,69 @@ def test_assemble_tolerates_a_lane_worktree_removed_before_its_flag_was_saved(
     assert landed == ["00001-a.md"], landed
 
 
+def _crash_on_second_save_of_l1_worktree_removed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The second save - the one that persists l1's `worktree_removed=True` -
+    really lands on disk; the process then dies before `branch -D` can run.
+    A crash tied to the first (status-only) save, or to a lane other than
+    l1, would never leave a branch undeleted for this to pin."""
+    real_save = wave_assemble.save
+
+    def save_then_crash(path: Path, data: dict) -> None:
+        real_save(path, data)
+        l1 = next(each for each in data["lanes"] if each["name"] == "l1")
+        if l1.get("worktree_removed"):
+            monkeypatch.setattr(wave_assemble, "save", real_save)
+            raise RuntimeError("simulated crash")
+
+    monkeypatch.setattr(wave_assemble, "save", save_then_crash)
+
+
+def test_branch_delete_is_retried_on_rerun_after_a_crash_before_branch_dash_d(
+    tmp_path: Path,
+    tmp_path_factory: pytest.TempPathFactory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Baseline: a clean single-lane run deletes its own branch in one pass -
+    # proving the fixture and the happy path are correct before any crash.
+    repo, wave_path = _launched(tmp_path, monkeypatch, 1)
+    worktree = _finish(wave_path, "l1", "")
+    _commit(worktree, {"x/a.py": "# l1\n"}, "l1 change")
+    _to_done(worktree, "00001-a.md")
+    assert wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass) == 0
+    _, lanes = _saved(repo, wave_path)
+    assert lanes["l1"]["status"] == "assembled", lanes["l1"]
+    assert lanes["l1"]["worktree_removed"] is True, lanes["l1"]
+    assert _git(repo, "branch", "--list", lanes["l1"]["branch"]).stdout.strip() == ""
+
+    # A fresh single-lane scenario, this time with a crash injected between
+    # the second save (worktree_removed persisted) and `branch -D`.
+    rerun_path = tmp_path_factory.mktemp("rerun")
+    repo2, wave_path2 = _launched(rerun_path, monkeypatch, 1)
+    worktree2 = _finish(wave_path2, "l1", "")
+    _commit(worktree2, {"x/a.py": "# l1\n"}, "l1 change")
+    _to_done(worktree2, "00001-a.md")
+    branch2 = wave.load(wave_path2)["lanes"][0]["branch"]
+    _crash_on_second_save_of_l1_worktree_removed(monkeypatch)
+
+    with pytest.raises(RuntimeError, match="simulated crash"):
+        wave_assemble.assemble(repo2, wave_path2, run_checks=_checks_pass)
+
+    _, lanes2 = _saved(repo2, wave_path2)
+    assert lanes2["l1"]["status"] == "assembled", lanes2["l1"]
+    assert lanes2["l1"]["worktree_removed"] is True, lanes2["l1"]
+    assert not worktree2.exists(), worktree2
+    leaked = _git(repo2, "branch", "--list", branch2).stdout.strip()
+    assert leaked, "the branch must still exist right after the crash"
+
+    # The regression assertion: today this second call returns early at the
+    # `worktree_removed` guard and the branch stays leaked forever; after the
+    # fix it must reach `branch -D` and actually delete it.
+    assert wave_assemble.assemble(repo2, wave_path2, run_checks=_checks_pass) == 0
+    assert _git(repo2, "branch", "--list", branch2).stdout.strip() == ""
+
+
 def _crash_on_first_save_of_l2_assembled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
