@@ -578,6 +578,56 @@ def test_assemble_tolerates_a_lane_worktree_removed_before_its_flag_was_saved(
     assert landed == ["00001-a.md"], landed
 
 
+def test_crash_after_save_before_remove_reruns_clean(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, wave_path = _launched(tmp_path, monkeypatch, 1)
+    worktree = _finish(wave_path, "l1", "")
+    _commit(worktree, {"x/a.py": "# l1\n"}, "l1 change")
+    _to_done(worktree, "00001-a.md")
+    held_prd = HELD_OUTSIDE_ROSTER[0]
+    _write(worktree, {f"{_PRDS}/hold/{held_prd}": "parked in l1\n"})
+    branch = wave.load(wave_path)["lanes"][0]["branch"]
+    real_save = wave_assemble.save
+    calls = []
+
+    def save_then_crash(path: Path, data: dict) -> None:
+        # The first save really lands on disk; the process then dies before
+        # anything after it - the worktree remove included - can run.
+        real_save(path, data)
+        calls.append(path)
+        if len(calls) == 1:
+            raise RuntimeError("simulated crash")
+
+    monkeypatch.setattr(wave_assemble, "save", save_then_crash)
+    with pytest.raises(RuntimeError, match="simulated crash"):
+        wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass)
+    monkeypatch.setattr(wave_assemble, "save", real_save)
+    _, lanes = _saved(repo, wave_path)
+    # Persisted BEFORE any destructive git call: assembled on disk, yet the
+    # worktree and branch are both still there.
+    assert lanes["l1"]["status"] == "assembled", lanes["l1"]
+    assert held_prd in lanes["l1"]["held_prds"], lanes["l1"]
+    assert not lanes["l1"].get("worktree_removed"), lanes["l1"]
+    assert worktree.is_dir(), worktree
+    assert _git(repo, "branch", "--list", branch).stdout.strip()
+    assert wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass) == 0
+    saved, lanes = _saved(repo, wave_path)
+    assert lanes["l1"]["status"] == "assembled", lanes["l1"]
+    assert lanes["l1"]["worktree_removed"] is True, lanes["l1"]
+    assert not worktree.exists(), worktree
+    assert _git(repo, "branch", "--list", branch).stdout == ""
+    wave_id = saved["id"]
+    for folder in ("reports", "ledger"):
+        text = (_autopilot(repo) / folder / f"{wave_id}-wave.md").read_text(
+            encoding="utf-8",
+        )
+        prds = text[text.index("## PRDs") :]
+        assert f"- {held_prd}: Wave {wave_id}, lane l1, parked" in prds, prds
+        assert f"- 00001-a.md: Wave {wave_id}, lane l1, done" in prds, prds
+
+
 # ── _migrate_jsonl and _wave_rows: a blank line in the file ──────────────
 
 

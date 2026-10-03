@@ -25,7 +25,8 @@ from pathlib import Path
 
 import pytest
 
-from cli import wave, wave_cli, wave_launch, wave_review
+from cli import wave, wave_assemble, wave_cli, wave_launch, wave_review
+from cli.test_wave_assemble import _commit, _finish, _launched
 from cli.test_wave_launch import ONE_LANE, _FakeSpawn, _git, _parse, _planned, _repo
 from cli.test_wave_review import _FakeLoop
 
@@ -111,6 +112,34 @@ def test_run_land_reports_a_failed_git_call_instead_of_raising(
     assert _no_traceback(combined)
     assert _git(repo, "rev-parse", "HEAD").stdout.strip() == before_head
     assert wave.load(wave_path) == saved
+
+
+def test_assemble_os_error_is_one_line_exit_one(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # assemble's own real fixture: one drained lane with a commit, so assemble
+    # gets past its refusals and reaches its first wave.json write.
+    repo, wave_path = _launched(tmp_path, monkeypatch, 1)
+    worktree = _finish(wave_path, "l1", "")
+    _commit(worktree, {"x/a.py": "# l1\n"}, "l1 change")
+
+    def disk_error(path: Path, data: dict) -> None:
+        raise OSError("simulated disk error")
+
+    monkeypatch.setattr(wave_assemble, "save", disk_error)
+    capsys.readouterr()
+
+    exit_code = wave_cli.run(_parse(["wave", "assemble"]), repo, wave_path)
+
+    assert exit_code == 1
+    printed = capsys.readouterr()
+    combined = printed.out + printed.err
+    lines = [line for line in combined.splitlines() if line.startswith("autopilot: ")]
+    assert len(lines) == 1, printed
+    assert "simulated disk error" in lines[0], lines
+    assert _no_traceback(combined)
 
 
 def test_run_land_prints_a_reason_when_review_failed(
