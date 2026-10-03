@@ -25,6 +25,7 @@ quotes `_NOTE`, the dirty-worktree note text the sibling suite pins against
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -123,6 +124,31 @@ def test_every_wave_test_file_is_listed() -> None:
     present on only one side fails loudly instead of the silent gap 00221
     found.
     """
+    # A HAND-WRITTEN list: a tuple derived from the glob always equals the glob
+    # and so can never fail. Only a literal tuple of string constants passes.
+    tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+    values = [
+        node.value
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "_WAVE_TEST_FILES"
+            for target in node.targets
+        )
+    ]
+    assert len(values) == 1, "_WAVE_TEST_FILES must be assigned exactly once"
+    assert isinstance(values[0], ast.Tuple) and all(
+        isinstance(elt, ast.Constant) and isinstance(elt.value, str)
+        for elt in values[0].elts
+    ), "_WAVE_TEST_FILES must be a literal tuple of string constants"
+    # The one named exception stays listed and stays a real file: subtracting it
+    # below must not let its removal from the gate go unnoticed.
+    assert "test_loop_slots.py" in _WAVE_TEST_FILES
+    assert (Path(__file__).resolve().parent / "test_loop_slots.py").is_file()
+    duplicates = sorted(
+        {name for name in _WAVE_TEST_FILES if _WAVE_TEST_FILES.count(name) > 1}
+    )
+    assert duplicates == [], f"_WAVE_TEST_FILES lists {duplicates} more than once"
     on_disk = {
         path.name
         for path in Path(__file__).resolve().parent.glob("test_wave*.py")
