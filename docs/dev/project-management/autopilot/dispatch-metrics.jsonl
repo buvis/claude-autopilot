@@ -2724,3 +2724,5 @@
 {"kind":"handoff","site":"done","edge":"resume","at":1790981391,"phase":"done","prd":"00236-track-the-store-without-tripping-the-loop-v1.md"}
 {"kind":"handoff","site":"build","edge":"resume","at":1791033103,"phase":"build","prd":"00240-ignore-nested-store-lock-files-v1.md"}
 {"id":"2b8b3b54","kind":"ivan","task":"1","queued_at":1791033375,"prompt_bytes":4845}
+{"id":"2b8b3b54","ended_at":1791034150,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791034150,"phase":"review","prd":"00240-ignore-nested-store-lock-files-v1.md"}
