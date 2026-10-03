@@ -776,7 +776,7 @@ def _add_group_rework(subparsers) -> None:
 def _run_group_rework(args: argparse.Namespace) -> int:
     try:
         findings = json.loads(args.findings.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as err:
+    except (OSError, ValueError) as err:
         print(f"autopilot: group-rework: cannot read {args.findings} ({err})", file=sys.stderr)
         return 2
     if not isinstance(findings, list):
