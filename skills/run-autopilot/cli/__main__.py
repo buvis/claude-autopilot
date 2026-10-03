@@ -193,6 +193,7 @@ from cli import (
     render_metrics,
     render_report,
     resume,
+    rework_groups,
     schema,
     selection,
     state,
@@ -767,6 +768,27 @@ def _run_gate(args: argparse.Namespace) -> int:
     )
 
 
+def _add_group_rework(subparsers) -> None:
+    p = subparsers.add_parser("group-rework")
+    p.add_argument("--findings", type=Path, required=True)
+
+
+def _run_group_rework(args: argparse.Namespace) -> int:
+    try:
+        findings = json.loads(args.findings.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as err:
+        print(f"autopilot: group-rework: cannot read {args.findings} ({err})", file=sys.stderr)
+        return 2
+    if not isinstance(findings, list):
+        print(
+            f"autopilot: group-rework: {args.findings} is not a JSON array",
+            file=sys.stderr,
+        )
+        return 2
+    print(json.dumps(rework_groups.group(findings)))
+    return 0
+
+
 def _utc_now() -> str:
     from datetime import datetime, timezone
 
@@ -1261,6 +1283,7 @@ _SUBCOMMANDS: dict[str, tuple] = {
     "phase-done": (_add_phase_done, _run_phase_done),
     "resume-target": (_add_resume_target, _run_resume_target),
     "gate": (_add_gate, _run_gate),
+    "group-rework": (_add_group_rework, _run_group_rework),
     "render": (_add_render, _run_render),
     "status": (_add_status, _run_status),
     "loop": (_add_loop, _run_loop_cmd),
