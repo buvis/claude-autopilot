@@ -349,6 +349,42 @@ def test_hand_reviewed_stub_in_done_lands(
         assert expected_line in text.splitlines()
 
 
+def test_hand_reviewed_land_resumes_after_a_crash_before_done(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The hand-reviewed path must save status "converged" to wave.json
+    before the merge/migrate/cycle-count/summary-line sequence runs, so a
+    crash anywhere in that sequence (here: _cycle_count, which only runs
+    after _land_migrate has already moved the stub out of the worktree)
+    leaves a resumable wave reading "converged" - never a stuck one still
+    reading "review_failed" with the stub already gone from the worktree."""
+    repo, wave_path, wave_dict, worktree, _ = _hand_reviewed(tmp_path, monkeypatch)
+    real_cycle_count = wave_review._cycle_count
+
+    def crashes(worktree: Path) -> int:
+        raise RuntimeError("simulated crash before the done save")
+
+    monkeypatch.setattr(wave_review, "_cycle_count", crashes)
+    with pytest.raises(RuntimeError, match="simulated crash before the done save"):
+        wave_review.land(repo, wave_dict)
+
+    assert wave.load(wave_path)["status"] == "converged"
+    assert worktree.exists()
+    assert (_pm(repo) / "prds" / "done" / STUB).exists()
+
+    monkeypatch.setattr(wave_review, "_cycle_count", real_cycle_count)
+    assert wave_review.land(repo, wave_dict) == 0
+
+    assert not wave_path.exists()
+    archived = json.loads(
+        (_autopilot(repo) / "reports" / f"{WAVE_ID}-wave.json").read_text(
+            encoding="utf-8",
+        ),
+    )
+    assert archived["status"] == "done"
+
+
 def test_hand_reviewed_land_refuses_when_master_moved(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
