@@ -504,6 +504,8 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
         return 0 if ok else 1
 
     def _record_review_once_store(self, ap_dir: Path, decision: dict) -> None:
+        if store_tree.in_wave_lane(self.env):  # a lane branch carries no store commits
+            return
         try:
             store_repo, store_run_git = store_git(ap_dir)
             store_tree.record_store(
