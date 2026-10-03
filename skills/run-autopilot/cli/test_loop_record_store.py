@@ -402,21 +402,64 @@ def test_run_once_records_the_store_once_after_metrics_with_site_review_once(
     assert [c["site"] for c in calls] == ["review_once"]
 
 
+def _git_head(repo: Path) -> str:
+    return subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def _review_once_loop(root: Path, env: dict | None):
+    """The review_once script and state, in a committed repo under `root`."""
+    lp = make_loop(root, [_progress_step("p.md", "build")], env=env)
+    _git_init(lp.cwd)
+    subprocess.run(
+        ["git", "-C", str(lp.cwd), "-c", "user.name=t", "-c", "user.email=t@t"]
+        + ["commit", "-q", "--allow-empty", "-m", "base"],
+        check=True,
+    )
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="review", batch={"id": "b-1"})
+    return lp
+
+
 def test_review_once_skips_the_store_in_a_wave_lane(tmp_path, monkeypatch):
-    # Same script and state as the review_once site test above; only the
-    # lane env differs, so the lane gate is the one thing that can skip it.
+    # Same script and state run twice: once without the lane env (the
+    # control, which must record) and once inside a lane (which must not).
+    # Only the env differs, so the lane gate is the one thing that can skip it.
     events, calls = [], []
     _record_store_into(monkeypatch, events, calls)
     _trace_metrics_and_act(monkeypatch, events)
-    lp = make_loop(tmp_path, [_progress_step("p.md", "build")], env=_lane_env(tmp_path))
-    write_state(lp._test["ap_dir"], prd="p.md", next_phase="review", batch={"id": "b-1"})
+
+    plain = _review_once_loop(tmp_path / "plain", None)
+    assert plain.run_once() == 0
+    assert events == [("metrics", "p.md"), ("store", "review_once", "p.md")]
+    assert "signal continue" in plain._test["out"].getvalue()
+
+    events.clear()
+    calls.clear()
+    lp = _review_once_loop(tmp_path / "lane", _lane_env(tmp_path))
+    head = _git_head(lp.cwd)
 
     assert lp.run_once() == 0
     assert len(lp._test["spawn"].launches) == 1
     assert calls == [], "a lane branch takes no store commit, at any site"
+    # No commit by any route, not only through record_store.
+    assert _git_head(lp.cwd) == head
     # Only the record is skipped: the metrics append and the summary still run.
     assert events == [("metrics", "p.md")]
     assert "signal continue" in lp._test["out"].getvalue()
+
+    # The slots dir alone marks a lane: the guard must not consult
+    # _AUTOPILOT_REVIEW_SLOTS, so it is absent here and still nothing records.
+    events.clear()
+    calls.clear()
+    dir_only = {"_AUTOPILOT_REVIEW_SLOTS_DIR": _lane_env(tmp_path)["_AUTOPILOT_REVIEW_SLOTS_DIR"]}
+    solo = _review_once_loop(tmp_path / "dir-only", dir_only)
+    assert solo.run_once() == 0
+    assert calls == [], "the slots dir alone is a lane"
+    assert events == [("metrics", "p.md")]
 
 
 def test_a_raising_recorder_still_lets_run_once_return_its_normal_code(
