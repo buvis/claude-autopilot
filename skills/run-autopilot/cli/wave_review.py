@@ -263,7 +263,6 @@ def _hold_backlog(worktree: Path, pm: Path, wave: dict) -> None:
         [
             "ls-files",
             "--others",
-            "--exclude-standard",
             "--",
             str(prds / "hold" / "*.md"),
         ],
