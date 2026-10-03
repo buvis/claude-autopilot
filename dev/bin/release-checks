@@ -72,7 +72,8 @@ echo "[checks] plan size gate"
 uv run --no-project --with pytest python -m pytest -q \
   skills/plan-tasks/scripts/test_plan_size_gate_prose.py \
   skills/run-autopilot/cli/test_policy.py \
-  skills/run-autopilot/cli/test_policy_budget.py
+  skills/run-autopilot/cli/test_policy_budget.py \
+  skills/run-autopilot/cli/test_rework_groups.py
 
 echo "[checks] l3"
 uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n auto --maxprocesses 4 \
