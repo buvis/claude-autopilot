@@ -30,7 +30,7 @@ GIT_TIMEOUT_SECS = 30
 STORE_GITIGNORE = """\
 autopilot/state.json
 autopilot/state.json.bak
-autopilot/*.lock
+autopilot/**/*.lock
 autopilot/.turn-counts.json
 autopilot/.handoff-requested
 autopilot/.cap-fired

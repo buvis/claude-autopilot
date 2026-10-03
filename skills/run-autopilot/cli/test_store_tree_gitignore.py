@@ -18,7 +18,7 @@ from cli.store_tree_testutil import _autopilot_dir, _write_state
 EXPECTED_GITIGNORE_PATTERNS = [
     "autopilot/state.json",
     "autopilot/state.json.bak",
-    "autopilot/*.lock",
+    "autopilot/**/*.lock",
     "autopilot/.turn-counts.json",
     "autopilot/.handoff-requested",
     "autopilot/.cap-fired",
