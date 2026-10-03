@@ -232,6 +232,33 @@ def _seed_steps(
     return steps
 
 
+def _hold_backlog(worktree: Path, pm: Path, wave: dict) -> None:
+    """Move every backlog PRD the assembly worktree inherited into prds/hold/
+    and commit the move, so the nested loop never picks one up. A no-op when
+    the backlog holds no `.md` file, so a retry does not re-commit."""
+    prds = pm / "prds"
+    names = sorted(path.name for path in (prds / "backlog").glob("*.md"))
+    if not names:
+        return
+    for name in names:
+        (prds / "backlog" / name).rename(prds / "hold" / name)
+    backlog = [str(prds / "backlog" / name) for name in names]
+    held = [str(prds / "hold" / name) for name in names]
+    _default_run_git(
+        ["rm", "--cached", "--ignore-unmatch", "-q", "--", *backlog],
+        cwd=worktree,
+    )
+    _default_run_git(["add", "-f", "--", *held], cwd=worktree)
+    message = "\n".join(
+        [
+            f"chore(autopilot): hold seeded backlog PRDs for wave {wave['id']} review",
+            "",
+            *[f"- {name}" for name in names],
+        ],
+    )
+    _default_run_git(["commit", "-q", "-m", message, "--", str(prds)], cwd=worktree)
+
+
 def _repo_from_worktree(worktree: Path) -> Path:
     """The main checkout `git worktree add` created `worktree` from, read
     from the worktree's own `.git` file (`gitdir: <repo>/.git/worktrees/<name>`)."""
@@ -253,6 +280,7 @@ def seed_state(
     pm = state_path.parent.parent
     state_path.parent.mkdir(parents=True, exist_ok=True)
     stub = _seed_prd(pm, wave)
+    _hold_backlog(state_path.parents[4], pm, wave)
     repo = _repo_from_worktree(state_path.parents[4])
     meta = repo / "docs/dev/project-management/meta"
     if meta.exists():
@@ -399,24 +427,14 @@ def _land_cleanup(
     and its branch, remove wave-slots, and archive wave.json into reports/."""
     worktree = Path(wave["assembly"]["worktree"])
     if worktree.is_dir():
-        migrated_stub = f"docs/dev/project-management/prds/done/{_stub_name(wave)}"
-        dirty = run_git(
-            [
-                "-C",
-                str(worktree),
-                "status",
-                "--porcelain",
-                "--",
-                f":(exclude){migrated_stub}",
-            ],
-        ).stdout
-        if dirty.strip():
+        dirty = "\n".join(store_tree.foreign_dirty(worktree, run_git=run_git))
+        if dirty:
             raise ValueError(f"{worktree} has uncommitted changes:\n{dirty}")
         run_git(["-C", str(repo), "worktree", "remove", "--force", str(worktree)])
 
     branch = f"wave/{wave['id']}/assembly"
     if run_git(["-C", str(repo), "branch", "--list", branch]).stdout.strip():
-        run_git(["-C", str(repo), "branch", "-d", branch])
+        run_git(["-C", str(repo), "branch", "-D", branch])
 
     slots = repo / "docs/dev/project-management/autopilot/wave-slots"
     if slots.exists():
