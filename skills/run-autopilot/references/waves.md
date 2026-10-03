@@ -187,10 +187,13 @@ Fast-forwards the main checkout onto the wave's assembly branch once review
 has converged, then migrates and cleans up. Reloads `wave.json` fresh under
 its own lock - a `wave` dict passed to it is used only to match the call
 signature. Returns `4` when the wave's status is `review_failed` (no git
-write). Returns `5` when it is `converged` but the main branch has moved
-since the wave was planned (no git write - land refuses rather than force
-anything). Returns `0` once landed. Raises `ValueError` if the status is
-neither `converged` nor `review_failed`.
+write). An operator who hand-reviewed a `review_failed` assembly and moved
+its stub PRD to the assembly worktree's `prds/done/` can rerun `land`: it
+finds the stub there, sets the wave's status to `converged`, and lands
+normally instead of returning `4` again. Returns `5` when it is `converged`
+but the main branch has moved since the wave was planned (no git write -
+land refuses rather than force anything). Returns `0` once landed. Raises
+`ValueError` if the status is neither `converged` nor `review_failed`.
 
 ## wave run
 
