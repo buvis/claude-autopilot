@@ -134,6 +134,15 @@ currently separate them.
   get committed in any repo that tracks the store. Fix: change the pattern to
   `autopilot/**/*.lock`. claude-autopilot carries a root `.gitignore` line,
   `docs/dev/project-management/**/*.lock`, as a workaround.
+- **Hold-stub triage 2026-10-03** (16 stubs, each checked against HEAD;
+  00110 is the user's own hold and was not touched):
+  - **Closed, already fixed:** 00219 and 00220 (`pid` bound `1 < v < 2**31`
+    at `wave.py:322`; the two are duplicates), 00224 (`wave run` registers
+    `--state`, `wave_cli.py:30-31`), 00228 (the cap hook imports
+    `_cap_headroom` and reads the deadline, `autopilot_context_cap_hook.py:68,576`).
+  - **Promoted:** 00221, 00222, 00225, 00226, 00227, 00239 → PRD 00242;
+    00229, 00230 → PRD 00243; 00234, 00235, 00237, 00238 → PRD 00244. Each
+    PRD names its stubs' ledger keys.
 - **Fixed 2026-10-03: `purge-devtmp` was not linked.** agent-skills renamed
   `purge-devlocal` on 09-30 (b3a61f9) but the links were never refreshed.
   `braid` relinked it (2 linked, 2 removed), `braid --check` reports zero
