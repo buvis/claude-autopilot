@@ -116,6 +116,24 @@ def test_the_release_gate_runs_every_wave_test_file() -> None:
     )
 
 
+def test_every_wave_test_file_is_listed() -> None:
+    """`_WAVE_TEST_FILES` (minus `test_loop_slots.py`, the one entry that is
+    not a `test_wave*.py` basename and so can never appear in the glob) and
+    the `cli/` directory's own `test_wave*.py` files agree, so a file
+    present on only one side fails loudly instead of the silent gap 00221
+    found.
+    """
+    on_disk = {
+        path.name
+        for path in Path(__file__).resolve().parent.glob("test_wave*.py")
+    }
+    listed = set(_WAVE_TEST_FILES) - {"test_loop_slots.py"}
+    assert on_disk == listed, (
+        f"cli/: {sorted(on_disk - listed)} not in _WAVE_TEST_FILES; "
+        f"_WAVE_TEST_FILES: {sorted(listed - on_disk)} not on disk"
+    )
+
+
 _ABORT_HEADING = "## `autopilot wave abort`"
 _KEEP_ANCHOR = "Steps 2 and 3 are skipped"
 
