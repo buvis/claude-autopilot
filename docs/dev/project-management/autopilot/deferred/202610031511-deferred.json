@@ -44,6 +44,166 @@
       "reason": "pre-existing breach already settled as a deferral in the 00223 review, and the PRD Repository Structure section directs the group-rework subparser into this file; splitting the module is its own PRD",
       "found_by": "alice",
       "prd": "00241-bound-rework-batches-by-file-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "Tail sweep step 2 still reads Build ONE [D{cycle}] task and the intro still reads one normal /autopilot:work task, both contradicting the Split rules one-task-per-group. The old >10 findings gate stays gone, so a 3-finding sweep over 3 files still yields 3 tasks. Partial fix of cycle 1 [3/4] Tail sweep HIGH.",
+      "file": "skills/run-autopilot/references/phase-review.md:195",
+      "severity": "high",
+      "consensus": "3/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00241-bound-rework-batches-by-file-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "_LINE_SUFFIX still misses three citation shapes the canonical consolidate_findings._TRAILING_LINENO_RE strips -- (line 3), (lines 18-22, 423) and #L12-L20 -- so each still becomes its own junk key and burns a cap slot. Unresolved remainder of cycle 1 file_key HIGH.",
+      "file": "skills/run-autopilot/cli/rework_groups.py:26",
+      "severity": "high",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00241-bound-rework-batches-by-file-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "file_key discards the cited file for N/A (path:77), mapping it to general where the canonical _NA_PARENS_RE unwraps it to the path, so a finding naming a real file is routed away from that files group.",
+      "file": "skills/run-autopilot/cli/rework_groups.py:28",
+      "severity": "medium",
+      "consensus": "2/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00241-bound-rework-batches-by-file-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "file_key goes beyond the spec key rule: it also strips the (lines a-b) and #Ln shapes and maps N/A and N/A (...) to general, where the spec lists only general and <path>[:<line>]. A harmless superset, but unrequested.",
+      "file": "skills/run-autopilot/cli/rework_groups.py:26",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00241-bound-rework-batches-by-file-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The Tail sweep Split rule is not the exact sentence the spec gave. The implementation appends five sentences (findings JSON path, naming rule, one-task floor, max-2-parallel). Sensible but unrequested.",
+      "file": "skills/run-autopilot/references/phase-review.md:197",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00241-bound-rework-batches-by-file-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The CHANGELOG entry adds three clauses beyond the single spec line about capping at 4 non-CRITICAL tasks grouped by file: suffix shapes, N/A handling and the exit-2 message.",
+      "file": "CHANGELOG.md:12",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00241-bound-rework-batches-by-file-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The prose test asserts the literal word floor is in the paragraph rather than asserting the rule, so any sentence containing floor satisfies it -- and the clause it guards is itself vacuous.",
+      "file": "skills/run-autopilot/scripts/test_rework_groups_prose.py:89",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00241-bound-rework-batches-by-file-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "Task 5 release-checks wiring ships with no regression test, though the sibling suite pins its own wiring the same way (test_design_rework_prose.py::test_release_checks_runs_both_design_contract_suites). Deleting the new line leaves everything green.",
+      "file": "dev/bin/release-checks:76",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00241-bound-rework-batches-by-file-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The new prose test copies about 15 lines of landmark lookup and paragraph bounding verbatim from test_tail_sweep_split_rule_uses_the_command. The duplicated block should be one _split_rule_paragraph() helper.",
+      "file": "skills/run-autopilot/scripts/test_rework_groups_prose.py:65",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00241-bound-rework-batches-by-file-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The guard that breaks out of _cap when no code group remains is unreachable through the public API and untested. A cap of 0 with prose-only input would drive it, and the guard exits with the group count still above the cap.",
+      "file": "skills/run-autopilot/cli/rework_groups.py:82",
+      "severity": "low",
+      "consensus": "2/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00241-bound-rework-batches-by-file-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "Two weaker pieces remain: _LINE_SUFFIX is still narrower than the canonical regex (misses (line 3), (lines 3, 5) and #L12-L14), and the comment at test_design_rework_prose.py:379 still says the Findings-verbatim mention lands first while the assertion below orders only the two bullet leads.",
+      "file": "skills/run-autopilot/cli/rework_groups.py:26",
+      "severity": "low",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00241-bound-rework-batches-by-file-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The spec names test_the_00223_cycle_one_set_yields_at_most_four_non_critical_tasks. The implemented test is test_the_00223_cycle_one_set_yields_four_non_critical_tasks: different name, stricter assertion (exactly 4).",
+      "file": "skills/run-autopilot/cli/test_rework_groups.py:481",
+      "severity": "low",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00241-bound-rework-batches-by-file-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "Beyond the spec test for malformed input, the CLI also rejects elements lacking a string severity or file and adds test_cli_malformed_element_exits_two. The spec required only exit 2 on unreadable or malformed input.",
+      "file": "skills/run-autopilot/cli/__main__.py:776",
+      "severity": "low",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00241-bound-rework-batches-by-file-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The last clause of spec rule 5 (merge prose into the single remaining group) is unreachable at cap 4. The code documents this and keeps a guarded branch.",
+      "file": "skills/run-autopilot/cli/rework_groups.py:76",
+      "severity": "low",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00241-bound-rework-batches-by-file-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "Neither _is_finding nor file_key rejects an empty file value, so a finding with file set to the empty string yields a group -- and a [D] task -- with an empty name.",
+      "file": "skills/run-autopilot/cli/__main__.py:776",
+      "severity": "low",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00241-bound-rework-batches-by-file-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The new cannot-read versus cannot-parse message split has no test that pins either wording: every malformed-input case asserts only exit 2, empty stdout and one stderr line, so collapsing the two clauses back into one stays green.",
+      "file": "skills/run-autopilot/cli/test_rework_groups.py:671",
+      "severity": "low",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00241-bound-rework-batches-by-file-v1.md"
     }
   ]
 }

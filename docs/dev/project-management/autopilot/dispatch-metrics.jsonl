@@ -2827,3 +2827,5 @@
 {"id":"356080cb","ended_at":1791047151,"elapsed_s":36,"outcome":"error","detail":"retry: exit 1"}
 {"id":"4df8ccfe","ended_at":1791047464,"elapsed_s":409,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"review","edge":"leave","at":1791048478,"phase":"done","prd":"00241-bound-rework-batches-by-file-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1791048522,"phase":"done","prd":"00241-bound-rework-batches-by-file-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1791048798,"phase":"build","prd":"00241-bound-rework-batches-by-file-v1.md"}

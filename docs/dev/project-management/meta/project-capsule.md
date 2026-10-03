@@ -46,10 +46,21 @@ Generated: 2026-09-14
 
 ### Batch 202610031511
 - [x] 00240-ignore-nested-store-lock-files-v1 (1 cycle)
+- [x] 00241-bound-rework-batches-by-file-v1 (2 cycles)
 
-Observations: clean single-PRD cycle, no deferred decisions or doubts, full
-suite green at merge (2150 passed). `engram pack` unavailable (repo not
-gita-registered) - every review prompt carried the documented sentinel.
+Observations: 00240 was a clean single-PRD cycle, no deferred decisions or
+doubts, full suite green at merge (2150 passed). 00241 cap-out at cycle 2
+(rework_cap 2) with 2 unresolved HIGH, 0 CRITICAL: 20 findings (4 cycle-1
+review-deferrals plus 16 cycle-2 cap-overflow records) migrated to the batch
+deferred JSON. `mint-stubs` minted three hold stubs for the unowned severe
+rows, `00245`/`00246`/`00247`: the store `.gitignore` recursive-lock-pattern
+revert (release-gated on this cache catching up to PRD 00240), the Tail sweep
+step-2/Split-rule contradiction left partially unresolved, and the
+`_LINE_SUFFIX` citation-shape gap left partially unresolved. Bob (codex)
+failed exit 1 twice in both cycles (`turn.failed`, no sidecar); the doubt
+lens ran on the Claude fallback both times, all five D1-D5 rubric rules
+passing. `engram pack` unavailable (repo not gita-registered) - every review
+prompt carried the documented sentinel.
 
 ### Batch 202610021244
 - [x] 00236-track-the-store-without-tripping-the-loop-v1 (2 cycles)
