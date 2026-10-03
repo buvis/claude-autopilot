@@ -2800,3 +2800,22 @@
 {"id":"c1d92eea","ended_at":1791044311,"elapsed_s":56,"outcome":"ok","detail":null}
 {"id":"52882002","ended_at":1791044418,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"kind":"handoff","site":"review","edge":"leave","at":1791044418,"phase":"review","prd":"00241-bound-rework-batches-by-file-v1.md"}
+{"id":"f5395d8f","kind":"tess","task":"6","queued_at":1791044627,"prompt_bytes":63470}
+{"id":"9560e912","kind":"tess","task":"6","queued_at":1791044661,"prompt_bytes":13341}
+{"id":"de5211c2","kind":"ivan","task":"6","queued_at":1791044923,"prompt_bytes":10416}
+{"id":"15bca963","kind":"pat","task":"6","queued_at":1791045176,"prompt_bytes":13452}
+{"id":"4526fa46","kind":"ivan","task":"6","queued_at":1791045257,"prompt_bytes":8803}
+{"id":"024a2ad1","kind":"pat","task":"6","queued_at":1791045375,"prompt_bytes":5956}
+{"id":"12deb370","kind":"ivan","task":"5","queued_at":1791045516,"prompt_bytes":5500}
+{"id":"e7d739e3","kind":"ivan","task":"5","queued_at":1791045537,"prompt_bytes":5596}
+{"id":"1819317e","kind":"pat","task":"4","queued_at":1791045957,"prompt_bytes":9164}
+{"id":"f5395d8f","ended_at":1791046415,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"9560e912","ended_at":1791046415,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"de5211c2","ended_at":1791046415,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"15bca963","ended_at":1791046415,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"4526fa46","ended_at":1791046415,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"024a2ad1","ended_at":1791046415,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"12deb370","ended_at":1791046415,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"e7d739e3","ended_at":1791046415,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"1819317e","ended_at":1791046415,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"kind":"handoff","site":"review","edge":"leave","at":1791046415,"phase":"review","prd":"00241-bound-rework-batches-by-file-v1.md"}
