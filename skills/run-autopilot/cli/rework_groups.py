@@ -62,8 +62,14 @@ def _cap(groups: list[dict]) -> list[dict]:
         merged = {**target, "findings": target["findings"] + general["findings"]}
         groups = [merged if g is target else g for g in groups if g is not general]
     while len(groups) > NON_CRITICAL_CAP:
-        (neg_shared, _, _), i, j = _merge_pair(groups)
-        a, b = groups[i], groups[j]
+        code = [g for g in groups if g["name_hint"] != "prose"]
+        if len(code) < 2:
+            prose = next(g for g in groups if g["name_hint"] == "prose")
+            merged = {**code[0], "findings": code[0]["findings"] + prose["findings"]}
+            groups = [merged]
+            break
+        (neg_shared, _, _), i, j = _merge_pair(code)
+        a, b = code[i], code[j]
         prefix = _dirs(a["name_hint"])[: -neg_shared]
         name = "/".join(prefix) + "/" if prefix else "mixed"
         merged = {
@@ -71,7 +77,7 @@ def _cap(groups: list[dict]) -> list[dict]:
             "critical": False,
             "findings": a["findings"] + b["findings"],
         }
-        groups = [g for k, g in enumerate(groups) if k not in (i, j)] + [merged]
+        groups = [g for g in groups if g is not a and g is not b] + [merged]
     return groups
 
 
@@ -88,7 +94,11 @@ def group(findings: list[dict]) -> list[dict]:
         {"name_hint": key, "critical": False, "findings": items}
         for key, items in by_key.items()
     ]
-    rest = _cap(rest)
+    position = {id(f): n for n, f in enumerate(findings)}
+    rest = [
+        {**g, "findings": sorted(g["findings"], key=lambda f: position[id(f)])}
+        for g in _cap(rest)
+    ]
     rest.sort(
         key=lambda g: (
             min(_RANK.get(f["severity"], len(_RANK)) for f in g["findings"]),
