@@ -2829,3 +2829,19 @@
 {"kind":"handoff","site":"review","edge":"leave","at":1791048478,"phase":"done","prd":"00241-bound-rework-batches-by-file-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1791048522,"phase":"done","prd":"00241-bound-rework-batches-by-file-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1791048798,"phase":"build","prd":"00241-bound-rework-batches-by-file-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791048817,"phase":"build","prd":"00242-harden-the-wave-verbs-v1.md"}
+{"id":"d5edf20e","kind":"tess","task":"1","queued_at":1791050116,"prompt_bytes":42133}
+{"id":"d5edf20e","ended_at":1791050242,"elapsed_s":126,"outcome":"lost","detail":"orchestrator session ended before dispatch observed; re-dispatching fresh"}
+{"id":"054cc994","kind":"tess","task":"1","queued_at":1791050266,"prompt_bytes":42133}
+{"id":"054cc994","ended_at":1791050292,"elapsed_s":26,"outcome":"error","detail":"misdispatched: wrong agent type and placeholder prompt, no edits made"}
+{"id":"74c9499e","kind":"tess","task":"1","queued_at":1791050295,"prompt_bytes":42133}
+{"id":"74c9499e","ended_at":1791050414,"elapsed_s":119,"outcome":"ok","detail":null}
+{"id":"2df47e65","kind":"devon","task":"1","queued_at":1791050470,"prompt_bytes":5450}
+{"id":"2df47e65","ended_at":1791050572,"elapsed_s":102,"outcome":"ok","detail":null}
+{"id":"7c244c92","kind":"tess","task":"1","queued_at":1791050681,"prompt_bytes":8565}
+{"id":"7c244c92","ended_at":1791050758,"elapsed_s":77,"outcome":"ok","detail":null}
+{"id":"529884e3","kind":"ivan","task":"1","queued_at":1791050812,"prompt_bytes":26380}
+{"id":"529884e3","ended_at":1791050883,"elapsed_s":71,"outcome":"ok","detail":null}
+{"id":"64da87f9","kind":"pat","task":"1","queued_at":1791051203,"prompt_bytes":11813}
+{"id":"64da87f9","ended_at":1791051311,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791051311,"phase":"build","prd":"00242-harden-the-wave-verbs-v1.md"}
