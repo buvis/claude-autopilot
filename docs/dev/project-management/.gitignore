@@ -1,6 +1,6 @@
 autopilot/state.json
 autopilot/state.json.bak
-autopilot/**/*.lock
+autopilot/*.lock
 autopilot/.turn-counts.json
 autopilot/.handoff-requested
 autopilot/.cap-fired

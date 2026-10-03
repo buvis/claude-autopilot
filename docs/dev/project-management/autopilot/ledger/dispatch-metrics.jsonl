@@ -2738,3 +2738,41 @@
 {"kind":"handoff","site":"review","edge":"leave","at":1791036115,"phase":"done","prd":"00240-ignore-nested-store-lock-files-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1791036178,"phase":"done","prd":"00240-ignore-nested-store-lock-files-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1791036269,"phase":"build","prd":"00240-ignore-nested-store-lock-files-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791036306,"phase":"build","prd":"00241-bound-rework-batches-by-file-v1.md"}
+{"id":"0eb6ee15","kind":"tess","task":"1","queued_at":1791036692,"prompt_bytes":15655}
+{"id":"8c0d83ff","kind":"devon","task":"1","queued_at":1791036900,"prompt_bytes":3830}
+{"id":"8c0d83ff","ended_at":1791036997,"elapsed_s":97,"outcome":"ok","detail":null}
+{"id":"0c44a044","kind":"tess","task":"1","queued_at":1791037023,"prompt_bytes":10053}
+{"id":"6bfc06d9","kind":"ivan","task":"1","queued_at":1791037114,"prompt_bytes":20190}
+{"id":"4531b22b","kind":"pat","task":"1","queued_at":1791037228,"prompt_bytes":25303}
+{"id":"eee9abd0","kind":"ivan","task":"1","queued_at":1791037300,"prompt_bytes":9355}
+{"id":"8c59a370","kind":"ivan","task":"1","queued_at":1791037315,"prompt_bytes":9275}
+{"id":"71c90309","kind":"pat","task":"1","queued_at":1791037401,"prompt_bytes":4793}
+{"id":"6f9cf3c2","kind":"tess","task":"2","queued_at":1791037558,"prompt_bytes":12979}
+{"id":"4d318dbf","kind":"ivan","task":"2","queued_at":1791037722,"prompt_bytes":32177}
+{"id":"22d76249","kind":"pat","task":"2","queued_at":1791037869,"prompt_bytes":10240}
+{"id":"42bbb0cc","kind":"ivan","task":"2","queued_at":1791037906,"prompt_bytes":14072}
+{"id":"e206d52b","kind":"pat","task":"2","queued_at":1791037992,"prompt_bytes":2765}
+{"id":"eac6ac1b","kind":"tess","task":"3","queued_at":1791038096,"prompt_bytes":11881}
+{"id":"c42b68dd","kind":"ivan","task":"3","queued_at":1791038228,"prompt_bytes":15198}
+{"id":"7b1ac72f","kind":"ivan","task":"3","queued_at":1791038265,"prompt_bytes":17380}
+{"id":"359e45cf","kind":"pat","task":"3","queued_at":1791038411,"prompt_bytes":17197}
+{"id":"1460565d","kind":"ivan","task":"3","queued_at":1791038567,"prompt_bytes":18697}
+{"id":"0eb6ee15","ended_at":1791038863,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"0c44a044","ended_at":1791038863,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"6bfc06d9","ended_at":1791038863,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"4531b22b","ended_at":1791038863,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"eee9abd0","ended_at":1791038863,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"8c59a370","ended_at":1791038863,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"71c90309","ended_at":1791038863,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"6f9cf3c2","ended_at":1791038863,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"4d318dbf","ended_at":1791038863,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"22d76249","ended_at":1791038863,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"42bbb0cc","ended_at":1791038863,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"e206d52b","ended_at":1791038863,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"eac6ac1b","ended_at":1791038863,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"c42b68dd","ended_at":1791038863,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"7b1ac72f","ended_at":1791038863,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"359e45cf","ended_at":1791038863,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"1460565d","ended_at":1791038863,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791038863,"phase":"review","prd":"00241-bound-rework-batches-by-file-v1.md"}
