@@ -234,26 +234,41 @@ def _seed_steps(
 
 def _hold_backlog(worktree: Path, pm: Path, wave: dict) -> None:
     """Move every backlog PRD the assembly worktree inherited into prds/hold/
-    and commit the move, so the nested loop never picks one up. A no-op when
-    the backlog holds no `.md` file, so a retry does not re-commit."""
+    and commit the move, so the nested loop never picks one up. Resumes a
+    move an earlier call staged but whose commit failed, and no-ops once
+    that commit has landed and the backlog holds no `.md` file. Raises
+    without touching either file when a backlog name already exists in
+    hold/."""
     prds = pm / "prds"
     names = sorted(path.name for path in (prds / "backlog").glob("*.md"))
-    if not names:
+    for name in names:
+        target = prds / "hold" / name
+        if target.exists():
+            raise FileExistsError(
+                f"{prds / 'backlog' / name} collides with already-held {target}",
+            )
+    staged = _default_run_git(
+        ["diff", "--cached", "--name-only", "--", str(prds)],
+        cwd=worktree,
+    ).stdout.split()
+    if not names and not staged:
         return
     for name in names:
         (prds / "backlog" / name).rename(prds / "hold" / name)
-    backlog = [str(prds / "backlog" / name) for name in names]
-    held = [str(prds / "hold" / name) for name in names]
-    _default_run_git(
-        ["rm", "--cached", "--ignore-unmatch", "-q", "--", *backlog],
-        cwd=worktree,
-    )
-    _default_run_git(["add", "-f", "--", *held], cwd=worktree)
+    if names:
+        backlog = [str(prds / "backlog" / name) for name in names]
+        held = [str(prds / "hold" / name) for name in names]
+        _default_run_git(
+            ["rm", "--cached", "--ignore-unmatch", "-q", "--", *backlog],
+            cwd=worktree,
+        )
+        _default_run_git(["add", "-f", "--", *held], cwd=worktree)
+    all_names = sorted({Path(path).name for path in staged} | set(names))
     message = "\n".join(
         [
             f"chore(autopilot): hold seeded backlog PRDs for wave {wave['id']} review",
             "",
-            *[f"- {name}" for name in names],
+            *[f"- {name}" for name in all_names],
         ],
     )
     _default_run_git(["commit", "-q", "-m", message, "--", str(prds)], cwd=worktree)
