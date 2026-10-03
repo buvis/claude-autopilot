@@ -59,29 +59,41 @@ def secs_left_from_env(env: Mapping[str, str], now: int) -> int | None:
 # the time term off for the whole remainder of every PRD that ever rotated -
 # precisely the long PRDs the term exists for.
 def trusted_last_wall(state: dict[str, Any]) -> int | None:
-    """The last completed task's wall in seconds, or None when that span cannot
-    be trusted as one session's own work (which drops the time term).
+    """The last completed task's wall in seconds, or None when none can be
+    trusted as one session's own work (which drops the time term).
 
-    Two reasons a span is not work. (1) The task ROTATED:
-    `record_task_bounds` stamps `started_at` once and never replaces it (a PRD
-    contract), so a task cut mid-flight and finished later carries every idle
-    second between. Its id appears in `state["cap_rotations"]` as a `task_id`,
-    so this is answerable exactly rather than by guessing from the magnitude.
-    (2) The span exceeds `MAX_CREDIBLE_WALL_SECS` - the backstop for what
-    state does not record (a watchdog kill, an operator pause).
+    An unusable span - missing or non-int stamps, a boolean stamp, or a
+    negative difference - is skipped, not a stop signal: the scan keeps
+    walking back for an earlier completed task's span, the same rule
+    `last_task_wall` already follows (PRD 00243). Two reasons DO stop the
+    scan outright, never falling through to an earlier task's span. (1) The
+    task ROTATED: `record_task_bounds` stamps `started_at` once and never
+    replaces it (a PRD contract), so a task cut mid-flight and finished later
+    carries every idle second between. Its id appears in
+    `state["cap_rotations"]` as a `task_id`, so this is answerable exactly
+    rather than by guessing from the magnitude. (2) The span exceeds
+    `MAX_CREDIBLE_WALL_SECS` - the backstop for what state does not record (a
+    watchdog kill, an operator pause).
     """
     tasks = state.get("tasks")
     if not isinstance(tasks, list):
         return None
     for task in reversed(tasks):
-        if task.get("status") != "completed":
+        if not isinstance(task, dict) or task.get("status") != "completed":
             continue
         started = task.get("started_at")
         done = task.get("done_at")
-        if not isinstance(started, int) or not isinstance(done, int):
-            return None
+        if (
+            isinstance(started, bool)
+            or isinstance(done, bool)
+            or not isinstance(started, int)
+            or not isinstance(done, int)
+        ):
+            continue
         span = done - started
-        if span < 0 or span > MAX_CREDIBLE_WALL_SECS:
+        if span < 0:
+            continue
+        if span > MAX_CREDIBLE_WALL_SECS:
             return None
         rotations = state.get("cap_rotations")
         if not isinstance(rotations, list):

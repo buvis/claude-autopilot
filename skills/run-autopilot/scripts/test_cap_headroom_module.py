@@ -207,17 +207,18 @@ class TrustedLastWallTests(unittest.TestCase):
             with self.subTest(stamps=stamps):
                 task = {"id": "t1", "name": "done", "status": "completed", **stamps}
                 state = {"tasks": [_spanned("t0", 6540), task]}
-                self.assertIsNone(trusted_last_wall(state))
+                self.assertEqual(trusted_last_wall(state), 6540)
 
     def test_a_negative_span_gives_nothing(self) -> None:
         """`done_at` before `started_at` is a stale stamp from an earlier
         session, not a task that took negative time - and a negative span
-        would make the time term fire on every check. An honest task behind
-        it is not a fallback: a walk that steps back past the unusable last
-        entry reports 6540 where the truth is "nothing to measure"."""
+        would make the time term fire on every check. With no earlier task
+        behind it the answer is still None; with an honest task behind it
+        the scan steps back past the unusable last entry to that task's span
+        (PRD 00243)."""
         self.assertIsNone(trusted_last_wall({"tasks": [_spanned("t1", -5)]}))
         behind = {"tasks": [_spanned("t0", 6540), _spanned("t1", -5)]}
-        self.assertIsNone(trusted_last_wall(behind))
+        self.assertEqual(trusted_last_wall(behind), 6540)
 
     def test_a_zero_second_span_is_measured_not_dropped(self) -> None:
         """A task that started and finished inside the same second is a
