@@ -232,6 +232,39 @@ def _seed_steps(
     return steps
 
 
+def _pending_hold_names(worktree: Path, prds: Path, names: list[str]) -> list[str]:
+    """`names` plus every PRD name git already shows staged under backlog/ or
+    hold/ or untracked under hold/: the move an earlier call left unfinished.
+    NUL-delimited output keeps a name with a space in one piece."""
+    staged = _default_run_git(
+        [
+            "diff",
+            "--cached",
+            "--name-only",
+            "-z",
+            "--",
+            str(prds / "backlog"),
+            str(prds / "hold"),
+        ],
+        cwd=worktree,
+    ).stdout.split("\0")
+    untracked = _default_run_git(
+        [
+            "ls-files",
+            "--others",
+            "-z",
+            "--",
+            str(prds / "hold" / "*.md"),
+        ],
+        cwd=worktree,
+    ).stdout.split("\0")
+    return sorted(
+        set(names)
+        | {Path(path).name for path in staged if path}
+        | {Path(path).name for path in untracked if path},
+    )
+
+
 def _hold_backlog(worktree: Path, pm: Path, wave: dict) -> None:
     """Move every backlog PRD the assembly worktree inherited into prds/hold/
     and commit the move, so the nested loop never picks one up. Resumes a
@@ -248,31 +281,7 @@ def _hold_backlog(worktree: Path, pm: Path, wave: dict) -> None:
             )
     for name in names:
         (prds / "backlog" / name).rename(prds / "hold" / name)
-    staged = _default_run_git(
-        [
-            "diff",
-            "--cached",
-            "--name-only",
-            "--",
-            str(prds / "backlog"),
-            str(prds / "hold"),
-        ],
-        cwd=worktree,
-    ).stdout.split()
-    untracked = _default_run_git(
-        [
-            "ls-files",
-            "--others",
-            "--",
-            str(prds / "hold" / "*.md"),
-        ],
-        cwd=worktree,
-    ).stdout.split()
-    all_names = sorted(
-        set(names)
-        | {Path(path).name for path in staged}
-        | {Path(path).name for path in untracked},
-    )
+    all_names = _pending_hold_names(worktree, prds, names)
     if not all_names:
         return
     backlog = [str(prds / "backlog" / name) for name in all_names]

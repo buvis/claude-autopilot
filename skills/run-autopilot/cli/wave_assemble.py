@@ -498,6 +498,16 @@ def _write_report(
         target.write_text(text, encoding="utf-8")
 
 
+def _delete_lane_branch(
+    repo: Path,
+    lane: dict,
+    run_git: Callable[..., subprocess.CompletedProcess],
+) -> None:
+    """Delete the lane's branch if it still exists."""
+    if run_git(["branch", "--list", lane["branch"]], cwd=repo).stdout.strip():
+        run_git(["branch", "-D", lane["branch"]], cwd=repo)
+
+
 def _drain_lane(
     repo: Path,
     wave: dict,
@@ -517,8 +527,7 @@ def _drain_lane(
     still there rather than assume their target exists."""
     names = set(lane.get("held_prds") or [])
     if lane.get("worktree_removed"):
-        if run_git(["branch", "--list", lane["branch"]], cwd=repo).stdout.strip():
-            run_git(["branch", "-D", lane["branch"]], cwd=repo)
+        _delete_lane_branch(repo, lane, run_git)
         return names
     names |= _lane_prd_names(Path(lane["worktree"]))
     lane["held_prds"] = sorted(names)
@@ -529,8 +538,7 @@ def _drain_lane(
             run_git(["worktree", "remove", "--force", lane["worktree"]], cwd=repo)
         lane["worktree_removed"] = True
         save(wave_path, wave)
-        if run_git(["branch", "--list", lane["branch"]], cwd=repo).stdout.strip():
-            run_git(["branch", "-D", lane["branch"]], cwd=repo)
+        _delete_lane_branch(repo, lane, run_git)
     return names
 
 

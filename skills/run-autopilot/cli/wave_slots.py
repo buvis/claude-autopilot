@@ -51,7 +51,6 @@ def _slot_lock(slot: Path):
     is a permanent sibling, never removed - removing it would race a second
     opener between close and unlink, defeating the lock."""
     lock_path = slot.with_name(f"{slot.name}.lock")
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
     with open(lock_path, "a") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
         yield
@@ -185,14 +184,14 @@ def release(slot: Path, owner_pid: int) -> None:
     Runs in the caller's `finally:`, so this never raises: an `OSError` from
     the lock is reported on stderr instead, exactly as `_remove` reports a
     failed removal. A slot whose parent dir is already gone (torn down by
-    `land`/`abort`) skips the lock entirely rather than recreating it - a
-    missing slot is a no-op, not a reason to resurrect the slots directory.
+    `land`/`abort`) makes the lock fail with `FileNotFoundError`, a silent
+    no-op: `_slot_lock` never recreates the slots directory.
     """
-    if not slot.parent.is_dir():
-        return
     try:
         with _slot_lock(slot):
             if _owner(slot) == str(owner_pid):
                 _remove(slot)
+    except FileNotFoundError:
+        return
     except OSError as exc:
         print(f"could not release {slot}: {exc}", file=sys.stderr)

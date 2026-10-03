@@ -58,6 +58,7 @@ _WAVE_TEST_FILES = (
     "test_wave_review_cleanup.py",
     "test_wave_review_land.py",
     "test_wave_slots.py",
+    "test_wave_slots_release.py",
     "test_loop_slots.py",
 )
 
