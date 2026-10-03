@@ -60,3 +60,33 @@ def test_tail_sweep_split_rule_uses_the_command() -> None:
         assert needle in sentence, (
             f"{_PHASE_REVIEW}: the Tail sweep 'Split rule:' sentence lacks {needle!r}"
         )
+
+
+def test_tail_sweep_split_rule_states_findings_path_naming_and_floor() -> None:
+    text = _PHASE_REVIEW.read_text()
+    assert _TAIL_SWEEP in text, f"{_PHASE_REVIEW}: the 'Tail sweep' section is gone"
+    assert _HAND_OFF in text, (
+        f"{_PHASE_REVIEW}: the 'Hand off to the finalize session' section is gone"
+    )
+    section = text[text.index(_TAIL_SWEEP) : text.index(_HAND_OFF)]
+    assert _SPLIT_RULE in section, (
+        f"{_PHASE_REVIEW}: the Tail sweep section lost its 'Split rule:' sentence"
+    )
+    start = section.index(_SPLIT_RULE)
+    assert "\n\n" in section[start:], (
+        f"{_PHASE_REVIEW}: the 'Split rule:' sentence has no paragraph end to bound it"
+    )
+    end = section.index("\n\n", start)
+    paragraph = section[start:end]
+    assert "--findings" in paragraph, (
+        f"{_PHASE_REVIEW}: the Tail sweep 'Split rule:' paragraph doesn't name a "
+        "'--findings' path for how the findings file is produced"
+    )
+    assert "[D{cycle}] Tail sweep:" in paragraph, (
+        f"{_PHASE_REVIEW}: the Tail sweep 'Split rule:' paragraph doesn't state the "
+        "'[D{cycle}] Tail sweep:' task naming prefix"
+    )
+    assert "floor" in paragraph, (
+        f"{_PHASE_REVIEW}: the Tail sweep 'Split rule:' paragraph doesn't state the "
+        "one-task floor for a single group"
+    )
