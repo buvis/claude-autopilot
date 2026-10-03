@@ -1,4 +1,4 @@
-# Assumption ledger
+# Assumptions ledger — PRD 00241 (bound rework batches by file)
 
 Per-plan ledger of ASSUMPTIONS lines Tess and Ivan reported where the task,
 tests, or listed files were silent. Replaced at the first completed task of
