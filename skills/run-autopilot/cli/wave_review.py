@@ -434,7 +434,7 @@ def _land_cleanup(
 
     branch = f"wave/{wave['id']}/assembly"
     if run_git(["-C", str(repo), "branch", "--list", branch]).stdout.strip():
-        run_git(["-C", str(repo), "branch", "-D", branch])
+        run_git(["-C", str(repo), "branch", "-d", branch])
 
     slots = repo / "docs/dev/project-management/autopilot/wave-slots"
     if slots.exists():
