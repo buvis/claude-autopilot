@@ -121,3 +121,19 @@ currently separate them.
 3. **R2: a `run_suite` helper plus narrow scope,** then xdist once the wave
    tests are isolated.
 4. **R4: merge rework tasks by file.**
+
+## Follow-ups (2026-10-03)
+
+- **Done.** R3 shipped as v0.6.0 and v0.7.0. R1 is PRD 00231, R2 is PRDs
+  00232 and 00233 (the parallel failures came from git commit signing in the
+  test fixtures), and PRD 00236 makes the store trackable. All of these are
+  in v0.7.0.
+- **Open: R4** (merge rework tasks by file). No PRD exists yet.
+- **Open: nested lock files.** `cli/store_tree.STORE_GITIGNORE` lists
+  `autopilot/*.lock`, which misses `autopilot/deferred/*.json.lock`, so those
+  get committed in any repo that tracks the store. Fix: change the pattern to
+  `autopilot/**/*.lock`. claude-autopilot carries a root `.gitignore` line,
+  `docs/dev/project-management/**/*.lock`, as a workaround.
+- **Open: `purge-devtmp` is not linked.** The drained loop calls
+  `~/.claude/skills/purge-devtmp/scripts/purge_devtmp.py`, which exists only
+  in agent-skills until `braid` runs, so drain-time cleanup fails soft.
