@@ -2,9 +2,9 @@
 the store after the metrics append of a session that made progress (site
 "loop"), and the drained exit records it once more after the state-final
 archive (site "drained"). Review-once records it once per call, right after
-its own metrics append (site "review_once"), with no wave-lane gate. Inside
-a wave lane neither loop-site record fires. The harness (fake clock,
-scripted spawn, make_loop) is cli/loop_testutil.py.
+its own metrics append (site "review_once"). Inside a wave lane none of the
+three records fires (PRD 00239 gave review-once the same lane gate). The
+harness (fake clock, scripted spawn, make_loop) is cli/loop_testutil.py.
 """
 
 from __future__ import annotations
@@ -400,6 +400,23 @@ def test_run_once_records_the_store_once_after_metrics_with_site_review_once(
         ("store", "review_once", "p.md"),
     ]
     assert [c["site"] for c in calls] == ["review_once"]
+
+
+def test_review_once_skips_the_store_in_a_wave_lane(tmp_path, monkeypatch):
+    # Same script and state as the review_once site test above; only the
+    # lane env differs, so the lane gate is the one thing that can skip it.
+    events, calls = [], []
+    _record_store_into(monkeypatch, events, calls)
+    _trace_metrics_and_act(monkeypatch, events)
+    lp = make_loop(tmp_path, [_progress_step("p.md", "build")], env=_lane_env(tmp_path))
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="review", batch={"id": "b-1"})
+
+    assert lp.run_once() == 0
+    assert len(lp._test["spawn"].launches) == 1
+    assert calls == [], "a lane branch takes no store commit, at any site"
+    # Only the record is skipped: the metrics append and the summary still run.
+    assert events == [("metrics", "p.md")]
+    assert "signal continue" in lp._test["out"].getvalue()
 
 
 def test_a_raising_recorder_still_lets_run_once_return_its_normal_code(
