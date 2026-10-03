@@ -44,6 +44,13 @@ Generated: 2026-09-14
 
 ## Active Work
 
+### Batch 202610031511
+- [x] 00240-ignore-nested-store-lock-files-v1 (1 cycle)
+
+Observations: clean single-PRD cycle, no deferred decisions or doubts, full
+suite green at merge (2150 passed). `engram pack` unavailable (repo not
+gita-registered) - every review prompt carried the documented sentinel.
+
 ### Batch 202610021244
 - [x] 00236-track-the-store-without-tripping-the-loop-v1 (2 cycles)
 
