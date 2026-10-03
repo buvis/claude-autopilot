@@ -376,12 +376,10 @@ def test_rework_design_reuse_needs_the_source_check_and_the_pass_gate() -> None:
 
 
 def test_critical_d_task_carries_design_then_contract_then_findings() -> None:
-    # First occurrences: the new CRITICAL sub-bullet must be the first one in
-    # source 2, so its `### Findings (verbatim)` mention lands before the
-    # transcribe bullet's — a sub-bullet placed after it fails the order.
+    # First occurrences: the CRITICAL sub-bullet must precede the transcribe
+    # bullet, so its `### Findings (verbatim)` mention lands first; the three
+    # blocks' own order is pinned on that one bullet further down.
     blocks = (_DESIGN_LINE, "### Contract", "### Findings (verbatim)")
-    critical_scope = _DISPATCH[_DISPATCH.index(_CRITICAL_BULLET_LEAD):]
-    _assert_in_order(critical_scope, _PHASE_REVIEW, _DISPATCH_WHERE, blocks)
     _assert_in_order(
         _DISPATCH,
         _PHASE_REVIEW,
