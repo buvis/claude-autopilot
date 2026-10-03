@@ -107,3 +107,21 @@ each plan, then appended to per task.
   single-finding files under one directory can yield two groups keyed the same).
   This task made the tests able to see a cap breach but did not change the
   merge rule, which no finding asked for.
+
+## 6: [D1] Reconcile the Tail sweep split rule with step 2 and restore the ledger title
+
+- Named the new prose test `test_tail_sweep_split_rule_states_findings_path_naming_and_floor`
+  and wrote it as one combined assertion covering all three required clauses,
+  rather than three separate test functions, matching the file's one-test-per-
+  landmark-group pattern.
+- Did not modify the module docstring, which still describes only the two
+  pre-existing tests — only surgically added the new test function.
+- Interpreted the "floor bounds only the upper end" instruction as: the 4-task
+  cap is a ceiling, and a single group still produces exactly one task (floor
+  of one, never zero) — the test only pins the literal word "floor", not a
+  specific numeric claim.
+- Restored the original PRD sentence verbatim per the reviewer's confirmed
+  finding, then appended the three required clauses as new sentences
+  immediately after it and before the closing "max-2-parallel" sentence, since
+  no specific phrasing was mandated for the appended clauses beyond the facts
+  themselves.
