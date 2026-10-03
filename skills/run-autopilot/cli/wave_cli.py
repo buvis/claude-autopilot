@@ -39,6 +39,7 @@ _GUARDED_ERRORS = (
     ValueError,
     RuntimeError,
     subprocess.CalledProcessError,
+    OSError,
 )
 
 

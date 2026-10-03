@@ -517,6 +517,8 @@ def _drain_lane(
     still there rather than assume their target exists."""
     names = set(lane.get("held_prds") or [])
     if lane.get("worktree_removed"):
+        if run_git(["branch", "--list", lane["branch"]], cwd=repo).stdout.strip():
+            run_git(["branch", "-D", lane["branch"]], cwd=repo)
         return names
     names |= _lane_prd_names(Path(lane["worktree"]))
     lane["held_prds"] = sorted(names)
