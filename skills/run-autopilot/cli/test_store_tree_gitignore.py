@@ -6,6 +6,8 @@ The patterns are the contract, so they are spelled out here, not derived.
 
 from __future__ import annotations
 
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -14,6 +16,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from cli import store_tree
 from cli.store_tree_testutil import _autopilot_dir, _write_state
+
+_GIT_ENV = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
 
 EXPECTED_GITIGNORE_PATTERNS = [
     "autopilot/state.json",
@@ -123,3 +127,39 @@ def test_ensure_store_gitignore_is_idempotent(
     assert sorted(p.name for p in store_dir.parent.iterdir()) == ["project-management"]
     if not expected:
         assert _fingerprint(gitignore) == before, "a matching file is never rewritten"
+
+
+def test_nested_lock_files_are_ignored(tmp_path: Path) -> None:
+    """The recursive pattern `autopilot/**/*.lock` ignores a lock file nested
+    under a subdirectory (`deferred/`), not just one directly in `autopilot/`."""
+    store_dir = _store_dir(tmp_path)
+    subprocess.run(
+        ["git", "init", "-q"],
+        cwd=tmp_path,
+        env=_GIT_ENV,
+        check=True,
+        timeout=30,
+    )
+
+    store_tree.ensure_store_gitignore(store_dir)
+
+    autopilot_dir = store_dir / "autopilot"
+    (autopilot_dir / "state.json.lock").write_text("lock", encoding="utf-8")
+    deferred_dir = autopilot_dir / "deferred"
+    deferred_dir.mkdir(parents=True, exist_ok=True)
+    (deferred_dir / "b-deferred.json.lock").write_text("lock", encoding="utf-8")
+    (deferred_dir / "b-deferred.json").write_text("{}", encoding="utf-8")
+
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=all"],
+        cwd=tmp_path,
+        env=_GIT_ENV,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+    ).stdout
+
+    assert "b-deferred.json" in status
+    assert "state.json.lock" not in status
+    assert "b-deferred.json.lock" not in status
