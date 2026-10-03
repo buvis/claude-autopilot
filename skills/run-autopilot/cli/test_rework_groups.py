@@ -10,6 +10,7 @@ directories). The last fixture is the real 00223 cycle-1 findings table.
 
 from __future__ import annotations
 
+import copy
 import itertools
 import sys
 import unittest
@@ -52,7 +53,9 @@ def _group_holding(groups: list[dict], finding: dict) -> dict:
 
 class GroupTestCase(unittest.TestCase):
     def assert_every_finding_kept_once(
-        self, findings: list[dict], groups: list[dict]
+        self,
+        findings: list[dict],
+        groups: list[dict],
     ) -> None:
         placed = [f for g in groups for f in g["findings"]]
         self.assertEqual(len(placed), len(findings))
@@ -71,8 +74,11 @@ class CriticalTests(GroupTestCase):
 
         critical_groups = [g for g in groups if g["critical"]]
         self.assertEqual(len(critical_groups), 6)
+        self.assertEqual([g["findings"][0] for g in critical_groups], criticals)
         for crit in criticals:
-            self.assertEqual(_group_holding(groups, crit)["findings"], [crit])
+            held = _group_holding(groups, crit)
+            self.assertEqual(held["findings"], [crit])
+            self.assertEqual(held["name_hint"], rework_groups.file_key(crit["file"]))
         self.assertEqual(len(_non_critical(groups)), 4)
         self.assertEqual(groups[:6], critical_groups)
         self.assert_every_finding_kept_once(findings, groups)
@@ -85,6 +91,9 @@ class FileKeyTests(GroupTestCase):
         self.assertEqual(rework_groups.file_key("a.py"), "a.py")
         self.assertEqual(rework_groups.file_key("src/cli/b.py:7"), "src/cli/b.py")
         self.assertEqual(rework_groups.file_key("general"), "general")
+        # Only a trailing line suffix is cut, never another colon.
+        self.assertEqual(rework_groups.file_key("a.py:oops"), "a.py:oops")
+        self.assertEqual(rework_groups.file_key("C:/x/a.py:3"), "C:/x/a.py")
 
         findings = [_f("a.py:10"), _f("a.py:20-30"), _f("a.py")]
         groups = rework_groups.group(findings)
@@ -99,14 +108,19 @@ class ProseTests(GroupTestCase):
     def test_markdown_findings_share_one_prose_group(self) -> None:
         md = [_f("docs/guide.md:3"), _f("README.md"), _f("skills/x/SKILL.md:1-4")]
         code = _f("src/app.py:5")
-        findings = [md[0], code, md[1], md[2]]
+        mdx, bak = _f("src/cmd.mdx.py:2"), _f("a.md.bak")  # ".md" not at the end
+        findings = [md[0], code, md[1], mdx, md[2], bak]
 
         groups = rework_groups.group(findings)
 
         by_key = _by_key(groups)
-        self.assertEqual(set(by_key), {"prose", "src/app.py"})
+        self.assertEqual(
+            set(by_key), {"prose", "src/app.py", "src/cmd.mdx.py", "a.md.bak"}
+        )
         self.assertEqual(by_key["prose"]["findings"], md)
         self.assertEqual(by_key["src/app.py"]["findings"], [code])
+        self.assertEqual(by_key["src/cmd.mdx.py"]["findings"], [mdx])
+        self.assertEqual(by_key["a.md.bak"]["findings"], [bak])
 
 
 class CapTests(GroupTestCase):
@@ -127,6 +141,17 @@ class CapTests(GroupTestCase):
         self.assertEqual(by_key["x/a.py"]["findings"], [findings[2], findings[4]])
         self.assertEqual(by_key["general"]["findings"], [findings[0]])
         self.assert_every_finding_kept_once(findings, groups)
+        self.assertEqual(rework_groups.group([]), [])
+
+    def test_grouping_leaves_the_input_findings_unchanged(self) -> None:
+        findings = [_f("q.py:4", CRIT), _f("general"), _f("docs/a.md:2")]
+        findings += [_f(f"p{i}/m.py:{i}-{i + 1}") for i in range(5)]
+        before = copy.deepcopy(findings)
+
+        rework_groups.group(findings)
+
+        self.assertEqual(findings, before)
+        self.assertEqual(findings[3]["file"], "p0/m.py:0-1")
 
     def test_general_merges_into_the_smallest_group_first(self) -> None:
         cases = {
@@ -214,7 +239,8 @@ class OrderTests(GroupTestCase):
         self.assertTrue(groups[0]["critical"])
         self.assertEqual(groups[0]["findings"], [findings[-1]])
         self.assertEqual(
-            [g["name_hint"] for g in groups[1:]], ["y.py", "c.py", "b.py", "z.py"]
+            [g["name_hint"] for g in groups[1:]],
+            ["y.py", "c.py", "b.py", "z.py"],
         )
 
     def test_equal_severity_and_size_order_by_key(self) -> None:
@@ -286,7 +312,7 @@ class Review00223FixtureTests(GroupTestCase):
 
         self.assertEqual(len(findings), 40)
         self.assertEqual([g for g in groups if g["critical"]], [])
-        self.assertGreaterEqual(len(groups), 1)
+        self.assertGreater(len(groups), 1)  # several groups, not one dump
         self.assertLessEqual(len(groups), rework_groups.NON_CRITICAL_CAP)
         self.assert_every_finding_kept_once(findings, groups)
 
