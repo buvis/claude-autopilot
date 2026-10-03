@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **run-autopilot**: review rework now caps at 4 non-CRITICAL tasks, grouped by file.
+
 ### Fixed
 
 - **run-autopilot**: nested store lock files such as `deferred/*.json.lock` are now ignored
