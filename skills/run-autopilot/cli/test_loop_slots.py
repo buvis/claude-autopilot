@@ -29,7 +29,7 @@ def _slot_env(slots_dir) -> dict:
 
 
 def _held_slots(slots_dir) -> list[str]:
-    return sorted(p.name for p in slots_dir.iterdir())
+    return sorted(p.name for p in slots_dir.iterdir() if not p.name.endswith(".lock"))
 
 
 def _recording_step(slots_dir, events: list):
