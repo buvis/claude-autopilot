@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import re
+import threading
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,7 @@ LIVE_PEER = 1111
 DEAD_PEER = 2222
 ME = 4242
 PEER = 5353  # a second live claimant, racing ME for the same slot
+THIRD = 6464  # a third live claimant, for races that need one more actor
 
 WAITED = "waited for a slot"
 
@@ -148,7 +150,7 @@ def _lines_while_waiting(tmp_path, monkeypatch, capsys, *, poll, until) -> list[
     def sleep_fn(secs: float) -> None:
         ticker.sleep(secs)
         if ticker.now >= until:
-            release(held)
+            release(held, LIVE_PEER)
 
     slot = acquire(slots, 1, ME, sleep_fn=sleep_fn, clock=ticker.clock, poll_secs=poll)
     assert slot == slots / "1"
@@ -210,7 +212,7 @@ def test_acquire_blocks_until_release(tmp_path, monkeypatch):
     def sleep_fn(secs: float) -> None:
         sleeps.append(secs)
         if len(sleeps) == 2:
-            release(held)
+            release(held, LIVE_PEER)
 
     slot = acquire(slots, 1, ME, sleep_fn=sleep_fn, clock=_fake_clock, poll_secs=7)
     assert sleeps == [7, 7]
@@ -325,7 +327,7 @@ def test_release_frees_the_slot(tmp_path, monkeypatch, capsys):
     # the slot has to clear that too, and quietly: a removal that did not
     # happen is reported on stderr, so silence here means the slot is gone.
     (slot / "session.log").write_text("output from the finished session")
-    release(slot)
+    release(slot, ME)
     assert not slot.exists()
     assert _stderr_lines(capsys) == [], "freeing a slot it holds is not news"
     # With our own (live) claim gone, a second acquire gets slot 1 at once.
@@ -335,7 +337,7 @@ def test_release_frees_the_slot(tmp_path, monkeypatch, capsys):
 
 def test_release_of_a_missing_slot_is_a_noop(tmp_path, capsys):
     slot = tmp_path / "wave-slots" / "1"
-    assert release(slot) is None
+    assert release(slot, ME) is None
     assert not slot.exists()
     captured = capsys.readouterr()  # a slot already gone is not worth a word
     assert captured.err == ""
@@ -360,11 +362,29 @@ def test_release_reports_a_removal_failure_on_one_stderr_line(
         return real_rmdir(path, *args, **kwargs)
 
     monkeypatch.setattr(os, "rmdir", failing_rmdir)
-    assert release(slot) is None
+    assert release(slot, ME) is None
     lines = _stderr_lines(capsys)
     assert len(lines) == 1, f"expected one report of the failure, got {lines}"
     assert os.fspath(slot) in lines[0]  # the line names the slot it could not free
     assert slot.exists()  # still held: the failure was reported, not faked
+
+
+def test_release_never_removes_another_holders_slot(tmp_path, capsys):
+    # A crash-and-reclaim cycle can hand ME's old slot to PEER before ME's
+    # `finally:` gets to release it. Freeing it then would throw out a live
+    # session's claim and let one more session in beside it.
+    slots = tmp_path / "wave-slots"
+    slot = _hold(slots, 1, str(PEER))
+    (slot / "session.log").write_text("PEER's session, still running")
+    assert release(slot, ME) is None
+    assert (slot / "owner").read_text().strip() == str(PEER)
+    assert sorted(child.name for child in slot.iterdir()) == ["owner", "session.log"]
+    assert (slot / "session.log").read_text() == "PEER's session, still running"
+    assert _stderr_lines(capsys) == [], "a slot ME no longer owns is not news"
+    # A control, so the no-op above cannot pass for a release that frees
+    # nothing at all: the owner's own release does free it.
+    release(slot, PEER)
+    assert not slot.exists()
 
 
 def test_docs_name_the_two_variables():
@@ -430,22 +450,27 @@ def test_one_slot_is_never_handed_to_two_holders(tmp_path, monkeypatch):
     # under way and not yet published. With count=1 exactly one of the two
     # may come back holding slots/1 and the other has to wait; nothing but
     # the test's own sleep signal may escape either acquire.
+    # The peer runs on a thread of its own, so a lock ME holds shuts it out
+    # the way it would a peer in another process, instead of deadlocking.
     _only_alive(monkeypatch, ME, PEER)
     slots = tmp_path / "wave-slots"
     real_mkdir = os.mkdir
-    raced: list[str] = []
+    me = threading.get_ident()
+    raced: list[threading.Thread] = []
     outcomes: list[tuple[int, Path | str]] = []
 
     def racing_mkdir(path, *args, **kwargs):
         made = real_mkdir(path, *args, **kwargs)
-        if not raced and _in_slots_dir(path, slots):
-            raced.append(os.fspath(path))  # ME's claim is under way
-            outcomes.append((PEER, _claim_or_wait(slots, 1, PEER)))
+        if threading.get_ident() == me and not raced and _in_slots_dir(path, slots):
+            raced.append(_acquire_on_a_thread(slots, PEER, outcomes))
+            raced[0].join(WINDOW_SECS)  # ME's claim is under way
         return made
 
     monkeypatch.setattr(os, "mkdir", racing_mkdir)
     outcomes.append((ME, _claim_or_wait(slots, 1, ME)))
     assert raced, "acquire never created a directory in the slots dir"
+    raced[0].join(10)
+    assert not raced[0].is_alive(), "the peer's acquire hung"
     holders = [pid for pid, out in outcomes if out == slots / "1"]
     waiters = [pid for pid, out in outcomes if out == WAITED]
     assert len(holders) == 1, f"count=1 handed slot 1 to {len(holders)} holders"
@@ -460,23 +485,27 @@ def test_a_reclaim_never_steals_a_claim_that_went_live_first(tmp_path, monkeypat
     # that stale slot aside: the peer reclaims it and publishes a live claim
     # of its own, which ME's rename then carries off. Moving a claim aside is
     # not owning it, so with count=1 exactly one of the two may come back
-    # holding slots/1 and the other has to wait.
+    # holding slots/1 and the other has to wait. The peer runs on a thread of
+    # its own, so a lock ME holds shuts it out instead of deadlocking.
     _only_alive(monkeypatch, ME, PEER)
     slots = tmp_path / "wave-slots"
     _hold(slots, 1, str(DEAD_PEER))
     real_rename = os.rename
-    raced: list[str] = []
+    me = threading.get_ident()
+    raced: list[threading.Thread] = []
     outcomes: list[tuple[int, Path | str]] = []
 
     def racing_rename(src, dst, *args, **kwargs):
-        if not raced and ".stale-" in os.fspath(dst):
-            raced.append(os.fspath(dst))  # ME's reclaim is under way
-            outcomes.append((PEER, _claim_or_wait(slots, 1, PEER)))
+        if threading.get_ident() == me and not raced and ".stale-" in os.fspath(dst):
+            raced.append(_acquire_on_a_thread(slots, PEER, outcomes))
+            raced[0].join(WINDOW_SECS)  # ME's reclaim is under way
         return real_rename(src, dst, *args, **kwargs)
 
     monkeypatch.setattr(os, "rename", racing_rename)
     outcomes.append((ME, _claim_or_wait(slots, 1, ME)))
     assert raced, "acquire never moved the stale slot aside"
+    raced[0].join(10)
+    assert not raced[0].is_alive(), "the peer's acquire hung"
     holders = [pid for pid, out in outcomes if out == slots / "1"]
     waiters = [pid for pid, out in outcomes if out == WAITED]
     assert len(holders) == 1, f"count=1 handed slot 1 to {len(holders)} holders"
@@ -518,6 +547,67 @@ def test_a_reclaim_compares_the_owner_it_judged_not_a_later_read(tmp_path, monke
     assert len(waiters) == 1, f"one acquirer had to wait, got {outcomes}"
     # The slot names whoever actually holds it: the reclaim that lost the race
     # put the winner's claim back rather than replacing it with its own.
+    assert (slots / "1" / "owner").read_text().strip() == str(holders[0])
+
+
+# How long an acquirer started inside another's window is given to finish
+# before that window closes anyway. One that is shut out stays blocked and
+# runs once the window closes, so this bounds the test's time, not its result.
+WINDOW_SECS = 0.5
+
+
+def _acquire_on_a_thread(slots: Path, pid: int, outcomes: list) -> threading.Thread:
+    """Run one count=1 acquire for `pid` on its own thread and record how it
+    ended. Each thread opens files of its own, so a per-file lock shuts it out
+    exactly as it would a peer in another process."""
+
+    def run() -> None:
+        try:
+            outcomes.append((pid, _claim_or_wait(slots, 1, pid)))
+        except BaseException as exc:  # recorded, so the test fails on it
+            outcomes.append((pid, f"raised {exc!r}"))
+
+    actor = threading.Thread(target=run, daemon=True)
+    actor.start()
+    return actor
+
+
+def test_reclaim_put_back_race_admits_one_holder(tmp_path, monkeypatch):
+    # Slot 1 holds a killed loop's leftover owner and count=1. ME moves it
+    # aside; inside that rename PEER reclaims it and publishes a live claim,
+    # which ME's rename then carries off, so ME has to put it back. Inside
+    # that put-back THIRD finds the slot name vacant. Three sessions, one
+    # slot: exactly one may hold it and the other two have to wait.
+    _only_alive(monkeypatch, ME, PEER, THIRD)
+    slots = tmp_path / "wave-slots"
+    _hold(slots, 1, str(DEAD_PEER))
+    real_rename = os.rename
+    me = threading.get_ident()
+    actors: dict[int, threading.Thread] = {}
+    outcomes: list[tuple[int, Path | str]] = []
+
+    def racing_rename(src, dst, *args, **kwargs):
+        if threading.get_ident() == me:
+            if PEER not in actors and ".stale-" in os.fspath(dst):
+                actors[PEER] = _acquire_on_a_thread(slots, PEER, outcomes)
+                actors[PEER].join(WINDOW_SECS)  # ME's reclaim is under way
+            elif THIRD not in actors and ".stale-" in os.fspath(src):
+                actors[THIRD] = _acquire_on_a_thread(slots, THIRD, outcomes)
+                actors[THIRD].join(WINDOW_SECS)  # ME's put-back is under way
+        return real_rename(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(os, "rename", racing_rename)
+    outcomes.append((ME, _claim_or_wait(slots, 1, ME)))
+    assert PEER in actors, "acquire never moved the stale slot aside"
+    if THIRD not in actors:  # no put-back window opened: THIRD comes after
+        actors[THIRD] = _acquire_on_a_thread(slots, THIRD, outcomes)
+    for actor in actors.values():
+        actor.join(10)
+    assert not any(a.is_alive() for a in actors.values()), "an acquirer hung"
+    holders = [pid for pid, out in outcomes if out == slots / "1"]
+    waiters = [pid for pid, out in outcomes if out == WAITED]
+    assert len(holders) == 1, f"count=1 handed slot 1 to {len(holders)} holders"
+    assert len(waiters) == 2, f"two acquirers had to wait, got {outcomes}"
     assert (slots / "1" / "owner").read_text().strip() == str(holders[0])
 
 
