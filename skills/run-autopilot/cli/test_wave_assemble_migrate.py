@@ -578,54 +578,94 @@ def test_assemble_tolerates_a_lane_worktree_removed_before_its_flag_was_saved(
     assert landed == ["00001-a.md"], landed
 
 
+def _crash_on_first_save_of_l2_assembled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The first save whose wave shows l2 assembled really lands on disk; the
+    process then dies before anything after it - l2's worktree remove
+    included - can run. l2 is the SECOND lane: a save that only fires for the
+    first lane, or for a lane named l1, never persists l2 before its removal."""
+    real_save = wave_assemble.save
+
+    def save_then_crash(path: Path, data: dict) -> None:
+        real_save(path, data)
+        l2 = next(each for each in data["lanes"] if each["name"] == "l2")
+        if l2["status"] == "assembled":
+            monkeypatch.setattr(wave_assemble, "save", real_save)
+            raise RuntimeError("simulated crash")
+
+    monkeypatch.setattr(wave_assemble, "save", save_then_crash)
+
+
+def _two_merging_lanes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    held_prd: str,
+) -> tuple[Path, Path, Path, str]:
+    """Two drained lanes that merge cleanly; the second, l2, also holds
+    `held_prd` outside its roster, one loop-metrics row and one review report.
+    The repo, wave.json, l2's worktree and l2's branch."""
+    repo, wave_path = _launched(tmp_path, monkeypatch, 2)
+    for name, rel, prd in (
+        ("l1", "x/a.py", "00001-a.md"),
+        ("l2", "y/b.py", "00002-b.md"),
+    ):
+        worktree = _finish(wave_path, name, "")
+        _commit(worktree, {rel: f"# {name}\n"}, f"{name} change")
+        _to_done(worktree, prd)
+    metric = {"prd": "00002-b.md", "wall_secs": 900}
+    _write(
+        worktree,
+        {
+            f"{_PRDS}/hold/{held_prd}": "parked in l2\n",
+            f"{_AP}/loop-metrics.jsonl": _jsonl([metric]),
+            f"{_AP}/reports/00002-b.md-review.md": "l2 review\n",
+        },
+    )
+    return repo, wave_path, worktree, wave.load(wave_path)["lanes"][1]["branch"]
+
+
 def test_crash_after_save_before_remove_reruns_clean(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    repo, wave_path = _launched(tmp_path, monkeypatch, 1)
-    worktree = _finish(wave_path, "l1", "")
-    _commit(worktree, {"x/a.py": "# l1\n"}, "l1 change")
-    _to_done(worktree, "00001-a.md")
-    held_prd = HELD_OUTSIDE_ROSTER[0]
-    _write(worktree, {f"{_PRDS}/hold/{held_prd}": "parked in l1\n"})
-    branch = wave.load(wave_path)["lanes"][0]["branch"]
-    real_save = wave_assemble.save
-    calls = []
-
-    def save_then_crash(path: Path, data: dict) -> None:
-        # The first save really lands on disk; the process then dies before
-        # anything after it - the worktree remove included - can run.
-        real_save(path, data)
-        calls.append(path)
-        if len(calls) == 1:
-            raise RuntimeError("simulated crash")
-
-    monkeypatch.setattr(wave_assemble, "save", save_then_crash)
+    held_prd = HELD_OUTSIDE_ROSTER[1]
+    repo, wave_path, worktree, branch = _two_merging_lanes(
+        tmp_path,
+        monkeypatch,
+        held_prd,
+    )
+    _crash_on_first_save_of_l2_assembled(monkeypatch)
     with pytest.raises(RuntimeError, match="simulated crash"):
         wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass)
-    monkeypatch.setattr(wave_assemble, "save", real_save)
     _, lanes = _saved(repo, wave_path)
-    # Persisted BEFORE any destructive git call: assembled on disk, yet the
-    # worktree and branch are both still there.
-    assert lanes["l1"]["status"] == "assembled", lanes["l1"]
-    assert held_prd in lanes["l1"]["held_prds"], lanes["l1"]
-    assert not lanes["l1"].get("worktree_removed"), lanes["l1"]
+    # Persisted BEFORE any destructive git call: assembled, held PRDs and the
+    # migration guard on disk, yet the worktree and branch are both still there.
+    assert lanes["l2"]["status"] == "assembled", lanes["l2"]
+    assert held_prd in lanes["l2"]["held_prds"], lanes["l2"]
+    assert lanes["l2"]["migrated_at"], lanes["l2"]
+    assert not lanes["l2"].get("worktree_removed"), lanes["l2"]
     assert worktree.is_dir(), worktree
     assert _git(repo, "branch", "--list", branch).stdout.strip()
+    review = _autopilot(repo) / "reports" / "00002-b.md-review.md"
+    assert review.read_text(encoding="utf-8") == "l2 review\n"
     assert wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass) == 0
     saved, lanes = _saved(repo, wave_path)
-    assert lanes["l1"]["status"] == "assembled", lanes["l1"]
-    assert lanes["l1"]["worktree_removed"] is True, lanes["l1"]
+    assert lanes["l2"]["status"] == "assembled", lanes["l2"]
+    assert lanes["l2"]["worktree_removed"] is True, lanes["l2"]
     assert not worktree.exists(), worktree
     assert _git(repo, "branch", "--list", branch).stdout == ""
+    metrics = _rows(_autopilot(repo) / "loop-metrics.jsonl")
+    assert [row["prd"] for row in metrics].count("00002-b.md") == 1, metrics
     wave_id = saved["id"]
     for folder in ("reports", "ledger"):
         text = (_autopilot(repo) / folder / f"{wave_id}-wave.md").read_text(
             encoding="utf-8",
         )
         prds = text[text.index("## PRDs") :]
-        assert f"- {held_prd}: Wave {wave_id}, lane l1, parked" in prds, prds
-        assert f"- 00001-a.md: Wave {wave_id}, lane l1, done" in prds, prds
+        assert f"- {held_prd}: Wave {wave_id}, lane l2, parked" in prds, prds
+        for prd, lane in (("00001-a.md", "l1"), ("00002-b.md", "l2")):
+            assert f"- {prd}: Wave {wave_id}, lane {lane}, done" in prds, prds
 
 
 # ── _migrate_jsonl and _wave_rows: a blank line in the file ──────────────

@@ -21,6 +21,7 @@ this checkout's own backlog or `docs/dev/project-management/autopilot/wave.json`
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -114,21 +115,48 @@ def test_run_land_reports_a_failed_git_call_instead_of_raising(
     assert wave.load(wave_path) == saved
 
 
+def _drained_lane(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[Path, Path, Path, str]:
+    """assemble's own real fixture: one drained lane with a commit, so assemble
+    gets past its refusals and reaches its wave.json writes. The repo, wave.json,
+    the lane's worktree and its branch."""
+    repo, wave_path = _launched(tmp_path, monkeypatch, 1)
+    worktree = _finish(wave_path, "l1", "")
+    _commit(worktree, {"x/a.py": "# l1\n"}, "l1 change")
+    return repo, wave_path, worktree, wave.load(wave_path)["lanes"][0]["branch"]
+
+
+def _failing_save(
+    monkeypatch: pytest.MonkeyPatch,
+    error: BaseException,
+    fails: Callable[[dict], bool],
+) -> None:
+    """Every wave.json write `fails` picks raises `error`; the rest land."""
+    real_save = wave_assemble.save
+
+    def save(path: Path, data: dict) -> None:
+        if fails(data):
+            raise error
+        real_save(path, data)
+
+    monkeypatch.setattr(wave_assemble, "save", save)
+
+
+@pytest.mark.parametrize(
+    "fails",
+    [lambda data: True, lambda data: "assembly" in data],
+    ids=["every_save", "post_loop_save"],
+)
 def test_assemble_os_error_is_one_line_exit_one(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    fails: Callable[[dict], bool],
 ) -> None:
-    # assemble's own real fixture: one drained lane with a commit, so assemble
-    # gets past its refusals and reaches its first wave.json write.
-    repo, wave_path = _launched(tmp_path, monkeypatch, 1)
-    worktree = _finish(wave_path, "l1", "")
-    _commit(worktree, {"x/a.py": "# l1\n"}, "l1 change")
-
-    def disk_error(path: Path, data: dict) -> None:
-        raise OSError("simulated disk error")
-
-    monkeypatch.setattr(wave_assemble, "save", disk_error)
+    repo, wave_path, worktree, branch = _drained_lane(tmp_path, monkeypatch)
+    _failing_save(monkeypatch, OSError("simulated disk error"), fails)
     capsys.readouterr()
 
     exit_code = wave_cli.run(_parse(["wave", "assemble"]), repo, wave_path)
@@ -140,6 +168,24 @@ def test_assemble_os_error_is_one_line_exit_one(
     assert len(lines) == 1, printed
     assert "simulated disk error" in lines[0], lines
     assert _no_traceback(combined)
+    if fails({}):
+        # every_save: nothing was ever persisted, so nothing destructive may
+        # have run - no worktree remove, no branch -D.
+        assert worktree.is_dir(), worktree
+        assert _git(repo, "branch", "--list", branch).stdout.strip()
+
+
+def test_assemble_lets_a_non_os_error_propagate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Only OSError joins the caught types: a programming bug must still raise,
+    # not shrink into one quiet line.
+    repo, wave_path, _, _ = _drained_lane(tmp_path, monkeypatch)
+    _failing_save(monkeypatch, KeyError("boom"), lambda data: True)
+
+    with pytest.raises(KeyError, match="boom"):
+        wave_cli.run(_parse(["wave", "assemble"]), repo, wave_path)
 
 
 def test_run_land_prints_a_reason_when_review_failed(
