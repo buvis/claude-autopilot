@@ -4,13 +4,15 @@
     "finding": "The PRD's success metrics — run `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_rework_groups.py skills/run-autopilot/scripts/test_rework_groups_prose.py`, then `bash dev/bin/release-checks`, and also `git check-ignore -q docs/dev/project-management/autopilot/deferred/x.json.lock` (expected 0; currently expected to fail).",
     "file": null,
     "command": "uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_rework_groups.py skills/run-autopilot/scripts/test_rework_groups_prose.py",
-    "source": "bob"
+    "source": "bob",
+    "result": {"exit": 0}
   },
   {
     "cycle": 1,
     "finding": "The PRD's success metrics — run `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_rework_groups.py skills/run-autopilot/scripts/test_rework_groups_prose.py`, then `bash dev/bin/release-checks`, and also `git check-ignore -q docs/dev/project-management/autopilot/deferred/x.json.lock` (expected 0; currently expected to fail).",
     "file": null,
     "command": "bash dev/bin/release-checks",
-    "source": "bob"
+    "source": "bob",
+    "result": {"exit": 0}
   }
 ]
