@@ -6,7 +6,6 @@ The patterns are the contract, so they are spelled out here, not derived.
 
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -15,9 +14,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from cli import store_tree
+from cli.custody_testutil import _GIT_ENV
 from cli.store_tree_testutil import _autopilot_dir, _write_state
-
-_GIT_ENV = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
 
 EXPECTED_GITIGNORE_PATTERNS = [
     "autopilot/state.json",
@@ -129,6 +127,23 @@ def test_ensure_store_gitignore_is_idempotent(
         assert _fingerprint(gitignore) == before, "a matching file is never rewritten"
 
 
+def test_ensure_store_gitignore_rewrites_the_one_level_lock_pattern(
+    tmp_path: Path,
+) -> None:
+    store_dir = _store_dir(tmp_path)
+    gitignore = store_dir / ".gitignore"
+    old_body = store_tree.STORE_GITIGNORE.replace(
+        "autopilot/**/*.lock",
+        "autopilot/*.lock",
+    )
+    gitignore.write_text(old_body, encoding="utf-8")
+
+    wrote = store_tree.ensure_store_gitignore(store_dir)
+
+    assert wrote is True, "a body with the old one-level lock pattern differs"
+    assert gitignore.read_text(encoding="utf-8") == store_tree.STORE_GITIGNORE
+
+
 def test_nested_lock_files_are_ignored(tmp_path: Path) -> None:
     """The recursive pattern `autopilot/**/*.lock` ignores a lock file nested
     under a subdirectory (`deferred/`), not just one directly in `autopilot/`."""
@@ -160,6 +175,7 @@ def test_nested_lock_files_are_ignored(tmp_path: Path) -> None:
         timeout=30,
     ).stdout
 
-    assert "b-deferred.json" in status
+    record = (deferred_dir / "b-deferred.json").relative_to(tmp_path).as_posix()
+    assert f"?? {record}" in [line.strip() for line in status.splitlines()]
     assert "state.json.lock" not in status
     assert "b-deferred.json.lock" not in status
