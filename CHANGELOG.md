@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **run-autopilot**: nested store lock files such as `deferred/*.json.lock` are now ignored
+
 ## [0.7.0] - 2026-10-03
 
 ### Fixed

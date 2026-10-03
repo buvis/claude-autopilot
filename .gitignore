@@ -5,4 +5,3 @@ __pycache__/
 *.pyc
 dev/local/
 docs/dev/tmp/
-docs/dev/project-management/**/*.lock
