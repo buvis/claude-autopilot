@@ -30,7 +30,7 @@ from cli.test_wave_review import WAVE_ID, _assembled, _plugins_json, _pm, _recor
 # ── _land_cleanup: the assembly worktree's dirty-tree gate ─────────────────
 
 
-def test_store_only_churn_in_the_assembly_worktree_does_not_refuse(
+def test_store_churn_in_the_assembly_worktree_does_not_refuse(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -186,6 +186,8 @@ def test_retrying_seed_state_does_not_recommit_the_held_backlog(
             return subprocess.CompletedProcess(argv, 1, "", "disk went away")
         return real(argv)
 
+    before_first_hold = _git(worktree, "rev-parse", "HEAD").stdout.strip()
+
     with pytest.raises(RuntimeError):
         wave_review.seed_state(
             state_path,
@@ -194,6 +196,13 @@ def test_retrying_seed_state_does_not_recommit_the_held_backlog(
             run_cli=dies_at_cycle,
         )
     head_after_first_hold = _git(worktree, "rev-parse", "HEAD").stdout.strip()
+
+    # The first call must have actually committed the hold: an unchanged HEAD
+    # here would pass the retry-idempotency check below vacuously even if
+    # `_hold_backlog` silently did nothing on the first call too.
+    assert head_after_first_hold != before_first_hold
+    assert (_pm(worktree) / "prds" / "hold" / "00050-already-seeded.md").exists()
+    assert not (backlog / "00050-already-seeded.md").exists()
 
     # The backlog is already held; a resumed seed_state must not re-commit it.
     wave_review.seed_state(state_path, wave_dict, _plugins_json(tmp_path))

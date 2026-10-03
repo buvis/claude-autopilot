@@ -207,8 +207,10 @@ No dependencies - built first.
   green.
 - [ ] Switch the assembly worktree gate to `foreign_dirty` and hold the
   seeded backlog (depends on: Phase 0) - Acceptance:
-  `test_wave_review.py::test_store_churn_in_the_assembly_worktree_does_not_refuse`
-  and `::test_seeded_backlog_prds_are_held_before_the_nested_loop` green.
+  `test_wave_review_cleanup.py::test_store_churn_in_the_assembly_worktree_does_not_refuse`
+  and `::test_seeded_backlog_prds_are_held_before_the_nested_loop` green
+  (moved to test_wave_review_cleanup.py, not test_wave_review.py, to stay
+  under the 800-line file cap - test_wave_review.py is 757 lines already).
 - [ ] Land after a hand review (depends on: Phase 0) - Acceptance:
   `test_wave_review_land.py::test_hand_reviewed_stub_in_done_lands` and
   `::test_review_failed_without_hand_review_still_exits_four` green.
