@@ -2845,3 +2845,35 @@
 {"id":"64da87f9","kind":"pat","task":"1","queued_at":1791051203,"prompt_bytes":11813}
 {"id":"64da87f9","ended_at":1791051311,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791051311,"phase":"build","prd":"00242-harden-the-wave-verbs-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791051433,"phase":"build","prd":"00242-harden-the-wave-verbs-v1.md"}
+{"id":"6c9953eb","kind":"tess","task":"2","queued_at":1791051502,"prompt_bytes":54405}
+{"id":"b028de0b","kind":"tess","task":"2","queued_at":1791051510,"prompt_bytes":47443}
+{"id":"2bbf4055","kind":"devon","task":"2","queued_at":1791051661,"prompt_bytes":6994}
+{"id":"2bbf4055","ended_at":1791051789,"elapsed_s":128,"outcome":"ok","detail":null}
+{"id":"6f48160f","kind":"ivan","task":"2","queued_at":1791052017,"prompt_bytes":29058}
+{"id":"12fd3468","kind":"pat","task":"2","queued_at":1791052106,"prompt_bytes":11280}
+{"id":"af856102","kind":"tess","task":"3","queued_at":1791052223,"prompt_bytes":44848}
+{"id":"87ef93a9","kind":"devon","task":"3","queued_at":1791052565,"prompt_bytes":4395}
+{"id":"87ef93a9","ended_at":1791052909,"elapsed_s":344,"outcome":"ok","detail":null}
+{"id":"644dc240","kind":"ivan","task":"3","queued_at":1791053279,"prompt_bytes":46279}
+{"id":"07e4ae6e","kind":"pat","task":"3","queued_at":1791053473,"prompt_bytes":43614}
+{"id":"4729d0a7","kind":"tess","task":"4","queued_at":1791053764,"prompt_bytes":43017}
+{"id":"8c6b163d","kind":"devon","task":"4","queued_at":1791053890,"prompt_bytes":4470}
+{"id":"8c6b163d","ended_at":1791054014,"elapsed_s":124,"outcome":"ok","detail":null}
+{"id":"0563074a","kind":"ivan","task":"4","queued_at":1791054276,"prompt_bytes":53629}
+{"id":"8bce89c6","kind":"ivan","task":"4","queued_at":1791054310,"prompt_bytes":50607}
+{"id":"372cc896","kind":"ivan","task":"4","queued_at":1791054326,"prompt_bytes":39500}
+{"id":"e4a1422c","kind":"pat","task":"4","queued_at":1791054436,"prompt_bytes":23323}
+{"id":"6c9953eb","ended_at":1791054557,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"b028de0b","ended_at":1791054557,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"6f48160f","ended_at":1791054557,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"12fd3468","ended_at":1791054557,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"af856102","ended_at":1791054557,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"644dc240","ended_at":1791054557,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"07e4ae6e","ended_at":1791054557,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"4729d0a7","ended_at":1791054557,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"0563074a","ended_at":1791054557,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"8bce89c6","ended_at":1791054557,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"372cc896","ended_at":1791054557,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"e4a1422c","ended_at":1791054557,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791054557,"phase":"build","prd":"00242-harden-the-wave-verbs-v1.md"}
