@@ -30,5 +30,149 @@
     "issue": "Expect a repeat until the 00240 release reaches the installed cache.",
     "file": "docs/dev/project-management/.gitignore:3",
     "reason": "The recurrence, not the current regression. The batch runs the installed plugin cache (v0.7.0), whose `cli/store_tree.STORE_GITIGNORE` predates PRD 00240, so every build-gate `ensure-store` rewrites the tracked store `.gitignore` back to `autopilot/*.lock`. Restoring the line and untracking the four lock files is queued as a cycle-1 rework fix; making the fix stick needs a release carrying 00240, which no PRD in this repo can do for itself. Deferred to batch end as a release-gated item."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "1 touched test passes against the pre-change code: test_critical_d_task_carries_design_then_contract_then_findings",
+    "file": "skills/run-autopilot/cli/test_design_rework_prose.py",
+    "reason": "Behavior-preserving by construction, the same call cycle 1 made. The f2d82e3 fix scoped this test's ordering assertion around the new \"Group first\" bullet, which does not exist at the base commit, so the test cannot fail there and that is correct rather than a gap. Ledgered this cycle so a third cycle auto-dismisses it instead of re-arguing it."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "The Tail sweep HIGH is only partly resolved. The `Tail sweep:` prefix and the resume-rule pin are fixed. Step 2 still reads \"Build ONE `[D{cycle}]` task\", and the intro still reads \"one normal `/autopilot:work` task\". Both contradict the Split rule's \"one task per group\". The old \">10 findings\" gate stays gone, so a 3-finding sweep over 3 files still yields 3 tasks, which is the per-task cost the PRD targets. Suggested fix: reword step 2 and the intro to \"one task per `group-rework` group\". Decide explicitly whether small sweeps still collapse to one task.",
+    "file": "skills/run-autopilot/references/phase-review.md:195",
+    "reason": "cap-overflow: rework cap reached (cycle 2 of 2) with this finding unresolved. Task 6 fixed the naming and resume-rule half of cycle 1's HIGH but left step 2's \"Build ONE task\" sentence and dropped the small-sweep gate. Whether a small sweep should still collapse to one task is a contract decision PRD 00241 never states, so it needs an owner rather than another rework pass."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "`_LINE_SUFFIX` still misses three citation shapes the canonical `consolidate_findings._TRAILING_LINENO_RE` strips and its comment says the personas emit — `(line 3)`, `(lines 18-22, 423)`, `#L12-L20` — so each still becomes its own junk key and burns a cap slot, the unresolved remainder of cycle 1's `file_key` HIGH",
+    "file": "skills/run-autopilot/cli/rework_groups.py:26",
+    "reason": "cap-overflow: rework cap reached (cycle 2 of 2) with this finding unresolved. Task 7 widened the regex past the PRD's stated rule but not to the canonical set. How far to widen is a judgment call the PRD does not specify (it names only `:<digits>` and `:<digits>-<digits>`), and Blake independently reads the current widening as already beyond spec, so the honest disposition is an owner rather than a third pass."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "`file_key` discards the cited file for `N/A (path:77)`. Cycle 1 pointed at `consolidate_findings.strip_citation_suffixes`, which unwraps that shape (`_NA_PARENS_RE`) and keeps the first path as the citation. `file_key` maps it to `general`, and `test_not_applicable_wrapping_a_path_is_the_general_key` pins that. A finding that names a real file therefore merges into the smallest group instead of its own file's group.",
+    "file": "skills/run-autopilot/cli/rework_groups.py:28",
+    "reason": "cap-overflow: rework cap reached (cycle 2 of 2) with this finding unresolved. Reversing it also flips a test task 7 pinned and an assumption task 7 recorded in the ledger, so it belongs to the same owner as the `_LINE_SUFFIX` HIGH above."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "`file_key` goes beyond the spec's key rule (strip trailing `:<digits>` and `:<digits>-<digits>`, `general` stays `general`). It also strips ` (lines a-b)` and `#Ln` suffixes, and maps `N/A` and `N/A (...)` to `general`. The spec lists only `general` and `<path>[:<line>]` as inputs, so this is unrequested behavior, though it is a harmless superset.",
+    "file": "skills/run-autopilot/cli/rework_groups.py:26",
+    "reason": "cap-overflow: rework cap reached (cycle 2 of 2) with this finding unresolved. Blake's own wording calls it a harmless superset, and the widening it objects to is what cycle 1's `file_key` HIGH demanded, so the two findings pull in opposite directions and the gate cannot satisfy both. Same owner as the `_LINE_SUFFIX` HIGH."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "The Tail sweep \"Split rule\" is not the exact sentence the spec gave. The spec says it \"becomes\" a single sentence. The implementation appends five sentences: the findings JSON path, the task naming rule, a one-task floor, and max-2-parallel. They are sensible but unrequested.",
+    "file": "skills/run-autopilot/references/phase-review.md:197",
+    "reason": "cap-overflow: rework cap reached (cycle 2 of 2) with this finding unresolved. The extra sentences exist because cycle 1's Tail sweep HIGH demanded the naming rule and the findings path; trimming back to the spec's one sentence would re-open that HIGH. Rides with the Tail sweep HIGH above."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "The CHANGELOG entry adds three clauses beyond the spec's single \"caps at 4 non-CRITICAL tasks, grouped by file\" line. They cover suffix shapes, `N/A` handling and the exit-2 message.",
+    "file": "CHANGELOG.md:12",
+    "reason": "cap-overflow: rework cap reached (cycle 2 of 2) with this finding unresolved. The extra clauses describe behavior that genuinely shipped (the rework added it), so the entry is accurate; it is longer than the spec asked, not wrong."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "`assert \"floor\" in paragraph` pins a literal word, not the rule, so any sentence containing \"floor\" satisfies it — and the clause it guards is itself vacuous",
+    "file": "skills/run-autopilot/scripts/test_rework_groups_prose.py:89",
+    "reason": "cap-overflow: rework cap reached (cycle 2 of 2) with this finding unresolved. Fixing the assertion only matters once the floor clause itself is decided, which is the Tail sweep HIGH's open question; it rides with that owner."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "Task 5's `release-checks` wiring ships with no regression test, though the sibling suite pins its own wiring the same way (`test_design_rework_prose.py:546 test_release_checks_runs_both_design_contract_suites`); deleting the new line leaves everything green",
+    "file": "dev/bin/release-checks:76",
+    "reason": "cap-overflow: rework cap reached (cycle 2 of 2) with this finding unresolved. A genuine test gap with a named sibling pattern to copy, and the smallest standalone item in this set."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "The new prose test copies ~15 lines of landmark lookup and paragraph bounding verbatim from `test_tail_sweep_split_rule_uses_the_command` (lines 43-62); the duplicated block should be one `_split_rule_paragraph()` helper",
+    "file": "skills/run-autopilot/scripts/test_rework_groups_prose.py:65",
+    "reason": "cap-overflow: rework cap reached (cycle 2 of 2) with this finding unresolved. Behavior-preserving tidy-up in test code, no correctness consequence."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The `if not code: break` guard added in `_cap` is unreachable and untested. The ledger calls it \"deliberately untested\". `test_prose_only_findings_under_a_cap_of_one_keep_every_finding` never enters the loop, because one group is not greater than a cap of one, so it passes at base and does not reach the guard. A cap of 0 with prose-only input would drive it. The guard also exits with the group count still above the cap.",
+    "file": "skills/run-autopilot/cli/rework_groups.py:82",
+    "reason": "cap-overflow: rework cap reached (cycle 2 of 2) with this finding unresolved. The guard exists because cycle 1 flagged a `code[0]` IndexError on exactly this branch, and the branch is PRD rule 5's last clause, which the PRD itself calls unreachable at cap 4. Bob placed it in his KNOWN bucket for the same reason: removing it re-opens the cycle-1 finding."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Two weaker pieces remain. `_LINE_SUFFIX` is still narrower than the canonical regex: it misses `(line 3)`, `(lines 3, 5)` and `#L12-L14`, so those shapes can still form bogus groups. The ledger acknowledges the `#L12-L14` case. Separately, the comment in `test_design_rework_prose.py:379` still says the `### Findings (verbatim)` mention \"lands first\", but the assertion below it now orders only the two bullet leads.",
+    "file": "skills/run-autopilot/cli/rework_groups.py:26",
+    "reason": "cap-overflow: rework cap reached (cycle 2 of 2) with this finding unresolved. Its first half is the `_LINE_SUFFIX` HIGH restated at Low; its second half is a one-line stale comment. Rides with that HIGH's owner."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The spec names `test_the_00223_cycle_one_set_yields_at_most_four_non_critical_tasks`. The implemented test is `test_the_00223_cycle_one_set_yields_four_non_critical_tasks`. The name differs and the assertion is stricter (exactly 4).",
+    "file": "skills/run-autopilot/cli/test_rework_groups.py:481",
+    "reason": "cap-overflow: rework cap reached (cycle 2 of 2) with this finding unresolved. The stricter assertion is what cycle 1's \"cap tests cannot detect a breach\" finding asked for, so renaming back would weaken the test the prior cycle strengthened."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Beyond the spec's `test_cli_malformed_input_exits_two`, the CLI also rejects arrays whose elements lack a string `severity` or `file`, and adds `test_cli_malformed_element_exits_two`. This is reasonable validation, but the spec only required exit 2 on unreadable or malformed input.",
+    "file": "skills/run-autopilot/cli/__main__.py:776",
+    "reason": "cap-overflow: rework cap reached (cycle 2 of 2) with this finding unresolved. The element validation is exactly what cycle 1's [3/4] malformed-input HIGH demanded, so Blake's scope objection and that HIGH are in direct conflict; the HIGH wins and the row is recorded rather than acted on."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The spec's last rule 5 clause (merge `prose` into the single remaining group) is unreachable at cap 4. The code documents this and keeps a guarded branch.",
+    "file": "skills/run-autopilot/cli/rework_groups.py:76",
+    "reason": "cap-overflow: rework cap reached (cycle 2 of 2) with this finding unresolved. The PRD mandates the clause and simultaneously makes it unreachable at its own cap; implementing it as a documented guarded branch is the faithful reading. Same substance as the `if not code: break` row above."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Neither `_is_finding` nor `file_key` rejects an empty `file`, so `{\"severity\": \"🟡\", \"file\": \"\"}` yields a group — and a `[D]` task — named `\"\"`",
+    "file": "skills/run-autopilot/cli/__main__.py:776",
+    "reason": "cap-overflow: rework cap reached (cycle 2 of 2) with this finding unresolved. A real input-validation gap with a one-line fix and a named test case, but the orchestrator writes this JSON from the consolidated table, which never emits an empty `file`, so reachability is low."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The new `cannot read` / `cannot parse` split has no test that pins either wording: every malformed-input case asserts only exit 2, empty stdout and one stderr line, so collapsing the two clauses back into one stays green",
+    "file": "skills/run-autopilot/cli/test_rework_groups.py:671",
+    "reason": "cap-overflow: rework cap reached (cycle 2 of 2) with this finding unresolved. A genuine unpinned message split introduced by task 7's fix of a cycle-1 Low; the PRD's own contract requires only exit 2 plus one stderr line, both of which are pinned."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The second `[MECH]` fail-first line is internally inconsistent: `test_bare_not_applicable_is_the_general_key` cannot pass against the base `file_key`, yet 16 sibling tests did fail at base, so a whole-module overlay leak cannot explain it either",
+    "file": "skills/run-autopilot/cli/test_rework_groups.py:139",
+    "reason": "cap-overflow: rework cap reached (cycle 2 of 2) with this finding unresolved. This is a defect in the review tooling, not in PRD 00241's code: `replay_tests_against_base.py` reads a `unittest` `subTest` parent as PASSED while its subtests report SUBFAILED, so it under-reports fail-first coverage. Alice, Bob and Carl each confirmed it independently this cycle. It needs its own PRD against `skills/review-work-completion/scripts/replay_tests_against_base.py`, and it is out of scope for a PRD about grouping rework findings."
   }
 ]

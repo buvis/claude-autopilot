@@ -1,0 +1,16 @@
+[
+  {
+    "cycle": 2,
+    "finding": "Success metrics at this HEAD — run `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_rework_groups.py skills/run-autopilot/scripts/test_rework_groups_prose.py skills/run-autopilot/cli/test_design_rework_prose.py` and `bash dev/bin/release-checks`, and record both exit codes against this HEAD rather than reusing cycle 1's.",
+    "file": null,
+    "command": "uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_rework_groups.py skills/run-autopilot/scripts/test_rework_groups_prose.py skills/run-autopilot/cli/test_design_rework_prose.py",
+    "source": "bob"
+  },
+  {
+    "cycle": 2,
+    "finding": "Success metrics at this HEAD — run `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_rework_groups.py skills/run-autopilot/scripts/test_rework_groups_prose.py skills/run-autopilot/cli/test_design_rework_prose.py` and `bash dev/bin/release-checks`, and record both exit codes against this HEAD rather than reusing cycle 1's.",
+    "file": null,
+    "command": "bash dev/bin/release-checks",
+    "source": "bob"
+  }
+]

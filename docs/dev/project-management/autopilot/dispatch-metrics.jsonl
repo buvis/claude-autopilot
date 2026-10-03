@@ -2819,3 +2819,11 @@
 {"id":"e7d739e3","ended_at":1791046415,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"id":"1819317e","ended_at":1791046415,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"kind":"handoff","site":"review","edge":"leave","at":1791046415,"phase":"review","prd":"00241-bound-rework-batches-by-file-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1791046468,"phase":"review","prd":"00241-bound-rework-batches-by-file-v1.md"}
+{"id":"0d970785","kind":"bob","task":"review-00241c2","queued_at":1791047051,"prompt_bytes":18672}
+{"id":"4df8ccfe","kind":"carl","task":"review-00241c2","queued_at":1791047055,"prompt_bytes":15403}
+{"id":"356080cb","kind":"bob","task":"review-00241c2","queued_at":1791047115,"prompt_bytes":18672}
+{"id":"0d970785","ended_at":1791047148,"elapsed_s":97,"outcome":"error","detail":"exit 1"}
+{"id":"356080cb","ended_at":1791047151,"elapsed_s":36,"outcome":"error","detail":"retry: exit 1"}
+{"id":"4df8ccfe","ended_at":1791047464,"elapsed_s":409,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"review","edge":"leave","at":1791048478,"phase":"done","prd":"00241-bound-rework-batches-by-file-v1.md"}
