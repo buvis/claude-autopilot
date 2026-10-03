@@ -341,6 +341,7 @@ def test_release_of_a_missing_slot_is_a_noop(tmp_path, capsys):
     slot = tmp_path / "wave-slots" / "1"
     assert release(slot, ME) is None
     assert not slot.exists()
+    assert not slot.parent.exists()  # releasing must not recreate wave-slots/
     captured = capsys.readouterr()  # a slot already gone is not worth a word
     assert captured.err == ""
     assert captured.out == ""

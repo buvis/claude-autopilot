@@ -291,7 +291,7 @@ def test_hold_backlog_refuses_a_name_collision_without_overwriting(
     (hold / name).write_text("original held content\n", encoding="utf-8")
     (backlog / name).write_text("colliding backlog content\n", encoding="utf-8")
 
-    with pytest.raises(Exception) as excinfo:
+    with pytest.raises(FileExistsError) as excinfo:
         wave_review._hold_backlog(worktree, pm, wave_dict)
 
     message = str(excinfo.value)
@@ -299,3 +299,138 @@ def test_hold_backlog_refuses_a_name_collision_without_overwriting(
     assert str(hold / name) in message, message
     assert (hold / name).read_text(encoding="utf-8") == "original held content\n"
     assert (backlog / name).exists()
+
+
+def _crash_on_hold_backlog_step(monkeypatch: pytest.MonkeyPatch, step: str) -> None:
+    """Every git call runs for real except the first one naming `step` (`rm`
+    or `add`), which raises as a real `check=True` failure would, then puts
+    real git back. The renames into hold/ have already happened by then, so
+    the only evidence of the pending move is files untracked under hold/."""
+    real_run_git = wave_assemble._default_run_git
+
+    def dies_at_step(
+        args: list[str],
+        cwd: Path | None = None,
+        check: bool = True,
+    ) -> subprocess.CompletedProcess:
+        if step in args:
+            monkeypatch.setattr(wave_review, "_default_run_git", real_run_git)
+            raise subprocess.CalledProcessError(
+                1,
+                args,
+                output="",
+                stderr="disk went away",
+            )
+        return real_run_git(args, cwd=cwd, check=check)
+
+    monkeypatch.setattr(wave_review, "_default_run_git", dies_at_step)
+
+
+def _worktree_with_backlog(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *names: str,
+) -> tuple[Path, Path, dict]:
+    """(worktree, pm, wave_dict) with one stub PRD per name in the backlog."""
+    _, _, wave_dict = _assembled(tmp_path, monkeypatch)
+    worktree = Path(wave_dict["assembly"]["worktree"])
+    pm = _pm(worktree)
+    (pm / "prds" / "backlog").mkdir(parents=True, exist_ok=True)
+    (pm / "prds" / "hold").mkdir(parents=True, exist_ok=True)
+    for name in names:
+        (pm / "prds" / "backlog" / name).write_text("# stub\n", encoding="utf-8")
+    return worktree, pm, wave_dict
+
+
+def _head_commit_files(worktree: Path) -> list[str]:
+    return _git(
+        worktree,
+        "show",
+        "--name-only",
+        "--pretty=format:",
+        "HEAD",
+    ).stdout.splitlines()
+
+
+def _commits_since(worktree: Path, before_head: str) -> str:
+    after_head = _git(worktree, "rev-parse", "HEAD").stdout.strip()
+    return _git(
+        worktree,
+        "rev-list",
+        "--count",
+        f"{before_head}..{after_head}",
+    ).stdout.strip()
+
+
+def test_a_backlog_prd_with_a_space_in_its_name_is_held_and_committed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    name = "00050-two words.md"
+    worktree, pm, wave_dict = _worktree_with_backlog(tmp_path, monkeypatch, name)
+    before_head = _git(worktree, "rev-parse", "HEAD").stdout.strip()
+
+    wave_review._hold_backlog(worktree, pm, wave_dict)
+
+    assert (pm / "prds" / "hold" / name).exists()
+    assert list((pm / "prds" / "backlog").glob("*.md")) == []
+    assert _commits_since(worktree, before_head) == "1"
+    message = _git(worktree, "log", "-1", "--pretty=%B").stdout
+    assert f"- {name}" in message, message
+    # Named in the message is not enough: the file itself must be in the commit.
+    assert f"docs/dev/project-management/prds/hold/{name}" in _head_commit_files(
+        worktree,
+    )
+
+
+def test_retrying_a_held_prd_with_a_space_in_its_name_converges_to_one_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    name = "00050-two words.md"
+    worktree, pm, wave_dict = _worktree_with_backlog(tmp_path, monkeypatch, name)
+    real_run_git = wave_assemble._default_run_git
+    _crash_on_hold_backlog_commit(monkeypatch)
+    before_head = _git(worktree, "rev-parse", "HEAD").stdout.strip()
+
+    with pytest.raises(subprocess.CalledProcessError):
+        wave_review._hold_backlog(worktree, pm, wave_dict)
+
+    monkeypatch.setattr(wave_review, "_default_run_git", real_run_git)
+    wave_review._hold_backlog(worktree, pm, wave_dict)
+
+    assert _commits_since(worktree, before_head) == "1"
+    assert list((pm / "prds" / "backlog").glob("*.md")) == []
+    assert f"docs/dev/project-management/prds/hold/{name}" in _head_commit_files(
+        worktree,
+    )
+
+
+@pytest.mark.parametrize("step", ["rm", "add"])
+def test_retry_recovers_a_move_that_failed_before_anything_was_staged(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    step: str,
+) -> None:
+    # Failing at `rm`/`add` leaves nothing staged: the renamed files sitting
+    # untracked under hold/ are the only sign of the pending move, so a retry
+    # that only looked at the index would commit nothing and strand them.
+    names = ("00049-another.md", "00050-already-seeded.md")
+    worktree, pm, wave_dict = _worktree_with_backlog(tmp_path, monkeypatch, *names)
+    before_head = _git(worktree, "rev-parse", "HEAD").stdout.strip()
+    _crash_on_hold_backlog_step(monkeypatch, step)
+
+    with pytest.raises(subprocess.CalledProcessError):
+        wave_review._hold_backlog(worktree, pm, wave_dict)
+    assert _commits_since(worktree, before_head) == "0"
+
+    wave_review._hold_backlog(worktree, pm, wave_dict)
+
+    assert _commits_since(worktree, before_head) == "1"
+    assert list((pm / "prds" / "backlog").glob("*.md")) == []
+    committed = _head_commit_files(worktree)
+    message = _git(worktree, "log", "-1", "--pretty=%B").stdout
+    for name in names:
+        assert (pm / "prds" / "hold" / name).exists()
+        assert f"docs/dev/project-management/prds/hold/{name}" in committed
+        assert message.count(name) == 1, message
