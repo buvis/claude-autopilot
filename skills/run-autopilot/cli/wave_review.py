@@ -498,9 +498,20 @@ def _review_file(worktree: Path, wave: dict) -> Path | None:
     return max(matches, key=lambda path: path.stat().st_mtime)
 
 
-def _land_review_failed(repo: Path, wave: dict) -> int:
-    """Record a review_failed wave's outcome (summary line + operator
-    message) and return the "nothing to land" exit code, 4."""
+def _land_review_failed(repo: Path, wave_path: Path, wave: dict) -> int | None:
+    """An operator who hand-reviewed the assembly moves the stub into the
+    worktree's prds/done/; save status "converged" so the merge/migrate
+    sequence runs and a crash mid-sequence resumes on the converged path, and
+    return None so `land` lands it like a converged wave. Otherwise record
+    the review_failed outcome (summary line + operator message) and return
+    the "nothing to land" exit code, 4."""
+    worktree_pm = Path(wave["assembly"]["worktree"]) / "docs/dev/project-management"
+    if (worktree_pm / "prds/done" / _stub_name(wave)).exists():
+        with locked(wave_path):
+            wave = load(wave_path)
+            wave["status"] = "converged"
+            save(wave_path, wave)
+        return None
     review_file = _review_file(Path(wave["assembly"]["worktree"]), wave)
     line = (
         f"## Assembly review: review_failed, see {review_file}"
@@ -541,11 +552,10 @@ def land(
 
     status = wave.get("status")
     if status == "review_failed":
-        # An operator who hand-reviewed the assembly moves the stub into the
-        # worktree's prds/done/; that wave lands exactly like a converged one.
-        worktree_pm = Path(wave["assembly"]["worktree"]) / "docs/dev/project-management"
-        if not (worktree_pm / "prds/done" / _stub_name(wave)).exists():
-            return _land_review_failed(repo, wave)
+        outcome = _land_review_failed(repo, wave_path, wave)
+        if outcome is not None:
+            return outcome
+        status = "converged"
     elif status not in ("converged", "done"):
         raise ValueError(f"wave status {status!r} is not landable")
 
