@@ -12,13 +12,17 @@ from __future__ import annotations
 
 import copy
 import itertools
+import json
 import sys
 import unittest
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from cli import rework_groups
+from cli.__main__ import main
 
 CRIT = "\U0001f534"
 HIGH = "\U0001f7e0"
@@ -315,6 +319,53 @@ class Review00223FixtureTests(GroupTestCase):
         self.assertGreater(len(groups), 1)  # several groups, not one dump
         self.assertLessEqual(len(groups), rework_groups.NON_CRITICAL_CAP)
         self.assert_every_finding_kept_once(findings, groups)
+
+
+# ── CLI wrapper: group-rework ────────────────────────────────────────────
+# `_run_group_rework` is a thin wrapper over `rework_groups.group()`: read
+# --findings, parse it as JSON, call group(), print/exit. Its grouping
+# behavior is proved above; these tests only prove the CLI reads, calls, and
+# prints/exits correctly.
+
+
+def test_cli_prints_one_json_array(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    findings = [_f("a.py:1", CRIT), _f("general"), _f("b/c.py:3")]
+    findings_path = tmp_path / "findings.json"
+    findings_path.write_text(json.dumps(findings), encoding="utf-8")
+
+    exit_code = main(["group-rework", "--findings", str(findings_path)])
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    printed = json.loads(out)
+    assert printed == rework_groups.group(findings)
+
+
+@pytest.mark.parametrize(
+    "setup",
+    ["missing_file", "unreadable_file", "non_array_json"],
+)
+def test_cli_malformed_input_exits_two(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    setup: str,
+) -> None:
+    if setup == "missing_file":
+        findings_path = tmp_path / "does-not-exist.json"
+    elif setup == "unreadable_file":
+        findings_path = tmp_path  # a directory cannot be read as a file
+    else:
+        findings_path = tmp_path / "findings.json"
+        findings_path.write_text(json.dumps({"not": "an array"}), encoding="utf-8")
+
+    exit_code = main(["group-rework", "--findings", str(findings_path)])
+
+    assert exit_code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert len(captured.err.splitlines()) == 1
 
 
 if __name__ == "__main__":
