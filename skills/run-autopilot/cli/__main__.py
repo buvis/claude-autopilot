@@ -773,11 +773,29 @@ def _add_group_rework(subparsers) -> None:
     p.add_argument("--findings", type=Path, required=True)
 
 
+def _is_finding(item: object) -> bool:
+    return (
+        isinstance(item, dict)
+        and isinstance(item.get("severity"), str)
+        and isinstance(item.get("file"), str)
+    )
+
+
 def _run_group_rework(args: argparse.Namespace) -> int:
     try:
         findings = json.loads(args.findings.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as err:
-        print(f"autopilot: group-rework: cannot read {args.findings} ({err})", file=sys.stderr)
+    except OSError as err:
+        print(
+            f"autopilot: group-rework: cannot read {args.findings} ({err})",
+            file=sys.stderr,
+        )
+        return 2
+    except ValueError as err:
+        # The read succeeded; only the bytes are bad (non-UTF-8 or non-JSON).
+        print(
+            f"autopilot: group-rework: cannot parse {args.findings} ({err})",
+            file=sys.stderr,
+        )
         return 2
     if not isinstance(findings, list):
         print(
@@ -785,7 +803,15 @@ def _run_group_rework(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 2
-    print(json.dumps(rework_groups.group(findings)))
+    if not all(_is_finding(f) for f in findings):
+        print(
+            f"autopilot: group-rework: {args.findings} holds a finding without a"
+            " string `severity` and `file`",
+            file=sys.stderr,
+        )
+        return 2
+    # Phase 6 copies this output verbatim, so emoji and dashes stay literal.
+    print(json.dumps(rework_groups.group(findings), ensure_ascii=False))
     return 0
 
 
