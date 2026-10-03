@@ -128,12 +128,13 @@ currently separate them.
   00232 and 00233 (the parallel failures came from git commit signing in the
   test fixtures), and PRD 00236 makes the store trackable. All of these are
   in v0.7.0.
-- **Open: R4** (merge rework tasks by file). No PRD exists yet.
-- **Open: nested lock files.** `cli/store_tree.STORE_GITIGNORE` lists
+- **R4** (merge rework tasks by file) → PRD 00241.
+- **Nested lock files** → PRD 00240. `cli/store_tree.STORE_GITIGNORE` lists
   `autopilot/*.lock`, which misses `autopilot/deferred/*.json.lock`, so those
   get committed in any repo that tracks the store. Fix: change the pattern to
   `autopilot/**/*.lock`. claude-autopilot carries a root `.gitignore` line,
   `docs/dev/project-management/**/*.lock`, as a workaround.
-- **Open: `purge-devtmp` is not linked.** The drained loop calls
-  `~/.claude/skills/purge-devtmp/scripts/purge_devtmp.py`, which exists only
-  in agent-skills until `braid` runs, so drain-time cleanup fails soft.
+- **Fixed 2026-10-03: `purge-devtmp` was not linked.** agent-skills renamed
+  `purge-devlocal` on 09-30 (b3a61f9) but the links were never refreshed.
+  `braid` relinked it (2 linked, 2 removed), `braid --check` reports zero
+  drift, and the loop's purge script path now resolves.
