@@ -151,6 +151,20 @@ the confirmed findings. One Ivan edit took 19 minutes of model time
 this wide pays for it in retries. Worth measuring task-size vs retries across
 the next batch before changing the cap.
 
+### V11. Every in-session gate run failed once on the session's own env (fixed)
+
+A review or rework session exports `AUTOPILOT_DISPATCH_DEPTH`,
+`CODEX_SESSION_ID` or `COPILOT_CLI`; the codex/gemini wrapper harnesses
+inherited them, every case hit the recursion guard (exit 3), and the
+`release-checks` run reported 20 failures and had to be re-run with `env -u`.
+Seen on 00241 c1/c2 (Carl), 00241 c2 (orchestrator) and 00254 c1 (193 s +
+194 s). **Fixed 2026-10-05, 85d2ff1:** the three harnesses unset those vars
+at the top. Verified: `release-checks` exits 0 with all three set.
+
+00254 c1 (converged, full lane): 34 min total, 6.4 min before the reviewers,
+~10 min reviewers, 2.7 min bookkeeping, then a 2-task tail sweep and the
+3-min final gate.
+
 ## Not waste (kept)
 
 - The four-lens roster, two cycles, and the cap: standing rule, and cycle 2
