@@ -53,6 +53,33 @@ echo "$ERR" | grep -qF "gather-context: empty diff against master; pass --since 
   || FAIL "empty diff message" "expected the refusal message, got: $ERR"
 PASS "a full review without --since at a clean HEAD refuses with exit 3"
 
+# --- Regression: --since pointing at HEAD itself (an unambiguously valid
+# ref that resolves to an empty diff) must never trip the refusal, even
+# though the diff it produces is empty (PRD 00244 finding 2) ---
+set +e
+OUT4="$(bash "$SCRIPT" --since "$HEAD_SHA")"
+CODE4=$?
+set -e
+[[ "$CODE4" -eq 0 ]] || FAIL "--since HEAD exit code" "expected exit 0, got $CODE4: $OUT4"
+DIFF_FILE4="$(echo "$OUT4" | grep -o 'docs/dev/tmp/review-diff-[^ ]*\.diff')"
+[[ -n "$DIFF_FILE4" ]] || FAIL "--since HEAD diff path printed" "stdout: $OUT4"
+[[ -e "$DIFF_FILE4" ]] || FAIL "--since HEAD diff file created" "missing file: $DIFF_FILE4"
+[[ ! -s "$DIFF_FILE4" ]] || FAIL "--since HEAD diff file empty" "expected an empty diff file, got content in: $DIFF_FILE4"
+PASS "--since pointing at HEAD itself never refuses, even though the diff is empty"
+
+# --- Regression: an unresolvable --since ref never actually applies, so a
+# clean HEAD must still hit the same refusal a bare call would hit, not a
+# silent fallback "success" (PRD 00244 findings 1 and 5) ---
+INVALID_SINCE="0000000000000000000000000000000000000000"
+set +e
+ERR2="$(bash "$SCRIPT" --since "$INVALID_SINCE" 2>&1 >/dev/null)"
+CODE5=$?
+set -e
+[[ "$CODE5" -eq 3 ]] || FAIL "invalid --since exit code" "expected exit 3, got $CODE5: $ERR2"
+echo "$ERR2" | grep -qF "gather-context: empty diff against master; pass --since <work_start_sha> for a full review" \
+  || FAIL "invalid --since message" "expected the no-since refusal message, got: $ERR2"
+PASS "an unresolvable --since ref falls back to the branch base and still refuses an empty diff"
+
 echo "y" > later.py
 git add later.py
 git commit -q -m later
