@@ -1,0 +1,16 @@
+[
+  {
+    "cycle": 1,
+    "finding": "Cannot statically verify: the hook/runner suites and release-checks pass; last-verification records release-checks exit 0 but provides no test counts",
+    "file": null,
+    "command": "uv run --no-project --with pytest python -m pytest -q hooks/test_guard_phase_delegation.py skills/run-autopilot/cli/test_runner.py",
+    "source": "bob"
+  },
+  {
+    "cycle": 1,
+    "finding": "Runtime acceptance - the PRD's two success-metric gates must both be green at the reviewed HEAD",
+    "file": null,
+    "command": "bash dev/bin/release-checks",
+    "source": "bob"
+  }
+]
