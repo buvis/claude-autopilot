@@ -59,7 +59,11 @@ NO_MECH = "(no mechanical test checks this cycle)"
 STORE_REL = "docs/dev/project-management"
 PERSONAS = ("alice", "bob", "blake", "carl", "eve")
 # Bob's doubt appendix: these eve.md sections, verbatim, in eve.md's order.
-EVE_DOUBT_SECTIONS = ("Two lenses", "Categorize every residual finding", "Rubric verdicts")
+EVE_DOUBT_SECTIONS = (
+    "Two lenses",
+    "Categorize every residual finding",
+    "Rubric verdicts",
+)
 CITATION_LINE = (
     "Cite files repo-relative as path:line (for example skills/work/SKILL.md:166), "
     'never absolute and never with a "(lines a-b)" suffix.'
@@ -89,10 +93,12 @@ _ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 _PERSONA_RE = re.compile(r"[a-z][a-z0-9_-]*")
 _DIFF_HEADER_RE = re.compile(r"^diff --git a/.* b/(.+)$", re.MULTILINE)
 _FINDINGS_RE = re.compile(
-    r"^(#+)\s*Findings precedent\s*$", re.MULTILINE | re.IGNORECASE
+    r"^(#+)\s*Findings precedent\s*$",
+    re.MULTILINE | re.IGNORECASE,
 )
 _SCOPE_RE = re.compile(
-    r"^_Diff scope: .*\((?:changes since|vs) ([^)\s]+)\)_$", re.MULTILINE
+    r"^_Diff scope: .*\((?:changes since|vs) ([^)\s]+)\)_$",
+    re.MULTILINE,
 )
 _TAUT_RE = re.compile(rf"^{re.escape(TAUT_HEADING)}", re.MULTILINE)
 _H2_RE = re.compile(r"^## ", re.MULTILINE)
@@ -100,7 +106,11 @@ _H2_RE = re.compile(r"^## ", re.MULTILINE)
 
 def _git_out(repo_root: Path, *args: str) -> str | None:
     proc = subprocess.run(
-        ["git", *args], cwd=repo_root, capture_output=True, text=True, check=False
+        ["git", *args],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     out = proc.stdout.strip()
     return out if proc.returncode == 0 and out else None
@@ -148,7 +158,15 @@ def _write_inputs(
 ) -> tuple[Path, Path]:
     tasks_file = tmp_dir / f"review-tasks-{cycle_id}.md"
     tasks_file.write_text(render_tasks(tasks), encoding="utf-8")
-    prd_text = Path(prd_path).read_text(encoding="utf-8").rstrip() + "\n"
+    # The raw PRD, file-backed on its own (review-prd-raw-{cycle_id}.md) so
+    # Blake can read it directly in _run_inputs instead of re-deriving it by
+    # splitting the merged file below on the "## Design Doc" marker.
+    prd_raw_text = Path(prd_path).read_text(encoding="utf-8").rstrip() + "\n"
+    (tmp_dir / f"review-prd-raw-{cycle_id}.md").write_text(
+        prd_raw_text,
+        encoding="utf-8",
+    )
+    prd_text = prd_raw_text
     if design_doc is not None and Path(design_doc).is_file():
         design = Path(design_doc).read_text(encoding="utf-8").rstrip()
         prd_text += f"\n## Design Doc\n\n{design}\n"
@@ -167,7 +185,11 @@ def _gather(repo_root: Path, since: str | None, cycle_id: str) -> dict:
         str(TMP_REL / f"review-prd-{cycle_id}.md"),
     ]
     proc = subprocess.run(
-        args, cwd=repo_root, capture_output=True, text=True, check=False
+        args,
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     if proc.returncode != 0:
         error = proc.stderr.strip() or f"gather-context.sh exited {proc.returncode}"
@@ -187,7 +209,11 @@ def resolve_base(repo_root: Path, since: str | None) -> str | None:
     master, then develop. None when nothing resolves."""
     if since:
         sha = _git_out(
-            repo_root, "rev-parse", "--verify", "--quiet", f"{since}^{{commit}}"
+            repo_root,
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            f"{since}^{{commit}}",
         )
         if sha:
             return sha
@@ -255,7 +281,7 @@ def _ledger_block(settled_ledger: Path) -> tuple[str | None, str | None]:
             lines.append(
                 f"- [{entry.get('disposition')}] {entry.get('severity')}: "
                 f"{entry.get('issue')} ({entry.get('file')}) - "
-                f"reason: {entry.get('reason')}"
+                f"reason: {entry.get('reason')}",
             )
     return "\n".join(lines), None
 
@@ -270,7 +296,9 @@ def _pack_failure(proc: subprocess.CompletedProcess, repo_root: Path) -> str:
 
 
 def run_pack(
-    repo_root: Path, cycle_id: str, prd_path: Path
+    repo_root: Path,
+    cycle_id: str,
+    prd_path: Path,
 ) -> tuple[Path | None, str]:
     """(pack path, status). Every failure is a status string, never a raise."""
     exe = shutil.which(ENGRAM)
@@ -318,7 +346,7 @@ def _append_pack(context: Path, pack: Path | None) -> None:
     findings = NO_PACK if pack is None else findings_section(pack)
     _append(
         context,
-        f"## Context Pack\n\nPack file: {pack if pack else NO_PACK}\n\n"
+        f"## Context Pack\n\nPack file: {pack or NO_PACK}\n\n"
         f"### Findings precedent\n\n{findings}",
     )
 
@@ -333,20 +361,27 @@ def _read_record(repo_root: Path) -> dict | None:
 
 
 def _tests_line(counts: tuple, suffix: str) -> str:
-    return f"Tests: {counts[0]} passed, {counts[1]} failed, {counts[2]} skipped {suffix}"
+    return (
+        f"Tests: {counts[0]} passed, {counts[1]} failed, {counts[2]} skipped {suffix}"
+    )
 
 
 def run_gate_line(repo_root: Path, gate_command: str, cycle_id: str) -> dict:
     """Reuse the recorded gate when it still certifies HEAD, else run it once."""
     head = _git_out(repo_root, "rev-parse", "HEAD") or ""
     verdict, record = verification.reuse_verdict(
-        _read_record(repo_root), repo_root, head
+        _read_record(repo_root),
+        repo_root,
+        head,
     )
     if verdict == "reused":
         counts = (record["passed"], record["failed"], record["skipped"])
         suffix = f"(reused from last-verification.json at {record['sha'][:7]})"
-        return {"verdict": verdict, "tests_line": _tests_line(counts, suffix),
-                "timed_out": False}
+        return {
+            "verdict": verdict,
+            "tests_line": _tests_line(counts, suffix),
+            "timed_out": False,
+        }
     cycle = int(cycle_id) if cycle_id.isascii() and cycle_id.isdigit() else None
     result = verification.run_gate(gate_command, repo_root, sha=head, cycle=cycle)
     if result["timed_out"]:
@@ -408,6 +443,17 @@ def _incremental_block(prior_findings: Path) -> str:
     )
 
 
+def _prd_body(prd_file: Path, merged: str) -> str:
+    """The blind PRD body: the file-backed raw sibling `_write_inputs()`
+    stages next to `prd_file`, or the pre-"## Design Doc" slice of the
+    merged text when that sibling isn't there."""
+    cycle_id = prd_file.name.removeprefix("review-prd-").removesuffix(".md")
+    raw_file = prd_file.parent / f"review-prd-raw-{cycle_id}.md"
+    if raw_file.is_file():
+        return _read(raw_file).strip()
+    return merged.split("\n\n## Design Doc\n\n", 1)[0]
+
+
 def _run_inputs(
     context_file: Path,
     diff_file: Path | None,
@@ -429,8 +475,14 @@ def _run_inputs(
         "changed": list(dict.fromkeys(_DIFF_HEADER_RE.findall(diff_text))),
         "prd": prd,
         # Blake is blind: the PRD body only, never the design doc _write_inputs
-        # appended onto prd_file for every other persona.
-        "prd_body": prd.split("\n\n## Design Doc\n\n", 1)[0],
+        # appended onto prd_file for every other persona. _write_inputs()
+        # stages the raw PRD as its own review-prd-raw-{id}.md file
+        # alongside the merged one; read that file-backed copy directly when
+        # it is there, instead of re-deriving it by splitting the merged
+        # text on its "## Design Doc" marker (a caller that stages prd_file
+        # without the raw sibling, e.g. a direct render_roster() call in
+        # tests, still gets the split fallback).
+        "prd_body": _prd_body(Path(prd_file), prd),
         "pack": str(pack_file) if pack_file else NO_PACK,
         "findings": findings_section(Path(pack_file)) if pack_file else NO_PACK,
         "ledger": _ledger_block(Path(settled_ledger))[0] if settled_ledger else None,
@@ -465,7 +517,7 @@ def _eve_inputs(run: dict) -> str:
             f"## Changed files\n{changed}",
             f"## Findings precedent\n{run['findings']}",
             f"## Mechanical test checks\n{_mech_checks(context)}",
-        ]
+        ],
     )
 
 
@@ -552,11 +604,19 @@ def render_roster(
     rendered: dict[str, Path | None] = dict.fromkeys(roster)
     try:
         run = _run_inputs(
-            context_file, diff_file, prd_file, pack_file,
-            settled_ledger, prior_findings, roster,
+            context_file,
+            diff_file,
+            prd_file,
+            pack_file,
+            settled_ledger,
+            prior_findings,
+            roster,
         )
     except (OSError, ValueError) as err:
-        print(f"render_roster: inputs unreadable, nothing rendered: {err}", file=sys.stderr)
+        print(
+            f"render_roster: inputs unreadable, nothing rendered: {err}",
+            file=sys.stderr,
+        )
         return rendered
     with tempfile.TemporaryDirectory() as scratch:
         for name in roster:
@@ -589,7 +649,7 @@ def _render_prompts(
         prior_findings,
         survivors,
     )
-    prompts: dict[str, str | None] = {name: None for name in roster}
+    prompts: dict[str, str | None] = dict.fromkeys(roster)
     for name in survivors:
         path = rendered.get(name)
         prompts[name] = str(path) if path else None
@@ -597,7 +657,10 @@ def _render_prompts(
 
 
 def _open_row(
-    kind: str, cycle_id: str, prompt: str | None, cwd: Path
+    kind: str,
+    cycle_id: str,
+    prompt: str | None,
+    cwd: Path,
 ) -> tuple[str | None, str | None]:
     """(dispatch id, error). Best-effort: every failure is returned, not raised."""
     if prompt is None:
@@ -615,7 +678,12 @@ def _open_row(
     ]
     try:
         proc = subprocess.run(
-            cmd, cwd=cwd, capture_output=True, text=True, check=False, timeout=60
+            cmd,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=60,
         )
     except (OSError, subprocess.TimeoutExpired) as err:
         return None, f"{kind}: record_dispatch failed ({err})"
@@ -627,7 +695,11 @@ def _open_row(
 
 
 def _arm(
-    state_path: Path, roster: list[str], prompts: dict, cycle_id: str, summary: dict
+    state_path: Path,
+    roster: list[str],
+    prompts: dict,
+    cycle_id: str,
+    summary: dict,
 ) -> None:
     """Autopilot mode only: stamp state.review_lenses, open the CLI rows."""
     lenses = {
@@ -653,7 +725,11 @@ def _arm(
 
 
 def _build_summary(
-    tasks_file: Path, prd_file: Path, context: Path, diff: Path | None, state_path: Path | None
+    tasks_file: Path,
+    prd_file: Path,
+    context: Path,
+    diff: Path | None,
+    state_path: Path | None,
 ) -> dict:
     """The summary dict's shape before the context/pack/gate blocks land."""
     return {
@@ -663,7 +739,7 @@ def _build_summary(
         "prd_file": str(prd_file),
         "context_file": str(context),
         "diff_file": str(diff) if diff else None,
-        "dispatch_rows": {kind: None for kind in CLI_REVIEWERS},
+        "dispatch_rows": dict.fromkeys(CLI_REVIEWERS),
         "errors": [],
     }
 

@@ -30,11 +30,38 @@ _STALE: tuple[str, dict] = ("stale", {})
 
 def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
-        ["git", *args], cwd=repo_root, capture_output=True, text=True, check=False
+        ["git", *args],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
     )
 
 
-def reuse_verdict(record: dict | None, repo_root: Path, head_sha: str) -> tuple[str, dict]:
+def _ancestor_and_clean(repo_root: Path, sha: str, head_sha: str) -> bool:
+    """True iff `sha` is an ancestor of `head_sha`, every path changed since
+    then stays under STORE_PREFIX, and the dirty paths outside the store are
+    none. May raise OSError, same as the `_git` calls it wraps."""
+    if _git(repo_root, "merge-base", "--is-ancestor", sha, head_sha).returncode != 0:
+        return False
+    log = _git(repo_root, "log", f"{sha}..{head_sha}", "--name-only", "--format=")
+    if log.returncode != 0:
+        return False
+    paths = [line for line in log.stdout.splitlines() if line.strip()]
+    if not all(path.startswith(STORE_PREFIX) for path in paths):
+        return False
+    status = _git(repo_root, "status", "--porcelain")
+    if status.returncode != 0:
+        return False
+    dirty = [line[3:] for line in status.stdout.splitlines() if line.strip()]
+    return all(path.startswith(STORE_PREFIX) for path in dirty)
+
+
+def reuse_verdict(
+    record: dict | None,
+    repo_root: Path,
+    head_sha: str,
+) -> tuple[str, dict]:
     """
     record: the parsed contents of last-verification.json, or None if the
         file is missing/unreadable/unparseable.
@@ -64,19 +91,7 @@ def reuse_verdict(record: dict | None, repo_root: Path, head_sha: str) -> tuple[
     if any(record.get(key) is None for key in ("passed", "failed", "skipped")):
         return _STALE
     try:
-        if _git(repo_root, "merge-base", "--is-ancestor", sha, head_sha).returncode != 0:
-            return _STALE
-        log = _git(repo_root, "log", f"{sha}..{head_sha}", "--name-only", "--format=")
-        if log.returncode != 0:
-            return _STALE
-        paths = [line for line in log.stdout.splitlines() if line.strip()]
-        if not all(path.startswith(STORE_PREFIX) for path in paths):
-            return _STALE
-        status = _git(repo_root, "status", "--porcelain")
-        if status.returncode != 0:
-            return _STALE
-        dirty = [line[3:] for line in status.stdout.splitlines() if line.strip()]
-        if any(not path.startswith(STORE_PREFIX) for path in dirty):
+        if not _ancestor_and_clean(repo_root, sha, head_sha):
             return _STALE
     except OSError:
         return _STALE
@@ -87,7 +102,13 @@ def _cap(text: str) -> str:
     return text.encode("utf-8")[-GATE_OUTPUT_CAP:].decode("utf-8", errors="ignore")
 
 
-def _write_record(cwd: Path, command: str, sha: str, cycle: int | None, result: dict) -> None:
+def _write_record(
+    cwd: Path,
+    command: str,
+    sha: str,
+    cycle: int | None,
+    result: dict,
+) -> None:
     path = cwd / RECORD_REL
     path.parent.mkdir(parents=True, exist_ok=True)
     record = {

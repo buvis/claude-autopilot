@@ -38,7 +38,24 @@ _PERSONA_LENS = {
     "carl": "ui",
     "eve": "fable",
 }
+# agents: status -> review_lenses state. "disabled" names a persona the
+# roster never included (never invoked, so not a failed attempt); anything
+# else unlisted (e.g. "unavailable") stays "failed".
+_LENS_STATUS = {"available": "done", "disabled": "skipped"}
+# agents: status -> the dispatch row's closing --outcome (SKILL.md step 6's
+# attempt-outcome table). A persona absent from the agents: block at all
+# (status None) defaults to "ok", same as the prior hardcoded value.
+_DISPATCH_OUTCOME = {"available": "ok", "unavailable": "failed", "timeout": "timeout"}
 _NO_ROW = ("", "null", "None")
+# A finding's severity is one of rework_groups.py's emoji; schema.py's
+# DECISION_SEVERITIES vocabulary for an `autonomous_decisions` entry is the
+# lowercase word instead.
+_DECISION_SEVERITY = {
+    "\U0001f534": "critical",
+    "\U0001f7e0": "high",
+    "\U0001f7e1": "medium",
+    "⚪": "low",
+}
 
 
 def _frontmatter_lines(text: str) -> list[str]:
@@ -75,12 +92,19 @@ def _findings_block(findings: list[dict]) -> str:
     return "### Findings (verbatim)\n" + "\n".join(lines) + "\n"
 
 
-def _end_dispatch_rows(row_ids: list[str], cwd: Path) -> None:
+def _end_dispatch_rows(rows: list[tuple[str, str]], cwd: Path) -> None:
     """Best-effort: a row left open is re-ended by a later call, never raised."""
-    for row_id in row_ids:
+    for row_id, outcome in rows:
         try:
             subprocess.run(
-                [sys.executable, str(_RECORD_DISPATCH), "end", row_id, "--outcome", "ok"],
+                [
+                    sys.executable,
+                    str(_RECORD_DISPATCH),
+                    "end",
+                    row_id,
+                    "--outcome",
+                    outcome,
+                ],
                 cwd=cwd,
                 check=True,
                 capture_output=True,
@@ -88,6 +112,27 @@ def _end_dispatch_rows(row_ids: list[str], cwd: Path) -> None:
             )
         except (OSError, subprocess.SubprocessError) as err:
             sys.stderr.write(f"review_close: dispatch row {row_id} not ended: {err}\n")
+
+
+def _dispatch_outcomes(frontmatter: list[str]) -> list[tuple[str, str]]:
+    """(row id, --outcome) for every open `dispatch_rows:` entry, the
+    outcome read from that persona's `agents:` status."""
+    agents = _nested_pairs(frontmatter, "agents")
+    rows = _nested_pairs(frontmatter, "dispatch_rows")
+    return [
+        (row_id, _DISPATCH_OUTCOME.get(agents.get(persona), "ok"))
+        for persona, row_id in rows.items()
+        if row_id not in _NO_ROW
+    ]
+
+
+def _lens_states(frontmatter: list[str]) -> dict[str, str]:
+    """`review_lenses` state per lens, from the `agents:` status of every
+    persona that lens maps to."""
+    return {
+        _PERSONA_LENS.get(name, name): _LENS_STATUS.get(status, "failed")
+        for name, status in _nested_pairs(frontmatter, "agents").items()
+    }
 
 
 def _gate_refusal(review_file: Path, text: str | None, reviewer_csv: str | None) -> str:
@@ -99,7 +144,8 @@ def _gate_refusal(review_file: Path, text: str | None, reviewer_csv: str | None)
 
 
 def _gate_review(
-    review_file: Path, require_codex_guard: bool
+    review_file: Path,
+    require_codex_guard: bool,
 ) -> tuple[str | None, str | None]:
     """Read and shape-gate `review_file`. Returns (text, None) when it may be
     applied, or (text-or-None, refusal reason) when close() must refuse."""
@@ -110,13 +156,84 @@ def _gate_review(
     reviewers = gate.FRONTMATTER_REVIEWERS_RE.search(text or "")
     reviewer_csv = reviewers.group(1) if reviewers else None
     rc = gate.run_gate(
-        review_file, reviewers=reviewer_csv, require_codex_guard=require_codex_guard
+        review_file,
+        reviewers=reviewer_csv,
+        require_codex_guard=require_codex_guard,
     )
     # run_gate fails open (0) on an unreadable file; close() cannot, since it
     # has nothing to apply.
     if rc != 0 or text is None:
         return text, _gate_refusal(review_file, text, reviewer_csv)
     return text, None
+
+
+def _add_rework_tasks(
+    state: dict,
+    fixes: list[dict],
+    prefix: str,
+    default_tier: str,
+) -> list[str]:
+    """One rework task per `rework_groups.group` group; returns the created ids."""
+    cycle = state.get("cycle", 1)
+    created = [
+        statectl.do_task_add(
+            state,
+            {
+                "name": f"[D{cycle}] {prefix}{grp['name_hint']}",
+                "description": _findings_block(grp["findings"]),
+                "model": default_tier,
+            },
+        )
+        for grp in (rework_groups.group(fixes) if fixes else [])
+    ]
+    for task_id in created:
+        statectl.do_append(state, statectl.parse_path("rework_task_ids"), task_id)
+    return created
+
+
+def _add_decisions(state: dict, fixes: list[dict], defers: list[dict]) -> None:
+    """`deferred_decisions` for every defer row, `autonomous_decisions` for
+    every fix row (the rework task itself is recorded separately)."""
+    cycle = state.get("cycle", 1)
+    for f in defers:
+        statectl.do_append(
+            state,
+            statectl.parse_path("deferred_decisions"),
+            {
+                "issue": f["issue"],
+                "severity": f["severity"],
+                "file": f["file"],
+                "reason": "deferred by review-close",
+            },
+        )
+    for f in fixes:
+        severity = f["severity"]
+        statectl.do_append(
+            state,
+            statectl.parse_path("autonomous_decisions"),
+            {
+                "cycle": cycle,
+                "issue": f["issue"],
+                "severity": _DECISION_SEVERITY.get(severity, severity.lower()),
+                "action": "auto-fixed",
+                "reason": "fixed by review-close",
+            },
+        )
+
+
+def _set_lens_state(
+    state: dict,
+    batch_id: str,
+    verdicts: list[dict],
+    lenses: dict[str, str],
+) -> None:
+    """Tail sweeps never touch the doubt verdicts or the lens close-out."""
+    if batch_id == "tail-sweep":
+        return
+    if verdicts:
+        statectl.do_set(state, statectl.parse_path("doubts_rubric_verdicts"), verdicts)
+    for lens, status in lenses.items():
+        statectl.do_set(state, statectl.parse_path(f"review_lenses.{lens}"), status)
 
 
 def _close_mutator(
@@ -136,41 +253,12 @@ def _close_mutator(
         if identity in state.get("applied_review_batches", []):
             outcome["already"] = True
             return state
-        cycle = state.get("cycle", 1)
-        created = [
-            statectl.do_task_add(
-                state,
-                {
-                    "name": f"[D{cycle}] {prefix}{grp['name_hint']}",
-                    "description": _findings_block(grp["findings"]),
-                    "model": default_tier,
-                },
-            )
-            for grp in (rework_groups.group(fixes) if fixes else [])
-        ]
-        for task_id in created:
-            statectl.do_append(state, statectl.parse_path("rework_task_ids"), task_id)
-        for f in defers:
-            statectl.do_append(
-                state,
-                statectl.parse_path("deferred_decisions"),
-                {
-                    "issue": f["issue"],
-                    "severity": f["severity"],
-                    "file": f["file"],
-                    "reason": "deferred by review-close",
-                },
-            )
-        if batch_id != "tail-sweep":
-            if verdicts:
-                statectl.do_set(
-                    state, statectl.parse_path("doubts_rubric_verdicts"), verdicts
-                )
-            for lens, status in lenses.items():
-                statectl.do_set(
-                    state, statectl.parse_path(f"review_lenses.{lens}"), status
-                )
-        statectl.do_append(state, statectl.parse_path("applied_review_batches"), identity)
+        created = _add_rework_tasks(state, fixes, prefix, default_tier)
+        _add_decisions(state, fixes, defers)
+        _set_lens_state(state, batch_id, verdicts, lenses)
+        statectl.do_append(
+            state, statectl.parse_path("applied_review_batches"), identity
+        )
         outcome["created"] = created
         outcome["rework_task_ids"] = list(state.get("rework_task_ids", []))
         return state
@@ -202,12 +290,10 @@ def close(
     identity = f"{review_file.resolve()}::{batch_id}"
     frontmatter = _frontmatter_lines(text)
     verdicts = [
-        {"rule_id": rule, "verdict": verdict} for rule, verdict in _DOUBT_RE.findall(text)
+        {"rule_id": rule, "verdict": verdict}
+        for rule, verdict in _DOUBT_RE.findall(text)
     ]
-    lenses = {
-        _PERSONA_LENS.get(name, name): "done" if status == "available" else "failed"
-        for name, status in _nested_pairs(frontmatter, "agents").items()
-    }
+    lenses = _lens_states(frontmatter)
     fixes = [f for f in chosen_findings if f["classification"] == "fix"]
     defers = [f for f in chosen_findings if f["classification"] == "defer"]
     prefix = "Tail sweep: " if batch_id == "tail-sweep" else ""
@@ -216,15 +302,22 @@ def close(
     statectl.mutate(
         state_path,
         _close_mutator(
-            identity, fixes, defers, prefix, default_tier, batch_id, verdicts, lenses, outcome
+            identity,
+            fixes,
+            defers,
+            prefix,
+            default_tier,
+            batch_id,
+            verdicts,
+            lenses,
+            outcome,
         ),
     )
     if outcome.get("already"):
         return {"applied": False, "reason": "already applied"}
 
     if batch_id != "tail-sweep":
-        rows = _nested_pairs(frontmatter, "dispatch_rows").values()
-        _end_dispatch_rows([r for r in rows if r not in _NO_ROW], state_path.parent)
+        _end_dispatch_rows(_dispatch_outcomes(frontmatter), state_path.parent)
     return {
         "applied": True,
         "tasks_created": outcome["created"],
