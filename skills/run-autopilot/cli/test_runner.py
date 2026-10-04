@@ -166,6 +166,29 @@ def test_prompt_names_the_cli_entry_point(tmp_path):
     assert "no `autopilot` binary or shell function" in prompt
 
 
+def test_launch_prompt_forbids_blocked_coreutils(tmp_path):
+    # A hook blocks cat/head/tail/grep/find, so every launch prompt says so
+    # and names the replacements. Checked with and without a brief, since
+    # both are real launch shapes, and appended after the CLI sentence.
+    cli_sentence = (
+        f" The `autopilot` CLI in this shell is `python3 {CLI_MAIN}`;"
+        " no `autopilot` binary or shell function is on PATH."
+    )
+    rule = (
+        " Never call `cat`, `head`, `tail`, `grep` or `find` (a hook blocks them):"
+        " use Read, `rg`, and `jq <file>`."
+    )
+    ap = _ap_dir(tmp_path)
+    bare = prompt_for(ap)
+    (ap / "session-brief.md").write_text("# Session brief\n")
+    briefed = prompt_for(ap)
+    assert bare != briefed
+    for prompt in (bare, briefed):
+        assert "Never call `cat`, `head`, `tail`, `grep` or `find`" in prompt
+        assert prompt.count(rule) == 1
+        assert prompt.endswith(cli_sentence + rule)
+
+
 def test_warn_window_defaults_to_fifteen_minutes():
     assert warn_secs_for({}) == 900
     assert warn_secs_for({"_AUTOPILOT_SESSION_WARN": "0"}) == 0
