@@ -127,6 +127,17 @@ it handed off before task 1 at 14:28. The cause of the ~350K-token
 consumption is not yet measured (likely the design step's adversarial
 review). Check the transcript before tuning.
 
+### V9. Capped rework groups make one task carry too many findings (open)
+
+00249 c1 rework task 8 bundles the file-grouped findings for
+`review_close.py`, `review_stage.py`, `verification.py` and `__main__.py`
+(00241's cap of 4 non-CRITICAL tasks). It ran from 18:48 past 20:45: Tess,
+Ivan, a style-split Ivan round, then a Pat review and an "Ivan retry 2" on
+the confirmed findings. One Ivan edit took 19 minutes of model time
+(19:45:19 -> 20:04:45). Fewer tasks saved per-task fixed cost, but a task
+this wide pays for it in retries. Worth measuring task-size vs retries across
+the next batch before changing the cap.
+
 ## Not waste (kept)
 
 - The four-lens roster, two cycles, and the cap: standing rule, and cycle 2
