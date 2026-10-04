@@ -255,7 +255,17 @@ def test_no_persona_prompt_text_survives_outside_the_registry() -> None:
                     continue
                 # The goldens fixture is the frozen pre-migration record and is
                 # SUPPOSED to hold this text; the sweep test names it here too.
-                if path.name in {"prompt-goldens.json", "test_agent_registry.py"}:
+                # review_stage's golden-prompt fixtures (PRD 00249) are the
+                # same kind of frozen record, for its render_roster() tests.
+                if path.name in {
+                    "prompt-goldens.json",
+                    "test_agent_registry.py",
+                    "alice-prompt-00244c1.md",
+                    "bob-prompt-00244c1.md",
+                    "blake-prompt-00244c1.md",
+                    "carl-prompt-00244c1.md",
+                    "eve-prompt-00244c1.md",
+                }:
                     continue
                 try:
                     text = path.read_text(encoding="utf-8")
