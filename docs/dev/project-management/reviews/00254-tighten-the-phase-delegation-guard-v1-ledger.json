@@ -1,0 +1,50 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "`bash dev/bin/release-checks` exited 1 in my run, so the \"exits 0\" success criterion is not confirmed. The failure is in the \"custody core\" stage, a `subprocess` git call (`git -c user.name=t ...`) returning 255. That looks environmental (sandbox or git config) and not related to the guard. The run I watched through the background output file had not finished by the time I stopped reading. Nothing in the hooks stages of release-checks failed.",
+    "file": "dev/bin/release-checks",
+    "reason": "contradicts computed facts: re-run in-session with the loop's inherited nested-dispatch markers stripped (env -u AUTOPILOT_DISPATCH_DEPTH -u COPILOT_CLI -u CODEX_SESSION_ID -u _AUTOPILOT_LOOP bash dev/bin/release-checks) gave PASS 25 FAIL 0 SKIP 0 EXIT 0. Carl independently located the cause: the runner recursion guard stage fails when codex-run.sh refuses nested dispatch because the loop session exports those markers. Not a regression in this diff, and nothing in the diff touches that stage."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Cannot statically verify: VERIFY by running `python3 -m pytest hooks/test_guard_phase_delegation.py` and confirming exit 0.",
+    "file": null,
+    "reason": "answered by evidence: Alice and Blake each ran it independently and both reported 91 passed; the file also runs inside release-checks, which exits 0 this cycle. A static-analysis limitation that has since been measured is not an open finding."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Cannot statically verify: VERIFY by running `bash dev/bin/release-checks` and confirming exit 0.",
+    "file": null,
+    "reason": "answered by evidence: the clean in-session run gave PASS 25 FAIL 0 SKIP 0 EXIT 0."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "The `isinstance(subagent_type, str)` guard in place of the spec's bare `.get(...) in frozenset` is a harmless hardening: a non-hashable `subagent_type` would raise `TypeError` under the spec form. No action needed.",
+    "file": "hooks/guard_phase_delegation.py:114",
+    "reason": "not a defect; the reviewer who raised it states no action is needed, and the hardening is strictly safer than the pinned form. The isinstance check is retained by the accepted fix for the sibling exemption-set finding."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "FIX: Supplied fail-first replay reports `test_direct_negation_still_allows`, `test_worker_dispatch_is_still_checked`, and `test_every_exempt_reviewer_lacks_the_skill_tool` passing at base; these preserve existing invariants but do not satisfy the rubric's requirement that every added test fail at base.",
+    "file": "hooks/test_guard_phase_delegation.py:231",
+    "reason": "the PRD's own acceptance criterion names only the first two new tests as required to fail against the old code, and both do (the replay confirms 3 of 6 failed at base). The three that pass at base are preservation guards the PRD explicitly asks for by name: test_direct_negation_still_allows pins that \"Do not run the work phase.\" stays allowed, test_worker_dispatch_is_still_checked pins that a worker dispatch is still denied, and test_every_exempt_reviewer_lacks_the_skill_tool pins a safety invariant about the agent files. A preservation guard that failed at base would mean the invariant did not hold before, which is the opposite of its purpose."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`test_direct_negation_still_allows` and `test_worker_dispatch_is_still_checked` pass against the pre-change code. That is expected, since both are preservation guards, but neither pins the change itself.",
+    "file": "hooks/test_guard_phase_delegation.py:265",
+    "reason": "same settled call as the fail-first replay entry above; the reviewer who raised it says himself it is expected. The PRD requires these two as preservation guards, not as change-pinning tests."
+  }
+]

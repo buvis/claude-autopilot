@@ -3168,3 +3168,13 @@
 {"id":"07ffb66d","ended_at":1791149832,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"id":"cb4f4f0c","ended_at":1791149832,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791149832,"phase":"review","prd":"00254-tighten-the-phase-delegation-guard-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1791149890,"phase":"review","prd":"00254-tighten-the-phase-delegation-guard-v1.md"}
+{"id":"07834d4f","kind":"bob","task":"review-00254-1","queued_at":1791150219,"prompt_bytes":9456}
+{"id":"987b8338","kind":"carl","task":"review-00254-1","queued_at":1791150223,"prompt_bytes":6684}
+{"id":"07834d4f","ended_at":1791150471,"elapsed_s":252,"outcome":"ok","detail":null}
+{"id":"987b8338","ended_at":1791150475,"elapsed_s":252,"outcome":"ok","detail":null}
+{"id":"2953d7c8","kind":"tess","task":"4","queued_at":1791151090,"prompt_bytes":35109}
+{"id":"2953d7c8","ended_at":1791151110,"elapsed_s":20,"outcome":"ok","detail":null}
+{"id":"61e492db","kind":"ivan","task":"4","queued_at":1791151223,"prompt_bytes":26083}
+{"id":"28fe97ae","kind":"pat","task":"4","queued_at":1791151396,"prompt_bytes":11573}
+{"id":"79ca671c","kind":"pat","task":"5","queued_at":1791151573,"prompt_bytes":8667}
