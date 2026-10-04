@@ -48,7 +48,7 @@ This skill runs inside an **automated autopilot loop**. The user is not watching
 
 ## CRITICAL: One Task at a Time
 
-**STOP.** Before dispatching ANY Agent or helper-script call, verify you are sending it EXACTLY ONE task. Batching tasks into one Agent call leaves `state.tasks` (and every dashboard reading state.json) stale for the entire duration and collapses per-task attempt logging.
+**STOP.** Before dispatching ANY Agent or helper-script call, verify you are sending it EXACTLY ONE task. Batching tasks into one Agent call leaves `state.tasks` (and every dashboard reading state.json) stale for the entire duration and collapses per-task attempt logging. In loop mode a hook denies dispatching a whole phase skill to an Agent (`hooks/guard_phase_delegation.py`) - it does not enforce the one-task-per-dispatch rule in general (e.g. `"Implement tasks 1 and 2"` is outside its scope; the STOP rule above still governs that case by prose alone).
 
 **The loop runs in YOUR session (the main session), not inside a subagent:**
 

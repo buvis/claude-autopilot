@@ -341,7 +341,7 @@ Before invoking `/autopilot:plan-tasks`, check for `docs/dev/project-management/
 
 If `replan-context.md` is absent, run `/autopilot:plan-tasks` normally — first-pass planning for a fresh PRD.
 
-Invoke `/autopilot:plan-tasks` with the selected PRD.
+Invoke `/autopilot:plan-tasks` with the Skill tool in this session; never delegate planning to an Agent. Invoke `/autopilot:plan-tasks` with the selected PRD.
 
 **PAUSE site - requirements clarification.** When `/autopilot:plan-tasks` pauses autopilot with a requirements-ambiguity or clarification question:
 
@@ -369,7 +369,7 @@ After completion, `state.tasks` is already current — every `task-add` call `/a
 
 **Capture `repo_root` in the same step.** Run `git rev-parse --show-toplevel` in the work repo and write the absolute path to `state.repo_root`. Usually this equals the project root, but when the work repo is nested under a non-git project root (e.g. `${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot` under `~/.claude`), the review session needs it to run `git` (diff gathering, `head_sha` capture) in the right repo. **Bare-repo-backed project root** (the project root has no `.git` of its own because it is tracked by a bare repo with a separate work-tree, e.g. `~/.claude` under the `~/.buvis` bare repo with work-tree `$HOME`): a plain `git rev-parse --show-toplevel` from the project root FAILS, so do NOT default `repo_root` to the project dir (that silently mis-records it every PRD). Record the bare repo's work-tree root instead — `git --git-dir=<bare-git-dir> --work-tree=<work-tree> rev-parse --show-toplevel` (for `~/.buvis`-backed `$HOME` this resolves to `/Users/<you>`). The same step also writes `state.git_dir` — the `--git-dir` value it had to pass in that bare-repo case (`~/.buvis` → `/Users/<you>/.buvis`) — and leaves it unset when a plain `git rev-parse --show-toplevel` worked.
 
-Invoke `/autopilot:work` skill. It runs until all tasks complete.
+Invoke `/autopilot:work` with the Skill tool in this session; never delegate work execution to an Agent. Invoke `/autopilot:work` skill. It runs until all tasks complete.
 
 While `/autopilot:work` runs (Phases 3 and 6), it uses these superpowers when available (all conditional — autopilot works without them, quality improves with them):
 
