@@ -73,7 +73,10 @@ def reuse_verdict(record: dict | None, repo_root: Path, head_sha: str) -> tuple[
         if not all(path.startswith(STORE_PREFIX) for path in paths):
             return _STALE
         status = _git(repo_root, "status", "--porcelain")
-        if status.returncode != 0 or status.stdout.strip():
+        if status.returncode != 0:
+            return _STALE
+        dirty = [line[3:] for line in status.stdout.splitlines() if line.strip()]
+        if any(not path.startswith(STORE_PREFIX) for path in dirty):
             return _STALE
     except OSError:
         return _STALE
@@ -81,7 +84,7 @@ def reuse_verdict(record: dict | None, repo_root: Path, head_sha: str) -> tuple[
 
 
 def _cap(text: str) -> str:
-    return text.encode("utf-8")[:GATE_OUTPUT_CAP].decode("utf-8", errors="ignore")
+    return text.encode("utf-8")[-GATE_OUTPUT_CAP:].decode("utf-8", errors="ignore")
 
 
 def _write_record(cwd: Path, command: str, sha: str, cycle: int | None, result: dict) -> None:

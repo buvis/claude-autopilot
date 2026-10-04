@@ -67,11 +67,11 @@ def _nested_pairs(frontmatter: list[str], key: str) -> dict[str, str]:
 
 
 def _findings_block(findings: list[dict]) -> str:
-    lines = [
-        f"- {f['severity']} {f['file']}: {f['issue']}"
-        f" (found by: {', '.join(f.get('found_by') or [])})"
-        for f in findings
-    ]
+    lines = []
+    for f in findings:
+        found_by = f.get("found_by") or []
+        suffix = f" (found by: {', '.join(found_by)})" if found_by else ""
+        lines.append(f"- {f['severity']} {f['file']}: {f['issue']}{suffix}")
     return "### Findings (verbatim)\n" + "\n".join(lines) + "\n"
 
 
@@ -104,6 +104,7 @@ def close(
     batch_id: str,
     chosen_findings: list[dict],
     default_tier: str = "sonnet",
+    require_codex_guard: bool = False,
 ) -> dict:
     """Apply one classified review batch to `state_path`, at most once.
 
@@ -120,7 +121,9 @@ def close(
         text = None
     reviewers = gate.FRONTMATTER_REVIEWERS_RE.search(text or "")
     reviewer_csv = reviewers.group(1) if reviewers else None
-    rc = gate.run_gate(review_file, reviewers=reviewer_csv, require_codex_guard=False)
+    rc = gate.run_gate(
+        review_file, reviewers=reviewer_csv, require_codex_guard=require_codex_guard
+    )
     # run_gate fails open (0) on an unreadable file; close() cannot, since it
     # has nothing to apply.
     if rc != 0 or text is None:
@@ -169,10 +172,15 @@ def close(
                     "reason": "deferred by review-close",
                 },
             )
-        if verdicts:
-            statectl.do_set(state, statectl.parse_path("doubts_rubric_verdicts"), verdicts)
-        for lens, status in lenses.items():
-            statectl.do_set(state, statectl.parse_path(f"review_lenses.{lens}"), status)
+        if batch_id != "tail-sweep":
+            if verdicts:
+                statectl.do_set(
+                    state, statectl.parse_path("doubts_rubric_verdicts"), verdicts
+                )
+            for lens, status in lenses.items():
+                statectl.do_set(
+                    state, statectl.parse_path(f"review_lenses.{lens}"), status
+                )
         statectl.do_append(state, statectl.parse_path("applied_review_batches"), identity)
         outcome["created"] = created
         outcome["rework_task_ids"] = list(state.get("rework_task_ids", []))
@@ -182,8 +190,9 @@ def close(
     if outcome.get("already"):
         return {"applied": False, "reason": "already applied"}
 
-    rows = _nested_pairs(frontmatter, "dispatch_rows").values()
-    _end_dispatch_rows([r for r in rows if r not in _NO_ROW], state_path.parent)
+    if batch_id != "tail-sweep":
+        rows = _nested_pairs(frontmatter, "dispatch_rows").values()
+        _end_dispatch_rows([r for r in rows if r not in _NO_ROW], state_path.parent)
     return {
         "applied": True,
         "tasks_created": outcome["created"],

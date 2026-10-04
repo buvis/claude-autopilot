@@ -82,6 +82,7 @@ LENS_PERSONAS = {
     "blind": ("blake",),
     "doubt": ("bob", "eve"),
     "fable": ("eve",),
+    "ui": ("carl",),
 }
 
 _ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -419,13 +420,17 @@ def _run_inputs(
     """Everything the per-persona plans draw on, read once."""
     context = Path(context_file).absolute()
     diff_text = _read(diff_file) if diff_file else ""
+    prd = _read(prd_file).strip()
     return {
         "context": context,
         "id": context.name.removeprefix("review-context-").removesuffix(".md"),
         "root": context.parents[len(TMP_REL.parts)],
         "diff": str(Path(diff_file).absolute()) if diff_file else NO_DIFF,
         "changed": list(dict.fromkeys(_DIFF_HEADER_RE.findall(diff_text))),
-        "prd": _read(prd_file).strip(),
+        "prd": prd,
+        # Blake is blind: the PRD body only, never the design doc _write_inputs
+        # appended onto prd_file for every other persona.
+        "prd_body": prd.split("\n\n## Design Doc\n\n", 1)[0],
         "pack": str(pack_file) if pack_file else NO_PACK,
         "findings": findings_section(Path(pack_file)) if pack_file else NO_PACK,
         "ledger": _ledger_block(Path(settled_ledger))[0] if settled_ledger else None,
@@ -485,7 +490,7 @@ def _plan(name: str, run: dict) -> tuple[str, dict[str, str], list[str | None]]:
     history = [run["ledger"], run["incremental"]]
     if name == "blake":  # blind every cycle: the PRD, never the diff or history
         values = {
-            "PRD": run["prd"],
+            "PRD": run["prd_body"],
             "RUBRIC": _read(BLIND_RUBRIC).strip(),
             "OUTPUT_FORMAT": _output_format(name),
         }
@@ -566,7 +571,10 @@ def render_roster(
 
 
 def _render_prompts(
-    staged: dict, roster: list[str], settled_ledger: Path | None
+    staged: dict,
+    roster: list[str],
+    settled_ledger: Path | None,
+    prior_findings: Path | None = None,
 ) -> dict[str, str | None]:
     # Preflight runs here, in stage(), and render_roster only ever receives
     # the personas that passed it: a failed persona stays None in the result
@@ -578,7 +586,7 @@ def _render_prompts(
         staged["prd"],
         staged["pack"],
         settled_ledger,
-        None,
+        prior_findings,
         survivors,
     )
     prompts: dict[str, str | None] = {name: None for name in roster}
@@ -656,6 +664,7 @@ def stage(
     since: str | None = None,
     state_path: Path | None = None,
     settled_ledger: Path | None = None,
+    prior_findings: Path | None = None,
 ) -> dict:
     """Stage every input file of one review cycle (PRD 00249 design doc,
     steps 1-9; step 9 only when `state_path` is given). Returns the summary
@@ -695,7 +704,7 @@ def stage(
     summary["gate"] = run_gate_line(repo_root, gate_command, cycle_id)
     _append(context, f"## Test gate\n\n{summary['gate']['tests_line']}")
     staged = {"context": context, "diff": diff, "prd": prd_file, "pack": pack}
-    summary["prompts"] = _render_prompts(staged, roster, settled_ledger)
+    summary["prompts"] = _render_prompts(staged, roster, settled_ledger, prior_findings)
     if state_path is not None:
         _arm(state_path, roster, summary["prompts"], cycle_id, summary)
     summary["elapsed_s"] = round(time.monotonic() - started, 3)

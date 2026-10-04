@@ -1013,14 +1013,24 @@ def _add_review_close(subparsers) -> None:
     p.add_argument("--default-tier", default="sonnet")
 
 
+_KNOWN_CLASSIFICATIONS = ("verify", "discard", "fix", "defer")
+
+
 def _is_chosen_finding(item: object) -> bool:
-    """A dict with a string classification; fix/defer rows also carry the
-    string severity, file and issue close() reads from them."""
+    """A dict with a known string classification; fix/defer rows also carry
+    the string severity, file and issue close() reads from them, and a
+    found_by list of strings."""
     if not isinstance(item, dict) or not isinstance(item.get("classification"), str):
         return False
-    if item["classification"] not in ("fix", "defer"):
+    classification = item["classification"]
+    if classification not in _KNOWN_CLASSIFICATIONS:
+        return False
+    if classification not in ("fix", "defer"):
         return True
-    return all(isinstance(item.get(k), str) for k in ("severity", "file", "issue"))
+    if not all(isinstance(item.get(k), str) for k in ("severity", "file", "issue")):
+        return False
+    found_by = item.get("found_by")
+    return isinstance(found_by, list) and all(isinstance(x, str) for x in found_by)
 
 
 def _run_review_close(args: argparse.Namespace) -> int:
