@@ -203,25 +203,6 @@ def _gather(repo_root: Path, since: str | None, cycle_id: str) -> dict:
     return {"ok": True, "context": context, "diff": diff}
 
 
-def resolve_base(repo_root: Path, since: str | None) -> str | None:
-    """The diff range's left side, as SKILL.md step 3 defines it: a valid
-    `since` wins; otherwise the merge-base of HEAD with origin/HEAD, then
-    master, then develop. None when nothing resolves."""
-    if since:
-        sha = _git_out(
-            repo_root,
-            "rev-parse",
-            "--verify",
-            "--quiet",
-            f"{since}^{{commit}}",
-        )
-        if sha:
-            return sha
-    for candidate in ("origin/HEAD", "master", "develop"):
-        sha = _git_out(repo_root, "merge-base", "HEAD", candidate)
-        if sha:
-            return sha
-    return None
 
 
 def _run_script(script: Path, args: list[str], cwd: Path) -> str:
@@ -461,7 +442,6 @@ def _run_inputs(
     pack_file: Path | None,
     settled_ledger: Path | None,
     prior_findings: Path | None,
-    roster: list[str],
 ) -> dict:
     """Everything the per-persona plans draw on, read once."""
     context = Path(context_file).absolute()
@@ -487,8 +467,6 @@ def _run_inputs(
         "findings": findings_section(Path(pack_file)) if pack_file else NO_PACK,
         "ledger": _ledger_block(Path(settled_ledger))[0] if settled_ledger else None,
         "incremental": _incremental_block(prior_findings) if prior_findings else None,
-        # Eve on the roster carries the doubt lens; otherwise Bob does.
-        "doubt": "eve" not in roster,
     }
 
 
@@ -512,7 +490,7 @@ def _eve_inputs(run: dict) -> str:
     changed = "\n".join(run["changed"]) or NO_DIFF
     return "\n\n".join(
         [
-            f"## PRD\n{run['prd']}",
+            f"## PRD\n{run['prd_body']}",
             f"## Diff range\n{diff_range}",
             f"## Changed files\n{changed}",
             f"## Findings precedent\n{run['findings']}",
@@ -558,11 +536,10 @@ def _plan(name: str, run: dict) -> tuple[str, dict[str, str], list[str | None]]:
         "OUTPUT_FORMAT": _output_format(name),
     }
     if name == "bob":
-        if run["doubt"]:
-            eve = _read(AGENTS_DIR / "eve.md")
-            appendix = [_section(eve, title) for title in EVE_DOUBT_SECTIONS]
-            source = "\n\n".join([source.rstrip(), *appendix])
-            values["PACK_FINDINGS"] = run["findings"]
+        eve = _read(AGENTS_DIR / "eve.md")
+        appendix = [_section(eve, title) for title in EVE_DOUBT_SECTIONS]
+        source = "\n\n".join([source.rstrip(), *appendix])
+        values["PACK_FINDINGS"] = run["findings"]
         source = f"{source.rstrip()}\n\n{CITATION_LINE}\n"
     return source, values, history
 
@@ -610,7 +587,6 @@ def render_roster(
             pack_file,
             settled_ledger,
             prior_findings,
-            roster,
         )
     except (OSError, ValueError) as err:
         print(
@@ -802,7 +778,8 @@ def stage(
         return gathered
     context, diff = gathered["context"], gathered["diff"]
     summary = _build_summary(tasks_file, prd_file, context, diff, state_path)
-    base = resolve_base(repo_root, since)
+    scope = _SCOPE_RE.search(_read(context))
+    base = scope.group(1) if scope else None
     pack = _append_context_blocks(
         context,
         diff,
