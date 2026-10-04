@@ -41,12 +41,34 @@ _SKILL_READ = (
     r"read\s+(?:skills/)?(work|plan-tasks|design-solution)/SKILL\.md"
     r".{0,60}\b(run|follow|execute|continue)\b.{0,20}\b(every|all)\s+tasks?\b"
 )
-_NEGATION = r"\b(not|never|n't|does\s+not|doesn't|don't|won't)\b"
+# No "n't" alternative: \b never matches before the "n" inside a
+# contraction, so that alternative was dead. Contractions are spelled out.
+_NEGATION = (
+    r"\b(not|never|does\s+not|doesn't|don't|won't|can't|cannot|isn't|"
+    r"shouldn't|wasn't|weren't)\b"
+)
 _NEGATION_RE = re.compile(_NEGATION, re.IGNORECASE)
+_SENTENCE_BOUNDARY_RE = re.compile(r"[.;\n]")
+
+# Tight (immediate-adjacency) phase-jargon pattern, forward direction only:
+# "run the work phase" / "run work phase" matches; "run by the work phase"
+# and "run at this exact HEAD by the work phase" do not, because nothing
+# sits between the verb and its object. The looser bidirectional {0,40}-gap
+# form this replaced matched ordinary reviewer prose ("run by the work
+# phase"), denying 21 of 231 real review-roster prompts (verified by
+# docs/dev/tmp/probe-blake-high-00248.py). No reverse-direction ("work phase
+# ... run") pattern: none of the four observed denial fixtures needs it, and
+# it is pure false-positive surface.
+_PHASE_JARGON_TIGHT = rf"\b{_IMPERATIVE}\s+(?:the\s+|this\s+)?{_PHASE_JARGON}\b"
 
 _DELEGATION_PATTERNS = (
-    re.compile(rf"\b{_IMPERATIVE}\b.{{0,40}}\b{_PHASE_JARGON}\b", re.IGNORECASE),
-    re.compile(rf"\b{_PHASE_JARGON}\b.{{0,40}}\b{_IMPERATIVE}\b", re.IGNORECASE),
+    re.compile(_PHASE_JARGON_TIGHT, re.IGNORECASE),
+    # Reverse direction ("<phase> phase ...: <imperative>"), gated on a
+    # colon between jargon and verb - "Planning phase for PRD 00300:
+    # continue it from task 4." matches; descriptive prose like "the work
+    # phase's own run at this HEAD" does not, because nothing introduces
+    # the verb as an instruction.
+    re.compile(rf"\b{_PHASE_JARGON}\b[^.;\n:]{{0,25}}:\s*(?:it\s+)?\b{_IMPERATIVE}\b", re.IGNORECASE),
     re.compile(rf"\b{_IMPERATIVE}\s+(?:the\s+)?{_BARE_SKILL}", re.IGNORECASE),
     re.compile(_SKILL_READ, re.IGNORECASE | re.DOTALL),
 )
@@ -54,9 +76,17 @@ _DELEGATION_PATTERNS = (
 
 def _negated_before(text: str, start: int, window: int = 20) -> bool:
     """True iff a negation word sits in the `window` chars immediately
-    before `start` - the match is `run plan-tasks` inside `does not run
-    plan-tasks`, and that is a prohibition, not a delegation."""
-    return bool(_NEGATION_RE.search(text[max(0, start - window):start]))
+    before `start`, without crossing a sentence boundary (`.`, `;`, or a
+    newline) - the match is `run plan-tasks` inside `does not run
+    plan-tasks`, and that is a prohibition, not a delegation. A negation in
+    an earlier sentence ("Do not wait for me. Run the work phase...") must
+    not suppress a real delegation in a later one."""
+    window_start = max(0, start - window)
+    preceding = text[window_start:start]
+    boundary = _SENTENCE_BOUNDARY_RE.search(preceding)
+    if boundary is not None:
+        preceding = preceding[boundary.end():]
+    return bool(_NEGATION_RE.search(preceding))
 
 
 def is_phase_delegation(tool_input: dict) -> bool:
@@ -70,8 +100,10 @@ def is_phase_delegation(tool_input: dict) -> bool:
     """
     if not isinstance(tool_input, dict):
         return False
-    prompt = tool_input.get("prompt") or ""
-    description = tool_input.get("description") or ""
+    prompt = tool_input.get("prompt")
+    description = tool_input.get("description")
+    prompt = prompt if isinstance(prompt, str) else ""
+    description = description if isinstance(description, str) else ""
     text = f"{prompt}\n{description}"
     return any(
         not _negated_before(text, match.start())
