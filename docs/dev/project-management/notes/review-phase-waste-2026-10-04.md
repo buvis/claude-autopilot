@@ -18,6 +18,11 @@ minutes. Everything else is the orchestrator, on opus at xhigh.
 | 00242 c2 | 33.4 min | ~6 min | ~7 min | ~18 min (includes a Tess+Ivan tail-sweep task and a 3-min gate) |
 
 | 00248 c1 (0.8.0, 15:4x) | 22.4 min | 7.1 min | ~10 min | 5.0 min |
+| 00248 c2 (0.8.0, converged) | 23.5 min | 5.2 min | ~14 min | 3.6 min |
+
+00248 c2 repeated V3 exactly: `release-checks` ran at 368 s (181 s), then
+again at 632 s (180 s) only "to a log", because the first run's counts could
+not be read back. Three minutes of duplicate gate per cycle, still on 0.8.0.
 
 0.8.0's lower coordinator effort trimmed the overhead a little; it did not
 change its shape (still about 55%). So about **60% of a review session is orchestrator overhead**, and two
