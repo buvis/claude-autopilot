@@ -9,6 +9,11 @@ severity: high
 
 # Triage: The store .gitignore recursive lock pattern will be reverted again by ensure-...
 
+> **Closed 2026-10-04 (operator triage): fixed.** PRD 00240 made the pattern
+> `autopilot/**/*.lock` (`store_tree.py:33`), and v0.8.0 carries it to the
+> installed cache. Kept in `done/` so this ledger key stays owned and is
+> not re-minted (it was, once, after the stub was deleted as 00245).
+
 ## Problem
 
 Deferred finding with no PRD owner when this stub was minted: batch `202610031511`, ledger `deferred/202610031511-deferred.json`, type `review-deferral`, cycle `1`, consensus `3/4`, raised against `00241-bound-rework-batches-by-file-v1.md`.
