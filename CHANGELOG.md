@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-04
+
 ### Changed
 
 - **autoclaude**: coordinator effort defaults to low with validated coordinator/phase overrides; native task tiers and reviewers select effort explicitly instead of inheriting session defaults. Existing model promotion, review lenses, and human-gated Fable rescue remain in force.
