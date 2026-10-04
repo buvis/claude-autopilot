@@ -89,3 +89,42 @@ DIFF_FILE3="$(echo "$OUT3" | grep -o 'docs/dev/tmp/review-diff-[^ ]*\.diff')"
 [[ -n "$DIFF_FILE3" ]] || FAIL "with --since diff path printed" "stdout: $OUT3"
 [[ -s "$DIFF_FILE3" ]] || FAIL "with --since diff is non-empty" "expected a non-empty diff file: $DIFF_FILE3"
 PASS "the same range with --since gets a non-empty diff, never refused"
+
+# --- Regression: a repo with no detectable base branch at all (no
+# master/develop branch, no origin remote) and no --since must still
+# refuse an empty diff, not silently skip the check because DIFF_BASE
+# resolved empty (code review finding) ---
+mkdir -p "$DIR/nobase"
+cd "$DIR/nobase"
+git init -q -b weirdbranch .
+git commit -q --allow-empty -m init
+
+set +e
+ERR3="$(bash "$SCRIPT" 2>&1 >/dev/null)"
+CODE6=$?
+set -e
+[[ "$CODE6" -eq 3 ]] || FAIL "no base branch exit code" "expected exit 3, got $CODE6: $ERR3"
+echo "$ERR3" | grep -qF "gather-context: empty diff against ; pass --since <work_start_sha> for a full review" \
+  || FAIL "no base branch message" "expected the empty-diff refusal message, got: $ERR3"
+PASS "a repo with no detectable base branch and no --since still refuses with exit 3"
+
+# --- Regression: when git diff --quiet against the detected base branch
+# itself fails (not merely reports an empty diff), the script must fail
+# loud with git's own error, not swallow it into the generic empty-diff
+# refusal (code review finding) ---
+mkdir -p "$DIR/badref"
+cd "$DIR/badref"
+git init -q -b master .
+git commit -q --allow-empty -m init
+echo "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef" > .git/refs/heads/master
+
+set +e
+ERR4="$(bash "$SCRIPT" 2>&1 >/dev/null)"
+CODE7=$?
+set -e
+[[ "$CODE7" -ge 2 ]] || FAIL "git diff --quiet failure exit code" "expected exit >=2, got $CODE7: $ERR4"
+echo "$ERR4" | grep -qF "fatal" \
+  || FAIL "git diff --quiet failure message" "expected git's own fatal error, got: $ERR4"
+echo "$ERR4" | grep -qF "gather-context: empty diff against" \
+  && FAIL "git diff --quiet failure message" "expected git's own error, not the empty-diff refusal: $ERR4"
+PASS "a git diff --quiet failure against the detected base branch fails loud instead of the empty-diff refusal"
