@@ -3184,3 +3184,4 @@
 {"kind":"handoff","site":"review","edge":"leave","at":1791151869,"phase":"done","prd":"00254-tighten-the-phase-delegation-guard-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1791151910,"phase":"done","prd":"00254-tighten-the-phase-delegation-guard-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1791151984,"phase":"build","prd":"00254-tighten-the-phase-delegation-guard-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791152012,"phase":"build","prd":"00256-finish-the-review-verbs-before-release-v1.md"}
