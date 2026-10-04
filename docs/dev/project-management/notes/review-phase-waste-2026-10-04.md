@@ -148,6 +148,9 @@ review). Check the transcript before tuning.
 - **V6** → deferred to this note; check before any fast-track tuning.
 - **Hold 00246, 00247** (both still real at HEAD) → PRD 00250, which also
   deletes the two stubs.
+- **Hold 00252, 00253** (minted by 00248's finalize, both confirmed at HEAD)
+  → PRD 00254 (last-boundary negation trim; reviewer personas exempt), which
+  deletes the two stubs.
 - **Hold 00245** → kept until the 0.8.0 release: PRD 00240 fixed the pattern
   in source (`store_tree.py:33`, `autopilot/**/*.lock`), but the installed
   0.7.0 cache still writes `autopilot/*.lock`. Delete the stub with the
