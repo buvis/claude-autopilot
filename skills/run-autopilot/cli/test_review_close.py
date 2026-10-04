@@ -422,3 +422,56 @@ def test_close_ends_frontmatter_dispatch_rows_best_effort(
     assert [cmd[cmd.index("end") + 1] for cmd in commands] == ["d-111", "d-222"]
     assert all(cmd[-2:] == ["--outcome", "ok"] for cmd in commands)
     assert _load(state_path)["applied_review_batches"]
+
+
+def test_every_dispatch_outcome_is_recordable() -> None:
+    from skills.work.scripts import record_dispatch
+
+    assert set(review_close._DISPATCH_OUTCOME.values()) <= set(record_dispatch.OUTCOMES)
+
+
+def test_close_ends_unavailable_dispatch_with_error_outcome(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    review = _review(
+        tmp_path,
+        agents="  alice: available\n  bob: unavailable\n",
+        extra_frontmatter="dispatch_rows:\n  bob: d-333\n",
+    )
+    state_path = _state(tmp_path)
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        review_close.subprocess, "run", lambda cmd, **_kwargs: commands.append(cmd)
+    )
+
+    result = review_close.close(review, state_path, "decision-gate", [])
+
+    assert result["applied"] is True
+    assert commands[0][-2:] == ["--outcome", "error"]
+
+
+def test_close_leaves_no_lens_running(tmp_path: Path) -> None:
+    review = _review(
+        tmp_path,
+        agents=(
+            "  alice: available\n"
+            "  blake: available\n"
+            "  bob: available\n"
+            "  carl: disabled\n"
+            "  eve: available\n"
+        ),
+    )
+    state_path = _state(tmp_path)
+
+    result = review_close.close(review, state_path, "decision-gate", [])
+
+    assert result["applied"] is True
+    lenses = _load(state_path)["review_lenses"]
+    assert "running" not in lenses.values()
+    assert lenses == {
+        "consensus": "done",
+        "blind": "done",
+        "doubt": "done",
+        "ui": "skipped",
+        "fable": "done",
+    }
