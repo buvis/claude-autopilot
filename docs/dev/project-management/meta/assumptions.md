@@ -84,3 +84,9 @@
 - (Ivan) A non-dict `tool_input` passed straight to `is_phase_delegation` returns False, per the contract docstring.
 - (Ivan) A non-string prompt beside a string description gets coerced into the joined text by the f-string rather than ignored; the predicate does not raise, so the hook allows with empty stderr.
 - (Orchestrator, autonomous decision) Widened the design contract's `_IMPERATIVE` regex to also match present-participle forms (executing/running/invoking/following/continuing/resuming): Tess recovered the real 2026-10-03 00242 transcript and found the verbatim base-form-only regex misses 2 of the 4 real denied delegations ("You are executing the `autopilot:design-solution` skill"). Logged to `state.json` `autonomous_decisions`.
+
+## 2: Add the CLI_SUFFIX sentence forbidding blocked coreutils (00248)
+
+- (Tess) The new sentence is the last thing in every autopilot launch prompt - follows from the contract's verbatim `CLI_SUFFIX` (new sentence last) and `prompt_for` returning `prompt + brief + cli`.
+- (Tess) Matching the contract's full sentence exactly, not just the acceptance-criteria substring, is intended, since the dispatch calls the contract text "verbatim".
+- (Ivan) None reported.
