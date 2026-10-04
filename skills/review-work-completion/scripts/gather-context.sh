@@ -6,9 +6,9 @@
 #   tasks_file:       path to file containing tasks markdown (optional)
 #   prd_summary_file: path to file containing PRD summary (optional)
 # Outputs: paths to created files (one per line)
-# Exits 3 (nothing written) when a full review (no --since) resolves to an
-# empty diff - a repo worked on directly on its base branch otherwise hands
-# reviewers a silent, empty "full review".
+# Exits 3 (no diff/context file written) when a full review (no --since)
+# resolves to an empty diff - a repo worked on directly on its base branch
+# otherwise hands reviewers a silent, empty "full review".
 
 set -euo pipefail
 
@@ -100,16 +100,23 @@ if [[ ${#REVIEW_PATHS[@]} -gt 0 ]]; then
   PATH_ARGS=(-- "${REVIEW_PATHS[@]}")
 fi
 
-# A full review (no --since) that resolves to an empty diff would otherwise
-# hand reviewers a silently empty review (PRD 00237: a repo worked on
-# directly on its base branch diffs against itself at a clean HEAD).
-DIFF_CONTENT=""
-if [[ -n "$DIFF_BASE" ]]; then
-  DIFF_CONTENT="$(git -C "$PROJECT_ROOT" diff "$DIFF_BASE" ${PATH_ARGS[@]+"${PATH_ARGS[@]}"} 2>/dev/null || true)"
-fi
-if [[ -z "$SINCE_APPLIED" && -n "$DIFF_BASE" && -z "$DIFF_CONTENT" ]]; then
-  echo "gather-context: empty diff against ${DIFF_BASE}; pass --since <work_start_sha> for a full review" >&2
-  exit 3
+# A full review (no --since) that resolves to an empty diff, or that found
+# no base branch to diff against at all, would otherwise hand reviewers a
+# silently empty review (PRD 00237: a repo worked on directly on its base
+# branch diffs against itself at a clean HEAD).
+if [[ -z "$SINCE_APPLIED" ]]; then
+  if [[ -z "$DIFF_BASE" ]]; then
+    echo "gather-context: empty diff against ${DIFF_BASE}; pass --since <work_start_sha> for a full review" >&2
+    exit 3
+  fi
+  DIFF_QUIET_ERR="$(git -C "$PROJECT_ROOT" diff --quiet "$DIFF_BASE" ${PATH_ARGS[@]+"${PATH_ARGS[@]}"} 2>&1)" && DIFF_QUIET_EXIT=0 || DIFF_QUIET_EXIT=$?
+  if [[ "$DIFF_QUIET_EXIT" -ge 2 ]]; then
+    echo "$DIFF_QUIET_ERR" >&2
+    exit "$DIFF_QUIET_EXIT"
+  elif [[ "$DIFF_QUIET_EXIT" -eq 0 ]]; then
+    echo "gather-context: empty diff against ${DIFF_BASE}; pass --since <work_start_sha> for a full review" >&2
+    exit 3
+  fi
 fi
 
 # Track all created files
