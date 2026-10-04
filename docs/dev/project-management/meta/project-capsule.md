@@ -51,10 +51,17 @@ Generated: 2026-09-14
 - [x] 00243-make-the-headroom-wall-scan-match-its-contract-v1 (1 cycle)
 - [x] 00244-tidy-the-enter-verb-and-the-review-diff-plumbing-v1 (1 cycle)
 - [x] 00248-keep-phase-skills-in-the-session-v1 (2 cycles)
-- [ ] 00249-stage-and-close-reviews-in-code-v1
+- [x] 00249-stage-and-close-reviews-in-code-v1 (2 cycles)
 - [ ] 00250-finish-the-rework-grouping-fixes-v1
 
-Observations: 00240 was a clean single-PRD cycle, no deferred decisions or
+Observations: 00249 cap-out at cycle 2 (rework_cap 2) with 9 unresolved HIGH,
+9 MEDIUM, 4 LOW, 0 CRITICAL: 22 cap-overflow findings migrated to the batch
+deferred JSON. `mint-stubs` minted one hold stub, `00255`, for the unowned
+`resolve_base` second-diff-base-resolution finding; 65 other rows skipped as
+already owned or medium/low. `bash dev/bin/release-checks` green at HEAD
+5d1bf4f (2564 passed, 0 failed, 0 skipped).
+
+00240 was a clean single-PRD cycle, no deferred decisions or
 doubts, full suite green at merge (2150 passed). 00241 cap-out at cycle 2
 (rework_cap 2) with 2 unresolved HIGH, 0 CRITICAL: 20 findings (4 cycle-1
 review-deferrals plus 16 cycle-2 cap-overflow records) migrated to the batch

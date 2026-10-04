@@ -426,6 +426,226 @@
       "consensus": "1/4",
       "reason": "each is pre-existing or behavior-preserving, none introduced by this diff (cycle 1 decision gate)",
       "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "Settled-ledger and prior-findings wiring exists in code (--settled-ledger / --prior-findings reach render_roster) but SKILL.md:216-218 and :248 still tell the model to hand-append both with the Edit tool, and the step 3 synopsis lists neither flag. Every cycle still falls back to the hand-editing this PRD removes.",
+      "severity": "\ud83d\udfe0",
+      "consensus": "3/4",
+      "file": "skills/review-work-completion/SKILL.md:216",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "run_gate is still 75 lines (over the 50-line limit) and still buffers all output through communicate(), so the output cap does not bound memory. Only the keep-tail fix landed from the cycle-1 finding.",
+      "severity": "\ud83d\udfe0",
+      "consensus": "3/4",
+      "file": "skills/run-autopilot/cli/verification.py:125",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The review-file format still omits the dispatch_rows: block review_close parses and lists only alice/bob/carl under agents:, so no model stamps the rows close() ends and Blake's blind and Eve's fable lenses are stamped running and never closed.",
+      "severity": "\ud83d\udfe0",
+      "consensus": "2/4",
+      "file": "skills/review-work-completion/references/output-formats.md:253",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "_eve_inputs still passes the merged run['prd'] (PRD plus design doc) to Eve, while only Blake gets the raw _prd_body slice. The doubt lens must stay PRD-only.",
+      "severity": "\ud83d\udfe0",
+      "consensus": "2/4",
+      "file": "skills/run-autopilot/cli/review_stage.py:515",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The gate's one-line summary reports check-block counts as passed tests (grep -c over its own echo lines), hardcodes zero skips, and emits nothing on failure. run_gate writes those counts to last-verification.json and a later cycle reuses them as real test counts: measured 25 against an actual 2564 this cycle.",
+      "severity": "\ud83d\udfe0",
+      "consensus": "2/4",
+      "file": "dev/bin/release-checks:214",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "reuse_verdict's docstring still requires an empty git status --porcelain although the code now ignores dirty store paths, and line[3:] on a porcelain rename record checks only the old path, so a staged rename out of the store reads as clean (fail-open).",
+      "severity": "\ud83d\udfe0",
+      "consensus": "2/4",
+      "file": "skills/run-autopilot/cli/verification.py:78",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "review-close takes its findings from a separate --findings JSON the model writes, and gate.py never cross-checks that file against the review's consolidated table. The design doc's settled answer to the second-source-of-truth risk was 'the gate refusal is the cross-check', and that check does not exist, so the settled reason no longer holds.",
+      "severity": "\ud83d\udfe0",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/__main__.py:1021",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "_DISPATCH_OUTCOME maps an unavailable reviewer to --outcome 'failed', which is not in record_dispatch.OUTCOMES ('ok','timeout','killed','error','lost'), so the row-closing call exits 2 for every unavailable reviewer. Confirmed mechanically; the value should be 'error'.",
+      "severity": "\ud83d\udfe0",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/review_close.py:48",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "run['doubt'] is 'eve' not in roster, so Bob's doubt appendix (lenses, FIX/VERIFY/KNOWN buckets, D1-D5) is dropped exactly when Eve is on the roster - the one case where agent-invocation.md sends Eve's failure fallback to Bob's assembled prompt. The fallback therefore carries no doubt lens. Cycle-1 F4, untouched.",
+      "severity": "\ud83d\udfe0",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/review_stage.py:491",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "review_stage.py is 823 lines, over the 800-line file limit, after the rework added helpers without extracting anything.",
+      "severity": "\ud83d\udfe1",
+      "consensus": "2/4",
+      "file": "skills/run-autopilot/cli/review_stage.py:823",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The tail-sweep prose test still hedges with '\"at most 4\" in section or \"caps at 4\" in section' while phase-review.md carries only 'at most 4, never zero'. The floor split landed, but the cap assert still passes against the pre-change prose and the fail-first replay still reports the test passing at base.",
+      "severity": "\ud83d\udfe1",
+      "consensus": "3/4",
+      "file": "skills/run-autopilot/scripts/test_rework_groups_prose.py:81",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "test_main_review_close_validation.py is absent from the review-verbs block, so the release gate never runs it. Run directly this cycle: 7 passed.",
+      "severity": "\ud83d\udfe1",
+      "consensus": "2/4",
+      "file": "dev/bin/release-checks:207",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The cycle-1 rework behaviours are mostly unpinned: nothing tests autonomous_decisions being written or its emoji-to-word severity map, 'disabled' mapping to 'skipped', the per-status --outcome mapping (the one assertion still expects 'ok'), the three new CLI flags, or the CLI rejecting an unknown classification with exit 2.",
+      "severity": "\ud83d\udfe1",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/test_review_close.py:403",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The stricter found_by validation (a list of strings) contradicts the tail-sweep prose, which says found_by is copied verbatim from the table, where it is the string 'ALICE, BOB'. Following the prose now exits 2, and the stderr message names neither the allowed values nor the emoji severities.",
+      "severity": "\ud83d\udfe1",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/references/phase-review.md:195",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The new 'skipped' review_lenses value is undocumented: state-schema.md and tracon/model.py define only running|done|failed.",
+      "severity": "\ud83d\udfe1",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/references/state-schema.md:216",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "review-stage runs the gate itself on a stale verdict through a mandatory --gate-command, so a long gate runs inside the staging call, and a timed-out gate emits a zero-count Tests: line that still satisfies the gate's own pattern.",
+      "severity": "\ud83d\udfe1",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/review_stage.py:369",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "Doubt verdicts are still extracted globally without source tags, overwriting reviewer-attributed verdicts that dual-reviewer reporting needs.",
+      "severity": "\ud83d\udfe1",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/review_close.py:290",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "_add_decisions records every fix row as action 'auto-fixed' with reason 'fixed by review-close' at the moment the rework task is queued, before any implementor runs, so the audit claims a fix that may never land.",
+      "severity": "\ud83d\udfe1",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/review_close.py:218",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "Unrelated reformatting churn (trailing commas, re-wrapped calls) in functions the PRD does not touch, which buries the real changes.",
+      "severity": "\u26aa",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/__main__.py:480",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "On a tail-sweep call close() still returns a populated lenses_closed although _set_lens_state applied none of it, misreporting the result.",
+      "severity": "\u26aa",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/review_close.py:314",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "last-verification.json is written with a plain write_text, so a crash mid-write leaves a truncated record. It parses to None and reads as stale, so the failure is safe but not atomic.",
+      "severity": "\u26aa",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/verification.py:122",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "Fail-first replay: four touched tests pass against the base - three accept-valid-input guards and one CLI forwarding test. Bob justifies these as regression guards outside the fail-first requirement for new behavior.",
+      "severity": "\u26aa",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/test_main_review_close_validation.py",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
     }
   ]
 }
