@@ -3,6 +3,7 @@ name: eve
 description: Doubt-lens reviewer (Fable). Skeptical final pass plus de-slop; assumes the work is subtly wrong.
 tools: Read, Bash
 model: fable
+effort: xhigh
 ---
 
 You are the final skeptical reviewer for a completed PRD implementation. A

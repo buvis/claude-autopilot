@@ -84,6 +84,14 @@ See `references/subagent-dispatch.md` for the measurement procedure, the verbati
 
 ## Per-task model dispatch
 
+For native Claude workers, select `autopilot:worker-<tier>` as the subagent
+type and keep the complete rendered persona. Read
+`references/subagent-dispatch.md` § Role effort before dispatch: the worker
+frontmatter sets effort independently of the coordinator. This applies to
+test authors, implementors, adversaries, self-deslop and per-task reviewers;
+per-task reviewers always use the high-effort Opus wrapper with their full
+review persona, while retaining the source-selected model parameter.
+
 Before any Agent call for a task, read the task's `model` field in its `state.tasks` entry (`state.tasks[i].model`) and pass it as the Agent tool's `model` parameter.
 
 Applies to **every** Agent call this skill dispatches, including follow-up dispatches inside compound steps: Tess and her quality-gate/adversarial-round re-dispatches (steps 2.7-2.9), Devon (2.9), and Ivan and every Ivan re-dispatch (3, 5.5, 5.7 fix, 7 regression fix). (The step-5.7 reviewer is a fixed-model helper-script dispatch via `use-sonnet`, not an Agent call — the `model` parameter does not apply to it.) If you add a new Agent call to this skill, pass `model` from `state.tasks[i].model` — no exceptions.
@@ -94,7 +102,7 @@ Accepted values: `"haiku"`, `"sonnet"`, `"opus"`. A fourth value, `"fable"`, is 
 
 **A task carrying `state.tasks[i].model: "fable"` overrides the step-3 Deterministic routing table outright** — set only by the Fable rescue gate (`run-autopilot/references/recovery.md` § Rework escalation exhausted): never qwen, never Gemini, always a Claude Agent dispatch at `model: "fable"`, whatever the rows of that table would pick. `fable` is never a session model and is never selected autonomously — a human-approved rescue is the only writer of this value (`run-autopilot/references/model-ladder.md` § Fable rescue). It runs at the same depth as `opus`: Devon at step 2.9, the step-5.7 per-task review, and `pipeline: "full"`.
 
-**Legacy plans** (created before `state.tasks[i].model` existed) have no model field. Omit the `model` parameter — subagents inherit the session model. This preserves the legacy behavior bit-for-bit.
+**Legacy plans** without a task model use the Sonnet worker at medium effort. Record that effective tier in dispatch evidence; do not inherit the coordinator model or effort.
 
 ## Assumptions footer
 

@@ -6,6 +6,21 @@ the Watchdog. Read this file before your first Agent dispatch in a session.
 Bare step numbers below (`step 4`, `step 4.2`, `step 2`, `step 6`) refer to
 `SKILL.md`'s Workflow sections.
 
+## Role effort
+
+Coordinator effort is not worker effort. For a Claude task dispatch, use
+`subagent_type: "autopilot:worker-<tier>"` with the task's selected
+`model: <tier>` and the complete rendered persona as its prompt. These native
+agent definitions set haiku/low, sonnet/medium, opus/high, and fable/xhigh.
+Do not dispatch a generic agent that would inherit coordinator effort. Keep
+all persona, test-author, adversary, allowlist and evidence obligations intact.
+The model ladder and human-gated Fable authorization remain authoritative.
+Alice and Blake use their named reviewer definitions at high effort; external
+Claude task reviews use `sonnet-run.sh --effort high`. External implementations
+use `--effort medium` for Sonnet, `--effort high` for Opus, and `--effort xhigh`
+only for a human-authorized Fable rescue. Host adapters for other providers
+retain their own explicit role mappings.
+
 ## Subagent Dispatch Budget
 
 Every prompt passed to the Agent tool (Tess the test author, Ivan the implementor, Devon the adversary, or code reviewer) must be **≤ 50 000 bytes**.

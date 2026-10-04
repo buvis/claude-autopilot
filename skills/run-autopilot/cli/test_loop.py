@@ -75,7 +75,7 @@ def test_drained_batch_exits_zero_with_banner_and_notification(tmp_path):
     assert not (ap / "state.json").exists()
 
 
-def test_signal_free_build_launches_sonnet_xhigh(tmp_path):
+def test_signal_free_build_launches_sonnet_low(tmp_path):
     lp = make_loop(tmp_path, [terminal_step()])
     ap = lp._test["ap_dir"]
     prds = ap.parent / "prds" / "wip"
@@ -93,7 +93,7 @@ def test_signal_free_build_launches_sonnet_xhigh(tmp_path):
     assert lp.run() == 0
     launch = lp._test["spawn"].launches[0]
     assert launch["model"] == "claude-sonnet-5[1m]"
-    assert launch["effort"] == "xhigh"
+    assert launch["effort"] == "low"
 
 
 def test_build_kill_switch_wins(tmp_path):
@@ -124,49 +124,49 @@ def test_review_branch_routes_opus_with_review_cap(tmp_path):
     assert launch["cap_secs"] == 10800
 
 
-def test_run_relaunches_a_cycle_two_review_at_high_effort_and_persists_it(tmp_path):
+def test_run_relaunches_a_cycle_two_review_at_low_effort_and_persists_it(tmp_path):
     lp = make_loop(tmp_path, [terminal_step()])
     ap = lp._test["ap_dir"]
     write_state(ap, prd="p.md", next_phase="review", cycle=2, batch={"id": "b"})
     assert lp.run() == 0
     launch = lp._test["spawn"].launches[0]
     assert launch["model"] == "claude-opus-5[1m]"
-    assert launch["effort"] == "high"
+    assert launch["effort"] == "low"
     primary = json.loads(
         (ap / "loop-metrics.jsonl").read_text().strip().splitlines()[0],
     )
     ledger = json.loads(
         (ap / "ledger" / "loop-metrics.jsonl").read_text().strip().splitlines()[0],
     )
-    assert primary["effort"] == "high"
-    assert ledger["effort"] == "high"
+    assert primary["effort"] == "low"
+    assert ledger["effort"] == "low"
 
 
-def test_run_once_launches_a_cycle_two_review_at_high_effort_and_persists_it(tmp_path):
+def test_run_once_launches_a_cycle_two_review_at_low_effort_and_persists_it(tmp_path):
     lp = make_loop(tmp_path, [noop_step])
     ap = lp._test["ap_dir"]
     write_state(ap, prd="p.md", next_phase="review", cycle=2, batch={"id": "b"})
     lp.run_once()
     launch = lp._test["spawn"].launches[0]
     assert launch["model"] == "claude-opus-5[1m]"
-    assert launch["effort"] == "high"
+    assert launch["effort"] == "low"
     primary = json.loads(
         (ap / "loop-metrics.jsonl").read_text().strip().splitlines()[0],
     )
     ledger = json.loads(
         (ap / "ledger" / "loop-metrics.jsonl").read_text().strip().splitlines()[0],
     )
-    assert primary["effort"] == "high"
-    assert ledger["effort"] == "high"
+    assert primary["effort"] == "low"
+    assert ledger["effort"] == "low"
 
 
-def test_done_branch_routes_sonnet_medium(tmp_path):
+def test_done_branch_routes_sonnet_low(tmp_path):
     lp = make_loop(tmp_path, [terminal_step()])
     write_state(lp._test["ap_dir"], prd="p.md", next_phase="done", batch={"id": "b"})
     assert lp.run() == 0
     launch = lp._test["spawn"].launches[0]
     assert launch["model"] == "claude-sonnet-5[1m]"
-    assert launch["effort"] == "medium"
+    assert launch["effort"] == "low"
 
 
 def test_continue_relaunches_until_drain(tmp_path):

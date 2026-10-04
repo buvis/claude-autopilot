@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **autoclaude**: coordinator effort defaults to low with validated coordinator/phase overrides; native task tiers and reviewers select effort explicitly instead of inheriting session defaults. Existing model promotion, review lenses, and human-gated Fable rescue remain in force.
+
 - **run-autopilot**: review rework now caps at 4 non-CRITICAL tasks, grouped by file. Findings citing one file in different shapes (`:12`, ` (lines 3-4)`, `#L12`) share a task, the findings table's `N/A` marker counts as `general` instead of becoming a task of its own, and a malformed `--findings` file exits 2 with one message rather than a traceback.
 
 ### Fixed

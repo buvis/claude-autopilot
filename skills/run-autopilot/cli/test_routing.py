@@ -495,7 +495,7 @@ def _route(phase: str, tmp_path: Path, env: dict | None = None) -> Route:
 
 def test_route_build_defaults_to_sonnet_xhigh_7200(tmp_path):
     got = _route("build", tmp_path)
-    assert got == Route(model=SONNET, effort="xhigh", cap_secs=7200)
+    assert got == Route(model=SONNET, effort="low", cap_secs=7200)
 
 
 def test_route_absent_phase_is_a_build_launch(tmp_path):
@@ -505,13 +505,13 @@ def test_route_absent_phase_is_a_build_launch(tmp_path):
 def test_route_build_kill_switch_wins_over_routing(tmp_path):
     got = _route("build", tmp_path, {"_AUTOPILOT_MODEL_BUILD": OPUS})
     assert got.model == OPUS
-    assert got.effort == "xhigh"
+    assert got.effort == "low"
 
 
 def test_route_review_is_opus_xhigh_10800(tmp_path):
     assert _route("review", tmp_path) == Route(
         model=OPUS,
-        effort="xhigh",
+        effort="low",
         cap_secs=10800,
     )
 
@@ -519,7 +519,7 @@ def test_route_review_is_opus_xhigh_10800(tmp_path):
 def test_route_done_is_sonnet_medium_7200(tmp_path):
     assert _route("done", tmp_path) == Route(
         model=SONNET,
-        effort="medium",
+        effort="low",
         cap_secs=7200,
     )
 
@@ -600,7 +600,7 @@ def test_review_cycle_survives_an_unreadable_state_file(tmp_path, monkeypatch):
 
     monkeypatch.setattr(Path, "read_text", _raise)
     assert review_cycle(ap_dir) == 1
-    assert route("review", ap_dir, env={}).effort == "xhigh"
+    assert route("review", ap_dir, env={}).effort == "low"
     assert state_path.read_bytes() == before
 
 
@@ -618,7 +618,7 @@ def test_review_cycle_treats_json_true_as_int_one_not_bool(tmp_path):
     got = review_cycle(ap_dir)
     assert got == 1
     assert type(got) is int
-    assert route("review", ap_dir, env={}).effort == "xhigh"
+    assert route("review", ap_dir, env={}).effort == "low"
 
 
 def test_review_cycle_treats_json_false_as_int_one_not_bool(tmp_path):
@@ -627,7 +627,7 @@ def test_review_cycle_treats_json_false_as_int_one_not_bool(tmp_path):
     got = review_cycle(ap_dir)
     assert got == 1
     assert type(got) is int
-    assert route("review", ap_dir, env={}).effort == "xhigh"
+    assert route("review", ap_dir, env={}).effort == "low"
 
 
 def test_review_cycle_defaults_to_one_when_cycle_key_is_absent(tmp_path):
@@ -636,23 +636,23 @@ def test_review_cycle_defaults_to_one_when_cycle_key_is_absent(tmp_path):
     assert review_cycle(ap_dir) == 1
 
 
-def test_review_first_cycle_keeps_xhigh(tmp_path):
+def test_review_first_cycle_defaults_to_low(tmp_path):
     ap_dir = _ap_dir_with_cycle(tmp_path, 1)
     got = route("review", ap_dir, env={})
-    assert got.effort == "xhigh"
+    assert got.effort == "low"
 
 
-def test_review_cycle_zero_or_below_keeps_xhigh(tmp_path):
+def test_review_cycle_zero_or_below_defaults_to_low(tmp_path):
     # The contract is explicitly "1 or lower", not "not equal to 1".
     ap_dir = _ap_dir_with_cycle(tmp_path, 0)
     got = route("review", ap_dir, env={})
-    assert got.effort == "xhigh"
+    assert got.effort == "low"
 
 
-def test_review_rerun_drops_effort_to_high(tmp_path):
+def test_review_rerun_keeps_coordinator_effort_low(tmp_path):
     ap_dir = _ap_dir_with_cycle(tmp_path, 2)
     got = route("review", ap_dir, env={})
-    assert got.effort == "high"
+    assert got.effort == "low"
     assert got.model == OPUS
 
 
@@ -688,20 +688,20 @@ def test_review_effort_override_wins_over_rerun_override_when_both_set(tmp_path)
     assert got.effort == "xhigh"
 
 
-def test_review_effort_override_wins_even_when_empty_string(tmp_path):
+def test_review_effort_empty_override_uses_default(tmp_path):
     # The override branch is a membership test ("that key is set in env"),
     # not the file's usual `.get(key) or default` idiom used elsewhere in
     # route() - an explicitly set empty string still wins over the
     # cycle-computed effort.
     ap_dir = _ap_dir_with_cycle(tmp_path, 2)
     got = route("review", ap_dir, env={"_AUTOPILOT_EFFORT_REVIEW": ""})
-    assert got.effort == ""
+    assert got.effort == "low"
 
 
-def test_review_missing_state_keeps_xhigh(tmp_path):
+def test_review_missing_state_defaults_to_low(tmp_path):
     ap_dir = _ap_dir_with_cycle(tmp_path, None)
     got = route("review", ap_dir, env={})
-    assert got.effort == "xhigh"
+    assert got.effort == "low"
 
 
 # ── Loop._append_metrics(): the effort the router chose, persisted ──────────

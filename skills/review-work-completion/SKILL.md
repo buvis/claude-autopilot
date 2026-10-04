@@ -11,6 +11,12 @@ compatibility: "Requires Bob personal Claude/autoclaude environment or equivalen
 > before running anything. Never pass the literal placeholder to a shell - it
 > expands to the empty string and the path silently becomes `/...`.
 
+> Claude reviewer effort: Alice and Blake use their named agent definitions
+> with `effort: high`. If rendering their persona into a generic prompt, dispatch
+> it through `autopilot:worker-opus` (high effort), passing the source-selected
+> reviewer model explicitly. External Claude reviewers pass `--effort high`.
+> Preserve all lenses, isolation, rubrics, and the independent provider voice.
+
 # Review Work Completion
 
 ## What This Does
@@ -142,7 +148,7 @@ Write tasks markdown to `docs/dev/tmp/review-tasks-{id}.md` and PRD summary to `
 - **No prior review file** → cycle 1, a **full review**. When `state.work_start_sha` is set in `docs/dev/project-management/autopilot/state.json` (running under autopilot), pass `--since <state.work_start_sha>` to `gather-context.sh` — the PRD's whole work range, the same value `COVERAGE_DIFF_RANGE` uses below. `gather-context.sh` otherwise diffs against the detected base branch, which is empty (and now refused with exit 3) for a repo worked on directly on that branch. Without `state.work_start_sha` (an interactive, non-autopilot run), run without `--since` as before.
 - **A prior review file exists** → this is a rework cycle, an **incremental review**. Read the highest-numbered prior file's `head_sha` frontmatter field.
   - `head_sha` present → pass `--since <head_sha>` to `gather-context.sh`. The diff then covers only the rework commits since that cycle, not the whole PRD branch — the prior cycle already reviewed the full diff. Also read that file's consolidated findings; step 4 hands them to the reviewers to verify.
-  - `head_sha` absent (file predates this field) → fall back to a full review: pass `--since <state.work_start_sha>` when that field is set in `state.json`, otherwise omit `--since`.
+  - `head_sha` absent (file predates this field) → fall back to a full review (omit `--since`).
   - Also read that same prior file's `codex_thread_id` frontmatter field (stamped in step 8 of the prior cycle). Present → step 5 adds `--resume-thread <codex_thread_id>` to Bob's launch so codex resumes his prior session instead of re-reviewing from zero. Absent (pre-change file, or Bob was skipped / thread-id capture failed last cycle) → Bob runs a fresh review, no resume flag.
 
 Capture the current HEAD now — `git rev-parse HEAD` — and hold it; step 8 stamps it into this cycle's review file as `head_sha`.

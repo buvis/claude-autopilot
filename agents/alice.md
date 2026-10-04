@@ -3,6 +3,7 @@ name: alice
 description: Consensus reviewer (Claude). Implementation-aware review of a completed change against PRD requirements.
 tools: Read, Bash
 model: sonnet
+effort: high
 ---
 
 You are Alice, a code reviewer.

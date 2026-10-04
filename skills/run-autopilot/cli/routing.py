@@ -8,14 +8,12 @@ test_autoclaude_build_model.sh, re-expressed in cli/test_routing.py).
 Build routes per-PRD (PRD 00076): Sonnet unless a promotion signal
 fires. The absent phase is a BUILD launch (a fresh batch has no
 state.json and resumes at the build gate). A genuinely unknown non-empty
-phase falls to Opus xhigh: fail expensive, never fail dumb. A fresh
-review runs on Opus, at effort xhigh on cycle 1 and high on cycle 2 and
-later; a rework resume (the cycle's review file on disk and unfinished
-`rework_task_ids`, PRD 00207) takes the queued tasks' highest tier
-instead, Sonnet unless one is opus or fable; `_AUTOPILOT_EFFORT_REVIEW`
-forces one effort on every cycle and `_AUTOPILOT_EFFORT_REVIEW_RERUN`
-sets the rerun value; finalize (done) is mechanical rendering - Sonnet at
-medium.
+phase falls to Opus xhigh. All known main phases default to low coordinator
+effort, independently of worker and reviewer effort. `_AUTOPILOT_COORDINATOR_EFFORT` sets that default;
+phase-specific `_AUTOPILOT_EFFORT_BUILD`, `_REVIEW`, and `_DONE` override it.
+`_AUTOPILOT_EFFORT_REVIEW_RERUN` remains a rerun-only override. Fresh review
+still selects Opus; rework resumes retain the queued tasks' highest tier.
+Unknown phases retain Opus/xhigh as a conservative recovery route.
 
 The `[1m]` suffix is load-bearing: autopilot_context_cap_hook.USAGE_CAP
 (500K) is sized for a 1M window, so every launch model here must carry
@@ -301,6 +299,25 @@ def _review_model(autopilot_dir: Path) -> str:
     return model
 
 
+def coordinator_effort(phase: str, autopilot_dir: Path, env: dict) -> str:
+    """Explicit coordinator settings never become worker effort defaults."""
+    value = env.get("_AUTOPILOT_COORDINATOR_EFFORT") or "low"
+    phase_key = {"": "BUILD", "build": "BUILD", "review": "REVIEW", "done": "DONE"}.get(
+        phase
+    )
+    if phase_key:
+        value = env.get(f"_AUTOPILOT_EFFORT_{phase_key}") or value
+    if phase == "review" and review_cycle(autopilot_dir) > 1:
+        value = (
+            env.get("_AUTOPILOT_EFFORT_REVIEW")
+            or env.get("_AUTOPILOT_EFFORT_REVIEW_RERUN")
+            or value
+        )
+    if value not in {"low", "medium", "high", "xhigh", "max"}:
+        raise ValueError(f"invalid coordinator effort: {value!r}")
+    return value
+
+
 def route(phase: str, autopilot_dir: Path, env: dict | None = None) -> Route:
     """Model, effort and wall-clock cap for the next spawn.
 
@@ -310,6 +327,7 @@ def route(phase: str, autopilot_dir: Path, env: dict | None = None) -> Route:
     """
     if env is None:
         env = dict(os.environ)
+    effort = coordinator_effort(phase, autopilot_dir, env)
     if phase in ("build", ""):
         model = env.get("_AUTOPILOT_MODEL_BUILD") or build_model(
             autopilot_dir / "state.json",
@@ -319,17 +337,10 @@ def route(phase: str, autopilot_dir: Path, env: dict | None = None) -> Route:
         )
         return Route(
             model=model,
-            effort=env.get("_AUTOPILOT_EFFORT_BUILD") or "xhigh",
+            effort=effort,
             cap_secs=_env_int(env, "_AUTOPILOT_SESSION_MAX", 7200),
         )
     if phase == "review":
-        cycle = review_cycle(autopilot_dir)
-        if cycle <= 1:
-            effort = "xhigh"
-        else:
-            effort = env.get("_AUTOPILOT_EFFORT_REVIEW_RERUN") or "high"
-        if "_AUTOPILOT_EFFORT_REVIEW" in env:
-            effort = env["_AUTOPILOT_EFFORT_REVIEW"]
         return Route(
             model=env.get("_AUTOPILOT_MODEL_REVIEW") or _review_model(autopilot_dir),
             effort=effort,
@@ -338,7 +349,7 @@ def route(phase: str, autopilot_dir: Path, env: dict | None = None) -> Route:
     if phase == "done":
         return Route(
             model=env.get("_AUTOPILOT_MODEL_DONE") or SONNET,
-            effort=env.get("_AUTOPILOT_EFFORT_DONE") or "medium",
+            effort=effort,
             cap_secs=_env_int(env, "_AUTOPILOT_SESSION_MAX", 7200),
         )
     return Route(

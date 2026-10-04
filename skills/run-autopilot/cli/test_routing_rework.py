@@ -55,7 +55,7 @@ def test_rework_resume_with_sonnet_tasks_routes_sonnet(tmp_path, capsys):
     ]
     ap_dir = _rework_box(tmp_path, tasks, ["4", "5", "6"])
     got = route("review", ap_dir, env={})
-    assert got == Route(model=SONNET, effort="xhigh", cap_secs=10800)
+    assert got == Route(model=SONNET, effort="low", cap_secs=10800)
     assert "rework resume, 2 task(s) left, routing" in capsys.readouterr().err
 
 
@@ -67,7 +67,7 @@ def test_rework_resume_with_one_opus_task_routes_opus(tmp_path):
     ap_dir = _rework_box(tmp_path, tasks, ["5", "6"], cycle=2)
     got = route("review", ap_dir, env={})
     assert got.model == OPUS
-    assert got.effort == "high"
+    assert got.effort == "low"
 
 
 def test_fresh_review_without_review_file_routes_opus(tmp_path, capsys):

@@ -332,7 +332,7 @@ pins every build launch to Opus immediately, which is strictly stronger than
 restoring any single signal.
 
 **Review sessions (PRD 00207).** A fresh review launch (no review file for
-`state.cycle` yet) runs on Opus: xhigh on cycle 1, high on reruns. A
+`state.cycle` yet) runs on Opus at low coordinator effort on every cycle. Reviewers remain at high effort. A
 **rework resume** (the cycle's review file on disk and `state.rework_task_ids`
 naming an unfinished task, so Phases 4 and 5 already ran and the session only
 dispatches `/autopilot:work` for the queued fixes) takes the highest tier

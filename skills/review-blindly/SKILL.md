@@ -102,7 +102,7 @@ Pin the reviewer to **Sonnet** for model diversity — a different model from th
 **Step 2b — run the reviewer with a direct foreground Bash call.** Run this single command in THIS session via the **Bash tool** (NOT wrapped in a subagent). Give the Bash tool a generous timeout (up to 600000 ms) so it blocks for the whole run. Do NOT redirect into `docs/dev/project-management/` — the aegis hook blocks shell `>` there; the Bash result comes back into this turn and the Write tool (Step 2.5) owns the file:
 
 ```bash
-timeout 600 ${CLAUDE_PLUGIN_ROOT}/skills/use-sonnet/scripts/sonnet-run.sh -y -f <ABSOLUTE path to docs/dev/project-management/reviews/.blind-reviewer-prompt.md>
+timeout 600 ${CLAUDE_PLUGIN_ROOT}/skills/use-sonnet/scripts/sonnet-run.sh --effort high -y -f <ABSOLUTE path to docs/dev/project-management/reviews/.blind-reviewer-prompt.md>
 ```
 
 `-y` gives the child full permissions so Sonnet reads the codebase and runs its checks unattended (`-a` grants acceptEdits only and would stall a headless child on its first gated command). `timeout 600` bounds a hung CLI. The Bash tool runs this in the FOREGROUND and blocks the turn until the CLI exits, then returns Sonnet's full report as the tool result this same turn — there is no async acknowledgment to strand on. If the command exits non-zero (including a timeout), or the result lacks the per-rule `B{n}:` verdict lines, the review did NOT complete — re-run this command, **at most 2 re-runs**. If the second re-run still fails, mark the blind review FAILED, quote the CLI's stderr in the report, and fail loud — never proceed over a failed review (unattended sessions: `${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/references/unattended-contract.md`). On success proceed to Step 2.5.

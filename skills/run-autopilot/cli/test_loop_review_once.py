@@ -54,20 +54,20 @@ def test_review_once_spawns_the_review_route_once_and_exits_zero(tmp_path):
 
     assert lp.run_once() == 0
     assert lp._test["spawn"].launches == [
-        {"model": OPUS, "effort": "xhigh", "cap_secs": 10800},
+        {"model": OPUS, "effort": "low", "cap_secs": 10800},
     ]
     out = lp._test["out"].getvalue()
     assert "signal continue" in out
     assert "next phase 'build'" in out
 
 
-def test_review_once_finalize_routes_sonnet_medium(tmp_path):
+def test_review_once_finalize_routes_sonnet_low(tmp_path):
     lp = make_loop(tmp_path, [_review_step(next_phase="")])
     write_state(lp._test["ap_dir"], prd="p.md", next_phase="done", batch={"id": "b"})
 
     assert lp.run_once() == 0
     assert lp._test["spawn"].launches == [
-        {"model": SONNET, "effort": "medium", "cap_secs": 7200},
+        {"model": SONNET, "effort": "low", "cap_secs": 7200},
     ]
 
 

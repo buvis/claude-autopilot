@@ -12,6 +12,15 @@ compatibility: "Requires Bob personal Claude/autoclaude environment or equivalen
 > before running anything. Never pass the literal placeholder to a shell - it
 > expands to the empty string and the path silently becomes `/...`.
 
+> **Role effort:** main sessions default to low coordinator effort. This does
+> not reduce worker or reviewer effort. Every native Claude task dispatch uses
+> `autopilot:worker-<tier>` with the full rendered persona and selected model:
+> haiku/low, sonnet/medium, opus/high, human-authorized fable/xhigh. Named
+> Alice/Blake reviewers run at high; other native reviewers use the high-effort
+> `autopilot:worker-opus` wrapper with their selected model. External Claude
+> reviews pass `sonnet-run.sh --effort high`. Preserve all review gates, lenses,
+> isolation, and escalation rules. Other provider hosts use their host mapping.
+
 # Autopilot
 
 Orchestrate the full PRD lifecycle: catchup → design → plan-tasks → work → review-rework loop (consensus + blind + doubt lenses, every cycle) → done.

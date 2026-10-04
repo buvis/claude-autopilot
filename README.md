@@ -121,3 +121,17 @@ dev/bin/release minor           # bump, tag, stamp the central marketplace
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+### Autoclaude role effort
+
+Coordinator effort defaults to `low` for build, review, and finalization.
+`_AUTOPILOT_COORDINATOR_EFFORT` overrides that default; existing phase effort
+settings override it for their phase. Invalid nonempty effort values fail before
+launch; empty values use the default. Model promotions and Fable authorization
+are unchanged. Unknown recovery phases retain Opus/xhigh.
+
+Native worker agent definitions explicitly set Haiku/low, Sonnet/medium,
+Opus/high, and authorized Fable/xhigh. Alice and Blake use high effort. Worker
+and reviewer settings do not inherit coordinator effort. External Claude reviews
+pass `--effort high` to `sonnet-run.sh`; implementations use their tier default.
+These defaults require the updated plugin, not merely a lower launcher setting.
