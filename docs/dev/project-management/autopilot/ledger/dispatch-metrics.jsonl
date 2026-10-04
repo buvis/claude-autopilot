@@ -3178,3 +3178,7 @@
 {"id":"61e492db","kind":"ivan","task":"4","queued_at":1791151223,"prompt_bytes":26083}
 {"id":"28fe97ae","kind":"pat","task":"4","queued_at":1791151396,"prompt_bytes":11573}
 {"id":"79ca671c","kind":"pat","task":"5","queued_at":1791151573,"prompt_bytes":8667}
+{"id":"61e492db","ended_at":1791151869,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"28fe97ae","ended_at":1791151869,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"79ca671c","ended_at":1791151869,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"kind":"handoff","site":"review","edge":"leave","at":1791151869,"phase":"done","prd":"00254-tighten-the-phase-delegation-guard-v1.md"}
