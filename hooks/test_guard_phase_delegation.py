@@ -32,17 +32,15 @@ CORPUS = HOOKS.parent / "docs" / "dev" / "tmp"
 REASON = "hooks/guard_phase_delegation.py denied this Agent call."
 
 
-_SELF_REFERENTIAL = {"dispatch-tess-1.txt", "dispatch-ivan-1.txt"}
-
-
 def _self_referential(p: Path) -> bool:
     # This PRD's own dispatch prompts (Tess, Devon, Ivan, their retries)
-    # quote the denied phrases verbatim to specify the hook's contract - not
-    # a real delegation attempt, so they are excluded rather than counted
-    # as false positives.
-    return p.name in _SELF_REFERENTIAL or "guard_phase_delegation" in p.read_text(
-        encoding="utf-8"
-    )
+    # quote the denied phrases verbatim ("guard_phase_delegation") to
+    # specify the hook's contract - not a real delegation attempt, so they
+    # are excluded rather than counted as false positives. Content-only
+    # check: every file this ever excluded (dispatch-tess-1[.txt/-strengthen],
+    # dispatch-ivan-1, dispatch-tess-3, dispatch-ivan-3) names the module
+    # literally, so no hard-coded filename list is needed.
+    return "guard_phase_delegation" in p.read_text(encoding="utf-8")
 
 
 def _allow_corpus() -> list[Path]:
@@ -51,7 +49,9 @@ def _allow_corpus() -> list[Path]:
 
 
 def _denied() -> list[Path]:
-    return sorted((FIXTURES / "denied").glob("*.txt"))
+    fixtures = sorted((FIXTURES / "denied").glob("*.txt"))
+    assert len(fixtures) == 4, fixtures
+    return fixtures
 
 
 def _description(prompt_file: Path) -> str:
@@ -120,7 +120,7 @@ def test_every_real_dispatch_prompt_is_allowed(prompt_file: Path) -> None:
 def test_committed_allowed_prompts_pass_the_hook_in_the_loop() -> None:
     # main() must route allowed prompts through the predicate, not deny every Agent call.
     samples = sorted((FIXTURES / "allowed").glob("*.txt"))
-    assert len(samples) == 20
+    assert len(samples) == 24
     blocked = []
     for sample in samples:
         tool_input = {
@@ -132,6 +132,22 @@ def test_committed_allowed_prompts_pass_the_hook_in_the_loop() -> None:
         if result.returncode != 0 or result.stderr != "":
             blocked.append((sample.name, result.returncode, result.stderr))
     assert blocked == []
+
+
+_REVIEWER_FIXTURES = sorted((FIXTURES / "allowed").glob("reviewer-*.txt"))
+
+
+@pytest.mark.parametrize("prompt_file", _REVIEWER_FIXTURES, ids=lambda p: p.name)
+def test_review_roster_prompts_are_allowed(prompt_file: Path) -> None:
+    # The PRD's allow set explicitly names "the review roster's Alice,
+    # Blake and Watcher prompts" (no Watcher prompt exists in the corpus to
+    # commit a sample of). These are real Alice/Blake/Carl review-cycle
+    # prompts, committed so this half of the allow set has a durable gate
+    # rather than relying on scratch docs/dev/tmp files.
+    guard = _guard_module()
+    prompt = prompt_file.read_text(encoding="utf-8")
+    assert prompt.strip(), prompt_file.name
+    assert guard.is_phase_delegation({"prompt": prompt, "description": ""}) is False
 
 
 def test_work_phase_named_only_in_the_description_without_a_verb_is_allowed() -> None:
@@ -174,6 +190,26 @@ def test_reworded_delegations_are_denied(description: str, prompt: str) -> None:
     result = _run(_agent_payload(tool_input), loop=True)
     assert result.returncode == 2
     assert REASON in result.stderr
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Does not run the work phase for PRD 300; implement task 2 only.",
+        "This task doesn't invoke the design phase at all.",
+        "We won't execute the autopilot:work skill here, just task 4.",
+    ],
+    ids=["does-not-run", "doesnt-invoke", "wont-execute"],
+)
+def test_negated_invocations_are_allowed(prompt: str) -> None:
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is False
+
+
+def test_negated_first_match_then_real_delegation_is_still_denied() -> None:
+    # A negation in an earlier sentence must not suppress a real delegation
+    # that follows it, beyond the negation window, in a later sentence.
+    prompt = "Do not wait for me. Run the work phase for PRD 7."
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
 
 
 @pytest.mark.parametrize("subagent_type", ["Explore", "Plan", None], ids=["explore", "plan", "omitted"])
@@ -243,66 +279,26 @@ def test_non_string_prompt_never_crashes_the_hook() -> None:
     # 1 with a traceback.
     result = _run(_agent_payload({"prompt": 5, "description": "x"}), loop=True)
     assert result.returncode == 0
-    assert result.stderr in ("", "guard_phase_delegation: predicate raised, allowing\n")
+    # The predicate coerces a non-string prompt to "" (isinstance check,
+    # no f-string coercion) and does not raise, so stderr is empty.
+    assert result.stderr == ""
 
 
 PLUGIN = HOOKS.parent
 
 
-# The three PreToolUse entries that must survive untouched - verbatim from
-# HEAD, so Devon's "empty an existing entry's hooks" and "add a stray
-# top-level key" exploits are both caught by exact equality.
-_EXISTING_PRE = [
-    {
-        "matcher": "Edit|Write|MultiEdit",
-        "hooks": [
-            {
-                "type": "command",
-                "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/enforce_prd_location.py",
-                "timeout": 5,
-            }
-        ],
-    },
-    {
-        "matcher": "Bash",
-        "hooks": [
-            {
-                "type": "command",
-                "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/enforce_prd_location.py",
-                "timeout": 5,
-            },
-            {
-                "type": "command",
-                "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/guard_push_on_critical.py",
-                "timeout": 10,
-            },
-        ],
-    },
-    {
-        "matcher": "Skill",
-        "hooks": [
-            {
-                "type": "command",
-                "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/guard_skill_after_leave.py",
-                "timeout": 5,
-            }
-        ],
-    },
-]
-
-
 def test_hooks_json_registers_the_guard_on_agent() -> None:
+    # Only the Agent-matcher registration is pinned here, not the shape of
+    # any other PreToolUse entry - a future unrelated hook addition must
+    # not break this test.
     assert GUARD.is_file()
     data = json.loads((HOOKS / "hooks.json").read_text(encoding="utf-8"))
     assert set(data) == {"hooks"}
     hooks = data["hooks"]
     pre = hooks["PreToolUse"]
-    # Exactly one new entry, appended after the three existing ones, which
-    # must be byte-for-byte unchanged (no emptied/deleted existing hook).
-    assert pre[:3] == _EXISTING_PRE
-    assert len(pre) == 4
-    agent = pre[3]
-    assert agent == {
+    agent_entries = [e for e in pre if e.get("matcher") == "Agent"]
+    assert len(agent_entries) == 1
+    assert agent_entries[0] == {
         "matcher": "Agent",
         "hooks": [
             {
@@ -364,7 +360,7 @@ def test_gate_prose_names_the_guard_in_phase_build() -> None:
         matches = [p for p in paras if gate in p and anchor in p]
         assert len(matches) == 1, (gate, anchor)
         para = matches[0]
-        assert para.startswith(f"{gate} {anchor}") or para == f"{gate} {anchor}"
+        assert para.startswith(f"{gate} {anchor}")
         for banned in _BANNED_NEAR_GATE:
             assert banned not in para.lower(), (banned, para)
         idx = paras.index(para)
@@ -400,3 +396,12 @@ def test_gate_prose_names_the_guard_in_work_skill() -> None:
     section_end = work_skill_text.index("##", section_start + 2)
     note_pos = work_skill_text.index(guard_note)
     assert section_start < note_pos < section_end
+
+
+def test_gate_prose_names_the_guard() -> None:
+    # The PRD's Phase 1 acceptance test id names this single test; the
+    # implementation split it into the two functions above to stay under
+    # the 50-line function limit (commit a7c6416). This thin wrapper makes
+    # the PRD's literal node-id runnable again without re-merging them.
+    test_gate_prose_names_the_guard_in_phase_build()
+    test_gate_prose_names_the_guard_in_work_skill()

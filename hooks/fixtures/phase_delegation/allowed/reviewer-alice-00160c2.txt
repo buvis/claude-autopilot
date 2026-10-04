@@ -1,0 +1,152 @@
+## Run inputs — review cycle 2, PRD 00160-route-opus-on-task-local-risk-v1
+
+Substitute these for the placeholders in your instructions.
+
+- `{CONTEXT_FILE}` = `/Users/bob/git/src/github.com/buvis/claude-autopilot/dev/local/tmp/review-context-00160c2.md`
+- `{DIFF_FILE}` = `/Users/bob/git/src/github.com/buvis/claude-autopilot/dev/local/tmp/review-diff-00160c2.diff`
+- `{PACK_FILE}` = `(no pack available this cycle)` — there is no engram pack this cycle; skip that instruction entirely, do not try to read a file by that name.
+- Project root: `/Users/bob/git/src/github.com/buvis/claude-autopilot`
+
+`{REVIEW_CHECKLIST}` is:
+
+# Review Dimensions
+
+## Plan Compliance
+- [ ] Implementation matches task description
+- [ ] All acceptance criteria met
+- [ ] No scope creep (extra features not requested)
+- [ ] No missing pieces from original task
+
+## PRD Coverage
+- [ ] All "must have" requirements addressed
+- [ ] Success metrics achievable with implementation
+- [ ] No PRD sections left unimplemented
+- [ ] Dependencies correctly handled
+
+## Simplification
+
+Hunt actively for simplification — do not just tick boxes. The diff under review is fresh; this is the cheapest moment to cut complexity before it sets. For every added or changed file, ask "what would make this simpler to read without changing what it does?" and flag concrete opportunities.
+
+- [ ] **Reduce complexity** — no needless indirection, dead branches, or abstractions built for a single caller; nesting <= 4 levels; functions under 50 lines
+- [ ] **Eliminate redundancy** — no logic duplicated within the diff or against existing code; no helper that reimplements a stdlib or existing utility
+- [ ] **Improve naming** — names state intent; no opaque abbreviations; action-named functions start with a verb
+- [ ] **Follow project standards** — conventions from CLAUDE.md / AGENTS.md and the surrounding code; no style drift
+- [ ] **No dead code** — no commented-out blocks, unused imports, variables, or speculatively-added parameters
+- [ ] **Appropriate error handling** — explicit, never silently swallowed
+
+**How to flag a simplification:** give the file:line, the current shape, and the simpler replacement. Flag concrete behavior-preserving simplifications at 🟡 Medium so the decision gate routes them into the rework loop. Do not inflate them to 🟠 High; that floods the rework loop and can trip the scope alarm.
+
+**Balance — do not over-simplify:** never propose a change that trades clarity for brevity, drops error handling, collapses a deliberate boundary, or removes a documented invariant. If a "simplification" would change behavior, it is out of scope — do not flag it.
+
+## Testing
+- [ ] Unit tests for new logic
+- [ ] Edge cases covered
+- [ ] Error paths tested
+- [ ] Integration tests if crossing boundaries
+- [ ] Tests actually run and pass
+
+## Security
+- [ ] No hardcoded secrets
+- [ ] Input validation at boundaries
+- [ ] No SQL/command injection risks
+- [ ] Auth/authz correctly applied
+- [ ] Sensitive data not logged
+
+## Documentation
+- [ ] Public APIs documented
+- [ ] Complex logic has comments
+- [ ] README updated if needed
+- [ ] Breaking changes noted
+
+`{RUBRIC}` is:
+
+R1: Tests cover every new behavior introduced by the diff.
+R2: Tests bind to intent, not just observable behavior.
+R3: No skipped or xfail tests mask failures.
+R4: Changed components integrate with existing callers.
+R6: No hardcoded secrets in the codebase.
+R7: All user input is validated and sanitized.
+R8: No injection-unsafe queries or commands.
+R9: Implementation matches PRD feature behavior exactly.
+R10: Error handling is explicit and not swallowed.
+R11: No debug statements, TODOs, or placeholder markers remain.
+R12: Function sizes respect the 50-line limit.
+R13: File sizes respect the 800-line limit.
+
+(There is no R5 — the numbering is stable and skips it.)
+
+`{OUTPUT_FORMAT}` is:
+
+Each issue on its own line, exactly:
+
+```
+[ALICE] {emoji} {description} | File: {path or "N/A"} | Task: {id or "general"}
+```
+
+Severity emojis: 🔴 Critical, 🟠 High, 🟡 Medium, ⚪ Low.
+One issue per line. Use `N/A` for file when the issue is architectural or
+cross-cutting; use `general` for task when it spans tasks or is a PRD gap.
+If you find zero issues, emit exactly `[ALICE] ✅ No issues found`.
+Use repo-relative file paths, never absolute ones — the consolidator matches
+findings across reviewers on file path.
+
+Then, after the issue lines, emit the twelve verdict lines, one per line, no
+other text and no rationale:
+
+```
+R1: pass|fail
+R2: pass|fail
+R3: pass|fail
+R4: pass|fail
+R6: pass|fail
+R7: pass|fail
+R8: pass|fail
+R9: pass|fail
+R10: pass|fail
+R11: pass|fail
+R12: pass|fail
+R13: pass|fail
+```
+
+## Incremental review — cycle 2
+
+This is an **incremental review** of the rework done since the previous review
+cycle — the diff is scoped to changes since then
+(`c6c32130e44639d09336c73aa9a0b0576ac0d1c6..0c0c80107c9d297d372ff2429f5cd57af4bd07e8`).
+Two jobs: (1) for each prior finding listed below, verify it is now resolved in
+the code; (2) review the scoped diff for any regression the rework introduced.
+You need not re-review unchanged code; the previous cycle already reviewed the
+full implementation.
+
+Cycle 1's 12 consolidated findings, verbatim:
+
+| Consensus | Severity | Issue | File | Found By |
+|-----------|----------|-------|------|----------|
+| [3/4] | 🟡 | Commit 82d770a reformatted skills/work/scripts/test_verify_queue_prose.py (quote style + line wrap), a file outside this PRD's declared Repository Structure — cosmetic-only but out-of-scope. | skills/work/scripts/test_verify_queue_prose.py | ALICE, BOB, CARL |
+| [1/4] | 🟠 | No test combines a true `contract_edit`/`algorithmic_risk` flag with genuinely mechanical-phrase text inside the haiku bounds (≤2 files, ≤50 lines); every risk-flag fixture uses non-mechanical text, so a regression that checks the mechanical rule before the risk facts would pass the whole suite undetected. | skills/plan-tasks/scripts/test_classify_tier.py | ALICE |
+| [1/4] | 🟡 | `classify()` writes to stderr for invalid floors, violating the required pure-core boundary; move validation and warning to `main()` | skills/plan-tasks/scripts/classify_tier.py:147 | BOB |
+| [1/4] | 🟡 | Tests never combine mechanical text with either risk flag, so moving the mechanical rule ahead of risk would pass while violating precedence | skills/plan-tasks/scripts/test_classify_tier.py:251 | BOB |
+| [1/4] | 🟡 | `tier_reason` is documented as explaining the current `tasks[].model`, but escalation rewrites `model` without rewriting this plan-time reason | skills/run-autopilot/references/state-schema.md:187 | BOB |
+| [1/4] | 🟡 | `_is_mechanical()` is a three-line single-caller indirection; inline its expression into the tier decision | skills/plan-tasks/scripts/classify_tier.py:137 | BOB |
+| [1/4] | 🟡 | `test_a_small_mechanical_edit_is_haiku` duplicates the exact rename behavior already covered by the parametrized core and CLI tests; remove it | skills/plan-tasks/scripts/test_classify_tier.py:288 | BOB |
+| [1/4] | 🟡 | `--lines` accepts negative values, allowing a negative change estimate to satisfy the mechanical `<= 50` limit and incorrectly route a task to Haiku; reject negative values and add a CLI test. | skills/plan-tasks/scripts/classify_tier.py:160 | CARL |
+| [1/4] | ⚪ | test_plan_tasks_prose.py's substring/proximity prose pins passed 12/12 against deliberately inverted-meaning adversarial prose during the build — a disclosed, repo-wide limitation of this technique, not unique to this diff, surfaced for visibility. | skills/plan-tasks/scripts/test_plan_tasks_prose.py | ALICE |
+| [1/4] | ⚪ | No test exercises a genuinely mixed test+packaging file slice (e.g. one test path plus one manifest path) to pin the `is_test_path(path) or is_packaging_path(path)` OR-branch across differing types; existing packaging tests use packaging-only slices. | skills/plan-tasks/scripts/test_classify_tier.py | ALICE |
+| [1/4] | ⚪ | Packaging-outranks test coverage only checks contract_edit, not algorithmic_risk (code order is correct either way) | skills/plan-tasks/scripts/test_classify_tier.py | BLAKE |
+| [1/4] | ⚪ | Cannot statically verify: full pytest suite passes | N/A | BOB |
+
+The 🟠 High was yours, and it is the reason the cycle did not converge. The
+acceptance bar the rework was given was explicit: **reordering the mechanical
+check ahead of the risk checks in `_tier_from_shape` must turn the suite RED.**
+Verify that empirically — make the edit, run the classifier suite, confirm it
+fails, then revert. Do not take the new test names on trust.
+
+**One structural change to look at closely.** The rework DELETED
+`skills/plan-tasks/scripts/test_classify_tier.py` (705 lines) and split it into
+five thematic modules plus `_classify_tier_test_support.py`. The PRD's
+Repository Structure names `test_classify_tier.py` explicitly, and two PRD
+acceptance criteria invoke that exact path
+(`uv run --no-project --with pytest python -m pytest -q skills/plan-tasks/scripts/test_classify_tier.py`).
+Run that exact command and report what it does now. Judge whether the split is
+compatible with the PRD as written and whether the coverage the deleted file
+carried survived the split intact.

@@ -1,0 +1,73 @@
+## Run inputs — blind lens
+
+You get the specification and nothing else. No diff, no changed-file list, no
+review history, no implementation summary. Find the code yourself.
+
+`{PRD}` — the specification — is the file
+`/Users/bob/git/src/github.com/buvis/claude-autopilot/dev/local/tmp/review-prd-00160c2.md`.
+**Read it in full, first, before anything else.** It is the PRD verbatim and
+nothing else. Project root: `/Users/bob/git/src/github.com/buvis/claude-autopilot`.
+
+`{RUBRIC}` is:
+
+B1: The implementation satisfies all specified behaviors and outputs described in the PRD.
+B2: All stated data formats and structures in the PRD are preserved in the implementation.
+B3: Every API endpoint or interface specified in the PRD is implemented with the correct signature and behavior.
+B4: All stated performance requirements and constraints from the PRD are met.
+B5: The implementation matches all specified error handling behaviors and status codes.
+B6: No new functionality or features beyond those explicitly specified in the PRD are present.
+B7: No additional parameters, options, or flags are added beyond those in the PRD.
+B8: No new external dependencies or libraries are introduced beyond those specified.
+B9: All specified authentication mechanisms from the PRD are implemented and enforced.
+B10: Required input validation and sanitization are present as specified in the PRD.
+B11: Any specified rate-limiting or throttling controls are implemented as described.
+B12: No destructive operations (delete, update, etc.) are performed without proper safeguards.
+B13: All data migrations include rollback or reversal mechanisms as specified.
+B14: No unguarded database queries or file operations are present in the implementation.
+B15: All acceptance criteria for Phase 1 tasks are satisfied in the implementation.
+B16: All acceptance criteria for Phase 2 tasks are satisfied in the implementation.
+B17: All acceptance criteria for Phase 3 tasks are satisfied in the implementation.
+B18: All items explicitly marked as out-of-scope in the PRD are absent from the implementation.
+B19: No features or functionality mentioned in the PRD as out-of-scope are present in the codebase the reviewer inspected.
+
+(The PRD has Phases 0, 1 and 2. Map B15/B16/B17 onto the phases that exist:
+B15 → Phase 0 acceptance criteria, B16 → Phase 1, B17 → Phase 2. Do not skip a
+line.)
+
+`{OUTPUT_FORMAT}` is:
+
+Each issue on its own line, exactly:
+
+```
+[BLAKE] {emoji} {description} | File: {path or "N/A"} | Task: {id or "general"}
+```
+
+Severity emojis: 🔴 Critical, 🟠 High, 🟡 Medium, ⚪ Low.
+One issue per line. Use `N/A` for file when the issue is architectural or
+cross-cutting; use `general` for task when it spans tasks or is a PRD gap.
+If you find zero issues, emit exactly `[BLAKE] ✅ No issues found`.
+Use **repo-relative** file paths, never absolute ones — findings are matched
+across reviewers on file path, and an absolute path breaks the match.
+
+Then, after the issue lines, emit the nineteen verdict lines, one per line, no
+other text and no rationale:
+
+```
+B1: pass|fail
+B2: pass|fail
+...
+B19: pass|fail
+```
+
+A rule you cannot evaluate counts as `fail`. Never omit a line, never renumber.
+
+## How to run the PRD's own acceptance commands
+
+The PRD's acceptance criteria name exact commands. **Run each one and report
+what actually happens** — a criterion you did not execute is not satisfied.
+Run them from the project root. If `bash dev/bin/release-checks` needs it,
+clear this session's nested-dispatch guards with
+`env -u AUTOPILOT_DISPATCH_DEPTH -u CODEX_SESSION_ID -u COPILOT_CLI`.
+
+Pay particular attention to whether every file path the PRD names actually
+exists, and whether every command the PRD names actually runs.
