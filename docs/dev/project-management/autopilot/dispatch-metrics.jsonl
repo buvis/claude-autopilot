@@ -3120,3 +3120,4 @@
 {"id":"9e2a4378","ended_at":1791140813,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"id":"5caf144c","ended_at":1791140813,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"kind":"handoff","site":"review","edge":"leave","at":1791140813,"phase":"review","prd":"00249-stage-and-close-reviews-in-code-v1.md"}
+{"kind":"handoff","site":"review","edge":"leave","at":1791142617,"phase":"review","prd":"00249-stage-and-close-reviews-in-code-v1.md"}
