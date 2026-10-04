@@ -78,7 +78,11 @@ def test_tail_sweep_split_rule_states_findings_path_naming_and_floor() -> None:
         f"{_PHASE_REVIEW}: the Tail sweep section doesn't state the "
         "'[D{cycle}] Tail sweep:' task naming prefix"
     )
-    assert "at most 4, never zero" in section or "caps at 4" in section, (
+    assert "at most 4" in section or "caps at 4" in section, (
         f"{_PHASE_REVIEW}: the Tail sweep section doesn't state the grouping "
-        "cap (at most 4 tasks, never zero)"
+        "upper cap (at most 4 tasks)"
+    )
+    assert "never zero" in section, (
+        f"{_PHASE_REVIEW}: the Tail sweep section doesn't state the grouping "
+        "nonzero floor (never zero tasks)"
     )
