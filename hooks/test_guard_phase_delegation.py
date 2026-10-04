@@ -34,13 +34,18 @@ REASON = "hooks/guard_phase_delegation.py denied this Agent call."
 _SELF_REFERENTIAL = {"dispatch-tess-1.txt", "dispatch-ivan-1.txt"}
 
 
-def _allow_corpus() -> list[Path]:
-    # This PRD's own task-1 dispatch prompts quote the denied phrases
-    # verbatim to specify the hook's contract - not a real delegation
-    # attempt, so they are excluded rather than counted as false positives.
-    real = sorted(
-        p for p in CORPUS.glob("dispatch-*.txt") if p.name not in _SELF_REFERENTIAL
+def _self_referential(p: Path) -> bool:
+    # This PRD's own dispatch prompts (Tess, Devon, Ivan, their retries)
+    # quote the denied phrases verbatim to specify the hook's contract - not
+    # a real delegation attempt, so they are excluded rather than counted
+    # as false positives.
+    return p.name in _SELF_REFERENTIAL or "guard_phase_delegation" in p.read_text(
+        encoding="utf-8"
     )
+
+
+def _allow_corpus() -> list[Path]:
+    real = sorted(p for p in CORPUS.glob("dispatch-*.txt") if not _self_referential(p))
     return real or sorted((FIXTURES / "allowed").glob("*.txt"))
 
 
@@ -48,15 +53,24 @@ def _denied() -> list[Path]:
     return sorted((FIXTURES / "denied").glob("*.txt"))
 
 
-def _tool_input(fixture: Path) -> dict:
+def _description(prompt_file: Path) -> str:
+    # A realistic Agent `description` for a per-task dispatch, e.g.
+    # "Tess 9 strengthen subagent" for dispatch-tess-9-strengthen.txt.
+    return prompt_file.stem.removeprefix("dispatch-").replace("-", " ").capitalize() + " subagent"
+
+
+def _tool_input(fixture: Path, subagent_type: str | None = "general-purpose") -> dict:
     description, _, prompt = fixture.read_text(encoding="utf-8").partition("\n")
-    return {"description": description, "prompt": prompt, "subagent_type": "general-purpose"}
+    tool_input = {"description": description, "prompt": prompt}
+    if subagent_type is not None:
+        tool_input["subagent_type"] = subagent_type
+    return tool_input
 
 
-def _run(stdin: str, *, loop: bool) -> subprocess.CompletedProcess[str]:
+def _run(stdin: str, *, loop: bool, loop_value: str = "4242") -> subprocess.CompletedProcess[str]:
     env = {"PATH": "/usr/bin:/bin", "HOME": str(Path.home())}
     if loop:
-        env["_AUTOPILOT_LOOP"] = "4242"
+        env["_AUTOPILOT_LOOP"] = loop_value
     return subprocess.run(
         [sys.executable, str(GUARD)],
         input=stdin,
@@ -66,14 +80,19 @@ def _run(stdin: str, *, loop: bool) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _agent_payload(tool_input: object) -> str:
+def _agent_payload(tool_input: object, tool_name: str = "Agent") -> str:
     return json.dumps(
         {
             "session_id": "11111111-2222-3333-4444-555555555555",
-            "tool_name": "Agent",
+            "tool_name": tool_name,
             "tool_input": tool_input,
         }
     )
+
+
+def _guard_module():
+    sys.path.insert(0, str(HOOKS))
+    return importlib.import_module("guard_phase_delegation")
 
 
 def test_the_four_observed_delegations_are_denied() -> None:
@@ -89,11 +108,95 @@ def test_the_four_observed_delegations_are_denied() -> None:
 
 @pytest.mark.parametrize("prompt_file", _allow_corpus(), ids=lambda p: p.name)
 def test_every_real_dispatch_prompt_is_allowed(prompt_file: Path) -> None:
-    sys.path.insert(0, str(HOOKS))
-    guard = importlib.import_module("guard_phase_delegation")
+    guard = _guard_module()
     prompt = prompt_file.read_text(encoding="utf-8")
     assert prompt.strip(), prompt_file.name
     assert guard.is_phase_delegation({"prompt": prompt, "description": ""}) is False
+    described = {"prompt": prompt, "description": _description(prompt_file)}
+    assert guard.is_phase_delegation(described) is False
+
+
+def test_committed_allowed_prompts_pass_the_hook_in_the_loop() -> None:
+    # main() must route allowed prompts through the predicate, not deny every Agent call.
+    samples = sorted((FIXTURES / "allowed").glob("*.txt"))
+    assert len(samples) == 20
+    blocked = []
+    for sample in samples:
+        tool_input = {
+            "description": _description(sample),
+            "prompt": sample.read_text(encoding="utf-8"),
+            "subagent_type": "general-purpose",
+        }
+        result = _run(_agent_payload(tool_input), loop=True)
+        if result.returncode != 0 or result.stderr != "":
+            blocked.append((sample.name, result.returncode, result.stderr))
+    assert blocked == []
+
+
+def test_work_phase_named_only_in_the_description_without_a_verb_is_allowed() -> None:
+    # The phase jargon alone is not a delegation: the contract needs an
+    # imperative verb (run/execute/continue/resume) beside it.
+    tool_input = {
+        "description": "Ivan: work phase task 3 of PRD 00300",
+        "prompt": "Implement task 3 of PRD 00300: add the parser and its tests.",
+    }
+    assert _guard_module().is_phase_delegation(tool_input) is False
+    result = _run(_agent_payload(tool_input), loop=True)
+    assert result.returncode == 0
+    assert result.stderr == ""
+
+
+_NEUTRAL_PROMPT = "Implement task 3 of PRD 00300: add the parser and its tests."
+
+
+@pytest.mark.parametrize(
+    ("description", "prompt"),
+    [
+        ("PRD 00300 build", "Run the autopilot:work skill on PRD 00300 and report back."),
+        ("PRD 00300 plan", "Follow /autopilot:plan-tasks for 00300 exactly."),
+        ("PRD 00300 design", "Invoke `/autopilot:design-solution` for PRD 00300."),
+        ("PRD 00300", "EXECUTE THE AUTOPILOT:WORK SKILL FOR PRD 00300."),
+        ("PRD 00300", "Please resume the Work Phase from task 2 of PRD 00300."),
+        ("PRD 00300", "Planning phase for PRD 00300: continue it from task 4."),
+        ("PRD 00300", "Read skills/work/SKILL.md and follow every task in it for PRD 00300."),
+        ("Run plan-tasks for PRD 00300", _NEUTRAL_PROMPT),
+        ("Continue the design phase for PRD 00300", _NEUTRAL_PROMPT),
+    ],
+    ids=[
+        "run-the-skill", "follow-slash", "invoke-backticks", "upper-case",
+        "resume-phase-mixed-case", "phase-then-verb", "read-skill-md-follow-every-task",
+        "description-only-skill", "description-only-phase",
+    ],
+)
+def test_reworded_delegations_are_denied(description: str, prompt: str) -> None:
+    tool_input = {"description": description, "prompt": prompt, "subagent_type": "general-purpose"}
+    result = _run(_agent_payload(tool_input), loop=True)
+    assert result.returncode == 2
+    assert REASON in result.stderr
+
+
+@pytest.mark.parametrize("subagent_type", ["Explore", "Plan", None], ids=["explore", "plan", "omitted"])
+def test_delegations_are_denied_whatever_the_subagent_type(subagent_type: str | None) -> None:
+    for fixture in _denied():
+        result = _run(_agent_payload(_tool_input(fixture, subagent_type)), loop=True)
+        assert result.returncode == 2, fixture.name
+        assert REASON in result.stderr, fixture.name
+
+
+@pytest.mark.parametrize("loop_value", ["1", "98765"])
+def test_any_non_empty_loop_value_arms_the_guard(loop_value: str) -> None:
+    for fixture in _denied():
+        result = _run(_agent_payload(_tool_input(fixture)), loop=True, loop_value=loop_value)
+        assert result.returncode == 2, fixture.name
+        assert REASON in result.stderr, fixture.name
+
+
+@pytest.mark.parametrize("tool_name", ["Bash", "Skill"])
+def test_non_agent_tools_pass_even_with_a_delegation_payload(tool_name: str) -> None:
+    for fixture in _denied():
+        result = _run(_agent_payload(_tool_input(fixture), tool_name), loop=True)
+        assert result.returncode == 0, fixture.name
+        assert result.stderr == "", fixture.name
 
 
 def test_outside_the_loop_everything_passes() -> None:
@@ -118,3 +221,25 @@ def test_unparseable_payload_fails_open(stdin: str, message: str) -> None:
     result = _run(stdin, loop=True)
     assert result.returncode == 0
     assert f"guard_phase_delegation: {message}" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "tool_input",
+    [{}, {"prompt": None}, {"prompt": None, "description": None}],
+    ids=["empty-dict", "prompt-none", "both-none"],
+)
+def test_dict_without_a_string_prompt_or_description_is_allowed_silently(tool_input: dict) -> None:
+    # Contract: neither key present as a non-empty string -> predicate False.
+    assert _guard_module().is_phase_delegation(tool_input) is False
+    result = _run(_agent_payload(tool_input), loop=True)
+    assert result.returncode == 0
+    assert result.stderr == ""
+
+
+def test_non_string_prompt_never_crashes_the_hook() -> None:
+    # The contract leaves a non-string prompt beside a string description
+    # unspecified for the predicate; main() must still fail open, never exit
+    # 1 with a traceback.
+    result = _run(_agent_payload({"prompt": 5, "description": "x"}), loop=True)
+    assert result.returncode == 0
+    assert result.stderr in ("", "guard_phase_delegation: predicate raised, allowing\n")
