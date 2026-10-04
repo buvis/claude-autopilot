@@ -266,7 +266,7 @@ def test_fs_error_row_names_every_owner() -> None:
 
 def test_park_halt_row_routes_by_exit_code() -> None:
     rows = _stop_table_rows(_enter_section())
-    row = next((r for r in rows if _first_cell(r) == "park_halt") , None)
+    row = next((r for r in rows if _first_cell(r) == "park_halt"), None)
     assert row is not None, (
         f"{_PHASE_BUILD}: {_ENTER_HEADING!r}'s stop-value table has no row whose "
         f"FIRST COLUMN is `park_halt` — found {[_first_cell(r) for r in rows]!r}."

@@ -136,6 +136,7 @@ echo "[checks] effort lanes"
 uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_lane.py \
   skills/run-autopilot/cli/test_lane_cli.py \
+  skills/run-autopilot/cli/test_lane_check.py \
   skills/run-autopilot/scripts/test_lane_prose.py \
   skills/run-autopilot/cli/test_release_checks_parallel_prose.py
 
@@ -192,3 +193,6 @@ uv run --no-project --with pytest python -m pytest -q \
 
 echo "[checks] gather-context paths"
 bash skills/review-work-completion/scripts/test_gather_context_paths.sh
+
+echo "[checks] gather-context id"
+bash skills/review-work-completion/scripts/test_gather_context_id.sh
