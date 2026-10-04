@@ -320,7 +320,9 @@ def test_spawn_scrubs_host_markers(tmp_path, capsys):
     assert err_lines == ["autopilot: scrubbed inherited host markers: CODEX_SESSION_ID"]
 
 
-def test_spawn_scrub_notice_sorts_multiple_markers_comma_space_joined(tmp_path, capsys):
+def test_spawn_scrub_notice_sorts_multiple_markers_comma_space_joined(
+    tmp_path, capsys
+):
     # Seeded out of alphabetical order so an implementation that merely
     # echoed the caller's dict order (rather than sorting) would fail.
     stub = _stub_runner(
