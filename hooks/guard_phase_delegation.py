@@ -48,7 +48,7 @@ _NEGATION = (
     r"shouldn't|wasn't|weren't)\b"
 )
 _NEGATION_RE = re.compile(_NEGATION, re.IGNORECASE)
-_SENTENCE_BOUNDARY_RE = re.compile(r"[.;\n]")
+_SENTENCE_BOUNDARY_RE = re.compile(r"[.;,\n]")
 
 # Tight (immediate-adjacency) phase-jargon pattern, forward direction only:
 # "run the work phase" / "run work phase" matches; "run by the work phase"
@@ -76,16 +76,17 @@ _DELEGATION_PATTERNS = (
 
 def _negated_before(text: str, start: int, window: int = 20) -> bool:
     """True iff a negation word sits in the `window` chars immediately
-    before `start`, without crossing a sentence boundary (`.`, `;`, or a
+    before `start`, without crossing a sentence boundary (`.`, `;`, `,`, or a
     newline) - the match is `run plan-tasks` inside `does not run
     plan-tasks`, and that is a prohibition, not a delegation. A negation in
     an earlier sentence ("Do not wait for me. Run the work phase...") must
-    not suppress a real delegation in a later one."""
+    not suppress a real delegation in a later one, so only the LAST boundary
+    in the window is honored."""
     window_start = max(0, start - window)
     preceding = text[window_start:start]
-    boundary = _SENTENCE_BOUNDARY_RE.search(preceding)
-    if boundary is not None:
-        preceding = preceding[boundary.end():]
+    boundaries = list(_SENTENCE_BOUNDARY_RE.finditer(preceding))
+    if boundaries:
+        preceding = preceding[boundaries[-1].end():]
     return bool(_NEGATION_RE.search(preceding))
 
 
