@@ -7,9 +7,9 @@ the engram pack, the Tests: line) and step 5's roster stamp. The existing
 scripts run as subprocesses, unchanged; nothing here re-derives what they
 compute.
 
-`render_roster()` is a STUB in this task: it returns {name: None} and writes
-nothing. A later task replaces its body only; `stage()` already calls it with
-the final signature and only ever passes it personas that passed preflight.
+`render_roster()` writes one prompt per roster persona through
+work/scripts/render_prompt.py, applying SKILL.md step 4's substitution table;
+`stage()` only ever passes it personas that passed preflight.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -31,6 +32,12 @@ MECH_SCRIPT = _RWC_SCRIPTS / "compute_mech_facts.py"
 TAUT_SCRIPT = _RWC_SCRIPTS / "detect_tautological_tests.py"
 REPLAY_SCRIPT = _RWC_SCRIPTS / "replay_tests_against_base.py"
 RECORD_DISPATCH = _SKILLS / "work" / "scripts" / "record_dispatch.py"
+RENDER_SCRIPT = _SKILLS / "work" / "scripts" / "render_prompt.py"
+_RWC_REFS = _SKILLS / "review-work-completion" / "references"
+CHECKLIST_FILE = _RWC_REFS / "review-dimensions.md"
+CONSENSUS_RUBRIC = _RWC_REFS / "rubric.md"
+OUTPUT_FORMATS = _RWC_REFS / "output-formats.md"
+BLIND_RUBRIC = _SKILLS / "review-blindly" / "references" / "rubric.md"
 # The plugin root's agents/: the installed cache dir when run from the
 # plugin, this checkout's agents/ when run from source.
 AGENTS_DIR = _SKILLS.parent / "agents"
@@ -46,6 +53,27 @@ SETTLED_INTRO = (
     "> the reasons given. Do not re-raise them. Raise a NEW finding only if you can\n"
     "> show the settled reason no longer holds."
 )
+NO_DIFF = "(no diff file this cycle)"
+NO_RANGE = "(diff range unavailable; see the context file's Diff scope line)"
+NO_MECH = "(no mechanical test checks this cycle)"
+STORE_REL = "docs/dev/project-management"
+PERSONAS = ("alice", "bob", "blake", "carl", "eve")
+# Bob's doubt appendix: these eve.md sections, verbatim, in eve.md's order.
+EVE_DOUBT_SECTIONS = ("Two lenses", "Categorize every residual finding", "Rubric verdicts")
+CITATION_LINE = (
+    "Cite files repo-relative as path:line (for example skills/work/SKILL.md:166), "
+    'never absolute and never with a "(lines a-b)" suffix.'
+)
+INCREMENTAL_NOTE = (
+    "This is an **incremental review** of the rework done since the previous "
+    "review cycle — the diff is scoped to changes since then. Two jobs: (1) for "
+    "each prior finding listed below, verify it is now resolved in the code; (2) "
+    "review the scoped diff for any regression the rework introduced. You need "
+    "not re-review unchanged code; the previous cycle already reviewed the full "
+    "implementation."
+)
+TAUT_HEADING = "## Tautological test shapes"
+REPLAY_HEADING = "## Fail-first replay"
 REQUIRED_PERSONA_KEYS = ("name", "description", "tools")
 CLI_REVIEWERS = ("bob", "carl")
 # A lens is active when any of its personas is on the roster.
@@ -62,6 +90,11 @@ _DIFF_HEADER_RE = re.compile(r"^diff --git a/.* b/(.+)$", re.MULTILINE)
 _FINDINGS_RE = re.compile(
     r"^(#+)\s*Findings precedent\s*$", re.MULTILINE | re.IGNORECASE
 )
+_SCOPE_RE = re.compile(
+    r"^_Diff scope: .*\((?:changes since|vs) ([^)\s]+)\)_$", re.MULTILINE
+)
+_TAUT_RE = re.compile(rf"^{re.escape(TAUT_HEADING)}", re.MULTILINE)
+_H2_RE = re.compile(r"^## ", re.MULTILINE)
 
 
 def _git_out(repo_root: Path, *args: str) -> str | None:
@@ -346,6 +379,159 @@ def preflight_persona(name: str) -> bool:
     return all(keys.get(key) for key in REQUIRED_PERSONA_KEYS)
 
 
+def _read(path: Path | str) -> str:
+    return Path(path).read_text(encoding="utf-8")
+
+
+def _section(text: str, title: str) -> str:
+    """The markdown section whose heading starts with `title`, heading
+    included, up to the next heading at the same or a higher level."""
+    match = re.search(rf"^(#+) {re.escape(title)}.*$", text, re.MULTILINE)
+    if match is None:
+        raise ValueError(f"no {title!r} section")
+    level = len(match.group(1))
+    stop = re.compile(rf"^#{{1,{level}}} ", re.MULTILINE).search(text, match.end())
+    return text[match.start() : stop.start() if stop else len(text)].rstrip()
+
+
+def _output_format(name: str) -> str:
+    section = _section(_read(OUTPUT_FORMATS), "Agent Output Format")
+    return f"{section}\n\nYour agent name is {name.upper()}."
+
+
+def _incremental_block(prior_findings: Path) -> str:
+    findings = _read(prior_findings).strip()
+    return (
+        f"## Incremental review\n\n{INCREMENTAL_NOTE}\n\n"
+        f"### Prior cycle findings\n\n{findings}"
+    )
+
+
+def _run_inputs(
+    context_file: Path,
+    diff_file: Path | None,
+    prd_file: Path,
+    pack_file: Path | None,
+    settled_ledger: Path | None,
+    prior_findings: Path | None,
+    roster: list[str],
+) -> dict:
+    """Everything the per-persona plans draw on, read once."""
+    context = Path(context_file).absolute()
+    diff_text = _read(diff_file) if diff_file else ""
+    return {
+        "context": context,
+        "id": context.name.removeprefix("review-context-").removesuffix(".md"),
+        "root": context.parents[len(TMP_REL.parts)],
+        "diff": str(Path(diff_file).absolute()) if diff_file else NO_DIFF,
+        "changed": list(dict.fromkeys(_DIFF_HEADER_RE.findall(diff_text))),
+        "prd": _read(prd_file).strip(),
+        "pack": str(pack_file) if pack_file else NO_PACK,
+        "findings": findings_section(Path(pack_file)) if pack_file else NO_PACK,
+        "ledger": _ledger_block(Path(settled_ledger))[0] if settled_ledger else None,
+        "incremental": _incremental_block(prior_findings) if prior_findings else None,
+        # Eve on the roster carries the doubt lens; otherwise Bob does.
+        "doubt": "eve" not in roster,
+    }
+
+
+def _mech_checks(context: str) -> str:
+    """The tautology and replay blocks stage() appended, verbatim."""
+    starts = list(_TAUT_RE.finditer(context))
+    if not starts:
+        return NO_MECH
+    rest = context[starts[-1].start() :]
+    for heading in _H2_RE.finditer(rest, 1):
+        if not rest.startswith(REPLAY_HEADING, heading.start()):
+            return rest[: heading.start()].rstrip()
+    return rest.rstrip()
+
+
+def _eve_inputs(run: dict) -> str:
+    """agent-invocation.md's five Eve run inputs."""
+    context = _read(run["context"])
+    scope = _SCOPE_RE.search(context)
+    diff_range = f"{scope.group(1)}..HEAD" if scope else NO_RANGE
+    changed = "\n".join(run["changed"]) or NO_DIFF
+    return "\n\n".join(
+        [
+            f"## PRD\n{run['prd']}",
+            f"## Diff range\n{diff_range}",
+            f"## Changed files\n{changed}",
+            f"## Findings precedent\n{run['findings']}",
+            f"## Mechanical test checks\n{_mech_checks(context)}",
+        ]
+    )
+
+
+def _filesystem_notes(root: Path) -> str | None:
+    """agent-invocation.md § Blake: Filesystem notes, when its trigger holds."""
+    store = root / STORE_REL
+    if not (store.is_symlink() or root.name.startswith(".")):
+        return None
+    return (
+        "## Filesystem notes\n"
+        f"Project root: {root}\n"
+        f"`{STORE_REL}` realpath: {store.resolve()}\n"
+        "`rg --files` does not descend into dot-directories or follow this "
+        "symlink; list or Read the realpath directly."
+    )
+
+
+def _plan(name: str, run: dict) -> tuple[str, dict[str, str], list[str | None]]:
+    """(persona source, placeholder values, run-input blocks appended after
+    the render) for one persona, per SKILL.md step 4's table."""
+    source = _read(AGENTS_DIR / f"{name}.md")
+    history = [run["ledger"], run["incremental"]]
+    if name == "blake":  # blind every cycle: the PRD, never the diff or history
+        values = {
+            "PRD": run["prd"],
+            "RUBRIC": _read(BLIND_RUBRIC).strip(),
+            "OUTPUT_FORMAT": _output_format(name),
+        }
+        return source, values, [_filesystem_notes(run["root"])]
+    if name == "eve":
+        return source, {"PACK_FINDINGS": run["findings"]}, [_eve_inputs(run), *history]
+    values = {
+        "CONTEXT_FILE": str(run["context"]),
+        "DIFF_FILE": run["diff"],
+        "PACK_FILE": run["pack"],
+        "REVIEW_CHECKLIST": _read(CHECKLIST_FILE).strip(),
+        "RUBRIC": _read(CONSENSUS_RUBRIC).strip(),
+        "OUTPUT_FORMAT": _output_format(name),
+    }
+    if name == "bob":
+        if run["doubt"]:
+            eve = _read(AGENTS_DIR / "eve.md")
+            appendix = [_section(eve, title) for title in EVE_DOUBT_SECTIONS]
+            source = "\n\n".join([source.rstrip(), *appendix])
+            values["PACK_FINDINGS"] = run["findings"]
+        source = f"{source.rstrip()}\n\n{CITATION_LINE}\n"
+    return source, values, history
+
+
+def _render_one(name: str, run: dict, scratch: Path) -> Path | None:
+    """Render one persona through render_prompt.py; None on its non-zero exit.
+    Run inputs are appended after the render, so text they carry is never
+    scanned for placeholders."""
+    source, values, appends = _plan(name, run)
+    persona = scratch / f"{name}.md"
+    persona.write_text(source, encoding="utf-8")
+    out = run["context"].parent / f"{name}-prompt-{run['id']}.md"
+    cmd = [sys.executable, str(RENDER_SCRIPT), str(persona), "--out", str(out)]
+    for key, value in values.items():
+        value_file = scratch / f"{name}-{key}.txt"
+        value_file.write_text(value, encoding="utf-8")
+        cmd += ["--set-file", f"{key}={value_file}"]
+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if proc.returncode != 0:
+        print(f"render_roster: {name}: {proc.stderr.strip()}", file=sys.stderr)
+        return None
+    blocks = [_read(out).strip(), *(block.rstrip() for block in appends if block)]
+    out.write_text("\n\n".join(blocks) + "\n", encoding="utf-8")
+    return out
+
+
 def render_roster(
     context_file: Path,
     diff_file: Path,
@@ -355,9 +541,28 @@ def render_roster(
     prior_findings: Path | None,
     roster: list[str],
 ) -> dict[str, Path | None]:
-    """STUB for this task — real implementation is a later task. Returns
-    {name: None for name in roster} and writes nothing."""
-    return {name: None for name in roster}
+    """Write docs/dev/tmp/{name}-prompt-{id}.md for each roster PERSONA name
+    ({id} from review-context-{id}.md). A persona whose render fails, or a
+    name outside PERSONAS, maps to None; the others still render."""
+    rendered: dict[str, Path | None] = dict.fromkeys(roster)
+    try:
+        run = _run_inputs(
+            context_file, diff_file, prd_file, pack_file,
+            settled_ledger, prior_findings, roster,
+        )
+    except (OSError, ValueError) as err:
+        print(f"render_roster: inputs unreadable, nothing rendered: {err}", file=sys.stderr)
+        return rendered
+    with tempfile.TemporaryDirectory() as scratch:
+        for name in roster:
+            if name not in PERSONAS:
+                print(f"render_roster: {name}: not a review persona", file=sys.stderr)
+                continue
+            try:
+                rendered[name] = _render_one(name, run, Path(scratch))
+            except (OSError, ValueError) as err:
+                print(f"render_roster: {name}: {err}", file=sys.stderr)
+    return rendered
 
 
 def _render_prompts(
