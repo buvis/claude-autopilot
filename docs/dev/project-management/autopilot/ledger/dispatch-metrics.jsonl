@@ -2992,3 +2992,5 @@
 {"id":"93edfae7","ended_at":1791072032,"elapsed_s":969,"outcome":"ok","detail":null}
 {"id":"9141a242","ended_at":1791072033,"elapsed_s":969,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1791072373,"phase":"done","prd":"00243-make-the-headroom-wall-scan-match-its-contract-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1791072417,"phase":"done","prd":"00243-make-the-headroom-wall-scan-match-its-contract-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1791072491,"phase":"build","prd":"00243-make-the-headroom-wall-scan-match-its-contract-v1.md"}

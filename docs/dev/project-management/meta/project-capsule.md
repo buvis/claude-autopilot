@@ -48,7 +48,7 @@ Generated: 2026-09-14
 - [x] 00240-ignore-nested-store-lock-files-v1 (1 cycle)
 - [x] 00241-bound-rework-batches-by-file-v1 (2 cycles)
 - [x] 00242-harden-the-wave-verbs-v1 (2 cycles)
-- [ ] 00243-make-the-headroom-wall-scan-match-its-contract-v1
+- [x] 00243-make-the-headroom-wall-scan-match-its-contract-v1 (1 cycle)
 - [ ] 00244-tidy-the-enter-verb-and-the-review-diff-plumbing-v1
 - [ ] 00248-keep-phase-skills-in-the-session-v1
 
@@ -71,7 +71,11 @@ Blake, Bob and Carl; the medium/low tail was swept in one `[D2]` task
 green at cb9be6b (2267 passed, 0 failed, 0 skipped). One deferral recorded
 (`_hold_backlog`'s non-injectable `run_git`, an operator call on test
 testability vs. scope) plus three cycle-1 deferrals carried from the design
-phase; `mint-stubs` minted nothing (all 28 open ledger rows medium/low).
+phase; `mint-stubs` minted nothing (all 28 open ledger rows medium/low). 00243 ran
+the fast-track lane (card-sized, single task): tests + fix via Tess/Ivan, a
+5-lane review (Alice fallback after a rejected Workflow scriptPath, Blake,
+Eve, Bob/codex, Carl/Gemini) found only MEDIUM/LOW, converged cycle 1,
+`exit-action=commit`. No deferrals, no doubts.
 
 ### Batch 202610021244
 - [x] 00236-track-the-store-without-tripping-the-loop-v1 (2 cycles)
