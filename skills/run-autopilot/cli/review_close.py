@@ -45,7 +45,7 @@ _LENS_STATUS = {"available": "done", "disabled": "skipped"}
 # agents: status -> the dispatch row's closing --outcome (SKILL.md step 6's
 # attempt-outcome table). A persona absent from the agents: block at all
 # (status None) defaults to "ok", same as the prior hardcoded value.
-_DISPATCH_OUTCOME = {"available": "ok", "unavailable": "failed", "timeout": "timeout"}
+_DISPATCH_OUTCOME = {"available": "ok", "unavailable": "error", "timeout": "timeout"}
 _NO_ROW = ("", "null", "None")
 # A finding's severity is one of rework_groups.py's emoji; schema.py's
 # DECISION_SEVERITIES vocabulary for an `autonomous_decisions` entry is the
