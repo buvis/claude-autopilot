@@ -332,6 +332,14 @@ the same change. In a loop session the Watcher subagent of § Preconditions
 (the `Loop session` bullet) goes into that same message: it is what keeps
 the session open until the two background lanes finish.
 
+Close each lane's row the moment that lane returns. Rows closed together at
+the end all record the slowest lane's time (item 00243: the blind lens took
+418 s and the doubt lens 164 s, and both rows read 969 s). If the
+Workflow tool refuses the fanout call, close the `fast-track:fanout` row as
+`error` right away and dispatch the `autopilot:alice` fallback, under its own
+`fast-track:alice` row, in the very next message, without waiting for the
+other lanes (item 00243 started its fallback 14 minutes late).
+
 ```
 Task tool:
   subagent_type: autopilot:alice

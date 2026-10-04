@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: new `autopilot review-stage` and `autopilot review-close` CLI verbs replace review-work-completion's hand-run staging/prompt-writing and the decision gate's/Tail sweep's hand-run `task-add`/`group-rework` sequences, moving each into code
 - **run-autopilot**: a review cycle's test gate result can now be reused from `last-verification.json` instead of re-run, when only store-tree paths changed since the recorded sha
 
+### Fixed
+
+- **fast-track**: each review lane's ledger row closes when that lane returns, so per-lens times are real, and a refused fanout dispatches the Alice fallback at once instead of after every other lane
+
 ## [0.8.0] - 2026-10-04
 
 ### Changed

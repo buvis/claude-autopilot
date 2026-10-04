@@ -615,6 +615,15 @@ def test_every_dispatch_opens_a_ledger_row() -> None:
     assert any("--outcome" in line.text for line in ends), _NO_OUTCOME
 
 
+def test_lane_rows_close_as_each_lane_returns_and_fallback_is_immediate() -> None:
+    # Rows closed together at the barrier all read the slowest lane's time,
+    # and a refused fanout left the Alice fallback waiting 14 minutes (00243).
+    text = " ".join(_SKILL_MD.read_text(encoding="utf-8").split())
+    assert "Close each lane's row the moment that lane returns" in text
+    assert "dispatch the `autopilot:alice` fallback" in text
+    assert "in the very next message, without waiting for the other lanes" in text
+
+
 def test_no_per_task_ceremony() -> None:
     # The lane's reason to exist is the ceremony it does not run. Each of these
     # names is a phase that, once mentioned, a reader will dutifully perform.
