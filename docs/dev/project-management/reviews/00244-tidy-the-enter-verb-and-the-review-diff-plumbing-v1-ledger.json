@@ -1,0 +1,26 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`__main__.py` is 1344 lines, over the 800-line limit, and this diff adds 4 more at the `diff_signal` call site. This is a settled pre-existing deferral (PRDs 00223, 00236, 00241), and the call-site edit is PRD-mandated. It is noted for R13 only",
+    "file": "skills/run-autopilot/cli/__main__.py",
+    "reason": "Pre-existing file-size overrun, already settled by PRDs 00223, 00236 and 00241. This PRD adds exactly the four lines its own spec mandates at the diff_signal call site. Splitting the CLI dispatcher is a separate PRD, outside this PRD's narrow plumbing scope."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "KNOWN: `__main__.py` exceeds the 800-line ceiling. This predates the change; splitting the CLI dispatcher is outside this PRD's narrowly scoped plumbing fixes.",
+    "file": "skills/run-autopilot/cli/__main__.py",
+    "reason": "Bob's wording of the same settled deferral as the entry above. Recorded with his own words so the matcher dismisses either phrasing if it returns."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Cannot statically verify: acceptance suites pass (VERIFY: run `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli -k \"enter or lane_check\"`, `bash skills/review-work-completion/scripts/test_gather_context_id.sh`, and `bash dev/bin/release-checks`).",
+    "file": null,
+    "reason": "Answered by evidence gathered in this same cycle, so there is nothing left to verify: pytest -k \"enter or lane_check\" gave 209 passed (Blake), test_gather_context_id.sh gave 4/4 PASS (Blake), and dev/bin/release-checks exited 0 with 2268 passed (orchestrator, foreground run at the reviewed HEAD). The item is a sandbox limitation of the codex lane, not a defect in the work."
+  }
+]
