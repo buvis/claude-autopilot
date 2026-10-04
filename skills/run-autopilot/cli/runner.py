@@ -296,9 +296,7 @@ def _child_env_with_deadline(env: dict, cap_secs: float) -> dict:
     """`child_env(env)` plus `_AUTOPILOT_SESSION_DEADLINE`, and the
     host-marker scrub notice on stderr when any were dropped."""
     env_for_child, dropped = child_env(env)
-    env_for_child["_AUTOPILOT_SESSION_DEADLINE"] = str(
-        math.ceil(time.time() + cap_secs)
-    )
+    env_for_child["_AUTOPILOT_SESSION_DEADLINE"] = str(math.ceil(time.time() + cap_secs))
     if dropped:
         print(
             "autopilot: scrubbed inherited host markers: " + ", ".join(dropped),
@@ -343,14 +341,7 @@ def spawn(
 
     env_for_child = _child_env_with_deadline(env, cap_secs)
     rc, cap_fired, cap_reason = _run_session(
-        argv,
-        log_path,
-        env_for_child,
-        cap_secs,
-        grace_secs,
-        presenter,
-        proc_slot,
-        warn_secs=warn_secs_for(env),
-        idle_secs=idle_secs_for(env),
+        argv, log_path, env_for_child, cap_secs, grace_secs, presenter, proc_slot,
+        warn_secs=warn_secs_for(env), idle_secs=idle_secs_for(env),
     )
     return SpawnResult(rc, log_path, cap_fired, cap_reason)
