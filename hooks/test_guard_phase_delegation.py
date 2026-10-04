@@ -236,7 +236,7 @@ def test_direct_negation_still_allows() -> None:
     assert _guard_module().is_phase_delegation({"prompt": prompt}) is False
 
 
-def test_negation_after_a_comma_still_allows() -> None:
+def test_comma_boundary_hides_leading_negation() -> None:
     # Measured: the last boundary in the window is the second comma, so the
     # leading "Do not" never reaches the match and this reads as a delegation.
     prompt = "Do not, under any circumstances, run the work phase."
@@ -268,9 +268,14 @@ def test_bare_reviewer_name_is_still_checked() -> None:
 
 def test_unhashable_subagent_type_fails_open() -> None:
     # A set-membership test on an unhashable value raises TypeError; the hook's
-    # contract is to fail open on a malformed payload, never to crash.
-    tool_input = {"subagent_type": {"a": 1}, "prompt": "run the work phase"}
-    assert isinstance(_guard_module().is_phase_delegation(tool_input), bool)
+    # contract is to fail open on a malformed payload, never to crash. Fail open
+    # here means "treat it as no subagent_type at all", so the verdict must equal
+    # the one for the same payload with the key absent - not merely be a bool.
+    guard = _guard_module()
+    payload = {"prompt": "run the work phase"}
+    assert guard.is_phase_delegation({**payload, "subagent_type": {"a": 1}}) is (
+        guard.is_phase_delegation(payload)
+    )
 
 
 def test_every_exempt_reviewer_lacks_the_skill_tool() -> None:
