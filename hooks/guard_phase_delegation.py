@@ -53,10 +53,12 @@ _SENTENCE_BOUNDARY_RE = re.compile(r"[.;,\n]")
 # Read-only reviewer personas: none of their persona files grant the Skill
 # tool (test_every_exempt_reviewer_lacks_the_skill_tool), so exempting them
 # from the delegation check cannot be exploited to delegate a phase skill.
-_EXEMPT_REVIEWERS = frozenset(
+_READ_ONLY_REVIEWERS = frozenset(
     {
-        "alice", "blake", "bob", "carl", "cora", "eve", "grace", "mallory",
-        "pat", "rita", "toby", "trent", "victor",
+        "autopilot:alice", "autopilot:blake", "autopilot:bob", "autopilot:carl",
+        "autopilot:cora", "autopilot:eve", "autopilot:grace", "autopilot:mallory",
+        "autopilot:pat", "autopilot:rita", "autopilot:toby", "autopilot:trent",
+        "autopilot:victor",
     }
 )
 
@@ -94,9 +96,7 @@ def _negated_before(text: str, start: int, window: int = 20) -> bool:
     in the window is honored."""
     window_start = max(0, start - window)
     preceding = text[window_start:start]
-    boundaries = list(_SENTENCE_BOUNDARY_RE.finditer(preceding))
-    if boundaries:
-        preceding = preceding[boundaries[-1].end():]
+    preceding = _SENTENCE_BOUNDARY_RE.split(preceding)[-1]
     return bool(_NEGATION_RE.search(preceding))
 
 
@@ -112,7 +112,7 @@ def is_phase_delegation(tool_input: dict) -> bool:
     if not isinstance(tool_input, dict):
         return False
     subagent_type = tool_input.get("subagent_type")
-    if isinstance(subagent_type, str) and subagent_type.removeprefix("autopilot:") in _EXEMPT_REVIEWERS:
+    if isinstance(subagent_type, str) and subagent_type in _READ_ONLY_REVIEWERS:
         return False
     prompt = tool_input.get("prompt")
     description = tool_input.get("description")
