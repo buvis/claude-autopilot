@@ -54,5 +54,189 @@
     "issue": "Low-severity tail: K1 unchanged either-or assertion in test_dispatch_references_document_the_fail_closed_contract; K2 test_no_persona_prompt_text_survives_outside_the_registry passes at base (fixture exemption only); K3 __main__.py is 1580 lines, already over the 800-line limit before this diff; a non-numeric cycle id records `cycle: null` in last-verification.json; the registry exemption test is 56 lines.",
     "file": "skills/run-autopilot/cli/__main__.py:1",
     "reason": "Each is pre-existing or behavior-preserving; none is introduced by this diff. Deferred to batch end."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "🟠",
+    "issue": "Settled-ledger and prior-findings wiring exists in code (--settled-ledger / --prior-findings reach render_roster) but SKILL.md:216-218 and :248 still tell the model to hand-append both with the Edit tool, and the step 3 synopsis lists neither flag. Every cycle still falls back to the hand-editing this PRD removes.",
+    "file": "skills/review-work-completion/SKILL.md:216",
+    "reason": "Cap-overflow at cycle 2 of 2: the rework cap was reached with this finding unresolved, so it is deferred to batch end rather than reworked."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "🟠",
+    "issue": "run_gate is still 75 lines (over the 50-line limit) and still buffers all output through communicate(), so the output cap does not bound memory. Only the keep-tail fix landed from the cycle-1 finding.",
+    "file": "skills/run-autopilot/cli/verification.py:125",
+    "reason": "Cap-overflow at cycle 2 of 2: the rework cap was reached with this finding unresolved, so it is deferred to batch end rather than reworked."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "🟠",
+    "issue": "The review-file format still omits the dispatch_rows: block review_close parses and lists only alice/bob/carl under agents:, so no model stamps the rows close() ends and Blake's blind and Eve's fable lenses are stamped running and never closed.",
+    "file": "skills/review-work-completion/references/output-formats.md:253",
+    "reason": "Cap-overflow at cycle 2 of 2: the rework cap was reached with this finding unresolved, so it is deferred to batch end rather than reworked."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "🟠",
+    "issue": "_eve_inputs still passes the merged run['prd'] (PRD plus design doc) to Eve, while only Blake gets the raw _prd_body slice. The doubt lens must stay PRD-only.",
+    "file": "skills/run-autopilot/cli/review_stage.py:515",
+    "reason": "Cap-overflow at cycle 2 of 2: the rework cap was reached with this finding unresolved, so it is deferred to batch end rather than reworked."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "🟠",
+    "issue": "The gate's one-line summary reports check-block counts as passed tests (grep -c over its own echo lines), hardcodes zero skips, and emits nothing on failure. run_gate writes those counts to last-verification.json and a later cycle reuses them as real test counts: measured 25 against an actual 2564 this cycle.",
+    "file": "dev/bin/release-checks:214",
+    "reason": "Cap-overflow at cycle 2 of 2: the rework cap was reached with this finding unresolved, so it is deferred to batch end rather than reworked."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "🟠",
+    "issue": "reuse_verdict's docstring still requires an empty git status --porcelain although the code now ignores dirty store paths, and line[3:] on a porcelain rename record checks only the old path, so a staged rename out of the store reads as clean (fail-open).",
+    "file": "skills/run-autopilot/cli/verification.py:78",
+    "reason": "Cap-overflow at cycle 2 of 2: the rework cap was reached with this finding unresolved, so it is deferred to batch end rather than reworked."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "🟠",
+    "issue": "review-close takes its findings from a separate --findings JSON the model writes, and gate.py never cross-checks that file against the review's consolidated table. The design doc's settled answer to the second-source-of-truth risk was 'the gate refusal is the cross-check', and that check does not exist, so the settled reason no longer holds.",
+    "file": "skills/run-autopilot/cli/__main__.py:1021",
+    "reason": "Cap-overflow at cycle 2 of 2: the rework cap was reached with this finding unresolved, so it is deferred to batch end rather than reworked."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "🟠",
+    "issue": "_DISPATCH_OUTCOME maps an unavailable reviewer to --outcome 'failed', which is not in record_dispatch.OUTCOMES ('ok','timeout','killed','error','lost'), so the row-closing call exits 2 for every unavailable reviewer. Confirmed mechanically; the value should be 'error'.",
+    "file": "skills/run-autopilot/cli/review_close.py:48",
+    "reason": "Cap-overflow at cycle 2 of 2: the rework cap was reached with this finding unresolved, so it is deferred to batch end rather than reworked."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "🟠",
+    "issue": "run['doubt'] is 'eve' not in roster, so Bob's doubt appendix (lenses, FIX/VERIFY/KNOWN buckets, D1-D5) is dropped exactly when Eve is on the roster - the one case where agent-invocation.md sends Eve's failure fallback to Bob's assembled prompt. The fallback therefore carries no doubt lens. Cycle-1 F4, untouched.",
+    "file": "skills/run-autopilot/cli/review_stage.py:491",
+    "reason": "Cap-overflow at cycle 2 of 2: the rework cap was reached with this finding unresolved, so it is deferred to batch end rather than reworked."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "🟡",
+    "issue": "review_stage.py is 823 lines, over the 800-line file limit, after the rework added helpers without extracting anything.",
+    "file": "skills/run-autopilot/cli/review_stage.py:823",
+    "reason": "Cap-overflow at cycle 2 of 2: the rework cap was reached with this finding unresolved, so it is deferred to batch end rather than reworked."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "🟡",
+    "issue": "The tail-sweep prose test still hedges with '\"at most 4\" in section or \"caps at 4\" in section' while phase-review.md carries only 'at most 4, never zero'. The floor split landed, but the cap assert still passes against the pre-change prose and the fail-first replay still reports the test passing at base.",
+    "file": "skills/run-autopilot/scripts/test_rework_groups_prose.py:81",
+    "reason": "Cap-overflow at cycle 2 of 2: the rework cap was reached with this finding unresolved, so it is deferred to batch end rather than reworked."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "🟡",
+    "issue": "test_main_review_close_validation.py is absent from the review-verbs block, so the release gate never runs it. Run directly this cycle: 7 passed.",
+    "file": "dev/bin/release-checks:207",
+    "reason": "Cap-overflow at cycle 2 of 2: the rework cap was reached with this finding unresolved, so it is deferred to batch end rather than reworked."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "🟡",
+    "issue": "The cycle-1 rework behaviours are mostly unpinned: nothing tests autonomous_decisions being written or its emoji-to-word severity map, 'disabled' mapping to 'skipped', the per-status --outcome mapping (the one assertion still expects 'ok'), the three new CLI flags, or the CLI rejecting an unknown classification with exit 2.",
+    "file": "skills/run-autopilot/cli/test_review_close.py:403",
+    "reason": "Cap-overflow at cycle 2 of 2: the rework cap was reached with this finding unresolved, so it is deferred to batch end rather than reworked."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "🟡",
+    "issue": "The stricter found_by validation (a list of strings) contradicts the tail-sweep prose, which says found_by is copied verbatim from the table, where it is the string 'ALICE, BOB'. Following the prose now exits 2, and the stderr message names neither the allowed values nor the emoji severities.",
+    "file": "skills/run-autopilot/references/phase-review.md:195",
+    "reason": "Cap-overflow at cycle 2 of 2: the rework cap was reached with this finding unresolved, so it is deferred to batch end rather than reworked."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "🟡",
+    "issue": "The new 'skipped' review_lenses value is undocumented: state-schema.md and tracon/model.py define only running|done|failed.",
+    "file": "skills/run-autopilot/references/state-schema.md:216",
+    "reason": "Cap-overflow at cycle 2 of 2: the rework cap was reached with this finding unresolved, so it is deferred to batch end rather than reworked."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "🟡",
+    "issue": "review-stage runs the gate itself on a stale verdict through a mandatory --gate-command, so a long gate runs inside the staging call, and a timed-out gate emits a zero-count Tests: line that still satisfies the gate's own pattern.",
+    "file": "skills/run-autopilot/cli/review_stage.py:369",
+    "reason": "Cap-overflow at cycle 2 of 2: the rework cap was reached with this finding unresolved, so it is deferred to batch end rather than reworked."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "🟡",
+    "issue": "Doubt verdicts are still extracted globally without source tags, overwriting reviewer-attributed verdicts that dual-reviewer reporting needs.",
+    "file": "skills/run-autopilot/cli/review_close.py:290",
+    "reason": "Cap-overflow at cycle 2 of 2: the rework cap was reached with this finding unresolved, so it is deferred to batch end rather than reworked."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "🟡",
+    "issue": "_add_decisions records every fix row as action 'auto-fixed' with reason 'fixed by review-close' at the moment the rework task is queued, before any implementor runs, so the audit claims a fix that may never land.",
+    "file": "skills/run-autopilot/cli/review_close.py:218",
+    "reason": "Cap-overflow at cycle 2 of 2: the rework cap was reached with this finding unresolved, so it is deferred to batch end rather than reworked."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "⚪",
+    "issue": "Unrelated reformatting churn (trailing commas, re-wrapped calls) in functions the PRD does not touch, which buries the real changes.",
+    "file": "skills/run-autopilot/cli/__main__.py:480",
+    "reason": "Cap-overflow at cycle 2 of 2: the rework cap was reached with this finding unresolved, so it is deferred to batch end rather than reworked."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "⚪",
+    "issue": "On a tail-sweep call close() still returns a populated lenses_closed although _set_lens_state applied none of it, misreporting the result.",
+    "file": "skills/run-autopilot/cli/review_close.py:314",
+    "reason": "Cap-overflow at cycle 2 of 2: the rework cap was reached with this finding unresolved, so it is deferred to batch end rather than reworked."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "⚪",
+    "issue": "last-verification.json is written with a plain write_text, so a crash mid-write leaves a truncated record. It parses to None and reads as stale, so the failure is safe but not atomic.",
+    "file": "skills/run-autopilot/cli/verification.py:122",
+    "reason": "Cap-overflow at cycle 2 of 2: the rework cap was reached with this finding unresolved, so it is deferred to batch end rather than reworked."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "⚪",
+    "issue": "Fail-first replay: four touched tests pass against the base - three accept-valid-input guards and one CLI forwarding test. Bob justifies these as regression guards outside the fail-first requirement for new behavior.",
+    "file": "skills/run-autopilot/cli/test_main_review_close_validation.py",
+    "reason": "Cap-overflow at cycle 2 of 2: the rework cap was reached with this finding unresolved, so it is deferred to batch end rather than reworked."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "🟡",
+    "issue": "Public signatures differ from the spec's module contract (stage, render_roster, close, run_gate, reuse_verdict parameter counts).",
+    "file": "skills/run-autopilot/cli/review_stage.py:592",
+    "reason": "Already settled as a discard in cycle 1 at __main__.py:898; re-raised blind at a different citation, so --ledger-dismiss BLAKE did not catch it. The design doc is the authority for the HOW and chose the richer parameter set deliberately; no behavioral defect is claimed."
   }
 ]

@@ -3121,3 +3121,9 @@
 {"id":"5caf144c","ended_at":1791140813,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"kind":"handoff","site":"review","edge":"leave","at":1791140813,"phase":"review","prd":"00249-stage-and-close-reviews-in-code-v1.md"}
 {"kind":"handoff","site":"review","edge":"leave","at":1791142617,"phase":"review","prd":"00249-stage-and-close-reviews-in-code-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1791142710,"phase":"review","prd":"00249-stage-and-close-reviews-in-code-v1.md"}
+{"id":"16e8883f","kind":"bob","task":"review-00249c2","queued_at":1791143123,"prompt_bytes":32593}
+{"id":"43d09396","kind":"carl","task":"review-00249c2","queued_at":1791143128,"prompt_bytes":25910}
+{"id":"16e8883f","ended_at":1791143453,"elapsed_s":330,"outcome":"ok","detail":null}
+{"id":"43d09396","ended_at":1791143517,"elapsed_s":389,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"review","edge":"leave","at":1791143938,"phase":"done","prd":"00249-stage-and-close-reviews-in-code-v1.md"}

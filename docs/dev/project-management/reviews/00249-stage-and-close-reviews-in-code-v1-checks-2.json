@@ -1,0 +1,12 @@
+[
+  {
+    "cycle": 2,
+    "finding": "Acceptance suites and release checks - the classification-validation module the gate omits",
+    "file": "skills/run-autopilot/cli/test_main_review_close_validation.py",
+    "command": "uv run --no-project --with pytest python -m pytest skills/run-autopilot/cli/test_main_review_close_validation.py -q",
+    "source": "bob",
+    "result": {
+      "exit": 0
+    }
+  }
+]
