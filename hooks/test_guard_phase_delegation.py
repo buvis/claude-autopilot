@@ -243,3 +243,82 @@ def test_non_string_prompt_never_crashes_the_hook() -> None:
     result = _run(_agent_payload({"prompt": 5, "description": "x"}), loop=True)
     assert result.returncode == 0
     assert result.stderr in ("", "guard_phase_delegation: predicate raised, allowing\n")
+
+
+PLUGIN = HOOKS.parent
+
+
+def test_hooks_json_registers_the_guard_on_agent() -> None:
+    assert GUARD.is_file()
+    hooks = json.loads((HOOKS / "hooks.json").read_text(encoding="utf-8"))["hooks"]
+    pre = hooks["PreToolUse"]
+    # The new entry is added beside the existing matchers, not merged into one.
+    assert sorted(entry["matcher"] for entry in pre) == sorted(
+        ["Edit|Write|MultiEdit", "Bash", "Skill", "Agent"]
+    )
+    (agent,) = [entry for entry in pre if entry["matcher"] == "Agent"]
+    assert agent == {
+        "matcher": "Agent",
+        "hooks": [
+            {
+                "type": "command",
+                "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/guard_phase_delegation.py",
+                "timeout": 5,
+            }
+        ],
+    }
+    # Registered once, and only as a PreToolUse Agent gate.
+    commands = [
+        hook["command"]
+        for event in hooks.values()
+        for entry in event
+        for hook in entry["hooks"]
+    ]
+    assert sum("guard_phase_delegation.py" in c for c in commands) == 1
+
+
+def _paragraphs(path: Path) -> list[str]:
+    # Markdown rendering: a blank line splits paragraphs, any other run of
+    # whitespace (including a hard wrap) reads as one space.
+    raw = path.read_text(encoding="utf-8")
+    return [" ".join(p.split()) for p in raw.split("\n\n")]
+
+
+def test_gate_prose_names_the_guard() -> None:
+    build_md = PLUGIN / "skills" / "run-autopilot" / "references" / "phase-build.md"
+    # "Just before" the anchor: only whitespace (a wrap or a blank line) between.
+    build = " ".join(build_md.read_text(encoding="utf-8").split())
+    plan_anchor = "Invoke `/autopilot:plan-tasks` with the selected PRD."
+    plan_gate = (
+        "Invoke `/autopilot:plan-tasks` with the Skill tool in this session; never"
+        " delegate planning to an Agent."
+    )
+    work_anchor = "Invoke `/autopilot:work` skill."
+    work_gate = (
+        "Invoke `/autopilot:work` with the Skill tool in this session; never"
+        " delegate work execution to an Agent."
+    )
+    for anchor, gate in ((plan_anchor, plan_gate), (work_anchor, work_gate)):
+        assert build.count(anchor) == 1, anchor
+        assert build.count(gate) == 1, gate
+        assert f"{gate} {anchor}" in build, gate
+    assert build.index("## Phase 2: Planning") < build.index(plan_gate)
+    assert build.index(plan_gate) < build.index("## Phase 3: Work")
+    assert build.index("## Phase 3: Work") < build.index(work_gate)
+
+    stop = (
+        "**STOP.** Before dispatching ANY Agent or helper-script call, verify you"
+        " are sending it EXACTLY ONE task. Batching tasks into one Agent call"
+        " leaves `state.tasks` (and every dashboard reading state.json) stale for"
+        " the entire duration and collapses per-task attempt logging."
+    )
+    guard_note = (
+        "In loop mode a hook denies dispatching a whole phase skill to an Agent"
+        ' (`hooks/guard_phase_delegation.py`) - it does not enforce the'
+        ' one-task-per-dispatch rule in general (e.g. `"Implement tasks 1 and 2"`'
+        " is outside its scope; the STOP rule above still governs that case by"
+        " prose alone)."
+    )
+    work_skill = _paragraphs(PLUGIN / "skills" / "work" / "SKILL.md")
+    assert f"{stop} {guard_note}" in work_skill
+    assert sum(guard_note in p for p in work_skill) == 1
