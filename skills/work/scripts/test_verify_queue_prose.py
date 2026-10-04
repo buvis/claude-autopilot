@@ -252,23 +252,35 @@ def test_the_tail_sweep_does_not_re_task_a_routed_finding() -> None:
 
 
 def test_zero_tasks_is_delivered_where_tasks_are_actually_created() -> None:
-    # Phase 5's routing row runs AFTER review step 7 has already called
-    # task-add, so the row alone cannot deliver the PRD's "zero tasks". The
-    # exclusion has to live in step 7 as well, or an all-VERIFY cycle still
-    # creates the rework task whose work pass re-runs the whole suite.
+    # The routing row alone cannot deliver the PRD's "zero tasks"; the place
+    # that creates tasks has to honour it. Since PRD 00249 that place is the
+    # decision gate's one `review-close` call: a routed finding enters it as
+    # "verify", which creates nothing - and review step 7 no longer creates a
+    # task of its own that would run first and win.
     review = _REVIEW_SKILL.read_text()
+    phase_review = _PHASE_REVIEW.read_text()
 
-    assert "Skip every finding this cycle queued for verification" in review, (
-        "review-work-completion/SKILL.md step 7 no longer skips queued findings, "
-        "so it creates the task Phase 5 then declines to create - and step 7 "
-        "runs first, so the task wins."
+    assert "This skill creates no tasks." in review, (
+        "review-work-completion/SKILL.md step 7 creates tasks again, ahead of "
+        "Phase 5's routing - a queued finding gets the task the routing row "
+        "then declines to create, and the task wins."
     )
-    # Since PRD 00194 a CRITICAL gets its task from Phase 6 (after the rework
-    # design), so step 7 exempts HIGH alone; it is still never routed.
-    assert "A queued **HIGH is not skipped**" in review, (
-        "review-work-completion/SKILL.md step 7 no longer exempts a queued "
-        "HIGH from the skip. It is never routed, so it must keep getting its "
-        "task."
+    assert '| Routed to verification | `"verify"` |' in phase_review, (
+        "phase-review.md's review-close classification table no longer maps a "
+        "finding routed to verification to `\"verify\"`, so it reaches the "
+        "call as a fix and gets the task the routing exists to remove."
+    )
+    assert '`"verify"` and `"discard"` rows create nothing' in phase_review, (
+        "phase-review.md no longer says review-close creates nothing for a "
+        "`\"verify\"` row - the duplicate suite run comes straight back."
+    )
+    # A queued HIGH keeps its task: it is never routed, so it keeps today's
+    # classification instead of becoming a `"verify"` row.
+    assert "A CRITICAL or HIGH is never routed.** It keeps today's classification" in (
+        phase_review
+    ), (
+        "phase-review.md no longer keeps a queued HIGH on its own "
+        "classification. It is never routed, so it must keep getting its task."
     )
 
 
@@ -303,19 +315,24 @@ def test_routing_matches_on_judgment_not_verbatim_text() -> None:
         "Cap check matches settled deferrals. Verbatim identity misses every "
         "paraphrased consensus finding."
     )
+    # Since PRD 00249 that match is the only one: review step 7's own skip,
+    # which had to name the same key pair, is gone, and the match's verdict
+    # reaches task creation as the `"verify"` classification. A second
+    # matcher coming back could diverge from this one, skipping a row Phase 5
+    # then fails to match and re-tasks.
     review = _REVIEW_SKILL.read_text()
-    assert "the same way Phase 5 does" in review, (
-        "review-work-completion/SKILL.md step 7 no longer states how to match a "
-        "row to a queue entry. Phase 5's matching rule runs after task "
-        "creation, so a semantic rule there does not help the skip here."
+    assert "Skip every finding this cycle queued for verification" not in review, (
+        "review-work-completion/SKILL.md step 7 runs its own queued-finding "
+        "skip again. Two matchers on one queue diverge; the decision gate's "
+        "match must be the only one."
     )
-    # Both readers must name the SAME key pair. Divergent matchers let step 7
-    # skip a row Phase 5 then fails to match, sending it back through
-    # classification into the duplicate rework task this mechanism removes.
-    assert "against the entry's `finding` and `file`" in review, (
-        "review-work-completion/SKILL.md step 7 matches on a different key pair "
-        "than phase-review.md's routing row. One reader skipping what the other "
-        "re-tasks is worse than neither doing it."
+    assert "classifies this cycle's consolidated findings" in review, (
+        "review-work-completion/SKILL.md step 7 no longer hands the findings to "
+        "the decision gate's classification, the one place the queue is matched."
+    )
+    assert '| Routed to verification | `"verify"` |' in phase_review, (
+        "phase-review.md no longer carries the routing match's verdict into "
+        "review-close as `\"verify\"`, so matching decides nothing."
     )
 
 

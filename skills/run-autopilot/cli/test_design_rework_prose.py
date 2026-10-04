@@ -1,7 +1,9 @@
 """Tests binding the PRD 00194 rework-design prose — the `### Dispatch rework`
-section of run-autopilot's `references/phase-review.md` and step 7 of
-`review-work-completion/SKILL.md`. They pin one `/autopilot:design-solution
---rework` call per cycle below the cap, before any task-add; the source check
+section of run-autopilot's `references/phase-review.md` and the step 7 stub of
+`review-work-completion/SKILL.md` (task creation left that skill for one
+`autopilot review-close` call in PRD 00249). They pin one
+`/autopilot:design-solution --rework` call per cycle below the cap, before the
+`review-close` call that creates the tasks; the source check
 and pass gate that decide reuse; CRITICAL `[D{cycle}]` tasks carrying
 `Design:` then `### Contract` then `### Findings (verbatim)`; the at-cap
 custody stall left untouched; non-CRITICAL routing unchanged; the loop-mode
@@ -70,13 +72,13 @@ _STEP_7 = _prose(
     _section(
         _REVIEW_SKILL_TEXT,
         _REVIEW_SKILL,
-        "### 7. Create follow-up tasks",
+        "### 7. Follow-up tasks (removed, PRD 00249)",
         "### 8. Save review file",
     ),
 )
 
 _DISPATCH_WHERE = "the `### Dispatch rework` section"
-_STEP_7_WHERE = "the `### 7. Create follow-up tasks` step"
+_STEP_7_WHERE = "the `### 7. Follow-up tasks (removed, PRD 00249)` stub"
 _ESCALATION_CAVEAT = "**Escalation caveat — diagnose the failure before escalating.**"
 _PASS_GATE = "awk 'NF{last=$0} END{exit last!=\"result: ok\"}'"
 _DESIGN_LINE = "Design: docs/dev/project-management/designs/<prd-stem>-rework-<cycle>-design.md"
@@ -88,13 +90,19 @@ _FAILURE_WHERE = "the `Rework design failure` paragraph"
 _CRITICAL_BULLET_LEAD = "- **CRITICAL D-tasks carry the rework design (PRD 00194).**"
 _CRITICAL_BULLET_WHERE = "the `CRITICAL D-tasks carry the rework design` bullet"
 _TRANSCRIBE_LEAD = "- **Transcribe the findings verbatim (PRD 00095).**"
-_NO_TASK_HERE = "A 🔴 CRITICAL finding gets no task here (PRD 00194)"
-_NO_TASK_WHERE = "the `A 🔴 CRITICAL finding gets no task here` paragraph"
-_QUEUE_LEAD = "**Skip every finding this cycle queued for verification**"
-_QUEUE_WHERE = "the verification-queue paragraph"
-_PROCESS_BULLET = (
-    r"(?m)^- Process 🟠 → 🟡 order \(🔴 rows belong to Phase 6, above\)[ \t]*$"
+# The real creation step since PRD 00249: the one `review-close` command line,
+# not a bare `review-close` mention, so prose naming the call cannot stand in.
+_CLOSE_CALL = (
+    "**Run** `autopilot review-close --review-file <this cycle's review file> "
+    "--state <state.json> --batch-id decision-gate"
 )
+_STUB_LEAD = "This skill creates no tasks."
+_STUB_WHERE = "the step 7 stub paragraph"
+_EXCEPTION_LEAD = "**Exception for 🔴 rows (PRD 00194):**"
+_EXCEPTION_WHERE = "the `Exception for 🔴 rows` line"
+_NEVER_ROUTED_LEAD = "**A CRITICAL or HIGH is never routed.**"
+_NEVER_ROUTED_WHERE = "the `A CRITICAL or HIGH is never routed` paragraph"
+_NEVER_ROUTED_ALLOW = ("is never routed", "never resolves a finding")
 
 # Override vocabulary: prose that keeps every pinned token but tells the
 # reader to disregard it reaches for one of these; none occurs in the
@@ -121,11 +129,6 @@ _FAILURE_ALLOW = (
     "do not re-invoke it",
     "create no fix task",
     "removes nothing from the roster",
-)
-_QUEUE_ALLOW = (
-    "never verbatim identity",
-    "it is never routed",
-    "is never routed either",
 )
 
 
@@ -177,64 +180,108 @@ def _assert_bullet_no_negation(banned: str = _OVERRIDE) -> None:
     )
 
 
-def _assert_step_7_critical_paragraph() -> None:
-    # The CRITICAL sentence opens its own paragraph (not a quoted "retired
-    # wording"), binds Phase 6 to the creation, and carries no override.
+def _assert_step_7_stub_paragraph() -> None:
+    # The stub opens its own paragraph (not a quoted "retired wording"),
+    # binds the decision gate's one review-close call to the creation of
+    # every task, 🔴 and 🟠/🟡 alike, and carries no override.
     _assert_matches(
         _STEP_7,
         _REVIEW_SKILL,
         _STEP_7_WHERE,
-        r"(?m)^A 🔴 CRITICAL finding gets no task here \(PRD 00194\):",
-        "open a paragraph with the CRITICAL no-task sentence",
+        rf"(?m)^{re.escape(_STUB_LEAD)}",
+        "open a paragraph with the no-task sentence",
     )
-    critical = _paragraph(_STEP_7, _REVIEW_SKILL, _NO_TASK_HERE)
-    _assert_bound(
-        critical,
-        _REVIEW_SKILL,
-        _NO_TASK_WHERE,
-        noun="Phase 6",
-        verbs="creates",
-    )
+    stub = _paragraph(_STEP_7, _REVIEW_SKILL, _STUB_LEAD)
+    _assert_bound(stub, _REVIEW_SKILL, _STUB_WHERE, noun="review-close", verbs="creates")
     _assert_present(
-        critical,
+        stub,
         _REVIEW_SKILL,
-        _NO_TASK_WHERE,
+        _STUB_WHERE,
         (
-            "never starts without a reviewed contract",
-            "Every other severity is created below as today",
+            "classifies this cycle's consolidated findings",
+            "`autopilot review-close --batch-id decision-gate`",
+            "🔴 rework and 🟠/🟡 follow-ups alike",
         ),
     )
     _assert_no_negation(
-        critical,
+        stub,
         _REVIEW_SKILL,
-        _NO_TASK_WHERE,
+        _STUB_WHERE,
         banned=_STEP_7_OVERRIDE,
-        allow=("never starts without a reviewed contract",),
+        allow=("never fabricate",),
     )
 
 
-def _assert_step_7_queue_paragraph() -> None:
-    # The queue paragraph hands a queued CRITICAL to Phase 6 too.
-    queue = _paragraph(_STEP_7, _REVIEW_SKILL, _QUEUE_LEAD)
-    _assert_present(
-        queue,
-        _REVIEW_SKILL,
-        _QUEUE_WHERE,
-        ("a queued CRITICAL is never routed either", "its task is Phase 6's"),
-    )
+def _assert_critical_enters_as_fix_after_the_design() -> None:
+    # Was step 7's "a CRITICAL fix never starts without a reviewed contract":
+    # the 🔴 row now reaches review-close as "fix", and that call sits below
+    # the design and runs only after it passed its gate.
+    exception = _single_row(_DISPATCH, _PHASE_REVIEW, _DISPATCH_WHERE, _EXCEPTION_LEAD)
     _assert_bound(
-        queue,
-        _REVIEW_SKILL,
-        _QUEUE_WHERE,
-        noun="a queued CRITICAL",
+        exception,
+        _PHASE_REVIEW,
+        _EXCEPTION_WHERE,
+        noun="unresolved 🔴 row",
+        verbs="entered",
+    )
+    _assert_present(
+        exception,
+        _PHASE_REVIEW,
+        _EXCEPTION_WHERE,
+        ('entered as `"fix"`, not `"defer"`', "made it a fix task"),
+    )
+    _assert_no_negation(exception, _PHASE_REVIEW, _EXCEPTION_WHERE, banned=_STEP_7_OVERRIDE)
+    _assert_present(
+        _DISPATCH,
+        _PHASE_REVIEW,
+        _DISPATCH_WHERE,
+        (
+            "It runs after the CRITICAL rework design above has passed its gate",
+            '| Auto-fix | `"fix"` |',
+            "creates one `[D{cycle}]` task per group",
+        ),
+    )
+    _assert_in_order(
+        _DISPATCH,
+        _PHASE_REVIEW,
+        _DISPATCH_WHERE,
+        ("ONCE for this cycle", _EXCEPTION_LEAD, _CLOSE_CALL),
+    )
+
+
+def _assert_queued_critical_is_never_routed() -> None:
+    # Was step 7's "a queued CRITICAL is never routed either, its task is
+    # Phase 6's": the Classification keeps a CRITICAL off the routed row, and
+    # the row the routing fills is the one review-close creates nothing for.
+    never_routed = _paragraph(_REVIEW_TEXT, _PHASE_REVIEW, _NEVER_ROUTED_LEAD)
+    _assert_bound(
+        never_routed,
+        _PHASE_REVIEW,
+        _NEVER_ROUTED_WHERE,
+        noun="A CRITICAL or HIGH",
         verbs="routed",
     )
+    _assert_present(
+        never_routed,
+        _PHASE_REVIEW,
+        _NEVER_ROUTED_WHERE,
+        ("It keeps today's classification",),
+    )
     _assert_no_negation(
-        queue,
-        _REVIEW_SKILL,
-        _QUEUE_WHERE,
+        never_routed,
+        _PHASE_REVIEW,
+        _NEVER_ROUTED_WHERE,
         banned=_STEP_7_OVERRIDE,
-        allow=_QUEUE_ALLOW,
+        allow=_NEVER_ROUTED_ALLOW,
+    )
+    _assert_present(
+        _DISPATCH,
+        _PHASE_REVIEW,
+        _DISPATCH_WHERE,
+        (
+            '| Routed to verification | `"verify"` |',
+            '| Defer to batch end (incl. every CRITICAL) | `"defer"` |',
+        ),
     )
 
 
@@ -247,17 +294,19 @@ def test_dispatch_rework_designs_critical_rework_once_before_any_task_add() -> N
     _assert_present(_DISPATCH, _PHASE_REVIEW, _DISPATCH_WHERE, pins)
 
     # First occurrences: the single design call must sit above the batch
-    # build, and the batch build above the real creation step — the
-    # backticked `task-add <task-json-file>` line, not a bare `task-add`.
+    # build, and the batch build above the real creation step — since PRD
+    # 00249 the `**Run** autopilot review-close ...` command line, not a bare
+    # `review-close` mention.
     order = (
         "ONCE for this cycle",
         "Build the rework batch from two sources:",
-        "`task-add <task-json-file>`",
+        _CLOSE_CALL,
     )
     _assert_in_order(_DISPATCH, _PHASE_REVIEW, _DISPATCH_WHERE, order)
     negations = (
         "Do NOT invoke `/autopilot:design-solution`",
         "after the tasks are created",
+        "`task-add <task-json-file>`",
     )
     _assert_absent(_DISPATCH, _PHASE_REVIEW, _DISPATCH_WHERE, negations)
 
@@ -297,35 +346,33 @@ def test_every_critical_row_becomes_a_d_task_with_one_owner() -> None:
     _assert_design_bound(noun="step 7", verbs="leaves")
     _assert_design_no_negation()
 
-    # The review skill hands 🔴 rows to Phase 6 and keeps the other
-    # severities; the two old sentences that gave CRITICAL a task here must
-    # be gone, not merely joined by the new paragraph.
-    step_7_pins = (
-        _NO_TASK_HERE,
-        "Phase 6",
-        "A queued **HIGH is not skipped**",
-        "- Process 🟠 → 🟡 order",
+    # Since PRD 00249 the review skill creates no task at all: its step 7 is a
+    # stub handing every severity to the decision gate's one review-close
+    # call, and none of the old creation sentences may survive beside it.
+    _assert_present(
+        _STEP_7,
+        _REVIEW_SKILL,
+        _STEP_7_WHERE,
+        (_STUB_LEAD, "decision gate"),
     )
-    _assert_present(_STEP_7, _REVIEW_SKILL, _STEP_7_WHERE, step_7_pins)
     negations = (
+        "task-add",
+        "Create each follow-up",
         "CRITICAL or HIGH is not skipped",
         "Process 🔴 → 🟠 → 🟡 order",
         "creates the CRITICAL task here",
     )
     _assert_absent(_STEP_7, _REVIEW_SKILL, _STEP_7_WHERE, negations)
 
-    # The CRITICAL paragraph and the queue paragraph each hand a CRITICAL to
-    # Phase 6; the Process bullet is the whole line, so no `, then 🔴 last`
-    # tail can ride on it.
-    _assert_step_7_critical_paragraph()
-    _assert_matches(
-        _STEP_7,
-        _REVIEW_SKILL,
-        _STEP_7_WHERE,
-        _PROCESS_BULLET,
-        "keep the whole line `- Process 🟠 → 🟡 order (🔴 rows belong to Phase 6, above)`",
-    )
-    _assert_step_7_queue_paragraph()
+    # Step 7's CRITICAL and queue paragraphs moved into phase-review.md: a 🔴
+    # row enters review-close as "fix" only after the rework design, and a
+    # queued CRITICAL is never routed. The old `- Process 🟠 → 🟡 order`
+    # bullet has no prose successor: review-close creates its tasks in
+    # rework_groups.group's order, pinned by test_rework_groups.py
+    # OrderTests.test_order_is_critical_then_severity_then_size.
+    _assert_step_7_stub_paragraph()
+    _assert_critical_enters_as_fix_after_the_design()
+    _assert_queued_critical_is_never_routed()
     _assert_no_match(
         _STEP_7,
         _REVIEW_SKILL,
@@ -597,7 +644,7 @@ def test_loop_mode_hands_off_after_task_add_before_work() -> None:
         _PHASE_REVIEW,
         _DISPATCH_WHERE,
         (
-            "`task-add <task-json-file>`",
+            _CLOSE_CALL,
             "in a session that ran Phases 4-5 of this cycle (it did not enter through the Phase 4 skip): hand off here",
             "write the contract card",
             "write the brief",
