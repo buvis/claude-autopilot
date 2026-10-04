@@ -3034,3 +3034,5 @@
 {"id":"1e2d8eb8","ended_at":1791108950,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"kind":"handoff","site":"review","edge":"leave","at":1791108950,"phase":"done","prd":"00244-tidy-the-enter-verb-and-the-review-diff-plumbing-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1791115443,"phase":"build","prd":"00244-tidy-the-enter-verb-and-the-review-diff-plumbing-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791115463,"phase":"build","prd":"00248-keep-phase-skills-in-the-session-v1.md"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791116852,"phase":"build","prd":"00248-keep-phase-skills-in-the-session-v1.md"}
