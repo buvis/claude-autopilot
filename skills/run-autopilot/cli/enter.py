@@ -16,17 +16,15 @@ from __future__ import annotations
 
 import contextlib
 import io
-import re
 import shutil
-import subprocess
 import sys
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import (
-    custody, frontmatter, handoff, records, resume, schema, selection, state,
-    statectl, store_tree,
+    custody, enter_io, frontmatter, handoff, records, resume, schema,
+    selection, state, statectl, store_tree,
 )
 
 STOPS: tuple[str, ...] = (
@@ -38,11 +36,6 @@ STOPS: tuple[str, ...] = (
     "state_write_failed", "design_review_log_empty",
 )
 
-_RECORD_DISPATCH = (
-    Path(__file__).resolve().parents[2]
-    / "work" / "scripts" / "record_dispatch.py"
-)
-
 _CATCHUP_FRESH = timedelta(hours=4)
 
 # null = "this step never ran", distinct from a checked value.
@@ -51,11 +44,6 @@ _EMPTY_RESULT = {
     "custody_pending": 0, "lane_effective": None, "catchup": None,
     "design": None, "resume_target": None, "batch": None,
 }
-
-_DISPATCH_RE = re.compile(
-    r"dispatch \d+ \((claude|codex|claude-fallback)\): "
-    r"cardinal-sin \d+, blocker \d+, non-blocker \d+, question \d+"
-)
 
 # do_park exit codes that halt Phase 0 (5 is handled apart: it names the PRD).
 _PARK_STOPS = {
@@ -72,51 +60,6 @@ _PARK_STOPS = {
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def _git_head_sha(repo_root: Path) -> str | None:
-    try:
-        proc = subprocess.run(
-            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
-            capture_output=True, text=True, timeout=10,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    return proc.stdout.strip() if proc.returncode == 0 else None
-
-
-def _record_resume_row(prd: str, site: str, autopilot_dir: Path) -> None:
-    """Best-effort handoff row via the work pack's record_dispatch.py; any
-    failure goes to stderr, never past the caller. Runs in `autopilot_dir`:
-    record_dispatch.py resolves the ledger from its own cwd, and this
-    process's cwd need not be inside the project at all."""
-    try:
-        proc = subprocess.run(
-            ["python3", str(_RECORD_DISPATCH), "handoff", "--site", site,
-             "--edge", "resume", "--phase", "build", "--prd", prd],
-            capture_output=True, text=True, timeout=10, cwd=str(autopilot_dir),
-        )
-    except (OSError, subprocess.SubprocessError) as err:
-        print(f"autopilot: enter: resume row failed: {err}", file=sys.stderr)
-        return
-    if proc.returncode != 0:
-        print(
-            f"autopilot: enter: resume row exited {proc.returncode}: {proc.stderr.strip()}",
-            file=sys.stderr,
-        )
-
-
-def _review_log_has_dispatch_line(text: str) -> bool:
-    in_section = False
-    for line in text.splitlines():
-        if line.startswith("## Review log"):
-            in_section = True
-            continue
-        if line.startswith("## "):
-            in_section = False
-        if in_section and _DISPATCH_RE.search(line):
-            return True
-    return False
 
 
 def _stop(out: dict, stop: str, detail: str) -> dict:
@@ -370,7 +313,7 @@ def _design(out: dict, current: dict, autopilot_dir: Path) -> None:
     except (OSError, UnicodeDecodeError) as err:
         _stop(out, "fs_error", f"read design doc {doc} failed: {err}")
         return
-    if _review_log_has_dispatch_line(text):
+    if enter_io.review_log_has_dispatch_line(text):
         out["design"] = "reuse"
     else:
         _stop(out, "design_review_log_empty", f"{doc} has empty ## Review log (review never ran)")
@@ -384,8 +327,8 @@ def enter(
     prd_arg: str | None,
     in_loop: bool,
     now: Callable[[], str] = _utc_now,
-    git_head: Callable[[Path], str | None] = _git_head_sha,
-    record_resume_row: Callable[[str, str, Path], None] = _record_resume_row,
+    git_head: Callable[[Path], str | None] = enter_io.git_head_sha,
+    record_resume_row: Callable[[str, str, Path], None] = enter_io.record_resume_row,
 ) -> dict:
     """Run the Phase 0 step chain in documented order; return the one JSON
     line as a dict, plus the frontmatter write's `warnings` for the caller to

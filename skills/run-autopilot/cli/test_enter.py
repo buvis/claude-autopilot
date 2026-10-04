@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from cli import custody, enter, frontmatter, handoff, notify_out, records, resume, state
+from cli import custody, enter, enter_io, frontmatter, handoff, notify_out, records, resume, state
 from cli.enter_harness import (
     BATCH_ID,
     DISPATCH_LINE,
@@ -199,8 +199,8 @@ def test_raising_resume_row_is_swallowed_to_stderr(env: Env, capsys) -> None:
 
 
 def test_default_record_dispatch_path_exists_in_the_repo() -> None:
-    assert enter._RECORD_DISPATCH.exists()
-    assert enter._RECORD_DISPATCH.parts[-3:] == (
+    assert enter_io._RECORD_DISPATCH.exists()
+    assert enter_io._RECORD_DISPATCH.parts[-3:] == (
         "work",
         "scripts",
         "record_dispatch.py",

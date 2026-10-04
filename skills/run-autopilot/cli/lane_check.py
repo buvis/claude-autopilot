@@ -6,16 +6,21 @@ review: the decision that a finished build may take the single review pass
 is made here, over the live git range, never by the session's reading of its
 own work.
 
-    diff_signal(work_start_sha, repo_root, git_dir) -> str | None
-    escalate(state_path, signal)                    -> the committed state
+    diff_signal(work_start_sha, repo_root, git_dir, store_dir) -> str | None
+    escalate(state_path, signal)                               -> the committed state
 
 Two checks, in order, over `work_start_sha..HEAD` read through
 `custody.git_argv`: `unnamed_path` when any changed path is a hook or a
 production path (a solo PRD named none, so any is unnamed); `security_diff`
-when `lane.security_triggered` fires. A git command that fails escalates with
-`check_failed` rather than passing: the check fails toward the expensive
-lane. The session's own signals (`critical_finding`, `high_unresolved`,
-`suite_red`) arrive through `--signal` and take the same write.
+when `lane.security_triggered` fires. The store is excluded from both: its
+exclusion pathspec is prefixed with `store_tree._store_prefix(repo_root,
+store_dir)`, so a bare-repo-backed project (the store sitting below git's
+work-tree root, e.g. `~/.claude`) excludes the store wherever it actually
+sits rather than only at the work-tree root. A git command that fails
+escalates with `check_failed` rather than passing: the check fails toward
+the expensive lane. The session's own signals (`critical_finding`,
+`high_unresolved`, `suite_red`) arrive through `--signal` and take the same
+write.
 """
 
 from __future__ import annotations
@@ -45,14 +50,22 @@ def _git_output(argv: list[str], cwd: str) -> str | None:
     return result.stdout if result.returncode == 0 else None
 
 
-def diff_signal(work_start_sha: str, repo_root: str, git_dir: str | None) -> str | None:
+def diff_signal(
+    work_start_sha: str, repo_root: str, git_dir: str | None, store_dir: Path | None
+) -> str | None:
     """The first escalation signal the range `work_start_sha..HEAD` earns,
     or None when the diff stays inside the solo lane's contract."""
     argv = custody.git_argv(repo_root, git_dir)
     span = f"{work_start_sha}..HEAD"
     # The store is never routing evidence: excluding it in the pathspec keeps
     # it out of the changed list AND out of the diff text the scan reads.
-    skip_store = ["--", *store_tree.STORE_EXCLUDE_PATHSPECS]
+    # The prefix is resolved fresh (never the static STORE_EXCLUDE_PATHSPECS)
+    # so a bare-repo-backed store below git's work-tree root is still found.
+    prefix = store_tree._store_prefix(Path(repo_root), store_dir)
+    skip_store = [
+        "--",
+        *(f":(exclude,top){prefix}{root.removesuffix('/')}" for root in store_tree.STORE_PREFIXES),
+    ]
     names = _git_output(
         [*argv, "diff", _NO_RENAMES, "--name-only", span, *skip_store],
         repo_root,

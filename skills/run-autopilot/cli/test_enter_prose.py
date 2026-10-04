@@ -27,7 +27,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from cli import enter
+from cli import enter, enter_io
 from cli.custody_prose_testutil import (
     _SELECTION_HEADING,
     _SKILL_DIR,
@@ -237,6 +237,52 @@ def test_every_stop_value_has_a_row() -> None:
         f"{_PHASE_BUILD}: {_ENTER_HEADING!r}'s stop-value table routes {orphans!r}, "
         "which cli.enter.STOPS does not define — a renamed stop leaves the old row "
         "behind, pointing a session at a halt that can never happen."
+    )
+
+
+def test_fs_error_row_names_every_owner() -> None:
+    rows = _stop_table_rows(_enter_section())
+    row = next((r for r in rows if _first_cell(r) == "fs_error"), None)
+    assert row is not None, (
+        f"{_PHASE_BUILD}: {_ENTER_HEADING!r}'s stop-value table has no row whose "
+        f"FIRST COLUMN is `fs_error` — found {[_first_cell(r) for r in rows]!r}."
+    )
+    where = "the `fs_error` row of the stop-value table"
+    _assert_present(
+        row,
+        _PHASE_BUILD,
+        where,
+        (
+            "Ensure lifecycle directories exist",
+            "`detail`",
+            "`mkdir`",
+            "`--prds`",
+            "shallow",
+            "design-gate invariant",
+            "design doc",
+        ),
+    )
+
+
+def test_park_halt_row_routes_by_exit_code() -> None:
+    rows = _stop_table_rows(_enter_section())
+    row = next((r for r in rows if _first_cell(r) == "park_halt") , None)
+    assert row is not None, (
+        f"{_PHASE_BUILD}: {_ENTER_HEADING!r}'s stop-value table has no row whose "
+        f"FIRST COLUMN is `park_halt` — found {[_first_cell(r) for r in rows]!r}."
+    )
+    where = "the `park_halt` row of the stop-value table"
+    _assert_present(
+        row,
+        _PHASE_BUILD,
+        where,
+        (
+            "Handle park request",
+            "exit-code row 5",
+            "systemic halt",
+            "`detail`",
+            "exit code",
+        ),
     )
 
 
@@ -581,10 +627,10 @@ def test_a_batch_with_no_string_id_counts_as_absent_and_minting_keeps_skips() ->
 
 
 def test_enter_mirrors_the_design_gate_awk_regex() -> None:
-    # `enter._DISPATCH_RE` is a hand-mirrored port of the `awk` body pinned in
-    # core SKILL.md's design-gate invariant. Editing one without the other lets
-    # the gate and the one-call entry disagree about what a dispatch summary
-    # line looks like, so the awk body is EXTRACTED here, never re-typed.
+    # `enter_io._DISPATCH_RE` is a hand-mirrored port of the `awk` body pinned
+    # in core SKILL.md's design-gate invariant. Editing one without the other
+    # lets the gate and the one-call entry disagree about what a dispatch
+    # summary line looks like, so the awk body is EXTRACTED here, never re-typed.
     found = re.search(r"f && /(dispatch [^/]+)/\{hit=1\}", _SKILL_TEXT)
     assert found, (
         f"{_SKILL}: expected the design-gate invariant's `awk` line with a "
@@ -592,9 +638,9 @@ def test_enter_mirrors_the_design_gate_awk_regex() -> None:
     )
     awk_body = found.group(1)
     # `\d` is the only licensed difference: awk's ERE has no shorthand class.
-    assert enter._DISPATCH_RE.pattern.replace(r"\d", "[0-9]") == awk_body, (
-        f"cli/enter.py's _DISPATCH_RE has drifted from {_SKILL}'s design-gate "
-        f"`awk` body.\n  enter: {enter._DISPATCH_RE.pattern}\n  awk:   {awk_body}\n"
+    assert enter_io._DISPATCH_RE.pattern.replace(r"\d", "[0-9]") == awk_body, (
+        f"cli/enter_io.py's _DISPATCH_RE has drifted from {_SKILL}'s design-gate "
+        f"`awk` body.\n  enter_io: {enter_io._DISPATCH_RE.pattern}\n  awk:   {awk_body}\n"
         "Change both or neither — a session running the gate and a session "
         "reading `design: reuse` must accept exactly the same lines."
     )

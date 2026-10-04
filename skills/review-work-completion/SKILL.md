@@ -139,7 +139,7 @@ Write tasks markdown to `docs/dev/tmp/review-tasks-{id}.md` and PRD summary to `
 
 **Determine review scope (full vs incremental).** List existing review files for this PRD with Bash `ls` (the native `Glob` tool is absent in this build): `docs/dev/project-management/reviews/<prd-name>-review-*.md` (PRD filename without the `.md` extension).
 
-- **No prior review file** → cycle 1, a **full review**. Run `gather-context.sh` without `--since`.
+- **No prior review file** → cycle 1, a **full review**. When `state.work_start_sha` is set in `docs/dev/project-management/autopilot/state.json` (running under autopilot), pass `--since <state.work_start_sha>` to `gather-context.sh` — the PRD's whole work range, the same value `COVERAGE_DIFF_RANGE` uses below. `gather-context.sh` otherwise diffs against the detected base branch, which is empty (and now refused with exit 3) for a repo worked on directly on that branch. Without `state.work_start_sha` (an interactive, non-autopilot run), run without `--since` as before.
 - **A prior review file exists** → this is a rework cycle, an **incremental review**. Read the highest-numbered prior file's `head_sha` frontmatter field.
   - `head_sha` present → pass `--since <head_sha>` to `gather-context.sh`. The diff then covers only the rework commits since that cycle, not the whole PRD branch — the prior cycle already reviewed the full diff. Also read that file's consolidated findings; step 4 hands them to the reviewers to verify.
   - `head_sha` absent (file predates this field) → fall back to a full review (omit `--since`).
@@ -149,7 +149,13 @@ Capture the current HEAD now — `git rev-parse HEAD` — and hold it; step 8 st
 
 Also capture the diff range for the review scope (recorded in the review file; the doubt lens reviews this range). For an **incremental review** the diff range is `<prior-cycle-head-sha>` (the same SHA passed to `gather-context.sh --since`). For a **full review**: when running under autopilot and `state.work_start_sha` is set in `docs/dev/project-management/autopilot/state.json`, use `<work_start_sha>..HEAD` (the PRD's whole work range — this is the scope the doubt lens reviews); otherwise compute it via `git merge-base HEAD origin/HEAD` (fallback: `git merge-base HEAD master`, then `git merge-base HEAD develop`). Store this as `COVERAGE_DIFF_RANGE`.
 
-Run `gather-context.sh` (from project root). Full review:
+Run `gather-context.sh` (from project root). Full review under autopilot — prepend `--since <state.work_start_sha>`:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/gather-context.sh --since <state.work_start_sha> docs/dev/tmp/review-tasks-{id}.md docs/dev/tmp/review-prd-{id}.md
+```
+
+Full review with no `state.work_start_sha` (interactive, non-autopilot):
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/gather-context.sh docs/dev/tmp/review-tasks-{id}.md docs/dev/tmp/review-prd-{id}.md

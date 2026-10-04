@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: nested store lock files such as `deferred/*.json.lock` are now ignored
 - **run-autopilot**: wave verb hardening - the `[checks] waves` release gate now runs the summary-migration tests (00221); `wave assemble` persists lane state before its destructive teardown and catches `OSError` instead of crashing (00222); `wave review`'s assembly-worktree dirty gate is store-aware and seeds the nested loop's backlog into `hold/` (00225); `wave land` can land a `review_failed` wave after an operator's hand review (00226); concurrent slot reclaim is now locked per-slot (00227); and `review-once` store writes are skipped inside a wave lane (00239). Releasing a slot no longer recreates a `wave-slots/` directory `land` or `abort` already removed, and a backlog PRD whose filename contains a space is held and committed intact
 - **run-autopilot**: the headroom time term scans back past unstamped or malformed tasks and never raises on a malformed task list
+- **review-work-completion**: `gather-context.sh` refuses an empty full-review diff instead of silently handing reviewers nothing; a full review now passes `--since <work_start_sha>` when running under autopilot
+- **run-autopilot**: lane routing ignores the store in bare-repo projects - `lane_check.diff_signal`'s store exclusion now follows the store's actual position under git's work-tree root, so a solo-lane PRD whose only changes are store commits no longer escalates to the full lane in a project like `~/.claude`
 
 ## [0.7.0] - 2026-10-03
 

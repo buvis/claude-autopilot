@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from cli import enter, frontmatter, notify_out
+from cli import enter, enter_io, frontmatter, notify_out
 from cli.enter_harness import (
     KEYS,
     NOW,
@@ -46,7 +46,7 @@ def test_default_resume_row_runs_the_record_dispatch_handoff(env: Env, monkeypat
     calls: list[tuple[list, dict]] = []
 
     def fake_run(args, *a, **k):
-        if isinstance(args, list) and str(enter._RECORD_DISPATCH) in args:
+        if isinstance(args, list) and str(enter_io._RECORD_DISPATCH) in args:
             calls.append((args, k))
             return subprocess.CompletedProcess(args, 0, "", "")
         return real_run(args, *a, **k)
@@ -57,7 +57,7 @@ def test_default_resume_row_runs_the_record_dispatch_handoff(env: Env, monkeypat
 
     assert out["stop"] is None
     assert [args for args, _ in calls] == [[
-        "python3", str(enter._RECORD_DISPATCH), "handoff", "--site", "build",
+        "python3", str(enter_io._RECORD_DISPATCH), "handoff", "--site", "build",
         "--edge", "resume", "--phase", "build", "--prd", PRD,
     ]]
     assert calls[0][1]["timeout"] == 10
@@ -73,7 +73,7 @@ def test_default_resume_row_runs_the_handoff_in_the_autopilot_dir(env: Env, monk
     calls: list[dict] = []
 
     def fake_run(args, *a, **k):
-        if isinstance(args, list) and str(enter._RECORD_DISPATCH) in args:
+        if isinstance(args, list) and str(enter_io._RECORD_DISPATCH) in args:
             calls.append(k)
             return subprocess.CompletedProcess(args, 0, "", "")
         return real_run(args, *a, **k)
@@ -513,14 +513,14 @@ def test_git_head_sha_reads_the_stripped_head_of_a_real_repo(tmp_path: Path) -> 
     _git(repo, "commit", "--quiet", "-m", "first")
     head = _git(repo, "rev-parse", "HEAD").stdout.strip()
 
-    sha = enter._git_head_sha(repo)
+    sha = enter_io.git_head_sha(repo)
 
     assert sha == head
     assert sha == sha.strip() and "\n" not in sha
 
 
 def test_git_head_sha_is_none_outside_a_repo(tmp_path: Path) -> None:
-    assert enter._git_head_sha(tmp_path) is None
+    assert enter_io.git_head_sha(tmp_path) is None
 
 
 # -- the --prd argument must be a bare basename -------------------------------

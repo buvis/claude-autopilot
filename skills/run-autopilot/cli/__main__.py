@@ -665,7 +665,10 @@ def _run_lane_check(args: argparse.Namespace) -> int:
             print(f"autopilot: lane-check: state has no {', '.join(missing)}", file=sys.stderr)
             return 2
         signal = lane_check.diff_signal(
-            data["work_start_sha"], data["repo_root"], data.get("git_dir")
+            data["work_start_sha"],
+            data["repo_root"],
+            data.get("git_dir"),
+            state_path.parents[1],
         )
     if signal is None:
         print("lane: ok")
