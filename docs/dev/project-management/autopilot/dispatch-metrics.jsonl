@@ -3036,3 +3036,37 @@
 {"kind":"handoff","site":"done","edge":"leave","at":1791115443,"phase":"build","prd":"00244-tidy-the-enter-verb-and-the-review-diff-plumbing-v1.md"}
 {"kind":"handoff","site":"build","edge":"resume","at":1791115463,"phase":"build","prd":"00248-keep-phase-skills-in-the-session-v1.md"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791116852,"phase":"build","prd":"00248-keep-phase-skills-in-the-session-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791116893,"phase":"build","prd":"00248-keep-phase-skills-in-the-session-v1.md"}
+{"id":"ee83e3b8","kind":"tess","task":"1","queued_at":1791117007,"prompt_bytes":28638}
+{"id":"7601395c","kind":"devon","task":"1","queued_at":1791117403,"prompt_bytes":4073}
+{"id":"7601395c","ended_at":1791117546,"elapsed_s":143,"outcome":"ok","detail":null}
+{"id":"d36bcb68","kind":"tess","task":"1","queued_at":1791117586,"prompt_bytes":4261}
+{"id":"d36bcb68","ended_at":1791117804,"elapsed_s":218,"outcome":"ok","detail":null}
+{"id":"040c5e3d","kind":"ivan","task":"1","queued_at":1791117860,"prompt_bytes":28398}
+{"id":"040c5e3d","ended_at":1791117918,"elapsed_s":58,"outcome":"ok","detail":null}
+{"id":"7f350639","kind":"pat","task":"1","queued_at":1791117983,"prompt_bytes":407638}
+{"id":"fe8d54f6","kind":"pat","task":"1","queued_at":1791117995,"prompt_bytes":61118}
+{"id":"c84032bf","kind":"pat","task":"1","queued_at":1791118009,"prompt_bytes":27089}
+{"id":"c84032bf","ended_at":1791118038,"elapsed_s":29,"outcome":"ok","detail":null}
+{"id":"7f8f07e3","kind":"tess","task":"2","queued_at":1791118130,"prompt_bytes":33472}
+{"id":"e940e228","kind":"devon","task":"2","queued_at":1791118212,"prompt_bytes":2597}
+{"id":"e940e228","ended_at":1791118269,"elapsed_s":57,"outcome":"ok","detail":null}
+{"id":"440956ce","kind":"ivan","task":"2","queued_at":1791118317,"prompt_bytes":32058}
+{"id":"440956ce","ended_at":1791118344,"elapsed_s":27,"outcome":"ok","detail":null}
+{"id":"dfc69c9b","kind":"pat","task":"2","queued_at":1791118443,"prompt_bytes":9627}
+{"id":"dfc69c9b","ended_at":1791118463,"elapsed_s":20,"outcome":"ok","detail":null}
+{"id":"c7d6a7c9","kind":"tess","task":"3","queued_at":1791118589,"prompt_bytes":20269}
+{"id":"66e7dbac","kind":"devon","task":"3","queued_at":1791118758,"prompt_bytes":3035}
+{"id":"66e7dbac","ended_at":1791119237,"elapsed_s":479,"outcome":"ok","detail":null}
+{"id":"89c003b2","kind":"ivan","task":"3","queued_at":1791119341,"prompt_bytes":135314}
+{"id":"c9c65eed","kind":"ivan","task":"3","queued_at":1791119361,"prompt_bytes":22280}
+{"id":"c9c65eed","ended_at":1791119400,"elapsed_s":39,"outcome":"ok","detail":null}
+{"id":"74822897","kind":"pat","task":"3","queued_at":1791119526,"prompt_bytes":18365}
+{"id":"74822897","ended_at":1791119547,"elapsed_s":21,"outcome":"ok","detail":null}
+{"id":"ee83e3b8","ended_at":1791120057,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"7f350639","ended_at":1791120057,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"fe8d54f6","ended_at":1791120057,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"7f8f07e3","ended_at":1791120057,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"c7d6a7c9","ended_at":1791120057,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"89c003b2","ended_at":1791120057,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791120057,"phase":"review","prd":"00248-keep-phase-skills-in-the-session-v1.md"}
