@@ -7,13 +7,24 @@ point is to bind the real CLI shapes stage() consumes. Two collaborators are
 swapped for fakes through module constants, because the real ones are slow
 or external: replay_tests_against_base.py (a recorder script that captures
 its argv) and `engram` (a fake executable, or a name that resolves nowhere).
-render_roster is a stub in this task; tests that need prompt files replace
-it with a writer that records which personas stage() handed it.
+Tests that only need stage()'s wiring replace render_roster with a writer
+that records which personas stage() handed it.
+
+The render_roster tests (PRD 00249 task 3) run the real render_prompt.py and
+compare every prompt byte for byte against fixtures/*-prompt-00244c1.md. The
+alice/bob/blake/carl goldens are the real hand-assembled 00244c1 prompts with
+three recorded deltas: the hand-added "The project root is ..." line is gone
+(no persona or table declares it), the repo root reads @ROOT@, and Bob's doubt
+appendix gains eve.md's FIX/VERIFY/KNOWN section and the trailing "Do not
+modify" paragraph of the "Rubric verdicts" section (PRD 00249 requires the
+bucket section). No Eve prompt exists for that cycle: eve-prompt-00244c1.md is
+hand-built from agents/eve.md and agent-invocation.md's five run inputs.
 """
 
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -399,6 +410,215 @@ def test_stage_returns_gather_context_refusal_without_raising(env: dict) -> None
     assert summary["ok"] is False
     assert "empty diff" in summary["error"]
     assert not env["replay_log"].exists()
+
+
+FIXTURES = Path(__file__).parent / "fixtures"
+GOLDEN_ID = "00244c1"
+GOLDEN_ROSTER = ["alice", "bob", "blake", "carl"]  # the 00244c1 roster: no Eve
+
+
+@pytest.fixture
+def golden(tmp_path: Path) -> dict:
+    """The staged inputs of cycle 00244c1, laid out the way stage() leaves them."""
+    root = tmp_path / "proj"
+    tmp = root / "docs" / "dev" / "tmp"
+    tmp.mkdir(parents=True)
+    staged = {}
+    for key, name in (
+        ("context", f"review-context-{GOLDEN_ID}.md"),
+        ("diff", f"review-diff-{GOLDEN_ID}.diff"),
+        ("prd", f"review-prd-{GOLDEN_ID}.md"),
+        ("pack", f"engram-pack-{GOLDEN_ID}.md"),
+    ):
+        staged[key] = tmp / name
+        shutil.copyfile(FIXTURES / name, staged[key])
+    ledger = tmp_path / "ledger.json"
+    ledger.write_text(
+        json.dumps(
+            [
+                {
+                    "disposition": "settled-deferral",
+                    "severity": "low",
+                    "issue": "LEDGER-ISSUE-MARKER",
+                    "file": "src/calc.py:1",
+                    "reason": "accepted",
+                }
+            ]
+        )
+    )
+    prior = tmp_path / "prior-findings.md"
+    prior.write_text("| [2/3] | 🟠 High | PRIOR-FINDING-MARKER | src/calc.py |\n")
+    return {"root": root, "ledger": ledger, "prior": prior, **staged}
+
+
+def _render(golden: dict, roster: list[str], **inputs) -> dict:
+    return review_stage.render_roster(
+        golden["context"],
+        golden["diff"],
+        golden["prd"],
+        inputs.get("pack"),
+        inputs.get("ledger"),
+        inputs.get("prior"),
+        roster,
+    )
+
+
+def _assert_golden(golden: dict, name: str, rendered: dict) -> None:
+    out = golden["context"].parent / f"{name}-prompt-{GOLDEN_ID}.md"
+    assert rendered[name] == out
+    expected = (FIXTURES / f"{name}-prompt-{GOLDEN_ID}.md").read_text()
+    assert out.read_text() == expected.replace("@ROOT@", str(golden["root"]))
+
+
+def test_render_matches_golden_alice(golden: dict) -> None:
+    _assert_golden(golden, "alice", _render(golden, GOLDEN_ROSTER))
+
+
+def test_render_matches_golden_bob(golden: dict) -> None:
+    _assert_golden(golden, "bob", _render(golden, GOLDEN_ROSTER))
+
+
+def test_render_matches_golden_blake(golden: dict) -> None:
+    _assert_golden(golden, "blake", _render(golden, GOLDEN_ROSTER))
+
+
+def test_render_matches_golden_carl(golden: dict) -> None:
+    _assert_golden(golden, "carl", _render(golden, GOLDEN_ROSTER))
+
+
+def test_render_matches_golden_eve(golden: dict) -> None:
+    rendered = _render(golden, ["alice", "blake", "eve"], pack=golden["pack"])
+    _assert_golden(golden, "eve", rendered)
+
+
+def test_blake_prompt_carries_no_diff_or_ledger(golden: dict) -> None:
+    rendered = _render(
+        golden,
+        ["alice", "blake"],
+        pack=golden["pack"],
+        ledger=golden["ledger"],
+        prior=golden["prior"],
+    )
+
+    alice = rendered["alice"].read_text()
+    blake = rendered["blake"].read_text()
+    # the same markers do reach an implementation-aware prompt
+    assert "LEDGER-ISSUE-MARKER" in alice
+    assert "PRIOR-FINDING-MARKER" in alice
+    assert str(golden["diff"]) in alice
+    for leak in (
+        str(golden["diff"]),
+        str(golden["context"]),
+        str(golden["pack"]),
+        "DIFF-BODY-MARKER",
+        "skills/run-autopilot/cli/enter_io.py",
+        "LEDGER-ISSUE-MARKER",
+        review_stage.SETTLED_HEADING,
+        "PRIOR-FINDING-MARKER",
+        "This is an **incremental review**",
+        "Findings precedent",
+    ):
+        assert leak not in blake, leak
+    assert "Tidy the enter verb and the review diff plumbing" in blake
+
+
+def test_blake_prompt_includes_output_format(golden: dict) -> None:
+    blake = _render(golden, ["blake"])["blake"].read_text()
+
+    assert "{OUTPUT_FORMAT}" not in blake
+    formats = (
+        review_stage._SKILLS
+        / "review-work-completion"
+        / "references"
+        / "output-formats.md"
+    ).read_text()
+    head = "## Agent Output Format (Single Source of Truth)"
+    section = formats[formats.index(head) : formats.index("## Per-Rule Verdict Format")]
+    assert section.strip() in blake
+    assert "Your agent name is BLAKE." in blake
+    # in its slot: after the mandatory-format line, before the verdict rules
+    assert (
+        blake.index("OUTPUT FORMAT IS MANDATORY")
+        < blake.index(head)
+        < blake.index("PER-RULE VERDICTS ARE MANDATORY")
+    )
+
+
+def test_bob_doubt_prompt_includes_eve_sections(golden: dict) -> None:
+    eve = (review_stage.AGENTS_DIR / "eve.md").read_text()
+    precedent = "- 00236 review: `diff_signal` missed the store in a bare-repo layout."
+    sections = [
+        eve[eve.index("## Two lenses") : eve.index("## Categorize")].strip(),
+        eve[eve.index("## Categorize") : eve.index("## Rubric verdicts")].strip(),
+        eve[eve.index("## Rubric verdicts") :].strip(),
+    ]
+
+    bob = _render(golden, ["alice", "bob"], pack=golden["pack"])["bob"].read_text()
+
+    for section in sections:
+        assert section.replace("{PACK_FINDINGS}", precedent) in bob
+    assert "FIX:\n" in bob and "D5: pass|fail" in bob
+    assert bob.rstrip().endswith('never with a "(lines a-b)" suffix.')
+
+    # Eve on the roster carries the doubt lens herself: Bob is consensus only.
+    with_eve = _render(golden, ["bob", "eve"], pack=golden["pack"])
+    bob_consensus = with_eve["bob"].read_text()
+    assert "## Two lenses" not in bob_consensus
+    assert "D1:" not in bob_consensus
+    assert "## Two lenses" in with_eve["eve"].read_text()
+
+
+def test_incremental_cycle_reaches_every_persona_but_blake(golden: dict) -> None:
+    roster = ["alice", "bob", "blake", "carl", "eve"]
+
+    rendered = _render(
+        golden, roster, ledger=golden["ledger"], prior=golden["prior"]
+    )
+
+    for name in ("alice", "bob", "carl", "eve"):
+        text = rendered[name].read_text()
+        assert "This is an **incremental review**" in text, name
+        assert "PRIOR-FINDING-MARKER" in text, name
+        assert review_stage.SETTLED_HEADING in text, name
+        assert "LEDGER-ISSUE-MARKER" in text, name
+    blake = rendered["blake"].read_text()
+    assert "This is an **incremental review**" not in blake
+    assert "PRIOR-FINDING-MARKER" not in blake
+
+
+def test_failed_render_marks_only_that_persona_none(
+    golden: dict, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    agents = tmp_path / "agents"
+    shutil.copytree(review_stage.AGENTS_DIR, agents)
+    with open(agents / "carl.md", "a", encoding="utf-8") as fh:
+        fh.write("\n{NEVER_SUPPLIED}\n")  # render_prompt.py exits 1 on it
+    monkeypatch.setattr(review_stage, "AGENTS_DIR", agents)
+
+    rendered = _render(golden, GOLDEN_ROSTER)
+
+    assert rendered["carl"] is None
+    assert not (golden["context"].parent / f"carl-prompt-{GOLDEN_ID}.md").exists()
+    for name in ("alice", "bob", "blake"):
+        assert rendered[name] is not None and rendered[name].is_file(), name
+
+
+def test_blake_gets_filesystem_notes_only_when_the_store_is_a_symlink(
+    golden: dict, tmp_path: Path
+) -> None:
+    plain = _render(golden, ["blake"])["blake"].read_text()
+    assert "## Filesystem notes" not in plain
+
+    real_store = tmp_path / "real-store"
+    real_store.mkdir()
+    (golden["root"] / "docs" / "dev" / "project-management").symlink_to(real_store)
+
+    blake = _render(golden, ["blake"])["blake"].read_text()
+
+    notes = blake[blake.index("## Filesystem notes") :]
+    assert f"Project root: {golden['root']}" in notes
+    assert f"`docs/dev/project-management` realpath: {real_store.resolve()}" in notes
+    assert "`rg --files` does not descend into dot-directories" in notes
 
 
 if __name__ == "__main__":

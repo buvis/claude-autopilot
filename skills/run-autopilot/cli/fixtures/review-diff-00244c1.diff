@@ -1,0 +1,21 @@
+diff --git a/skills/run-autopilot/cli/enter.py b/skills/run-autopilot/cli/enter.py
+index 1111111..2222222 100644
+--- a/skills/run-autopilot/cli/enter.py
++++ b/skills/run-autopilot/cli/enter.py
+@@ -1 +1 @@
+-DIFF-BODY-MARKER old
++DIFF-BODY-MARKER new
+diff --git a/skills/run-autopilot/cli/enter_io.py b/skills/run-autopilot/cli/enter_io.py
+new file mode 100644
+index 0000000..3333333
+--- /dev/null
++++ b/skills/run-autopilot/cli/enter_io.py
+@@ -0,0 +1 @@
++def git_head_sha(): ...
+diff --git a/skills/run-autopilot/cli/enter.py b/skills/run-autopilot/cli/enter.py
+index 2222222..4444444 100644
+--- a/skills/run-autopilot/cli/enter.py
++++ b/skills/run-autopilot/cli/enter.py
+@@ -2 +2 @@
+-a
++b
