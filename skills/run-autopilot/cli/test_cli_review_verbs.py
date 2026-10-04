@@ -121,6 +121,43 @@ def test_review_stage_fable_doubt_reviewer_puts_eve_on_the_roster(
     assert staged["kwargs"]["roster"] == ["alice", "bob", "carl", "blake", "eve"]
 
 
+def test_review_stage_codex_implemented_task_forces_eve_onto_the_roster(
+    tmp_path: Path, staged: dict
+) -> None:
+    # review-work-completion's codex doubt-roster guard: the doubt leg must
+    # not be codex alone, whatever state.doubt_reviewer says.
+    tasks = [{"id": "1", "attempts": [{"implementor": "codex"}]}]
+    state_path = _state(tmp_path, tasks=tasks, doubt_reviewer="codex")
+
+    assert main(_stage_argv(tmp_path, "--state", str(state_path))) == 0
+
+    assert staged["kwargs"]["roster"] == ["alice", "bob", "carl", "blake", "eve"]
+
+
+def test_review_stage_roster_flag_overrides_the_state_roster(
+    tmp_path: Path, staged: dict
+) -> None:
+    state_path = _state(tmp_path)
+
+    code = main(_stage_argv(tmp_path, "--state", str(state_path), "--roster", "blake"))
+
+    assert code == 0
+    assert staged["kwargs"]["roster"] == ["blake"]
+
+
+@pytest.mark.parametrize("flag", ["--tasks-json", "--prd", "--design-doc"])
+def test_review_stage_refuses_standalone_inputs_beside_state(
+    tmp_path: Path, staged: dict, flag: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    state_path = _state(tmp_path)
+
+    code = main(_stage_argv(tmp_path, "--state", str(state_path), flag, "x"))
+
+    assert code == 1
+    assert "args" not in staged
+    assert flag in capsys.readouterr().err
+
+
 def test_review_stage_standalone_reads_flags_and_skips_state(
     tmp_path: Path, staged: dict
 ) -> None:

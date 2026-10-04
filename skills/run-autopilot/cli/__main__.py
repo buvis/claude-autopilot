@@ -64,6 +64,20 @@ Subcommands:
         gate.run_gate() — the review-file shape gate (PRD 00107). Takes no
         --state and keeps the gate's own exit contract (0 pass / 1 shape gap
         / 2 constraint UNMET, see cli/gate.py), NOT the state-CLI codes below.
+    review-stage --cycle-id --gate-command [--state] [--since] [--repo-root]
+                 [--replay-cmd] [--roster] [--tasks-json --prd [--design-doc]]
+        review_stage.stage() (PRD 00249): stages one review cycle's input
+        files and prints its summary as one JSON line. With --state, tasks,
+        the wip PRD, design_doc and the persona roster (from review_lenses
+        and the resolved doubt_reviewer; --roster overrides) come from the
+        state; without it, --tasks-json, --prd and --roster are required.
+        A gather-context.sh refusal exits with that script's own code.
+    review-close --review-file --state --batch-id {decision-gate,tail-sweep}
+                 --findings [--default-tier]
+        review_close.close() (PRD 00249) over the --findings JSON array;
+        prints its result as one JSON line. Exit 1 when close() refuses
+        (gate failure, unreadable review file, batch already applied), 2 on
+        an unreadable or malformed findings file or a failed state write.
     render    {audit|report|metrics} --state [--stdout] [--now ISO]
               [--summary] [--stalled --site --detail] [--metrics PATH]
         The deterministic render surfaces (PRD 00107): `audit` writes
@@ -193,6 +207,8 @@ from cli import (
     render_metrics,
     render_report,
     resume,
+    review_close,
+    review_stage,
     rework_groups,
     schema,
     selection,
@@ -821,6 +837,221 @@ def _run_group_rework(args: argparse.Namespace) -> int:
     return 0
 
 
+# Lens -> persona names, in roster order. `doubt` is Bob unless the resolved
+# doubt reviewer is fable (then Eve); `ui` is the key review_close stamps
+# for Carl.
+_LENS_PERSONAS = {
+    "consensus": ("alice", "bob", "carl"),
+    "blind": ("blake",),
+    "doubt": ("bob",),
+    "fable": ("eve",),
+    "ui": ("carl",),
+}
+_DEFAULT_LENSES = ("consensus", "blind", "doubt")
+_STANDALONE_ONLY = ("tasks_json", "prd", "design_doc")
+
+
+def _doubt_is_fable(data: dict) -> bool:
+    """state.doubt_reviewer, after review-work-completion's codex doubt-roster
+    guard: a codex-implemented task attempt forces fable, in memory only."""
+    if data.get("doubt_reviewer") == "fable":
+        return True
+    return any(
+        isinstance(attempt, dict) and attempt.get("implementor") == "codex"
+        for task in data.get("tasks") or []
+        if isinstance(task, dict)
+        for attempt in task.get("attempts") or []
+    )
+
+
+def _roster_from_state(data: dict) -> list[str]:
+    fable = _doubt_is_fable(data)
+    lenses = data.get("review_lenses")
+    if isinstance(lenses, dict) and lenses:
+        active = set(lenses)
+    else:
+        active = {*_DEFAULT_LENSES, *(["fable"] if fable else [])}
+    for unknown in sorted(active - set(_LENS_PERSONAS)):
+        print(f"autopilot: review-stage: unknown lens {unknown!r} skipped", file=sys.stderr)
+    roster: list[str] = []
+    for lens, personas in _LENS_PERSONAS.items():
+        if lens in active:
+            roster.extend(("eve",) if lens == "doubt" and fable else personas)
+    return list(dict.fromkeys(roster))
+
+
+def _split_roster(raw: str) -> list[str]:
+    return list(dict.fromkeys(n.strip() for n in raw.split(",") if n.strip()))
+
+
+def _load_json_file(verb: str, path: Path) -> tuple[bool, object]:
+    """(ok, value); a read or parse failure is printed, never raised."""
+    try:
+        return True, json.loads(path.read_text(encoding="utf-8"))
+    except OSError as err:
+        print(f"autopilot: {verb}: cannot read {path} ({err})", file=sys.stderr)
+    except ValueError as err:
+        print(f"autopilot: {verb}: cannot parse {path} ({err})", file=sys.stderr)
+    return False, None
+
+
+def _add_review_stage(subparsers) -> None:
+    p = subparsers.add_parser("review-stage")
+    p.add_argument("--cycle-id", required=True)
+    p.add_argument("--state", type=Path)
+    p.add_argument("--since")
+    p.add_argument("--repo-root", type=Path)
+    p.add_argument("--gate-command", required=True)
+    p.add_argument("--replay-cmd")
+    p.add_argument("--tasks-json", type=Path)
+    p.add_argument("--prd", type=Path)
+    p.add_argument("--design-doc", type=Path)
+    p.add_argument("--roster")
+
+
+def _stage_inputs_from_state(args: argparse.Namespace, repo_root: Path) -> dict | int:
+    mixed = [f"--{n.replace('_', '-')}" for n in _STANDALONE_ONLY if getattr(args, n)]
+    if mixed:
+        print(
+            f"autopilot: review-stage: {', '.join(mixed)} is standalone-only;"
+            " --state supplies it",
+            file=sys.stderr,
+        )
+        return 1
+    refuse = _schema_version_preflight(args.state)
+    if refuse is not None:
+        return refuse
+    loaded = _load_state_or_exit(args.state)
+    if isinstance(loaded, int):
+        return loaded
+    prd, tasks = loaded.get("prd"), loaded.get("tasks", [])
+    if not isinstance(prd, str) or not prd or not isinstance(tasks, list):
+        print(
+            f"autopilot: review-stage: {args.state} has no `prd` or a non-list `tasks`",
+            file=sys.stderr,
+        )
+        return 2
+    design = loaded.get("design_doc")
+    return {
+        "tasks": tasks,
+        "prd_path": Path(_resolve_prds_path(None, args.state.parent)) / "wip" / prd,
+        "design_doc": repo_root / design if design else None,
+        "roster": _split_roster(args.roster) if args.roster else _roster_from_state(loaded),
+    }
+
+
+def _stage_inputs_standalone(args: argparse.Namespace) -> dict | int:
+    missing = [
+        flag
+        for flag, value in (
+            ("--tasks-json", args.tasks_json),
+            ("--prd", args.prd),
+            ("--roster", args.roster),
+        )
+        if not value
+    ]
+    if missing:
+        print(
+            f"autopilot: review-stage: without --state, {', '.join(missing)} is required",
+            file=sys.stderr,
+        )
+        return 1
+    ok, tasks = _load_json_file("review-stage", args.tasks_json)
+    if not ok:
+        return 2
+    if not isinstance(tasks, list) or not all(isinstance(t, dict) for t in tasks):
+        print(
+            f"autopilot: review-stage: {args.tasks_json} is not a JSON array of objects",
+            file=sys.stderr,
+        )
+        return 2
+    return {
+        "tasks": tasks,
+        "prd_path": args.prd,
+        "design_doc": args.design_doc,
+        "roster": _split_roster(args.roster),
+    }
+
+
+def _run_review_stage(args: argparse.Namespace) -> int:
+    repo_root = args.repo_root if args.repo_root is not None else Path.cwd()
+    if args.state is not None:
+        inputs = _stage_inputs_from_state(args, repo_root)
+    else:
+        inputs = _stage_inputs_standalone(args)
+    if isinstance(inputs, int):
+        return inputs
+    try:
+        result = review_stage.stage(
+            cycle_id=args.cycle_id,
+            repo_root=repo_root,
+            gate_command=args.gate_command,
+            replay_cmd=args.replay_cmd,
+            since=args.since,
+            state_path=args.state,
+            **inputs,
+        )
+    except ValueError as err:
+        print(f"autopilot: review-stage: {err}", file=sys.stderr)
+        return 1
+    except OSError as err:
+        print(f"autopilot: review-stage: {err}", file=sys.stderr)
+        return 2
+    print(json.dumps(result))
+    if result.get("ok", True):
+        return 0
+    print(f"autopilot: review-stage: {result.get('error')}", file=sys.stderr)
+    return int(result.get("exit") or 1)
+
+
+def _add_review_close(subparsers) -> None:
+    p = subparsers.add_parser("review-close")
+    p.add_argument("--review-file", type=Path, required=True)
+    p.add_argument("--state", type=Path, required=True)
+    p.add_argument("--batch-id", required=True, choices=["decision-gate", "tail-sweep"])
+    p.add_argument("--findings", type=Path, required=True)
+    p.add_argument("--default-tier", default="sonnet")
+
+
+def _is_chosen_finding(item: object) -> bool:
+    """A dict with a string classification; fix/defer rows also carry the
+    string severity, file and issue close() reads from them."""
+    if not isinstance(item, dict) or not isinstance(item.get("classification"), str):
+        return False
+    if item["classification"] not in ("fix", "defer"):
+        return True
+    return all(isinstance(item.get(k), str) for k in ("severity", "file", "issue"))
+
+
+def _run_review_close(args: argparse.Namespace) -> int:
+    ok, findings = _load_json_file("review-close", args.findings)
+    if not ok:
+        return 2
+    if not isinstance(findings, list) or not all(map(_is_chosen_finding, findings)):
+        print(
+            f"autopilot: review-close: {args.findings} is not a JSON array of"
+            " findings with a string `classification` (and `severity`, `file`,"
+            " `issue` on fix/defer rows)",
+            file=sys.stderr,
+        )
+        return 2
+    refuse = _schema_version_preflight(args.state)
+    if refuse is not None:
+        return refuse
+    try:
+        result = review_close.close(
+            args.review_file, args.state, args.batch_id, findings, args.default_tier
+        )
+    except (state.StateError, schema.SchemaError, statectl.UsageError, OSError) as err:
+        print(f"autopilot: review-close: state write failed: {err}", file=sys.stderr)
+        return 2
+    print(json.dumps(result, ensure_ascii=False))
+    if result.get("applied"):
+        return 0
+    print(f"autopilot: review-close: {result.get('reason')}", file=sys.stderr)
+    return 1
+
+
 def _utc_now() -> str:
     from datetime import datetime, timezone
 
@@ -1316,6 +1547,8 @@ _SUBCOMMANDS: dict[str, tuple] = {
     "resume-target": (_add_resume_target, _run_resume_target),
     "gate": (_add_gate, _run_gate),
     "group-rework": (_add_group_rework, _run_group_rework),
+    "review-stage": (_add_review_stage, _run_review_stage),
+    "review-close": (_add_review_close, _run_review_close),
     "render": (_add_render, _run_render),
     "status": (_add_status, _run_status),
     "loop": (_add_loop, _run_loop_cmd),
