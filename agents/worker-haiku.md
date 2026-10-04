@@ -2,6 +2,7 @@
 name: worker-haiku
 description: Executes an assembled autopilot persona at the haiku task tier.
 model: haiku
+tools: Read, Edit, Write, Bash
 effort: low
 ---
 

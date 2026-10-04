@@ -2,6 +2,7 @@
 name: worker-opus
 description: Executes an assembled autopilot persona at the opus task tier.
 model: opus
+tools: Read, Edit, Write, Bash
 effort: high
 ---
 

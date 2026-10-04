@@ -2,6 +2,7 @@
 name: worker-sonnet
 description: Executes an assembled autopilot persona at the sonnet task tier.
 model: sonnet
+tools: Read, Edit, Write, Bash
 effort: medium
 ---
 

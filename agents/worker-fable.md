@@ -2,6 +2,7 @@
 name: worker-fable
 description: Executes an assembled autopilot persona at the fable task tier.
 model: fable
+tools: Read, Edit, Write, Bash
 effort: xhigh
 ---
 
