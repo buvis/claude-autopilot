@@ -249,6 +249,9 @@ def _exempt_types() -> list[str]:
     # is checked against the copy instead of against production.
     types = sorted(_guard_module()._READ_ONLY_REVIEWERS)
     assert types, "the guard's exemption set is empty"
+    # Namespaced only: a bare entry would exempt any agent of that name, which
+    # is the widening this exemption set was corrected for.
+    assert all(t.startswith("autopilot:") for t in types), types
     return types
 
 
