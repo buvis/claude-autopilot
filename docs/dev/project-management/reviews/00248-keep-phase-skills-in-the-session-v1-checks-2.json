@@ -1,0 +1,28 @@
+[
+  {
+    "cycle": 2,
+    "finding": "Runtime acceptance at reviewed HEAD - hook/runner suites and release-checks must both be green; last-verification records a different SHA",
+    "file": null,
+    "command": "uv run --no-project --with pytest python -m pytest -q hooks/test_guard_phase_delegation.py skills/run-autopilot/cli/test_runner.py",
+    "source": "bob",
+    "result": {
+      "exit": 0,
+      "counts": "245 passed, 2 warnings",
+      "sha": "8c0ad1af33f82d7f5524f9d9f34f3a2fe5f97f12",
+      "ran_by": "review orchestrator (cap-out cycle has no rework pass)"
+    }
+  },
+  {
+    "cycle": 2,
+    "finding": "Runtime acceptance at reviewed HEAD - the PRD's release-checks success metric",
+    "file": null,
+    "command": "bash dev/bin/release-checks",
+    "source": "bob",
+    "result": {
+      "exit": 0,
+      "counts": "all [checks] blocks green",
+      "sha": "8c0ad1af33f82d7f5524f9d9f34f3a2fe5f97f12",
+      "ran_by": "review orchestrator (cap-out cycle has no rework pass)"
+    }
+  }
+]
