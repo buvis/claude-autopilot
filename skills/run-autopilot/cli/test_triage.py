@@ -102,6 +102,18 @@ def test_severity_is_matched_case_insensitively(tree) -> None:
     assert len(triage.mint_stubs(autopilot, prds, BATCH)["minted"]) == 2
 
 
+def test_emoji_high_row_qualifies(tree) -> None:
+    autopilot, prds = tree
+    _ledger(autopilot, [_row(severity="\U0001f7e0", issue="an emoji high one")])
+    assert len(triage.mint_stubs(autopilot, prds, BATCH)["minted"]) == 1
+
+
+def test_emoji_critical_row_qualifies(tree) -> None:
+    autopilot, prds = tree
+    _ledger(autopilot, [_row(severity="\U0001f534", issue="an emoji critical one")])
+    assert len(triage.mint_stubs(autopilot, prds, BATCH)["minted"]) == 1
+
+
 @pytest.mark.parametrize(
     "row",
     [
