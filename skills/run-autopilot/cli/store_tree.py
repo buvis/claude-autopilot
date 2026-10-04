@@ -21,10 +21,6 @@ from pathlib import Path
 STORE_SUBDIR = "docs/dev/project-management"
 STORE_PREFIXES = (f"{STORE_SUBDIR}/", "docs/dev/tmp/")
 STORE_PATHSPEC = f":(top){STORE_SUBDIR}"
-# Derived, so a store root added above needs no second edit here.
-STORE_EXCLUDE_PATHSPECS = tuple(
-    ":(exclude)" + prefix.removesuffix("/") for prefix in STORE_PREFIXES
-)
 GIT_TIMEOUT_SECS = 30
 
 STORE_GITIGNORE = """\

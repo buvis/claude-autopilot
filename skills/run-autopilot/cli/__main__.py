@@ -647,7 +647,10 @@ def _add_lane_check(subparsers) -> None:
 
 
 def _run_lane_check(args: argparse.Namespace) -> int:
-    state_path = _resolve_state_path(args.state)
+    # Resolve to absolute: a cwd-relative `--state state.json` otherwise has
+    # too few `.parents` entries below for the `state_path.parents[1]` store
+    # lookup, raising IndexError instead of exiting cleanly.
+    state_path = _resolve_state_path(args.state).resolve()
     try:
         refuse = _schema_version_preflight(state_path)
         if refuse is not None:

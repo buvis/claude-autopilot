@@ -64,26 +64,6 @@ def _record_store_argv(state_path: Path) -> list[str]:
     ]
 
 
-# -- the exclude pathspecs ----------------------------------------------------
-
-
-def test_every_store_prefix_has_its_own_exclude_pathspec() -> None:
-    derived = tuple(
-        ":(exclude)" + prefix.removesuffix("/") for prefix in store_tree.STORE_PREFIXES
-    )
-
-    # One entry per store prefix, in the same order, each the prefix without
-    # its trailing slash. Whether the module derives that tuple or spells it
-    # out is not observable from here; this enforces only that the two agree,
-    # so a store root added to STORE_PREFIXES cannot be left unexcluded.
-    assert derived == store_tree.STORE_EXCLUDE_PATHSPECS
-    # Today's two roots, spelled out once so the derivation above is readable.
-    assert derived == (
-        ":(exclude)docs/dev/project-management",
-        ":(exclude)docs/dev/tmp",
-    )
-
-
 # -- the wave-lane predicate --------------------------------------------------
 
 

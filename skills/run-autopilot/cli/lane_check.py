@@ -59,7 +59,7 @@ def diff_signal(
     span = f"{work_start_sha}..HEAD"
     # The store is never routing evidence: excluding it in the pathspec keeps
     # it out of the changed list AND out of the diff text the scan reads.
-    # The prefix is resolved fresh (never the static STORE_EXCLUDE_PATHSPECS)
+    # The prefix is resolved fresh (never a static, flat-layout-only pathspec)
     # so a bare-repo-backed store below git's work-tree root is still found.
     prefix = store_tree._store_prefix(Path(repo_root), store_dir)
     skip_store = [
