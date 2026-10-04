@@ -243,14 +243,18 @@ def test_comma_boundary_hides_leading_negation() -> None:
     assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
 
 
-_READ_ONLY_REVIEWER_NAMES = (
-    "alice", "blake", "bob", "carl", "cora", "eve", "grace", "mallory",
-    "pat", "rita", "toby", "trent", "victor",
-)
+def _exempt_types() -> list[str]:
+    # Derived from the guard's own frozenset, never a hand-copied list: a
+    # persona added there must reach these tests, or the safety invariant below
+    # is checked against the copy instead of against production.
+    types = sorted(_guard_module()._READ_ONLY_REVIEWERS)
+    assert types, "the guard's exemption set is empty"
+    return types
 
 
-def test_reviewer_dispatch_quoting_the_guard_is_allowed() -> None:
-    tool_input = {"subagent_type": "autopilot:blake", "prompt": "run the work phase"}
+@pytest.mark.parametrize("subagent_type", _exempt_types())
+def test_reviewer_dispatch_quoting_the_guard_is_allowed(subagent_type: str) -> None:
+    tool_input = {"subagent_type": subagent_type, "prompt": "run the work phase"}
     assert _guard_module().is_phase_delegation(tool_input) is False
 
 
@@ -283,7 +287,8 @@ def test_every_exempt_reviewer_lacks_the_skill_tool() -> None:
     # exploited to delegate: none of the 13 personas can themselves invoke
     # the Skill tool (its persona file never grants it).
     agents_dir = HOOKS.parent / "agents"
-    for name in _READ_ONLY_REVIEWER_NAMES:
+    for subagent_type in _exempt_types():
+        name = subagent_type.removeprefix("autopilot:")
         text = (agents_dir / f"{name}.md").read_text(encoding="utf-8")
         assert text.startswith("---\n"), name
         end = text.index("\n---", 4)
