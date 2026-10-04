@@ -69,3 +69,18 @@
 - (Tess) A filename containing a space appears unquoted in `git show --name-only`, which held when run.
 - (Ivan) The `-z` queries need no `core.quotePath` handling, because `-z` output is unquoted.
 - (Ivan) Placed `_delete_lane_branch` directly above `_drain_lane` and `_pending_hold_names` directly above `_hold_backlog`.
+
+## 1: Write hooks/guard_phase_delegation.py with is_phase_delegation and fixtures (00248)
+
+- (Tess, initial) Denied fixture format: line 1 is the Agent `description`, the remainder is the `prompt` - the task did not specify a fixture format.
+- (Tess, initial) Allowed fixtures, and every corpus file, are passed as `tool_input["prompt"]` with description "".
+- (Tess, initial) The corpus test calls `is_phase_delegation` in-process rather than running the hook as a subprocess, for speed.
+- (Tess, initial) The test module is not run as `__main__`, so `guard_phase_delegation.py` must be importable without side effects (`main()` guarded by `if __name__ == "__main__"`).
+- (Tess, initial) Fail-open cases assert the exact stderr strings given in the contract's `main()`; a JSON array at stdin counts as an empty/unparseable payload.
+- (Tess, strengthen) A realistic Agent `description` is the stem-derived label "<Role> <n> <suffix> subagent" - the contract does not specify description shapes.
+- (Tess, strengthen) `{}`, `{"prompt": None}` and both-None must give empty stderr, per the contract's predicate-returns-False / main-prints-only-on-raise semantics.
+- (Tess, strengthen) For a non-string prompt beside a string description the contract does not pin the predicate's result, so either a silent allow or the "predicate raised, allowing" line is accepted.
+- (Tess, strengthen) Skipping corpus files that mention `guard_phase_delegation` (rather than a fixed name list) is the right reading of "this PRD's own dispatch prompts are self-referential".
+- (Ivan) A non-dict `tool_input` passed straight to `is_phase_delegation` returns False, per the contract docstring.
+- (Ivan) A non-string prompt beside a string description gets coerced into the joined text by the f-string rather than ignored; the predicate does not raise, so the hook allows with empty stderr.
+- (Orchestrator, autonomous decision) Widened the design contract's `_IMPERATIVE` regex to also match present-participle forms (executing/running/invoking/following/continuing/resuming): Tess recovered the real 2026-10-03 00242 transcript and found the verbatim base-form-only regex misses 2 of the 4 real denied delegations ("You are executing the `autopilot:design-solution` skill"). Logged to `state.json` `autonomous_decisions`.
