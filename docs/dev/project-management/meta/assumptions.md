@@ -99,3 +99,7 @@
 - (Tess) PreToolUse entry order in hooks.json is not checked, only that the set of matchers is preserved and none is lost.
 - (Tess, strengthen after Devon) Reworked the gate-prose check to operate on real (non-flattened) paragraphs so a gate/anchor hidden in an HTML comment, heading, or code fence - or split across a blank line - cannot pass; added neighbour-paragraph and section-boundary checks so a sentence can't be relocated elsewhere in the file; added a banned-phrase check so prose that contradicts the gate (e.g. "may be ignored") cannot pass.
 - (Ivan) None reported.
+
+## 7: Merge the duplicated gate sentences in phase-build.md Phase 2 and Phase 3 (00248)
+
+- (review cycle 1, low finding) `skills/work/SKILL.md`'s STOP-line addition deliberately differs from the PRD's example sentence ("In loop mode a hook enforces this (`hooks/guard_phase_delegation.py`).") - it is expanded with a disclaimer scoping the claim to what the hook actually checks (it does not enforce the general one-task-per-dispatch rule; the STOP paragraph still governs that by prose alone). The design doc's dispatch-2 non-blocker made this change deliberately. Left unchanged per the rework task's own instruction to record, not churn it.

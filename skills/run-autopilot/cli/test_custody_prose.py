@@ -166,7 +166,7 @@ def test_phase_3_records_git_dir_for_the_bare_repo_case() -> None:
         _BUILD_TEXT,
         _PHASE_BUILD,
         "**Capture `repo_root` in the same step.**",
-        "Invoke `/autopilot:work` skill.",
+        "Invoke `/autopilot:work` with the Skill tool in this session",
     )
     where = "the Phase 3 `repo_root` capture step"
 

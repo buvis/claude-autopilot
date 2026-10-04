@@ -335,41 +335,36 @@ _BANNED_NEAR_GATE = ("ignore", "advisory", "may be ignored", "dispatch an agent 
 
 
 def test_gate_prose_names_the_guard_in_phase_build() -> None:
+    # Each gate states the selected-PRD/runs-until-done fact and the
+    # Skill-tool rule ONCE, in one merged sentence pair - not the old
+    # duplicated-imperative shape ("Invoke X with the Skill tool...Invoke X
+    # with the selected PRD.").
     build_md = PLUGIN / "skills" / "run-autopilot" / "references" / "phase-build.md"
     paras = _paragraphs(build_md)
-    plan_anchor = "Invoke `/autopilot:plan-tasks` with the selected PRD."
-    plan_gate = (
-        "Invoke `/autopilot:plan-tasks` with the Skill tool in this session; never"
-        " delegate planning to an Agent."
+    plan_para = (
+        "Invoke `/autopilot:plan-tasks` with the selected PRD, using the Skill"
+        " tool in this session; never delegate planning to an Agent."
     )
     plan_next = "**PAUSE site - requirements clarification.**"
-    work_anchor = "Invoke `/autopilot:work` skill."
-    work_gate = (
+    work_para = (
         "Invoke `/autopilot:work` with the Skill tool in this session; never"
-        " delegate work execution to an Agent."
+        " delegate work execution to an Agent. It runs until all tasks complete."
     )
     work_next = "While `/autopilot:work` runs"
-    for gate, anchor, next_text in (
-        (plan_gate, plan_anchor, plan_next),
-        (work_gate, work_anchor, work_next),
-    ):
-        # The gate and its anchor must sit in ONE paragraph together (not a
-        # comment, a heading, or split across a blank line), and that
-        # paragraph's own neighbourhood must be unchanged from HEAD, so
-        # neither sentence can be relocated elsewhere in the file.
-        matches = [p for p in paras if gate in p and anchor in p]
-        assert len(matches) == 1, (gate, anchor)
-        para = matches[0]
-        assert para.startswith(f"{gate} {anchor}")
+    for para, next_text in ((plan_para, plan_next), (work_para, work_next)):
+        matches = [p for p in paras if p == para]
+        assert len(matches) == 1, para
+        assert sum(1 for p in paras if para in p) == 1
         for banned in _BANNED_NEAR_GATE:
             assert banned not in para.lower(), (banned, para)
         idx = paras.index(para)
         assert next_text in paras[idx + 1], (next_text, paras[idx + 1])
-    assert sum(1 for p in paras if plan_gate in p) == 1
-    assert sum(1 for p in paras if work_gate in p) == 1
+        # Each sentence's imperative appears exactly once in the paragraph,
+        # not twice (the duplication this test was written to catch).
+        assert para.count("Invoke `/autopilot:") == 1, para
     text = build_md.read_text(encoding="utf-8")
-    assert text.index("## Phase 2: Planning") < text.index(plan_gate)
-    assert text.index(plan_gate) < text.index("## Phase 3: Work")
+    assert text.index("## Phase 2: Planning") < text.index(plan_para)
+    assert text.index(plan_para) < text.index("## Phase 3: Work")
 
 
 def test_gate_prose_names_the_guard_in_work_skill() -> None:
