@@ -212,6 +212,30 @@ def test_negated_first_match_then_real_delegation_is_still_denied() -> None:
     assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
 
 
+def test_negation_before_a_comma_does_not_hide_delegation() -> None:
+    # A comma separates the negation "Never stop" from the delegation "run
+    # the work phase" - the comma is a boundary, so the negation must not
+    # suppress the match.
+    prompt = "Never stop, run the work phase for PRD 7."
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
+
+
+def test_negation_in_an_earlier_clause_does_not_hide_delegation() -> None:
+    # The negation "not now" is in an earlier sentence, separated by both a
+    # semicolon and a period from the delegation - it must not suppress the
+    # match.
+    prompt = "OK; not now. Run the work phase for PRD 7."
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
+
+
+def test_direct_negation_still_allows() -> None:
+    # The negation "Do not" is in the SAME clause immediately before the
+    # delegation phrase, with no boundary between them - this must still
+    # suppress the match.
+    prompt = "Do not run the work phase."
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is False
+
+
 @pytest.mark.parametrize("subagent_type", ["Explore", "Plan", None], ids=["explore", "plan", "omitted"])
 def test_delegations_are_denied_whatever_the_subagent_type(subagent_type: str | None) -> None:
     for fixture in _denied():
