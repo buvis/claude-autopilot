@@ -50,6 +50,16 @@ _NEGATION = (
 _NEGATION_RE = re.compile(_NEGATION, re.IGNORECASE)
 _SENTENCE_BOUNDARY_RE = re.compile(r"[.;,\n]")
 
+# Read-only reviewer personas: none of their persona files grant the Skill
+# tool (test_every_exempt_reviewer_lacks_the_skill_tool), so exempting them
+# from the delegation check cannot be exploited to delegate a phase skill.
+_EXEMPT_REVIEWERS = frozenset(
+    {
+        "alice", "blake", "bob", "carl", "cora", "eve", "grace", "mallory",
+        "pat", "rita", "toby", "trent", "victor",
+    }
+)
+
 # Tight (immediate-adjacency) phase-jargon pattern, forward direction only:
 # "run the work phase" / "run work phase" matches; "run by the work phase"
 # and "run at this exact HEAD by the work phase" do not, because nothing
@@ -100,6 +110,9 @@ def is_phase_delegation(tool_input: dict) -> bool:
     neither key present as a non-empty string, returns False (fail open).
     """
     if not isinstance(tool_input, dict):
+        return False
+    subagent_type = tool_input.get("subagent_type")
+    if isinstance(subagent_type, str) and subagent_type.removeprefix("autopilot:") in _EXEMPT_REVIEWERS:
         return False
     prompt = tool_input.get("prompt")
     description = tool_input.get("description")
