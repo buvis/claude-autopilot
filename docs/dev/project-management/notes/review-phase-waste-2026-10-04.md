@@ -103,6 +103,22 @@ and the fanout row closed `error` at 964 s. Identical durations suggest the
 rows close at the barrier, not when each lens finished, so the telemetry
 cannot show which lens is slow. Worth checking before any fast-track tuning.
 
+### V7. Closing a stub by deleting it re-mints it (fixed by hand)
+
+Deleting hold stub 00245 as "fixed" made the 00244 finalize re-mint the same
+ledger key as 00251 an hour later: `cli/triage.py` treats a key as owned only
+while some PRD quotes it in its first 20 lines. Closed properly by moving
+00251 to `done/` with a resolution note. A `close` verb that writes the
+done/ record would remove the trap.
+
+### V8. 00248's planning session used its whole headroom before work (0.8.0, open)
+
+The 14:04 session ran catchup, design and planning for 00248 and hit the
+gate-edge headroom check at 146,511 tokens remaining (threshold 150,000), so
+it handed off before task 1 at 14:28. The cause of the ~350K-token
+consumption is not yet measured (likely the design step's adversarial
+review). Check the transcript before tuning.
+
 ## Not waste (kept)
 
 - The four-lens roster, two cycles, and the cap: standing rule, and cycle 2
