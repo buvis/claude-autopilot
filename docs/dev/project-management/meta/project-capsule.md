@@ -49,8 +49,10 @@ Generated: 2026-09-14
 - [x] 00241-bound-rework-batches-by-file-v1 (2 cycles)
 - [x] 00242-harden-the-wave-verbs-v1 (2 cycles)
 - [x] 00243-make-the-headroom-wall-scan-match-its-contract-v1 (1 cycle)
-- [ ] 00244-tidy-the-enter-verb-and-the-review-diff-plumbing-v1
+- [x] 00244-tidy-the-enter-verb-and-the-review-diff-plumbing-v1 (1 cycle)
 - [ ] 00248-keep-phase-skills-in-the-session-v1
+- [ ] 00249-stage-and-close-reviews-in-code-v1
+- [ ] 00250-finish-the-rework-grouping-fixes-v1
 
 Observations: 00240 was a clean single-PRD cycle, no deferred decisions or
 doubts, full suite green at merge (2150 passed). 00241 cap-out at cycle 2
@@ -75,7 +77,17 @@ phase; `mint-stubs` minted nothing (all 28 open ledger rows medium/low). 00243 r
 the fast-track lane (card-sized, single task): tests + fix via Tess/Ivan, a
 5-lane review (Alice fallback after a rejected Workflow scriptPath, Blake,
 Eve, Bob/codex, Carl/Gemini) found only MEDIUM/LOW, converged cycle 1,
-`exit-action=commit`. No deferrals, no doubts.
+`exit-action=commit`. No deferrals, no doubts. 00244 converged at cycle 1
+(9/9 tasks) with 15 autonomous decisions, all swept via one tail-sweep task
+[D1] rather than per-finding tasks; a concurrent unrelated session committed
+mid-run (1fda3dc) introducing one pre-existing release-checks failure
+(`test_agent_registry.py::test_registry_holds_no_malformed_agents`, confirmed
+unrelated to this PRD's own diff, out of scope here). Two settled deferrals
+(`__main__.py` over the 800-line ceiling, pre-existing per PRDs 00223/00236/
+00241) migrated to the batch deferred JSON; `mint-stubs` minted one new hold
+stub, `00251-triage-the-store-gitignore-recursive-lock-patte-v1`, for an
+unowned severe row elsewhere in the batch ledger (29 other rows skipped as
+already owned or medium/low).
 
 ### Batch 202610021244
 - [x] 00236-track-the-store-without-tripping-the-loop-v1 (2 cycles)

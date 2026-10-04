@@ -276,6 +276,24 @@
       "action": "deferred to batch end",
       "reason": "Adding a run_git parameter changes seed_state signature for testability neither the PRD nor the design doc asks for; operator call. Recorded via autopilot defer into 202610031511-deferred.json and the ledger.",
       "prd": "00242-harden-the-wave-verbs-v1.md"
+    },
+    {
+      "type": "deferred_decision",
+      "cycle": 1,
+      "issue": "__main__.py is 1344 lines, over the 800-line limit, and this diff adds 4 more at the diff_signal call site",
+      "severity": "low",
+      "action": "deferred - settled pre-existing deferral",
+      "reason": "Pre-existing and already settled by PRDs 00223, 00236 and 00241; the only line this PRD adds there is the PRD-mandated diff_signal call-site argument. Splitting the CLI dispatcher is a separate PRD, not this PRD's narrow plumbing scope. Drives R13: fail for Alice and Bob; not a regression.",
+      "prd": "00244-tidy-the-enter-verb-and-the-review-diff-plumbing-v1.md"
+    },
+    {
+      "type": "deferred_decision",
+      "cycle": 1,
+      "issue": "KNOWN: __main__.py exceeds the 800-line ceiling. This predates the change; splitting the CLI dispatcher is outside this PRD's narrowly scoped plumbing fixes.",
+      "severity": "low",
+      "action": "deferred - settled pre-existing deferral",
+      "reason": "Bob's wording of the same settled deferral as the row above; recorded separately so the ledger matcher can dismiss either phrasing next cycle.",
+      "prd": "00244-tidy-the-enter-verb-and-the-review-diff-plumbing-v1.md"
     }
   ]
 }
