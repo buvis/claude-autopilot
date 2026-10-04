@@ -98,23 +98,11 @@ def _gate_refusal(review_file: Path, text: str | None, reviewer_csv: str | None)
     return gate.check(text, reviewers) or "review gate failed"
 
 
-def close(
-    review_file: Path,
-    state_path: Path,
-    batch_id: str,
-    chosen_findings: list[dict],
-    default_tier: str = "sonnet",
-    require_codex_guard: bool = False,
-) -> dict:
-    """Apply one classified review batch to `state_path`, at most once.
-
-    Returns {"applied": True, "tasks_created", "rework_task_ids" (the state's
-    whole list after the write), "lenses_closed"}, or {"applied": False,
-    "reason"} when the review file fails the shape gate, cannot be read, or
-    this batch was already applied.
-    """
-    review_file = Path(review_file)
-    state_path = Path(state_path)
+def _gate_review(
+    review_file: Path, require_codex_guard: bool
+) -> tuple[str | None, str | None]:
+    """Read and shape-gate `review_file`. Returns (text, None) when it may be
+    applied, or (text-or-None, refusal reason) when close() must refuse."""
     try:
         text: str | None = review_file.read_text(encoding="utf-8")
     except OSError:
@@ -127,21 +115,22 @@ def close(
     # run_gate fails open (0) on an unreadable file; close() cannot, since it
     # has nothing to apply.
     if rc != 0 or text is None:
-        return {"applied": False, "reason": _gate_refusal(review_file, text, reviewer_csv)}
+        return text, _gate_refusal(review_file, text, reviewer_csv)
+    return text, None
 
-    identity = f"{review_file.resolve()}::{batch_id}"
-    frontmatter = _frontmatter_lines(text)
-    verdicts = [
-        {"rule_id": rule, "verdict": verdict} for rule, verdict in _DOUBT_RE.findall(text)
-    ]
-    lenses = {
-        _PERSONA_LENS.get(name, name): "done" if status == "available" else "failed"
-        for name, status in _nested_pairs(frontmatter, "agents").items()
-    }
-    fixes = [f for f in chosen_findings if f["classification"] == "fix"]
-    defers = [f for f in chosen_findings if f["classification"] == "defer"]
-    prefix = "Tail sweep: " if batch_id == "tail-sweep" else ""
-    outcome: dict[str, Any] = {}
+
+def _close_mutator(
+    identity: str,
+    fixes: list[dict],
+    defers: list[dict],
+    prefix: str,
+    default_tier: str,
+    batch_id: str,
+    verdicts: list[dict],
+    lenses: dict[str, str],
+    outcome: dict[str, Any],
+):
+    """The `statectl.mutate()` callback that applies one classified batch."""
 
     def _apply(state: dict) -> dict:
         if identity in state.get("applied_review_batches", []):
@@ -186,7 +175,50 @@ def close(
         outcome["rework_task_ids"] = list(state.get("rework_task_ids", []))
         return state
 
-    statectl.mutate(state_path, _apply)
+    return _apply
+
+
+def close(
+    review_file: Path,
+    state_path: Path,
+    batch_id: str,
+    chosen_findings: list[dict],
+    default_tier: str = "sonnet",
+    require_codex_guard: bool = False,
+) -> dict:
+    """Apply one classified review batch to `state_path`, at most once.
+
+    Returns {"applied": True, "tasks_created", "rework_task_ids" (the state's
+    whole list after the write), "lenses_closed"}, or {"applied": False,
+    "reason"} when the review file fails the shape gate, cannot be read, or
+    this batch was already applied.
+    """
+    review_file = Path(review_file)
+    state_path = Path(state_path)
+    text, refusal = _gate_review(review_file, require_codex_guard)
+    if refusal is not None:
+        return {"applied": False, "reason": refusal}
+
+    identity = f"{review_file.resolve()}::{batch_id}"
+    frontmatter = _frontmatter_lines(text)
+    verdicts = [
+        {"rule_id": rule, "verdict": verdict} for rule, verdict in _DOUBT_RE.findall(text)
+    ]
+    lenses = {
+        _PERSONA_LENS.get(name, name): "done" if status == "available" else "failed"
+        for name, status in _nested_pairs(frontmatter, "agents").items()
+    }
+    fixes = [f for f in chosen_findings if f["classification"] == "fix"]
+    defers = [f for f in chosen_findings if f["classification"] == "defer"]
+    prefix = "Tail sweep: " if batch_id == "tail-sweep" else ""
+    outcome: dict[str, Any] = {}
+
+    statectl.mutate(
+        state_path,
+        _close_mutator(
+            identity, fixes, defers, prefix, default_tier, batch_id, verdicts, lenses, outcome
+        ),
+    )
     if outcome.get("already"):
         return {"applied": False, "reason": "already applied"}
 

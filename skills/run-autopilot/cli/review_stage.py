@@ -652,6 +652,50 @@ def _arm(
                 summary["errors"].append(error)
 
 
+def _build_summary(
+    tasks_file: Path, prd_file: Path, context: Path, diff: Path | None, state_path: Path | None
+) -> dict:
+    """The summary dict's shape before the context/pack/gate blocks land."""
+    return {
+        "ok": True,
+        "mode": "standalone" if state_path is None else "autopilot",
+        "tasks_file": str(tasks_file),
+        "prd_file": str(prd_file),
+        "context_file": str(context),
+        "diff_file": str(diff) if diff else None,
+        "dispatch_rows": {kind: None for kind in CLI_REVIEWERS},
+        "errors": [],
+    }
+
+
+def _append_context_blocks(
+    context: Path,
+    diff: Path | None,
+    repo_root: Path,
+    base: str | None,
+    replay_cmd: str | None,
+    settled_ledger: Path | None,
+    cycle_id: str,
+    prd_path: Path,
+    gate_command: str,
+    summary: dict,
+) -> Path | None:
+    """Append the mech, ledger, pack and gate blocks to `context`. Returns
+    the pack path for the prompt-rendering step."""
+    _append_mech_blocks(context, diff, repo_root, base, replay_cmd)
+    if settled_ledger is not None:
+        block, error = _ledger_block(settled_ledger)
+        if block:
+            _append(context, block)
+        else:
+            summary["errors"].append(error)
+    pack, summary["pack"] = run_pack(repo_root, cycle_id, prd_path)
+    _append_pack(context, pack)
+    summary["gate"] = run_gate_line(repo_root, gate_command, cycle_id)
+    _append(context, f"## Test gate\n\n{summary['gate']['tests_line']}")
+    return pack
+
+
 def stage(
     cycle_id: str,
     tasks: list[dict],
@@ -681,28 +725,20 @@ def stage(
     if not gathered["ok"]:
         return gathered
     context, diff = gathered["context"], gathered["diff"]
-    summary: dict = {
-        "ok": True,
-        "mode": "standalone" if state_path is None else "autopilot",
-        "tasks_file": str(tasks_file),
-        "prd_file": str(prd_file),
-        "context_file": str(context),
-        "diff_file": str(diff) if diff else None,
-        "dispatch_rows": {kind: None for kind in CLI_REVIEWERS},
-        "errors": [],
-    }
+    summary = _build_summary(tasks_file, prd_file, context, diff, state_path)
     base = resolve_base(repo_root, since)
-    _append_mech_blocks(context, diff, repo_root, base, replay_cmd)
-    if settled_ledger is not None:
-        block, error = _ledger_block(settled_ledger)
-        if block:
-            _append(context, block)
-        else:
-            summary["errors"].append(error)
-    pack, summary["pack"] = run_pack(repo_root, cycle_id, prd_path)
-    _append_pack(context, pack)
-    summary["gate"] = run_gate_line(repo_root, gate_command, cycle_id)
-    _append(context, f"## Test gate\n\n{summary['gate']['tests_line']}")
+    pack = _append_context_blocks(
+        context,
+        diff,
+        repo_root,
+        base,
+        replay_cmd,
+        settled_ledger,
+        cycle_id,
+        prd_path,
+        gate_command,
+        summary,
+    )
     staged = {"context": context, "diff": diff, "prd": prd_file, "pack": pack}
     summary["prompts"] = _render_prompts(staged, roster, settled_ledger, prior_findings)
     if state_path is not None:
