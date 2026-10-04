@@ -75,9 +75,11 @@ fi
 # rework review) overrides the detected branch base.
 DIFF_BASE="$BASE_BRANCH"
 DIFF_SCOPE="full review (vs ${BASE_BRANCH:-unknown base})"
-if [[ -n "$SINCE_REF" ]] && git -C "$PROJECT_ROOT" rev-parse --verify "$SINCE_REF" >/dev/null 2>&1; then
+SINCE_APPLIED=""
+if [[ -n "$SINCE_REF" ]] && git -C "$PROJECT_ROOT" cat-file -e "$SINCE_REF" >/dev/null 2>&1; then
   DIFF_BASE="$SINCE_REF"
   DIFF_SCOPE="incremental review (changes since ${SINCE_REF})"
+  SINCE_APPLIED=1
 fi
 
 # Scope both diff calls to the paths listed in the review-paths marker
@@ -105,7 +107,7 @@ DIFF_CONTENT=""
 if [[ -n "$DIFF_BASE" ]]; then
   DIFF_CONTENT="$(git -C "$PROJECT_ROOT" diff "$DIFF_BASE" ${PATH_ARGS[@]+"${PATH_ARGS[@]}"} 2>/dev/null || true)"
 fi
-if [[ -z "$SINCE_REF" && -n "$DIFF_BASE" && -z "$DIFF_CONTENT" ]]; then
+if [[ -z "$SINCE_APPLIED" && -n "$DIFF_BASE" && -z "$DIFF_CONTENT" ]]; then
   echo "gather-context: empty diff against ${DIFF_BASE}; pass --since <work_start_sha> for a full review" >&2
   exit 3
 fi
