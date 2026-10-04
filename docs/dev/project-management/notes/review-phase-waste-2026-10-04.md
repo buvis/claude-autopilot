@@ -162,6 +162,11 @@ the next batch before changing the cap.
 - **Hold 00252, 00253** (minted by 00248's finalize, both confirmed at HEAD)
   → PRD 00254 (last-boundary negation trim; reviewer personas exempt), which
   deletes the two stubs.
+- **00249 cap-out (10 HIGH, 1 stub 00255)** → PRD 00256, which owns all ten
+  ledger keys in its frontmatter and must converge before 0.9.0 ships 00249.
+- **V10, found here:** nine of the ten were never stubbed because their
+  severity was written as `🟠` and `triage.qualifies` matches only words.
+  Fixed in 00256 (emoji accepted; cap-out prose says to write a word).
 - **Hold 00245** → kept until the 0.8.0 release: PRD 00240 fixed the pattern
   in source (`store_tree.py:33`, `autopilot/**/*.lock`), but the installed
   0.7.0 cache still writes `autopilot/*.lock`. Delete the stub with the
