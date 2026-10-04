@@ -1,0 +1,117 @@
+# Review-phase waste (2026-10-04, batch 202610031511 on 0.7.0)
+
+Sources: `loop-metrics.jsonl`, `dispatch-metrics.jsonl`, and per-call
+timelines of the review-session transcripts (`scratchpad/tl.py`: each tool
+call's start, duration, and the model-time gap before it). Follows
+`batch-0.7.0-reflection-2026-10-03.md` (build side) and
+`review-time-analysis-2026-09-30.md` (R1-R5, all shipped or queued).
+
+## Where a review session's time goes
+
+The reviewers themselves (Alice, Blake, Bob, Carl in parallel) take 10-11
+minutes. Everything else is the orchestrator, on opus at xhigh.
+
+| Session | Total | Before reviewers launch | Reviewers run | After reviewers finish |
+|---|---|---|---|---|
+| 00244 c1 | 25.5 min | 9.0 min | 9.8 min | 7.2 min |
+| 00242 c1 | 38.1 min | 15.5 min | 11.3 min | 11.1 min |
+| 00242 c2 | 33.4 min | ~6 min | ~7 min | ~18 min (includes a Tess+Ivan tail-sweep task and a 3-min gate) |
+
+So about **60% of a review session is orchestrator overhead**, and two
+cycles per PRD is the norm. Per PRD that is roughly 30-45 minutes of
+opus/xhigh time spent on work that is deterministic.
+
+## Findings
+
+### V1. The model hand-builds the review inputs every cycle (largest)
+
+Before launch, the orchestrator:
+
+- copies tasks out of `state.json` into `review-tasks-{id}.md` and the PRD
+  into `review-prd-{id}.md` by hand (00242 c1: 208-459 s, three Write/Edit
+  rounds on the PRD copy alone);
+- reads 9 reference files (5 persona files, registry, 2 rubrics, output
+  formats);
+- writes each reviewer prompt with the Write tool (4 prompts, 26-73 s of
+  generation each; in 00242 c2 it gave up and wrote a `/tmp` python
+  assembler);
+- opens dispatch rows and stamps the lens roster, one Bash call each.
+
+Every one of these is substitution into a known template: the skill itself
+says so (`SKILL.md` step 4, "assembled from the agent registry ... substitute
+its placeholders"). `skills/work/scripts/render_prompt.py` already does this
+for the build personas, and `autopilot enter` already cut session
+orientation from ~8 min to ~45 s the same way.
+
+**Lever:** one verb, `autopilot review-stage`, that writes the tasks/PRD
+files, runs `gather-context.sh`, the mechanical-facts, tautology and replay
+scripts and `engram pack`, renders every roster prompt (settled-decisions
+section, incremental addendum, Blake's filesystem notes), stamps the roster
+and opens the CLI dispatch rows, then prints the dispatch block. The model
+keeps the one judgment call it owns: launching the reviewers.
+**Estimate (guess):** 6-12 min saved per cycle, 12-25 min per PRD.
+
+### V2. Post-review bookkeeping runs as many small model turns
+
+After synthesis the orchestrator writes decision arrays through `/tmp` JSON
+files, one Write plus one `task-add` per rework or sweep task (00244 c1: 4
+sweep tasks, ~75 s), the contract card, the brief, and the handoff rows:
+~5 min per cycle.
+
+**Lever:** `autopilot review-close --review-file <f>` reads a structured
+block the review file already must carry (findings with severity, file,
+consensus, disposition) and does decisions, `group-rework`, `task-add`,
+`rework_task_ids`, roster close-out and doubt verdicts in one call.
+**Estimate (guess):** 3-5 min per cycle.
+
+### V3. The full gate runs again inside review, sometimes twice
+
+- 00244 c1 ran `release-checks` twice (179 s + 178 s): the second run only
+  to read counts the first one printed but the pipe ban kept it from
+  extracting.
+- `last-verification.json` is not reused because its `sha` lags HEAD by the
+  store/handoff commits, or its counts are null (00241 c2 review file, line
+  270).
+- Carl and Blake also run `release-checks` themselves; Carl's nested
+  environment (`AUTOPILOT_DISPATCH_DEPTH`, `CODEX_SESSION_ID`, ...) makes 20
+  checks fail spuriously, and he re-runs (00241 c1 and c2).
+
+The orchestrator's run overlaps the reviewers, so this is mostly cost, not
+wall time. **Lever:** reuse `last-verification.json` when the only commits
+since its `sha` touch the store; when a run is needed, print one
+`PASS n FAIL n EXIT c` summary line; tell reviewers the gate result instead
+of having them re-run it.
+
+### V4. The engram pack failed on every cycle (fixed today)
+
+`engram pack` exited 1 on every review this batch: "not inside a
+registered repo; register it in ~/.config/gita/repos.csv". Every review was
+recorded as degraded. **Fixed 2026-10-04:** `gita add` registered this repo.
+The same failure would hit any repo not in gita; the skill could say so in
+its failure note instead of retrying silently each cycle.
+
+### V5. Codex (Bob) failed twice per cycle on 00241, both cycles
+
+Exit 1 with `turn.failed`, 97 s + 27-36 s, then a Claude fallback ran Bob's
+prompt. The doubt lens survived; the cost was ~2 min and model diversity.
+00242 and 00244 were fine, so this looks transient. Watch only.
+
+### V6. Fast-track fan-out: four lenses all report exactly 969 s
+
+00243's fast-track roster (Blake, Eve, Bob, Carl) all closed at 969-970 s
+and the fanout row closed `error` at 964 s. Identical durations suggest the
+rows close at the barrier, not when each lens finished, so the telemetry
+cannot show which lens is slow. Worth checking before any fast-track tuning.
+
+## Not waste (kept)
+
+- The four-lens roster, two cycles, and the cap: standing rule, and cycle 2
+  found real HIGHs on 00241 and 00242.
+- Reviewer wall time itself (10-11 min, bounded by codex/gemini).
+
+## Suggested order
+
+1. **V1 + V2** as one PRD: review stage-in and stage-out verbs. Biggest,
+   deterministic, and has precedent (`enter`, `render_prompt.py`).
+2. **V3** rides along (gate reuse and summary line).
+3. **V6:** check the fan-out telemetry before trusting fast-track timings.
