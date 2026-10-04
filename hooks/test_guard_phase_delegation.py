@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -248,15 +249,59 @@ def test_non_string_prompt_never_crashes_the_hook() -> None:
 PLUGIN = HOOKS.parent
 
 
+# The three PreToolUse entries that must survive untouched - verbatim from
+# HEAD, so Devon's "empty an existing entry's hooks" and "add a stray
+# top-level key" exploits are both caught by exact equality.
+_EXISTING_PRE = [
+    {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+            {
+                "type": "command",
+                "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/enforce_prd_location.py",
+                "timeout": 5,
+            }
+        ],
+    },
+    {
+        "matcher": "Bash",
+        "hooks": [
+            {
+                "type": "command",
+                "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/enforce_prd_location.py",
+                "timeout": 5,
+            },
+            {
+                "type": "command",
+                "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/guard_push_on_critical.py",
+                "timeout": 10,
+            },
+        ],
+    },
+    {
+        "matcher": "Skill",
+        "hooks": [
+            {
+                "type": "command",
+                "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/guard_skill_after_leave.py",
+                "timeout": 5,
+            }
+        ],
+    },
+]
+
+
 def test_hooks_json_registers_the_guard_on_agent() -> None:
     assert GUARD.is_file()
-    hooks = json.loads((HOOKS / "hooks.json").read_text(encoding="utf-8"))["hooks"]
+    data = json.loads((HOOKS / "hooks.json").read_text(encoding="utf-8"))
+    assert set(data) == {"hooks"}
+    hooks = data["hooks"]
     pre = hooks["PreToolUse"]
-    # The new entry is added beside the existing matchers, not merged into one.
-    assert sorted(entry["matcher"] for entry in pre) == sorted(
-        ["Edit|Write|MultiEdit", "Bash", "Skill", "Agent"]
-    )
-    (agent,) = [entry for entry in pre if entry["matcher"] == "Agent"]
+    # Exactly one new entry, appended after the three existing ones, which
+    # must be byte-for-byte unchanged (no emptied/deleted existing hook).
+    assert pre[:3] == _EXISTING_PRE
+    assert len(pre) == 4
+    agent = pre[3]
     assert agent == {
         "matcher": "Agent",
         "hooks": [
@@ -267,44 +312,71 @@ def test_hooks_json_registers_the_guard_on_agent() -> None:
             }
         ],
     }
-    # Registered once, and only as a PreToolUse Agent gate.
+    # Registered exactly once, anywhere in the file, under any spelling
+    # that would actually invoke the module (with or without ".py").
     commands = [
         hook["command"]
         for event in hooks.values()
         for entry in event
         for hook in entry["hooks"]
     ]
-    assert sum("guard_phase_delegation.py" in c for c in commands) == 1
+    assert sum("guard_phase_delegation" in c for c in commands) == 1
 
 
 def _paragraphs(path: Path) -> list[str]:
-    # Markdown rendering: a blank line splits paragraphs, any other run of
-    # whitespace (including a hard wrap) reads as one space.
+    # Markdown rendering: a blank line (possibly whitespace-only) splits
+    # paragraphs; any other run of whitespace (a hard wrap) reads as one
+    # space. Using the raw, un-flattened text keeps an HTML comment, a
+    # code fence or a heading marker (#, >, <!--) visible in the result,
+    # so a gate/anchor hidden inside one of those never matches a plain
+    # sentence-level assertion below.
     raw = path.read_text(encoding="utf-8")
-    return [" ".join(p.split()) for p in raw.split("\n\n")]
+    paragraphs = re.split(r"\n[ \t]*\n", raw)
+    return [" ".join(p.split()) for p in paragraphs]
+
+
+_BANNED_NEAR_GATE = ("ignore", "advisory", "may be ignored", "dispatch an agent to")
 
 
 def test_gate_prose_names_the_guard() -> None:
     build_md = PLUGIN / "skills" / "run-autopilot" / "references" / "phase-build.md"
-    # "Just before" the anchor: only whitespace (a wrap or a blank line) between.
-    build = " ".join(build_md.read_text(encoding="utf-8").split())
+    paras = _paragraphs(build_md)
     plan_anchor = "Invoke `/autopilot:plan-tasks` with the selected PRD."
     plan_gate = (
         "Invoke `/autopilot:plan-tasks` with the Skill tool in this session; never"
         " delegate planning to an Agent."
     )
+    plan_next = "**PAUSE site - requirements clarification.**"
     work_anchor = "Invoke `/autopilot:work` skill."
     work_gate = (
         "Invoke `/autopilot:work` with the Skill tool in this session; never"
         " delegate work execution to an Agent."
     )
-    for anchor, gate in ((plan_anchor, plan_gate), (work_anchor, work_gate)):
-        assert build.count(anchor) == 1, anchor
-        assert build.count(gate) == 1, gate
-        assert f"{gate} {anchor}" in build, gate
-    assert build.index("## Phase 2: Planning") < build.index(plan_gate)
-    assert build.index(plan_gate) < build.index("## Phase 3: Work")
-    assert build.index("## Phase 3: Work") < build.index(work_gate)
+    work_next = "While `/autopilot:work` runs"
+    for gate, anchor, next_text in (
+        (plan_gate, plan_anchor, plan_next),
+        (work_gate, work_anchor, work_next),
+    ):
+        # The gate and its anchor must sit in ONE paragraph together (not a
+        # comment, a heading, or split across a blank line), and that
+        # paragraph's own neighbourhood must be unchanged from HEAD, so
+        # neither sentence can be relocated elsewhere in the file.
+        matches = [p for p in paras if gate in p and anchor in p]
+        assert len(matches) == 1, (gate, anchor)
+        para = matches[0]
+        assert para.startswith(f"{gate} {anchor}") or para == f"{gate} {anchor}"
+        for banned in _BANNED_NEAR_GATE:
+            assert banned not in para.lower(), (banned, para)
+        idx = paras.index(para)
+        assert next_text in paras[idx + 1], (next_text, paras[idx + 1])
+    assert sum(1 for p in paras if plan_gate in p) == 1
+    assert sum(1 for p in paras if work_gate in p) == 1
+    assert build_md.read_text(encoding="utf-8").index(
+        "## Phase 2: Planning"
+    ) < build_md.read_text(encoding="utf-8").index(plan_gate)
+    assert build_md.read_text(encoding="utf-8").index(
+        plan_gate
+    ) < build_md.read_text(encoding="utf-8").index("## Phase 3: Work")
 
     stop = (
         "**STOP.** Before dispatching ANY Agent or helper-script call, verify you"
@@ -319,6 +391,14 @@ def test_gate_prose_names_the_guard() -> None:
         " is outside its scope; the STOP rule above still governs that case by"
         " prose alone)."
     )
+    work_skill_text = (PLUGIN / "skills" / "work" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
     work_skill = _paragraphs(PLUGIN / "skills" / "work" / "SKILL.md")
     assert f"{stop} {guard_note}" in work_skill
     assert sum(guard_note in p for p in work_skill) == 1
+    # The STOP+note paragraph must stay inside its original section.
+    section_start = work_skill_text.index("## CRITICAL: One Task at a Time")
+    section_end = work_skill_text.index("##", section_start + 2)
+    note_pos = work_skill_text.index(guard_note)
+    assert section_start < note_pos < section_end
