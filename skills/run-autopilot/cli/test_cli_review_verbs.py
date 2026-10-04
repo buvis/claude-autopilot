@@ -51,8 +51,8 @@ def closed(monkeypatch: pytest.MonkeyPatch) -> dict:
     """Swap close() for a recorder; `result` is what it returns."""
     seen: dict = {"result": {"applied": True, "tasks_created": ["2"]}}
 
-    def fake_close(*args) -> dict:
-        seen["args"] = args
+    def fake_close(*args, **kwargs) -> dict:
+        seen["args"], seen["kwargs"] = args, kwargs
         return seen["result"]
 
     monkeypatch.setattr(review_close, "close", fake_close)
@@ -245,7 +245,15 @@ def _close_argv(tmp_path: Path, findings: Path, *extra: str) -> list[str]:
 def test_review_close_passes_findings_through_and_exits_zero_when_applied(
     tmp_path: Path, closed: dict, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    chosen = [{"severity": "x", "file": "a.py", "issue": "i", "classification": "fix"}]
+    chosen = [
+        {
+            "severity": "\U0001f534",
+            "file": "a.py",
+            "issue": "i",
+            "classification": "fix",
+            "found_by": ["alice"],
+        }
+    ]
     findings = _findings(tmp_path, chosen)
 
     code = main(_close_argv(tmp_path, findings, "--default-tier", "opus"))

@@ -6,6 +6,12 @@
 # (no lane can write to the repo it reviews, every persona dispatches),
 # the runner recursion guard, and the state schema the loop depends on.
 # Shipping past a red suite would ship a pipeline whose promises are untrue.
+#
+# Prints one `PASS n FAIL n SKIP n EXIT c` summary line at the end so
+# cli/verification.py's run_gate() can read block counts without a second
+# run (SUMMARY_RE in skills/run-autopilot/cli/verification.py). `set -e`
+# means this line is reached only once every block above has exited 0, so
+# the counts are the block count and a flat zero/zero.
 set -euo pipefail
 
 echo "[checks] reviewer registry"
@@ -197,3 +203,12 @@ bash skills/review-work-completion/scripts/test_gather_context_paths.sh
 
 echo "[checks] gather-context id"
 bash skills/review-work-completion/scripts/test_gather_context_id.sh
+
+echo "[checks] review verbs"
+uv run --no-project --with pytest python -m pytest -q \
+  skills/run-autopilot/cli/test_verification.py \
+  skills/run-autopilot/cli/test_review_stage.py \
+  skills/run-autopilot/cli/test_review_close.py \
+  skills/run-autopilot/cli/test_cli_review_verbs.py
+
+echo "PASS $(grep -c '^echo "\[checks\]' "$0") FAIL 0 SKIP 0 EXIT 0"
