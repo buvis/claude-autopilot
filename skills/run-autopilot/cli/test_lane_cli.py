@@ -237,6 +237,22 @@ def _lane_check(
     return proc, json.loads(state_path.read_text(encoding="utf-8"))
 
 
+def test_lane_check_tolerates_a_cwd_relative_state_path(tmp_path: Path) -> None:
+    # `--state state.json` resolves relative to cwd when cwd is the autopilot
+    # directory itself, not to an absolute path; the CLI must still exit
+    # cleanly (0 "ok" or 3 "escalate", both legitimate outcomes for a
+    # one-commit repo) rather than crash with an uncaught IndexError.
+    _repo, state_path = _solo_repo(tmp_path)
+    proc = subprocess.run(
+        [sys.executable, str(CLI_MAIN), "lane-check", "--state", "state.json"],
+        cwd=str(state_path.parent),
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode in (0, 3), proc.stderr
+    assert "Traceback" not in proc.stderr
+
+
 def test_lane_check_escalates_on_a_production_path(tmp_path: Path) -> None:
     repo, state_path = _solo_repo(tmp_path)
     _commit(repo, "pkg/mod.py", "x = 1\n")
