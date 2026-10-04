@@ -188,7 +188,7 @@ Where each field comes from:
 
 ### Tail sweep
 
-Runs once, on the converged outcome above, after the review file is saved and before the finalize hand-off. The Medium/Low tail is **swept, not dropped**: one normal `/autopilot:work` task fixes it, then the PRD finalizes. No new verification machinery.
+Runs once, on the converged outcome above, after the review file is saved and before the finalize hand-off. The Medium/Low tail is **swept, not dropped**: normal `/autopilot:work` tasks fix it, then the PRD finalizes. No new verification machinery.
 
 **1. Select.** Take the converging cycle's actionable Medium/Low findings. Exclude settled deferrals, findings this gate discarded, findings routed to verification (their check runs in step 7; sweeping them would rebuild the task this routing exists to remove), and anything already in `deferred_decisions` — a decision already taken is not swept again. **Zero actionable Medium/Low → skip the sweep entirely** and go straight to the finalize hand-off (today's clean path, unchanged).
 
