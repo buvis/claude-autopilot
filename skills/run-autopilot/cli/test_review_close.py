@@ -9,17 +9,31 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
-from cli import gate, rework_groups, review_close, schema, statectl
+from cli import gate, review_close, rework_groups, schema, statectl
+
+CLI_MAIN = Path(__file__).resolve().parent / "__main__.py"
+RUN_AUTOPILOT = CLI_MAIN.parent.parent
 
 CRIT = "\U0001f534"
 HIGH = "\U0001f7e0"
 MED = "\U0001f7e1"
 
 D_LINES = "D1: pass\nD2: fail\nD3: pass\nD4: pass\nD5: pass\n"
+
+# The saved review artifact's consolidated-findings bullet list, carrying two
+# rows. Batches applied against it are subsets of these.
+CONSOLIDATED = (
+    "## Consolidated Findings\n\n"
+    "### Full Consensus (2/2)\n\n"
+    f"- [2/2] {HIGH} wrong default | src/b.py:10 | Found by: alice, bob\n\n"
+    "### Minority (<=50%)\n\n"
+    f"- [1/2] {MED} unclear name | src/c.py:20 | Found by: bob\n\n"
+)
 
 
 def _review(
@@ -29,6 +43,7 @@ def _review(
     verdict: str = "Verdict: 3 findings\n",
     agents: str = "  alice: available\n  bob: available\n",
     extra_frontmatter: str = "",
+    consolidated: str = "",
     name: str = "00249-x-review-01.md",
 ) -> Path:
     text = (
@@ -43,6 +58,7 @@ def _review(
         "## Bob\n\n"
         f"{d_lines}\n"
         "Some doubts.\n\n"
+        f"{consolidated}"
         f"{verdict}"
         "Tests: 12 passed, 0 failed\n"
     )
@@ -123,7 +139,8 @@ def test_close_is_idempotent(tmp_path: Path) -> None:
 
 
 def test_close_refuses_a_gate_failing_review_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     review = _review(tmp_path, verdict="")  # no Verdict: line -> gate exit 1
     state_path = _state(tmp_path)
@@ -134,7 +151,10 @@ def test_close_refuses_a_gate_failing_review_file(
 
     monkeypatch.setattr(statectl, "mutate", _no_mutate)
     result = review_close.close(
-        review, state_path, "decision-gate", [_finding(HIGH, "x.py", "y")]
+        review,
+        state_path,
+        "decision-gate",
+        [_finding(HIGH, "x.py", "y")],
     )
 
     assert result["applied"] is False
@@ -165,7 +185,8 @@ def test_close_records_doubt_verdicts(tmp_path: Path) -> None:
 
 
 def test_close_group_uses_emoji_severity_not_english_word(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     review = _review(tmp_path)
     state_path = _state(tmp_path)
@@ -192,7 +213,8 @@ def test_close_group_uses_emoji_severity_not_english_word(
 
 
 def test_close_idempotency_check_is_inside_the_transaction(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Two racing calls: the rival commits after the first call has passed
     every pre-lock step but before it takes the lock. Only an in-lock check
@@ -245,7 +267,8 @@ def test_close_decision_gate_and_tail_sweep_batches_are_independently_idempotent
 
 
 def test_close_state_mutations_use_parse_path(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     review = _review(tmp_path, agents="  alice: available\n  blake: available\n")
     state_path = _state(tmp_path)
@@ -281,7 +304,8 @@ def test_close_state_mutations_use_parse_path(
 
 
 def test_close_uses_statectl_mutate_scoped_validator(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     review = _review(tmp_path)
     # An unrelated pre-existing odd field: whole-state validation refuses
@@ -299,7 +323,10 @@ def test_close_uses_statectl_mutate_scoped_validator(
         schema.validate(_load(state_path))
 
     result = review_close.close(
-        review, state_path, "decision-gate", [_finding(HIGH, "src/b.py", "x")]
+        review,
+        state_path,
+        "decision-gate",
+        [_finding(HIGH, "src/b.py", "x")],
     )
 
     assert calls == [state_path]
@@ -331,7 +358,7 @@ def test_close_maps_every_classification_row_to_a_chosen_finding_value(
             "severity": MED,
             "file": "src/defer.py",
             "reason": "deferred by review-close",
-        }
+        },
     ]
     every_text = json.dumps(data, ensure_ascii=False)
     assert "verify me" not in every_text
@@ -352,7 +379,8 @@ def test_close_omits_found_by_suffix_when_no_author(tmp_path: Path) -> None:
 
 
 def test_close_threads_require_codex_guard_flag_to_the_gate(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     review = _review(tmp_path)
     state_path = _state(tmp_path)
@@ -362,23 +390,34 @@ def test_close_threads_require_codex_guard_flag_to_the_gate(
     def _spy(review_file, reviewers=None, require_codex_guard=False):
         calls.append(require_codex_guard)
         return real_run_gate(
-            review_file, reviewers=reviewers, require_codex_guard=require_codex_guard
+            review_file,
+            reviewers=reviewers,
+            require_codex_guard=require_codex_guard,
         )
 
     monkeypatch.setattr(review_close.gate, "run_gate", _spy)
 
     review_close.close(
-        review, state_path, "decision-gate", [], require_codex_guard=True
+        review,
+        state_path,
+        "decision-gate",
+        [],
+        require_codex_guard=True,
     )
     review_close.close(
-        review, state_path, "tail-sweep", [], require_codex_guard=False
+        review,
+        state_path,
+        "tail-sweep",
+        [],
+        require_codex_guard=False,
     )
 
     assert calls == [True, False]
 
 
 def test_close_tail_sweep_skips_lens_verdict_and_dispatch_row_steps(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     review = _review(tmp_path, extra_frontmatter="dispatch_rows:\n  bob: d-999\n")
     state_path = _state(
@@ -388,7 +427,9 @@ def test_close_tail_sweep_skips_lens_verdict_and_dispatch_row_steps(
     )
     commands: list[list[str]] = []
     monkeypatch.setattr(
-        review_close.subprocess, "run", lambda cmd, **_kwargs: commands.append(cmd)
+        review_close.subprocess,
+        "run",
+        lambda cmd, **_kwargs: commands.append(cmd),
     )
 
     result = review_close.close(review, state_path, "tail-sweep", [])
@@ -401,7 +442,8 @@ def test_close_tail_sweep_skips_lens_verdict_and_dispatch_row_steps(
 
 
 def test_close_ends_frontmatter_dispatch_rows_best_effort(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     review = _review(
         tmp_path,
@@ -431,7 +473,8 @@ def test_every_dispatch_outcome_is_recordable() -> None:
 
 
 def test_close_ends_unavailable_dispatch_with_error_outcome(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     review = _review(
         tmp_path,
@@ -441,13 +484,107 @@ def test_close_ends_unavailable_dispatch_with_error_outcome(
     state_path = _state(tmp_path)
     commands: list[list[str]] = []
     monkeypatch.setattr(
-        review_close.subprocess, "run", lambda cmd, **_kwargs: commands.append(cmd)
+        review_close.subprocess,
+        "run",
+        lambda cmd, **_kwargs: commands.append(cmd),
     )
 
     result = review_close.close(review, state_path, "decision-gate", [])
 
     assert result["applied"] is True
     assert commands[0][-2:] == ["--outcome", "error"]
+
+
+def _findings_file(tmp_path: Path, rows: list[dict]) -> Path:
+    path = tmp_path / "findings.json"
+    path.write_text(json.dumps(rows, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
+def _review_close_cli(
+    review: Path, state_path: Path, findings: Path
+) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(CLI_MAIN),
+            "review-close",
+            "--review-file",
+            str(review),
+            "--state",
+            str(state_path),
+            "--batch-id",
+            "decision-gate",
+            "--findings",
+            str(findings),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(RUN_AUTOPILOT),
+    )
+
+
+def test_review_close_refuses_on_findings_mismatch(tmp_path: Path) -> None:
+    """The cross-check is mandatory in close(): a chosen finding the review
+    file never recorded is refused, and state stays byte-identical."""
+    review = _review(tmp_path, consolidated=CONSOLIDATED)
+    state_path = _state(tmp_path)
+    before = state_path.read_bytes()
+    # The file matches a real review row; the issue text does not.
+    findings = [_finding(HIGH, "src/b.py:10", "an issue no reviewer raised")]
+
+    result = review_close.close(review, state_path, "decision-gate", findings)
+
+    assert result["applied"] is False
+    assert result["refused"] == "findings_mismatch"
+    assert state_path.read_bytes() == before
+    assert not Path(f"{state_path}.lock").exists()
+
+
+def test_close_applies_a_findings_subset_of_the_review(tmp_path: Path) -> None:
+    """The counterpart: the cross-check must not block a legitimate batch that
+    applies only some of the review's rows."""
+    review = _review(tmp_path, consolidated=CONSOLIDATED)
+    state_path = _state(tmp_path)
+    findings = [_finding(HIGH, "src/b.py:10", "wrong default")]
+
+    result = review_close.close(review, state_path, "decision-gate", findings)
+
+    assert result["applied"] is True
+    assert "refused" not in result
+    assert [t["name"] for t in _load(state_path)["tasks"][1:]] == ["[D2] src/b.py"]
+
+
+def test_cli_exit_2_on_findings_mismatch(tmp_path: Path) -> None:
+    review = _review(tmp_path, consolidated=CONSOLIDATED)
+    state_path = _state(tmp_path)
+    before = state_path.read_bytes()
+    findings = _findings_file(
+        tmp_path, [_finding(HIGH, "src/b.py:10", "an issue no reviewer raised")]
+    )
+
+    proc = _review_close_cli(review, state_path, findings)
+
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    assert "findings_mismatch" in proc.stdout + proc.stderr
+    assert state_path.read_bytes() == before
+
+
+def test_cli_still_exits_1_on_other_not_applied_reasons(tmp_path: Path) -> None:
+    """Exit 2 is reserved for the mismatch: the already-applied refusal, whose
+    findings do cross-check, keeps the old exit 1."""
+    review = _review(tmp_path, consolidated=CONSOLIDATED)
+    state_path = _state(tmp_path)
+    findings = _findings_file(
+        tmp_path, [_finding(HIGH, "src/b.py:10", "wrong default")]
+    )
+
+    first = _review_close_cli(review, state_path, findings)
+    second = _review_close_cli(review, state_path, findings)
+
+    assert first.returncode == 0, first.stdout + first.stderr
+    assert second.returncode == 1, second.stdout + second.stderr
+    assert "findings_mismatch" not in second.stdout + second.stderr
 
 
 def test_close_leaves_no_lens_running(tmp_path: Path) -> None:

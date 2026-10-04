@@ -9,6 +9,7 @@ passing unmodified (the parity proof for the move).
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import unittest
@@ -67,6 +68,36 @@ codex_rung_guard: fired (2 codex-implemented task(s)); constraint UNMET
 
 Verdict: converged
 Tests: 3 passed, 0 failed
+"""
+
+CRIT = "\U0001f534"
+HIGH = "\U0001f7e0"
+MED = "\U0001f7e1"
+
+# The SAVED review artifact: the Review Summary Format's bullet list, which is
+# what `gate --review-file` reads.
+FINDINGS_SECTION = f"""## Consolidated Findings
+
+### Full Consensus (3/3)
+
+- [3/3] {CRIT} crash on empty input | src/a.py:3 | Found by: alice, blake, bob
+
+### Majority Consensus (>50%)
+
+- [2/3] {HIGH} wrong default | src/b.py:10 | Found by: alice, bob
+
+### Minority (<=50%)
+
+- [1/3] {MED} unclear name | src/c.py:20 | Found by: bob
+"""
+
+EMPTY_FINDINGS_SECTION = """## Consolidated Findings
+
+### Full Consensus (3/3)
+
+### Majority Consensus (>50%)
+
+### Minority (<=50%)
 """
 
 
@@ -216,6 +247,193 @@ class ShimParityTests(unittest.TestCase):
         self.assertIs(shim.check, cli_gate.check)
         self.assertIs(shim.run_gate, cli_gate.run_gate)
         self.assertIs(shim.FRONTMATTER_REVIEWERS_RE, cli_gate.FRONTMATTER_REVIEWERS_RE)
+
+
+class FindingsCrossCheckTests(unittest.TestCase):
+    """`gate --findings` cross-checks a chosen-findings JSON array against the
+    review file's consolidated-findings bullet list.
+
+    One direction only: every findings row must match a review row; the review
+    may carry rows the batch is not applying.
+    """
+
+    def setUp(self) -> None:
+        import tempfile
+
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.tmp = Path(tmp.name)
+
+    def _review(self, section: str = FINDINGS_SECTION) -> Path:
+        body = GOOD_FILE
+        if section:
+            body = body.replace("Verdict: converged", f"{section}\nVerdict: converged")
+        path = self.tmp / "prd-review-1.md"
+        path.write_text(body, encoding="utf-8")
+        return path
+
+    def _findings(self, rows: list[dict]) -> Path:
+        path = self.tmp / "findings.json"
+        path.write_text(json.dumps(rows, ensure_ascii=False), encoding="utf-8")
+        return path
+
+    def _gate(self, review: Path, findings: Path) -> subprocess.CompletedProcess:
+        return _run(
+            [str(CLI_MAIN)],
+            ["gate", "--review-file", str(review), "--findings", str(findings)],
+        )
+
+    def test_gate_accepts_matching_findings_json(self) -> None:
+        # Severity spelled as emoji on two rows and as the English word on the
+        # third; issue text and file carry stray whitespace. All normalize.
+        findings = self._findings(
+            [
+                {
+                    "classification": "fix",
+                    "severity": CRIT,
+                    "file": "src/a.py:3",
+                    "issue": "crash on empty input",
+                },
+                {
+                    "classification": "fix",
+                    "severity": "high",
+                    "file": "src/b.py:10",
+                    "issue": "wrong   default",
+                },
+                {
+                    "classification": "defer",
+                    "severity": MED,
+                    "file": " src/c.py:20 ",
+                    "issue": "unclear name",
+                },
+            ],
+        )
+        proc = self._gate(self._review(), findings)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_gate_refuses_findings_json_mismatch(self) -> None:
+        findings = self._findings(
+            [
+                {
+                    "classification": "fix",
+                    "severity": CRIT,
+                    "file": "src/a.py:3",
+                    "issue": "crash on empty input",
+                },
+                # Same file as a real review row, invented issue text: an
+                # implementation comparing file paths alone would pass this.
+                {
+                    "classification": "fix",
+                    "severity": HIGH,
+                    "file": "src/b.py:10",
+                    "issue": "issue nobody reviewed",
+                },
+                {
+                    "classification": "fix",
+                    "severity": MED,
+                    "file": "src/z.py:1",
+                    "issue": "second invented issue",
+                },
+            ],
+        )
+        proc = self._gate(self._review(), findings)
+        self.assertEqual(proc.returncode, 2, proc.stdout)
+        self.assertIn("issue nobody reviewed", proc.stderr)
+        # Only the FIRST mismatched row is named.
+        self.assertNotIn("second invented issue", proc.stderr)
+
+    def test_gate_refuses_severity_only_mismatch(self) -> None:
+        # File and issue match a real review row; the severity does not. The
+        # comparison tuple includes severity, so this is a mismatch.
+        findings = self._findings(
+            [
+                {
+                    "classification": "fix",
+                    "severity": "critical",
+                    "file": "src/b.py:10",
+                    "issue": "wrong default",
+                },
+            ],
+        )
+        proc = self._gate(self._review(), findings)
+        self.assertEqual(proc.returncode, 2, proc.stdout)
+        self.assertIn("wrong default", proc.stderr)
+
+    def test_partial_batch_is_not_a_mismatch(self) -> None:
+        # A real subset of the review's rows. The two rows findings never
+        # mentions must not count against it.
+        findings = self._findings(
+            [
+                {
+                    "classification": "fix",
+                    "severity": HIGH,
+                    "file": "src/b.py:10",
+                    "issue": "wrong default",
+                },
+            ],
+        )
+        proc = self._gate(self._review(), findings)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_malformed_findings_section_exits_1_not_2(self) -> None:
+        # GOOD_FILE has no `## Consolidated Findings` heading at all.
+        findings = self._findings(
+            [
+                {
+                    "classification": "fix",
+                    "severity": HIGH,
+                    "file": "src/b.py:10",
+                    "issue": "wrong default",
+                },
+            ],
+        )
+        proc = self._gate(self._review(section=""), findings)
+        self.assertEqual(proc.returncode, 1, proc.stdout)
+        # The 1 must come from check()'s gap path, not from argparse rejecting
+        # an unknown flag - which also exits 1 here.
+        self.assertNotIn("unrecognized arguments", proc.stderr)
+
+    def test_empty_findings_is_not_malformed(self) -> None:
+        proc = self._gate(
+            self._review(section=EMPTY_FINDINGS_SECTION),
+            self._findings([]),
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_cross_check_normalizes_combined_severity_cell(self) -> None:
+        """A review row written `🟠 High` equals a findings row written `high`."""
+        from cli import gate
+
+        text = (
+            "## Consolidated Findings\n\n"
+            "### Majority Consensus (>50%)\n\n"
+            f"- [2/3] {HIGH} High wrong default | src/b.py:10 | "
+            "Found by: alice, bob\n"
+        )
+        row = {
+            "classification": "fix",
+            "severity": "high",
+            "file": "src/b.py:10",
+            "issue": "wrong default",
+        }
+        self.assertEqual(gate._cross_check_findings(text, [row]), ("ok", None))
+
+    def test_cross_check_reports_the_missing_section_as_malformed(self) -> None:
+        from cli import gate
+
+        tag, detail = gate._cross_check_findings(
+            GOOD_FILE,
+            [
+                {
+                    "classification": "fix",
+                    "severity": HIGH,
+                    "file": "src/b.py:10",
+                    "issue": "wrong default",
+                },
+            ],
+        )
+        self.assertEqual(tag, "malformed")
+        self.assertTrue(detail)
 
 
 if __name__ == "__main__":
