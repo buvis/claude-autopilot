@@ -3182,3 +3182,5 @@
 {"id":"28fe97ae","ended_at":1791151869,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"id":"79ca671c","ended_at":1791151869,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"kind":"handoff","site":"review","edge":"leave","at":1791151869,"phase":"done","prd":"00254-tighten-the-phase-delegation-guard-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1791151910,"phase":"done","prd":"00254-tighten-the-phase-delegation-guard-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1791151984,"phase":"build","prd":"00254-tighten-the-phase-delegation-guard-v1.md"}
