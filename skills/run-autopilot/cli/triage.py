@@ -53,7 +53,7 @@ from . import custody, render_report, selection
 LIFECYCLE_DIRS = ("backlog", "wip", "hold", "done")
 DISCOVERY_DIR = "discovery"
 OWNERSHIP_LINES = 20
-SEVERE = frozenset({"critical", "high"})
+SEVERE = frozenset({"critical", "high", "\U0001f534", "\U0001f7e0"})
 _SLUG_MAX = 40
 _TITLE_MAX = 80
 _REVISION_RE = re.compile(r"-v\d+\.md$")
