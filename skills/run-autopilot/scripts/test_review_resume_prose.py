@@ -58,6 +58,23 @@ def test_resume_drops_completed_ids_and_keeps_a_sweep_on_its_finalize_path() -> 
     )
 
 
+def test_tail_sweep_prose_never_says_one_task() -> None:
+    # PRD 00247: the Tail sweep's step 2 Split rule creates one task per
+    # `group-rework` group, so the section's own framing must not promise a
+    # single task - a reader who stops at step 2 would build only one.
+    text = _PHASE_REVIEW.read_text()
+    sweep = text[text.index("### Tail sweep") : text.index("**3. Dispatch.**")]
+    assert "Build ONE" not in sweep, (
+        f"{_PHASE_REVIEW}: Tail sweep still says 'Build ONE', contradicting the "
+        "Split rule's one task per group-rework group"
+    )
+    assert "one normal" not in sweep, (
+        f"{_PHASE_REVIEW}: Tail sweep still says 'one normal `/autopilot:work` "
+        "task fixes it', contradicting the Split rule's one task per "
+        "group-rework group"
+    )
+
+
 def test_escalation_resets_the_status_before_appending_the_rework_id() -> None:
     # Review 2 of PRD 00196: the resume rule drops listed ids whose task is
     # still `completed`, so the status reset must land before the append.

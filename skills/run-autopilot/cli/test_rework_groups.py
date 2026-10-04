@@ -167,6 +167,17 @@ class FileKeyNormalizationTests(GroupTestCase):
         # Stripping repeats until the key stops changing.
         self.assertEqual(rework_groups.file_key("a/b.py#L12:7"), "a/b.py")
 
+    def test_file_key_strips_singular_line_citation(self) -> None:
+        self.assertEqual(rework_groups.file_key("a/b.py (line 3)"), "a/b.py")
+
+    def test_file_key_strips_comma_line_list(self) -> None:
+        self.assertEqual(
+            rework_groups.file_key("a/b.py (lines 18-22, 423)"), "a/b.py"
+        )
+
+    def test_file_key_strips_anchor_range(self) -> None:
+        self.assertEqual(rework_groups.file_key("a/b.py#L12-L20"), "a/b.py")
+
     def test_widened_stripping_leaves_the_colon_suffix_rule_intact(self) -> None:
         self.assertEqual(rework_groups.file_key("a.py:10"), "a.py")
         self.assertEqual(rework_groups.file_key("a.py:20-30"), "a.py")
