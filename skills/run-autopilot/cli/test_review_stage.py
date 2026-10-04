@@ -446,8 +446,8 @@ def test_replay_cmd_never_receives_gate_command(env: dict) -> None:
     argv = json.loads(env["replay_log"].read_text())
     # The base is read from gather-context.sh's own recorded `_Diff scope:`
     # line (the one resolver, PRD 00256) -- for a full review that is the
-    # base branch NAME it found ("master"), not a re-derived merge-base SHA.
-    assert argv == ["--base", "master", "--cmd", REPLAY]
+    # base branch NAME it found ("master"), resolved to its merge-base with HEAD.
+    assert argv == ["--base", env["base"], "--cmd", REPLAY]
     assert GATE not in argv
     assert summary["ok"] is True
 
@@ -456,6 +456,24 @@ def test_replay_cmd_never_receives_gate_command(env: dict) -> None:
     skipped = _stage(env, cycle_id="00001-c2", replay_cmd=None)
     assert not env["replay_log"].exists()
     assert "REPLAY-MARKER" not in Path(skipped["context_file"]).read_text()
+
+
+def test_replay_base_is_branch_point_when_scope_records_a_branch_name(
+    env: dict,
+) -> None:
+    # Full review records the base branch NAME; the replay must start at the
+    # branch point (merge-base), not at the moved tip of that branch.
+    repo = env["repo"]
+    _git(repo, "checkout", "-q", "master")
+    _commit(repo, {"moved.txt": "base moved on\n"})
+    _git(repo, "checkout", "-q", "feature")
+    expected = _git(repo, "merge-base", "HEAD", "master")
+    assert expected != _git(repo, "rev-parse", "master")
+
+    _stage(env)
+
+    argv = json.loads(env["replay_log"].read_text())
+    assert argv[:2] == ["--base", expected]
 
 
 def test_replay_base_follows_since(env: dict) -> None:

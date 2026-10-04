@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **fast-track**: each review lane's ledger row closes when that lane returns, so per-lens times are real, and a refused fanout dispatches the Alice fallback at once instead of after every other lane
+- **run-autopilot**: `autopilot mint-stubs` recognizes emoji severity markers, so an emoji-tagged critical or high finding mints its triage stub instead of being skipped
+- **run-autopilot**: release-checks reports the real pytest totals instead of counting its own check-block headers, `run_gate` streams its output under a byte cap, and a reused verification verdict survives a file rename
+- **run-autopilot**: an unavailable reviewer's dispatch row closes with an error outcome instead of staying open
+- **run-autopilot**: a review cycle's test replay diffs from the branch point rather than the base branch's tip, so it no longer picks up unrelated commits; Eve's prompt carries the raw PRD body, and Bob's doubt appendix is included every cycle
 
 ## [0.8.0] - 2026-10-04
 

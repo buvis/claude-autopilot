@@ -203,8 +203,6 @@ def _gather(repo_root: Path, since: str | None, cycle_id: str) -> dict:
     return {"ok": True, "context": context, "diff": diff}
 
 
-
-
 def _run_script(script: Path, args: list[str], cwd: Path) -> str:
     """A helper script's stdout; a failed run says so in the block instead."""
     proc = subprocess.run(
@@ -780,6 +778,9 @@ def stage(
     summary = _build_summary(tasks_file, prd_file, context, diff, state_path)
     scope = _SCOPE_RE.search(_read(context))
     base = scope.group(1) if scope else None
+    if base:
+        # A recorded branch name must replay from the branch point, not the tip.
+        base = _git_out(repo_root, "merge-base", "HEAD", base) or base
     pack = _append_context_blocks(
         context,
         diff,
