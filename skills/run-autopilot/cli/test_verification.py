@@ -24,9 +24,12 @@ def _git(repo: Path, *args: str) -> str:
     return subprocess.run(
         [
             "git",
-            "-c", "user.name=t",
-            "-c", "user.email=t@example.com",
-            "-c", "commit.gpgsign=false",
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@example.com",
+            "-c",
+            "commit.gpgsign=false",
             *args,
         ],
         cwd=repo,
@@ -107,7 +110,10 @@ def test_reuse_verdict_fails_closed_on_git_error(repo: Path, tmp_path_factory) -
     assert verification.reuse_verdict(_record(123), repo, head) == ("stale", {})
     unknown = _record("0123456789abcdef0123456789abcdef01234567")
     assert verification.reuse_verdict(unknown, repo, head) == ("stale", {})
-    assert verification.reuse_verdict(_record("no-such-ref"), repo, head) == ("stale", {})
+    assert verification.reuse_verdict(_record("no-such-ref"), repo, head) == (
+        "stale",
+        {},
+    )
     assert verification.reuse_verdict(_record(head), not_a_repo, head) == ("stale", {})
 
 
@@ -137,6 +143,22 @@ def test_reuse_verdict_rejects_dirty_tree(repo: Path) -> None:
     assert verification.reuse_verdict(record, repo, head) == ("stale", {})
 
 
+def test_rename_out_of_store_is_not_clean(repo: Path) -> None:
+    head = _git(repo, "rev-parse", "HEAD")
+    record = _record(head)
+    store_dir = repo / STORE / "notes"
+    store_dir.mkdir(parents=True)
+    (store_dir / "old.md").write_text("x\n")
+    _git(repo, "add", "--", f"{STORE}/notes/old.md")
+    _git(repo, "commit", "--no-verify", "-q", "-m", "add store note")
+    head = _git(repo, "rev-parse", "HEAD")
+    record = _record(head)
+    assert verification.reuse_verdict(record, repo, head) == ("reused", record)
+
+    _git(repo, "mv", f"{STORE}/notes/old.md", "src/moved.md")
+    assert verification.reuse_verdict(record, repo, head) == ("stale", {})
+
+
 def test_reuse_verdict_ignores_dirty_paths_under_the_store(repo: Path) -> None:
     head = _git(repo, "rev-parse", "HEAD")
     store_dir = repo / STORE / "autopilot"
@@ -150,7 +172,7 @@ def test_reuse_verdict_ignores_dirty_paths_under_the_store(repo: Path) -> None:
     assert verification.reuse_verdict(record, repo, head) == ("reused", record)
 
     # Dirty a tracked store file and add an untracked one: both ignored.
-    tracked.write_text("{\"dirty\": true}\n")
+    tracked.write_text('{"dirty": true}\n')
     (store_dir / "dispatch-metrics.jsonl").write_text("{}\n")
     assert verification.reuse_verdict(record, repo, head) == ("reused", record)
 
@@ -179,7 +201,10 @@ def test_run_gate_prints_one_summary_line(tmp_path: Path) -> None:
 
 def test_run_gate_unparseable_output_records_nothing(tmp_path: Path) -> None:
     result = verification.run_gate(
-        "echo 'pass 1 fail 0 skip 0 exit 0'; exit 3", tmp_path, "abc", 1
+        "echo 'pass 1 fail 0 skip 0 exit 0'; exit 3",
+        tmp_path,
+        "abc",
+        1,
     )
 
     assert result["passed"] is None
@@ -191,7 +216,8 @@ def test_run_gate_unparseable_output_records_nothing(tmp_path: Path) -> None:
 
 
 def test_run_gate_keeps_tail_so_a_late_summary_line_still_parses(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     monkeypatch.setattr(verification, "GATE_OUTPUT_CAP", 64)
     # The summary line is always last; a cap that keeps the tail (not the
@@ -204,6 +230,26 @@ def test_run_gate_keeps_tail_so_a_late_summary_line_still_parses(
     assert result["skipped"] == 0
     assert result["raw_line"] == "PASS 1 FAIL 0 SKIP 0 EXIT 0"
     assert (tmp_path / RECORD_REL).exists()
+
+
+def test_run_gate_streams_and_keeps_tail(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(verification, "GATE_OUTPUT_CAP", 4096)
+    # One unbroken burst, no newlines, far larger than the cap -- proves the
+    # drain is byte-bounded as it reads, not only truncated after a full
+    # buffered capture.
+    command = "head -c 2000000 /dev/zero | tr '\\0' 'x'; echo; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
+    result = verification.run_gate(command, tmp_path, "abc", None, timeout=30)
+
+    assert result["passed"] == 1
+    assert result["raw_line"] == "PASS 1 FAIL 0 SKIP 0 EXIT 0"
+
+
+def test_run_gate_uses_last_summary_line_not_first(tmp_path: Path) -> None:
+    command = "echo 'PASS 1 FAIL 1 SKIP 0 EXIT 1'; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
+    result = verification.run_gate(command, tmp_path, "abc", None)
+
+    assert result["raw_line"] == "PASS 1 FAIL 0 SKIP 0 EXIT 0"
+    assert result["failed"] == 0
 
 
 def test_run_gate_times_out_and_writes_nothing(tmp_path: Path) -> None:

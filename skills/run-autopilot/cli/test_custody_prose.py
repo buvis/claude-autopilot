@@ -68,7 +68,7 @@ _CHANGELOG_TEXT = _CHANGELOG.read_text()
 
 _CUSTODY_GUARD_BLOCK = (
     'echo "[checks] custody push guard"\n'
-    "uv run --no-project --with pytest python -m pytest -q "
+    "run_pytest uv run --no-project --with pytest python -m pytest -q "
     "hooks/test_guard_push_on_critical.py\n"
 )
 
