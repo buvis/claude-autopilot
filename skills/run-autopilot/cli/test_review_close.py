@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from cli import rework_groups, review_close, schema, statectl
+from cli import gate, rework_groups, review_close, schema, statectl
 
 CRIT = "\U0001f534"
 HIGH = "\U0001f7e0"
@@ -336,6 +336,68 @@ def test_close_maps_every_classification_row_to_a_chosen_finding_value(
     every_text = json.dumps(data, ensure_ascii=False)
     assert "verify me" not in every_text
     assert "discard me" not in every_text
+
+
+def test_close_omits_found_by_suffix_when_no_author(tmp_path: Path) -> None:
+    review = _review(tmp_path)
+    state_path = _state(tmp_path)
+    finding = _finding(HIGH, "src/b.py", "wrong default")
+    finding["found_by"] = []
+
+    review_close.close(review, state_path, "decision-gate", [finding])
+
+    desc = _load(state_path)["tasks"][1]["description"]
+    assert "(found by:" not in desc
+    assert "wrong default" in desc
+
+
+def test_close_threads_require_codex_guard_flag_to_the_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    review = _review(tmp_path)
+    state_path = _state(tmp_path)
+    calls: list[bool | None] = []
+    real_run_gate = gate.run_gate
+
+    def _spy(review_file, reviewers=None, require_codex_guard=False):
+        calls.append(require_codex_guard)
+        return real_run_gate(
+            review_file, reviewers=reviewers, require_codex_guard=require_codex_guard
+        )
+
+    monkeypatch.setattr(review_close.gate, "run_gate", _spy)
+
+    review_close.close(
+        review, state_path, "decision-gate", [], require_codex_guard=True
+    )
+    review_close.close(
+        review, state_path, "tail-sweep", [], require_codex_guard=False
+    )
+
+    assert calls == [True, False]
+
+
+def test_close_tail_sweep_skips_lens_verdict_and_dispatch_row_steps(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    review = _review(tmp_path, extra_frontmatter="dispatch_rows:\n  bob: d-999\n")
+    state_path = _state(
+        tmp_path,
+        review_lenses={"consensus": "running"},
+        doubts_rubric_verdicts=[{"rule_id": "D9", "verdict": "pass"}],
+    )
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        review_close.subprocess, "run", lambda cmd, **_kwargs: commands.append(cmd)
+    )
+
+    result = review_close.close(review, state_path, "tail-sweep", [])
+
+    assert result["applied"] is True
+    data = _load(state_path)
+    assert data["review_lenses"] == {"consensus": "running"}
+    assert data["doubts_rubric_verdicts"] == [{"rule_id": "D9", "verdict": "pass"}]
+    assert commands == []
 
 
 def test_close_ends_frontmatter_dispatch_rows_best_effort(

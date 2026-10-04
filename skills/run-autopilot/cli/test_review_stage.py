@@ -296,6 +296,7 @@ def test_stage_stamps_roster_and_opens_cli_rows(
         "consensus": "running",
         "blind": "running",
         "doubt": "running",
+        "ui": "running",
     }
     assert state["phase"] == "review"
 
@@ -349,6 +350,43 @@ def test_stage_standalone_mode_skips_state_write(
     assert summary["dispatch_rows"] == {"bob": None, "carl": None}
     # steps 1-8 still ran: prompts came back from render_roster
     assert summary["prompts"]["bob"] is not None
+
+
+def test_blake_prompt_excludes_the_design_doc_appended_to_the_staged_prd(
+    env: dict,
+) -> None:
+    summary = _stage(env)
+
+    blake_prompt = Path(summary["prompts"]["blake"]).read_text()
+    assert "PRD-BODY-MARKER" in blake_prompt
+    assert "DESIGN-MARKER" not in blake_prompt
+
+
+def test_stage_wires_prior_findings_into_render_roster(
+    env: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[object] = []
+
+    def fake_render_roster(
+        context_file, diff_file, prd_file, pack_file, settled_ledger,
+        prior_findings, roster,
+    ):
+        seen.append(prior_findings)
+        out = {}
+        for name in roster:
+            path = Path(context_file).parent / f"{name}-prompt-test.md"
+            path.write_text(f"prompt for {name}\n")
+            out[name] = path
+        return out
+
+    monkeypatch.setattr(review_stage, "render_roster", fake_render_roster)
+    prior = env["tmp"] / "prior-findings.md"
+    prior.write_text("PRIOR-FINDING-MARKER\n")
+
+    summary = _stage(env, prior_findings=prior)
+
+    assert seen == [prior]
+    assert summary["ok"] is True
 
 
 def test_persona_preflight_fails_closed_on_malformed_frontmatter(

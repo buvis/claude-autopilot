@@ -137,6 +137,28 @@ def test_reuse_verdict_rejects_dirty_tree(repo: Path) -> None:
     assert verification.reuse_verdict(record, repo, head) == ("stale", {})
 
 
+def test_reuse_verdict_ignores_dirty_paths_under_the_store(repo: Path) -> None:
+    head = _git(repo, "rev-parse", "HEAD")
+    store_dir = repo / STORE / "autopilot"
+    store_dir.mkdir(parents=True)
+    tracked = store_dir / "state.json"
+    tracked.write_text("{}\n")
+    _git(repo, "add", "--", f"{STORE}/autopilot/state.json")
+    _git(repo, "commit", "--no-verify", "-q", "-m", "add store file")
+    head = _git(repo, "rev-parse", "HEAD")
+    record = _record(head)
+    assert verification.reuse_verdict(record, repo, head) == ("reused", record)
+
+    # Dirty a tracked store file and add an untracked one: both ignored.
+    tracked.write_text("{\"dirty\": true}\n")
+    (store_dir / "dispatch-metrics.jsonl").write_text("{}\n")
+    assert verification.reuse_verdict(record, repo, head) == ("reused", record)
+
+    # A non-store path dirty at the same time still makes the record stale.
+    (repo / "src" / "app.py").write_text("print('dirty')\n")
+    assert verification.reuse_verdict(record, repo, head) == ("stale", {})
+
+
 def test_run_gate_prints_one_summary_line(tmp_path: Path) -> None:
     command = (
         "printf 'PASS 1 FAIL 1 SKIP 1 EXIT 1\\n"
@@ -168,14 +190,20 @@ def test_run_gate_unparseable_output_records_nothing(tmp_path: Path) -> None:
     assert not (tmp_path / RECORD_REL).exists()
 
 
-def test_run_gate_truncates_output_before_parsing(tmp_path: Path, monkeypatch) -> None:
+def test_run_gate_keeps_tail_so_a_late_summary_line_still_parses(
+    tmp_path: Path, monkeypatch
+) -> None:
     monkeypatch.setattr(verification, "GATE_OUTPUT_CAP", 64)
-    # The summary line sits past the cap, so it must never be parsed.
+    # The summary line is always last; a cap that keeps the tail (not the
+    # head) of output exceeding GATE_OUTPUT_CAP must still find it.
     command = "printf '%0100d\\n' 0; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
     result = verification.run_gate(command, tmp_path, "abc", None)
 
-    assert result["passed"] is None
-    assert not (tmp_path / RECORD_REL).exists()
+    assert result["passed"] == 1
+    assert result["failed"] == 0
+    assert result["skipped"] == 0
+    assert result["raw_line"] == "PASS 1 FAIL 0 SKIP 0 EXIT 0"
+    assert (tmp_path / RECORD_REL).exists()
 
 
 def test_run_gate_times_out_and_writes_nothing(tmp_path: Path) -> None:
