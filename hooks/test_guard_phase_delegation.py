@@ -236,6 +236,39 @@ def test_direct_negation_still_allows() -> None:
     assert _guard_module().is_phase_delegation({"prompt": prompt}) is False
 
 
+_READ_ONLY_REVIEWER_NAMES = (
+    "alice", "blake", "bob", "carl", "cora", "eve", "grace", "mallory",
+    "pat", "rita", "toby", "trent", "victor",
+)
+
+
+def test_reviewer_dispatch_quoting_the_guard_is_allowed() -> None:
+    tool_input = {"subagent_type": "autopilot:blake", "prompt": "run the work phase"}
+    assert _guard_module().is_phase_delegation(tool_input) is False
+
+
+def test_worker_dispatch_is_still_checked() -> None:
+    tool_input = {"subagent_type": "autopilot:worker-sonnet", "prompt": "run the work phase"}
+    assert _guard_module().is_phase_delegation(tool_input) is True
+
+
+def test_every_exempt_reviewer_lacks_the_skill_tool() -> None:
+    # Exempting a read-only reviewer from the delegation guard cannot be
+    # exploited to delegate: none of the 13 personas can themselves invoke
+    # the Skill tool (its persona file never grants it).
+    agents_dir = HOOKS.parent / "agents"
+    for name in _READ_ONLY_REVIEWER_NAMES:
+        text = (agents_dir / f"{name}.md").read_text(encoding="utf-8")
+        assert text.startswith("---\n"), name
+        end = text.index("\n---", 4)
+        frontmatter = text[4:end]
+        tools_line = next(
+            line for line in frontmatter.splitlines() if line.startswith("tools:")
+        )
+        tools = [t.strip() for t in tools_line.removeprefix("tools:").split(",")]
+        assert "Skill" not in tools, (name, tools)
+
+
 @pytest.mark.parametrize("subagent_type", ["Explore", "Plan", None], ids=["explore", "plan", "omitted"])
 def test_delegations_are_denied_whatever_the_subagent_type(subagent_type: str | None) -> None:
     for fixture in _denied():
