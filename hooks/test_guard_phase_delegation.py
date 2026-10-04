@@ -236,6 +236,13 @@ def test_direct_negation_still_allows() -> None:
     assert _guard_module().is_phase_delegation({"prompt": prompt}) is False
 
 
+def test_negation_after_a_comma_still_allows() -> None:
+    # Measured: the last boundary in the window is the second comma, so the
+    # leading "Do not" never reaches the match and this reads as a delegation.
+    prompt = "Do not, under any circumstances, run the work phase."
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
+
+
 _READ_ONLY_REVIEWER_NAMES = (
     "alice", "blake", "bob", "carl", "cora", "eve", "grace", "mallory",
     "pat", "rita", "toby", "trent", "victor",
@@ -250,6 +257,20 @@ def test_reviewer_dispatch_quoting_the_guard_is_allowed() -> None:
 def test_worker_dispatch_is_still_checked() -> None:
     tool_input = {"subagent_type": "autopilot:worker-sonnet", "prompt": "run the work phase"}
     assert _guard_module().is_phase_delegation(tool_input) is True
+
+
+def test_bare_reviewer_name_is_still_checked() -> None:
+    # Only the namespaced plugin personas are exempt; a bare `blake` is some
+    # other agent of the same name and must still be checked.
+    tool_input = {"subagent_type": "blake", "prompt": "run the work phase"}
+    assert _guard_module().is_phase_delegation(tool_input) is True
+
+
+def test_unhashable_subagent_type_fails_open() -> None:
+    # A set-membership test on an unhashable value raises TypeError; the hook's
+    # contract is to fail open on a malformed payload, never to crash.
+    tool_input = {"subagent_type": {"a": 1}, "prompt": "run the work phase"}
+    assert isinstance(_guard_module().is_phase_delegation(tool_input), bool)
 
 
 def test_every_exempt_reviewer_lacks_the_skill_tool() -> None:
