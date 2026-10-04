@@ -17,7 +17,10 @@ minutes. Everything else is the orchestrator, on opus at xhigh.
 | 00242 c1 | 38.1 min | 15.5 min | 11.3 min | 11.1 min |
 | 00242 c2 | 33.4 min | ~6 min | ~7 min | ~18 min (includes a Tess+Ivan tail-sweep task and a 3-min gate) |
 
-So about **60% of a review session is orchestrator overhead**, and two
+| 00248 c1 (0.8.0, 15:4x) | 22.4 min | 7.1 min | ~10 min | 5.0 min |
+
+0.8.0's lower coordinator effort trimmed the overhead a little; it did not
+change its shape (still about 55%). So about **60% of a review session is orchestrator overhead**, and two
 cycles per PRD is the norm. Per PRD that is roughly 30-45 minutes of
 opus/xhigh time spent on work that is deterministic.
 
