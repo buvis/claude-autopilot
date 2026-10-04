@@ -1,0 +1,1141 @@
+You are writing tests for a feature. You have NOT seen any implementation and must NOT think about how to implement it.
+
+Task: Guard review-once in a lane (00239)
+
+
+Description:
+Add the in_wave_lane guard to _record_review_once_store
+
+Location: skills/run-autopilot/cli/loop.py (_record_review_once_store, currently lines 506-517); test in skills/run-autopilot/cli/test_loop_record_store.py
+
+Reuse: cli/store_tree.py::in_wave_lane(env=None) -> bool, reused verbatim, same call shape as loop.py:611 and loop_act.py:218's existing guarded sites.
+
+Contract (verbatim from the design doc's Interfaces & contracts, 00239):
+loop.py's _record_review_once_store (lines 506-517) gains the same guard its two siblings (loop.py:611, loop_act.py:218) already carry:
+```python
+def _record_review_once_store(self, ap_dir: Path, decision: dict) -> None:
+    if store_tree.in_wave_lane(self.env):
+        return
+    try:
+        store_repo, store_run_git = store_git(ap_dir)
+        store_tree.record_store(
+            store_repo,
+            "review_once",
+            decision.get("prd", ""),
+            ap_dir.parent,
+            run_git=store_run_git,
+        )
+    except Exception:
+        pass
+```
+This mirrors loop.py:608-611's `if (decision["signal"] == "continue" and decision.get("state_touched") and not store_tree.in_wave_lane(self.env)):` and loop_act.py:218's `if not store_tree.in_wave_lane(self.env):` exactly - store_tree.in_wave_lane(env: Mapping[str, str] | None = None) -> bool is called the same way at all three sites, with self.env (the Loop instance's own environment mapping, already used by both existing guarded call sites) as the single argument.
+
+Details:
+- Loop._record_review_once_store (loop.py:506) calls record_store without the store_tree.in_wave_lane(self.env) guard that the per-session site (loop.py:611) and the drained exit (loop_act.py:218) carry.
+- The fix is a pure early return added before the existing try/except body; no other behavior in the function changes.
+
+Write the new test in skills/run-autopilot/cli/test_loop_record_store.py, named test_review_once_skips_the_store_in_a_wave_lane. Use the existing test harness in that file (make_loop, write_state, _record_store_into, _progress_step, _lane_env) and follow the style of the neighboring wave-lane tests (test_a_wave_lane_records_no_store_for_a_session_that_made_progress, test_a_wave_lane_drained_exit_archives_but_records_no_store) and the review_once site tests (test_run_once_records_the_store_once_after_metrics_with_site_review_once). The test must call lp.run_once() with env=_lane_env(tmp_path) set on the loop, with a session that made progress (hand off to "build" or similar), and assert that no "review_once" (or any) store call fires, while the rest of run_once's normal behavior (exit code, output) is unaffected.
+
+Also update this file's module docstring (lines 1-8), which currently says review_once "records it once per call, right after its own metrics append (site 'review_once'), with no wave-lane gate" - that sentence describes the pre-fix behavior and must be corrected to reflect the new guard once the fix lands. Do not touch any other test in the file, and do not modify loop.py (that is the implementor's job, not yours - tests only).
+
+
+Acceptance Criteria:
+`test_loop_record_store.py::test_review_once_skips_the_store_in_a_wave_lane` green and red before the guard.
+
+
+Existing test patterns (follow these conventions):
+"""Tests for the wrapper's own store recording (PRD 00236): the loop records
+the store after the metrics append of a session that made progress (site
+"loop"), and the drained exit records it once more after the state-final
+archive (site "drained"). Review-once records it once per call, right after
+its own metrics append (site "review_once"), with no wave-lane gate. Inside
+a wave lane neither loop-site record fires. The harness (fake clock,
+scripted spawn, make_loop) is cli/loop_testutil.py.
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+from pathlib import Path
+
+import pytest
+
+from cli import loop_act, loop_testutil, store_tree
+from cli.loop import Loop
+from cli.loop_testutil import (
+    make_loop,
+    noop_step,
+    terminal_step,
+    write_log,
+    write_state,
+)
+
+# The autouse fixture registers by being a module attribute.
+_no_real_drain_side_effects = loop_testutil._no_real_drain_side_effects
+
+
+def _record_store_into(monkeypatch, events: list, calls: list, probe=None):
+    def fake(repo, site, prd, store_dir=None, run_git=store_tree.run_git):
+        events.append(("store", site, prd))
+        calls.append(
+            {
+                "repo": repo,
+                "site": site,
+                "prd": prd,
+                "run_git": run_git,
+                "store_dir": store_dir,
+                "probe": probe() if probe else None,
+            },
+        )
+        return None  # nothing committed: the wrapper must carry on regardless
+
+    monkeypatch.setattr(store_tree, "record_store", fake)
+
+
+def _trace_metrics_and_act(monkeypatch, events: list) -> None:
+    orig_metrics, orig_act = Loop._append_metrics, Loop._act_branch
+
+    def metrics(self, *args, **kwargs):
+        decision = args[3] if len(args) > 3 else kwargs["decision"]
+        events.append(("metrics", decision.get("prd", "")))
+        return orig_metrics(self, *args, **kwargs)
+
+    def act(self, *args, **kwargs):
+        events.append(("act",))
+        return orig_act(self, *args, **kwargs)
+
+    monkeypatch.setattr(Loop, "_append_metrics", metrics)
+    monkeypatch.setattr(Loop, "_act_branch", act)
+
+
+def _progress_step(prd: str, hand_off: str = "plan"):
+    """A session that made progress: it queued `hand_off` as the next phase.
+    Which phase it handed off to is not what makes it progress."""
+
+    def step(ap_dir: Path) -> None:
+        (ap_dir / "state.json").write_text(
+            json.dumps({"prd": prd, "next_phase": hand_off, "batch": {"id": "b-1"}}),
+        )
+        write_log(ap_dir, {"type": "result"})
+
+    return step
+
+
+def _git_init(repo: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+
+
+def _bare_terminal(lp, git_dir: Path, batch: str = "b-1"):
+    """A drained session whose state names a bare git dir for the repo."""
+    subprocess.run(["git", "init", "-q", "--bare", str(git_dir)], check=True)
+
+    def step(ap_dir: Path) -> None:
+        terminal_step(batch=batch)(ap_dir)
+        state = json.loads((ap_dir / "state.json").read_text())
+        state.update(repo_root=str(lp.cwd), git_dir=str(git_dir))
+        (ap_dir / "state.json").write_text(json.dumps(state))
+
+    return step
+
+
+def _bare_progress(lp, git_dir: Path, prd: str = "p.md"):
+    """A session that made progress, whose state names a bare git dir."""
+    subprocess.run(["git", "init", "-q", "--bare", str(git_dir)], check=True)
+
+    def step(ap_dir: Path) -> None:
+        _progress_step(prd)(ap_dir)
+        state = json.loads((ap_dir / "state.json").read_text())
+        state.update(repo_root=str(lp.cwd), git_dir=str(git_dir))
+        (ap_dir / "state.json").write_text(json.dumps(state))
+
+    return step
+
+
+def _lane_env(tmp_path: Path) -> dict:
+    """The two variables `autopilot wave launch` sets on every lane loop.
+    The slots dir is an opaque path: any non-empty value is a lane, and
+    nothing may read its name."""
+    return {
+        "_AUTOPILOT_REVIEW_SLOTS_DIR": str(tmp_path / "slots-7"),
+        "_AUTOPILOT_REVIEW_SLOTS": "1",
+    }
+
+
+def _store_dir_of(call: dict) -> Path:
+    """The store dir the call carried, resolved. None (the pathspec would
+    then miss a project root below git's work-tree root) is not a path."""
+    assert call["store_dir"] is not None, "the store dir is not optional here"
+    return Path(call["store_dir"]).resolve()
+
+
+def _assert_runner_bound_to_bare_repo(run_git, lp, git_dir: Path, tmp_path) -> None:
+    seen = run_git(["rev-parse", "--git-dir"], lp.cwd)
+    assert Path(seen.stdout.strip()).resolve() == git_dir.resolve()
+    # A bare git dir needs the work tree set, or add/commit cannot work.
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir(exist_ok=True)
+    top = run_git(["rev-parse", "--show-toplevel"], elsewhere)
+    assert Path(top.stdout.strip()).resolve() == lp.cwd.resolve()
+
+
+# ── site "loop": once per iteration, between metrics and act ────────────────
+
+
+@pytest.mark.parametrize("hand_off", ["plan", "design", "build", "verify", "review"])
+def test_each_iteration_records_the_store_after_metrics_and_before_acting(
+    tmp_path,
+    monkeypatch,
+    hand_off,
+):
+    # Whatever phase the session handed off to, it made progress and the
+    # loop relaunches: that, not the phase name, is what records the store.
+    events, calls = [], []
+    _record_store_into(monkeypatch, events, calls)
+    _trace_metrics_and_act(monkeypatch, events)
+    lp = make_loop(
+        tmp_path,
+        [_progress_step("p.md", hand_off), terminal_step(prd="q.md", batch="b-1")],
+    )
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b-1"})
+
+    # record_store returned None both times; the loop still drained normally.
+    assert lp.run() == 0
+    assert len(lp._test["spawn"].launches) == 2
+
+    first_prd, second_prd = (e[1] for e in events if e[0] == "metrics")
+    assert first_prd == "p.md"
+    assert events == [
+        ("metrics", first_prd),
+        ("store", "loop", first_prd),
+        ("act",),
+        # The second session drained the batch: no per-iteration record.
+        ("metrics", second_prd),
+        ("act",),
+        # The drained record carries the PRD the final state named.
+        ("store", "drained", "q.md"),
+    ]
+
+
+def test_loop_site_records_the_projects_repo_with_a_git_runner_bound_to_it(
+    tmp_path,
+    monkeypatch,
+):
+    events, calls = [], []
+    _record_store_into(monkeypatch, events, calls)
+    # The first session made progress, so it is the one that records.
+    lp = make_loop(tmp_path, [_progress_step("p.md"), terminal_step()])
+    _git_init(lp.cwd)
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b-1"})
+    assert lp.run() == 0
+
+    loop_calls = [c for c in calls if c["site"] == "loop"]
+    assert len(loop_calls) == 1
+    call = loop_calls[0]
+    assert Path(call["repo"]).resolve() == lp.cwd.resolve()
+    # The store dir, not None: it is what puts the store pathspec under a
+    # project root that sits below git's work-tree root.
+    assert _store_dir_of(call) == lp._test["ap_dir"].parent.resolve()
+    # The runner targets the project repo even when invoked from elsewhere.
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    top = call["run_git"](["rev-parse", "--show-toplevel"], elsewhere)
+    assert Path(top.stdout.strip()).resolve() == lp.cwd.resolve()
+    # A failed git call must raise, never pass as a quiet nonzero result.
+    with pytest.raises(subprocess.CalledProcessError):
+        call["run_git"](["rev-parse", "--verify", "nonexistent-ref"], lp.cwd)
+
+
+def test_loop_site_runner_uses_the_bare_git_dir_recorded_in_state(
+    tmp_path,
+    monkeypatch,
+):
+    events, calls = [], []
+    _record_store_into(monkeypatch, events, calls)
+    lp = make_loop(tmp_path, [])
+    git_dir = tmp_path / "bare.git"
+    # A session that made progress, then one that drains the batch.
+    lp._test["spawn"].steps.append(_bare_progress(lp, git_dir))
+    lp._test["spawn"].steps.append(terminal_step())
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b-1"})
+    assert lp.run() == 0
+
+    call = next(c for c in calls if c["site"] == "loop")
+    assert Path(call["repo"]).resolve() == lp.cwd.resolve()
+    _assert_runner_bound_to_bare_repo(call["run_git"], lp, git_dir, tmp_path)
+
+
+# ── site "drained": once, after the archive, purge and agoge ────────────────
+
+
+def test_drained_exit_records_the_store_once_after_archive_and_agoge(
+    tmp_path,
+    monkeypatch,
+):
+    events, calls = [], []
+    lp = make_loop(tmp_path, [terminal_step(batch="b-7")])
+    ap = lp._test["ap_dir"]
+    archived = ap / "reports" / "b-7-state-final.json"
+    _record_store_into(
+        monkeypatch,
+        events,
+        calls,
+        probe=lambda: (archived.is_file(), (ap / "state.json").exists()),
+    )
+    monkeypatch.setattr(loop_act, "run_purge", lambda repo: events.append(("purge",)))
+    monkeypatch.setattr(
+        loop_act,
+        "run_agoge",
+        lambda ap_dir, batch, drained, env, out, claude_bin="claude": events.append(
+            ("agoge",),
+        ),
+    )
+    _git_init(lp.cwd)
+    write_state(ap, prd="p.md", next_phase="build", batch={"id": "b-7"})
+    assert lp.run() == 0
+
+    drained = [c for c in calls if c["site"] == "drained"]
+    assert len(drained) == 1
+    assert drained[0]["probe"] == (True, False)  # archived, live state gone
+    assert Path(drained[0]["repo"]).resolve() == lp.cwd.resolve()
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    top = drained[0]["run_git"](["rev-parse", "--show-toplevel"], elsewhere)
+    assert Path(top.stdout.strip()).resolve() == lp.cwd.resolve()
+    # Nothing touches the store after the drained record: it is the last event.
+    assert events[-1][:2] == ("store", "drained")
+    assert events.index(("agoge",)) < len(events) - 1
+    assert events.index(("purge",)) < len(events) - 1
+    assert "Backlog drained." in lp._test["out"].getvalue()
+
+
+def test_drained_site_runner_uses_the_bare_git_dir_from_state_before_archive(
+    tmp_path,
+    monkeypatch,
+):
+    # The live state.json is archived before the drained record, so the
+    # repo and git dir must come from the state as it stood before that.
+    events, calls = [], []
+    _record_store_into(monkeypatch, events, calls)
+    lp = make_loop(tmp_path, [])
+    git_dir = tmp_path / "bare.git"
+    lp._test["spawn"].steps.append(_bare_terminal(lp, git_dir, batch="b-7"))
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b-7"})
+    assert lp.run() == 0
+
+    drained = [c for c in calls if c["site"] == "drained"]
+    assert len(drained) == 1
+    assert Path(drained[0]["repo"]).resolve() == lp.cwd.resolve()
+    # The store dir, not None: see the loop site's test above.
+    assert _store_dir_of(drained[0]) == lp._test["ap_dir"].parent.resolve()
+    _assert_runner_bound_to_bare_repo(drained[0]["run_git"], lp, git_dir, tmp_path)
+
+
+def test_operator_pause_exit_records_no_drained_store(tmp_path, monkeypatch):
+    # A stand-down also exits 0, but the batch is not drained and the
+    # session made no progress: neither record may fire.
+    events, calls = [], []
+    _record_store_into(monkeypatch, events, calls)
+
+    def stand_down(ap_dir: Path) -> None:
+        (ap_dir / "pause-requested").write_text(json.dumps({"reason": "peer owns it"}))
+
+    lp = make_loop(tmp_path, [stand_down])
+    ap = lp._test["ap_dir"]
+    write_state(ap, prd="p.md", next_phase="build", batch={"id": "b-1"})
+    assert lp.run() == 0
+    assert (ap / "paused-by-operator").is_file()
+    assert "stood down" in lp._test["out"].getvalue()
+
+    assert [c["site"] for c in calls] == []
+
+
+# ── the gate: a session that made progress, outside a wave lane ────────────
+
+
+def test_a_session_that_died_records_no_store(tmp_path, monkeypatch):
+    monkeypatch.delenv("_AUTOPILOT_REVIEW_SLOTS_DIR", raising=False)
+    events, calls = [], []
+    _record_store_into(monkeypatch, events, calls)
+    # The first session touches nothing (it died and is retried); the
+    # second drains the batch.
+    lp = make_loop(tmp_path, [noop_step, terminal_step(prd="q.md")])
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b-1"})
+    assert lp.run() == 0
+    assert len(lp._test["spawn"].launches) == 2
+
+    assert [c["site"] for c in calls] == ["drained"]
+
+
+def test_a_paused_session_records_no_store(tmp_path, monkeypatch):
+    monkeypatch.delenv("_AUTOPILOT_REVIEW_SLOTS_DIR", raising=False)
+    events, calls = [], []
+    _record_store_into(monkeypatch, events, calls)
+
+    def pausing(ap_dir: Path) -> None:
+        (ap_dir / "state.json").write_text(
+            json.dumps(
+                {
+                    "prd": "p.md",
+                    "phase": "paused",
+                    "next_phase": "paused",
+                    "pause_reason": {"detail": "design gate needs the operator"},
+                    "batch": {"id": "b-1"},
+                },
+            ),
+        )
+        write_log(ap_dir, {"type": "result"})
+
+    lp = make_loop(tmp_path, [pausing])
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b-1"})
+    assert lp.run() == 1
+
+    assert calls == []
+
+
+def test_a_wave_lane_records_no_store_for_a_session_that_made_progress(
+    tmp_path,
+    monkeypatch,
+):
+    events, calls = [], []
+    _record_store_into(monkeypatch, events, calls)
+    lp = make_loop(
+        tmp_path,
+        [_progress_step("p.md"), terminal_step(prd="q.md", batch="b-1")],
+        env=_lane_env(tmp_path),
+    )
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b-1"})
+    assert lp.run() == 0
+    assert len(lp._test["spawn"].launches) == 2
+
+    assert calls == [], "a lane branch takes no store commit, at any site"
+
+
+def test_a_wave_lane_drained_exit_archives_but_records_no_store(tmp_path, monkeypatch):
+    events, calls = [], []
+    _record_store_into(monkeypatch, events, calls)
+    lp = make_loop(tmp_path, [terminal_step(batch="b-7")], env=_lane_env(tmp_path))
+    ap = lp._test["ap_dir"]
+    write_state(ap, prd="p.md", next_phase="build", batch={"id": "b-7"})
+    assert lp.run() == 0
+
+    assert calls == []
+    # Only the record is skipped: the drained exit itself ran to the end.
+    assert (ap / "reports" / "b-7-state-final.json").is_file()
+    assert not (ap / "state.json").exists()
+    assert "Backlog drained." in lp._test["out"].getvalue()
+
+
+# ── site "review_once": once per call, after metrics ───────────────────────
+
+
+def test_run_once_records_the_store_once_after_metrics_with_site_review_once(
+    tmp_path,
+    monkeypatch,
+):
+    events, calls = [], []
+    _record_store_into(monkeypatch, events, calls)
+    _trace_metrics_and_act(monkeypatch, events)
+    lp = make_loop(tmp_path, [_progress_step("p.md", "build")])
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="review", batch={"id": "b-1"})
+
+    assert lp.run_once() == 0
+    assert len(lp._test["spawn"].launches) == 1
+    assert events == [
+        ("metrics", "p.md"),
+        ("store", "review_once", "p.md"),
+    ]
+    assert [c["site"] for c in calls] == ["review_once"]
+
+
+def test_a_raising_recorder_still_lets_run_once_return_its_normal_code(
+    tmp_path,
+    monkeypatch,
+):
+    calls: list = []
+
+    def boom(*args, **kwargs):
+        calls.append(1)
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(store_tree, "record_store", boom)
+    lp = make_loop(tmp_path, [_progress_step("p.md", "build")])
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="review", batch={"id": "b-1"})
+
+    # Same script, state and expected code as the non-raising baseline
+    # (test_review_once_spawns_the_review_route_once_and_exits_zero in
+    # cli/test_loop_review_once.py): a raising recorder must not change it,
+    # and must not escape _run_once uncaught (the call below would error,
+    # not just fail an assertion, if it did).
+    assert lp.run_once() == 0
+    assert calls == [1]
+    assert "signal continue" in lp._test["out"].getvalue()
+
+
+Public interfaces/types relevant to this task:
+"""cli/loop.py - the autopilot loop driver (PRD 00106).
+
+Replaces the bash `autoclaude()` loop body: read state through the
+00051 core, decide over the PRD-00014 decision table, spawn the routed
+phase runner, act on the branch. One session = one `claude -p` turn =
+one process that exits at turn end; the decision is made from
+state.json after exit, never from the session's words.
+
+Signals, in decision order (one per session):
+    state_write_failed  the 00051 marker survives past state.json and
+                        wins over an otherwise-continue state
+    paused              a human is needed (pause_reason / review cap), or
+                        the session stood down for a peer that owns its
+                        PRD (pause marker written mid-session, PRD 00172)
+    continue            next phase queued (also: replan, limit wait,
+                        network restored, died-retry)
+    done                backlog drained (next_phase empty)
+    died                no progress and no scheduling explanation
+    park                died past the retry budget, or the
+                        no-progress fingerprint bound fired
+
+state_touched guards the no-progress branch: a healthy session ALWAYS
+writes state at its hand-off, so an untouched state.json means this
+session made no progress (limit-hit at start, crash, cap-kill) -
+without the mtime check a mid-batch limit hit would relaunch into the
+same banner in a tight loop.
+
+Everything the wrapper accreted rides along: memory circuit-breaker
+(2026-06-25 RAM lockout), loop registry + duplicate guard, plugin-pin
+preflight (PRD 00086 R3), usage-limit wait (bounded), network-outage
+poll (bounded, retry-capped), died-retry + park marker with its
+unconsumed-marker bounds (PRD 00066), progress-fingerprint bound
+(2026-07-14), per-session metrics with the GC-exempt ledger mirror,
+and the drained-path purge + agoge QA run (PRD 00102).
+"""
+
+from __future__ import annotations
+
+import datetime as _dt
+import json
+import os
+import re
+import signal as signal_mod
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+from cli import convergence, notify_out, pause, render_metrics, routing, runner, store_tree, usage_limit, wave_slots
+from cli.loop_act import PURGE_SCRIPT, ActMixin, run_agoge, run_purge, store_git
+from cli.loop_decision import DecisionMixin, died_next, fingerprint, last_result_field, pause_detail, plugin_drift
+from cli.loop_gates import DEFAULT_LOOPS_DIR, GatesMixin, live_wrapper_pid, prune_registry
+from cli.routing import _load_json
+
+_SKILL_ROOT = Path(__file__).resolve().parents[1]
+_SCRIPTS_DIR = _SKILL_ROOT / "scripts"
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+import _walk_up
+
+# compat re-exports: the names loop.py defined before PRD 00192 split it
+__all__ = [
+    "DEFAULT_LOOPS_DIR",
+    "Loop",
+    "PURGE_SCRIPT",
+    "died_next",
+    "fingerprint",
+    "last_result_field",
+    "live_wrapper_pid",
+    "main",
+    "pause_detail",
+    "plugin_drift",
+    "prune_registry",
+    "run_agoge",
+    "run_purge",
+]
+
+_API_PROBE_URL = "https://api.anthropic.com"
+# The lanes whose build session converges from `build` (PRD 00205).
+_LANES = ("solo", "fast-track")
+
+
+class _Terminated(Exception):
+    def __init__(self, code: int) -> None:
+        self.code = code
+
+
+# ── the driver ───────────────────────────────────────────────────────────────
+
+
+def _read_memory_pressure() -> int | None:
+    """macOS memorystatus level: 1 normal, 2 warning, 4 critical.
+    None where the sysctl does not exist."""
+    try:
+        out = subprocess.run(
+            ["sysctl", "-n", "kern.memorystatus_vm_pressure_level"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        ).stdout.strip()
+        return int(out) if out else None
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
+def _probe_api() -> bool:
+    try:
+        urllib.request.urlopen(_API_PROBE_URL, timeout=5)
+        return True
+    except urllib.error.HTTPError:
+        return True  # an HTTP status IS connectivity (curl -s exits 0 too)
+    except (OSError, ValueError):
+        return False
+
+
+def _decision_fields(decision: dict) -> dict:
+    """The PRD 00199 fields of a session row. A stand-down's paused row
+    names why the session stood down and on what evidence, so a false
+    stand-down (a reader mistaken for a writer) is visible in the ledger,
+    not only in the notification. A continue row that sleeps first (a
+    rejected wait or a window yield) carries `limit_wait`; a wait the
+    fingerprint bound overrode into park/paused never happens, so those
+    rows carry none. Empty for every other row."""
+    fields: dict = {}
+    if decision.get("stood_down"):
+        fields["stood_down"] = decision["stood_down"]
+        fields["stood_down_condition"] = decision.get("stood_down_condition", "unknown")
+    if decision["signal"] == "continue" and decision.get("limit_wait") is not None:
+        fields["limit_wait"] = decision["limit_wait"]
+    return fields
+
+
+def _metrics_line(
+    ap_dir: Path,
+    ts_start: float,
+    ts_end: float,
+    decision: dict,
+    phase_launched: str,
+    model: str,
+    effort: str,
+    killed_by: str | None,
+) -> dict:
+    line = {
+        "ts_start": int(ts_start),
+        "ts_end": int(ts_end),
+        "wall_secs": int(ts_end) - int(ts_start),
+        "prd": decision["prd"],
+        "batch": decision["batch"],
+        "phase_launched": phase_launched,
+        "phase_end": decision["phase_end"],
+        "signal": decision["signal"],
+        "model": model,
+        "effort": effort,
+        "lane": decision.get("lane"),
+        "lane_effective": decision.get("lane_effective"),
+    }
+    line.update(_decision_fields(decision))
+    if killed_by:
+        line["killed_by"] = killed_by
+    cost = last_result_field(ap_dir / "last-session.log", "total_cost_usd")
+    if isinstance(cost, (int, float)) and not isinstance(cost, bool):
+        line["cost_usd"] = cost
+    usage = last_result_field(ap_dir / "last-session.log", "usage")
+    tokens = usage.get("output_tokens") if isinstance(usage, dict) else None
+    if isinstance(tokens, int) and not isinstance(tokens, bool):
+        line["tokens_out"] = tokens
+    return line
+
+
+def _write_metrics_row(path: Path, encoded: str) -> None:
+    with open(path, "a", encoding="utf-8") as fh:
+        fh.write(encoded + "\n")
+
+
+class Loop(GatesMixin, DecisionMixin, ActMixin):
+    """One `autopilot loop` invocation: drives sessions until drain,
+    pause, halt, or an operator signal. Collaborators are injectable so
+    the decision table and every act branch are testable without a real
+    claude, notifier, network, or clock."""
+
+    def __init__(
+        self,
+        cwd: Path | None = None,
+        env: dict | None = None,
+        *,
+        spawn_fn=runner.spawn,
+        notify_fn=notify_out.notify,
+        sleep_fn=time.sleep,
+        pressure_fn=_read_memory_pressure,
+        probe_fn=_probe_api,
+        detect_limit_fn=usage_limit.detect_from_log,
+        clock=time.time,
+        out=None,
+        err=None,
+        runner_bin: str = "claude",
+    ) -> None:
+        self.cwd = Path.cwd() if cwd is None else cwd
+        self.env = dict(os.environ) if env is None else env
+        self._spawn = spawn_fn
+        self._notify = notify_fn
+        self._sleep = sleep_fn
+        self._pressure = pressure_fn
+        self._probe = probe_fn
+        self._detect_limit = detect_limit_fn
+        self._clock = clock
+        self.out = out if out is not None else sys.stdout
+        self.err = err if err is not None else sys.stderr
+        self.runner_bin = runner_bin
+
+        raw_tag = self.env.get("_AUTOPILOT_LOOP", "")
+        self.loop_pid = int(raw_tag) if raw_tag.isdigit() else os.getpid()
+        # Children must inherit the tag (orphan cleanup and the recycled-pid
+        # guard both grep for it), exactly as the bash export did.
+        self.env["_AUTOPILOT_LOOP"] = str(self.loop_pid)
+
+        self._reg: Path | None = None
+        self._net_retries = 0
+        self._died_retries = 0
+        self._park_relaunches = 0
+        self._fp_prev = ""
+        self._fp_repeats = 0
+        self._proc_slot: list = [None]
+        self._warned_schema = False
+        self._last_spawn = None
+
+    # ── env knobs ──
+    def _int(self, key: str, default: int) -> int:
+        return routing._env_int(self.env, key, default)
+
+    # ── plumbing ──
+    def _repo_name(self) -> str:
+        return self.cwd.name
+
+    def _teardown(self) -> None:
+        proc = self._proc_slot[0]
+        if proc is not None and proc.poll() is None:
+            proc.terminate()
+        self._cleanup_orphans()
+        if self._reg is not None:
+            try:
+                self._reg.unlink()
+            except OSError:
+                pass
+
+    def _cleanup_orphans(self) -> None:
+        """HUP orphaned (PPID=1) processes tagged with our marker, so
+        shells propagate the signal to their children. One ps over all
+        candidates (the bash loop ran ps per pid; launchd parents
+        hundreds of user processes, so per-pid probing is seconds of
+        work per session)."""
+        try:
+            out = subprocess.run(
+                ["pgrep", "-u", os.environ.get("USER", ""), "-P", "1"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            ).stdout
+        except (OSError, subprocess.SubprocessError):
+            return
+        pids = [token for token in out.split() if token.isdigit()]
+        if not pids:
+            return
+        try:
+            ps_out = subprocess.run(
+                ["ps", "ewww", "-p", ",".join(pids), "-o", "pid=,command="],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            ).stdout
+        except (OSError, subprocess.SubprocessError):
+            return
+        tag = re.compile(rf"_AUTOPILOT_LOOP={self.loop_pid}( |$)")
+        for line in ps_out.splitlines():
+            parts = line.strip().split(None, 1)
+            if len(parts) == 2 and parts[0].isdigit() and tag.search(parts[1]):
+                try:
+                    os.kill(int(parts[0]), signal_mod.SIGHUP)
+                except OSError:
+                    pass
+
+    def _resolve_ap_dir(self) -> Path:
+        ap_dir = _walk_up.find_autopilot_dir(self.cwd)
+        if ap_dir is None:
+            # walk-up miss = no dir exists yet (normal on a fresh repo), not a failure
+            print(
+                f"autoclaude: no existing autopilot dir found (fresh start); creating {self.cwd}/docs/dev/project-management/autopilot",
+                file=self.err,
+            )
+            ap_dir = self.cwd / "docs" / "dev" / "project-management" / "autopilot"
+        try:
+            ap_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
+        return ap_dir
+
+    def _killed_by(self) -> str | None:
+        """The watchdog's fire reason for the most recently launched session,
+        or None when it never fired (or none has launched yet)."""
+        if self._last_spawn is not None and self._last_spawn.cap_fired:
+            return self._last_spawn.cap_reason
+        return None
+
+    def _append_metrics(
+        self,
+        ap_dir: Path,
+        ts_start: float,
+        ts_end: float,
+        decision: dict,
+        phase_launched: str,
+        model: str,
+        effort: str,
+    ) -> None:
+        """One JSONL line per session, after the decision and before any exit
+        path, plus the review_converged row when a review exits to done. Observation
+        only: the append can never block or fail the loop (the one sanctioned
+        silent failure, scoped to itself)."""
+        try:
+            line = _metrics_line(
+                ap_dir,
+                ts_start,
+                ts_end,
+                decision,
+                phase_launched,
+                model,
+                effort,
+                self._killed_by(),
+            )
+            encoded = json.dumps(line, separators=(",", ":"))
+            # Primary row first: a mkdir failure below must not lose it, and
+            # an absent ap_dir must not get created as a mkdir(parents=True)
+            # side effect.
+            _write_metrics_row(ap_dir / "loop-metrics.jsonl", encoded)
+            ledger_dir = ap_dir / "ledger"
+            ledger_dir.mkdir(parents=True, exist_ok=True)
+            _write_metrics_row(ledger_dir / "loop-metrics.jsonl", encoded)
+            # Session row first, so build_row sees this session's batch.
+            converged = phase_launched == "review" or line["lane_effective"] in _LANES
+            if decision.get("phase_end") == "done" and converged:
+                self._append_convergence(ap_dir, ledger_dir, ts_end)
+        except (OSError, ValueError, TypeError):
+            pass
+
+    def _append_convergence(
+        self,
+        ap_dir: Path,
+        ledger_dir: Path,
+        ts_end: float,
+    ) -> None:
+        """The review_converged row, appended to both metrics files; nothing
+        when state.json is gone, malformed or names no prd/batch (the session
+        row already written stays)."""
+        state = _load_json(ap_dir / "state.json")
+        if not isinstance(state, dict):
+            return
+        # Unidentifiable reads as unreadable: no prd or batch id, no row.
+        prd = state.get("prd")
+        batch = (state.get("batch") or {}).get("id")
+        if not (isinstance(prd, str) and prd and isinstance(batch, str) and batch):
+            return
+        rows = render_metrics.load_rows(ap_dir / "loop-metrics.jsonl")
+        row = convergence.build_row(ap_dir, state, rows, int(ts_end))
+        event = json.dumps(row, separators=(",", ":"))
+        for path in (ap_dir, ledger_dir):
+            with open(path / "loop-metrics.jsonl", "a", encoding="utf-8") as fh:
+                fh.write(event + "\n")
+
+    # ── run ──
+    def run(self) -> int:
+        return self._guarded(self._run_loop)
+
+    def run_once(self) -> int:
+        """`autopilot review-once`: one review or finalize session for
+        state.next_phase, then exit. No relaunch, no park, no
+        notification, and the operator's pause marker is left alone."""
+        return self._guarded(self._run_once)
+
+    def _guarded(self, body) -> int:
+        """Signal contract shared by the loop and the one-shot: SIGTERM
+        and SIGHUP exit 128+signum, Ctrl-C exits 130, both after a
+        teardown, and the caller's own handlers are restored on the way
+        out."""
+
+        def _on_term(signum, frame):
+            raise _Terminated(128 + signum)
+
+        old_handlers = {}
+        for sig in (signal_mod.SIGTERM, signal_mod.SIGHUP):
+            try:
+                old_handlers[sig] = signal_mod.signal(sig, _on_term)
+            except (ValueError, OSError):
+                pass  # not the main thread (tests) - handlers stay default
+        try:
+            return body()
+        except KeyboardInterrupt:
+            self._teardown()
+            return 130
+        except _Terminated as term:
+            self._teardown()
+            return term.code
+        finally:
+            for sig, handler in old_handlers.items():
+                try:
+                    signal_mod.signal(sig, handler)
+                except (ValueError, OSError):
+                    pass
+
+    def _launch(self, plan: routing.Route, ap_dir: Path, phase: str) -> float:
+        """One routed session, plus the slot reset and orphan sweep that
+        always follow it. The keyword set is the contract every spawn_fn
+        (runner.spawn and the tests' ScriptedSpawn) is written against.
+        A review session first claims a slot under
+        _AUTOPILOT_REVIEW_SLOTS_DIR, when set, and frees it after. Returns
+        the clock reading taken once the slot is held (or immediately, when
+        there is none to wait for), so the metrics ts_start excludes the
+        queue wait."""
+        slots_dir = self.env.get("_AUTOPILOT_REVIEW_SLOTS_DIR", "")
+        slot = None
+        if phase == "review" and slots_dir:
+            slot = wave_slots.acquire(
+                Path(slots_dir),
+                self._int("_AUTOPILOT_REVIEW_SLOTS", 3),
+                self.loop_pid,
+                sleep_fn=self._sleep,
+                clock=self._clock,
+            )
+        ts_start = self._clock()
+        try:
+            self._last_spawn = self._spawn(
+                plan.model,
+                plan.effort,
+                cap_secs=plan.cap_secs,
+                autopilot_dir=ap_dir,
+                env=self.env,
+                runner_bin=self.runner_bin,
+                proc_slot=self._proc_slot,
+            )
+        finally:
+            if slot is not None:
+                wave_slots.release(slot)
+        self._proc_slot[0] = None
+        self._cleanup_orphans()
+        return ts_start
+
+    def _one_shot_phase(self, state, state_path: Path) -> str | None:
+        """The phase guard. Only `review` and `done` may be driven by a
+        single session; a build needs the loop's acting branches, so
+        refusing here is what keeps the operator from starting one by
+        accident. None = refused, and the reason is already printed."""
+        value = state.get("next_phase") or "" if isinstance(state, dict) else "missing"
+        if value in ("review", "done"):
+            return value
+        print(
+            f"autopilot review-once: next_phase is '{value}' ({state_path}); "
+            "this verb runs review and finalize sessions only. Drive the "
+            "build in your session, or run autoclaude.",
+            file=self.err,
+        )
+        return None
+
+    def _run_once(self) -> int:
+        code = self._memory_gate()
+        if code is not None:
+            self._teardown()
+            return code
+
+        ap_dir = self._resolve_ap_dir()
+        for gate in (self._register, self._plugin_gate, self._schema_gate):
+            code = gate(ap_dir)
+            if code is not None:
+                self._teardown()
+                return code
+
+        state = _load_json(ap_dir / "state.json")
+        next_phase = self._one_shot_phase(state, ap_dir / "state.json")
+        if next_phase is None:
+            self._teardown()
+            return 1
+
+        prd = (state.get("prd") or "") if isinstance(state, dict) else ""
+        plan = routing.route(next_phase, ap_dir, env=self.env)
+        ts_start = self._announce_and_launch(ap_dir, next_phase, prd, plan)
+
+        decision = self._decide(ap_dir, ts_start)
+        # NOT _fingerprint_bound: it parks.
+        self._append_metrics(
+            ap_dir,
+            ts_start,
+            self._clock(),
+            decision,
+            next_phase,
+            plan.model,
+            plan.effort,
+        )
+        self._record_review_once_store(ap_dir, decision)
+        print(
+            f"autopilot review-once: signal {decision['signal']} · next phase "
+            f"'{decision['next']}' · {decision['detail']}",
+            file=self.out,
+        )
+        self._teardown()
+        ok = decision["state_touched"] and decision["signal"] != "state_write_failed"
+        return 0 if ok else 1
+
+    def _record_review_once_store(self, ap_dir: Path, decision: dict) -> None:
+        try:
+            store_repo, store_run_git = store_git(ap_dir)
+            store_tree.record_store(
+                store_repo,
+                "review_once",
+                decision.get("prd", ""),
+                ap_dir.parent,
+                run_git=store_run_git,
+            )
+        except Exception:
+            pass
+
+    def _loop_gates(self, ap_dir: Path) -> int | None:
+        """The per-iteration gates that run once the autopilot dir is
+        known. An exit code halts the loop (teardown already done);
+        None means this iteration launches a session."""
+        code = self._register(ap_dir)
+        if code is not None:
+            self._teardown()
+            return code
+
+        if pause.consume_pause(ap_dir):
+            return self._stop_on_marker(
+                ap_dir,
+                "paused by operator ON PURPOSE",
+                "Paused by operator at a session boundary. State intact.",
+            )
+
+        pause.clear_paused(ap_dir)  # past the pause branch: this loop runs
+
+        for gate in (self._plugin_gate, self._schema_gate):
+            code = gate(ap_dir)
+            if code is not None:
+                self._teardown()
+                return code
+        return None
+
+    def _announce_and_launch(
+        self, ap_dir: Path, phase: str, prd: str, plan: routing.Route
+    ) -> float:
+        """Print the launch banner and spawn the routed session. Phase
+        resolution and the banner's empty-phase fallback stay with each
+        caller: `_run_once` passes an already-restricted phase,
+        `_launch_phase` passes `phase_launched or 'bootstrap'`. Returns
+        `_launch`'s post-slot-wait clock reading."""
+        stamp = _dt.datetime.now().strftime("%H:%M:%S")
+        print(
+            f"\n━━ {stamp} · phase {phase} · prd {prd or 'no-prd'} · "
+            f"{plan.model}/{plan.effort} ━━",
+            file=self.out,
+        )
+        return self._launch(plan, ap_dir, phase)
+
+    def _launch_phase(self, ap_dir: Path) -> tuple[float, str, routing.Route]:
+        """Read state, route it, announce it, spawn it. Returns the
+        start clock, the phase launched and the route, all three needed
+        by the metrics line the caller appends. The start clock is read
+        once the session actually launches, excluding any review-slot
+        wait."""
+        state = _load_json(ap_dir / "state.json")
+        phase_launched = ""
+        prd_launched = ""
+        if isinstance(state, dict):
+            phase_launched = state.get("next_phase") or ""
+            prd_launched = state.get("prd") or ""
+
+        plan = routing.route(phase_launched, ap_dir, env=self.env)
+        ts_start = self._announce_and_launch(
+            ap_dir, phase_launched or "bootstrap", prd_launched, plan
+        )
+        return ts_start, phase_launched, plan
+
+    def _run_loop(self) -> int:
+        while True:
+            code = self._memory_gate()
+            if code is not None:
+                self._teardown()
+                return code
+
+            ap_dir = self._resolve_ap_dir()
+
+            code = self._loop_gates(ap_dir)
+            if code is not None:
+                return code
+
+            ts_start, phase_launched, plan = self._launch_phase(ap_dir)
+
+            decision = self._decide(ap_dir, ts_start)
+            self._fingerprint_bound(decision, ap_dir / "state.json")
+            ts_end = self._clock()
+            self._append_metrics(
+                ap_dir,
+                ts_start,
+                ts_end,
+                decision,
+                phase_launched,
+                plan.model,
+                plan.effort,
+            )
+            # A lane branch carries no store commits. state_touched is not
+            # redundant: the first death continues as a retry.
+            if (
+                decision["signal"] == "continue"
+                and decision.get("state_touched")
+                and not store_tree.in_wave_lane(self.env)
+            ):
+                store_repo, store_run_git = store_git(ap_dir)
+                store_tree.record_store(
+                    store_repo,
+                    "loop",
+                    decision.get("prd", ""),
+                    ap_dir.parent,
+                    run_git=store_run_git,
+                )
+
+            code = self._act_branch(decision, ap_dir)
+            if code is not None:
+                return code
+
+
+def main(argv: list[str] | None = None) -> int:
+    return Loop().run()
+
+Test framework: pytest
+
+Rules:
+1. Write tests from requirements only. You are a USER of this API, not its builder.
+2. Each test name describes a behavior: "rejects empty email", "returns 404 for missing user"
+3. Assert on outputs, return values, side effects, and errors. Never assert on mock existence.
+4. Cover edge cases: empty input, null/undefined, boundary values, error conditions
+5. Use real code paths. Mock only external dependencies (network, filesystem, databases).
+6. For EACH test, ask yourself: "What wrong implementation would still pass this?" If easy to answer, add constraints.
+7. Do not write implementation code. Do not modify non-test files.
+8. Do not add test-only methods to production classes. Use test utilities instead.
+9. SIMPLICITY FIRST: Test only the behavior in the acceptance criteria. Do not add tests for features nobody asked for. If you write 20 tests when 6 cover the spec, cut back.
+10. THINK BEFORE CODING: If the acceptance criteria are ambiguous (unclear input shape, unstated error behavior, multiple valid interpretations), STOP and report the ambiguity instead of picking an interpretation silently.
+10a. NEVER INVENT A CONTRACT: If the task names a data structure (JSON object, API response, enum, config schema, record type) but does not pin its EXACT field names, enum values, or types, STOP and report it as a blocker. Do not invent a plausible schema and test against it — a self-consistent wrong contract is worse than a reported gap, because the implementer will build to your tests and the mistake survives until PRD-level review. Likewise for "which kind of thing" choices the task leaves open (e.g. which hook event, which file location). The task description must hand you the exact strings; if it does not, that is a blocker, not a judgement call.
+11. SURGICAL: Only create/modify test files. Match the existing test file's style (quote style, import order, assertion library, naming). Do not reformat sample files you were given for reference.
+12. SIZE LIMITS: keep every test function under 50 lines and every test file under 800 lines; split by behavior into sibling files named after the test module (for example test_events_completion.py, test_events_usage.py) before you exceed either.
+
+Do NOT:
+- Think about how to implement the feature
+- Read or reference implementation files
+- Write stubs, placeholders, or TODO comments
+- Mock internal modules (only mock external boundaries)
+- Create tests that just check a function exists or returns truthy
+
+Read only the files listed above. If a file or symbol you need is not listed, stop and report it as a blocker — do not run broad `rg` sweeps to discover scope.
+
+Abort and report if you read more than 100K of total input. Return the partial result and an abort_reason: context_overrun field.
+
+Read every file before your first Edit to it. Never call bash `head`, `tail`, `cat`, `grep`, or `find` - a hook blocks them. Use the Read tool (offset/limit), `rg`, or `rg --files` instead. Never combine an inspection (read, list, search, diff) with a test, lint or build invocation in one Bash call - run them as two calls, because a combined command has two ways to hang and one exit code. Pass an explicit `timeout` on every Bash call: 60000 ms for an inspection, 300000 ms for a lint run or a narrow test run, 600000 ms for a full suite or a full build.
+
+Run only the test files this task names (the tests you wrote, or the
+failing tests in your prompt), with `-q --tb=line`. Never run a whole test
+directory or `dev/bin/release-checks`: the orchestrator runs the full suite
+once, after every task. Read the pass count and exit code from that one
+run; never re-run a suite to recover a number.
+
+End your report with `ASSUMPTIONS:` - one line per assumption you made where the task, tests, or listed files were silent (guessed interface, data shape, resolved ambiguity, unstated behavior). Write `ASSUMPTIONS: none` if you made none.

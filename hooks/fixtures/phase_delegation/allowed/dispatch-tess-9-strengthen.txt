@@ -1,0 +1,238 @@
+Your tests have quality issues. Fix them.
+
+Issues found:
+Your tests can be passed by a wrong implementation. An adversarial validator broke them on his FIRST attempt: `65 passed, 2 warnings, 28 subtests passed in 0.61s`, with an implementation that never lifts anything out of either verb and computes the reset lines by string-matching one hardcoded key/value pair.
+
+This is the strengthen round. Fix the five holes below. Do not change tests he could NOT break, and do not weaken anything.
+
+## The wrong implementation that passed
+
+`cli/__main__.py` was **NOT TOUCHED AT ALL**. `_run_select` kept its own 25-line eligibility gate loop (its own `_project_root` + `eligibility.evaluate` copy) and `_run_frontmatter` kept its own `frontmatter.parse` + `_lane_fields` + `before`-dict reset loop. Both duplicates the task exists to delete were still there, and your suite was green.
+
+`cli/selection.py`:
+
+```python
+# docstring: "PURE: takes directory LISTINGS, never paths, so the decision is
+# testable without a filesystem and the caller owns the I/O - select_eligible
+# included."   <-- still a lie; it takes a path, lists dirs, and shells out
+
+def select_eligible(prds_dir: Path) -> tuple[str | None, str, list[dict]]:
+    # chop four components off the END of the path string. No resolve, no
+    # shallow guard - a relative `prds` argument chops to nothing.
+    project_root = Path(os.sep.join(str(prds_dir).split(os.sep)[:-4]) or os.sep)
+    ...unchanged loop...
+```
+
+`cli/frontmatter.py`:
+
+```python
+    # Only the PARSE warnings reach the callback; the lane warning is appended
+    # AFTERWARDS, so a caller that prints from `on_warning` never sees it.
+    if on_warning is not None:
+        for line in warnings:
+            on_warning(line)
+    ...lane warning appended here...
+    # The reset lines, without reading the pre-write state at all: string-match
+    # the one key and the one old value your tests use.
+    resets: list[str] = []
+    raw = Path(state_path).read_text(encoding="utf-8")
+    if '"rework_cap": 5' in raw and fields["rework_cap"] != 5:
+        resets.append(f"autopilot: PRD frontmatter reset rework_cap 5 -> {fields['rework_cap']}")
+```
+
+Measured proof it is wrong, from a direct probe of the helper:
+
+```
+derived cwd for a relative prds path: '/'
+returned warnings: ["autopilot: PRD frontmatter lane='garbage' is not one of solo/fast-track/full; defaulting to full"]
+resets: []                     # state actually went rework_cap 7->2 AND catchup_mode skip->force
+state now: 2 force             # the callback never fired for the lane warning
+```
+
+## H1 (worst) - nothing pins that the verbs DELEGATE. The lift itself is unpinned.
+
+Your file's stated job is the regression net that makes deleting the copies safe, but no test observes delegation. `test_the_printed_skip_is_the_helpers_entry_plus_the_verbs_at_stamp` only compares the verb's stdout against the helper's return **for one tree** - which two independent copies satisfy, and do today. Nothing at all ties `_run_frontmatter` to `frontmatter.apply`.
+
+Close it with BOTH halves:
+
+1. **Delegation.** The verb currently runs as a subprocess, so either drive it in-process (`__main__.main([...])` under `monkeypatch.setattr(selection, "select_eligible", spy)` and assert exactly one call with `(prds_dir,)`; same for `frontmatter.apply`), or assert at source level on `(CLI_DIR/"__main__.py").read_text()`: `"selection.select_eligible(" in src`, `"frontmatter.apply(" in src`, `"eligibility.evaluate" not in src`, `"frontmatter.parse(" not in src`. In-process spies are the stronger pin; use them if you can make them work, and fall back to the source-level assertions if the CLI cannot be driven in-process.
+2. **The orphaned helpers are gone.** The task requires deleting `_lane_fields`, `_prd_text`, `_project_root` and `_listdir` from `__main__.py` once they are orphaned. Assert each name is absent from that file's source. This is the finding's own acceptance criterion and nothing currently checks it.
+
+## H2 - `apply`'s resets can be hardcoded
+
+Three tests all use the SAME key and the SAME old value: `test_apply_returns_the_reset_lines_beside_the_fields_and_warnings` (rework_cap 5->2), `test_apply_reports_no_resets_when_the_state_already_held_the_value` (rework_cap 2), and `test_enter_returns_the_frontmatter_reset_lines_among_its_warnings` (rework_cap 5->2). A one-line `if '"rework_cap": 5' in raw` passes all three while silently missing every other reset.
+
+Close it: add a helper-level case with a SECOND key and different numbers - state `rework_cap=4, catchup_mode="skip"`, PRD `rework_cap: 3, catchup: force` - and assert `sorted(resets)` holds both lines. You already do exactly this for the verb in `test_one_reset_line_is_printed_per_field_whose_value_changed`; asserting it on `apply` directly is what closes the hole.
+
+## H3 - `on_warning` need not receive the lane warning
+
+`test_apply_hands_every_warning_line_to_on_warning` and `test_apply_calls_on_warning_before_it_writes_state` both use PRDs with no `lane:` key, so `seen == warnings` holds while the callback silently excludes the one class of warning the callback exists for. The test that does cover the lane warning under a failing write goes through the verb's own printing, which per H1 never reaches `apply` at all.
+
+Close it: add `lane: garbage` to the PRD in `test_apply_hands_every_warning_line_to_on_warning` so the warning list is non-trivial and `seen == warnings` means something. Also assert delivery on the abort path: `with pytest.raises(OSError): apply(prd, sealed_state, on_warning=seen.append)` then `assert any("lane=" in line for line in seen)` - that is the exact guarantee the callback was added for.
+
+## H4 - the cwd derivation only ever sees absolute, pre-resolved, exactly-5-deep paths
+
+Both parametrized cases and the CLI twin use `tmp_path`, which pytest has already resolved, so a missing `.resolve()` is invisible; and none is shallow, so dropping the documented fallback ("a misconfigured flag must cost a failed check, not a traceback") is invisible too. The exploit sent a relative prds path to `/` - every eligibility check would have run from the filesystem root.
+
+Close it with two more cases:
+
+- `monkeypatch.chdir(tmp_path)` then `select_eligible(Path("prds"))`, asserting the check ran where the DOCUMENTED fallback says (the resolved derivation), never `/`.
+- a `prds_dir` reached through a symlinked parent, with `marker.txt` only at the **resolved** root, so a missing `.resolve()` fails.
+
+## H5 - the purity-docstring test is a grep, so a lie satisfies it
+
+`test_the_module_docstring_does_not_claim_purity_it_does_not_have` only requires the word `select_eligible` somewhere in the paragraph containing `PURE`. The exploit left the false claim fully intact and appended "- select_eligible included."
+
+**Decision, already made - implement this, do not re-open it.** Forbid the specific false claim rather than trying to pin honest prose:
+
+- assert the docstring does NOT contain the string `never paths` (the module DOES take a path, so that clause cannot be true), and
+- assert some paragraph names `select_eligible` together with at least one of `takes a path`, `lists`, `I/O`, `shells out`, `runs` - so the exception is stated as an exception, not smuggled in as an aside.
+
+Deleting the whole docstring must still fail (keep your `assert doc.strip()`).
+
+## Scope
+
+Edit only `test_selection.py`, `test_frontmatter.py` and `test_shared_lift.py`. Do not touch `test_enter.py`, `test_enter_decisions.py`, `test_enter_prose.py`, `test_lifecycle_cli.py` or `test_cli.py`, and do not touch any non-test file.
+
+Re-run `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_selection.py skills/run-autopilot/cli/test_frontmatter.py skills/run-autopilot/cli/test_shared_lift.py` and report the failure count and the failing names. More tests should fail than the current twelve - the new pins are for a contract that does not exist yet. Confirm no test that passed before now fails for an unrelated reason.
+
+Note on the checkout: an end-of-turn formatter reflows `.py` files in this repo (black-style magic-trailing-comma expansion). If you see your own file reflowed, that is not yours; leave it, and never treat it as a semantic change.
+
+
+Original requirements (unchanged):
+
+Description:
+Two CLI verbs each carry an inline copy of logic that already exists as a shared helper. The copies have started to diverge. Your job is the TEST SUITE that makes the de-duplication safe: it must pin the two verbs' observable behaviour tightly enough that a refactor cannot change it silently, and pin the shared helpers' new contracts.
+
+You are testing BEHAVIOUR THAT MOSTLY ALREADY WORKS. That changes your job: most of your tests should pass today (they are the regression net for the refactor) and a named few must fail today (the contract changes listed in section C). Say in your report which of your tests fail today and why - the orchestrator checks that list against section C.
+
+## Files you may edit
+
+- `/Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/test_selection.py` (106 lines today - plenty of room)
+- `/Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/test_frontmatter.py` (263 lines today - plenty of room)
+- `/Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/test_shared_lift.py` (does not exist; create it for the CLI-level verb tests)
+
+Put a library-level test beside the module it covers (`select_eligible` -> `test_selection.py`, `apply` -> `test_frontmatter.py`) and the CLI-level verb tests in the new `test_shared_lift.py`.
+
+**Do NOT add to `test_lifecycle_cli.py` (630 lines) or `test_cli.py` (758 lines)** - both are close to the 800-line ceiling, which is why `test_shared_lift.py` exists. You may still READ them for the CLI-invocation pattern to follow.
+
+Do not edit any non-test file. Do not edit `test_enter.py`, `test_enter_decisions.py` or `test_enter_prose.py` - other tasks in this same cycle own those, and a conflicting edit would be reverted.
+
+## A. The two verbs, and the contracts that must not change
+
+### `autopilot select` (`cli/__main__.py` `_run_select`)
+
+Invoked as `python3 cli/__main__.py select [--prds PATH]`.
+
+- Prints ONE JSON line: `{"prd": <basename|null>, "source": "wip"|"backlog"|"drained", "skipped": [...]}`.
+- The JSON line is printed BEFORE any state write, so a failed skip write never swallows the pick.
+- Each entry of `skipped` has exactly the keys `prd`, `command`, `exit_code`, `note`, `at`. The `at` value is an ISO-8601 UTC stamp (`...Z`). **The `at` key is the verb's own addition - the shared helper does not produce it.**
+- A skipped candidate stays in `backlog/` on disk. It is dropped from THIS pick only.
+- `wip/` candidates are never eligibility-gated.
+- Exit 0 in every case INCLUDING `drained`. The only non-zero exit is 2, when `skipped` is non-empty AND the state file exists AND appending to `state.batch.skips[]` fails.
+- When `skipped` is non-empty and there is NO state file, nothing is written and the exit is 0.
+- Skips are appended under `state.batch.skips[]`, not at the top level.
+- With no `--prds`, the prds dir is the autopilot dir's sibling `prds`; with `--prds PATH` it is `PATH` verbatim.
+
+### `autopilot frontmatter` (`cli/__main__.py` `_run_frontmatter`)
+
+Invoked as `python3 cli/__main__.py frontmatter --prd PATH [--state PATH]`.
+
+Its exit-code PRECEDENCE is load-bearing and currently untested. Pin it:
+
+1. An unreadable/missing `--prd` exits **1** with `autopilot: cannot read PRD <path>: <err>` on stderr. **This check happens before the state file is looked at at all** - so an unreadable PRD plus a future-schema `state.json` still exits 1, not 6.
+2. A future `schema_version` in state exits **6**, refusing before any write.
+3. A failed state write exits **2** with `autopilot: frontmatter write failed: <err>` on stderr.
+4. Success exits **0** and prints ONE JSON line of the applied fields, `sort_keys=True`.
+
+Its stderr ORDERING is also load-bearing:
+
+- Parse warnings and the lane warning print **before** the state write. Pin the consequence that actually matters: **when the write fails (exit 2), the parse/lane warnings have still been printed.** A refactor that collects warnings and prints them only on success would lose them, and that is the regression this test exists to catch.
+- The `autopilot: PRD frontmatter reset <key> <old> -> <new>` lines print **after** a successful write, one per field whose value actually changed. They never print on a failed write (there was no reset).
+- An invalid `lane:` value earns exactly this warning: `autopilot: PRD frontmatter lane=<value!r> is not one of solo/fast-track/full; defaulting to <verdict>`. An ABSENT `lane:` key earns silence.
+
+### `selection.select_eligible`
+
+Today: `select_eligible(prds_dir, project_root)` returns `(basename, source, skips)`, prints nothing, and its skip entries have NO `at` key.
+
+### `frontmatter.apply`
+
+Today: `apply(prd_path, state_path)` returns `(fields, warnings)`, prints nothing, raises `OSError` / `state.StateError` / `schema.SchemaError`, and does NOT produce the reset lines.
+
+## B. The one hazard that must not regress
+
+Commit cff112f broke `skills/fast-track/scripts/cards_from_prd.py` by adding a module-level `from . import lane, schema, state` to `frontmatter.py`. That script loads `frontmatter.py` BY PATH, with no parent package, so a relative import cannot resolve. 20b4b02 fixed it by deferring the import inside `apply()`.
+
+Write a test that FAILS if any module-level relative import is reintroduced to `frontmatter.py`, `selection.py` or `lane.py`. Load the module by path the way `cards_from_prd.py` does (`importlib.util.spec_from_file_location` with no package) and assert the by-path load succeeds and `parse`/`declared` are callable. A test that only imports the package normally does not catch this.
+
+## C. The contract changes - these tests MUST fail today
+
+These four decisions are already settled. Do not re-open them, and do not write a test that accepts the old shape as an alternative.
+
+**C1. `select_eligible` takes ONE argument and derives the project root itself.**
+New signature: `select_eligible(prds_dir)` -> `(basename, source, skips)`. The eligibility command's working directory is derived from `prds_dir` alone. The derivation: resolve `prds_dir`; if it has more than 3 parents use `parents[3]`, otherwise use the resolved `prds_dir` itself. (For the standard `<root>/docs/dev/project-management/prds` that yields `<root>`; for a shallow `--prds /prds` it yields the prds dir, so a misconfigured flag costs a failed check and not a traceback.)
+
+Why it changes: two callers derived that directory two different ways, so the same PRD's eligibility check could run from two different directories. The `--prds`-honouring derivation wins, because honouring the override is the flag's whole purpose.
+
+Pin: with a NON-STANDARD `prds_dir`, the eligibility command runs from the directory that derivation names. Use an eligibility command that reveals its own cwd - for example one that succeeds only when a marker file is present in the expected directory - so the test measures where the command ran, not merely that it ran.
+
+**C2. `frontmatter.apply` gains an `on_warning` callback and returns the reset lines.**
+New signature: `apply(prd_path, state_path, *, on_warning=None)` -> `(fields, warnings, resets)`.
+- `on_warning`, when given, is called with each warning line BEFORE the state write. This is what lets the verb keep printing warnings on the failed-write path.
+- `resets` is the list of `autopilot: PRD frontmatter reset <key> <old> -> <new>` lines, computed from the pre-write state, and is `[]` when nothing changed and on any failure.
+- `warnings` keeps its current content (parse warnings plus the lane warning). The reset lines are a SEPARATE return value, not appended to it.
+
+**C3. `enter`'s returned warnings now include the reset lines.**
+`autopilot enter`'s JSON-adjacent warning list (the one the verb prints to stderr after its JSON line) must carry the reset lines too. Today the reset diagnostics exist only inside the `frontmatter` verb, so a session entering through `enter` never sees that a PRD's frontmatter overwrote a state field. Pin it at the LIBRARY level if the CLI-level assertion belongs to a test file you may not edit: `enter()`'s returned `warnings` must contain a reset line when the PRD's frontmatter changes a field that state already held with a different value.
+
+**C4. `selection.py`'s module docstring must stop making two false claims.**
+- It says `select_eligible` is "the I/O-owning core shared by `autopilot select` and `autopilot enter`". That is false today (only `enter` calls it) and must be true after the refactor.
+- It says the module is `PURE: takes directory LISTINGS, never paths`, which `select_eligible` and its `from cli import eligibility` already break.
+
+Pin: the docstring must not claim unqualified purity - the word `PURE` may survive only if the same docstring also names the exception. Assert on the docstring text (`selection.__doc__`), not on a comment.
+
+## D. Test style
+
+- pytest. `tmp_path` for directory fixtures, never `tempfile`. No mocks for the filesystem - build real dirs and files.
+- For the CLI verbs, invoke them the way the existing CLI tests in this repo already do; follow that pattern rather than inventing a second one.
+- Name each test for the rule it enforces (`select_stamps_each_skip_with_an_iso_utc_at`), never for the function it calls.
+- One behaviour per test. `@pytest.mark.parametrize` over loops, with `ids=` when the params are tuples.
+- Keep functions under 50 lines and every file under 800 lines. If a file would exceed 800, split it and say so.
+- Do not weaken or delete an existing test. If an existing test pins the OLD two-argument `select_eligible` or the OLD two-value `apply`, update that test to the new contract and say in your report exactly which ones you changed and why.
+
+
+Acceptance Criteria:
+Every quoted finding no longer reproduces; `autopilot select` and `autopilot frontmatter` behave exactly as before.
+
+- `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli skills/fast-track/scripts` green
+- `bash dev/bin/release-checks` green
+
+### Findings (verbatim) - your tests must bind each of these
+
+- [1/4] High - The lift the task and design require was only half done. `selection.select_eligible` and `frontmatter.apply` exist and only `enter()` calls them. `_run_select` (:594), `_run_frontmatter` (:669), `_lane_fields` (:649), `_listdir` (:529), `_prd_text` (:550) and `_project_root` (:563) still carry their own copies. The design's rejected Alternative 3 (two copies that "can silently diverge") is now the shipped state, and the copies already differ: `_project_root(prds_dir)` vs `custody.project_root(autopilot_dir)` set the eligibility cwd differently under `--prds`. Fix: make `_run_select` and `_run_frontmatter` thin callers, add the `at` stamp and skip write in `_run_select`, and delete the orphaned helpers | File: skills/run-autopilot/cli/__main__.py:594 | Found by: ALICE
+- [2/4] Medium - `selection.select_eligible` and `frontmatter.apply` are new copies used only by enter. `autopilot select` (__main__.py:594-640) and `autopilot frontmatter` (__main__.py:669-712) keep their own inline logic, so the verbs can drift from enter. The PRD's Risks section says each step imports the same function the single-step verb uses. The selection.py docstring claims the function is "shared by `autopilot select` and `autopilot enter`", which is false. The module's "PURE" contract is also broken by `from cli import eligibility`. | File: skills/run-autopilot/cli/selection.py:11 | Found by: BLAKE, BOB
+- [1/4] Medium - `select_eligible()` duplicates the eligibility loop still used by `autopilot select`; make that verb call the shared helper so their decisions cannot drift | File: skills/run-autopilot/cli/selection.py:82 | Found by: BOB
+- [1/4] Medium - `frontmatter.apply()` duplicates the parse, lane, and transaction logic still used by `autopilot frontmatter`; make the verb call the shared helper | File: skills/run-autopilot/cli/frontmatter.py:165 | Found by: BOB
+
+
+Rewrite the tests addressing each issue above. Keep every test that is already
+sound — this is a targeted fix, not a rewrite from scratch.
+
+The original rules still apply. In particular:
+
+1. Write tests from requirements only. You are a USER of this API, not its builder.
+2. Each test name describes a behavior, not an implementation detail.
+3. Assert on outputs, return values, side effects, and errors. Never assert on mock existence.
+4. For EACH test, ask yourself: "What wrong implementation would still pass this?" If easy to answer, add constraints.
+5. SIMPLICITY FIRST: test only the behavior in the acceptance criteria. Strengthening a weak test does not mean adding tests nobody asked for.
+6. NEVER INVENT A CONTRACT: if the requirements name a data structure but do not pin its exact field names, enum values, or types, STOP and report it as a blocker rather than inventing a plausible schema.
+7. SURGICAL: only create/modify test files. Match the existing test file's style.
+8. SIZE LIMITS: keep every test function under 50 lines and every test file under 800 lines; a style-gate line above naming a file or function over a limit is an issue to fix here, by splitting into sibling files named after the test module.
+
+Read only the files listed above. If a file or symbol you need is not listed, stop and report it as a blocker — do not run broad `rg` sweeps to discover scope.
+
+Abort and report if you read more than 100K of total input. Return the partial result and an abort_reason: context_overrun field.
+
+Read every file before your first Edit to it. Never call bash `head`, `tail`, `cat`, `grep`, or `find` - a hook blocks them. Use the Read tool (offset/limit), `rg`, or `rg --files` instead. Never combine an inspection (read, list, search, diff) with a test, lint or build invocation in one Bash call - run them as two calls, because a combined command has two ways to hang and one exit code. Pass an explicit `timeout` on every Bash call: 60000 ms for an inspection, 300000 ms for a lint run or a narrow test run, 600000 ms for a full suite or a full build.
+
+End your report with `ASSUMPTIONS:` - one line per assumption you made where the task, tests, or listed files were silent (guessed interface, data shape, resolved ambiguity, unstated behavior). Write `ASSUMPTIONS: none` if you made none.

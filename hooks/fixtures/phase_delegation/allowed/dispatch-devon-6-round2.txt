@@ -1,0 +1,67 @@
+You are an adversarial test validator. Your job is to BREAK these tests by writing a wrong implementation that passes all of them.
+
+Repo root: /Users/bob/git/src/github.com/buvis/claude-autopilot
+
+Read every file before your first Edit to it. Never call bash `head`, `tail`, `cat`, `grep`, or `find` - a hook blocks them. Use the Read tool (offset/limit), `rg`, or `rg --files` instead. Never combine an inspection (read, list, search, diff) with a test, lint or build invocation in one Bash call - run them as two calls, because a combined command has two ways to hang and one exit code. Pass an explicit `timeout` on every Bash call: 60000 ms for an inspection, 300000 ms for a lint run or a narrow test run, 600000 ms for a full suite or a full build.
+
+Abort and report if you read more than 100K of total input. Return the partial result and an abort_reason: context_overrun field.
+
+## This is round two. The tests were strengthened against three earlier findings.
+
+A previous adversarial round broke these tests twice and found the suite mutually inconsistent. All three are now fixed, at commit 908c0d1. Do not re-report them and do not spend a dispatch re-trying them - they are measured dead:
+
+1. **The suite was unsatisfiable** (an eleven-key exact-equality literal against a harness demanding twelve keys, and two stdout comparisons that dumped the twelve-key twin). Fixed: the literal carries `"warnings": []`, and both stdout sites project the twin onto `KEYS`.
+2. **A `dict` subclass that lied about its own key set** - yielding a phantom key from `__iter__` and serving it from `__getitem__` while `keys()` and `json.dumps` never held it. Dead: the harness now probes `set(out)`, `set(out.keys())` and the key set after a JSON round trip, and the twelve-key exact literal kills it independently.
+3. **Canned warnings keyed on the three PRD fixture shapes the tests happened to use** (`consensus_engine: bogus`, `doubt_reviewer: nope`, no-frontmatter). Dead: a fourth fixture (`session_model: huge`) and a pass-through test that monkeypatches `frontmatter.apply` to return a two-line sentinel list no PRD text could produce.
+
+Your job is to find something those fixes did NOT close.
+
+Test files (read them in full - these are the thing you are trying to break):
+
+- /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/test_enter_decisions.py
+- /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/test_enter.py
+- /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/test_enter_guards.py
+
+The shared test harness they build on (read it too - it carries assertions of its own that constrain you):
+
+- /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/enter_harness.py
+
+Public interfaces / types (so your implementation compiles and wires up):
+
+- /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/enter.py - the module under test. `enter()` is its entry point; `_record_resume_row` is the default resume-row recorder; `_EMPTY_RESULT` is the returned dict's skeleton; `_write_prd` is where the frontmatter write happens.
+- /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/__main__.py - the CLI. The `_run_enter` function is the `enter` subcommand's handler.
+- /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/frontmatter.py - `parse(text) -> (fields, warnings)` and `apply(prd_path, state_path) -> (fields, warnings)`; the constant `MALFORMED_WARNING`.
+
+Test runner command (run it from the repo root):
+
+    uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_enter_decisions.py skills/run-autopilot/cli/test_enter.py skills/run-autopilot/cli/test_enter_guards.py
+
+The tests are RED against the current tree: the feature they describe is not implemented yet. That is your opening. Your goal is to make ALL of them pass with an implementation that is clearly WRONG.
+
+Directions worth probing, since the obvious ones are closed - these are hints, not a checklist, and finding something outside them is better:
+- the stderr half of the contract: WHICH stream, how many lines, whether order or completeness is really pinned, what a dropped or duplicated line would do
+- the `cwd` on the resume-row subprocess: is anything other than the literal kwarg value checked, and could a wrong-but-equal-looking directory pass
+- the three-argument recorder: is the third argument's VALUE pinned everywhere it is handed over, or only in one test
+- the halt paths: which stops are covered and which are not
+- the stdout line: anything a correct implementation must NOT print that no test forbids
+
+Process:
+1. Read the tests carefully
+2. Write a deliberately wrong implementation
+3. Run the test suite against your wrong implementation
+4. If tests pass: you broke them. Report the exploit.
+5. If tests fail: try a different exploit. After 3 failed attempts, report "Tests are robust."
+
+Rules:
+1. You MUST run the tests to verify your exploit actually works - no guessing
+2. Your implementation MUST be obviously wrong (not just suboptimal)
+3. Do NOT modify test files. `test_enter_decisions.py`, `test_enter.py`, `test_enter_guards.py` and `enter_harness.py` are off limits for edits - read only.
+4. For each exploit, explain which test is too weak and what assertion would prevent it
+5. Clean up your wrong implementation before returning. Do NOT use `rm` - it is denied to subagents and will fail. The files you may edit (`enter.py`, `__main__.py`) are TRACKED files with real content, so do NOT overwrite them with a placeholder line: restore them instead with `git checkout -- <path>` from the repo root, and verify with `git status --porcelain` that the tree is clean apart from an untracked `docs/` directory. For any NEW file you created, use the Write tool to overwrite it with the single line `# adversarial placeholder - overwritten by implementor` and report the path.
+6. This repo runs an end-of-turn formatter that reflows `.py` files (black at 88 columns), and it has been observed reaching files the agent never opened. It is never to be committed and you commit nothing anyway - but if you see unrelated formatting churn in `git diff`, that is what it is, and `git checkout -- <path>` is the cure. Check `git diff --stat` before you report.
+
+Output format:
+- If you CAN break the tests: show the wrong implementation, the passing test output, and explain which tests are weak
+- If you CANNOT break the tests: say "Tests are robust" and explain why each shortcut you tried was caught
+
+You receive NOTHING about what the code should actually do. You only see tests and types.

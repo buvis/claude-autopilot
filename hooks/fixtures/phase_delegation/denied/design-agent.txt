@@ -1,0 +1,78 @@
+Design doc for harden-the-wave-verbs PRD
+You are executing the `autopilot:design-solution` skill for PRD `docs/dev/project-management/prds/wip/00242-harden-the-wave-verbs-v1.md` in repo `/Users/bob/git/src/github.com/buvis/claude-autopilot`. Follow the skill procedure below EXACTLY and produce the design doc artifact plus the printed exit report. Do not ask the user anything — this runs unattended.
+
+## PRD summary (already read in full by the caller; you must re-read it yourself from the path above since it has the full acceptance criteria)
+
+Six deferred findings on the wave verbs (00214-00217), each reproduced at HEAD:
+1. 00221: `test_wave_assemble_summary.py` not wired into `dev/bin/release-checks` `[checks] waves` block nor `test_wave_docs.py`'s `_WAVE_TEST_FILES`.
+2. 00222: `wave_assemble.py` `_drain_lane`/`_assemble_lane` mutate lane state in memory; the single `save()` runs AFTER `git worktree remove` and `branch -D` — a crash in that window loses state. Need `save()` before the destructive git ops, and `worktree_removed` saved right after remove succeeds. `wave_cli.run` should catch `OSError` from assemble, print one `autopilot:` line, exit 1.
+3. 00225: `wave_review.py:403` uses raw `git status --porcelain` in the assembly worktree instead of `store_tree.foreign_dirty`. Also: when review seeds the assembly worktree, every `prds/backlog/*.md` there must move to `prds/hold/` (committed on the assembly branch) before the nested loop spawns, so the nested loop can't pick up main-checkout backlog PRDs.
+4. 00226: `wave_review.py:483` `_land_review_failed` always returns 4, even after an operator hand-moved the stub to the assembly worktree's `prds/done/`. Needs to check for that and, if present, set status to `converged` (saved) and continue the normal land path.
+5. 00227: `wave_slots.py:108-116` `_discard` renames a stale slot aside before judging it, without a lock — race lets two holders claim the same slot. Fix: per-slot `fcntl.flock(LOCK_EX)` sibling lock file `N.lock`, held by `_claim`, `_discard`, and `release` across their whole check-and-rename; `release` verifies pid ownership before removing.
+6. 00239: `loop.py:506` `_record_review_once_store` calls `record_store` without the `store_tree.in_wave_lane(self.env)` guard that `loop.py:611` and `loop_act.py:218` already have.
+
+Full PRD (read it yourself too): `/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/prds/wip/00242-harden-the-wave-verbs-v1.md`
+
+## Skill procedure to follow
+
+### 1. Resolve PRD and load context
+Already resolved above. Also check for and read if present (skip silently if absent):
+- `~/.local/share/agents/cartographer/projects/*/atlas.md` (find via hash of this repo path if it exists)
+- `docs/dev/project-management/meta/project-capsule.md`
+- `AGENTS.md` / `agent_docs/`
+
+### 2. Reuse sweep
+Before designing anything new, `rg` the codebase for existing helpers relevant to each capability: `store_tree.foreign_dirty`, `store_tree.in_wave_lane`, `fcntl.flock` usage elsewhere in the repo, existing `save()` ordering patterns in `wave_assemble.py`/`wave_review.py`, existing `OSError` handling patterns in `wave_cli.py`, how `_WAVE_TEST_FILES` and `[checks] waves` are currently defined. Check `~/.claude/rules-library/rationalizations.md` if present for synonym sets; if absent, just use your own verb/noun synonyms and say so. Record an explicit `## Reuse inventory` section: one entry per existing helper (path + how to use it), or `nothing found, greps tried: ...` lines.
+
+Read these files in full to ground the design (all under `/Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/` unless noted):
+- `wave_assemble.py`
+- `wave_cli.py`
+- `wave_review.py`
+- `wave_slots.py`
+- `loop.py` (focus on `_record_review_once_store` near line 506, and the guarded call sites near 611)
+- `loop_act.py` (focus near line 218)
+- `test_wave_docs.py` (the `_WAVE_TEST_FILES` list and the parity test)
+- `../dev/bin/release-checks` (repo-root-relative: `/Users/bob/git/src/github.com/buvis/claude-autopilot/dev/bin/release-checks`) — the `[checks] waves` block
+- `store_tree.py` (for `foreign_dirty` and `in_wave_lane` signatures)
+- `../references/waves.md` (`/Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/references/waves.md`)
+
+### 3. Write the design doc
+Write to `/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/designs/00242-harden-the-wave-verbs-v1-design.md` with EXACTLY these nine sections, these headings, in this order:
+1. `## Architecture fit`
+2. `## Module placement`
+3. `## Interfaces & contracts` — exact signatures, field names, lock file naming, thresholds. Write verbatim-ready: a planner who never reads the PRD must be able to copy a contract verbatim and be correct. This must cover, concretely: the exact save-before-teardown ordering change in `wave_assemble.py` (what fields, what order, where `worktree_removed` is set); the exact `OSError` catch site and message format in `wave_cli.py`; the exact `wave_review.py:403` call replacing raw `git status --porcelain` with `store_tree.foreign_dirty(...)`, and the exact seeding-time move-to-hold logic (what function, what commit message); the exact `_land_review_failed` check (what path, what status transition, what save call); the exact `wave_slots.py` lock file naming (`N.lock`), which functions acquire it and over what span, and the `release` ownership-verification mechanism (pid storage/check); the exact `in_wave_lane` guard addition to `loop.py:506`'s `_record_review_once_store` (mirror the pattern at `loop.py:611`); the exact additions to `dev/bin/release-checks` and `_WAVE_TEST_FILES` in `test_wave_docs.py`, plus the new `test_every_wave_test_file_is_listed` test's exact comparison logic (`_WAVE_TEST_FILES` vs `rg --files -g "test_wave*.py"` under `cli/`).
+4. `## Data flow`
+5. `## Reuse inventory` (from step 2)
+6. `## Alternatives considered` — 2-3 options per nontrivial fix (at minimum for the flock mechanism and the teardown-ordering fix), the chosen one and why; one option must be the smallest-diff version.
+7. `## Risks & edge cases` — include flock being advisory/local (already noted in PRD Risks) and 2-3 likely next changes after this PRD.
+8. `## Test strategy outline` — map to the PRD's named acceptance tests (test_wave_slots.py::test_reclaim_put_back_race_admits_one_holder, ::test_release_never_removes_another_holders_slot, test_wave_assemble_migrate.py::test_crash_after_save_before_remove_reruns_clean, test_wave_cli_refusals.py::test_assemble_os_error_is_one_line_exit_one, test_wave_review.py::test_store_churn_in_the_assembly_worktree_does_not_refuse, ::test_seeded_backlog_prds_are_held_before_the_nested_loop, test_wave_review_land.py::test_hand_reviewed_stub_in_done_lands, ::test_review_failed_without_hand_review_still_exits_four, test_loop_record_store.py::test_review_once_skips_the_store_in_a_wave_lane, test_wave_docs.py::test_every_wave_test_file_is_listed).
+9. `## Review log` — start empty.
+
+### 4. Autonomous adversarial review (up to 3 dispatches)
+Severity taxonomy: read `/Users/bob/.claude/plugins/cache/buvis-plugins/autopilot/0.7.0/skills/design-solution/references/cardinal-sins.md` and inline its content into every reviewer prompt. Other severities: Blocking (makes design wrong/unbuildable, must fix before planning), Non-blocking (real concern, record don't fix), Question (ambiguity, record don't fix). Calibration: not everything is a blocker.
+
+Dispatch 1: spawn a fresh subagent (use the Agent tool yourself, subagent_type general-purpose) with the draft doc + PRD summary + taxonomy, asking it to return ONLY findings in the shape `{severity, title, evidence, suggested_fix}`, never edit files. Fix every cardinal-sin/blocker it finds by editing the doc yourself.
+
+Dispatch 2 (mandatory codex, always runs even if dispatch 1 found zero issues): run as background Bash:
+`/Users/bob/.claude/plugins/cache/buvis-plugins/autopilot/0.7.0/skills/use-codex/scripts/codex-run.sh -f "{prompt_file_abs}" -o "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/tmp/design-codex-output-242.txt"`
+(write the self-contained prompt to a temp file first, e.g. under docs/dev/tmp/). Wait for completion (you'll get a task notification), read the output file for findings, fix cardinal-sins/blockers. If codex-run.sh is missing/non-executable/fails/unparseable/times out (~10-20 min), fall back to a fresh Claude subagent dispatch instead, and note "claude-fallback" instead of "codex" in the log line.
+
+Dispatch 3 (conditional): only if dispatch 2 found cardinal sins or blockers, run one more codex (or claude-fallback) verification dispatch the same way.
+
+Minimum-engagement check: after each substantive dispatch, if it returned fewer than 3 total findings AND none anchor to a specific design-doc section or file:symbol, re-dispatch that SAME reviewer once with a sharper prompt demanding section-anchored findings. If still not anchored, mark that dispatch WEAK (append " weak" to its review-log line).
+
+After each dispatch, append to `## Review log`:
+- every non-blocker and question (do not fix)
+- one summary line in EXACT format: `dispatch <n> (<claude|codex|claude-fallback>): cardinal-sin <c>, blocker <b>, non-blocker <nb>, question <q>` (append ` weak` at the end if WEAK)
+
+### 5. Terminate
+If all cardinal sins/blockers resolved (or none found): done, success.
+If a cardinal sin or blocker is STILL open after dispatch 3: report it as a failure (do not silently drop it).
+
+## What to report back to me (the caller)
+
+Report in full:
+1. The exact exit report block (the 7-line format: design-solution: <stem> / doc: <path> / reviewer dispatches: <n>/3 / findings: ... / open cardinal sins/blockers: ... / weak dispatches: ... / result: ok|failed).
+2. Confirm the design doc was written to the exact path above with all 9 sections present.
+3. Any cardinal-sin/blocker findings you fixed, briefly.
+4. Whether this terminated with result: ok (exit 0 equivalent) or failed (exit non-zero equivalent) — be explicit, this gates whether the caller proceeds to planning or pauses.

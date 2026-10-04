@@ -1,0 +1,31 @@
+Resume work phase for PRD 00242, task 1 onward
+You are RESUMING execution of the `autopilot:work` skill for PRD `00242-harden-the-wave-verbs-v1.md` in repo `/Users/bob/git/src/github.com/buvis/claude-autopilot`. A previous agent got cut short mid-dispatch (its own turn ended while waiting on a backgrounded Tess Agent call) — nothing failed, nothing stalled, it just ran out of turns reporting back too early. You are continuing its work, not starting over.
+
+This is a fully unattended autopilot loop session (`$_AUTOPILOT_LOOP` set) — never ask the user anything, never stop for confirmation except the two sanctioned reasons the skill names.
+
+**First, read the full skill file**: `/Users/bob/.claude/plugins/cache/buvis-plugins/autopilot/0.7.0/skills/work/SKILL.md` — follow it to the letter, and its `references/*.md` files as it directs (subagent-dispatch.md, attempt-logging.md, gate-failure.md, final-verification.md, etc. before the first use of each).
+
+## Where things stand right now
+
+- `state.json`: `docs/dev/project-management/autopilot/state.json`.
+- `state.tasks[0]` ("Gate the summary tests (00221)") is `status: "in_progress"` — claimed via `task-start`, but NO attempt has been logged yet, no commits made. The scratch files `docs/dev/tmp/tess-1-subject.txt`, `tess-1-description.txt`, `tess-1-acceptance.txt`, `dispatch-tess-1.txt` already exist from the prior agent's render call — re-read them if useful, or re-render if you prefer a clean start (both are safe; the prior Tess Agent dispatch's result was never observed/collected, so there is no in-flight subagent to conflict with — dispatch fresh).
+- Tasks 2-7 are still `status: "pending"`, untouched.
+- `task_base_sha` for task 1 = `b48069ed29823e2c44bd05dfcfbad42d94a89ada` (== `work_start_sha`, since nothing has committed yet for this PRD).
+- All 7 tasks are tier `model: "opus"` (PRD frontmatter `default_model: opus`) — Devon (step 2.9) and Pat's per-task review (step 5.7) run on every task.
+- Design doc: `docs/dev/project-management/designs/00242-harden-the-wave-verbs-v1-design.md` (Contract source). PRD: `docs/dev/project-management/prds/wip/00242-harden-the-wave-verbs-v1.md`.
+- `statectl`: `/Users/bob/.claude/plugins/cache/buvis-plugins/autopilot/0.7.0/skills/run-autopilot/scripts/statectl.py`.
+- Task dependency order: tasks 1 & 2 (Phase 0, no blockers) → tasks 3,4,5,6 (Phase 1, blocked by both 1 and 2) → task 7 (Phase 2, blocked by all of 1-6). Read `state.tasks` yourself for exact ids/descriptions/files — don't guess.
+
+## What to do
+
+Resume task 1 at step 2.7 (dispatch Tess — fresh dispatch, since the prior one's result was never collected) and continue the skill's workflow through to completion: steps 2.7→2.8→2.85→2.9→2.95→3→4→5→5.5→5.6→5.65→5.7→6→6.5 for task 1, then step 1 again for task 2, then (once 1 and 2 are done) tasks 3-6 (any order among themselves, since both their blockers will be satisfied), then task 7 last. After all 7 are `status: "completed"`, run step 7's full verification suite once — the PRD's Success Metrics name `uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n 4 skills/run-autopilot/cli -k "wave or review_once"` and `bash dev/bin/release-checks` as the authoritative commands for this PRD; use `references/final-verification.md` for what else the project's full suite requires.
+
+**This is a long-running multi-hour job across 7 opus-tier tasks.** If you find yourself about to run out of turns again before finishing, that is fine — report back exactly like last time: what's genuinely done (by state.json fact, not your intention), what's in-flight, and the precise resumable state (which task is in_progress, what's been dispatched-but-not-collected, what's committed). Never report a task "done" unless `task-done` has actually landed in `state.json` for it, and never report the phase complete unless step 7's suite actually ran and you observed its real exit output.
+
+**Respect step 6.5's task-boundary handoff check for real** — if `.handoff-requested` appears beside `state.json` between tasks, follow `references/task-boundary-handoff.md` exactly (clean-tree check, remove marker, banner, contract card, `leave` row, STOP) and report that explicitly as a handoff, not a stall or a cutoff.
+
+**If a task genuinely stalls** (premise failure, infra failures exhausted, review escalation exhausted), follow the skill's and `references/recovery.md`'s loop-mode stall procedures and report the exact `stall_reason` site/detail.
+
+## Report back to me (the caller)
+
+Whatever state you end in — fully done, cut off again, handoff, or stall — report with the same rigor as above: real `state.tasks[].status` values you observed, real commit SHAs, real test output/exit codes, not intentions. If genuinely all 7 complete and step 7 passed, include the exact verification commands and their pass/fail output, `last-verification.json` location if written, and the assumptions ledger contents if any.

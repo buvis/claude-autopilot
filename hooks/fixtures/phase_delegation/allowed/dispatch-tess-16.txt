@@ -1,0 +1,817 @@
+You are writing tests for a feature. You have NOT seen any implementation and must NOT think about how to implement it.
+
+Task: Store-tracking cleanups: dead except arm, stale docstring, missed work/SKILL.md dirt site, gitignore literal
+
+
+Description:
+Four small, independent items. Each is a one-or-two-line production change; you are
+writing TESTS only (not production code) - the actual fixes land in a later step.
+Add tests to the EXISTING files named below (do not start new suites); each item's
+target is spelled out concretely so you pin the real post-fix behavior, not a guess.
+
+## Item 1 - dead `except` arm in `record_store`
+
+`skills/run-autopilot/cli/store_tree.py`'s `record_store` (around line 177) has:
+    except (OSError, RuntimeError, subprocess.SubprocessError) as err:
+`RuntimeError` is dead: nothing `record_store` calls raises a bare `RuntimeError` on
+the success path (it only exists so one test can inject it). The fix drops it:
+    except (OSError, subprocess.SubprocessError) as err:
+(Note: `subprocess.CalledProcessError` is already a `subprocess.SubprocessError`
+subclass, so this keeps catching real git failures unchanged. `StoreGitError`, a
+separate `RuntimeError` subclass raised elsewhere in this module, is never raised
+inside `record_store`'s own try block, so dropping bare `RuntimeError` here changes
+nothing about what `record_store` catches in practice.)
+
+The one test that currently depends on catching a bare `RuntimeError` is
+`test_record_store_collapses_a_multiline_error_into_one_stderr_line` in
+`skills/run-autopilot/cli/test_store_tree_record_store.py` (around line 201-214):
+it builds a `FakeGit(..., fail_on="commit", error=RuntimeError("boom first\nboom
+second"))`. Change ONLY this one `error=` argument to
+`subprocess.CalledProcessError(1, ["git", "commit"], stderr="boom first\nboom
+second")` - this is what a real failing git call actually raises (`check=True`),
+so the test now exercises the real failure path instead of a synthetic one. Do not
+change any of the test's assertions or its other `error=`/`fail_on=` usages
+elsewhere in the file - only this one test's `error=` value. Keep
+`import subprocess` (it is likely already imported in that file; check first).
+
+## Item 2 - stale docstring on `wave_review._check_reviewable`
+
+`skills/run-autopilot/cli/wave_review.py`'s `_check_reviewable` (around line 270)
+has the docstring:
+    """The assembly worktree; ValueError when the wave is not assembled, the
+    worktree is gone, or `repo` has any uncommitted change."""
+This is stale: the function's actual dirty-check calls `store_tree.foreign_dirty`,
+which exempts the store, so "any uncommitted change" is no longer true (a store-only
+change does NOT raise). The target docstring (exact wording to pin):
+    """The assembly worktree; ValueError when the wave is not assembled, the
+    worktree is gone, or `repo` has any uncommitted change outside the store
+    (store churn is exempt)."""
+Add ONE test to `skills/run-autopilot/cli/test_wave_review.py` (same file that
+already has the behavioral tests `test_review_ignores_a_tree_dirty_only_inside_the_store`
+and `test_review_refuses_foreign_dirt_beside_dirt_inside_the_store`, which test the
+BEHAVIOR this docstring describes - your new test pins the DOCSTRING TEXT itself,
+which neither of those checks): assert
+`wave_review._check_reviewable.__doc__` does NOT contain the literal substring
+"any uncommitted change." (with the trailing period, so a corrected sentence that
+reads "...change outside the store..." does not accidentally still match), and DOES
+contain "outside the store". Import `wave_review` the way this file's existing
+imports already do.
+
+## Item 3 - `skills/work/SKILL.md` step 5's foreign-dirt rule needs the store carve-out
+
+Around line 364 of `skills/work/SKILL.md`, step 5 ("Commit changes") ends with:
+    Any other dirty path is **foreign**: leave it unstaged and untouched, and name
+    it in the phase report (fail loud) — the same never-commit-foreign-work rule
+    the step-5.5 ESCALATE reset guard enforces.
+Now that the store (`docs/dev/project-management/`) is tracked, a durable store
+write made mid-task (a ledger append, a review file) is a real uncommitted tracked
+path a raw git-status read would show - but it is not foreign. The fix appends ONE
+sentence (exact wording to pin), keeping the existing sentence and its consequence
+completely unchanged:
+    Any other dirty path is **foreign**: leave it unstaged and untouched, and name
+    it in the phase report (fail loud) — the same never-commit-foreign-work rule
+    the step-5.5 ESCALATE reset guard enforces. A store write (state.json, a ledger
+    append, a review file) is never foreign dirt here: `autopilot dirty` is
+    store-exempt, and that is the check this rule means.
+Add ONE test to `skills/run-autopilot/scripts/test_store_tree_prose.py` (the file
+that already holds the pack's prose-pin tests for this PRD - same file, same style,
+do not start a new suite): read `skills/work/SKILL.md`'s text (the file already
+loads this as `_TEXT`, see its own top-of-file setup) and assert the sentence
+"A store write" with "is never foreign dirt here" appears in the file, anchored
+near (after) the existing "Any other dirty path is" sentence - for example, locate
+the "Any other dirty path is **foreign**" substring's index and assert "store write"
+(case-insensitive) appears within the following ~400 characters. Do not write a
+test that merely checks the substring exists anywhere in the whole file - anchor it
+near the rule it clarifies, the same care the file's other prose-pin tests already
+take. This new sentence must NOT be flagged by this same file's existing
+`test_no_gate_parses_porcelain_by_hand` test (it contains neither "status
+--porcelain" nor "status --short") - after writing it, run
+`uv run --no-project --with pytest python -m pytest -q
+skills/run-autopilot/scripts/test_store_tree_prose.py` once (after your fix lands,
+not now) to confirm, and report the result.
+
+## Item 4 - `STORE_GITIGNORE` readability (tuple + join -> multiline string literal)
+
+`skills/run-autopilot/cli/store_tree.py`'s `STORE_GITIGNORE` (around line 30) is
+built as:
+    STORE_GITIGNORE = "".join(
+        f"{pattern}\n"
+        for pattern in (
+            "autopilot/state.json",
+            ... (22 entries total) ...
+            "autopilot/last-verification.json",
+        )
+    )
+The fix replaces this with an equivalent multiline string literal (one line per
+pattern, each ending in `\n`, same 22 entries in the same order) - a readability
+change only. The EXACT rendered bytes of `store_tree.STORE_GITIGNORE` must not
+change - this is ALREADY fully pinned by two existing tests you do not need to
+touch or duplicate: `test_ensure_store_gitignore_writes_the_pattern_list` and
+`test_store_gitignore_matches_the_disposable_list` (and the whole
+`EXPECTED_GITIGNORE_PATTERNS` / `EXACT_BODY` comparison machinery in
+`skills/run-autopilot/cli/test_store_tree_gitignore.py`). What is NOT yet pinned is
+that the readability fix actually happened (as opposed to just being asked for and
+ignored, which would also leave the existing byte tests green). Add ONE structural
+test to `skills/run-autopilot/cli/test_store_tree_gitignore.py` (same file, same
+style as its existing tests): read `skills/run-autopilot/cli/store_tree.py`'s
+source text and assert it does NOT contain the literal substring
+`'STORE_GITIGNORE = "".join('` - this fails today (the join form is exactly what is
+there) and passes once the literal-string fix lands, without caring about the exact
+replacement spelling (which is an implementation detail this test should not pin).
+
+Read all four target files (`skills/run-autopilot/cli/store_tree.py`,
+`skills/run-autopilot/cli/wave_review.py`, `skills/work/SKILL.md`, and the three
+test files named above) before writing, to confirm today's exact current text
+matches what is quoted here.
+
+### Findings (verbatim)
+
+- ⚪ [1/4] ALICE: Small cleanups. The `except` tuple in `record_store` includes `RuntimeError`, which nothing in production raises; it exists so one test can inject it, and the test could raise `CalledProcessError` instead. `_check_reviewable`'s docstring still says "any uncommitted change" although store churn is now exempt. | File: skills/run-autopilot/cli/wave_review.py:276 | Task: 3
+- ⚪ [1/4] BLAKE: With the store tracked, work/SKILL.md step 5's "any other dirty path is foreign ... name it in the phase report" rule will list store paths in every task report. It was not reworded to `autopilot dirty`. The PRD counted about 16 sites; the design accounts for fewer. | File: skills/work/SKILL.md:364 | Task: general
+- 🟡 [1/4] BOB: STORE_GITIGNORE generates a fixed payload through a tuple and join; an equivalent multiline string makes the ordered file contents directly readable | File: skills/run-autopilot/cli/store_tree.py:19 | Task: 1
+
+Acceptance: every quoted finding no longer reproduces; `STORE_GITIGNORE`'s rendered bytes are unchanged; `bash dev/bin/release-checks` green.
+
+
+Acceptance Criteria:
+- test_record_store_collapses_a_multiline_error_into_one_stderr_line injects
+  subprocess.CalledProcessError instead of RuntimeError, and still passes once
+  record_store's except tuple drops bare RuntimeError.
+- wave_review._check_reviewable.__doc__ no longer contains "any uncommitted
+  change." and does contain "outside the store".
+- skills/work/SKILL.md names the store write carve-out near its "Any other dirty
+  path is foreign" rule, and test_no_gate_parses_porcelain_by_hand still passes
+  against the edited file.
+- store_tree.py's source text no longer contains 'STORE_GITIGNORE = "".join(';
+  STORE_GITIGNORE's rendered bytes are unchanged (existing pattern-list and
+  parity tests keep passing, untouched).
+- uv run --no-project --with pytest python -m pytest -q
+  skills/run-autopilot/cli/test_store_tree_record_store.py
+  skills/run-autopilot/cli/test_wave_review.py
+  skills/run-autopilot/cli/test_store_tree_gitignore.py
+  skills/run-autopilot/scripts/test_store_tree_prose.py
+  is green once the fixes land.
+
+
+Existing test patterns (follow these conventions):
+#!/usr/bin/env python3
+"""Tests for store_tree.STORE_GITIGNORE / ensure_store_gitignore.
+
+The patterns are the contract, so they are spelled out here, not derived.
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from cli import store_tree
+from cli.store_tree_testutil import _autopilot_dir, _write_state
+
+EXPECTED_GITIGNORE_PATTERNS = [
+    "autopilot/state.json",
+    "autopilot/state.json.bak",
+    "autopilot/*.lock",
+    "autopilot/.turn-counts.json",
+    "autopilot/.handoff-requested",
+    "autopilot/.cap-fired",
+    "autopilot/.session-left",
+    "autopilot/.review-gate-blocks",
+    "autopilot/.review-gate-failed",
+    "autopilot/.lane-guard-blocks",
+    "autopilot/lanes/",
+    "autopilot/wave-slots/",
+    "autopilot/wave.json",
+    "autopilot/review-paths",
+    "autopilot/last-session.log",
+    "autopilot/wrapper.log",
+    "autopilot/pause-requested",
+    "autopilot/paused-by-operator",
+    "autopilot/park-requested",
+    "autopilot/session-brief.md",
+    "autopilot/contract-card.md",
+    "autopilot/replan-context.md",
+    "autopilot/last-verification.json",
+]
+
+EXACT_BODY = "".join(f"{pattern}\n" for pattern in EXPECTED_GITIGNORE_PATTERNS)
+# Each near miss below shares the line count, the word set or the last line with
+# the contract's body; only a byte-exact body already matches.
+EXISTING_BODIES = {
+    "absent": (None, True),
+    "exact": (EXACT_BODY, False),
+    "reordered": ("".join(f"{p}\n" for p in EXPECTED_GITIGNORE_PATTERNS[::-1]), True),
+    "same-line-count-of-junk": ("junk\n" * len(EXPECTED_GITIGNORE_PATTERNS), True),
+    "same-words-on-one-line": (" ".join(EXPECTED_GITIGNORE_PATTERNS) + "\n", True),
+    "last-line-only": (EXPECTED_GITIGNORE_PATTERNS[-1] + "\n", True),
+    "extra-line": (EXACT_BODY + "autopilot/extra\n", True),
+    "missing-line": ("".join(f"{p}\n" for p in EXPECTED_GITIGNORE_PATTERNS[:-1]), True),
+    "trailing-blank-line": (EXACT_BODY + "\n", True),
+    # read_text translates CRLF to LF, so the contract's comparison matches
+    "crlf": (EXACT_BODY.replace("\n", "\r\n"), False),
+}
+
+
+def _store_dir(tmp_path: Path) -> Path:
+    """A store holding two files the writer must never touch."""
+    autopilot_dir = _autopilot_dir(tmp_path)
+    _write_state(autopilot_dir, {"phase": "build"})
+    (autopilot_dir.parent / "decisions.md").write_text("# kept\n", encoding="utf-8")
+    return autopilot_dir.parent
+
+
+def _fingerprint(path: Path) -> tuple:
+    stat = path.stat()
+    return (path.read_bytes(), stat.st_ino, stat.st_mtime_ns, stat.st_ctime_ns)
+
+
+def test_ensure_store_gitignore_writes_the_pattern_list(tmp_path: Path) -> None:
+    store_dir = _store_dir(tmp_path)
+
+    wrote = store_tree.ensure_store_gitignore(store_dir)
+
+    assert wrote is True, "a missing .gitignore is written and the write reported"
+    body = (store_dir / ".gitignore").read_text(encoding="utf-8")
+    assert body == store_tree.STORE_GITIGNORE, "the file body is STORE_GITIGNORE itself"
+    assert body.endswith("\n") and not body.endswith("\n\n"), "one single final newline"
+    assert body.splitlines() == EXPECTED_GITIGNORE_PATTERNS, "one per line, in order"
+    assert [p.name for p in store_dir.parent.iterdir()] == ["project-management"]
+
+
+@pytest.mark.parametrize(
+    ("existing", "expected"),
+    list(EXISTING_BODIES.values()),
+    ids=list(EXISTING_BODIES),
+)
+def test_ensure_store_gitignore_is_idempotent(
+    tmp_path: Path,
+    existing: str | None,
+    expected: bool,
+) -> None:
+    store_dir = _store_dir(tmp_path)
+    gitignore = store_dir / ".gitignore"
+    siblings = [store_dir / "decisions.md", store_dir / "autopilot" / "state.json"]
+    if existing is not None:
+        gitignore.write_text(existing, encoding="utf-8")
+    before = _fingerprint(gitignore) if existing is not None else ()
+    siblings_before = [_fingerprint(path) for path in siblings]
+
+    wrote = store_tree.ensure_store_gitignore(store_dir)
+
+    assert wrote is expected, f"only a byte-exact body already matches: {existing!r}"
+    assert gitignore.read_text(encoding="utf-8") == store_tree.STORE_GITIGNORE
+    assert [_fingerprint(p) for p in siblings] == siblings_before, (
+        "no other file touched"
+    )
+    assert sorted(p.name for p in store_dir.parent.iterdir()) == ["project-management"]
+    if not expected:
+        assert _fingerprint(gitignore) == before, "a matching file is never rewritten"
+
+
+Public interfaces/types relevant to this task:
+#!/usr/bin/env python3
+"""store_tree.py - the dirty-tree predicate and the scoped store recorder.
+
+`foreign_dirty` lists the dirty paths outside the autopilot store roots;
+`record_store` stages and commits the store alone, leaving any other staged
+path untouched.
+
+The store is `<project root>/docs/dev/project-management`, and a bare-backed
+project puts the project root below git's work-tree root (`$HOME/.claude` under
+`$HOME`), so the roots `git status` prints carry a prefix git cannot report.
+"""
+
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+from collections.abc import Mapping
+from pathlib import Path
+
+STORE_SUBDIR = "docs/dev/project-management"
+STORE_PREFIXES = (f"{STORE_SUBDIR}/", "docs/dev/tmp/")
+STORE_PATHSPEC = f":(top){STORE_SUBDIR}"
+# Derived, so a store root added above needs no second edit here.
+STORE_EXCLUDE_PATHSPECS = tuple(
+    ":(exclude)" + prefix.removesuffix("/") for prefix in STORE_PREFIXES
+)
+GIT_TIMEOUT_SECS = 30
+
+STORE_GITIGNORE = "".join(
+    f"{pattern}\n"
+    for pattern in (
+        "autopilot/state.json",
+        "autopilot/state.json.bak",
+        "autopilot/*.lock",
+        "autopilot/.turn-counts.json",
+        "autopilot/.handoff-requested",
+        "autopilot/.cap-fired",
+        "autopilot/.session-left",
+        "autopilot/.review-gate-blocks",
+        "autopilot/.review-gate-failed",
+        "autopilot/.lane-guard-blocks",
+        "autopilot/lanes/",
+        "autopilot/wave-slots/",
+        "autopilot/wave.json",
+        "autopilot/review-paths",
+        "autopilot/last-session.log",
+        "autopilot/wrapper.log",
+        "autopilot/pause-requested",
+        "autopilot/paused-by-operator",
+        "autopilot/park-requested",
+        "autopilot/session-brief.md",
+        "autopilot/contract-card.md",
+        "autopilot/replan-context.md",
+        "autopilot/last-verification.json",
+    )
+)
+
+
+class StoreGitError(RuntimeError):
+    """A `git status` probe behind `foreign_dirty` failed."""
+
+
+def run_git(args: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=GIT_TIMEOUT_SECS,
+    )
+
+
+def in_wave_lane(env: Mapping[str, str] | None = None) -> bool:
+    """True inside a wave lane worktree, where `_AUTOPILOT_REVIEW_SLOTS_DIR`
+    carries the lane's (opaque) slots directory. A mapping that was passed
+    answers for itself; only `None` falls back to os.environ, read now."""
+    if env is None:
+        env = os.environ
+    return bool(env.get("_AUTOPILOT_REVIEW_SLOTS_DIR"))
+
+
+def _store_prefix(repo: Path, store_dir: Path | None) -> str:
+    """The slash-terminated path from git's work-tree root down to the store's
+    parent, or "" when `store_dir` is absent or is not `<x>/STORE_SUBDIR` inside
+    `repo`. git resolves symlinks in `--show-toplevel`, so both sides must too."""
+    if store_dir is None:
+        return ""
+    try:
+        rel = store_dir.resolve().relative_to(repo.resolve()).as_posix()
+    except (OSError, ValueError):
+        return ""
+    if not rel.endswith(f"/{STORE_SUBDIR}"):
+        return ""
+    return rel[: -len(STORE_SUBDIR)]
+
+
+def _status(args: list[str], repo: Path, run_git) -> list[tuple[str, str]]:
+    """(code, path) per porcelain entry, both sides of a rename or copy;
+    StoreGitError when the probe itself failed."""
+    try:
+        out = run_git(args, cwd=repo)
+    except (OSError, subprocess.SubprocessError) as err:
+        stderr = getattr(err, "stderr", None)
+        detail = f"{err} {stderr if isinstance(stderr, str) else ''}"
+        raise StoreGitError(f"git status failed: {' '.join(detail.split())}") from err
+    fields = iter(out.stdout.split("\0"))
+    entries = []
+    for field in fields:
+        if not field:
+            continue
+        code, path = field[:2], field[3:]
+        entries.append((code, path))
+        if "R" in code or "C" in code:
+            entries.append((code, next(fields)))
+    return entries
+
+
+def foreign_dirty(
+    repo: Path, store_dir: Path | None = None, run_git=run_git
+) -> list[str]:
+    """Dirty paths (either side of a rename or copy) outside the store roots as
+    they read from `repo`, git's work-tree root. The repository's own
+    `status.showUntrackedFiles` decides which untracked paths reach us, so a
+    wholly untracked store can arrive collapsed into one ancestor directory;
+    such an entry is re-listed in full instead of being reported as foreign."""
+    roots = tuple(_store_prefix(repo, store_dir) + root for root in STORE_PREFIXES)
+    paths = []
+    for code, path in _status(["status", "--porcelain", "-z"], repo, run_git):
+        if path.startswith(roots):
+            continue
+        untracked_dir = code == "??" and path.endswith("/")
+        if untracked_dir and any(root.startswith(path) for root in roots):
+            probe = ["status", "--porcelain", "-z", "--untracked-files=all"]
+            paths.extend(
+                leaf
+                for _code, leaf in _status([*probe, "--", path], repo, run_git)
+                if not leaf.startswith(roots)
+            )
+        else:
+            paths.append(path)
+    return paths
+
+
+def ensure_store_gitignore(store_dir: Path) -> bool:
+    """Write STORE_GITIGNORE into store_dir unless the file already holds it;
+    True when it was written. A body that cannot be read counts as differing;
+    when the existing file can neither be read nor overwritten (e.g.
+    permission-denied), the function raises instead of returning - expected,
+    not a bug."""
+    path = store_dir / ".gitignore"
+    try:
+        if path.read_text(encoding="utf-8") == STORE_GITIGNORE:
+            return False
+    except (OSError, UnicodeDecodeError):
+        pass
+    store_dir.mkdir(parents=True, exist_ok=True)
+    path.write_text(STORE_GITIGNORE, encoding="utf-8")
+    return True
+
+
+def record_store(
+    repo: Path, site: str, prd: str, store_dir: Path | None = None, run_git=run_git
+) -> str | None:
+    """Commit the store pathspec only; the new HEAD sha, or None when nothing
+    changed or git failed (the reason on one stderr line)."""
+    pathspec = f":(top){_store_prefix(repo, store_dir)}{STORE_SUBDIR}"
+    message = f"chore(autopilot): record {site} state" + (f" for {prd}" if prd else "")
+    try:
+        run_git(["add", "--", pathspec], cwd=repo)
+        staged = run_git(["diff", "--cached", "--name-only", "--", pathspec], cwd=repo)
+        if not staged.stdout.strip():
+            return None
+        run_git(["commit", "-m", message, "--", pathspec], cwd=repo)
+        return run_git(["rev-parse", "HEAD"], cwd=repo).stdout.strip()
+    except (OSError, RuntimeError, subprocess.SubprocessError) as err:
+        stderr = getattr(err, "stderr", None)
+        if isinstance(stderr, str) and "ignored by one of your .gitignore files" in stderr:
+            # Refused because the pathspec is itself gitignored/excluded:
+            # nothing to record, not a reportable failure.
+            return None
+        reason = (stderr if isinstance(stderr, str) else None) or str(err)
+        print(
+            f"autopilot: store record failed: {' '.join(reason.split())}",
+            file=sys.stderr,
+        )
+        return None
+Excerpt from skills/run-autopilot/cli/wave_review.py - only `_check_reviewable`
+(the rest of this ~500 line file is not needed):
+
+def _check_reviewable(
+    repo: Path,
+    wave: dict,
+    run_git: Callable[..., subprocess.CompletedProcess] = _default_run_git,
+) -> Path:
+    """The assembly worktree; ValueError when the wave is not assembled, the
+    worktree is gone, or `repo` has any uncommitted change."""
+    if not _is_basename(wave.get("id")):
+        raise ValueError("wave.json: malformed top-level field id")
+    if "assembly" not in wave:
+        raise ValueError("wave has no assembly - run `wave assemble` first")
+    if wave.get("status") not in ("assembled", "assembled_partial"):
+        raise ValueError(f"wave status {wave.get('status')!r} is not reviewable")
+    worktree = Path(wave["assembly"]["worktree"])
+    if not worktree.is_dir():
+        raise ValueError(f"assembly worktree {worktree} is gone")
+    dirty = "\n".join(store_tree.foreign_dirty(repo, run_git=run_git))
+    if dirty:
+        raise ValueError(f"{repo} has uncommitted changes:\n{dirty}")
+    return worktree
+Excerpt from skills/work/SKILL.md - only step 5 "Commit changes" (the rest of
+this ~68K file is not needed; the file's own top sets module-level `_TEXT` from
+a `.read_text()` of this same file in the test file you are extending):
+
+### 5. Commit changes
+
+Stage exactly this task's files, then commit in a separate Bash call. **Never `git add -A` or `git add .`** — the worktree is live (the user edits files during dispatches), and a bulk add sweeps foreign uncommitted work into the task commit (memory: feedback_subagents_vs_live_worktree).
+
+1. Build the stage list: the paths from Ivan's `FILES_TOUCHED:` footer (see **Assumptions footer**), plus any build-generated files this task's changes legitimately produced (lockfiles, snapshots, generated bindings) — identified from `git status --porcelain` output, never guessed.
+2. Fallback when the footer is absent or `none` while the tree is dirty (legacy retry prompts, malformed report): stage the intersection of dirty paths with the exact files the plan task names; treat every other dirty path as foreign.
+3. Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/check_reflow.py <stage list>` over that list: exit 1 → stamp `reflow: "<path>:<hunks>"` (`;`-joined for several) on the attempt and name the files in the phase report; exit 2 → `reflow: "failed:<stderr>"`; exit 0 → no field. Staging and the commit proceed unchanged in every branch — see `references/subagent-dispatch.md` § Reflow tripwire.
+
+```bash
+git add <path> [<path> ...]
+```
+```bash
+git commit -m "<type>(<scope>): <description>"
+```
+
+Any other dirty path is **foreign**: leave it unstaged and untouched, and name it in the phase report (fail loud) — the same never-commit-foreign-work rule the step-5.5 ESCALATE reset guard enforces.
+
+Never chain these with `&&` in a single Bash call. Commit message rules: conventional commit format, one line, no period, reference the task ID if available.
+Excerpt from skills/run-autopilot/cli/test_store_tree_record_store.py - the
+imports (top of file), and the one test you are editing (rest of the file's
+~220 lines is not needed; the file is a single `class RecordStoreTests(unittest.TestCase):`
+and this test is one of its methods):
+
+from __future__ import annotations
+
+import io
+import subprocess
+import sys
+import unittest
+from contextlib import redirect_stderr
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from cli import store_tree
+from cli.store_tree_testutil import (
+    REPO,
+    SHA,
+    SUBCOMMANDS,
+    FakeGit,
+    _one_line,
+    _subcommand,
+)
+
+STORE_PATHSPEC = ":(top)docs/dev/project-management"
+OTHER_SHA = "fedcba9876543210fedcba9876543210fedcba98"
+STAGED_STORE_FILE = "docs/dev/project-management/autopilot/state.json\n"
+
+# ... (unrelated code omitted) ...
+
+class RecordStoreTests(unittest.TestCase):
+    # ... (other test methods omitted) ...
+
+    def test_record_store_collapses_a_multiline_error_into_one_stderr_line(
+        self,
+    ) -> None:
+        git = FakeGit(
+            {"diff": STAGED_STORE_FILE},
+            fail_on="commit",
+            error=RuntimeError("boom first\nboom second"),
+        )
+        err = io.StringIO()
+
+        with redirect_stderr(err):
+            out = store_tree.record_store(REPO, "build", "", run_git=git)
+
+        self.assertIsNone(out)
+        self.assertTrue(_one_line(err.getvalue()), err.getvalue())
+        self.assertIn("boom first boom second", err.getvalue())
+Excerpt from skills/run-autopilot/cli/test_wave_review.py - the imports (top of
+file), and the two existing tests that already cover the BEHAVIOR your new
+docstring-text test is pinning in addition to (rest of this ~720 line file is
+not needed):
+
+from __future__ import annotations
+
+import fcntl
+import json
+import os
+import shutil
+import subprocess
+from collections.abc import Callable
+from pathlib import Path
+
+import pytest
+
+from cli import (
+    frontmatter,
+    loop_decision,
+    schema,
+    wave,
+    wave_launch,
+    wave_review,
+)
+from cli.test_wave_launch import _autopilot, _git, _repo
+from cli.test_wave_launch_refusals import (
+    FOREIGN_CASES,
+    STORE_FILES,
+    _dirty_store_and_foreign,
+    _dirty_store_only,
+    _track_store_file,
+)
+
+# ... (unrelated code omitted) ...
+
+def test_review_ignores_a_tree_dirty_only_inside_the_store(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, _, wave_dict = _assembled(tmp_path, monkeypatch)
+    worktree = Path(wave_dict["assembly"]["worktree"])
+    _track_store_file(repo)
+    _dirty_store_only(repo)
+    spawn = _FakeLoop(_moving(worktree, "done"))
+    # No ValueError: the store edit is not a foreign change, so review proceeds
+    # to spawn the loop and reads its verdict like a clean checkout would.
+    assert wave_review.review(repo, wave_dict, spawn_fn=spawn) == "converged"
+    assert len(spawn.calls) == 1, spawn.calls
+
+
+# `repo_dirty` in `test_review_refuses_before_assembly` already covers untracked.
+@pytest.mark.parametrize("case", [c for c in FOREIGN_CASES if c != "untracked"])
+def test_review_refuses_foreign_dirt_beside_dirt_inside_the_store(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    case: str,
+) -> None:
+    repo, _, wave_dict = _assembled(tmp_path, monkeypatch)
+    _track_store_file(repo)
+    foreign = _dirty_store_and_foreign(repo, case)
+    spawn = _FakeLoop()
+    with pytest.raises(ValueError, match="uncommitted changes") as refused:
+        wave_review.review(repo, wave_dict, spawn_fn=spawn)
+    message = str(refused.value)
+    assert foreign in message, message
+    for rel in STORE_FILES:
+        assert rel not in message, message
+    assert spawn.calls == []
+"""Prose pins for the store-aware dirty-tree rule (PRD 00236).
+
+What these tests enforce:
+
+- No skill prose teaches a clean-tree GATE off raw `git status --porcelain` /
+  `--short` any more: the gate is `autopilot dirty`, which ignores the store.
+  Every surviving prose mention is an inspection, a file enumeration or a
+  deliberately-unrelaxed destructive precondition, and each one is named in an
+  auditable allowlist below (by content, never by line number). A new
+  clean-tree gate in prose fails the first test.
+- The stand-down `dirty_tree` condition and the handoff procedure's
+  `record-store` call sit where the design puts them.
+- `STORE_GITIGNORE` and § Retention's Disposable list name the same paths.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from cli.store_tree import STORE_GITIGNORE
+
+_RUN_AUTOPILOT = Path(__file__).resolve().parent.parent
+_SKILLS = _RUN_AUTOPILOT.parent
+_SKILL = _RUN_AUTOPILOT / "SKILL.md"
+_TEXT = _SKILL.read_text(encoding="utf-8")
+
+_HOOK = Path(__file__).resolve().parent / "autopilot_context_cap_hook.py"
+_HANDOFF = _SKILLS / "work" / "references" / "task-boundary-handoff.md"
+_HANDOFF_TEXT = _HANDOFF.read_text(encoding="utf-8")
+
+
+def _load_hook_module():
+    """Load autopilot_context_cap_hook.py as an importable module, same
+    pattern as test_autopilot_context_cap_hook.py, so `_rotation_instructions`
+    is callable without installing the package or touching sys.path."""
+    spec = importlib.util.spec_from_file_location("autopilot_context_cap_hook", _HOOK)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+# `--shortstat` is a diff flag, not a status gate, so it must not match.
+_PORCELAIN = re.compile(r"status --porcelain|status --short(?!stat)")
+
+# (repo-relative path, a short distinguishing substring of the exempt line).
+_EXEMPT = (
+    ("work/SKILL.md", "identified from `git status --porcelain` output, never guessed"),
+    ("work/references/codex-implementor.md", "codex-probe-<nonce>"),
+    ("work/references/codex-implementor.md", "--git-dir=<bare-git-dir>"),
+    ("work/references/codex-implementor.md", "An orphaned"),
+    ("work/references/rework-mode.md", "clean at claim time"),
+    (
+        "work/references/subagent-dispatch.md",
+        "have the task's AUTHORIZED surfaces changed since dispatch?",
+    ),
+    ("work/references/gate-failure.md", "exits 128 with"),
+    ("work/references/gate-failure.md", "--git-dir=<bare-git-dir>"),
+    ("work/references/gate-failure.md", "**uncommitted:**"),
+    ("work/references/gate-failure.md", "A crashed agent may have left partial"),
+)
+
+
+def _prose_files() -> list[Path]:
+    """Every `.md` under skills/, bar the golden fixtures (frozen records)."""
+    golden = _RUN_AUTOPILOT / "cli" / "golden"
+    return [p for p in sorted(_SKILLS.rglob("*.md")) if golden not in p.parents]
+
+
+def test_no_gate_parses_porcelain_by_hand() -> None:
+    """Prose never gates on raw porcelain outside the named exemptions."""
+    unexpected = []
+    for path in _prose_files():
+        rel = path.relative_to(_SKILLS).as_posix()
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not _PORCELAIN.search(line):
+                continue
+            if any(rel == p and needle in line for p, needle in _EXEMPT):
+                continue
+            unexpected.append(f"{rel}: {line.strip()}")
+    assert not unexpected, (
+        "raw porcelain outside the allowlist — use `autopilot dirty` for a "
+        "clean-tree gate, or add an exemption here:\n" + "\n".join(unexpected)
+    )
+
+
+def test_stand_down_names_autopilot_dirty() -> None:
+    """The `dirty_tree` condition is measured by `autopilot dirty`."""
+    start = _TEXT.index("\n## Session Loop")
+    loop = _TEXT[start : _TEXT.index("\n## ", start + 1)]
+    procedure = loop[loop.index("**Stand-down procedure") :]
+    assert "`autopilot dirty`" in procedure
+    assert "condition `dirty_tree`" in procedure
+    assert not _PORCELAIN.search(procedure)
+
+
+def test_handoff_procedure_records_the_store_before_the_leave_row() -> None:
+    """The handoff records the store after its `leave` row, before the STOP."""
+    start = _TEXT.index("### Session handoff procedure")
+    procedure = _TEXT[start : _TEXT.index("\n### ", start + 1)]
+    assert procedure.index("record_dispatch.py handoff") < procedure.index(
+        "`autopilot record-store`"
+    )
+
+
+def test_store_gitignore_matches_the_disposable_list() -> None:
+    """§ Retention's Disposable list and `STORE_GITIGNORE` name one set."""
+    bullet = _TEXT[_TEXT.index("- **Disposable**") :]
+    bullet = bullet[: bullet.index("\n")]
+    # Both sides are compared without a trailing slash: STORE_GITIGNORE marks
+    # directories with one (`autopilot/lanes/`), the prose does not.
+    listed = {
+        path.rstrip("/").removeprefix("docs/dev/project-management/")
+        for path in re.findall(r"`(docs/dev/project-management/autopilot/[^`]+)`", bullet)
+    }
+    patterns = {p.rstrip("/") for p in STORE_GITIGNORE.split()}
+    assert listed == patterns, f"drift: {listed ^ patterns}"
+
+
+def test_rotation_instructions_build_phase_names_build_site() -> None:
+    """The rotation's record-store call is a runnable invocation (an
+    absolute `python3 .../cli/__main__.py` call, not the bare non-runnable
+    `autopilot record-store`), and its `--site` tracks the `phase` argument
+    rather than a hardcoded literal."""
+    module = _load_hook_module()
+    text = module._rotation_instructions(500_000, "build")
+    assert "record-store" in text
+    assert "--site build" in text
+    assert "python3 " in text
+    assert "cli/__main__.py" in text
+    assert "--prd" in text
+
+
+def test_rotation_instructions_review_phase_names_review_site() -> None:
+    """Same pin as the build-phase test, for the review-phase rotation
+    (rework rotation, PRD 00196) — `--site` must read `review`, not a
+    literal carried over from the build case."""
+    module = _load_hook_module()
+    text = module._rotation_instructions(500_000, "review")
+    assert "record-store" in text
+    assert "--site review" in text
+    assert "python3 " in text
+    assert "cli/__main__.py" in text
+    assert "--prd" in text
+
+
+def test_task_boundary_handoff_records_the_store_before_the_leave_row() -> None:
+    """task-boundary-handoff.md step h hands off the `leave` row before
+    `autopilot record-store`, the same ordering SKILL.md's handoff procedure
+    pins (test_handoff_procedure_records_the_store_before_the_leave_row,
+    above) for the core-skill copy of this rule."""
+    start = _HANDOFF_TEXT.index("**Write the contract card**")
+    step = _HANDOFF_TEXT[start : _HANDOFF_TEXT.index("**Do NOT return to step 1", start)]
+    assert step.index("record_dispatch.py handoff") < step.index(
+        "`autopilot record-store`"
+    )
+
+Test framework: pytest
+
+Rules:
+1. Write tests from requirements only. You are a USER of this API, not its builder.
+2. Each test name describes a behavior: "rejects empty email", "returns 404 for missing user"
+3. Assert on outputs, return values, side effects, and errors. Never assert on mock existence.
+4. Cover edge cases: empty input, null/undefined, boundary values, error conditions
+5. Use real code paths. Mock only external dependencies (network, filesystem, databases).
+6. For EACH test, ask yourself: "What wrong implementation would still pass this?" If easy to answer, add constraints.
+7. Do not write implementation code. Do not modify non-test files.
+8. Do not add test-only methods to production classes. Use test utilities instead.
+9. SIMPLICITY FIRST: Test only the behavior in the acceptance criteria. Do not add tests for features nobody asked for. If you write 20 tests when 6 cover the spec, cut back.
+10. THINK BEFORE CODING: If the acceptance criteria are ambiguous (unclear input shape, unstated error behavior, multiple valid interpretations), STOP and report the ambiguity instead of picking an interpretation silently.
+10a. NEVER INVENT A CONTRACT: If the task names a data structure (JSON object, API response, enum, config schema, record type) but does not pin its EXACT field names, enum values, or types, STOP and report it as a blocker. Do not invent a plausible schema and test against it — a self-consistent wrong contract is worse than a reported gap, because the implementer will build to your tests and the mistake survives until PRD-level review. Likewise for "which kind of thing" choices the task leaves open (e.g. which hook event, which file location). The task description must hand you the exact strings; if it does not, that is a blocker, not a judgement call.
+11. SURGICAL: Only create/modify test files. Match the existing test file's style (quote style, import order, assertion library, naming). Do not reformat sample files you were given for reference.
+12. SIZE LIMITS: keep every test function under 50 lines and every test file under 800 lines; split by behavior into sibling files named after the test module (for example test_events_completion.py, test_events_usage.py) before you exceed either.
+
+Do NOT:
+- Think about how to implement the feature
+- Read or reference implementation files
+- Write stubs, placeholders, or TODO comments
+- Mock internal modules (only mock external boundaries)
+- Create tests that just check a function exists or returns truthy
+
+Read only the files listed above. If a file or symbol you need is not listed, stop and report it as a blocker — do not run broad `rg` sweeps to discover scope.
+
+Abort and report if you read more than 100K of total input. Return the partial result and an abort_reason: context_overrun field.
+
+Read every file before your first Edit to it. Never call bash `head`, `tail`, `cat`, `grep`, or `find` - a hook blocks them. Use the Read tool (offset/limit), `rg`, or `rg --files` instead. Never combine an inspection (read, list, search, diff) with a test, lint or build invocation in one Bash call - run them as two calls, because a combined command has two ways to hang and one exit code. Pass an explicit `timeout` on every Bash call: 60000 ms for an inspection, 300000 ms for a lint run or a narrow test run, 600000 ms for a full suite or a full build.
+
+End your report with `ASSUMPTIONS:` - one line per assumption you made where the task, tests, or listed files were silent (guessed interface, data shape, resolved ambiguity, unstated behavior). Write `ASSUMPTIONS: none` if you made none.

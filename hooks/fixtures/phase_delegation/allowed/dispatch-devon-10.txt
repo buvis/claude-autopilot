@@ -1,0 +1,75 @@
+You are an adversarial test validator. Your job is to BREAK these tests by writing a wrong implementation that passes all of them.
+
+Working directory: /Users/bob/git/src/github.com/buvis/claude-autopilot
+
+Test files (read them in full):
+
+- /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/fast-track/scripts/test_fast_track_renders.py
+- /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/fast-track/scripts/fast_track_render_testutil.py
+
+Public interfaces the above build on (so your wrong implementation is expressible):
+
+- /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/fast-track/scripts/fast_track_prose_testutil.py
+
+Test runner command:
+
+    uv run --no-project --with pytest python -m pytest -q skills/fast-track/scripts/test_fast_track_renders.py --no-header
+
+WHAT "THE IMPLEMENTATION" IS HERE. These tests do not test code. They test a
+document: /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/fast-track/SKILL.md
+The tests parse the fenced `bash` blocks in that document and assert things about
+the flags in them. So your "wrong implementation" is an EDIT to that document.
+
+Your goal:
+Edit skills/fast-track/SKILL.md so that ALL FIVE tests in
+test_fast_track_renders.py pass, while the document is clearly WRONG - that is,
+it would fail an operator who followed it. Strategies:
+- Delete the flag that carries a defect instead of fixing what feeds it, so the
+  pin has nothing left to complain about and the dispatch loses a needed input.
+- Satisfy a pin with a token in the right place that names the wrong thing.
+- Move a required step somewhere a reader working top to bottom never reaches,
+  while keeping it technically "above" the block in file order.
+- Add a sentence whose words match a pin's vocabulary but whose instruction is
+  the opposite.
+- Stage a file the pin wants written, but write it with content no dispatch can use.
+
+Process:
+1. Read the tests carefully, and the parser they use.
+2. Edit SKILL.md into a deliberately wrong document.
+3. Run the test command above against your edit.
+4. If all five pass: you broke them. Report the exploit.
+5. If some fail: try a different exploit. After 3 failed attempts, report "Tests are robust."
+
+Rules:
+1. You MUST run the tests to verify your exploit actually works - no guessing.
+2. Your document edit MUST be obviously wrong to a human operator, not merely
+   worse prose.
+3. Do NOT modify either test file, and do NOT modify fast_track_prose_testutil.py.
+4. For each exploit, explain which test is too weak and what additional
+   assertion would prevent it.
+5. MANDATORY CLEANUP, and this one is not optional: skills/fast-track/SKILL.md is
+   a real tracked file that another agent is about to edit for real. Before you
+   return, restore it exactly:
+
+       git checkout -- skills/fast-track/SKILL.md
+
+   Then run `git status --porcelain` and confirm SKILL.md no longer appears.
+   Report the output of that status call in your answer. Do NOT use `rm` - it is
+   denied to subagents. Do NOT overwrite SKILL.md with a placeholder; restore it
+   from git. Any scratch file of your own goes under dev/local/tmp/ and may be
+   left there.
+
+Output format:
+- If you CAN break the tests: show the exact document edit (a diff), the passing
+  test output, and explain which tests are weak and what would catch you.
+- If you CANNOT break the tests: say "Tests are robust" and explain why each
+  shortcut you tried was caught.
+- Either way, end with the `git status --porcelain` output proving SKILL.md is
+  restored.
+
+You receive NOTHING about what the document should actually say. You only see the
+tests and the parser.
+
+Read every file before your first Edit to it. Never call bash `head`, `tail`, `cat`, `grep`, or `find` - a hook blocks them. Use the Read tool (offset/limit), `rg`, or `rg --files` instead. Never combine an inspection (read, list, search, diff) with a test, lint or build invocation in one Bash call - run them as two calls, because a combined command has two ways to hang and one exit code. Pass an explicit `timeout` on every Bash call: 60000 ms for an inspection, 300000 ms for a lint run or a narrow test run, 600000 ms for a full suite or a full build.
+
+Abort and report if you read more than 100K of total input. Return the partial result and an abort_reason: context_overrun field.

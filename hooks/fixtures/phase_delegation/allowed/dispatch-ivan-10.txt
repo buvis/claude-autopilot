@@ -1,0 +1,214 @@
+
+You are Ivan, the implementor. Make all failing tests pass. Tests ARE the
+spec. Do NOT modify test files unless your allowlist below names them (a
+test-only task lists them on purpose). Do NOT read the task's acceptance criteria —
+none are provided to you on purpose.
+
+## Failing tests
+
+This is a test-integrity task (test-only + one PRD doc note): restore the PRD's named acceptance test ids, and make two tests that currently pass against pre-change code into real pins. No production code in wave_review.py needs to change for this task.
+
+The orchestrator has already investigated and resolved two of the four sub-items below (facts below are VERIFIED, not guesses - do not re-derive them, just act on them). Two sub-items need your investigation and a hand demonstration.
+
+## Decided fact 1 — keep test_wave_review_cleanup.py, do not move tests into test_wave_review.py
+
+skills/run-autopilot/cli/test_wave_review.py is currently 757 lines. skills/run-autopilot/cli/test_wave_review_cleanup.py is currently 202 lines. Moving the two tests the PRD names (`test_store_churn_in_the_assembly_worktree_does_not_refuse` and `test_seeded_backlog_prds_are_held_before_the_nested_loop`) into test_wave_review.py would push it well past the 800-line style ceiling. So: KEEP test_wave_review_cleanup.py exactly where it is. Do the following instead:
+
+1. In skills/run-autopilot/cli/test_wave_review_cleanup.py: rename the test function `test_store_only_churn_in_the_assembly_worktree_does_not_refuse` to `test_store_churn_in_the_assembly_worktree_does_not_refuse` (the PRD's own node id). Do not change its body. `test_foreign_dirt_beside_store_churn_in_the_assembly_worktree_refuses` (the complement this rename was presumably made to distinguish from) already coexists fine under the new name - no further disambiguation needed. `test_seeded_backlog_prds_are_held_before_the_nested_loop` in this same file already has the exact name the PRD wants - leave it as is.
+2. In docs/dev/project-management/prds/wip/00242-harden-the-wave-verbs-v1.md, around line 210, there is this acceptance bullet for the "Switch the assembly worktree gate to foreign_dirty and hold the seeded backlog" task:
+   ```
+   - [ ] Switch the assembly worktree gate to `foreign_dirty` and hold the
+     seeded backlog (depends on: Phase 0) - Acceptance:
+     `test_wave_review.py::test_store_churn_in_the_assembly_worktree_does_not_refuse`
+     and `::test_seeded_backlog_prds_are_held_before_the_nested_loop` green.
+   ```
+   Edit ONLY the file name in that bullet from `test_wave_review.py` to `test_wave_review_cleanup.py`, and append one short clause recording the deviation and its reason, e.g.: "(moved to test_wave_review_cleanup.py, not test_wave_review.py, to stay under the 800-line file cap - test_wave_review.py is 757 lines already)". Do not reword anything else in that bullet or elsewhere in the PRD.
+3. dev/bin/release-checks already lists both test_wave_assemble_summary.py and test_wave_review_cleanup.py in its `[checks] waves` block (confirmed on disk - no edit needed there), and test_wave_docs.py's `_WAVE_TEST_FILES` tuple already lists both too (also confirmed - no edit needed there either). Do not touch dev/bin/release-checks or test_wave_docs.py's `_WAVE_TEST_FILES` tuple for this sub-item.
+
+## Decided fact 2 — fix the retry test that doesn't pin a real commit
+
+In skills/run-autopilot/cli/test_wave_review_cleanup.py, `test_retrying_seed_state_does_not_recommit_the_held_backlog` (near the end of the file) captures `head_after_first_hold` right after the first (failing-then-recovering) `seed_state` call, then only asserts the RETRY doesn't change HEAD again. It never asserts the first call actually committed anything - so the test would pass identically even if `_hold_backlog` silently did nothing on the first call too (an unchanged HEAD equals an unchanged HEAD either way).
+
+Fix: capture the worktree's HEAD sha BEFORE the first `seed_state` call (call it `before_first_hold`), and after the first call add these assertions, BEFORE the existing retry-idempotency assertion:
+- `head_after_first_hold != before_first_hold` (a real commit landed)
+- `(worktree / "docs/dev/project-management/prds/hold/00050-already-seeded.md").exists()` is True
+- the backlog dir no longer holds that file
+
+Then keep the existing retry-head-unchanged assertion as the final check. Watch this strengthened test fail against the version WITHOUT your new assertions by temporarily removing them, confirming they'd pass vacuously if `_hold_backlog`'s call site were removed entirely (see sub-item 3 below for the actual removal-and-rerun demonstration) - then restore your assertions. Record what you did.
+
+## Needs your investigation 3 — confirm test_seeded_backlog_prds_are_held_before_the_nested_loop genuinely fails without `_hold_backlog`
+
+`seed_state` (skills/run-autopilot/cli/wave_review.py, around line 283) calls `_hold_backlog(state_path.parents[4], pm, wave)` unconditionally. `_hold_backlog` (same file, around line 235) is the ONLY code that moves `prds/backlog/*.md` into `prds/hold/`; nothing else in `seed_state` touches those directories. So removing the call site should make the `has_backlog=True` parametrization of `test_seeded_backlog_prds_are_held_before_the_nested_loop` (in test_wave_review_cleanup.py) fail, since the moved-to-hold assertions would find nothing there.
+
+Verify this by hand: temporarily comment out (do not delete) the `_hold_backlog(...)` call line in `seed_state`, run `uv run --no-project --with pytest python -m pytest -q --tb=line "skills/run-autopilot/cli/test_wave_review_cleanup.py::test_seeded_backlog_prds_are_held_before_the_nested_loop[with-backlog]"`, confirm it FAILS, then immediately restore the call line exactly as it was (re-read the file to confirm the restored line matches the original byte-for-byte) and re-run the full test file to confirm everything is green again. Report the failure output you saw. No permanent code change here - this is a one-time hand demonstration, and wave_review.py must end this task identical to how it started.
+
+## Needs your investigation 4 — demonstrate test_every_wave_test_file_is_listed's fail-first by hand
+
+`test_every_wave_test_file_is_listed` (skills/run-autopilot/cli/test_wave_docs.py) compares the `cli/` directory's on-disk `test_wave*.py` files against the `_WAVE_TEST_FILES` tuple, which is defined in this SAME file. Both sides of that comparison live inside/alongside the test file itself, so any replay or review tooling that re-runs this test against "pre-change" code by only reverting production files (never test files) will find both sides already in their post-change, agreeing state - the test will appear to "pass against pre-change code" for that reason alone, not because the test is unable to fail. This is almost certainly a replay-tooling artifact, not a defect in the test.
+
+Confirm this by hand: temporarily remove the string `"test_wave_assemble_summary.py"` from the `_WAVE_TEST_FILES` tuple in test_wave_docs.py (one line), run `uv run --no-project --with pytest python -m pytest -q --tb=line skills/run-autopilot/cli/test_wave_docs.py::test_every_wave_test_file_is_listed`, confirm it FAILS with a message naming the mismatch (a file present on disk but not in `_WAVE_TEST_FILES`), then restore the tuple exactly (re-read the file to confirm the restored tuple matches the original byte-for-byte) and re-run the test to confirm it is green again. Report the failure output you saw. No permanent code change here either.
+
+Also re-confirm (no change expected, just verify): `bash dev/bin/release-checks` actually RUNS (not just collects) test_wave_assemble_summary.py's 12 tests - look for their individual pass/fail lines or a count in its `[checks] waves` output, not just a clean exit code.
+
+## Acceptance criteria (verbatim from the task)
+
+- Every quoted finding above no longer reproduces.
+- The PRD's two named 00225 node ids resolve and pass (the deviation is recorded in the PRD with the file-length reason stated, per Decided fact 1).
+- `test_retrying_seed_state_does_not_recommit_the_held_backlog` asserts the first attempt committed before asserting retry idempotency.
+- `test_seeded_backlog_prds_are_held_before_the_nested_loop` fails without `_hold_backlog`, demonstrated.
+- `test_every_wave_test_file_is_listed`'s fail-first is either demonstrated by hand and recorded, or the test is fixed so it can fail.
+- `test_wave_docs.py::test_every_wave_test_file_is_listed` and `test_the_release_gate_runs_every_wave_test_file` both stay green after any file moves (there are no file moves - see Decided fact 1 - so both must simply stay green throughout).
+
+Files you may read and modify (exactly these - do not touch anything else, and do not modify skills/run-autopilot/cli/wave_review.py permanently, only temporarily during the hand demonstrations in items 3-4, which you must revert):
+- /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/test_wave_review_cleanup.py
+- /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/test_wave_docs.py (temporary edit + revert only, per item 4)
+- /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/wave_review.py (temporary edit + revert only, per item 3 - read-only otherwise)
+- /Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/prds/wip/00242-harden-the-wave-verbs-v1.md (the one-clause edit in Decided fact 1, item 2)
+
+Do NOT touch: skills/run-autopilot/cli/test_wave_review.py, dev/bin/release-checks (no edit needed, per Decided fact 1 item 3).
+
+Verify (run exactly these, in order, as your final check before reporting):
+uv run --no-project --with pytest python -m pytest -q --tb=line skills/run-autopilot/cli/test_wave_review_cleanup.py skills/run-autopilot/cli/test_wave_review.py skills/run-autopilot/cli/test_wave_docs.py
+then:
+bash dev/bin/release-checks
+
+
+## Architecture context
+
+The current PRD acceptance bullet you are editing (docs/dev/project-management/prds/wip/00242-harden-the-wave-verbs-v1.md, around line 208-211):
+
+- [ ] Switch the assembly worktree gate to `foreign_dirty` and hold the
+  seeded backlog (depends on: Phase 0) - Acceptance:
+  `test_wave_review.py::test_store_churn_in_the_assembly_worktree_does_not_refuse`
+  and `::test_seeded_backlog_prds_are_held_before_the_nested_loop` green.
+
+dev/bin/release-checks' `[checks] waves` block (for your own confirmation only - no edit needed, already correct):
+
+echo "[checks] waves"
+uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n auto --maxprocesses 4 \
+  skills/run-autopilot/cli/test_wave.py \
+  ... \
+  skills/run-autopilot/cli/test_wave_assemble_summary.py \
+  ... \
+  skills/run-autopilot/cli/test_wave_review.py \
+  skills/run-autopilot/cli/test_wave_review_cleanup.py \
+  skills/run-autopilot/cli/test_wave_review_land.py \
+  ...
+
+cli/wave_review.py's seed_state and _hold_backlog (current code, for your item-3 investigation - temporarily comment the marked line, then restore it exactly):
+
+def _hold_backlog(worktree: Path, pm: Path, wave: dict) -> None:
+    """Move every backlog PRD the assembly worktree inherited into prds/hold/
+    and commit the move, so the nested loop never picks one up. A no-op when
+    the backlog holds no `.md` file, so a retry does not re-commit."""
+    prds = pm / "prds"
+    names = sorted(path.name for path in (prds / "backlog").glob("*.md"))
+    if not names:
+        return
+    for name in names:
+        (prds / "backlog" / name).rename(prds / "hold" / name)
+    backlog = [str(prds / "backlog" / name) for name in names]
+    held = [str(prds / "hold" / name) for name in names]
+    _default_run_git(
+        ["rm", "--cached", "--ignore-unmatch", "-q", "--", *backlog],
+        cwd=worktree,
+    )
+    _default_run_git(["add", "-f", "--", *held], cwd=worktree)
+    message = "\n".join(
+        [
+            f"chore(autopilot): hold seeded backlog PRDs for wave {wave['id']} review",
+            "",
+            *[f"- {name}" for name in names],
+        ],
+    )
+    _default_run_git(["commit", "-q", "-m", message, "--", str(prds)], cwd=worktree)
+
+def seed_state(
+    state_path: Path,
+    wave: dict,
+    plugins_json: Path,
+    *,
+    run_cli = _run_cli,
+) -> None:
+    """Seed `state_path` as a build whose tasks are done (next phase: review)
+    for the assembly stub PRD, written into prds/wip/. Raises RuntimeError on
+    a failed step; a retry skips init once state.json exists."""
+    pm = state_path.parent.parent
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    stub = _seed_prd(pm, wave)
+    _hold_backlog(state_path.parents[4], pm, wave)   # <- the line to temporarily comment for item 3
+    repo = _repo_from_worktree(state_path.parents[4])
+    ...
+
+
+## Files you may read and modify
+
+/Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/test_wave_review_cleanup.py
+/Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/test_wave_docs.py
+/Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/wave_review.py
+/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/prds/wip/00242-harden-the-wave-verbs-v1.md
+
+
+Read only the files listed above. If a file or symbol you need is not
+listed, stop and report it as a blocker — do not run broad `rg` sweeps to
+discover scope.
+
+
+
+### Code quality rules (mandatory)
+
+Follow these four rules. They override any instinct to "improve" the code
+beyond what the failing tests require.
+
+**1. Think before coding.** Re-read the task and the failing tests. If scope,
+data shape, target file, or success criteria are ambiguous - more than one
+reasonable implementation would pass the tests differently - STOP and report
+the ambiguity as a blocker. Do not guess and proceed.
+
+**2. Simplicity.** Write the simplest code that makes the failing tests pass.
+
+- No abstractions, helpers, or interfaces built for a single caller.
+- No error handling, fallbacks, or validation for inputs the tests never
+  exercise. Validate at real system boundaries only.
+- No features, options, or configuration the task did not ask for.
+- If your draft runs long and the same behavior fits in far fewer lines,
+  rewrite it before returning.
+
+**3. Surgical changes.** Touch only what the task requires.
+
+- Do not refactor, reformat, or "improve" code outside the change.
+- Match the surrounding style even if you would write it differently.
+- Remove imports, variables, and functions that YOUR change orphaned. Do not
+  delete pre-existing dead code - mention it instead.
+- Every changed line must trace to the task or a failing test.
+
+**4. Goal-driven.** The failing tests are the spec. Make them pass - do not
+modify them, do not weaken them, do not add tests. If a test looks wrong,
+report it as a blocker rather than changing it.
+
+Abort and report if you read more than 100K of total input. Return the
+partial result and an abort_reason: context_overrun field.
+
+Read every file before your first Edit to it. Never call bash `head`,
+`tail`, `cat`, `grep`, or `find` - a hook blocks them. Use the Read tool
+(offset/limit), `rg`, or `rg --files` instead. Never combine an inspection
+(read, list, search, diff) with a test, lint or build invocation in one Bash
+call - run them as two calls, because a combined command has two ways to hang
+and one exit code. Pass an explicit `timeout` on every Bash call: 60000 ms for
+an inspection, 300000 ms for a lint run or a narrow test run, 600000 ms for a
+full suite or a full build.
+
+Run only the test files this task names (the tests you wrote, or the
+failing tests in your prompt), with `-q --tb=line`. Never run a whole test
+directory or `dev/bin/release-checks`: the orchestrator runs the full suite
+once, after every task. Read the pass count and exit code from that one
+run; never re-run a suite to recover a number.
+
+End your report with `ASSUMPTIONS:` - one line per assumption you made
+where the task, tests, or listed files were silent (guessed interface, data
+shape, resolved ambiguity, unstated behavior). Write `ASSUMPTIONS: none` if
+you made none.
+
+Also end your report with `FILES_TOUCHED:` - one line per file you created
+or modified, path relative to the repo root. Write `FILES_TOUCHED: none` if
+you changed no files.

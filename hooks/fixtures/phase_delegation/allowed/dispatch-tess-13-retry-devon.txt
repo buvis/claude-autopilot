@@ -1,0 +1,59 @@
+Your tests have quality issues. Fix them.
+
+Issues found:
+Your tests can be passed by a wrong implementation. An adversarial validator wrote three deliberately wrong versions of the module under test and each passed the whole hooks suite (44 passed, 175 subtests) - the six entries you added are the ones they exploit. Strengthen these specific tests so the exploits below no longer work. Do not change tests the validator could NOT break, and do not add tests for behaviour nobody asked for. Only the two hook test files are in scope for this fix (the prose-pin edit is done and stays).
+
+Exploit 1 - memorised literal tails. Wrong implementation: `is_push_like` returns True when the segment ends with one of the exact tails ("-u bob git push", "-n 10 git push", "-u VAR git push", "-u git git push") and False otherwise; `sudo -u alice git push`, `nice -n 5 git push`, `env -u HOME git git push` are then allowed from a guarded cwd. Weak point: the wrapper rows in `IsPushLikeTests.test_flags_commands_that_could_run_a_push_the_parser_cannot_see` and `DecideTests.test_hidden_push_denies_only_when_the_payload_cwd_has_custody` use fixed values (`bob`, `10`, `VAR`) while the parser tables in the same file already build unmemorisable rows from `_NONCE`. Fix: build the wrapper rows from the nonce too - e.g. `f"sudo -u {_NONCE} git push"`, `f"env -u {_NONCE} git git push"`, `f"nice -n {len(_NONCE)} git push"` (the on_critical test file has no `_NONCE`; derive one the same way the grammar file does, `uuid.uuid4().hex`, or a per-run value of your own, never a fixed string).
+
+Exploit 2 - key on the doubled `git` word. Wrong implementation: treat a segment as uncertain only when the two words after the wrapper's option are literally `git git`; `sudo -u git /usr/bin/git push`, `env -u git exec git push` and `sudo -u git command git push` are then allowed from a guarded cwd (`is_push_like` False and `decide` returns None from the seeded guarded repo) - a real push as user `git`. Weak point: both "operand spelt `git`" rows put a bare `git` right after the operand, so "the pair `git git`" is indistinguishable from "an option swallowed the executable". Fix: add at least one row per list where the real executable after the `git` operand is NOT the bare word - `sudo -u git /usr/bin/git push` and `env -u git exec git push` - to the push-like list and to the hidden-push decide list (denied from the guarded cwd with the unresolved-target note, allowed from the clean repo).
+
+Exploit 3 - hardcode the two flag letters. Wrong implementation: a wrapper counts as uncertain only when the option it consumed is exactly `-u` or `-n`; `sudo -g git git push`, `sudo --user git git push`, `nice --adjustment 10 git push`, `env -C /tmp git push` are then allowed from a guarded cwd. Weak point: the value-taking-option rows only ever spell `-u` and `-n`. Fix: vary the option in both lists - a different short option (`sudo -g git git push`), a long option (`sudo --user {nonce} git push`, `nice --adjustment 10 git push`). Also pin the flag-free wrapper in front of a non-git executable that merely mentions push - `nohup mytool git push` is looked through (`mytool` is the executable; it is not git and not a shell), so it is NOT push-like and is allowed from a guarded cwd: add it beside `command echo 'git' 'push'` in both not-push-like/allow lists.
+
+Keep every new row a subTest entry in the existing tuples, beside the rows you added last time, with the one-line comments; both files must stay under 800 lines and every function under 50.
+
+Original requirements (unchanged):
+
+Description:
+The unit under test is the PreToolUse Bash hook that denies a `git push` into a repository with pending cap_critical custody. Its documented rule for shell WRAPPERS (`command`, `env`, `exec`, `nohup`, `sudo`, `nice`, `time`) is changing. Three requirements, in two test files plus one deletion-only edit:
+
+1. **A wrapper that consumed an option is uncertain.** When a wrapper is followed by one or more `-`-prefixed options before the next word, the option may have taken that next word as its operand (`sudo -u NAME`, `nice -n 10`, `env -u VAR`), so the guard cannot tell which word is the executable. Such a segment that mentions `push` is push-like (uncertain), and `decide` follows the uncertain path: deny when the payload cwd has pending custody (the block reason names the unresolvable target), allow from a clean repo. This already holds for `sudo -u bob git push`, `nice -n 10 git push`, `env -u VAR git push`. It must ALSO hold when the operand happens to be the literal word `git`: `env -u git git push` and `sudo -u git git push` (a `git` user is common on git hosts) are push-like and are denied from a guarded cwd, allowed from a clean one. Today both are allowed from a guarded cwd - that is the bypass to pin.
+
+2. **A flag-free wrapper is looked through.** When a wrapper is followed directly by a non-option word, that word is the executable and is classified normally: `command git push`, `nice git push`, `exec git push` are plain pushes (already pinned as denied-with-resolved-target from a guarded cwd); `command echo 'git' 'push'` runs `echo`, is NOT push-like, and is ALLOWED from a guarded cwd. Today `command echo 'git' 'push'` is denied from a guarded cwd - that is the false deny to pin.
+
+3. **Deletion-only edit** in `test_git_push_row_routes_a_guard_denial_to_custody_resolve`: two asserts restate stronger neighbours. `_assert_present(row, _SKILL, where, (_PUSH_DENIAL_SENTENCE,))` (the sentence is in the row) is implied by the assert that the sentence is in the `interactive` cell, a cell of that row; `assert _PUSH_DENIAL_SENTENCE not in loop` is implied by `assert "custody resolve" not in loop`, because `_PUSH_DENIAL_SENTENCE` contains the words `custody resolve`. Delete exactly those two asserts (the first is one line; the second is the four-line `assert ... not in loop, (...)` statement). Change nothing else in the function - the `_assert_present(loop, ...)` call, the `"custody resolve" not in loop` assert, and the `cell`/`tail` countermand checks all stay.
+
+Exact files and symbols (absolute paths):
+
+- `/Users/bob/git/src/github.com/buvis/claude-autopilot/hooks/test_guard_push_grammar.py` - class `IsPushLikeTests`: add `env -u git git push` and `sudo -u git git push` to the tuple in `test_flags_commands_that_could_run_a_push_the_parser_cannot_see` (push-like: `guard.is_push_like(shlex.split(segment), segment)` is True), and `command echo 'git' 'push'` to the tuple in `test_ignores_plain_git_calls_and_words_that_merely_mention_push` (not push-like: False). Keep each new entry beside the existing wrapper cases with a one-line comment saying what it pins. Every existing entry keeps its verdict.
+- `/Users/bob/git/src/github.com/buvis/claude-autopilot/hooks/test_guard_push_on_critical.py` - class `DecideTests`: add `env -u git git push` and `sudo -u git git push` to the tuple in `test_hidden_push_denies_only_when_the_payload_cwd_has_custody` (denied from `self.guarded` with `_UNRESOLVED_TEXT` in the reason, allowed from `self.clean`), and `command echo 'git' 'push'` to the tuple in `test_allows_read_only_git_and_echo_that_mention_push` (allowed from `self.guarded`). Use the fixtures the class already has (`_bash`, `self.guarded`, `self.clean`, `assertDenied`); no new fixtures.
+- `/Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/test_custody_prose_schema.py` - function `test_git_push_row_routes_a_guard_denial_to_custody_resolve` (near line 268): the deletion-only edit in requirement 3. Do not add tests here.
+
+Do not create new test files. Do not edit any non-test file. The guard module itself is not yours to read or change: you test the behaviour named above through the public functions listed under "Public interfaces".
+
+Acceptance Criteria:
+- [ ] `env -u git git push` and `sudo -u git git push` are push-like (`is_push_like` True) and `decide` denies them from a guarded cwd (block reason carries the unresolved-target note) and allows them from a clean repo; the new table entries fail against the current code.
+- [ ] `command echo 'git' 'push'` is not push-like (`is_push_like` False) and `decide` allows it from a guarded cwd; the new entry fails against the current code.
+- [ ] `sudo -u bob git push`, `nice -n 10 git push`, `env -u VAR git push`, `eval "git pu''sh"` stay push-like; `command git push`, `nice git push`, `/usr/bin/git push`, `FOO=1 git push` still resolve as plain pushes (denied with a resolved target from a guarded cwd); `echo 'git' 'push'`, `git log push`, `git -c push=1 status`, `git status 2>&1` still allow - every existing entry in both hook test files keeps its verdict.
+- [ ] `test_git_push_row_routes_a_guard_denial_to_custody_resolve` no longer carries the row-wide presence assert or the full-sentence loop-exclusion assert and still passes; no other assert in the function changes.
+- [ ] Both hook test files stay under 800 lines; every function under 50 lines.
+
+Rewrite the tests addressing each issue above. Keep every test that is already
+sound — this is a targeted fix, not a rewrite from scratch.
+
+The original rules still apply. In particular:
+
+1. Write tests from requirements only. You are a USER of this API, not its builder.
+2. Each test name describes a behavior, not an implementation detail.
+3. Assert on outputs, return values, side effects, and errors. Never assert on mock existence.
+4. For EACH test, ask yourself: "What wrong implementation would still pass this?" If easy to answer, add constraints.
+5. SIMPLICITY FIRST: test only the behavior in the acceptance criteria. Strengthening a weak test does not mean adding tests nobody asked for.
+6. NEVER INVENT A CONTRACT: if the requirements name a data structure but do not pin its exact field names, enum values, or types, STOP and report it as a blocker rather than inventing a plausible schema.
+7. SURGICAL: only create/modify test files. Match the existing test file's style.
+
+Read only the files listed above. If a file or symbol you need is not listed, stop and report it as a blocker — do not run broad `rg` sweeps to discover scope.
+
+Abort and report if you read more than 100K of total input. Return the partial result and an abort_reason: context_overrun field.
+
+Read every file before your first Edit to it. Never call bash `head`, `tail`, `cat`, `grep`, or `find` - a hook blocks them. Use the Read tool (offset/limit), `rg`, or `rg --files` instead. Never combine an inspection (read, list, search, diff) with a test, lint or build invocation in one Bash call - run them as two calls, because a combined command has two ways to hang and one exit code. Pass an explicit `timeout` on every Bash call: 60000 ms for an inspection, 300000 ms for a lint run or a narrow test run, 600000 ms for a full suite or a full build.
+
+End your report with `ASSUMPTIONS:` - one line per assumption you made where the task, tests, or listed files were silent (guessed interface, data shape, resolved ambiguity, unstated behavior). Write `ASSUMPTIONS: none` if you made none.

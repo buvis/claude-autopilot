@@ -1,0 +1,406 @@
+
+You are Ivan, the implementor. Make all failing tests pass. Tests ARE the
+spec. Do NOT modify test files unless your allowlist below names them (a
+test-only task lists them on purpose). Do NOT read the task's acceptance criteria —
+none are provided to you on purpose.
+
+## Failing tests
+
+"""Tests binding the live text of the single-Devon-round prose — cutting the
+second Devon dispatch and documenting the new `exploit_fixed` attempt value
+plus the `devon_weak_points` / `devon_in_contract` attempt-record fields.
+
+Mirrors test_adversarial_cap_prose.py's pattern: resolve each target file's
+path relative to this file, read it once at module level, and assert on
+short, reword-resistant substrings, each with a failure message naming what
+drifted. Presence assertions are scoped to the section that is supposed to
+carry them via `_section`, so the pin still catches text that has moved out
+of its section rather than only text that has vanished outright. Absence
+assertions stay whole-file on purpose: scoping an absence check to one
+section would let the old wording reappear anywhere else in the file and
+still pass.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+_SCRIPTS_DIR = Path(__file__).resolve().parent
+_WORK_DIR = _SCRIPTS_DIR.parent
+_SKILLS_DIR = _WORK_DIR.parent
+
+_SKILL_MD = _WORK_DIR / "SKILL.md"
+_SKILL_TEXT = _SKILL_MD.read_text()
+
+_ADVERSARIAL_TEST_PROMPT = _WORK_DIR / "references" / "adversarial-test-prompt.md"
+_ADVERSARIAL_TEXT = _ADVERSARIAL_TEST_PROMPT.read_text()
+
+_ATTEMPT_LOGGING = _WORK_DIR / "references" / "attempt-logging.md"
+_ATTEMPT_LOGGING_TEXT = _ATTEMPT_LOGGING.read_text()
+
+_STATE_SCHEMA = _SKILLS_DIR / "run-autopilot" / "references" / "state-schema.md"
+_STATE_SCHEMA_TEXT = _STATE_SCHEMA.read_text()
+
+
+def _section(text: str, path: Path, start_anchor: str, end_anchor: str) -> str:
+    """Slice `text` from `start_anchor` up to `end_anchor`.
+
+    Asserts both anchors are present first, naming `path` and the missing
+    anchor, so a drifted heading fails loudly instead of raising a bare
+    `ValueError: substring not found`.
+    """
+    assert start_anchor in text, (
+        f"{path}: expected section anchor {start_anchor!r} — not found."
+    )
+    start = text.index(start_anchor)
+    assert end_anchor in text[start:], (
+        f"{path}: expected section anchor {end_anchor!r} after "
+        f"{start_anchor!r} — not found."
+    )
+    end = text.index(end_anchor, start)
+    return text[start:end]
+
+
+class TestDevonRoundProse:
+    def test_step_2_9_runs_devon_once(self) -> None:
+        # "\n### " (not a literal next-heading title) bounds the section at
+        # whatever heading follows 2.9, without hardcoding its number.
+        step_2_9 = _section(_SKILL_TEXT, _SKILL_MD, "### 2.9", "\n### ")
+        assert "runs once per task" in step_2_9, (
+            f"{_SKILL_MD}: expected step 2.9 to say 'runs once per task' — "
+            "not found. The single-round Devon cap appears to have drifted "
+            "or been removed."
+        )
+
+        # Whole-file on purpose: an absence assertion scoped to 2.9 would
+        # let this wording reappear elsewhere in the file and still pass.
+        for needle in ("re-run Devon", "second Devon dispatch"):
+            assert needle not in _SKILL_TEXT, (
+                f"{_SKILL_MD}: found {needle!r} — the second Devon round "
+                "appears to still be documented."
+            )
+
+    def test_outcomes_table_has_no_re_check_row(self) -> None:
+        for needle in ("re-run Devon", "1 round exhausted"):
+            assert needle not in _ADVERSARIAL_TEXT, (
+                f"{_ADVERSARIAL_TEST_PROMPT}: found {needle!r} — the old "
+                "two-round outcome row appears to still be documented."
+            )
+
+    def test_attempt_logging_lists_exploit_fixed(self) -> None:
+        assert '"exploit_fixed"' in _ATTEMPT_LOGGING_TEXT, (
+            f"{_ATTEMPT_LOGGING}: expected the `devon` attempt field to "
+            "list \"exploit_fixed\" as a value — not found."
+        )
+
+    def test_devon_lists_every_weak_point(self) -> None:
+        for needle in (
+            "show every other weak point",
+            "a numbered `Weak points:` list",
+        ):
+            assert needle in _ADVERSARIAL_TEXT, (
+                f"{_ADVERSARIAL_TEST_PROMPT}: expected {needle!r} — not "
+                "found. Devon's every-weak-point instruction appears to "
+                "have drifted or been removed."
+            )
+
+        # Whole-file: the old single-exploit instruction must be gone
+        # everywhere, not just out of whatever section replaced it.
+        assert "Report the exploit." not in _ADVERSARIAL_TEXT, (
+            f"{_ADVERSARIAL_TEST_PROMPT}: found 'Report the exploit.' — "
+            "the old single-exploit instruction appears to still be "
+            "documented."
+        )
+
+    def test_tess_answers_each_weak_point(self) -> None:
+        for needle in (
+            "Address every numbered weak point",
+            "strengthened:",
+            "in-contract:",
+        ):
+            assert needle in _ADVERSARIAL_TEXT, (
+                f"{_ADVERSARIAL_TEST_PROMPT}: expected {needle!r} in the "
+                "Feedback to Tess section — not found. The per-weak-point "
+                "feedback wording appears to have drifted or been removed."
+            )
+
+    def test_orchestrator_never_dismisses_a_weak_point(self) -> None:
+        needle = "the orchestrator never dismisses one itself"
+        assert needle in _ADVERSARIAL_TEXT, (
+            f"{_ADVERSARIAL_TEST_PROMPT}: expected {needle!r} in the "
+            "outcomes row about unresolved weak points — not found."
+        )
+
+    def test_attempt_logging_lists_weak_point_fields(self) -> None:
+        for needle in ("devon_weak_points", "devon_in_contract"):
+            assert needle in _ATTEMPT_LOGGING_TEXT, (
+                f"{_ATTEMPT_LOGGING}: expected {needle!r} — not found. The "
+                "new weak-point attempt-record field appears to be missing "
+                "from attempt-logging.md."
+            )
+            assert needle in _STATE_SCHEMA_TEXT, (
+                f"{_STATE_SCHEMA}: expected {needle!r} — not found. The new "
+                "weak-point attempt-record field appears to be missing from "
+                "state-schema.md."
+            )
+
+## Architecture context
+
+This task edits five files' PROSE to exact new wording, adds one new test
+file's entry to a release-checks script, and adds one CHANGELOG entry. Read
+each of the six files below yourself (all are in your allowlist) before
+editing. Apply every edit listed. Do not touch anything else in any file.
+
+## 1. skills/work/SKILL.md, step 2.9
+
+Find the sentence: "Devon runs at most twice per task: the first pass and
+one re-check after Tess strengthens" (this is the opening sentence of the
+"### 2.9. Adversarial validation (Devon - devil's advocate)" section, right
+after the tier-gate table).
+
+Replace it with exactly:
+
+"Devon runs once per task; when he breaks the tests, Tess strengthens once
+and the task proceeds on the strengthened tests with no second Devon
+dispatch (seven measured re-checks on 2026-09-25/26 changed no test; the
+one that named a real exploit was dismissed and the review caught it)."
+
+Then search the REST OF THE FILE (not just step 2.9) for the phrases
+"re-run Devon" and "second Devon dispatch" and remove/reword every other
+occurrence describing a second Devon dispatch (there should be none left
+anywhere in SKILL.md once this edit and the adversarial-test-prompt.md edit
+below both land — SKILL.md's own step 2.9 body may reference the outcome
+table in adversarial-test-prompt.md, which is fixed separately below).
+
+## 2. skills/work/references/adversarial-test-prompt.md
+
+a) In the `## Procedure` section's Devon Process step 4 (inside the
+   ` ``` ` prompt template block, numbered list "Process:"), replace step 4:
+
+   OLD: "4. If tests pass: you broke them. Report the exploit."
+
+   NEW: "4. If tests pass: you broke them. Keep going: show every other
+   weak point you can prove the same way, up to 8 in total, before
+   reporting."
+
+b) In the same prompt template block's "Output format:" section, replace
+   the "If you CAN break the tests" bullet:
+
+   OLD: "- If you CAN break the tests: show the wrong implementation, the
+   passing test output, and explain which tests are weak"
+
+   NEW: "- If you CAN break the tests: show the wrong implementation and
+   the passing test output, then a numbered `Weak points:` list, one line
+   each: `N. <test name> - <what a wrong implementation gets away with> -
+   <assertion that would prevent it>`"
+
+c) In the `## Feedback to Tess (when Devon succeeds)` section's prompt
+   block, replace the line:
+
+   OLD: "Strengthen these specific tests so the above exploit no longer
+   works."
+
+   NEW: "Address every numbered weak point. Answer each in your reply as
+   `N. strengthened: <test name>` or `N. in-contract: <why the behavior is
+   allowed>`."
+
+   Keep the line right after it ("Do not change tests that Devon could NOT
+   break.") unchanged.
+
+d) In the `## Procedure` section's Outcomes table:
+
+   - Keep row 1 ("Cannot break tests...") unchanged.
+   - Rewrite row 2 (the "Breaks tests with wrong impl that passes" row) so
+     its Action column reads (this replaces the old row 2's action text,
+     which named a "re-run Devon once" second dispatch and a
+     "Max 1 Tess/Devon round (2 Devon dispatches, 1 strengthen-side Tess
+     dispatch per task)" cap — remove that second-dispatch language
+     entirely):
+
+     "Send Devon's exploit back to Tess as a numbered weak-point list (see
+     Feedback to Tess below). Commit the strengthened tests as
+     `test(<scope>): strengthen <feature>` (this commit is now
+     `<test_commit_sha>`), record `devon: exploit_fixed` and
+     `devon_exploit: <Devon's one-line weak-point summary>`,
+     `devon_weak_points: <count of Devon's list>` and
+     `devon_in_contract: [<each \"N. in-contract: ...\" line Tess
+     returned>]` in the task's attempt entry, proceed to 2.95. A weak
+     point Tess neither strengthened nor marked in-contract goes back to
+     Tess in the same strengthen dispatch's one correction retry; the
+     orchestrator never dismisses one itself (V33)."
+
+   - DROP the old third row entirely ("1 round exhausted (Devon still
+     breaks the strengthened tests) | Flag weakness in task output,
+     proceed anyway."). There are only two rows in the table after this
+     edit.
+
+Do not change anything else in this file (the `## Prompt Template` code
+block's other numbered Process steps 1-3 and 5, the Rules list, the
+`## Context Selection` table).
+
+## 3 & 4. Attempt-record field documentation
+
+In BOTH `skills/work/references/attempt-logging.md` AND
+`skills/run-autopilot/references/state-schema.md`:
+
+- Wherever the `devon` attempt field's documented values are listed
+  (search for `"skipped:prose"` in each file — it appears once per file),
+  add `"exploit_fixed"` as an additional value that field can take,
+  alongside the existing `"skipped:prose"` value. Keep the rest of each
+  file's existing `devon` documentation intact; just widen the value set.
+- In both files, also document two NEW attempt-record fields:
+  `devon_weak_points` (an integer: the count of weak points Devon's list
+  named) and `devon_in_contract` (a list of strings: each
+  "N. in-contract: ..." line Tess returned when answering Devon's weak
+  points). Add them near the existing `devon`/`devon_exploit` field
+  documentation in each file, in that file's own existing style (JSON
+  shape line in `attempt-logging.md`'s schema comment block, and the
+  inline `tasks[].attempts` object-shape documentation in
+  `state-schema.md`).
+
+## 5. dev/bin/release-checks
+
+Add `skills/work/scripts/test_devon_round_prose.py` to this script's list
+of test files it runs (read the script first to see its existing list
+format and follow it exactly — it already runs other `test_*_prose.py`
+files the same way).
+
+## 6. CHANGELOG.md
+
+Add ONE new entry under the `## [Unreleased]` heading's `### Changed`
+subsection (create that subsection under `[Unreleased]` if it does not
+already exist, following the file's existing heading conventions):
+
+- `**run-autopilot**: boundary hand-off on time and margin, idle-only
+  kill, wall-clock report lines`
+- `**work**: one Devon round`
+
+(Two separate bullet lines, one per bolded scope prefix, both under the
+same `### Changed` subsection of `[Unreleased]`.)
+
+## 7. skills/work/scripts/test_adversarial_cap_prose.py (already exists — also run by release-checks)
+
+This pre-existing test file is ALSO in your allowlist because two of its
+three test functions pin the exact OLD wording this task removes, and
+`dev/bin/release-checks` already runs this file — so without this fix,
+`bash dev/bin/release-checks` will fail after your edits above land, even
+though this file is not named in the task's own file list. This is a
+necessary consequence of the prose change, not scope creep.
+
+Read the file. Delete ONLY these two test functions in their entirety
+(including their bodies): `test_outcome_table_caps_the_loop_at_one_round`
+and `test_step_2_9_states_devons_per_task_maximum` — both assert the exact
+old "Max 1 Tess/Devon round" / "Devon runs at most twice per task" wording
+your edits above remove, so they would fail (correctly) once your edits
+land.
+
+KEEP `test_total_tess_budget_is_four` exactly as-is — it pins a DIFFERENT,
+unrelated fact (the total 4-dispatch Tess budget across the whole test-
+authoring phase) that this task's contract explicitly does NOT change
+("Step 2.8's Tess budget line is unchanged"). Do not touch that function
+or its supporting module-level code (`_section`, `_SKILL_TEXT`, etc. are
+still used by it, so leave the whole file's setup code alone — only
+delete the two named function bodies).
+
+## Verify (run these yourself before reporting)
+
+uv run --no-project --with pytest python -m pytest -q skills/work/scripts/test_devon_round_prose.py
+bash dev/bin/release-checks
+
+Report both commands' exit codes and a one-line summary of their output.
+
+
+## Files you may read and modify
+
+/Users/bob/git/src/github.com/buvis/claude-autopilot/skills/work/scripts/test_step_order_prose.py
+
+
+Read only the files listed above. If a file or symbol you need is not
+listed, stop and report it as a blocker — do not run broad `rg` sweeps to
+discover scope.
+
+Your prose edits landed correctly and `test_devon_round_prose.py` passes,
+but `bash dev/bin/release-checks` still fails at
+`skills/work/scripts/test_step_order_prose.py`'s
+`test_strengthened_tests_are_committed_before_devon_round_two`, which pins
+the OLD "before the second Devon dispatch" wording your edits above
+correctly removed. You already correctly identified this and reported it
+as a blocker instead of guessing — that file is now in your allowlist so
+you can fix it.
+
+REQUIRED FIX in `skills/work/scripts/test_step_order_prose.py`:
+
+Delete the entire `test_strengthened_tests_are_committed_before_devon_round_two`
+function (its full body, including the module-level `_STRENGTHEN_SENTENCE`
+constant it is the ONLY reader of — delete that constant too, since an
+unused module-level constant is dead code your own change orphaned).
+
+Do NOT touch `test_tests_commit_before_devon` or
+`test_step_2_resumes_from_a_wip_commit` — both pin facts this task does
+not change (tests committed before Devon runs at all; a fresh session
+resuming from a wip commit). Do NOT touch `_section`, `_WORK_DIR`,
+`_SKILL_MD`, `_ADVERSARIAL`, `_COMMIT_HEADING`, or `_DEVON_HEADING` — all
+four remaining functions after your deletion still need `_section` and the
+two path constants; `_COMMIT_HEADING`/`_DEVON_HEADING` are also still used
+by the surviving `test_tests_commit_before_devon`.
+
+After the deletion, re-run:
+
+bash dev/bin/release-checks
+
+Report its exit code and the last few lines of output. If it still fails
+somewhere else, report that as a new blocker rather than editing further
+files outside this allowlist.
+
+
+### Code quality rules (mandatory)
+
+Follow these four rules. They override any instinct to "improve" the code
+beyond what the failing tests require.
+
+**1. Think before coding.** Re-read the task and the failing tests. If scope,
+data shape, target file, or success criteria are ambiguous - more than one
+reasonable implementation would pass the tests differently - STOP and report
+the ambiguity as a blocker. Do not guess and proceed.
+
+**2. Simplicity.** Write the simplest code that makes the failing tests pass.
+
+- No abstractions, helpers, or interfaces built for a single caller.
+- No error handling, fallbacks, or validation for inputs the tests never
+  exercise. Validate at real system boundaries only.
+- No features, options, or configuration the task did not ask for.
+- If your draft runs long and the same behavior fits in far fewer lines,
+  rewrite it before returning.
+
+**3. Surgical changes.** Touch only what the task requires.
+
+- Do not refactor, reformat, or "improve" code outside the change.
+- Match the surrounding style even if you would write it differently.
+- Remove imports, variables, and functions that YOUR change orphaned. Do not
+  delete pre-existing dead code - mention it instead.
+- Every changed line must trace to the task or a failing test.
+
+**4. Goal-driven.** The failing tests are the spec. Make them pass - do not
+modify them, do not weaken them, do not add tests. If a test looks wrong,
+report it as a blocker rather than changing it.
+
+Abort and report if you read more than 100K of total input. Return the
+partial result and an abort_reason: context_overrun field.
+
+Read every file before your first Edit to it. Never call bash `head`,
+`tail`, `cat`, `grep`, or `find` - a hook blocks them. Use the Read tool
+(offset/limit), `rg`, or `rg --files` instead. Never combine an inspection
+(read, list, search, diff) with a test, lint or build invocation in one Bash
+call - run them as two calls, because a combined command has two ways to hang
+and one exit code. Pass an explicit `timeout` on every Bash call: 60000 ms for
+an inspection, 300000 ms for a lint run or a narrow test run, 600000 ms for a
+full suite or a full build.
+
+End your report with `ASSUMPTIONS:` - one line per assumption you made
+where the task, tests, or listed files were silent (guessed interface, data
+shape, resolved ambiguity, unstated behavior). Write `ASSUMPTIONS: none` if
+you made none.
+
+Also end your report with `FILES_TOUCHED:` - one line per file you created
+or modified, path relative to the repo root. Write `FILES_TOUCHED: none` if
+you changed no files.

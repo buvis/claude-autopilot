@@ -1,0 +1,156 @@
+
+You are Ivan, the implementor. Make all failing tests pass. Tests ARE the
+spec. Do NOT modify test files unless your allowlist below names them (a
+test-only task lists them on purpose). Do NOT read the task's acceptance criteria —
+none are provided to you on purpose.
+
+## Failing tests
+
+Style-limit violations (functions must be under 50 lines). Fix by factoring the repeated assertion groups into small module-level helpers in the same file (for example one helper that runs the design-paragraph override sweep, one that runs the critical-bullet sweep) and by compacting multi-line call formatting where it fits within ~88 columns. Keep every assertion, every pinned literal, and all eight test function names exactly as they are; the eight tests must still pass and still fail against the pre-change prose. Do not create a second test module for these eight functions.
+
+FUNCTION | /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/test_design_rework_prose.py:132 | test_dispatch_rework_designs_critical_rework_once_before_any_task_add | 72 lines
+FUNCTION | /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/test_design_rework_prose.py:206 | test_every_critical_row_becomes_a_d_task_with_one_owner | 103 lines
+FUNCTION | /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/test_design_rework_prose.py:311 | test_rework_design_reuse_needs_the_source_check_and_the_pass_gate | 67 lines
+FUNCTION | /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/test_design_rework_prose.py:380 | test_critical_d_task_carries_design_then_contract_then_findings | 71 lines
+FUNCTION | /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/test_design_rework_prose.py:453 | test_at_cap_keeps_the_custody_stall_and_launches_no_rework_design | 52 lines
+FUNCTION | /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/test_design_rework_prose.py:551 | test_rework_design_failure_stalls_in_loop_and_pauses_interactively | 70 lines
+
+Verify after editing (timeout 300000):
+  python3 /Users/bob/.claude/plugins/cache/buvis-plugins/autopilot/0.5.2/skills/work/scripts/check_style_limits.py --diff /dev/null /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/test_design_rework_prose.py
+  (exit 0 = clean; the --diff flag scopes to hunks, so pass /dev/null only if the script accepts it, otherwise rebuild the diff with `git diff 6e3df94d50898d88a2dd1dcedeb36dcef4bae513 -- skills/run-autopilot/cli/test_design_rework_prose.py --output=/tmp/style-2.txt` and pass that file)
+  uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_design_rework_prose.py skills/run-autopilot/cli/test_custody_prose.py
+
+
+## Architecture context
+
+# Context for task 00194 T2 (prose-only change: two markdown skill files)
+
+This repo is the `autopilot` Claude Code plugin pack. The change is PROSE ONLY:
+two markdown files gain paragraphs/bullets and two sentences are amended. The
+failing tests pin exact substrings of that prose (section-scoped), so the
+literals below must land byte-for-byte. No Python, no CLI change.
+
+Design doc (the why): /Users/bob/git/src/github.com/buvis/claude-autopilot/dev/local/designs/00194-design-critical-rework-before-task-dispatch-v1-design.md
+(read `## Architecture fit` and `## Risks & edge cases` if you need the rationale; the contract below is its `## Interfaces & contracts` C2 and C2b copied verbatim).
+
+## Hard constraints
+
+- `skills/run-autopilot/cli/test_custody_prose.py` sweeps every `.md` under
+  `skills/run-autopilot` for the hyphenated spelling `design-rework` and for
+  `--range` and must find NOTHING. Use only the slug `design_rework` and the
+  phrase "rework design". Never write `design-rework` anywhere in a `.md`.
+- The roster sentence (`Invoke \`/autopilot:review-work-completion\` skill. Every cycle runs ALL lenses ...`) must stay byte-identical and appear exactly once in phase-review.md.
+- The paragraph beginning `**Escalation caveat — diagnose the failure before escalating.**` must appear exactly once.
+- The loop-mode cap-out bullet keeps `site: "cap_critical"`.
+- Every OTHER line of `### Dispatch rework`, the Cap check, and step 7 stays byte-identical. Insert; do not rewrap or reflow neighbouring text.
+- `_assert_in_order` in the tests uses FIRST occurrences, so the order pins are anchored on the preserved lines `Build the rework batch from two sources:` and `` `task-add <task-json-file>` `` — do not add a second copy of those strings above their existing position.
+
+## C2. `skills/run-autopilot/references/phase-review.md` § `### Dispatch rework`
+
+Insert these two paragraphs directly under the `### Dispatch rework` heading,
+before `Build the rework batch from two sources:` (the fence delimits the contract; it is not part of the file text):
+
+```
+**Design CRITICAL rework before any task-add (PRD 00194).** When this cycle's consolidated table holds at least one 🔴 CRITICAL row AND `state.cycle < state.rework_cap`, invoke `/autopilot:design-solution dev/local/prds/wip/<state.prd> --rework <this cycle's review file>` ONCE for this cycle, before the first task is created below. Every unresolved 🔴 row of this cycle becomes (or joins) a `[D{cycle}]` task in source 2 below; its Defer-to-batch-end record (Classification) is the audit trail, not a reason to skip the fix - the Cap check reads "A CRITICAL blocks until it is fixed". This section is the only task-creation point for a 🔴 finding under autopilot: `review-work-completion` step 7 leaves 🔴 rows to it (PRD 00194) and creates the other severities as today. The skill writes `dev/local/designs/<prd-stem>-rework-<cycle>-design.md` (`<cycle>` = `state.cycle`), reviewed by its own three-dispatch loop, and ends its `## Review log` with a terminal `result:` line. **Artifact rule on entry:** first the source check - `rg -q -F 'Source review: <review-file> (head_sha <head_sha>)' dev/local/designs/<prd-stem>-rework-<cycle>-design.md`, `<review-file>` being the path passed to `--rework` and `<head_sha>` its frontmatter value; a missing doc or a non-zero exit means the doc is absent or stale (written for other findings) and the skill is invoked, which overwrites it. When the source line matches: if the pass gate below exits 0 (a crash-resume of this cycle), reuse it and skip the invocation; if it has a terminal `result: failed` line, take the failure routing below without re-invoking; if it has no terminal `result:` line (an interrupted run), invoke the skill, which overwrites it. **Pass gate**, run after the invocation or on reuse: `awk 'NF{last=$0} END{exit last!="result: ok"}' dev/local/designs/<prd-stem>-rework-<cycle>-design.md` - exit 0 means the review completed with no open cardinal sin or blocker; anything else is a rework design failure. At the cap (`state.cycle >= state.rework_cap`) the Cap check above already routed the cycle - the loop-mode `site: "cap_critical"` custody stall or the interactive Cap-pause behavior - so no rework design and no fix task is launched here. A cycle with no 🔴 row runs no rework design (the exit-2 doubt-constraint CRITICAL of the Converged outcome is not a table row and runs none either), and every other severity routes exactly as before.
+
+**Rework design failure** - the pass gate exits non-zero: the report ended `result: failed (open cardinal sins/blockers)`, or the doc is missing after the invocation. The skill's three dispatches were the retry budget: do not re-invoke it, and create no fix task. **Loop mode (`$_AUTOPILOT_LOOP` set):** follow the **Loop-mode stall procedure** (`references/recovery.md`) with `site: "design_rework"`, recording the rework design doc path and the open cardinal-sin / blocker titles in `--detail`, and continue the batch. **Interactive:** set `state.phase = "paused"` and `state.next_phase = "paused"`, write `state.pause_reason = {"site": "sub_skill_fail", "detail": "rework design failed with open findings (cycle <state.cycle>): <rework design doc path>; resolve them, then delete the doc so the next Phase 6 entry regenerates it"}`, print `── AUTOPILOT ── PRD: {prd-name} ── PAUSED (rework design failed, cycle {n}) ──`, and STOP. Every consensus, blind and doubt/de-slop lens already ran in Phase 4; the rework design adds a step before the fix task and removes nothing from the roster.
+```
+
+Insert this bullet in source 2 (`**Decision gate `[D{cycle}]` follow-ups**`),
+as the FIRST sub-bullet, before `**Transcribe the findings verbatim (PRD 00095).**`:
+
+```
+   - **CRITICAL D-tasks carry the rework design (PRD 00194).** A D-task whose findings include at least one 🔴 CRITICAL line carries, in this order: the line `Design: dev/local/designs/<prd-stem>-rework-<cycle>-design.md`, then a `### Contract` block holding the rework design's `## Interfaces & contracts` section body copied verbatim - byte-identical, not paraphrased; the rework design is the sole contract source for these tasks - then the existing `### Findings (verbatim)` block below them. A D-task with no 🔴 line carries neither and is built exactly as before.
+```
+
+## C2b. `skills/review-work-completion/SKILL.md` § `### 7. Create follow-up tasks`
+
+Insert this paragraph directly after the line
+`**If issues found, and `dev/local/autopilot/state.json` exists (autopilot run):** Create each follow-up with `task-add`, prioritizing multi-agent consensus:`
+and before its `- Process 🔴 → 🟠 → 🟡 order` bullet list (as its own paragraph, blank line before and after):
+
+```
+A 🔴 CRITICAL finding gets no task here (PRD 00194): `run-autopilot/references/phase-review.md` Phase 6 § Dispatch rework creates it after the cycle's rework design, so a CRITICAL fix never starts without a reviewed contract. Every other severity is created below as today.
+```
+
+Two existing sentences in the same step contradict that paragraph and are
+amended in the same edit:
+
+- In the verification-queue paragraph, replace
+  `A queued **CRITICAL or HIGH is not skipped**: it is never routed (`run-autopilot/references/phase-review.md` Phase 5), so it gets its task as today.`
+  with
+  `A queued **HIGH is not skipped**: it is never routed (`run-autopilot/references/phase-review.md` Phase 5), so it gets its task as today; a queued CRITICAL is never routed either, and its task is Phase 6's (below).`
+- Replace the bullet `- Process 🔴 → 🟠 → 🟡 order` with
+  `- Process 🟠 → 🟡 order (🔴 rows belong to Phase 6, above)`.
+
+## Verify
+
+```
+uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_design_rework_prose.py skills/run-autopilot/cli/test_custody_prose.py
+```
+(timeout 300000 ms). Both files must be green.
+
+
+## Files you may read and modify
+
+/Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/test_design_rework_prose.py
+/Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli (new modules may be created here)
+
+
+Read only the files listed above. If a file or symbol you need is not
+listed, stop and report it as a blocker — do not run broad `rg` sweeps to
+discover scope.
+
+Fix only the listed style-limit violations. You may create new modules in the directories marked above and update imports in the listed files to use them. Do not change behavior, do not touch other code, and do not modify tests except to split a test file a violation line names.
+
+### Code quality rules (mandatory)
+
+Follow these four rules. They override any instinct to "improve" the code
+beyond what the failing tests require.
+
+**1. Think before coding.** Re-read the task and the failing tests. If scope,
+data shape, target file, or success criteria are ambiguous - more than one
+reasonable implementation would pass the tests differently - STOP and report
+the ambiguity as a blocker. Do not guess and proceed.
+
+**2. Simplicity.** Write the simplest code that makes the failing tests pass.
+
+- No abstractions, helpers, or interfaces built for a single caller.
+- No error handling, fallbacks, or validation for inputs the tests never
+  exercise. Validate at real system boundaries only.
+- No features, options, or configuration the task did not ask for.
+- If your draft runs long and the same behavior fits in far fewer lines,
+  rewrite it before returning.
+
+**3. Surgical changes.** Touch only what the task requires.
+
+- Do not refactor, reformat, or "improve" code outside the change.
+- Match the surrounding style even if you would write it differently.
+- Remove imports, variables, and functions that YOUR change orphaned. Do not
+  delete pre-existing dead code - mention it instead.
+- Every changed line must trace to the task or a failing test.
+
+**4. Goal-driven.** The failing tests are the spec. Make them pass - do not
+modify them, do not weaken them, do not add tests. If a test looks wrong,
+report it as a blocker rather than changing it.
+
+Abort and report if you read more than 100K of total input. Return the
+partial result and an abort_reason: context_overrun field.
+
+Read every file before your first Edit to it. Never call bash `head`,
+`tail`, `cat`, `grep`, or `find` - a hook blocks them. Use the Read tool
+(offset/limit), `rg`, or `rg --files` instead. Never combine an inspection
+(read, list, search, diff) with a test, lint or build invocation in one Bash
+call - run them as two calls, because a combined command has two ways to hang
+and one exit code. Pass an explicit `timeout` on every Bash call: 60000 ms for
+an inspection, 300000 ms for a lint run or a narrow test run, 600000 ms for a
+full suite or a full build.
+
+End your report with `ASSUMPTIONS:` - one line per assumption you made
+where the task, tests, or listed files were silent (guessed interface, data
+shape, resolved ambiguity, unstated behavior). Write `ASSUMPTIONS: none` if
+you made none.
+
+Also end your report with `FILES_TOUCHED:` - one line per file you created
+or modified, path relative to the repo root. Write `FILES_TOUCHED: none` if
+you changed no files.

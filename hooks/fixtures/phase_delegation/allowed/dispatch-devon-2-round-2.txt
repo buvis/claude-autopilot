@@ -1,0 +1,49 @@
+Abort and report if you read more than 100K of total input. Return the partial result and an abort_reason: context_overrun field.
+
+You are an adversarial test validator. Your job is to BREAK these tests by writing a wrong implementation that passes all of them. This is ROUND 2: the tests were strengthened after a first exploit (a fenced token dump plus an "operative rule" paragraph telling the reader the opposite). That exploit no longer works: sections now pass through `_prose()` (fenced blocks are stripped), every pin is bound to its verb on one line via `_assert_bound`, and each paragraph is swept by `_assert_no_negation` with an override vocabulary (`optional|regardless|uninvoked|omit|unnecessary|retired|supersede|no operative force|in your own words|kept for the pin|in this step too|ahead of Phase 6|🔴 last`, plus `as before` in step 7).
+
+Working directory: /Users/bob/git/src/github.com/buvis/claude-autopilot
+
+Read every file before your first Edit to it. Never call bash `head`, `tail`, `cat`, `grep`, or `find` - a hook blocks them. Use the Read tool (offset/limit), `rg`, or `rg --files` instead. Never combine an inspection (read, list, search, diff) with a test, lint or build invocation in one Bash call - run them as two calls. Pass an explicit `timeout` on every Bash call: 60000 ms for an inspection, 300000 ms for a test run.
+
+Test file (READ IT IN FULL with the Read tool first - it is ~630 lines):
+  /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/test_design_rework_prose.py
+
+Public interfaces (READ with the Read tool - the helper module the tests import; every `_assert_*`, `_section`, `_paragraph`, `_single_row`, `_prose`, `_NEGATION` lives here):
+  /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/custody_prose_testutil.py
+
+The "implementation" under test is PROSE: the two markdown files
+  /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/references/phase-review.md   (section `### Dispatch rework` .. `### After /autopilot:work returns`)
+  /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/review-work-completion/SKILL.md            (section `### 7. Create follow-up tasks` .. `### 8. Save review file`)
+Your wrong implementation = edits to those two files that make every test pass while being clearly WRONG: prose that carries every bound phrase yet, read by a human operator, instructs the opposite or nothing (e.g. bound phrases inside a sentence whose main clause negates them with a word the sweep does not list - "seldom", "rarely", "at your discretion", "if convenient", "may", "could", "historically", "used to", "previously", "was", "no longer", "deprecated", "informational", "for reference", "illustrative", a conditional that can never hold, a quoted example, a sentence addressed to a different actor, etc.), or satisfy `_assert_bound` with the verb and noun on one line but in a clause where the verb does not govern the noun.
+
+Test runner command (timeout 300000):
+  uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_design_rework_prose.py
+
+Your goal:
+Write an implementation that makes ALL tests pass but is clearly WRONG. Strategies:
+- Return hardcoded values that happen to match test expectations (satisfy each bound pin with the minimal phrase, in a sentence that carries no instruction)
+- Ignore parameters and return constants
+- Handle only the exact cases the tests check, fail on everything else
+- Keep a needle but wrap it in a negation or hedge the sweep does not list
+
+Process:
+1. Read the tests and the helper carefully; list the exact banned words and allow tuples per slice so you know what the sweep sees
+2. Write a deliberately wrong implementation
+3. Run the test suite against your wrong implementation
+4. If tests pass: you broke them. Report the exploit.
+5. If tests fail: try a different exploit. After 3 failed attempts, report "Tests are robust."
+
+Rules:
+1. You MUST run the tests to verify your exploit actually works - no guessing
+2. Your implementation MUST be obviously wrong (not just suboptimal) - an operator following it would NOT run the rework design before the task-add, or would reuse a stale doc, or would skip the stall/pause, or would still create CRITICAL tasks in step 7
+3. Do NOT modify test files (anything named test_*.py or custody_prose_testutil.py)
+4. For each exploit, explain which test is too weak and what assertion would prevent it
+5. Clean up before returning: the two markdown files are EXISTING tracked files, so restore them with `git checkout -- <path>` (one Bash call per file, timeout 60000) and confirm `git status --short` shows only `?? skills/run-autopilot/cli/test_design_rework_prose.py`. Do NOT use `rm`. If you created any other file, overwrite it with the single line `# adversarial placeholder - overwritten by implementor` using the Write tool and report the path. Never ask for permission; just restore and report.
+6. Do not edit any file other than those two markdown files.
+
+Output format:
+- If you CAN break the tests: show the wrong implementation (the exact text you inserted and where), the passing test output, and explain which tests are weak
+- If you CANNOT break the tests: say "Tests are robust" and explain why each shortcut you tried was caught
+
+You receive NOTHING about what the prose should actually say. You only see tests and the helper interfaces.

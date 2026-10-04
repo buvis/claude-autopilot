@@ -1,0 +1,134 @@
+Your tests have quality issues. Fix them.
+
+Issues found:
+Per-task code review (Pat) found a real issue in the implementation that traces back to a gap in your test's setup, not in your assertions:
+
+`_land_cleanup`'s implementation changed `branch -d` to `branch -D` to make `test_store_only_churn_in_the_assembly_worktree_does_not_refuse` pass. That is an unrequested, out-of-contract deviation that removes a real git safety net (an unmerged-branch guard) from production code.
+
+Why the implementation needed it: your test calls `wave_review._land_cleanup(...)` directly, bypassing `_land_converged`, which in the real `land()` flow always runs first and fast-forwards the main repo (`git -C <repo> merge --ff-only <assembly-branch-tip>`, see `wave_review.py::_land_merge`) before `_land_cleanup` ever runs. Your `_assembled` fixture branches the assembly worktree off the repo's HEAD, then `_track_store_file(worktree)` commits "track store files and look-alikes" ON the assembly branch - one commit the main repo (`repo`) never receives, because your test skips the fast-forward step the real flow always does. That is why `branch -d` (which only deletes a branch whose tip is already merged into the current branch) refused, and the implementor worked around it with `-D` instead of fixing the test's precondition.
+
+Fix (test-only, in `skills/run-autopilot/cli/test_wave_review_cleanup.py`): in `test_store_only_churn_in_the_assembly_worktree_does_not_refuse` only (the one test that reaches the branch-delete line; the foreign-dirt test raises before getting there and needs no change), after `_track_store_file(worktree)` and before calling `wave_review._land_cleanup(...)`, add the same fast-forward the real `land()` flow performs:
+
+```python
+_git(repo, "merge", "--ff-only", f"wave/{WAVE_ID}/assembly")
+```
+
+(`_git` is already imported in this file from `cli.test_wave_launch`; `WAVE_ID` is already imported from `cli.test_wave_review`.) This makes the test accurately model the real precondition `_land_cleanup` always runs under in production, so the implementation does not need `-D` to pass it.
+
+Do not touch anything else in this file - the only change is inserting that one line in that one test, in the position described above (after `_track_store_file`, before the `_land_cleanup` call). `wave_review.py` is being fixed separately (the implementor is reverting `-D` back to `-d`); do not touch it.
+
+Run only skills/run-autopilot/cli/test_wave_review_cleanup.py with `-q --tb=line`:
+uv run --no-project --with pytest python -m pytest -q --tb=line skills/run-autopilot/cli/test_wave_review_cleanup.py
+
+Report both the test's exit code/pass count BEFORE your edit (it should currently pass, since the implementation still has -D) and confirm after your edit it still passes (it should, since -D also tolerates an already-merged branch).
+
+Read every file before your first Edit to it. Never call bash `head`, `tail`, `cat`, `grep`, or `find` - a hook blocks them. Use the Read tool (offset/limit), `rg`, or `rg --files` instead. Pass an explicit `timeout` on every Bash call: 60000 ms for an inspection, 300000 ms for a narrow test run.
+
+End your report with `ASSUMPTIONS:` - one line per assumption you made where the task, tests, or listed files were silent. Write `ASSUMPTIONS: none` if you made none.
+
+
+Original requirements (unchanged):
+
+Description:
+Switch the assembly worktree gate to foreign_dirty and hold the seeded backlog
+
+Location: skills/run-autopilot/cli/wave_review.py (_land_cleanup, lines 391-419; seed_state, lines 243-267); test in skills/run-autopilot/cli/test_wave_review.py
+
+Reuse: cli/store_tree.py::foreign_dirty(repo, store_dir=None, run_git=run_git) - reused verbatim, same call shape _check_reviewable (same file, line 287) already uses. _repo_from_worktree / state_path.parents[4] already in scope in seed_state (its very next line calls repo = _repo_from_worktree(state_path.parents[4])).
+
+Contract (verbatim from the design doc's Interfaces & contracts, 00225a and 00225b):
+```python
+def _land_cleanup(
+    repo: Path,
+    wave_path: Path,
+    wave: dict,
+    run_git: Callable[..., subprocess.CompletedProcess],
+) -> None:
+    worktree = Path(wave["assembly"]["worktree"])
+    if worktree.is_dir():
+        dirty = store_tree.foreign_dirty(worktree, run_git=run_git)
+        if dirty:
+            raise ValueError(
+                f"{worktree} has uncommitted changes:\n" + "\n".join(dirty)
+            )
+        run_git(["-C", str(repo), "worktree", "remove", "--force", str(worktree)])
+    ...
+```
+foreign_dirty is called positionally with worktree as repo (the assembly worktree IS the repository this check runs against) and the existing run_git parameter passed through by keyword, store_dir left at its default None. The migrated-stub exclude pathspec (`:(exclude)docs/dev/project-management/prds/done/<stub>`) that the old raw call used is DROPPED: foreign_dirty's own store-root exemption (STORE_PREFIXES = ("docs/dev/project-management/", "docs/dev/tmp/")) already covers the whole store tree, including the migrated stub under prds/done/.
+
+```python
+def _hold_seeded_backlog(worktree: Path, wave_id: str) -> list[str]:
+    """Move every prds/backlog/*.md the assembly worktree inherited into
+    prds/hold/ and commit that move on the assembly branch, so the nested
+    loop this seed feeds cannot select a main-checkout backlog PRD. Returns
+    the moved basenames, sorted, for the commit message and the caller's
+    own reporting; [] (no commit) when backlog/ is empty."""
+    pm = worktree / "docs/dev/project-management"
+    backlog, hold = pm / "prds/backlog", pm / "prds/hold"
+    moved = sorted(path.name for path in backlog.glob("*.md"))
+    if not moved:
+        return []
+    hold.mkdir(parents=True, exist_ok=True)
+    for name in moved:
+        (backlog / name).rename(hold / name)
+    message = (
+        f"chore(autopilot): hold seeded backlog PRDs for wave {wave_id} review\n\n"
+        + "\n".join(f"- {name}" for name in moved)
+    )
+    _default_run_git(["add", "--", "prds/backlog", "prds/hold"], cwd=worktree)
+    _default_run_git(["commit", "-m", message], cwd=worktree)
+    return moved
+```
+Called from seed_state, right after `stub = _seed_prd(pm, wave)`:
+```python
+    stub = _seed_prd(pm, wave)
+    _hold_seeded_backlog(state_path.parents[4], wave["id"])
+```
+Resolution of the PRD's own open design question: move to hold/, committed - land's PRD-routing path (wave_assemble._route_prds, _PRD_HOME = {"hold": "hold"}) already knows how to bring a held PRD home unmerged, and deleting would make an operator-visible backlog PRD vanish with no trace.
+
+Details:
+- wave_review.py:403 reads raw git status --porcelain in the assembly worktree, so store churn there (e.g. a nested loop's own record_store write left uncommitted) refuses a review even though the main-checkout gates already use store_tree.foreign_dirty since 00236.
+- Seeding the assembly worktree also inherits the main checkout's prds/backlog/ PRDs (via base_sha), which the nested loop could otherwise select; moving them to hold/ before the nested loop spawns prevents that.
+- The commit message must name every PRD moved (list each moved basename in the commit body), per the design.
+
+Files to test: skills/run-autopilot/cli/wave_review.py's _land_cleanup function (currently lines 391-419, uses raw `git status --porcelain` with an exclude pathspec) and seed_state function (currently lines 243-267, calls `_seed_prd(pm, wave)` but does not yet hold the seeded backlog). The new helper `_hold_seeded_backlog` does not exist yet in wave_review.py.
+
+Public interfaces to test against (read-only reference, do not modify):
+- cli/store_tree.py::foreign_dirty(repo: Path, store_dir: Path | None = None, *, run_git) -> list[str]
+- cli/wave_review.py::seed_state(state_path, wave, plugins_json, *, run_cli=_run_cli) -> None
+- cli/wave_review.py::_land_cleanup(repo, wave_path, wave, run_git) -> None
+
+
+Acceptance Criteria:
+`test_wave_review.py::test_store_churn_in_the_assembly_worktree_does_not_refuse` and `::test_seeded_backlog_prds_are_held_before_the_nested_loop` green.
+
+Verify: uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_wave_review.py::test_store_churn_in_the_assembly_worktree_does_not_refuse skills/run-autopilot/cli/test_wave_review.py::test_seeded_backlog_prds_are_held_before_the_nested_loop
+
+
+Rewrite the tests addressing each issue above. Keep every test that is already
+sound — this is a targeted fix, not a rewrite from scratch.
+
+The original rules still apply. In particular:
+
+1. Write tests from requirements only. You are a USER of this API, not its builder.
+2. Each test name describes a behavior, not an implementation detail.
+3. Assert on outputs, return values, side effects, and errors. Never assert on mock existence.
+4. For EACH test, ask yourself: "What wrong implementation would still pass this?" If easy to answer, add constraints.
+5. SIMPLICITY FIRST: test only the behavior in the acceptance criteria. Strengthening a weak test does not mean adding tests nobody asked for.
+6. NEVER INVENT A CONTRACT: if the requirements name a data structure but do not pin its exact field names, enum values, or types, STOP and report it as a blocker rather than inventing a plausible schema.
+7. SURGICAL: only create/modify test files. Match the existing test file's style.
+8. SIZE LIMITS: keep every test function under 50 lines and every test file under 800 lines; a style-gate line above naming a file or function over a limit is an issue to fix here, by splitting into sibling files named after the test module.
+
+Read only the files listed above. If a file or symbol you need is not listed, stop and report it as a blocker — do not run broad `rg` sweeps to discover scope.
+
+Abort and report if you read more than 100K of total input. Return the partial result and an abort_reason: context_overrun field.
+
+Read every file before your first Edit to it. Never call bash `head`, `tail`, `cat`, `grep`, or `find` - a hook blocks them. Use the Read tool (offset/limit), `rg`, or `rg --files` instead. Never combine an inspection (read, list, search, diff) with a test, lint or build invocation in one Bash call - run them as two calls, because a combined command has two ways to hang and one exit code. Pass an explicit `timeout` on every Bash call: 60000 ms for an inspection, 300000 ms for a lint run or a narrow test run, 600000 ms for a full suite or a full build.
+
+Run only the test files this task names (the tests you wrote, or the
+failing tests in your prompt), with `-q --tb=line`. Never run a whole test
+directory or `dev/bin/release-checks`: the orchestrator runs the full suite
+once, after every task. Read the pass count and exit code from that one
+run; never re-run a suite to recover a number.
+
+End your report with `ASSUMPTIONS:` - one line per assumption you made where the task, tests, or listed files were silent (guessed interface, data shape, resolved ambiguity, unstated behavior). Write `ASSUMPTIONS: none` if you made none.

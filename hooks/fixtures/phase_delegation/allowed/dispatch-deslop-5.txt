@@ -1,0 +1,143 @@
+A diff has been written to satisfy this task. The implementation passed its
+tests. Your job: prune slop from the diff while keeping every test green.
+This is best-effort cleanup, not a correctness rework — do not change
+behavior, do not modify tests, do not refactor.
+
+Work in the repository /Users/bob/git/src/github.com/buvis/claude-autopilot.
+
+Task: Write the fast-track reference files (spec-card.md, lane-dispatch.md) and their pins
+
+Description:
+Write the two reference files the driver skill points at, and add their two pins to the existing prose test.
+
+Location: skills/fast-track/references/spec-card.md (new) and skills/fast-track/references/lane-dispatch.md (new). The two new tests are appended to the existing skills/fast-track/scripts/test_fast_track_prose.py.
+
+Reuse: the card contract is already implemented in skills/fast-track/scripts/card.py - the reference documents that parser, it does not restate a second contract, and the worked example must be a card `load_card` actually accepts. The per-lane command blocks are the ones already written in skills/fast-track/SKILL.md; the reference expands them into copyable blocks and must not contradict the skill.
+
+Contract:
+- Write `references/spec-card.md` (the format, one full example card, the empty-`## Tests` rule) and `references/lane-dispatch.md` (one command block per lane, victor's render, Eve's sixth input, the record_item call)
+- Responsibility: the procedure the operator's session follows; every command line copyable.
+- `lane-dispatch.md` names every `fast-track:` dispatch kind: the eight the test asserts, plus the two conditional lanes `fast-track:tess` and `fast-track:alice`.
+- Prose follows rules/writing.md: short words, active voice, no em dashes.
+
+This task also renamed the ledger kinds in `SKILL.md` so they match the lane ids `skills/fast-track/scripts/fast_track_plan.py` actually emits, and added three persona words to `_LANE_WORDS` in `fast_track_prose_testutil.py` so those kinds read back to a lane.
+
+Acceptance criteria:
+`test_reference_card_example_loads` (`load_card` on the example extracted from the reference) and `test_lane_reference_names_every_kind` (the eight `fast-track:` kinds) pass, and the whole fast-track suite passes with zero skips.
+
+Tests that the diff made pass (do NOT modify):
+skills/fast-track/scripts/test_fast_track_prose.py
+
+Files in the diff:
+skills/fast-track/references/lane-dispatch.md, skills/fast-track/references/spec-card.md, skills/fast-track/SKILL.md, skills/fast-track/scripts/fast_track_prose_testutil.py
+
+Run the tests with:
+uv run --no-project --with pytest python -m pytest -q skills/fast-track/scripts
+
+Procedure:
+
+1. Read the diff for each file in scope (`git diff HEAD~1..HEAD <file>` or
+   equivalent in your environment).
+2. For each line, block, helper, comment or docstring added in the
+   diff, ask:
+     "Does this trace to a failing test, an acceptance criterion, or
+     existing-behavior preservation?"
+   If the answer is no, mark the construct for removal.
+3. Apply removals one at a time. After each individual removal, re-run the
+   tests listed above (the narrow set Tess wrote). If any test fails,
+   restore that single removal and move on to the next candidate. Never
+   delete the test that fails — the test is authoritative.
+4. If no removal survived its test re-run, exit WITHOUT committing. Return
+   the literal string "no slop found" so the caller can record a noop.
+5. If at least one removal survived, commit with message:
+     chore: prune slop from the fast-track reference files
+   No CHANGELOG entry. No HEREDOC. No Co-Authored-By trailer. One commit
+   only — do not split into multiple cleanup commits.
+
+Rules:
+
+- **Do not modify tests.** If a test reads as weak, that is the per-task
+  reviewer's call, not yours. Leave it.
+- **Do not change behavior.** Tests prove behavior; if you cannot satisfy
+  the tests, the deletion is wrong. Restore.
+- **Do not refactor.** This pass deletes; it does not move code around,
+  rename symbols, or extract helpers. If a slop pattern would only resolve
+  through restructuring, note it in the return message instead of acting.
+- **Do not touch files outside the diff.**
+
+Most of this diff is reference prose, so read the catalog below through that
+lens. Entry 8 is the live one: a sentence that restates the command line above
+it, a rule stated twice in two sections, a paragraph that explains what the
+reader can see. Entry 15 too. Be careful with two things that look like slop and
+are not: the two pins read these documents, so a deletion can turn a passing
+test red, and the pack banner at the top of each reference is load-bearing
+(`${CLAUDE_PLUGIN_ROOT}` does not resolve inside a reference file).
+
+Slop patterns to look for (catalog inlined from `prompts/de-sloppify.md`):
+
+### 1. Language/framework verification tests
+
+Tests that only prove the runtime or framework works, not the project's behavior.
+
+### 2. Weak or tautological tests
+
+Replace existence checks, mock-confirming tests, self-referential assertions, and unexplained magic assertions with behavior-focused assertions. If an important boundary or failure case is missing, add the smallest useful test.
+
+### 3. Redundant type checks
+
+Remove runtime checks that duplicate compile-time guarantees, except at system boundaries.
+
+### 4. Impossible-state error handling
+
+Remove defensive handling for states that cannot occur from the current control flow. Keep validation and error handling at boundaries.
+
+### 5. Swallowed errors and empty catch blocks
+
+Do not hide failures. Re-throw, surface, or handle them meaningfully.
+
+### 6. Debug statements
+
+Remove development-only prints and logs.
+
+### 7. Commented-out code
+
+Delete dead code kept in comments.
+
+### 8. Obvious comments
+
+Remove comments that restate the code. Keep comments that explain intent, constraints, workarounds, or why.
+
+### 9. Over-abstraction and unnecessary indirection
+
+Inline abstractions that have only one consumer and no current testability or architectural value.
+
+### 10. Duplicate code
+
+Reuse existing code or standard library helpers instead of introducing parallel logic.
+
+### 11. Suspicious dependencies
+
+Verify any newly added dependency exists, is used, and is justified. Remove hallucinated, unused, or speculative dependencies.
+
+### 12. Hardcoded secrets and placeholder credentials
+
+Replace with environment variables, secret storage, or project-approved configuration.
+
+### 13. Deprecated APIs and outdated patterns
+
+Modernize only when the newer approach is already supported by the project and the change stays in scope.
+
+### 14. Naive performance patterns
+
+Fix only if the code is on a hot path or clearly scales poorly with input size.
+
+### 15. Leftover artifacts
+
+Remove temp files, scratch scripts, backup files, unrelated lockfile churn, and agent-generated planning docs.
+
+Return one of:
+  - "no slop found" — exited without commit, nothing to clean.
+  - "committed {sha}" — committed `chore: prune slop from ...` at {sha},
+    test suite green.
+  - "errored: {short reason}" — dispatch problem; do not commit, just
+    explain so the caller can record the failure.

@@ -1,0 +1,98 @@
+Plan tasks for harden-the-wave-verbs PRD
+You are executing the `autopilot:plan-tasks` skill for PRD `docs/dev/project-management/prds/wip/00242-harden-the-wave-verbs-v1.md` in repo `/Users/bob/git/src/github.com/buvis/claude-autopilot`. A design doc already exists at `docs/dev/project-management/designs/00242-harden-the-wave-verbs-v1-design.md` (state.design_doc is already set to that path in state.json) — use it as the contract source per the rules below. Follow the skill procedure EXACTLY.
+
+## Full skill instructions
+
+### 1. Select PRD
+Already selected: `docs/dev/project-management/prds/wip/00242-harden-the-wave-verbs-v1.md`. Do not re-select.
+
+### 2.5. Replan mode
+Check for `docs/dev/project-management/autopilot/replan-context.md`. If absent (expected here), this is normal first-pass planning, 150K threshold.
+
+### 3. Analyze PRD
+Read the full PRD at the path above. Read the design doc at `docs/dev/project-management/designs/00242-harden-the-wave-verbs-v1-design.md` in full — it has `## Interfaces & contracts` (exact signatures), `## Module placement` (file targets), `## Reuse inventory` (existing helpers to reuse). Also check for `AGENTS.md` at repo root.
+
+**Contract source rule**: when a design doc exists, each task's `Contract` section is copied VERBATIM from the design doc's `## Interfaces & contracts` (byte-identical, not paraphrased) — the design doc refines the PRD's contract. `Acceptance criteria` is ALWAYS copied verbatim from the PRD (never the design doc). `Location` and `Reuse:` come from the design doc's `## Module placement` / `## Reuse inventory`. On a PRD-vs-design conflict, the design doc wins — note it in your final summary.
+
+The PRD has a `### Implementation Phases` section (Phase 0: Foundation, Phase 1: Core, Phase 2: Integration) with explicit tasks and acceptance criteria already listed — use that as your decomposition; it's not a derived structure, so skip the "derived-structure note" in step 6.
+
+### 4. Create tasks
+Persist each task with statectl (the sole writer):
+```bash
+python3 /Users/bob/.claude/plugins/cache/buvis-plugins/autopilot/0.7.0/skills/run-autopilot/scripts/statectl.py docs/dev/project-management/autopilot/state.json task-add <task-json-file>
+```
+Write each task JSON object to a temp file first (e.g. under `docs/dev/tmp/`) with the Write tool, since task bodies have backticks/quotes/newlines. Required key `"name"`. Body goes in `"description"` per the format below. Every other field (`files`, `blocked_by`, `estimated_tokens`, `est_context_peak`, `model`, `tier_reason`, `qwen_eligible`, `qwen_excluded_reason`) is a top-level flattened key, not nested. `task-add` prints the new task's id to stdout — capture it for later `blocked_by` arrays. Create tasks in PRD phase order (Phase 0 before Phase 1 before Phase 2) so blocker ids exist before being referenced.
+
+Task description format:
+```
+{What to do}
+
+Location: {file paths or how to find them}
+
+Reuse: {existing patterns/utilities to build on, from design doc Reuse inventory}
+
+Contract (verbatim — from the design doc's ## Interfaces & contracts; copy exact names, do NOT paraphrase):
+- {every exact field/signature/threshold this task needs}
+
+Details:
+- {specific requirement 1}
+- {specific requirement 2}
+
+Acceptance criteria:
+- {the PRD's per-task "Acceptance:" clause(s), copied verbatim}
+
+Verify: {how to confirm it's done}
+```
+
+The six PRD tasks to plan (map 1:1 unless the design doc's reuse sweep or module placement implies a split — but keep each task atomic per the "Task qualities" below):
+- Phase 0: "Add test_wave_assemble_summary.py to release-checks and _WAVE_TEST_FILES, plus test_every_wave_test_file_is_listed" — Acceptance verbatim: "that test green, and red before the two additions (fail-first recorded); `bash dev/bin/release-checks` runs the 12 summary tests."
+- Phase 0: "Add the in_wave_lane guard to _record_review_once_store" — Acceptance verbatim: "`test_loop_record_store.py::test_review_once_skips_the_store_in_a_wave_lane` green and red before the guard."
+- Phase 1 (blocked by both Phase 0 tasks): "Lock the slot reclaim" — Acceptance verbatim: "`test_wave_slots.py::test_reclaim_put_back_race_admits_one_holder` (three processes, count=1, a forced interleave at the rename) and `::test_release_never_removes_another_holders_slot` green."
+- Phase 1 (blocked by both Phase 0 tasks): "Persist before teardown and catch OSError" — Acceptance verbatim: "`test_wave_assemble_migrate.py::test_crash_after_save_before_remove_reruns_clean` (save, then simulate a crash before `worktree remove`, rerun: the lane stays assembled, exit 0, the report keeps non-roster PRDs) and `test_wave_cli_refusals.py::test_assemble_os_error_is_one_line_exit_one` green."
+- Phase 1 (blocked by both Phase 0 tasks): "Switch the assembly worktree gate to foreign_dirty and hold the seeded backlog" — Acceptance verbatim: "`test_wave_review.py::test_store_churn_in_the_assembly_worktree_does_not_refuse` and `::test_seeded_backlog_prds_are_held_before_the_nested_loop` green."
+- Phase 1 (blocked by both Phase 0 tasks): "Land after a hand review" — Acceptance verbatim: "`test_wave_review_land.py::test_hand_reviewed_stub_in_done_lands` and `::test_review_failed_without_hand_review_still_exits_four` green."
+- Phase 2 (blocked by all five above): "Add the hand-review route to references/waves.md and a CHANGELOG.md [Unreleased] ### Fixed **run-autopilot** line naming the six fixes" — Acceptance verbatim: "`bash dev/bin/release-checks` green."
+
+Task "Task qualities": Atomic, Self-contained, Sequenced, Unambiguous. Fold the PRD's own `Inputs`/`Outputs`/`Behavior` bullets for each Feature (00221, 00222, 00225, 00226, 00227, 00239 — matching to the task list above) into the task's `Details:` section from the PRD text you read.
+
+### 4.5. Estimate per-task context budget
+`estimated_tokens = sum(file_bytes/4 for files touched) + prd_slice_bytes/4 + plan_text_bytes/4 + 55000`. Read each touched file's actual size (use `ls -la` or Read tool length) to compute file_bytes. `est_context_peak = estimated_tokens + 20000`. Threshold 150000 — these are all small, targeted fixes to existing files so none should be close to the threshold, but compute honestly per file.
+
+### 4.6. Split tasks
+Context-budget trigger: only if estimated_tokens > 150000 (unlikely here). Eligibility trigger (qwen routing): run the qwen infra preflight per `/Users/bob/.claude/plugins/cache/buvis-plugins/autopilot/0.7.0/skills/work/references/qwen-integration.md` — if that file doesn't exist or the preflight fails/is unavailable, the eligibility SPLIT trigger is skipped entirely (tasks keep their shape), but you must STILL compute and persist `qwen_eligible`/`qwen_excluded_reason` per step 4.7 on every task regardless. This PRD's frontmatter sets `default_model: opus` with a stated rationale (crash-safety ordering, three-party race fixed with a lock, landing state machine) — judge `contract_edit`/`algorithmic_risk` per-task honestly (see step 4.7); don't assume opus a priori, the frontmatter floor handles that.
+
+### 5. Set dependencies
+Phase 0 tasks: no blockers. Phase 1 tasks: blocked_by both Phase 0 task ids. Phase 2 task: blocked_by all five Phase 0+1 task ids.
+
+### 4.7. Assign per-task model tier
+For each task, judge the two facts honestly from that task's own Details/Contract/file slice:
+- `contract_edit`: true only if the task itself changes an exported API signature, persisted schema, wire format, or hook registration shape. (Candidates to examine: the "Persist before teardown" task touches internal lane dict ordering — likely NOT a contract edit since it's internal state, not an exported API; the "Lock the slot reclaim" task adds a lock file mechanism — likely NOT a contract edit since `acquire`/`release` exports are unchanged per the design; judge for real against the design doc's actual interface section.)
+- `algorithmic_risk`: true when the task's Details name a new algorithm, shared mutable state across threads/processes, or a migration of persisted data. The slot-lock task (concurrent flock across processes) and the teardown-ordering task (crash-safety / partial-write recovery) are strong candidates for `algorithmic_risk: true` — judge against their actual Details text once written.
+
+Write the task's file slice to `docs/dev/tmp/plan-<n>-files.txt` and title+description to `docs/dev/tmp/plan-<n>-text.txt`, then run:
+```bash
+python3 /Users/bob/.claude/plugins/cache/buvis-plugins/autopilot/0.7.0/skills/plan-tasks/scripts/classify_tier.py --files-file docs/dev/tmp/plan-<n>-files.txt --text-file docs/dev/tmp/plan-<n>-text.txt --lines <estimated-lines-changed> [--contract-edit] [--algorithmic-risk] --default-model opus
+```
+(The `--default-model opus` is always passed here since the PRD frontmatter sets `default_model: opus`.) Persist the printed `model` and `tier_reason` as top-level keys.
+
+`qwen_eligible` formula: `task is backend AND model in {haiku,sonnet} AND files_touched==1 AND contract_edit==false`. Since `--default-model opus` floors every task to opus here (`final_tier = max(classifier_tier, opus) = opus` always), every task will end up `model: opus` regardless of classifier output, and opus tier means `qwen_eligible: false` with `qwen_excluded_reason: "tier"` for all of them. Confirm this is what classify_tier.py actually prints before assuming it — run it for real per task.
+
+### 5.5. Plan-expansion gate
+After all tasks are persisted, run:
+```bash
+python3 /Users/bob/.claude/plugins/cache/buvis-plugins/autopilot/0.7.0/skills/run-autopilot/cli/__main__.py check-plan --prd docs/dev/project-management/prds/wip/00242-harden-the-wave-verbs-v1.md
+```
+Exit 0: fine, continue. Exit 3 in interactive context (this is NOT loop mode — `$_AUTOPILOT_LOOP` is unset): print the warning and continue — the gate is advisory outside the loop. Exit 2: state/PRD unreadable, report as a failure.
+
+### Error handling
+If any `task-add` call fails mid-plan: stop, run `python3 /Users/bob/.claude/plugins/cache/buvis-plugins/autopilot/0.7.0/skills/run-autopilot/scripts/statectl.py docs/dev/project-management/autopilot/state.json tasks-clear`, then `statectl set stall_reason '{"stalled": "taskcreate_failed", "detail": "<error>"}'`, report the failure, and STOP — do not continue to planning success.
+
+On success (all task-add calls succeeded, check-plan passed or advisory-warned), check `python3 /Users/bob/.claude/plugins/cache/buvis-plugins/autopilot/0.7.0/skills/run-autopilot/scripts/statectl.py docs/dev/project-management/autopilot/state.json get stall_reason` — if it reads `"taskcreate_failed"`, delete it with `del stall_reason`. Otherwise leave untouched.
+
+## What to report back to me (the caller)
+
+1. Total tasks created (expect 7), their ids, names, and the dependency chain you set.
+2. Per-task: model tier assigned, tier_reason, qwen_eligible/qwen_excluded_reason.
+3. The check-plan (step 5.5) result — exit code and any warning.
+4. Any PRD-vs-design contract conflicts you found (design doc wins — just list them).
+5. Confirm final success/failure state explicitly — did planning complete cleanly with no stall_reason left behind, or did it stall? This gates whether the caller proceeds to the work phase.

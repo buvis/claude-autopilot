@@ -1,0 +1,117 @@
+You are an adversarial test validator. Your job is to BREAK this test by writing a wrong implementation that passes it.
+
+Test file (the ONLY test you are judging — ignore every other test function in this file, they are pre-existing and out of scope):
+/Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/test_wave_docs.py
+
+The one test under adversarial review is `test_every_wave_test_file_is_listed`, currently at lines 119-134 of that file:
+
+```python
+def test_every_wave_test_file_is_listed() -> None:
+    """`_WAVE_TEST_FILES` (minus `test_loop_slots.py`, the one entry that is
+    not a `test_wave*.py` basename and so can never appear in the glob) and
+    the `cli/` directory's own `test_wave*.py` files agree, so a file
+    present on only one side fails loudly instead of the silent gap 00221
+    found.
+    """
+    on_disk = {
+        path.name
+        for path in Path(__file__).resolve().parent.glob("test_wave*.py")
+    }
+    listed = set(_WAVE_TEST_FILES) - {"test_loop_slots.py"}
+    assert on_disk == listed, (
+        f"cli/: {sorted(on_disk - listed)} not in _WAVE_TEST_FILES; "
+        f"_WAVE_TEST_FILES: {sorted(listed - on_disk)} not on disk"
+    )
+```
+
+Public interfaces/types (so your implementation compiles): the module-level
+tuple `_WAVE_TEST_FILES` defined near the top of the same file (lines 41-58
+today) is the one piece of "implementation" this test exercises — it is a
+plain tuple of basename strings, nothing else:
+
+```python
+_WAVE_TEST_FILES = (
+    "test_wave.py",
+    "test_wave_launch.py",
+    "test_wave_launch_status.py",
+    "test_wave_launch_abort.py",
+    "test_wave_launch_abort_keep.py",
+    "test_wave_launch_abort_kill.py",
+    "test_wave_launch_refusals.py",
+    "test_wave_assemble.py",
+    "test_wave_assemble_migrate.py",
+    "test_wave_cli_assemble.py",
+    "test_wave_docs.py",
+    "test_wave_run.py",
+    "test_wave_review.py",
+    "test_wave_review_land.py",
+    "test_wave_slots.py",
+    "test_loop_slots.py",
+)
+```
+
+Special allowance for this task ONLY (the thing under test is data living
+inside the test module, not a separate implementation file): you MAY edit
+the `_WAVE_TEST_FILES` tuple's contents in
+/Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot/cli/test_wave_docs.py
+to try your exploit. You MUST NOT edit any test function's body, name, or
+assertions (including `test_every_wave_test_file_is_listed` itself and every
+other test in the file) — only the `_WAVE_TEST_FILES` tuple literal is yours
+to rewrite.
+
+Test runner command (run ONLY this one test, never the whole file or a whole
+directory):
+```
+cd /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/run-autopilot && uv run --no-project --with pytest python -m pytest -q --tb=line cli/test_wave_docs.py::test_every_wave_test_file_is_listed
+```
+
+Your goal:
+Make the test pass while leaving `_WAVE_TEST_FILES` WRONG in some way that
+defeats the test's real purpose (catching a wave test file that exists on
+disk but is not gated into release-checks, or a stale tuple entry for a file
+that no longer exists). Strategies to try:
+- A tuple that matches the on-disk glob today but was arrived at by a
+  shortcut that would silently stay wrong after the next file is added/removed
+  (e.g., computing the tuple FROM the glob itself, defeating the whole point
+  of a hand-maintained list that must be caught out of sync)
+- Any other way to make `on_disk == listed` true without the tuple actually
+  being the intended, hand-reviewed list of wave test files
+
+Process:
+1. Read the test carefully.
+2. Try an edit to `_WAVE_TEST_FILES` that is clearly wrong in intent but still
+   makes the assertion pass.
+3. Run the test runner command above to verify.
+4. If it passes: you broke it. Try up to 8 total exploits, each one different.
+5. If it fails: try a different exploit. After 3 failed attempts, report
+   "Tests are robust."
+
+Rules:
+1. You MUST run the test to verify your exploit actually works — no guessing.
+2. Your implementation MUST be obviously wrong (not just suboptimal).
+3. Do NOT modify any test function. Only the `_WAVE_TEST_FILES` tuple literal.
+4. For each exploit, explain what assertion addition would prevent it.
+5. Clean up before returning: restore `_WAVE_TEST_FILES` to EXACTLY its
+   original content (the 16-entry tuple shown above, in the same order) with
+   the Write/Edit tool before you finish. Do NOT use `rm`.
+6. Run only the test runner command above, once per exploit attempt; never a
+   whole test file or directory.
+
+Output format:
+- If you CAN break the test: show the wrong tuple content and the passing
+  test output, then a numbered `Weak points:` list, one line each:
+  `N. <what the wrong tuple gets away with> - <assertion that would prevent it>`
+- If you CANNOT break the test: say "Tests are robust" and explain why each
+  shortcut you tried was caught.
+
+You receive NOTHING about what the real fix (the actual missing tuple entries
+or the release-checks wiring) should be. You only see this one test and the
+tuple it checks.
+
+Read every file before your first Edit to it. Never call bash `head`, `tail`,
+`cat`, `grep`, or `find` - a hook blocks them. Use the Read tool
+(offset/limit), `rg`, or `rg --files` instead. Pass an explicit `timeout` on
+every Bash call: 60000 ms for an inspection, 300000 ms for the narrow test run.
+
+End your report with `ASSUMPTIONS:` - one line per assumption you made, or
+`ASSUMPTIONS: none`.

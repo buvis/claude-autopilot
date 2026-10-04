@@ -1,0 +1,190 @@
+Your tests have quality issues. Fix them.
+
+Issues found:
+One computed shape finding, verbatim from the mechanical checker that also runs at review:
+
+[MECH] 🟡 test_every_dispatch_opens_a_ledger_row hedges with `or`: either outcome satisfies it | File: /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/fast-track/scripts/test_fast_track_prose.py:1054 | Task: general
+
+The line it means:
+
+```python
+assert all(_PLACEHOLDER.match(task) for task in tasks) or len(set(tasks)) > 1, (
+```
+
+This is the only change asked for in this dispatch. Do not touch any other test, assertion, regex or helper.
+
+What is actually wrong: nothing about the semantics. Two document shapes are both correct here - every `--task` argument is a placeholder the reader substitutes, or the arguments vary across rows - and only the third shape, one literal constant repeated on every row, is the failure. That is a genuine disjunction, not a hedge, and it is already proven to fail on the sabotage document.
+
+What is wrong is the shape. A bare top-level `or` in an assert reads as a hedge to the mechanical checker, and the same checker runs again during the review phase, where the finding costs a rework cycle instead of an edit. It is also harder to read than it needs to be: the failure message talks about one condition while the assert tests two.
+
+Restructure it so the assertion states the rule it actually enforces, with no top-level `or` in the assert. The straightforward form is to compute the offending condition first and assert its absence, for example deriving a single boolean such as "every row carries the same non-placeholder argument" and asserting `not` that, so the assert has one condition and the message describes it.
+
+Requirements for the replacement:
+
+- Same behaviour, exactly. A document whose start lines all carry `--task <item>` still passes. A document whose start lines carry different real item names still passes. A document repeating one literal like `--task ITEM` on every row still fails.
+- Keep the failure message's substance: it must still name the repeated argument and say why a hard-coded constant makes every row on every card resolve to one literal string.
+- No new helper, no new module-level constant, unless the replacement genuinely needs one.
+
+Re-run the mechanical checker afterwards and confirm the `[MECH]` line is gone:
+
+```
+python3 /Users/bob/.claude/plugins/cache/buvis-plugins/autopilot/0.5.1/skills/review-work-completion/scripts/detect_tautological_tests.py /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/fast-track/scripts/test_fast_track_prose.py
+```
+
+Then re-run the suite and confirm the same eight pins still fail against the current one-line placeholder SKILL.md and nothing else changed.
+
+
+Original requirements (unchanged):
+
+Description:
+Write ONE new test file that pins the promises of a skill document that does not
+exist yet.
+
+File you write (the only file you may create or edit):
+  /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/fast-track/scripts/test_fast_track_prose.py
+
+File under test (prose, not code; it will be written after your tests exist):
+  /Users/bob/git/src/github.com/buvis/claude-autopilot/skills/fast-track/SKILL.md
+
+A "prose pin" test reads a Markdown file as text and asserts on short,
+reword-resistant substrings, each assertion carrying a failure message naming
+what drifted. Nothing executes the document: its command lines are copied by a
+human operator, so a dropped flag leaves every script test green while the
+documented procedure silently rots. That is the failure these tests exist to
+end. Resolve the document path from `Path(__file__).resolve().parent` upward -
+never hardcode an absolute path, never depend on the current working directory.
+
+WHAT THE DOCUMENT PROMISES (this is the spec you test against)
+
+`skills/fast-track/SKILL.md` documents a lane that takes one or more "spec
+cards" and drives each to a reviewed commit inside an attended session. Its
+frontmatter carries `name: fast-track` and a trigger-led `description` of at
+most 250 characters. Its body carries these sections, in this order:
+Preconditions, Card, Tests, Implement, Gates, Roster, Verify, Rework, Delta,
+Exit, Ledgers, Report.
+
+Invocation: `/autopilot:fast-track <card.md> [<card.md> ...] [--push]`, items
+processed in argument order.
+
+Preconditions: the lane refuses to run when the environment variable
+`_AUTOPILOT_LOOP` is set, because headless sessions kill background Bash and
+this lane is attended by design. It also refuses when a dirty working-tree path
+lies inside the card's `## Files` allowlist.
+
+Tests: when the card's `## Tests` section is empty, a fresh test author writes
+them from the card alone; the test files are committed before any implementor
+runs, after a red check proves them failing. Tests green before implementation
+stops the item.
+
+Implement: a fresh `autopilot:ivan` at the card's `model` makes the tests pass
+inside the `## Files` allowlist, and commits exactly the files it reports.
+
+Gates: every `## Gates` line runs in the foreground, one Bash call each, in
+order; a non-zero exit stops the item and no reviewer is dispatched. The lane
+runs no per-task ceremony: no adversarial test validator, no self-deslop pass,
+no per-task patch reviewer, no planning skill, no design skill. The words
+`Devon`, `deslop`, `Pat`, `plan-tasks` and `design-solution` must therefore not
+appear anywhere in the document.
+
+Roster (the zero-context review): five lanes are dispatched together in one
+message.
+  - consensus: the `review-fanout` workflow at
+    `~/.claude/workflows/review-fanout.workflow.js` when that file exists, else
+    the subagent `autopilot:alice`
+  - blind: the subagent `autopilot:blake`, who receives the card and never the
+    diff
+  - doubt: the subagent `autopilot:eve`
+  - a codex lane run as `codex-run.sh` background Bash
+  - a gemini lane run as `gemini-run.sh` background Bash
+The two CLI lanes are launched as background Bash with `run_in_background: true`
+from the driver session, and never inside a subagent. Every prompt is rendered
+from the card, the diff and persona files; the driver leaks no session context.
+
+Verify: one adversarial verifier dispatch per CRITICAL or HIGH row raised.
+Rework: a second fresh `autopilot:ivan` at the card's model addresses the
+confirmed findings, inside the same allowlist. Rework happens at most once.
+Delta: one final doubt pass over the rework range only.
+
+Exit: `branch` whenever any confirmed CRITICAL or HIGH remains. `branch` creates
+`git branch fast-track/<item> HEAD` and then runs `git reset --keep <base>`.
+`--keep` refuses rather than clobbers a foreign change; a refusal stops the item
+with the paths named, and the lane never uses `--hard`. Otherwise the item exits
+`commit` and its commits stay on the current branch.
+
+Ledgers: every dispatch opens a ledger row with a
+`record_dispatch.py start --kind fast-track:<lane> --task <item>` command line
+and closes it with `record_dispatch.py end <id> --outcome ...`. The document
+carries at least eight distinct `record_dispatch.py start --kind fast-track:`
+command lines, one per dispatch kind it documents.
+
+Report: one report per item at `dev/local/tmp/<item>-fast-track-review.md`.
+
+SCOPE AND STYLE
+
+- Write exactly the nine tests named in the acceptance criteria, with those
+  exact names. Do not add more tests, do not rename them.
+- Read the document once into a module-level or fixture-level string and assert
+  against it; do not re-read the file inside every test.
+- Every assertion carries a failure message naming what drifted.
+- The suite runs under pytest from the repository root with
+  `uv run --no-project --with pytest python -m pytest -q skills/fast-track/scripts`.
+  It must not import `pytest` plugins beyond the standard distribution and must
+  not need a conftest.
+- No test may pass when SKILL.md is absent: a missing file is a failure, never
+  a skip. Do not use `pytest.skip`, `pytest.importorskip`, or
+  `@pytest.mark.skipif` anywhere in the file.
+
+
+Acceptance Criteria:
+All nine tests below must exist in
+/Users/bob/git/src/github.com/buvis/claude-autopilot/skills/fast-track/scripts/test_fast_track_prose.py
+with exactly these names, and each must fail today (SKILL.md does not exist yet)
+and pass once the SKILL.md described below is written:
+
+- test_skill_names_the_invocation_form
+    the body contains `/autopilot:fast-track <card.md>`
+- test_every_lens_is_dispatched_in_one_message
+    the body names every roster lane: `autopilot:blake`, `autopilot:eve`,
+    `codex-run.sh`, `gemini-run.sh`, `review-fanout.workflow.js`,
+    `autopilot:alice`
+- test_cli_reviewers_run_as_background_bash_never_inside_a_subagent
+    the body contains `run_in_background: true` and `never inside a subagent`
+- test_blake_receives_the_card_never_the_diff
+    the prose states Blake gets the card and never the diff
+- test_ivan_is_fresh_on_rework_and_capped_at_one_rework
+    the prose states the rework Ivan is fresh and that rework happens at most once
+- test_exit_rule_branches_and_resets_with_keep
+    the body contains `fast-track/<item>` and `git reset --keep`
+- test_headless_sessions_are_refused
+    the body names `_AUTOPILOT_LOOP` as the refusal trigger
+- test_every_dispatch_opens_a_ledger_row
+    the body holds at least 8 lines containing
+    `record_dispatch.py start --kind fast-track:`
+- test_no_per_task_ceremony
+    the body contains none of `Devon`, `deslop`, `Pat`, `plan-tasks`,
+    `design-solution`
+
+Zero skips. The whole file runs green under:
+uv run --no-project --with pytest python -m pytest -q skills/fast-track/scripts
+
+
+Rewrite the tests addressing each issue above. Keep every test that is already
+sound — this is a targeted fix, not a rewrite from scratch.
+
+The original rules still apply. In particular:
+
+1. Write tests from requirements only. You are a USER of this API, not its builder.
+2. Each test name describes a behavior, not an implementation detail.
+3. Assert on outputs, return values, side effects, and errors. Never assert on mock existence.
+4. For EACH test, ask yourself: "What wrong implementation would still pass this?" If easy to answer, add constraints.
+5. SIMPLICITY FIRST: test only the behavior in the acceptance criteria. Strengthening a weak test does not mean adding tests nobody asked for.
+6. NEVER INVENT A CONTRACT: if the requirements name a data structure but do not pin its exact field names, enum values, or types, STOP and report it as a blocker rather than inventing a plausible schema.
+7. SURGICAL: only create/modify test files. Match the existing test file's style.
+
+Read only the files listed above. If a file or symbol you need is not listed, stop and report it as a blocker — do not run broad `rg` sweeps to discover scope.
+
+Abort and report if you read more than 100K of total input. Return the partial result and an abort_reason: context_overrun field.
+
+Read every file before your first Edit to it. Never call bash `head`, `tail`, `cat`, `grep`, or `find` - a hook blocks them. Use the Read tool (offset/limit), `rg`, or `rg --files` instead. Never combine an inspection (read, list, search, diff) with a test, lint or build invocation in one Bash call - run them as two calls, because a combined command has two ways to hang and one exit code. Pass an explicit `timeout` on every Bash call: 60000 ms for an inspection, 300000 ms for a lint run or a narrow test run, 600000 ms for a full suite or a full build.
+
+End your report with `ASSUMPTIONS:` - one line per assumption you made where the task, tests, or listed files were silent (guessed interface, data shape, resolved ambiguity, unstated behavior). Write `ASSUMPTIONS: none` if you made none.

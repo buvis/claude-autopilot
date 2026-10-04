@@ -1,0 +1,177 @@
+A diff has been written to satisfy this task. The implementation passed its
+tests. Your job: prune slop from the diff while keeping every test green.
+This is best-effort cleanup, not a correctness rework — do not change
+behavior, do not modify tests, do not refactor.
+
+Task: Wire the doctor into the batch probe docs, schema, and CHANGELOG
+
+Description:
+Document the doctor-first batch probe, add prose pins to the test suite, and add the CHANGELOG entries. No code change to the doctor script itself in this task.
+
+Location: skills/work/references/codex-implementor.md, skills/use-codex/SKILL.md, skills/run-autopilot/references/state-schema.md, skills/run-autopilot/references/batch-report-format.md, skills/use-codex/scripts/test_codex_hook_doctor.py, CHANGELOG.md
+
+Reuse: the existing `## Codex batch health probe` section in codex-implementor.md (the `codex-run.sh -a` block already there), the existing `codex_probe` row in state-schema.md, the existing probe-line prose in batch-report-format.md, and the `[Unreleased]` section format already used in CHANGELOG.md.
+
+Premise: Tasks 1-3 have landed, so `codex_hook_doctor.py` has both `check` and `repair` verbs, and `render_report.py` renders the `; hooks:` suffix — re-verify this before writing docs that describe them as done.
+
+Contract (verbatim from the PRD):
+
+Feature: Doctor-first batch probe
+- Description: `work/references/codex-implementor.md` § Codex batch health probe runs the doctor before the live probe.
+- Inputs: the doctor's exit code and summary line.
+- Outputs: the `state.codex_probe` slice, with a new optional key `hook_doctor`.
+- Behavior: Under the existing batch-scope check, the probe first runs `python3 ${CLAUDE_PLUGIN_ROOT}/skills/use-codex/scripts/codex_hook_doctor.py check` (foreground Bash: a local file scan, no dispatch). Exit 1 or 2: write `verdict: "unhealthy"`, `detail: "hook_doctor: <the first broken TSV line>"`, `hook_doctor: "<summary line>"`, `backend` as resolved by `command -v codex`, and skip the live probe (no codex dispatch this batch, infra semantics, no escalation stamp). Exit 0 or 3: run the live probe unchanged and add `hook_doctor: "ok"` or `hook_doctor: "stale: <basenames>"` to the slice. Stale copies do not gate the rung `(guess)` - they have run every batch so far; flip to gating if a drifted copy ever misbehaves. A batch never runs `repair`: the unattended write fence denies `~/.codex`, and repair is the operator's explicit command.
+
+Module: batch-probe-prose
+- Responsibility: the doctor-first paragraph in `codex-implementor.md`; the `## Hook doctor` section in `use-codex/SKILL.md` (both commands, exit codes, the operator-only rule for repair); the `codex_probe` row and the report-format clause.
+
+Details:
+- Add the doctor-first paragraph to `skills/work/references/codex-implementor.md` § Codex batch health probe, ahead of the `codex-run.sh -a` block: the command, the exit-code mapping to `verdict`/`detail`/`hook_doctor`, and "never `repair` from a batch".
+- Add `## Hook doctor` to `skills/use-codex/SKILL.md`: both commands, exit codes 0/1/2/3, the operator-only repair rule.
+- Document `hook_doctor?` and the `detail` shape in the `codex_probe` row of `skills/run-autopilot/references/state-schema.md`.
+- Document the `; hooks:` suffix in `skills/run-autopilot/references/batch-report-format.md`.
+- Add prose pins to `test_codex_hook_doctor.py`: `codex-implementor.md` names `codex_hook_doctor.py` before its first `codex-run.sh -a`; `state-schema.md` names `hook_doctor`; `use-codex/SKILL.md` names `repair`.
+- Add the CHANGELOG lines: `**use-codex**` under Added for the doctor; `**work**` under Changed for the doctor-first probe; `**run-autopilot**` under Added for the `hooks:` note.
+
+Acceptance criteria:
+- `rg -n "codex_hook_doctor.py" skills/work/references/codex-implementor.md skills/use-codex/SKILL.md` hits in both.
+- `rg -n "hook_doctor" skills/run-autopilot/references/state-schema.md skills/run-autopilot/references/batch-report-format.md` hits in both.
+- `rg -n "^- \*\*(use-codex|work|run-autopilot)\*\*" CHANGELOG.md` hits under `[Unreleased]`.
+- `uv run --no-project --with pytest --with rich --with textual python -m pytest -q skills/use-codex/scripts skills/work/scripts skills/run-autopilot` green.
+
+Tests that the diff made pass (do NOT modify):
+none (this task is docs-only; the implementor was dispatched directly against the acceptance criteria and Verify line above, with no Tess-authored test file — the pre-existing prose-pin tests in test_codex_hook_doctor.py already covered the doc claims)
+
+Files in the diff:
+CHANGELOG.md, skills/run-autopilot/references/batch-report-format.md, skills/run-autopilot/references/state-schema.md, skills/use-codex/SKILL.md, skills/use-codex/scripts/test_codex_hook_doctor.py, skills/work/references/codex-implementor.md
+
+Procedure:
+
+1. Read the diff for each file in scope (`git diff HEAD~1..HEAD <file>` or
+   equivalent in your environment).
+2. For each line, block, helper, comment or docstring added in the
+   diff, ask:
+     "Does this trace to a failing test, an acceptance criterion, or
+     existing-behavior preservation?"
+   If the answer is no, mark the construct for removal.
+3. Apply removals one at a time. After each individual removal, re-run
+   `uv run --no-project --with pytest --with rich --with textual python -m pytest -q skills/use-codex/scripts skills/work/scripts skills/run-autopilot`.
+   If any test fails, restore that single removal and move on to the next
+   candidate. Never delete the test that fails — the test is authoritative.
+4. If no removal survived its test re-run, exit WITHOUT committing. Return
+   the literal string "no slop found" so the caller can record a noop.
+5. If at least one removal survived, commit with message:
+     chore: prune slop from Wire the doctor into the batch probe docs, schema, and CHANGELOG
+   No CHANGELOG entry. No HEREDOC. No Co-Authored-By trailer. One commit
+   only — do not split into multiple cleanup commits.
+
+Rules:
+
+- **Do not modify tests.** If a test reads as weak, that is the per-task
+  reviewer's call (step 5.7), not yours. Leave it. Dead bindings a split left
+  behind in a test file are not yours either: `check_split_hygiene.py` answers
+  that mechanically at the task boundary (step 5.65), with `ast` rather than
+  judgment, so you never have to guess which test binding is safe to drop.
+- **Do not change behavior.** Tests prove behavior; if you cannot satisfy
+  the tests, the deletion is wrong. Restore.
+- **Do not refactor.** This pass deletes; it does not move code around,
+  rename symbols, or extract helpers. If a slop pattern would only resolve
+  through restructuring, note it in the return message instead of acting.
+- **Do not touch files outside the diff.** The cleanup is scoped to what
+  the implementor just produced. Adjacent slop in untouched files is out
+  of scope here — the post-session codex pass catches it separately.
+
+Slop patterns to look for (catalog inlined from `prompts/de-sloppify.md`):
+
+## What to remove
+
+### 1. Language/framework verification tests
+
+Tests that only prove the runtime or framework works, not the project's behavior.
+
+### 2. Weak or tautological tests
+
+Replace existence checks, mock-confirming tests, self-referential assertions, and unexplained magic assertions with behavior-focused assertions. If an important boundary or failure case is missing, add the smallest useful test.
+
+### 3. Redundant type checks
+
+Remove runtime checks that duplicate compile-time guarantees, except at system boundaries.
+
+### 4. Impossible-state error handling
+
+Remove defensive handling for states that cannot occur from the current control flow. Keep validation and error handling at boundaries.
+
+### 5. Swallowed errors and empty catch blocks
+
+Do not hide failures. Re-throw, surface, or handle them meaningfully.
+
+### 6. Debug statements
+
+Remove development-only prints and logs.
+
+### 7. Commented-out code
+
+Delete dead code kept in comments.
+
+### 8. Obvious comments
+
+Remove comments that restate the code. Keep comments that explain intent, constraints, workarounds, or why.
+
+### 9. Over-abstraction and unnecessary indirection
+
+Inline abstractions that have only one consumer and no current testability or architectural value.
+
+### 10. Duplicate code
+
+Reuse existing code or standard library helpers instead of introducing parallel logic.
+
+### 11. Suspicious dependencies
+
+Verify any newly added dependency exists, is used, and is justified. Remove hallucinated, unused, or speculative dependencies.
+
+### 12. Hardcoded secrets and placeholder credentials
+
+Replace with environment variables, secret storage, or project-approved configuration.
+
+### 13. Deprecated APIs and outdated patterns
+
+Modernize only when the newer approach is already supported by the project and the change stays in scope.
+
+### 14. Naive performance patterns
+
+Fix only if the code is on a hot path or clearly scales poorly with input size.
+
+### 15. Leftover artifacts
+
+Remove temp files, scratch scripts, backup files, unrelated lockfile churn, and agent-generated planning docs.
+
+### 16. AI-style docstrings
+
+Remove multi-paragraph docstrings on trivial functions. Remove docstrings that paraphrase the function name or restate its arguments — when the function is well-named, the docstring is noise. Remove "this function does X by calling Y" preambles that describe implementation rather than contract. Keep docstrings that capture non-obvious intent, invariants, or constraints.
+
+### 17. Trivial-type validation
+
+Remove runtime type guards, JSON schemas, or pydantic models that duplicate compile-time guarantees in a fully-typed file. Examples: `isinstance(x, int)` inside a function whose signature is `x: int`; a pydantic model declared for a function-internal dict whose shape is already pinned by the caller's types. Keep validation at real system boundaries (request bodies, file inputs, external API responses).
+
+### 18. Single-instantiation factories
+
+Inline factory functions, builders, or wrapper classes called from exactly one place where direct construction reads more clearly. A factory pattern only earns its complexity when multiple call sites benefit; before there are multiple call sites, the abstraction is speculative.
+
+### 19. Speculative configuration
+
+Remove config flags, env vars, options parameters that have exactly one used value across the codebase. Configuration is a contract with future readers — exposing one without a current consumer adds maintenance burden for no benefit.
+
+### 20. Restating comments
+
+Remove comments that say what the next line of code already says. Examples: `// increment counter` above `counter += 1`; `# parse the response` above `data = json.loads(raw)`. Keep comments that explain non-obvious why (invariants, workarounds, constraints).
+
+### 21. Framework-verification tests
+
+A more explicit subsection of #2. Remove tests asserting only "import works", "function exists", "method returns truthy" without exercising business logic. Remove mock-confirming tests (the only assertion is `mock.assert_called_with(...)`). Remove snapshot tests where the shape itself is not the contract — they catch any change, including correct ones. Keep behavior assertions that fail when business logic changes.
+
+Return one of:
+  - "no slop found" — exited without commit, nothing to clean.
+  - "committed {sha}" — committed `chore: prune slop from ...` at {sha},
+    test suite green.
+  - "errored: {short reason}" — dispatch problem; do not commit, just
+    explain so the caller can record the failure.
