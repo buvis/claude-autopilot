@@ -115,3 +115,21 @@ cannot show which lens is slow. Worth checking before any fast-track tuning.
    deterministic, and has precedent (`enter`, `render_prompt.py`).
 2. **V3** rides along (gate reuse and summary line).
 3. **V6:** check the fan-out telemetry before trusting fast-track timings.
+
+## Minutes (2026-10-04)
+
+- **V1 + V2 + V3** → PRD 00249 (stage and close reviews in code), backlog.
+- **V4** → applied: `gita add` registered this repo.
+- **V5** → watch only.
+- **V6** → deferred to this note; check before any fast-track tuning.
+- **Hold 00246, 00247** (both still real at HEAD) → PRD 00250, which also
+  deletes the two stubs.
+- **Hold 00245** → kept until the 0.8.0 release: PRD 00240 fixed the pattern
+  in source (`store_tree.py:33`, `autopilot/**/*.lock`), but the installed
+  0.7.0 cache still writes `autopilot/*.lock`. Delete the stub with the
+  release.
+- **Hold 00110** → closed by the user (keep the `consensus_engine` switch).
+  It could never unpark: no PRD is stamped `shadow`, and its eligibility
+  check searches `dev/local/reviews`, gone since v0.6.0. Its evidence
+  (`reviews/00110-flip-evidence.md`) argued against the flip: ~6.5x tokens
+  for about one adopted LOW/MEDIUM finding per cycle.
