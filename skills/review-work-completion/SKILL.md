@@ -21,7 +21,7 @@ compatibility: "Requires Bob personal Claude/autoclaude environment or equivalen
 
 ## What This Does
 
-Validates completed implementation work against PRD requirements using independent AI reviewers (tools may change in the future). Each reviewer analyzes the code changes and PRD criteria separately, then findings are consolidated by consensus - issues flagged by multiple reviewers get higher priority. Creates follow-up tasks for any gaps found.
+Validates completed implementation work against PRD requirements using independent AI reviewers (tools may change in the future). Each reviewer analyzes the code changes and PRD criteria separately, then findings are consolidated by consensus - issues flagged by multiple reviewers get higher priority. Under autopilot, the decision gate in `run-autopilot/references/phase-review.md` turns the findings into follow-up tasks.
 
 **Why multiple reviewers:** Different models catch different issues. Consensus scoring surfaces real problems while filtering noise from single-model false positives.
 
@@ -78,7 +78,7 @@ Under autopilot, `state.prd` names the PRD, so this guard does not apply — rev
 **Optional - Carl (Gemini), batch check first:** read
 `state.batch.unavailable_reviewers` before probing any binary. Missing field
 means `[]`. When it contains `carl`, Carl is inactive for this cycle: no dispatch,
-no retry, and no `ui` key in `state.review_lenses` when step 5 replaces the lens
+no retry, and no `ui` key in `state.review_lenses` when step 3 replaces the lens
 roster. Retain `state.batch.unavailable_reviewer_details.carl` as the skip origin
 for step 6 and omit Carl from `reviewers:`. This applies to every later cycle
 and PRD in the same batch. On a standalone run with no `state.json`, do not
@@ -135,100 +135,87 @@ Cannot review: no completed tasks found. Complete tasks first.
 
 Read the **review-target PRD** from `docs/dev/project-management/prds/wip/` — `state.prd`'s PRD under autopilot, the PRD step 1's ambiguous-target guard resolved on a standalone multi-PRD run, else the single wip PRD. Extract success criteria, acceptance criteria, required features. (Only when the target is genuinely one PRD and wip legitimately holds several — an autopilot batch mid-flight — read the others for cross-PRD context, but scope the review to the target.)
 
-Load architecture docs: AGENTS.md, agent_docs/, and any `docs/dev/project-management/` architecture notes. Reviewers benefit from seeing invariants and boundaries.
-
-Build markdown of completed tasks with descriptions. **One row per task — never merge rows.** If a task was implemented in the same commit as another task (folded), it still gets its own row; note the shared commit SHA and the companion task IDs in the row's description so the cycle-N task→commit table stays unambiguous.
-
-Write tasks markdown to `docs/dev/tmp/review-tasks-{id}.md` and PRD summary to `docs/dev/tmp/review-prd-{id}.md` using the **Write tool** (not bash).
-
-**Design doc context (when present).** Check `state.design_doc` in `docs/dev/project-management/autopilot/state.json`; if it is unset, fall back to the glob `docs/dev/project-management/designs/<prd-stem>-design.md` (`<prd-stem>` = the wip PRD filename minus `.md`). When a design doc exists, append its full content to the PRD summary file (`docs/dev/tmp/review-prd-{id}.md`) under a `## Design Doc` heading. This lets reviewers distinguish "implemented as designed" from drift. The PRD remains the requirements authority — the design doc is the implementation design (the HOW), not the spec. Blind review and doubt review stay PRD-only by design (a blind reviewer must test requirements without design bias) — do **not** add the design doc to those surfaces.
-
 **Determine review scope (full vs incremental).** List existing review files for this PRD with Bash `ls` (the native `Glob` tool is absent in this build): `docs/dev/project-management/reviews/<prd-name>-review-*.md` (PRD filename without the `.md` extension).
 
-- **No prior review file** → cycle 1, a **full review**. When `state.work_start_sha` is set in `docs/dev/project-management/autopilot/state.json` (running under autopilot), pass `--since <state.work_start_sha>` to `gather-context.sh` — the PRD's whole work range, the same value `COVERAGE_DIFF_RANGE` uses below. `gather-context.sh` otherwise diffs against the detected base branch, which is empty (and now refused with exit 3) for a repo worked on directly on that branch. Without `state.work_start_sha` (an interactive, non-autopilot run), run without `--since` as before.
+- **No prior review file** → cycle 1, a **full review**. When `state.work_start_sha` is set in `docs/dev/project-management/autopilot/state.json` (running under autopilot), pass `--since <state.work_start_sha>` to `review-stage` — the PRD's whole work range, the same value `COVERAGE_DIFF_RANGE` uses below. Without it, the `gather-context.sh` run inside `review-stage` diffs against the detected base branch, which is empty (and refused with exit 3) for a repo worked on directly on that branch. Without `state.work_start_sha` (an interactive, non-autopilot run), omit `--since`.
 - **A prior review file exists** → this is a rework cycle, an **incremental review**. Read the highest-numbered prior file's `head_sha` frontmatter field.
-  - `head_sha` present → pass `--since <head_sha>` to `gather-context.sh`. The diff then covers only the rework commits since that cycle, not the whole PRD branch — the prior cycle already reviewed the full diff. Also read that file's consolidated findings; step 4 hands them to the reviewers to verify.
+  - `head_sha` present → pass `--since <head_sha>` to `review-stage`. The diff then covers only the rework commits since that cycle, not the whole PRD branch — the prior cycle already reviewed the full diff. Also read that file's consolidated findings; step 4 hands them to the reviewers to verify.
   - `head_sha` absent (file predates this field) → fall back to a full review (omit `--since`).
   - Also read that same prior file's `codex_thread_id` frontmatter field (stamped in step 8 of the prior cycle). Present → step 5 adds `--resume-thread <codex_thread_id>` to Bob's launch so codex resumes his prior session instead of re-reviewing from zero. Absent (pre-change file, or Bob was skipped / thread-id capture failed last cycle) → Bob runs a fresh review, no resume flag.
 
 Capture the current HEAD now — `git rev-parse HEAD` — and hold it; step 8 stamps it into this cycle's review file as `head_sha`.
 
-Also capture the diff range for the review scope (recorded in the review file; the doubt lens reviews this range). For an **incremental review** the diff range is `<prior-cycle-head-sha>` (the same SHA passed to `gather-context.sh --since`). For a **full review**: when running under autopilot and `state.work_start_sha` is set in `docs/dev/project-management/autopilot/state.json`, use `<work_start_sha>..HEAD` (the PRD's whole work range — this is the scope the doubt lens reviews); otherwise compute it via `git merge-base HEAD origin/HEAD` (fallback: `git merge-base HEAD master`, then `git merge-base HEAD develop`). Store this as `COVERAGE_DIFF_RANGE`.
+Also capture the diff range for the review scope (recorded in the review file; the doubt lens reviews this range). For an **incremental review** the diff range is `<prior-cycle-head-sha>` (the same SHA passed to `review-stage --since`). For a **full review**: when running under autopilot and `state.work_start_sha` is set in `docs/dev/project-management/autopilot/state.json`, use `<work_start_sha>..HEAD` (the PRD's whole work range — this is the scope the doubt lens reviews); otherwise compute it via `git merge-base HEAD origin/HEAD` (fallback: `git merge-base HEAD master`, then `git merge-base HEAD develop`). Store this as `COVERAGE_DIFF_RANGE`.
 
-Run `gather-context.sh` (from project root). Full review under autopilot — prepend `--since <state.work_start_sha>`:
-
-```bash
-bash ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/gather-context.sh --since <state.work_start_sha> docs/dev/tmp/review-tasks-{id}.md docs/dev/tmp/review-prd-{id}.md
-```
-
-Full review with no `state.work_start_sha` (interactive, non-autopilot):
+**Stage the cycle with one call (PRD 00249).** From the project root, run:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/gather-context.sh docs/dev/tmp/review-tasks-{id}.md docs/dev/tmp/review-prd-{id}.md
+autopilot review-stage --cycle-id {id} --state docs/dev/project-management/autopilot/state.json --gate-command "<project gate command>" --roster <personas> [--since <sha>] [--replay-cmd "<per-file pytest invocation>"]
 ```
 
-Incremental review (rework cycle) — prepend `--since <prior-cycle-head-sha>`:
+- `{id}`: one id for the whole cycle (a timestamp or UUID; letters, digits, `.`, `_`, `-` only). Every `docs/dev/tmp/review-*-{id}.*` file, every prompt and every `-o` output path in step 5 shares it.
+- `--gate-command`: the project's full test-gate command (this pack: `dev/bin/release-checks`). `review-stage` reuses `last-verification.json` when it still certifies HEAD, else runs this command once.
+- `--roster`: comma-separated persona names of the reviewers step 1 made active: `alice,blake,bob`, plus `carl` when Carl is active and `eve` when the resolved doubt reviewer is `fable`. Always pass it: without it the CLI derives the roster from `state.review_lenses`, which knows neither Carl's batch skip nor his binary check.
+- `--since`: per the scope rules above; omit it for a full review with no `state.work_start_sha`.
+- `--replay-cmd`: the project's per-file pytest invocation (`python3 -m pytest`, unless the project runs one test file another way; this pack: `uv run --no-project --with pytest python -m pytest`). Omitting it skips the fail-first replay.
 
-```bash
-bash ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/gather-context.sh --since <prior-cycle-head-sha> docs/dev/tmp/review-tasks-{id}.md docs/dev/tmp/review-prd-{id}.md
-```
+**Standalone runs (no `state.json`).** Drop `--state` and pass what it would have supplied: `--tasks-json <file>` (a JSON array of `state.tasks`-shaped objects — `id`, `name`, `status`, `description`, plus `commit` and `companions` for a folded task — or `[]` when step 2 found no tasks; write it to `docs/dev/tmp/review-tasks-{id}.json` with the Write tool), `--prd <absolute path of the review-target PRD>`, and `--design-doc docs/dev/project-management/designs/<prd-stem>-design.md` when that file exists (`<prd-stem>` = the wip PRD filename minus `.md`). Under `--state`, `review-stage` reads `state.prd`, `state.tasks` and `state.design_doc` itself and refuses those three flags.
 
-Both positional args are optional — omit if no tasks/PRD available. Outputs context file and diff file paths to `docs/dev/tmp/`.
+**What the call does** (`skills/run-autopilot/cli/review_stage.py`; it runs the existing scripts unchanged):
 
-**Bare-repo homes (e.g. `~/.buvis`: `git --git-dir=~/.buvis --work-tree=~`):** `gather-context.sh` assumes a normal checkout and fails here — do not fight it. Build the review inputs yourself: generate the diff with `git --git-dir=<bare-dir> --work-tree=<tree> diff <COVERAGE_DIFF_RANGE>` (the range captured above), write it plus the tasks/PRD/context files to `/tmp/` with the Write tool, and pass those absolute `/tmp` paths to the reviewer prompts. The script path stays primary for normal repos.
+- Writes `docs/dev/tmp/review-tasks-{id}.md`, **one row per task — never merged**: a task folded into another's commit keeps its own row with the shared commit and companion task ids, so the cycle-N task→commit table stays unambiguous.
+- Writes `docs/dev/tmp/review-prd-{id}.md`: the PRD, plus the design doc's full text under `## Design Doc` when one exists, so reviewers can tell "implemented as designed" from drift. The PRD remains the requirements authority. Blind review and doubt review must stay PRD-only (a blind reviewer tests requirements without design bias), so the design doc belongs on neither surface.
+- Runs `gather-context.sh` with your `--since`, which writes the context and diff files to `docs/dev/tmp/`.
+- Appends to the context file the mechanical-facts block (`compute_mech_facts.py`, PRD 00095: per-function line counts from `ast`, so a reviewer citing it cannot get a line count wrong, and step 6's gate discards any finding that contradicts it), then the two mechanical test checks: `detect_tautological_tests.py` (test functions whose shape cannot fail) and, with `--replay-cmd`, `replay_tests_against_base.py` (changed tests that PASS against the pre-change code, so they do not pin this change). Every `[MECH]` line in those two blocks is a finding step 6 absorbs, and they are Eve's fifth run input (step 4).
+- Builds this cycle's engram context pack at `docs/dev/tmp/engram-pack-{id}.md` and appends its "Findings precedent" section, then the test-gate `Tests:` line.
+- Renders every roster prompt (step 4).
+- With `--state` only: REPLACES `state.review_lenses` with one `"running"` key per active lens (tracon renders these as the review phase's sub-steps; step 6 flips them to `"done"`/`"failed"`), and opens one dispatch row per CLI reviewer on the roster (`record_dispatch.py start --kind bob|carl --task review-{id}`).
 
-**Append the mechanical-facts block (PRD 00095).** After `gather-context.sh` has written the context file, compute the countable facts for the changed Python files and append the block to that context file, so every implementation-aware prompt carries it:
+**Read its summary.** It prints one JSON line on stdout. Hold these keys:
 
-```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/compute_mech_facts.py <changed file>...
-```
+- `context_file`, `diff_file`, `prd_file`, `tasks_file`: the staged inputs (`diff_file` is `null` when no diff was written).
+- `prompts`: `{persona: prompt path}`. A `null` value means that reviewer failed (step 4).
+- `dispatch_rows`: `{"bob": id, "carl": id}` for step 6's `end` calls; `null` where no row was opened.
+- `pack`: `"ok"` or `"failed (<reason>)"`. A failure is non-fatal and never blocks the cycle: the prompts already carry `(no pack available this cycle)` for `{PACK_FILE}` and `{PACK_FINDINGS}`; note the failure in the review file. A review without the pack is degraded, not invalid. Blake never receives a pack, by design.
+- `gate.tests_line`: this cycle's computed counts. Step 6 still composes the `Tests:` line; when this run parsed counts it wrote `last-verification.json` at HEAD, so step 6 reuses that record instead of running the suite again.
+- `errors`: every best-effort failure (lens stamp, dispatch row). Name each one in the review file.
 
-Pass the paths from the context file's `### Changed Files` section (in a **bare-repo home**, the changed-file list you built by hand per the carve-out above — the script needs no git, only readable paths). It prints a markdown block of per-function line counts from `ast`, lists non-Python and unparseable files as skipped, and always exits 0. Append its stdout to the context file with the Write tool. A reviewer citing this block cannot get a line count wrong, and step 6's gate discards any finding that contradicts it — the measured cost of the alternative was a whole orchestrator refutation pass over one reviewer's 58-vs-44 line claim.
+Pass every staged path to subagents and CLIs as an absolute path (resolve a relative one against the project root): subagents misresolve relative `docs/dev/project-management/` paths as `~/docs/dev/project-management/`.
 
-**Append the mechanical test checks.** Two more computed blocks follow the facts block in the same context file, so a tautological test reaches every implementation-aware reviewer as a fact rather than a hunch (the 00164, 00167 and 00173 cycles each caught one only because a single reviewer reverted the change by hand and re-ran the test):
+**A non-zero exit stages nothing to review.** Read its stderr. Exit 3 is `gather-context.sh` refusing an empty diff (no base branch, or nothing since `--since`): a review of nothing must never converge, so fix the range (e.g. pass `state.work_start_sha`) and re-run once, else STOP and report. Exit 1 or 2 is a usage or input problem (a bad `--cycle-id`, a standalone flag beside `--state`, an unreadable state or tasks file): fix it and re-run once, else STOP and report.
 
-```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/detect_tautological_tests.py <changed file>...
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/replay_tests_against_base.py --base <left side of COVERAGE_DIFF_RANGE> --cmd "<the project's per-file pytest invocation>"
-```
+**Read the settled-decisions ledger (PRD 00095).** Read `docs/dev/project-management/reviews/<prd-stem>-ledger.json` (`<prd-stem>` = the review-target PRD's filename minus `.md`; absent on cycle 1, which is normal). When it exists and parses, hold its entries for step 4 — they become the "Settled decisions — do not re-raise" section of the implementation-aware prompts — and hold the path for step 6's `--ledger` flag. A malformed ledger is logged and skipped, never fatal.
 
-The first takes the same changed-file list as `compute_mech_facts.py` and reports test functions whose shape cannot fail (a constant or self-comparing assert, an `A or B` hedge, a swallowed exception, `raises(Exception)`, no assertion at all). The second checks the base out in a temporary worktree, overlays HEAD's changed test files, runs only the test functions the diff touched, and reports the ones that PASS against the pre-change code — a test that passes there does not pin this change. Pass `--cmd` when plain `python3 -m pytest` is not how this project runs one test file (this pack: `uv run --no-project --with pytest python -m pytest`). The replay is skipped, never failed, when the runner cannot run, when the diff changes no non-test file (a coverage backfill pins existing behavior by design), or in a **bare-repo home** (no worktree to add; the shapes check still runs there, it needs only readable paths). Both scripts always exit 0. Append both blocks' stdout to the context file with the Write tool, and hold them: they are Eve's fifth run input (step 4), and every `[MECH]` line in them is a finding step 6 absorbs.
+**Bare-repo homes (e.g. `~/.buvis`: `git --git-dir=~/.buvis --work-tree=~`) — the fallback path.** `gather-context.sh` assumes a normal checkout, so `review-stage` fails here — do not fight it. Stage the cycle by hand instead; `review-stage` stays primary for normal repos.
 
-**Append the settled-decisions ledger (PRD 00095).** Read `docs/dev/project-management/reviews/<prd-stem>-ledger.json` (`<prd-stem>` = the review-target PRD's filename minus `.md`; absent on cycle 1, which is normal). When it exists and parses, hold its entries for step 4 — they become the "Settled decisions — do not re-raise" section of the implementation-aware prompts — and hold the path for step 6's `--ledger` flag. A malformed ledger is logged and skipped, never fatal.
-
-**Generate the cycle's context pack.** After `gather-context.sh` has produced the diff, and before any prompt is assembled, run `git rev-parse --show-toplevel` from the project root with no extra flags — the pack resolves `repo_root` the same way, so a non-zero exit means the pack cannot succeed here. On non-zero: skip the command below entirely, substitute `(no pack available this cycle)` for `{PACK_FILE}` and `{PACK_FINDINGS}`, write `pack: skipped (no git worktree)` in the review file, and move to step 4. On zero exit, run this from the project root:
-
-```bash
-engram pack --cycle {id} --prd <absolute path of the review-target PRD resolved at the top of this step> --capsule docs/dev/project-management/meta/project-capsule.md
-```
-
-`engram` is an optional external tool, so check how it is installed before running this. On PATH, the command above works as written; otherwise run it out of your own checkout, `uv run --project <your engram checkout> engram pack ...`, and expect a bare `engram pack` to fail. The command prints the pack's absolute path, its estimated token total, and the pre-pack reindex stats. `{id}` is the same cycle id used for the other `docs/dev/tmp/review-*-{id}.*` staging files, so the pack lands at `docs/dev/tmp/engram-pack-{id}.md`.
-
-Hold the printed absolute path. Step 4 substitutes it for `{PACK_FILE}`, and substitutes the file's "Findings precedent" section for `{PACK_FINDINGS}`. Pass the pack path to prompts as an absolute path, like the other staged inputs. Subagents misresolve relative `docs/dev/project-management/` paths as `~/docs/dev/project-management/`.
-
-**Failure is non-fatal and must never block the cycle.** If the command exits non-zero or writes no pack file, retry at most once and do not fail the review. Substitute the literal text `(no pack available this cycle)` for `{PACK_FILE}` and `{PACK_FINDINGS}` in every prompt that takes them, and note the pack failure in the review file. The pack is additive retrieval context. A review without it is degraded, not invalid. The blind lens (Blake) never receives a pack, by design.
-
-In a **bare-repo home** (the carve-out one paragraph above), the pre-check is what fires: `git rev-parse --show-toplevel` exits non-zero, so the pack is never attempted and the review file records `pack: skipped (no git worktree)` — a skip, not a failure, and no retry. `gather-context.sh` never wrote `review-diff-{id}.diff` there either.
+1. Generate the diff with `git --git-dir=<bare-dir> --work-tree=<tree> diff <COVERAGE_DIFF_RANGE>` (the range captured above), and write it plus the tasks, PRD and context files to `/tmp/` with the Write tool (tasks one row per task, as above).
+2. Append the mechanical blocks to that context file, passing the changed-file list you built: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/compute_mech_facts.py <changed file>...`, then `python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/detect_tautological_tests.py <changed file>...`. Both need only readable paths and always exit 0. The fail-first replay is skipped: there is no worktree to add.
+3. Run `git rev-parse --show-toplevel` from the project root with no extra flags. The pack resolves `repo_root` the same way, and here it exits non-zero, so `engram pack` is never attempted: substitute `(no pack available this cycle)` for `{PACK_FILE}` and `{PACK_FINDINGS}` and write `pack: skipped (no git worktree)` in the review file — a skip, not a failure, and no retry.
+4. Render the prompts per step 4's fallback, and under autopilot open the roster and dispatch rows per step 5's fallback.
 
 ### 4. Prepare agent prompts
 
-Create prompt files in `docs/dev/tmp/`:
+The `review-stage` call in step 3 already rendered one prompt per roster
+persona to `docs/dev/tmp/{agent}-prompt-{id}.md`; their absolute paths are its
+summary's `prompts`. Do not author prompt files: the only hand edits are the two
+appends below that `review-stage` takes no input for, the settled decisions and
+the incremental addendum.
 
-For each active agent, use the **Write tool** (not bash heredocs) to create `docs/dev/tmp/{agent}-prompt-{unique-id}.md` (use timestamp or UUID). **Use absolute paths** (e.g. `/full/path/to/project/docs/dev/tmp/...`) when writing and when referencing these files in agent prompts - relative `docs/dev/project-management/` paths get misresolved as `~/docs/dev/project-management/` by subagents.
+**Every prompt is assembled from the agent registry.** `review-stage` reads the
+persona's file under `${CLAUDE_PLUGIN_ROOT}/agents/`, strips its frontmatter,
+and substitutes its placeholders through `work/scripts/render_prompt.py` — the
+substitution table and the conventions live in `references/agent-registry.md`.
+There is no fallback prompt: a persona whose prompt is `null` in `prompts` is a
+failed reviewer, handled by `references/retry-policy.md`.
 
-**Every prompt is assembled from the agent registry.** Read the persona's file
-under `${CLAUDE_PLUGIN_ROOT}/agents/`, strip its frontmatter, and substitute its
-placeholders — the substitution table and the conventions live in
-`references/agent-registry.md`. There is no fallback prompt: if a roster file is
-missing or its frontmatter does not parse, mark that reviewer failed and let
-`references/retry-policy.md` handle it.
+**Fail-closed preflight.** Before rendering, `review-stage` verifies every
+roster persona's file exists and its frontmatter carries non-empty `name`,
+`description` and `tools`. A persona that fails it, or whose render fails
+`render_prompt.py`'s placeholder check, never gets a prompt file written.
 
-**Fail-closed preflight.** Before writing any prompt file, verify every roster
-agent for this cycle exists and parses. A reviewer whose file fails this check
-never gets a prompt file written.
-
-**Settled decisions — do not re-raise (PRD 00095).** When step 3 loaded ledger
-entries, append this section to **Alice's, Bob's, Carl's and Eve's** prompts,
+**Settled decisions — do not re-raise (PRD 00095).** `review-stage` takes no
+ledger input, so when step 3 loaded ledger entries, append this section with
+the Edit tool to the end of **Alice's, Bob's, Carl's and Eve's** prompts,
 one line per entry (`disposition`, `severity`, `issue`, `file`, `reason`), under
 the heading `## Settled decisions — do not re-raise`:
 
@@ -240,16 +227,15 @@ the heading `## Settled decisions — do not re-raise`:
 fed the review's own history is no longer blind. His re-raises are absorbed
 mechanically instead, by step 6's `--ledger-dismiss BLAKE`.
 
-**Filesystem notes — Blake only (PRD 00141).** Run one check from the project
-root: `test -L docs/dev/project-management` succeeds, OR the root's basename starts with `.`.
-When either holds, prepend a `## Filesystem notes` block to Blake's run inputs
+**Filesystem notes — Blake only (PRD 00141).** `review-stage` runs one check
+on the project root: `test -L docs/dev/project-management` succeeds, OR the root's basename starts with `.`.
+When either holds, it adds a `## Filesystem notes` block to Blake's run inputs
 carrying the project root, the `docs/dev/project-management` realpath, and the sentence telling
 him `rg --files` reaches neither. Paths only — no diff, no file list, no
-review history, so the blind lens stays blind. **Read
-`references/agent-invocation.md` § Blake: Filesystem notes for the verbatim
-block** before assembling his prompt.
+review history, so the blind lens stays blind. The verbatim block lives in
+`references/agent-invocation.md` § Blake: Filesystem notes.
 
-Per persona:
+Per persona (the table `review-stage` applies):
 
 | Persona | Source | Substitutions |
 |---------|--------|---------------|
@@ -259,23 +245,21 @@ Per persona:
 | Blake | `agents/blake.md` | `{PRD}` and `{RUBRIC}` (from `review-blindly/references/rubric.md`) **only** — no context file, no diff file, no incremental addendum; blind every cycle. Run inputs gain the `## Filesystem notes` block when this project's trigger holds (above) |
 | Eve | `agents/eve.md` | `{PACK_FINDINGS}`; the PRD, diff range, changed-file list, the pack's Findings-precedent section and step 3's two mechanical test-check blocks are appended as her five run inputs (see `references/agent-invocation.md`) |
 
-**Create each prompt independently.** Do NOT create one prompt and copy/sed it into another - this triggers bash permission warnings (quote characters in comments desync quote tracking).
-
-> **Why Write tool:** Prompt templates contain patterns like `{path or "N/A"}` that trigger bash permission checks ("brace with quote character - expansion obfuscation"). The Write tool bypasses this entirely since it doesn't go through the shell.
-
-With 1M context, agent prompts can include more background — full PRD, architecture summary, relevant module interfaces — rather than compressed summaries. Richer context produces better reviews.
-
-**For an incremental review** (step 3 found a prior cycle): add to each agent prompt the prior cycle's consolidated findings, plus this instruction:
+**For an incremental review** (step 3 found a prior cycle): `review-stage` renders no incremental addendum, so append it with the Edit tool to Alice's, Bob's, Carl's and Eve's prompts — the prior cycle's consolidated findings, plus this instruction. Blake is blind every cycle and never gets it.
 
 > This is an **incremental review** of the rework done since the previous review cycle — the diff is scoped to changes since then. Two jobs: (1) for each prior finding listed below, verify it is now resolved in the code; (2) review the scoped diff for any regression the rework introduced. You need not re-review unchanged code; the previous cycle already reviewed the full implementation.
 
+**Bare-repo fallback (step 3's carve-out).** With no `review-stage` run, run the same fail-closed preflight yourself, then render each active persona with `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py <persona file> --out <absolute prompt path> --set-file <PLACEHOLDER>=<value file>` per the table above, the paths pointing at the `/tmp` inputs. For Bob, the persona file is a `/tmp` copy of `agents/bob.md` with the two `agents/eve.md` sections appended; Eve's run inputs and Blake's Filesystem notes go after the render. A non-zero exit fails that reviewer. Then make the same two appends above.
+
 ### 5. Run agent review
 
-**Stamp the lens roster (autopilot runs).** When `docs/dev/project-management/autopilot/state.json` exists, REPLACE `state.review_lenses` (merge into state.json, do NOT replace sibling fields) with one key per active lens set to `"running"`: `consensus` (Alice), `blind` (Blake), `doubt` (Bob), plus `ui` (Carl) and `fable` (Eve) only when active. tracon renders these as the review phase's sub-steps; step 6 flips them to `"done"`/`"failed"`. Skip entirely on standalone (non-autopilot) runs.
+**Use the staged prompts.** Each reviewer runs on its prompt path from step 3's summary `prompts` (absolute). A reviewer whose prompt is `null` is not dispatched; it counts as failed per `references/retry-policy.md`. Under autopilot, `review-stage` already stamped `state.review_lenses`.
 
 **Launch ALL active reviewers in a SINGLE message so they run concurrently.** Alice, Blake, and Eve (when active) are Task subagent calls (native Claude tools), dispatched as `autopilot:alice`, `autopilot:blake`, `autopilot:eve` - the bare persona name is not a registered agent type and fails the dispatch outright (`references/agent-registry.md` § Dispatch mechanism). Every one of those Agent calls, and the Watcher below, carries `run_in_background: true` - never `false`, never omitted: an Agent dispatched with `run_in_background: false` makes the harness hold the background Bash calls in the same message until that Agent returns, while the Watcher only returns once those Bash lanes have written their outputs, so one `false` idles the cycle for the Watcher's whole 30-run budget (~50 min, seen twice on 2026-09-26). Bob and Carl are parallel **background Bash** commands (`run_in_background: true`) - never wrap a CLI reviewer (codex/gemini) in a subagent, it hangs and strands the whole cycle (see `references/agent-invocation.md`). Put the Task calls, the Watcher (below, if `$_AUTOPILOT_LOOP` is set), and the background Bash calls in the one message - if any CLI reviewer is in the dispatch, the Watcher goes in the same message or nothing holds the session open to see it finish.
 
-**Ledger each CLI reviewer dispatch.** Immediately before each CLI reviewer's background Bash, open a dispatch row: `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind bob --task review-{id} --prompt-file <absolute prompt path>` (`--kind carl` for Carl); hold the printed id for step 6's `end` call. A retry (`references/retry-policy.md`) opens a second `start` row under the same `--task`.
+**Ledger each CLI reviewer dispatch.** Under autopilot, `review-stage` already opened one dispatch row per CLI reviewer; hold its `dispatch_rows` ids for step 6's `end` call. Open a row by hand with `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind bob --task review-{id} --prompt-file <absolute prompt path>` (`--kind carl` for Carl), and hold the printed id, in three cases: a dispatched CLI reviewer whose `dispatch_rows` id is `null` (the failure is in `errors`), a retry (`references/retry-policy.md`), which opens a second `start` row under the same `--task`, and the bare-repo fallback.
+
+**Bare-repo fallback (step 3's carve-out), autopilot runs.** With no `review-stage` run, also REPLACE `state.review_lenses` yourself (merge into state.json, do NOT replace sibling fields) with one key per active lens set to `"running"`: `consensus` (Alice), `blind` (Blake), `doubt` (Bob), plus `ui` (Carl) and `fable` (Eve) only when active. tracon renders these as the review phase's sub-steps; step 6 flips them to `"done"`/`"failed"`.
 
 **Eve unavailable (codex doubt-roster guard active).** When Eve's dispatch fails after her one-retry budget (`references/agent-invocation.md` for the retry/unavailability semantics), dispatch a Claude Task subagent with Bob's exact assembled doubt prompt as a substitute for her, so a non-codex doubt voice still exists, and use its output as Eve's. Step 6 records which of the three `codex_rung_guard` outcomes resulted.
 
@@ -371,7 +355,7 @@ key this cycle. A manually populated legacy list without origin still suppresses
 dispatch: use `unknown` for each missing origin value rather than inventing one.
 The cycle that first receives exit 4 records the failure per step 5 instead.
 
-**Close out the lens roster (autopilot runs).** When `state.review_lenses` was stamped in step 5, set each lens to `"done"`, or `"failed"` for a reviewer that failed per `references/retry-policy.md` (a lens rescued by a fallback — e.g. Bob's Claude fallback — is `"done"`). Skip on standalone runs.
+**Close out the lens roster (autopilot runs).** When `state.review_lenses` was stamped (by `review-stage` in step 3, or by hand on the bare-repo fallback), set each lens to `"done"`, or `"failed"` for a reviewer that failed per `references/retry-policy.md` (a lens rescued by a fallback — e.g. Bob's Claude fallback — is `"done"`). Skip on standalone runs.
 
 Save each subagent reviewer's returned text to `docs/dev/tmp/` — **Alice** to `alice-output-{id}.txt`, **Blake** to `blake-output-{id}.txt`, **Eve** (when she ran) or her Claude substitute (when it ran instead) to `eve-output-{id}.txt`, and Bob's Claude fallback (when it ran) to `bob-output-{id}.txt`. Bob's and Carl's CLI outputs are already on disk - their `-o` flag wrote them straight to `bob-output-{id}.txt` / `carl-output-{id}.txt` in step 5.
 
@@ -405,7 +389,7 @@ Pass only agents that produced output (omit the `CARL:` pair when Carl was skipp
 
 **If `consolidate_findings.py` exits nonzero, or warden denies it:** do not skip consolidation (that would silently drop every finding). Read the deny/error reason from the tool result; a fixable invocation problem (a passed path that does not exist for a reviewer that did run) → fix and retry ONCE. Otherwise **fall back to model-side consolidation**: read each reviewer's `*-output-{id}.txt`, group the findings that name the same issue at the same `File:` across reviewers, set each finding's consensus to the count of distinct reviewers that flagged it, and sort by consensus then severity — the same shape the script emits. **Note in the review file that consolidation was model-side** (fail loud — a hand-rolled consolidation must not read as the script's). The `Verdict:`/`Tests:` composition below applies unchanged to the model-side result.
 
-**Carry the previous cycle's failed checks forward.** Do this **before** composing the `Verdict:` line below — the count has to include what this adds, or a cycle whose only findings are carried-forward ones writes `Verdict: converged` over a non-empty table. Read the previous cycle's queue file (`<prd-stem>-checks-<state.cycle - 1>.json`; absent on cycle 1, and absent is never an error). **Every entry whose `result.exit` is anything but the integer `0` becomes a finding in this cycle's consolidated table** — a non-zero code, `"timeout"`, `"refused"`, or a missing `result` on an entry an earlier cycle queued: each means the check did not pass, and a refused or unrun one is exactly the case step 7 skipped the task for. Severity from what the check proves, `Found by: verify-check`, the entry's `command` and its exit in the text. This is the mechanism behind "a failed check comes back through the normal path": without it a red check is written to a file nothing reads, and the cycle converges over it. Skip on standalone (non-autopilot) runs, which have no `state.cycle` to count back from.
+**Carry the previous cycle's failed checks forward.** Do this **before** composing the `Verdict:` line below — the count has to include what this adds, or a cycle whose only findings are carried-forward ones writes `Verdict: converged` over a non-empty table. Read the previous cycle's queue file (`<prd-stem>-checks-<state.cycle - 1>.json`; absent on cycle 1, and absent is never an error). **Every entry whose `result.exit` is anything but the integer `0` becomes a finding in this cycle's consolidated table** — a non-zero code, `"timeout"`, `"refused"`, or a missing `result` on an entry an earlier cycle queued: each means the check did not pass, and a refused or unrun one is exactly the case the decision gate created no task for. Severity from what the check proves, `Found by: verify-check`, the entry's `command` and its exit in the text. This is the mechanism behind "a failed check comes back through the normal path": without it a red check is written to a file nothing reads, and the cycle converges over it. Skip on standalone (non-autopilot) runs, which have no `state.cycle` to count back from.
 
 **Absorb the mechanical test checks.** Also before composing the `Verdict:` line: every `[MECH]` line in the context file's two test-check blocks (step 3) is a finding. When a consolidated row already names the same test file and test, append `mech-check` to its finders; otherwise add the line as its own row — its own severity, consensus `[1/N]`, `Found by: mech-check`. A replay row states a computed fact (the test passes against the pre-change code); whether that is a defect depends on the PRD, since a behavior-preserving refactor's tests pass by design, so it stays 🟡 and the decision gate may ledger-dismiss it with that reason. It is never dropped silently — that silence is the failure these blocks exist to end.
 
@@ -421,30 +405,9 @@ Pass only agents that produced output (omit the `CARL:` pair when Carl was skipp
 
 Outputs consolidated issues sorted by consensus then severity. See `references/output-formats.md` for output format details.
 
-### 7. Create follow-up tasks
+### 7. Follow-up tasks (removed, PRD 00249)
 
-**If no issues found:** Skip task creation. Report clean review to user.
-
-**Skip every finding this cycle queued for verification** (the entries written in step 6). Their check runs inside the work phase's step 7; a task here would re-run the whole suite to answer what one command answers, which is the duplication PRD 00164 removed. This step is where "an all-VERIFY cycle creates zero tasks" is actually delivered — Phase 5's routing row runs later and cannot un-create a task. **Match a consolidated row to a queue entry the same way Phase 5 does** — a judgment call on issue text plus file, against the entry's `finding` and `file`, never verbatim identity: `consolidate_findings.py` folds paraphrases onto the first-seen wording, so an exact-text skip would miss precisely the multi-reviewer rows and hand them the task anyway. A queued **HIGH is not skipped**: it is never routed (`run-autopilot/references/phase-review.md` Phase 5), so it gets its task as today; a queued CRITICAL is never routed either, and its task is Phase 6's (below).
-
-**If issues found, and `docs/dev/project-management/autopilot/state.json` exists (autopilot run):** Create each follow-up with `task-add`, prioritizing multi-agent consensus:
-
-A 🔴 CRITICAL finding gets no task here (PRD 00194): `run-autopilot/references/phase-review.md` Phase 6 § Dispatch rework creates it after the cycle's rework design, so a CRITICAL fix never starts without a reviewed contract. Every other severity is created below as today.
-
-- Process 🟠 → 🟡 order (🔴 rows belong to Phase 6, above)
-- Max 25 tasks (batch overflow into "Misc fixes")
-- Group by theme
-- Tag complexity: `(S)` small, `(M)` medium, `(L)` large
-
-```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py docs/dev/project-management/autopilot/state.json task-add <task-json-file>
-```
-
-Build one JSON object per follow-up and write it to `<task-json-file>` with the Write tool — a finding body carries backticks, quotes and newlines, which break as an inline shell argument. Required key: `"name"` (the task title); the finding's full body goes in `"description"`.
-
-See `references/output-formats.md` for task description format.
-
-**If issues found, and `docs/dev/project-management/autopilot/state.json` is absent (standalone run):** Do not create one — a standalone review must never fabricate autopilot state that no `/autopilot:run-autopilot` build phase wrote. Skip `task-add` entirely; report the findings in the review file's consolidated table (step 6/8) and directly to the user, and say plainly that they were reported rather than written as tasks.
+This skill creates no tasks. Under autopilot, the decision gate in `run-autopilot/references/phase-review.md` classifies this cycle's consolidated findings and then makes one `autopilot review-close --batch-id decision-gate` call, which creates every task the cycle needs (🔴 rework and 🟠/🟡 follow-ups alike). On a standalone run, report the findings in the review file's consolidated table (step 8) and directly to the user, and say plainly that they were reported, not written as tasks; never fabricate the autopilot state no `/autopilot:run-autopilot` build phase wrote.
 
 ### 8. Save review file
 
