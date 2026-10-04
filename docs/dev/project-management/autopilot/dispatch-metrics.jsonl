@@ -3002,3 +3002,21 @@
 {"id":"470fb0d4","ended_at":1791075203,"elapsed_s":586,"outcome":"ok","detail":null}
 {"id":"3741de28","ended_at":1791075207,"elapsed_s":586,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"review","edge":"leave","at":1791075621,"phase":"review","prd":"00244-tidy-the-enter-verb-and-the-review-diff-plumbing-v1.md"}
+{"id":"997fd4ab","kind":"tess","task":"6","queued_at":1791075930,"prompt_bytes":18217}
+{"id":"b0c4275f","kind":"ivan","task":"6","queued_at":1791076186,"prompt_bytes":8258}
+{"id":"997fd4ab","ended_at":1791104776,"elapsed_s":null,"outcome":"lost","detail":"open at review/resume handoff"}
+{"id":"b0c4275f","ended_at":1791104776,"elapsed_s":null,"outcome":"lost","detail":"open at review/resume handoff"}
+{"kind":"handoff","site":"review","edge":"resume","at":1791104776,"phase":"review","prd":"00244-tidy-the-enter-verb-and-the-review-diff-plumbing-v1.md"}
+{"id":"6911ebf6","kind":"ivan","task":"6","queued_at":1791105154,"prompt_bytes":7806}
+{"id":"6911ebf6","ended_at":1791105336,"elapsed_s":182,"outcome":"ok","detail":null}
+{"id":"1691c052","kind":"pat","task":"6","queued_at":1791105458,"prompt_bytes":18017}
+{"id":"de2fa2c3","kind":"ivan","task":"6","queued_at":1791105527,"prompt_bytes":5780}
+{"id":"de2fa2c3","ended_at":1791105732,"elapsed_s":205,"outcome":"ok","detail":null}
+{"id":"06925c68","kind":"pat","task":"6","queued_at":1791105800,"prompt_bytes":43163}
+{"id":"acf3a8ee","kind":"ivan","task":"6","queued_at":1791105873,"prompt_bytes":4945}
+{"id":"acf3a8ee","ended_at":1791106547,"elapsed_s":674,"outcome":"ok","detail":null}
+{"id":"b6fcec25","kind":"pat","task":"6","queued_at":1791106576,"prompt_bytes":4423}
+{"id":"1691c052","ended_at":1791106694,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"06925c68","ended_at":1791106694,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"b6fcec25","ended_at":1791106694,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"kind":"handoff","site":"review","edge":"leave","at":1791106694,"phase":"review","prd":"00244-tidy-the-enter-verb-and-the-review-diff-plumbing-v1.md"}
