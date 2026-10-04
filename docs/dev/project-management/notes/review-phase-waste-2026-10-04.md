@@ -111,6 +111,19 @@ and the fanout row closed `error` at 964 s. Identical durations suggest the
 rows close at the barrier, not when each lens finished, so the telemetry
 cannot show which lens is slow. Worth checking before any fast-track tuning.
 
+**V6 measured (later 2026-10-04):** in the 00243 session the Workflow tool
+refused the fanout call at 1114 s ("scriptPath rejected"), the Alice fallback
+only went out at 1977 s after the Watcher returned, and every lane row closed
+together at 2030-2040 s, so the blind lens (418 s) and the doubt lens (164 s)
+both read 969 s. Fixed on branch `fix/fast-track-lane-rows` (close each row on
+return; dispatch the fallback at once), cherry-picked to master between PRDs.
+
+**V8 measured:** the 00248 planning session grew 82K → 371K tokens; the design
+step accounts for most of it (design-doc reads ~41K, design edits ~21K, the
+codex design-review output ~21K, prompt writes ~10K, reading the codex runner
+script itself ~8K). The plan-edge handoff it triggered cost about one minute.
+No fix: the handoff rule did its job.
+
 ### V7. Closing a stub by deleting it re-mints it (fixed by hand)
 
 Deleting hold stub 00245 as "fixed" made the 00244 finalize re-mint the same
