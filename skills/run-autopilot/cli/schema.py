@@ -65,6 +65,7 @@ _LIST_FIELDS = (
     "phases_completed",
     "autonomous_decisions",
     "deferred_decisions",
+    "applied_review_batches",
     "review_cycles",
     "doubts",
 )
