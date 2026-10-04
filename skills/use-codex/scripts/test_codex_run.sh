@@ -4,6 +4,9 @@
 # codex-run.sh's internals. Extend this file with more assertions/invocations
 # as codex-run.sh grows new behavior (thread-id capture, resume, etc.).
 set -u
+# Hermetic: a reviewer or loop session exports these, and the wrapper's
+# recursion guard would then refuse every case with exit 3.
+unset AUTOPILOT_DISPATCH_DEPTH CODEX_SESSION_ID COPILOT_CLI _AUTOPILOT_LOOP
 
 # Shared assert helpers, stub `codex` binary, and run_codex_run() live in
 # codex_run_test_lib.sh (also sourced by test_codex_run_resume.sh) -- see

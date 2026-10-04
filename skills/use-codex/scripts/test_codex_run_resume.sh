@@ -3,6 +3,9 @@
 # out of test_codex_run.sh to keep that file under the repo's 800-line cap.
 # Stubs the `codex` binary on PATH and asserts on its OBSERVABLE argv/stdin.
 set -u
+# Hermetic: a reviewer or loop session exports these, and the wrapper's
+# recursion guard would then refuse every case with exit 3.
+unset AUTOPILOT_DISPATCH_DEPTH CODEX_SESSION_ID COPILOT_CLI _AUTOPILOT_LOOP
 
 # Shared assert helpers, stub `codex` binary, and run_codex_run() live in
 # codex_run_test_lib.sh (also sourced by test_codex_run.sh) -- see that file

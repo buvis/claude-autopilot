@@ -4,6 +4,9 @@
 # argv/stdin/exit codes, never on gemini-run.sh's internals. Modeled on
 # use-codex/scripts/test_codex_run.sh.
 set -u
+# Hermetic: a reviewer or loop session exports these, and the wrapper's
+# recursion guard would then refuse every case with exit 3.
+unset AUTOPILOT_DISPATCH_DEPTH CODEX_SESSION_ID COPILOT_CLI _AUTOPILOT_LOOP
 
 GEMINI_RUN_SH="$(cd "$(dirname "$0")" && pwd)/gemini-run.sh"
 [ -n "${1:-}" ] && GEMINI_RUN_SH="$1"
