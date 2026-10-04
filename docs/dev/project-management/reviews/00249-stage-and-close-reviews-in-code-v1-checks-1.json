@@ -1,0 +1,10 @@
+[
+  {
+    "cycle": 1,
+    "finding": "Acceptance suites and release gate - Run the four new review-verb test files, then bash dev/bin/release-checks.",
+    "file": null,
+    "command": "uv run --no-project --with pytest python -m pytest skills/run-autopilot/cli/test_verification.py skills/run-autopilot/cli/test_review_stage.py skills/run-autopilot/cli/test_review_close.py skills/run-autopilot/cli/test_cli_review_verbs.py -q",
+    "source": "bob",
+    "result": {"exit": 0}
+  }
+]

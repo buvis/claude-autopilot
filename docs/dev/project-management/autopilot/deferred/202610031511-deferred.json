@@ -394,6 +394,38 @@
       "file": "hooks/guard_phase_delegation.py:30",
       "reason": "rework cap reached with this finding unresolved",
       "prd": "00248-keep-phase-skills-in-the-session-v1.md"
+    },
+    {
+      "type": "review-deferral",
+      "issue": "review-stage summary lacks the diff-scope field and the exact dispatch commands the PRD lists; counts are a tests_line string rather than separate fields",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "cosmetic stdout shape; every path the dispatch needs is already named in the summary (cycle 1 decision gate)",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "review-deferral",
+      "issue": "resolve_base() is a second diff-base resolver beside gather-context.sh, so the replay could certify a different range (review_stage.py:183)",
+      "severity": "high",
+      "consensus": "2/4",
+      "reason": "no drift shown and the replay block is evidence not a gate; cheaper fix (read the context file _Diff scope_ line) recorded for a later PRD (cycle 1 decision gate)",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "review-deferral",
+      "issue": "persona preflight parses frontmatter with a permissive flat-string parser rather than validating YAML, and direct render_roster() calls bypass preflight (review_stage.py:369)",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "the PRD fail-closed requirement is met; full YAML validation is hardening beyond this PRD (cycle 1 decision gate)",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "review-deferral",
+      "issue": "low-severity tail: unchanged either-or assertion in test_dispatch_references_document_the_fail_closed_contract; test_no_persona_prompt_text_survives_outside_the_registry passes at base (fixture exemption); __main__.py is 1580 lines, over the 800-line limit before this diff; a non-numeric cycle id records cycle null in last-verification.json; the registry exemption test is 56 lines",
+      "severity": "low",
+      "consensus": "1/4",
+      "reason": "each is pre-existing or behavior-preserving, none introduced by this diff (cycle 1 decision gate)",
+      "prd": "00249-stage-and-close-reviews-in-code-v1.md"
     }
   ]
 }

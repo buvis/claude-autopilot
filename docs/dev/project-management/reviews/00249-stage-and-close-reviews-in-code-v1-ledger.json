@@ -1,0 +1,58 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "🟡",
+    "issue": "Module signatures and flags differ from the spec. The spec has `stage(state_path, cycle_id, since)`, `render_roster(staged, roster)`, `close(review_file, state_path)`, `reuse_verdict(record, repo)` and `run_gate(command)`. The code has `stage()` with 11 parameters, `render_roster` with 7, `close()` with 5, `reuse_verdict(record, repo_root, head_sha)` and `run_gate(command, cwd, sha, cycle, timeout)`. The spec lists `--state (default store path)`, `--cycle-id` and `--since`. The code adds `--gate-command` (required), `--replay-cmd`, `--tasks-json`, `--prd`, `--design-doc`, `--roster` and `--repo-root`.",
+    "file": "skills/run-autopilot/cli/__main__.py:898",
+    "reason": "The PRD's Structural Decomposition lists module sketches, not binding signatures; the reviewed design doc (docs/dev/project-management/designs/00249-...-design.md) is the authority for the HOW and chose the richer parameter set deliberately. No behavioral defect is claimed."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "🟠",
+    "issue": "`review-close` does not match the specified interface. The spec has `--review-file <f>` reading a machine-readable findings block carried in the review file. The code needs `--state`, `--batch-id {decision-gate,tail-sweep}`, `--findings <external json>` and `--default-tier`, and the model must hand-write that JSON with the Write tool.",
+    "file": "skills/run-autopilot/cli/review_close.py:101",
+    "reason": "The design doc decided the flag-driven findings input over an in-file block, with the gate refusal as the cross-check. Discarded as a spec-sketch deviation. The one part of this finding that is a real gap - close() writing no `autonomous_decisions` - was split out into the [D1] __main__.py rework task instead."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "🟡",
+    "issue": "`review-work-completion/SKILL.md` step 6 does not end with `autopilot review-close`, as the Phase 2 task requires. The skill states \"This skill creates no tasks\", and the call lives only in `phase-review.md`.",
+    "file": "skills/review-work-completion/SKILL.md:410",
+    "reason": "The design doc moved the call to the decision gate on purpose: the skill has no state authority over task creation. Prose tests pin the review-close call in phase-review.md, so the behavior the PRD asked for exists, in one place rather than two."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "🟡",
+    "issue": "The summary lacks items the spec lists. It has no diff-scope field, and no \"exact commands\" for the reviewer dispatch message. The gate verdict is a `tests_line` string and the counts are not separate fields.",
+    "file": "skills/run-autopilot/cli/review_stage.py:675",
+    "reason": "Cosmetic shape of the stdout summary; every path the dispatch needs is already named in it. Deferred to batch end rather than reworked."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "🟠",
+    "issue": "F9: resolve_base() independently computes a merge-base, while gather-context.sh diffs against the branch tip and supports additional remote fallbacks; replay can therefore certify a different range.",
+    "file": "skills/run-autopilot/cli/review_stage.py:183",
+    "reason": "Second resolver is real but no drift is shown, and the replay block is evidence rather than a gate. Deferred; the cheaper fix (read the context file's own `_Diff scope_` line) is recorded for a later PRD."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "🟡",
+    "issue": "F7: Persona preflight uses a permissive flat-string parser rather than validating YAML; null, empty collections and malformed values can pass. Direct render_roster() calls bypass preflight entirely.",
+    "file": "skills/run-autopilot/cli/review_stage.py:369",
+    "reason": "The fail-closed requirement the PRD states (a missing or unparseable persona fails that reviewer) is met; full YAML validation is hardening beyond this PRD's scope."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "⚪",
+    "issue": "Low-severity tail: K1 unchanged either-or assertion in test_dispatch_references_document_the_fail_closed_contract; K2 test_no_persona_prompt_text_survives_outside_the_registry passes at base (fixture exemption only); K3 __main__.py is 1580 lines, already over the 800-line limit before this diff; a non-numeric cycle id records `cycle: null` in last-verification.json; the registry exemption test is 56 lines.",
+    "file": "skills/run-autopilot/cli/__main__.py:1",
+    "reason": "Each is pre-existing or behavior-preserving; none is introduced by this diff. Deferred to batch end."
+  }
+]
