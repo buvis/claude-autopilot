@@ -9,36 +9,105 @@
 #
 # Prints one `PASS n FAIL n SKIP n EXIT c` summary line at the end so
 # cli/verification.py's run_gate() can read block counts without a second
-# run (SUMMARY_RE in skills/run-autopilot/cli/verification.py). `set -e`
-# means this line is reached only once every block above has exited 0, so
-# the counts are the block count and a flat zero/zero.
-set -euo pipefail
+# run (SUMMARY_RE in skills/run-autopilot/cli/verification.py). Each
+# `run_pytest`/`run_harness`/`run_gather_harness` call below reports its
+# own real counts via a count adapter (pytest's own -q summary line for
+# pytest blocks, PASS: line counts for the two gather-context harnesses, a
+# pass/fail count for the remaining shell harnesses) and a failing call no
+# longer aborts the script -- `set -e` is gone, so FAIL reflects real
+# failures instead of always reading 0. A call that cannot report at all
+# (aborts before any count) is never folded into FAIL as an invented
+# number; it only forces EXIT non-zero. The `echo "[checks] <name>"`
+# lines are unchanged from before this rewrite -- several existing tests
+# (test_release_checks_parallel_prose.py, test_wave_docs.py,
+# test_triage_prose.py, test_enter_prose.py, test_design_rework_prose.py,
+# test_custody_prose.py) parse this file by scanning for those exact
+# lines and the block of commands between one and the next; the helpers
+# below never print their own "[checks]" line, so that scan is undisturbed.
+set -uo pipefail
+
+TOTAL_PASS=0
+TOTAL_FAIL=0
+TOTAL_SKIP=0
+INFRA_FAIL=0
+
+# Runs a pytest invocation, parses its own -q summary line for real counts.
+# Prints no block header -- the caller's own "echo [checks] ..." line is
+# the header.
+run_pytest() {
+  local out
+  out="$("$@" 2>&1)"
+  echo "$out"
+  local p f s
+  p="$(echo "$out" | grep -oE '[0-9]+ passed' | tail -1 | grep -oE '[0-9]+')"
+  f="$(echo "$out" | grep -oE '[0-9]+ failed' | tail -1 | grep -oE '[0-9]+')"
+  s="$(echo "$out" | grep -oE '[0-9]+ skipped' | tail -1 | grep -oE '[0-9]+')"
+  if [[ -z "$p" && -z "$f" && -z "$s" ]]; then
+    echo "release-checks: no parseable pytest summary -- infrastructure failure"
+    INFRA_FAIL=1
+    return
+  fi
+  TOTAL_PASS=$((TOTAL_PASS + ${p:-0}))
+  TOTAL_FAIL=$((TOTAL_FAIL + ${f:-0}))
+  TOTAL_SKIP=$((TOTAL_SKIP + ${s:-0}))
+}
+
+# Runs a shell-harness script that has no count of its own: one pass/fail
+# case per invocation, by exit code.
+run_harness() {
+  if "$@"; then
+    TOTAL_PASS=$((TOTAL_PASS + 1))
+  else
+    TOTAL_FAIL=$((TOTAL_FAIL + 1))
+  fi
+}
+
+# Runs a gather-context harness: counts its own "PASS:" lines as passed
+# cases. A fail-fast abort before any PASS: line is an infrastructure
+# failure (unknown remainder), not a measured failed count.
+run_gather_harness() {
+  local out rc
+  out="$("$@" 2>&1)"
+  rc=$?
+  echo "$out"
+  local p
+  p="$(echo "$out" | grep -c '^PASS:' || true)"
+  if [[ "$rc" -ne 0 && "$p" -eq 0 ]]; then
+    echo "release-checks: aborted before any PASS: line -- infrastructure failure"
+    INFRA_FAIL=1
+    return
+  fi
+  TOTAL_PASS=$((TOTAL_PASS + p))
+  if [[ "$rc" -ne 0 ]]; then
+    INFRA_FAIL=1
+  fi
+}
 
 echo "[checks] reviewer registry"
-uv run --no-project --with pytest python -m pytest -q \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/review-work-completion/scripts/test_agent_registry.py \
   skills/review-work-completion/scripts/test_carl_skip_prose.py \
   skills/review-work-completion/scripts/test_reviewer_dispatch_prose.py
 
 echo "[checks] retry policy prose"
-uv run --no-project --with pytest python -m pytest -q \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/review-work-completion/scripts/test_retry_policy_prose.py
 
 echo "[checks] adversarial cap prose"
-uv run --no-project --with pytest python -m pytest -q \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/work/scripts/test_adversarial_cap_prose.py \
   skills/work/scripts/test_devon_round_prose.py
 
 echo "[checks] narrow runs prose"
-uv run --no-project --with pytest python -m pytest -q \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/work/scripts/test_narrow_runs_prose.py
 
 echo "[checks] record_dispatch"
-uv run --no-project --with pytest python -m pytest -q \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/work/scripts/test_record_dispatch.py
 
 echo "[checks] hook registration"
-uv run --no-project --with pytest python -m pytest -q \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/scripts/test_review_coverage_hook_registration.py \
   hooks/test_hook_registration.py \
   hooks/test_enforce_prd_location.py \
@@ -47,14 +116,14 @@ uv run --no-project --with pytest python -m pytest -q \
   hooks/test_guard_phase_delegation.py
 
 echo "[checks] custody push guard"
-uv run --no-project --with pytest python -m pytest -q hooks/test_guard_push_on_critical.py
-uv run --no-project --with pytest python -m pytest -q hooks/test_guard_push_grammar.py
+run_pytest uv run --no-project --with pytest python -m pytest -q hooks/test_guard_push_on_critical.py
+run_pytest uv run --no-project --with pytest python -m pytest -q hooks/test_guard_push_grammar.py
 
 # capped at 4 workers: bare -n auto resolves to 18 workers on this host and
 # dies with fork/process-table exhaustion (Errno 35/12, SIGKILLed git
 # children) on these blocks (PRD 00233)
 echo "[checks] custody core"
-uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n auto --maxprocesses 4 \
+run_pytest uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n auto --maxprocesses 4 \
   skills/run-autopilot/cli/test_custody.py \
   skills/run-autopilot/cli/test_custody_stall.py \
   skills/run-autopilot/cli/test_custody_resolve.py \
@@ -65,25 +134,25 @@ uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n aut
   skills/run-autopilot/cli/test_render_custody.py
 
 echo "[checks] runner recursion guard"
-bash skills/use-codex/scripts/test_codex_run.sh
-bash skills/use-codex/scripts/test_codex_run_resume.sh
-bash skills/use-gemini/scripts/test_gemini_run.sh
-bash skills/use-sonnet/scripts/test_sonnet_run.sh
+run_harness bash skills/use-codex/scripts/test_codex_run.sh
+run_harness bash skills/use-codex/scripts/test_codex_run_resume.sh
+run_harness bash skills/use-gemini/scripts/test_gemini_run.sh
+run_harness bash skills/use-sonnet/scripts/test_sonnet_run.sh
 
 echo "[checks] fast-track lane"
-uv run --no-project --with pytest python -m pytest -q skills/fast-track/scripts
+run_pytest uv run --no-project --with pytest python -m pytest -q skills/fast-track/scripts
 
 # serial: mixes files outside skills/run-autopilot/cli/, not covered by the
 # whole-cli-directory parallel-safety proof (PRD 00233)
 echo "[checks] plan size gate"
-uv run --no-project --with pytest python -m pytest -q \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/plan-tasks/scripts/test_plan_size_gate_prose.py \
   skills/run-autopilot/cli/test_policy.py \
   skills/run-autopilot/cli/test_policy_budget.py \
   skills/run-autopilot/cli/test_rework_groups.py
 
 echo "[checks] l3"
-uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n auto --maxprocesses 4 \
+run_pytest uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n auto --maxprocesses 4 \
   skills/run-autopilot/cli/test_loop_prose.py \
   skills/run-autopilot/cli/test_pause.py \
   skills/run-autopilot/cli/test_usage_limit.py \
@@ -94,7 +163,7 @@ uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n aut
   skills/run-autopilot/cli/test_handoff_request.py
 
 echo "[checks] reporting"
-uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n auto --maxprocesses 4 \
+run_pytest uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n auto --maxprocesses 4 \
   skills/run-autopilot/cli/test_loop_metrics.py \
   skills/run-autopilot/cli/test_render_report.py \
   skills/run-autopilot/cli/test_render.py \
@@ -102,7 +171,7 @@ uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n aut
 
 # serial: no skills/run-autopilot/cli/ files here, outside PRD 00233's scope
 echo "[checks] cap hook"
-uv run --no-project --with pytest python -m pytest -q \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/scripts/test_autopilot_context_cap_hook.py \
   skills/run-autopilot/scripts/test_autopilot_cap_headroom.py \
   skills/run-autopilot/scripts/test_cap_task_record_wall.py \
@@ -119,12 +188,12 @@ uv run --no-project --with pytest python -m pytest -q \
 # serial: mixes files outside skills/run-autopilot/cli/, not covered by the
 # whole-cli-directory parallel-safety proof (PRD 00233)
 echo "[checks] design rework prose"
-uv run --no-project --with pytest python -m pytest -q \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/scripts/test_design_review_contract.py \
   skills/run-autopilot/cli/test_design_rework_prose.py
 # serial: no skills/run-autopilot/cli/ files here, outside PRD 00233's scope
 echo "[checks] loop blockers prose"
-uv run --no-project --with pytest python -m pytest -q \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/work/scripts/test_tess_size_limits_prose.py \
   skills/work/scripts/test_step_order_prose.py \
   skills/work/scripts/test_loop_blockers_prose.py
@@ -132,7 +201,7 @@ uv run --no-project --with pytest python -m pytest -q \
 # serial: mixes files outside skills/run-autopilot/cli/, not covered by the
 # whole-cli-directory parallel-safety proof (PRD 00233)
 echo "[checks] l4"
-uv run --no-project --with pytest python -m pytest -q \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/review-work-completion/scripts/test_consolidate_findings.py \
   skills/review-work-completion/scripts/test_citation_format_prose.py \
   skills/run-autopilot/cli/test_triage.py \
@@ -140,7 +209,7 @@ uv run --no-project --with pytest python -m pytest -q \
 # serial: mixes files outside skills/run-autopilot/cli/, not covered by the
 # whole-cli-directory parallel-safety proof (PRD 00233)
 echo "[checks] effort lanes"
-uv run --no-project --with pytest python -m pytest -q \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_lane.py \
   skills/run-autopilot/cli/test_lane_cli.py \
   skills/run-autopilot/cli/test_lane_check.py \
@@ -149,11 +218,11 @@ uv run --no-project --with pytest python -m pytest -q \
 
 # serial: spawns its own -n 2 subprocess internally (PRD 00233)
 echo "[checks] parallel safety"
-uv run --no-project --with pytest --with pytest-xdist python -m pytest -q \
+run_pytest uv run --no-project --with pytest --with pytest-xdist python -m pytest -q \
   skills/run-autopilot/cli/test_parallel_safety.py
 
 echo "[checks] waves"
-uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n auto --maxprocesses 4 \
+run_pytest uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n auto --maxprocesses 4 \
   skills/run-autopilot/cli/test_wave.py \
   skills/run-autopilot/cli/test_wave_launch.py \
   skills/run-autopilot/cli/test_wave_launch_status.py \
@@ -176,7 +245,7 @@ uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n aut
   skills/run-autopilot/cli/test_loop_slots.py
 
 echo "[checks] store tree"
-uv run --no-project --with pytest python -m pytest -q \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_store_tree_foreign_dirty.py \
   skills/run-autopilot/cli/test_store_tree_record_store.py \
   skills/run-autopilot/cli/test_store_tree_cli.py \
@@ -191,7 +260,7 @@ uv run --no-project --with pytest python -m pytest -q \
 # serial: pinned by test_enter_prose.py's exact invocation text; runs in
 # ~2s serial, not worth the pin edit (PRD 00233)
 echo "[checks] enter"
-uv run --no-project --with pytest python -m pytest -q \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_enter.py \
   skills/run-autopilot/cli/test_enter_prose.py \
   skills/run-autopilot/cli/test_enter_guards.py \
@@ -199,16 +268,22 @@ uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_enter_cli.py
 
 echo "[checks] gather-context paths"
-bash skills/review-work-completion/scripts/test_gather_context_paths.sh
+run_gather_harness bash skills/review-work-completion/scripts/test_gather_context_paths.sh
 
 echo "[checks] gather-context id"
-bash skills/review-work-completion/scripts/test_gather_context_id.sh
+run_gather_harness bash skills/review-work-completion/scripts/test_gather_context_id.sh
 
 echo "[checks] review verbs"
-uv run --no-project --with pytest python -m pytest -q \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_verification.py \
   skills/run-autopilot/cli/test_review_stage.py \
   skills/run-autopilot/cli/test_review_close.py \
-  skills/run-autopilot/cli/test_cli_review_verbs.py
+  skills/run-autopilot/cli/test_cli_review_verbs.py \
+  skills/run-autopilot/cli/test_release_checks_counts.py
 
-echo "PASS $(grep -c '^echo "\[checks\]' "$0") FAIL 0 SKIP 0 EXIT 0"
+EXIT_CODE=0
+if [[ "$TOTAL_FAIL" -ne 0 || "$INFRA_FAIL" -ne 0 ]]; then
+  EXIT_CODE=1
+fi
+echo "PASS $TOTAL_PASS FAIL $TOTAL_FAIL SKIP $TOTAL_SKIP EXIT $EXIT_CODE"
+exit "$EXIT_CODE"

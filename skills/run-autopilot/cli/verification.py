@@ -15,8 +15,10 @@ from __future__ import annotations
 import json
 import os
 import re
+import selectors
 import signal
 import subprocess
+import time
 from pathlib import Path
 
 GATE_TIMEOUT_S = 1800
@@ -38,6 +40,37 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess:
     )
 
 
+def _dirty_path_is_in_store(new_path: str, old_path: str | None) -> bool:
+    """A porcelain -z status record's STORE_PREFIX check: the path field
+    (and the second, source path field when the record is a rename/copy)
+    must both be under STORE_PREFIX, or the record counts as dirty outside
+    the store. A rename or copy is judged by both its destination and
+    source path -- crossing the store boundary in either direction, on
+    either path, is dirty."""
+    paths = (new_path, old_path) if old_path else (new_path,)
+    return all(p.startswith(STORE_PREFIX) for p in paths)
+
+
+def _iter_porcelain_z_records(raw: str) -> list[tuple[str, str | None]]:
+    """Splits `git status --porcelain=1 -z` output into (path, source_path)
+    pairs. XY is always two status-code bytes (either may be blank); a
+    rename/copy record (R or C in EITHER column) carries a second,
+    NUL-terminated source-path field."""
+    fields = raw.split("\0")
+    records = []
+    i = 0
+    while i < len(fields) and fields[i]:
+        field = fields[i]
+        code, path = field[:2], field[3:]
+        if code[0] in "RC" or code[1] in "RC":
+            i += 1
+            records.append((path, fields[i]))
+        else:
+            records.append((path, None))
+        i += 1
+    return records
+
+
 def _ancestor_and_clean(repo_root: Path, sha: str, head_sha: str) -> bool:
     """True iff `sha` is an ancestor of `head_sha`, every path changed since
     then stays under STORE_PREFIX, and the dirty paths outside the store are
@@ -50,11 +83,11 @@ def _ancestor_and_clean(repo_root: Path, sha: str, head_sha: str) -> bool:
     paths = [line for line in log.stdout.splitlines() if line.strip()]
     if not all(path.startswith(STORE_PREFIX) for path in paths):
         return False
-    status = _git(repo_root, "status", "--porcelain")
+    status = _git(repo_root, "status", "--porcelain=1", "-z")
     if status.returncode != 0:
         return False
-    dirty = [line[3:] for line in status.stdout.splitlines() if line.strip()]
-    return all(path.startswith(STORE_PREFIX) for path in dirty)
+    records = _iter_porcelain_z_records(status.stdout)
+    return all(_dirty_path_is_in_store(new, old) for new, old in records)
 
 
 def reuse_verdict(
@@ -98,10 +131,6 @@ def reuse_verdict(
     return ("reused", record)
 
 
-def _cap(text: str) -> str:
-    return text.encode("utf-8")[-GATE_OUTPUT_CAP:].decode("utf-8", errors="ignore")
-
-
 def _write_record(
     cwd: Path,
     command: str,
@@ -122,6 +151,33 @@ def _write_record(
     path.write_text(json.dumps(record, indent=2) + "\n")
 
 
+def _drain_bounded(
+    proc: subprocess.Popen, cap: int, deadline: float
+) -> tuple[bytes, bool]:
+    """Drains stdout and stderr against `deadline`, keeping only the last
+    `cap` bytes of stdout (dropping from the front, never the back) and
+    discarding stderr after reading it (so its pipe can never fill and
+    block the child). Returns (stdout_tail, done) where `done` is True iff
+    the child exited and both pipes reached EOF before the deadline."""
+    sel = selectors.DefaultSelector()
+    sel.register(proc.stdout, selectors.EVENT_READ)
+    sel.register(proc.stderr, selectors.EVENT_READ)
+    open_fds = {proc.stdout, proc.stderr}
+    stdout_buf = b""
+    while open_fds and time.monotonic() < deadline:
+        for key, _ in sel.select(timeout=min(deadline - time.monotonic(), 1.0)):
+            fobj = key.fileobj
+            chunk = os.read(fobj.fileno(), 65536)
+            if not chunk:
+                sel.unregister(fobj)
+                open_fds.discard(fobj)
+                continue
+            if fobj is proc.stdout:
+                stdout_buf = (stdout_buf + chunk)[-cap:]
+    sel.close()
+    return stdout_buf, not open_fds
+
+
 def run_gate(
     command: str,
     cwd: Path,
@@ -131,48 +187,32 @@ def run_gate(
 ) -> dict:
     """
     Runs `command` (the project's test-gate command, e.g.
-    `dev/bin/release-checks` — resolved by the caller, never hardcoded here)
-    via subprocess.run(command, shell=True, cwd=cwd, capture_output=True,
-    text=True, timeout=GATE_TIMEOUT_S), with stdout/stderr each truncated to
-    GATE_OUTPUT_CAP bytes before any parsing or storage.
-    On subprocess.TimeoutExpired: kill the process group, return
-    {"passed": None, "failed": None, "skipped": None, "exit": None,
-     "raw_line": None, "timed_out": True} and write NOTHING to
-     last-verification.json (a timed-out run proves nothing).
-    On a clean exit, parse the command's own final summary line via the
-    fixed pattern `PASS (\\d+) FAIL (\\d+) SKIP (\\d+) EXIT (\\d+)`
-    (case-sensitive, matched against the LAST matching line in the captured
-    stdout). Return {"passed": int, "failed": int, "skipped": int,
-    "exit": int, "raw_line": str, "timed_out": False}.
-    If no line matches, return the same shape with passed/failed/skipped
-    = None.
-    On a successful parse (passed/failed/skipped all not None), WRITE
-    <cwd>/docs/dev/project-management/autopilot/last-verification.json:
-    {"sha": sha, "cycle": cycle, "commands":
-    [{"command": command, "exit": result["exit"]}], "passed", "failed",
-    "skipped"} — this is the shape skills/work/references/final-verification.md
-    already defines for this file.
-
-    `timeout` defaults to GATE_TIMEOUT_S; it exists so tests need not sleep
-    for 30 minutes. `exit` is the process's own return code. stderr is
-    captured (so it never floods the caller) but not parsed or stored.
+    `dev/bin/release-checks` -- resolved by the caller, never hardcoded
+    here) via subprocess.Popen(shell=True), draining stdout/stderr in
+    bounded chunks (never buffering the full output) against a wall-clock
+    deadline. On deadline expiry with the child not yet reaped: kill the
+    process group, return {"passed": None, "failed": None, "skipped": None,
+    "exit": None, "raw_line": None, "timed_out": True} and write NOTHING to
+    last-verification.json. On a clean exit, parse the command's own final
+    summary line via SUMMARY_RE, keeping the LAST match in the (bounded)
+    stdout tail -- a command that prints the pattern more than once (a
+    retry) is read as its final, superseding line. If no line matches,
+    passed/failed/skipped are None and nothing is written. On a successful
+    parse, writes last-verification.json per
+    skills/work/references/final-verification.md.
     """
-    # Popen in its own session so a timeout can kill the shell's children too;
-    # a bare kill() of the shell would leave them holding the pipes open.
     proc = subprocess.Popen(
         command,
         shell=True,
         cwd=cwd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True,
         start_new_session=True,
     )
-    try:
-        stdout, _stderr = proc.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired:
+    stdout_buf, done = _drain_bounded(proc, GATE_OUTPUT_CAP, time.monotonic() + timeout)
+    if not done:
         os.killpg(proc.pid, signal.SIGKILL)
-        proc.communicate()
+        proc.wait()
         return {
             "passed": None,
             "failed": None,
@@ -181,8 +221,9 @@ def run_gate(
             "raw_line": None,
             "timed_out": True,
         }
+    proc.wait()
     raw_line, found = None, None
-    for line in _cap(stdout).splitlines():
+    for line in stdout_buf.decode("utf-8", errors="ignore").splitlines():
         hit = SUMMARY_RE.search(line)
         if hit:
             raw_line, found = line, hit
