@@ -2994,3 +2994,5 @@
 {"kind":"handoff","site":"build","edge":"leave","at":1791072373,"phase":"done","prd":"00243-make-the-headroom-wall-scan-match-its-contract-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1791072417,"phase":"done","prd":"00243-make-the-headroom-wall-scan-match-its-contract-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1791072491,"phase":"build","prd":"00243-make-the-headroom-wall-scan-match-its-contract-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791072768,"phase":"build","prd":"00244-tidy-the-enter-verb-and-the-review-diff-plumbing-v1.md"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791074070,"phase":"review","prd":"00244-tidy-the-enter-verb-and-the-review-diff-plumbing-v1.md"}
