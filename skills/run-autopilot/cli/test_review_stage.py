@@ -362,6 +362,29 @@ def test_blake_prompt_excludes_the_design_doc_appended_to_the_staged_prd(
     assert "DESIGN-MARKER" not in blake_prompt
 
 
+def test_eve_gets_raw_prd_only(env: dict) -> None:
+    summary = _stage(env, roster=["alice", "eve"])
+
+    eve_prompt = Path(summary["prompts"]["eve"]).read_text()
+    assert "PRD-BODY-MARKER" in eve_prompt
+    assert "DESIGN-MARKER" not in eve_prompt
+
+
+def test_replay_uses_gather_context_base(env: dict) -> None:
+    # One resolver (PRD 00256): the replay base is whatever gather-context.sh
+    # itself recorded in the context file's `_Diff scope:` line -- not a
+    # second, independently-derived merge-base. resolve_base() no longer
+    # exists as a symbol in the module.
+    assert not hasattr(review_stage, "resolve_base")
+    since = env["base"]
+    summary = _stage(env, since=since)
+
+    argv = json.loads(env["replay_log"].read_text())
+    assert argv[:2] == ["--base", since]
+    context_text = Path(summary["context_file"]).read_text()
+    assert f"changes since {since}" in context_text
+
+
 def test_stage_wires_prior_findings_into_render_roster(
     env: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -421,7 +444,10 @@ def test_replay_cmd_never_receives_gate_command(env: dict) -> None:
     summary = _stage(env)
 
     argv = json.loads(env["replay_log"].read_text())
-    assert argv == ["--base", env["base"], "--cmd", REPLAY]
+    # The base is read from gather-context.sh's own recorded `_Diff scope:`
+    # line (the one resolver, PRD 00256) -- for a full review that is the
+    # base branch NAME it found ("master"), not a re-derived merge-base SHA.
+    assert argv == ["--base", "master", "--cmd", REPLAY]
     assert GATE not in argv
     assert summary["ok"] is True
 
@@ -598,11 +624,14 @@ def test_bob_doubt_prompt_includes_eve_sections(golden: dict) -> None:
     assert "FIX:\n" in bob and "D5: pass|fail" in bob
     assert bob.rstrip().endswith('never with a "(lines a-b)" suffix.')
 
-    # Eve on the roster carries the doubt lens herself: Bob is consensus only.
+
+def test_bob_keeps_doubt_appendix_when_eve_rostered(golden: dict) -> None:
+    # PRD 00256: Bob's doubt appendix survives Eve -- it is no longer gated
+    # off when Eve is also on the roster. Both carry the doubt lens.
     with_eve = _render(golden, ["bob", "eve"], pack=golden["pack"])
-    bob_consensus = with_eve["bob"].read_text()
-    assert "## Two lenses" not in bob_consensus
-    assert "D1:" not in bob_consensus
+    bob_with_eve = with_eve["bob"].read_text()
+    assert "## Two lenses" in bob_with_eve
+    assert "D1:" in bob_with_eve and "D5: pass|fail" in bob_with_eve
     assert "## Two lenses" in with_eve["eve"].read_text()
 
 
