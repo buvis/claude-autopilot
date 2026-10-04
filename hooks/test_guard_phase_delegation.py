@@ -338,7 +338,7 @@ def _paragraphs(path: Path) -> list[str]:
 _BANNED_NEAR_GATE = ("ignore", "advisory", "may be ignored", "dispatch an agent to")
 
 
-def test_gate_prose_names_the_guard() -> None:
+def test_gate_prose_names_the_guard_in_phase_build() -> None:
     build_md = PLUGIN / "skills" / "run-autopilot" / "references" / "phase-build.md"
     paras = _paragraphs(build_md)
     plan_anchor = "Invoke `/autopilot:plan-tasks` with the selected PRD."
@@ -371,13 +371,12 @@ def test_gate_prose_names_the_guard() -> None:
         assert next_text in paras[idx + 1], (next_text, paras[idx + 1])
     assert sum(1 for p in paras if plan_gate in p) == 1
     assert sum(1 for p in paras if work_gate in p) == 1
-    assert build_md.read_text(encoding="utf-8").index(
-        "## Phase 2: Planning"
-    ) < build_md.read_text(encoding="utf-8").index(plan_gate)
-    assert build_md.read_text(encoding="utf-8").index(
-        plan_gate
-    ) < build_md.read_text(encoding="utf-8").index("## Phase 3: Work")
+    text = build_md.read_text(encoding="utf-8")
+    assert text.index("## Phase 2: Planning") < text.index(plan_gate)
+    assert text.index(plan_gate) < text.index("## Phase 3: Work")
 
+
+def test_gate_prose_names_the_guard_in_work_skill() -> None:
     stop = (
         "**STOP.** Before dispatching ANY Agent or helper-script call, verify you"
         " are sending it EXACTLY ONE task. Batching tasks into one Agent call"
@@ -391,10 +390,9 @@ def test_gate_prose_names_the_guard() -> None:
         " is outside its scope; the STOP rule above still governs that case by"
         " prose alone)."
     )
-    work_skill_text = (PLUGIN / "skills" / "work" / "SKILL.md").read_text(
-        encoding="utf-8"
-    )
-    work_skill = _paragraphs(PLUGIN / "skills" / "work" / "SKILL.md")
+    skill_md = PLUGIN / "skills" / "work" / "SKILL.md"
+    work_skill_text = skill_md.read_text(encoding="utf-8")
+    work_skill = _paragraphs(skill_md)
     assert f"{stop} {guard_note}" in work_skill
     assert sum(guard_note in p for p in work_skill) == 1
     # The STOP+note paragraph must stay inside its original section.
