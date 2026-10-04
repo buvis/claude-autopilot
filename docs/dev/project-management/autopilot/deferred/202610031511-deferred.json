@@ -294,6 +294,106 @@
       "action": "deferred - settled pre-existing deferral",
       "reason": "Bob's wording of the same settled deferral as the row above; recorded separately so the ledger matcher can dismiss either phrasing next cycle.",
       "prd": "00244-tidy-the-enter-verb-and-the-review-diff-plumbing-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "guard_phase_delegation's negation window suppresses a real delegation when a negation word sits within 20 characters before the match in the same sentence. Orchestrator-confirmed: \"Never stop, run the work phase for PRD 7.\" returns False (allowed). Same root cause: the sentence-boundary trim takes the first boundary, not the last, so \"OK; not now. Run the work phase for PRD 7.\" also returns False.",
+      "severity": "high",
+      "consensus": "3/4",
+      "file": "hooks/guard_phase_delegation.py:77",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00248-keep-phase-skills-in-the-session-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "Five of 235 real reviewer prompts are still denied by the predicate - every one being this PRD's own review prompts, which quote the denied phrases verbatim because they review this guard (alice/blake/bob/carl-prompt-00248-c2.md plus blake-prompt-00248-c1.md). Cycle 1's 21-of-231 is down to 5-of-235 and every ordinary reviewer prompt now passes, so the PRD's allow requirement holds except for a prompt reviewing the guard itself.",
+      "severity": "high",
+      "consensus": "1/4",
+      "file": "hooks/guard_phase_delegation.py:62",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00248-keep-phase-skills-in-the-session-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The non-string fail-open fix has no discriminating test. test_non_string_prompt_never_crashes_the_hook uses {\"prompt\": 5}, which passes against the pre-change code (fail-first replay confirms). The cycle-1 repro {\"prompt\": [\"run plan-tasks\"]} is uncovered: reverting the isinstance guard would fail no test. Add list and dict cases carrying delegation text in both prompt and description.",
+      "severity": "medium",
+      "consensus": "2/4",
+      "file": "hooks/test_guard_phase_delegation.py:276",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00248-keep-phase-skills-in-the-session-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The predicate's deny surface is narrower than the PRD's candidate signals imply: \"Do the work phase for PRD 7\", \"Start the work phase now\" and \"Complete the work phase\" are all allowed, as are \"Run /work for PRD 3\", \"Run the PRD 5 work phase.\", \"Execute work for PRD 00242 task by task\" and \"Run work-phase tasks 1-5\". No test documents the accepted gap and the design doc's Risks section still describes the old bidirectional 40-char window.",
+      "severity": "medium",
+      "consensus": "2/4",
+      "file": "hooks/guard_phase_delegation.py:62",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00248-keep-phase-skills-in-the-session-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The new negation tests all pass against cycle 1's code and cover none of the newly recognized contractions; the \"negated first match\" test contains no negated delegation match, so scanning past one remains untested.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "file": "hooks/test_guard_phase_delegation.py:204",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00248-keep-phase-skills-in-the-session-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The gate-prose test asserts banned words and imperative counts against its own hard-coded expected paragraph, so those assertions cannot fail. Drop them and keep the checks against the actual file contents (equality, uniqueness, placement, neighbours).",
+      "severity": "medium",
+      "consensus": "1/4",
+      "file": "hooks/test_guard_phase_delegation.py:361",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00248-keep-phase-skills-in-the-session-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The work/SKILL.md STOP-line addition departs from the PRD's literal sentence (\"In loop mode a hook enforces this (hooks/guard_phase_delegation.py).\"), expanding it with a scope disclaimer. The implementation's wording is more accurate, and the test pins the reworded text, so the PRD's own sentence is absent.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "file": "skills/work/SKILL.md:51",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00248-keep-phase-skills-in-the-session-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "_REVIEWER_FIXTURES is globbed at import, and an empty glob parametrizes to a silently skipped test - the same vacuous shape task 6 closed elsewhere. Nothing asserts the reviewer-* subset is non-empty, while the total count is hard-coded at 24 so any fixture add or remove breaks the test. No Watcher prompt is covered.",
+      "severity": "low",
+      "consensus": "2/4",
+      "file": "hooks/test_guard_phase_delegation.py:137",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00248-keep-phase-skills-in-the-session-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The phase-build.md gate sentences differ from the PRD, which asked for the same sentence in both phases: Phase 2 reads \"Invoke /autopilot:plan-tasks with the selected PRD, using the Skill tool in this session; never delegate planning to an Agent.\" and Phase 3 \"...never delegate work execution to an Agent.\" Meaning is preserved.",
+      "severity": "low",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/references/phase-build.md:344",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00248-keep-phase-skills-in-the-session-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "Accepted predicate and prose limitations remain: quoted examples and task-boundary wording can match the predicate, and the STOP prose, the -ing verb widening and the generic denial wording deliberately differ from the PRD's example strings (logged in meta/assumptions.md).",
+      "severity": "low",
+      "consensus": "1/4",
+      "file": "hooks/guard_phase_delegation.py:30",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00248-keep-phase-skills-in-the-session-v1.md"
     }
   ]
 }

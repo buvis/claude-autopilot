@@ -50,7 +50,7 @@ Generated: 2026-09-14
 - [x] 00242-harden-the-wave-verbs-v1 (2 cycles)
 - [x] 00243-make-the-headroom-wall-scan-match-its-contract-v1 (1 cycle)
 - [x] 00244-tidy-the-enter-verb-and-the-review-diff-plumbing-v1 (1 cycle)
-- [ ] 00248-keep-phase-skills-in-the-session-v1
+- [x] 00248-keep-phase-skills-in-the-session-v1 (2 cycles)
 - [ ] 00249-stage-and-close-reviews-in-code-v1
 - [ ] 00250-finish-the-rework-grouping-fixes-v1
 
@@ -87,7 +87,19 @@ unrelated to this PRD's own diff, out of scope here). Two settled deferrals
 00241) migrated to the batch deferred JSON; `mint-stubs` minted one new hold
 stub, `00251-triage-the-store-gitignore-recursive-lock-patte-v1`, for an
 unowned severe row elsewhere in the batch ledger (29 other rows skipped as
-already owned or medium/low).
+already owned or medium/low). 00248 (guard_phase_delegation hook work)
+cap-out at cycle 2 (rework_cap 2) with 2 unresolved HIGH, 0 CRITICAL: 10
+cap-overflow findings (2 HIGH, 6 MEDIUM, 2 LOW) migrated to the batch
+deferred JSON. `mint-stubs` minted two hold stubs for the unowned HIGHs,
+`00252`/`00253`: (1) the negation window's sentence-boundary trim takes the
+first boundary instead of the last, so a negated delegation after an earlier
+sentence-ending punctuation still denies; (2) 5 of 235 real reviewer prompts
+are still denied, all five being this PRD's own review prompts that quote
+the denied phrases verbatim while reviewing the guard itself. Cycle 1
+auto-fixed 4 findings via rework (sonnet tier, grouped into 4 `[D1]` tasks);
+cycle 2 ran both queued verification checks directly at the reviewed HEAD
+(245 passed, release-checks exit 0) since no work-phase step 7 pass existed
+to run them. `engram pack` unavailable (repo not gita-registered).
 
 ### Batch 202610021244
 - [x] 00236-track-the-store-without-tripping-the-loop-v1 (2 cycles)
