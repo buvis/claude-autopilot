@@ -236,26 +236,24 @@ def _set_lens_state(
         statectl.do_set(state, statectl.parse_path(f"review_lenses.{lens}"), status)
 
 
-def _close_mutator(
-    identity: str,
-    fixes: list[dict],
-    defers: list[dict],
-    prefix: str,
-    default_tier: str,
-    batch_id: str,
-    verdicts: list[dict],
-    lenses: dict[str, str],
-    outcome: dict[str, Any],
-):
-    """The `statectl.mutate()` callback that applies one classified batch."""
+def _close_mutator(ctx: dict[str, Any]):
+    """The `statectl.mutate()` callback that applies one classified batch.
+
+    `ctx` carries identity, fixes, defers, prefix, default_tier, batch_id,
+    verdicts, lenses and outcome (the same values the old positional
+    signature took, now as one object)."""
 
     def _apply(state: dict) -> dict:
+        identity = ctx["identity"]
+        outcome = ctx["outcome"]
         if identity in state.get("applied_review_batches", []):
             outcome["already"] = True
             return state
-        created = _add_rework_tasks(state, fixes, prefix, default_tier)
-        _add_decisions(state, fixes, defers)
-        _set_lens_state(state, batch_id, verdicts, lenses)
+        created = _add_rework_tasks(
+            state, ctx["fixes"], ctx["prefix"], ctx["default_tier"]
+        )
+        _add_decisions(state, ctx["fixes"], ctx["defers"])
+        _set_lens_state(state, ctx["batch_id"], ctx["verdicts"], ctx["lenses"])
         statectl.do_append(
             state, statectl.parse_path("applied_review_batches"), identity
         )
@@ -298,21 +296,12 @@ def close(
     defers = [f for f in chosen_findings if f["classification"] == "defer"]
     prefix = "Tail sweep: " if batch_id == "tail-sweep" else ""
     outcome: dict[str, Any] = {}
-
-    statectl.mutate(
-        state_path,
-        _close_mutator(
-            identity,
-            fixes,
-            defers,
-            prefix,
-            default_tier,
-            batch_id,
-            verdicts,
-            lenses,
-            outcome,
-        ),
-    )
+    ctx = {
+        "identity": identity, "fixes": fixes, "defers": defers, "prefix": prefix,
+        "default_tier": default_tier, "batch_id": batch_id, "verdicts": verdicts,
+        "lenses": lenses, "outcome": outcome,
+    }
+    statectl.mutate(state_path, _close_mutator(ctx))
     if outcome.get("already"):
         return {"applied": False, "reason": "already applied"}
 

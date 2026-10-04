@@ -1029,13 +1029,11 @@ def _add_review_close(subparsers) -> None:
 
 
 _KNOWN_CLASSIFICATIONS = ("verify", "discard", "fix", "defer")
-# Both the emoji severities review_close.py/rework_groups.py key on and their
-# plain-word equivalents some callers still pass.
+# The emoji severities review_close.py/rework_groups.py key on. The plain
+# English words are not accepted: rework_groups.group only recognises the
+# emoji form for CRITICAL grouping, so a word-form severity would silently
+# never be grouped as critical.
 _KNOWN_SEVERITIES = (
-    "CRITICAL",
-    "HIGH",
-    "MEDIUM",
-    "LOW",
     "\U0001f534",
     "\U0001f7e0",
     "\U0001f7e1",

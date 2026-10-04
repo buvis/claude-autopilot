@@ -15,7 +15,7 @@ from cli import __main__ as cli_main
 def _row(classification: str, **overrides: object) -> dict:
     base = {
         "classification": classification,
-        "severity": "HIGH",
+        "severity": "\U0001f7e0",
         "file": "src/x.py",
         "issue": "something",
         "found_by": ["bob"],
@@ -48,3 +48,7 @@ def test_rejects_found_by_containing_a_non_string_element() -> None:
 
 def test_accepts_found_by_as_a_list_of_strings() -> None:
     assert cli_main._is_chosen_finding(_row("fix", found_by=["bob", "carl"])) is True
+
+
+def test_rejects_plain_word_severity() -> None:
+    assert cli_main._is_chosen_finding(_row("fix", severity="CRITICAL")) is False
