@@ -27,7 +27,7 @@ existing section that owns that halt.
 | `stop` | owner |
 |---|---|
 | `fs_error` | § Ensure lifecycle directories exist when `detail` names the `mkdir`; the `--prds` flag when `detail` names a shallow path; the design-gate invariant's non-zero branch when `detail` names the design doc |
-| `park_halt` | § Handle park request: exit-code row 5 when `detail` says systemic halt, otherwise the row matching the exit code `detail` names |
+| `park_halt` | § Handle park request: exit-code row 5 when `detail` says systemic halt; otherwise `detail` names an exit code outside the table's 0/3/4/5/9/10 rows (`do_park` returned something `enter.py` does not recognize) — PAUSE (`site: "sub_skill_fail"`, `detail` = the unmapped-exit-code message) |
 | `mv_verify` | § Handle park request row 4, or Normal PRD selection's verified move, whichever move failed |
 | `deferred_io` | routed by `detail`: `do_park exited 9: a deferred-record append failed` → § Handle park request row 9; an unreadable custody entry (`custody.CustodyError` from the pending-custody count) → § Handle pending custody's exit-9 branch, PAUSE in every mode with `site: "sub_skill_fail"` and the `detail` as the pause detail |
 | `stall_op_conflict` | § Handle park request row 10 |
