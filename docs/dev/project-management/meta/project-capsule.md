@@ -52,9 +52,16 @@ Generated: 2026-09-14
 - [x] 00244-tidy-the-enter-verb-and-the-review-diff-plumbing-v1 (1 cycle)
 - [x] 00248-keep-phase-skills-in-the-session-v1 (2 cycles)
 - [x] 00249-stage-and-close-reviews-in-code-v1 (2 cycles)
-- [ ] 00250-finish-the-rework-grouping-fixes-v1
+- [x] 00250-finish-the-rework-grouping-fixes-v1 (1 cycle)
+- [ ] 00254-tighten-the-phase-delegation-guard-v1
+- [ ] 00256-finish-the-review-verbs-before-release-v1
 
-Observations: 00249 cap-out at cycle 2 (rework_cap 2) with 9 unresolved HIGH,
+Observations: 00250 ran the fast-track lane (card_sized), one cycle,
+lane-reviewed and converged, review file gated
+(00250-finish-the-rework-grouping-fixes-v1-review-1.md), batch suite green
+(25/0/0), no surviving findings.
+
+00249 cap-out at cycle 2 (rework_cap 2) with 9 unresolved HIGH,
 9 MEDIUM, 4 LOW, 0 CRITICAL: 22 cap-overflow findings migrated to the batch
 deferred JSON. `mint-stubs` minted one hold stub, `00255`, for the unowned
 `resolve_base` second-diff-base-resolution finding; 65 other rows skipped as

@@ -3150,3 +3150,5 @@
 {"id":"1e8227e7","kind":"fast-track:delta","task":"00250-finish-the-rework-grouping-fixes-v1-c1","queued_at":1791147437,"prompt_bytes":4766}
 {"id":"1e8227e7","ended_at":1791147790,"elapsed_s":353,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1791148484,"phase":"done","prd":"00250-finish-the-rework-grouping-fixes-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1791148555,"phase":"done","prd":"00250-finish-the-rework-grouping-fixes-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1791148626,"phase":"build","prd":"00250-finish-the-rework-grouping-fixes-v1.md"}
