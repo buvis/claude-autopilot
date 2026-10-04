@@ -90,3 +90,12 @@
 - (Tess) The new sentence is the last thing in every autopilot launch prompt - follows from the contract's verbatim `CLI_SUFFIX` (new sentence last) and `prompt_for` returning `prompt + brief + cli`.
 - (Tess) Matching the contract's full sentence exactly, not just the acceptance-criteria substring, is intended, since the dispatch calls the contract text "verbatim".
 - (Ivan) None reported.
+
+## 3: Register the hook on PreToolUse Agent and add the gate prose (00248)
+
+- (Tess) Contract line breaks and "> " markers in the design doc are just markdown wrapping; prose is checked as rendered markdown (one space per whitespace run, blank line splits paragraphs).
+- (Tess) "Just before" the anchor means only whitespace (a line wrap or a blank line) between the gate sentence and the anchor; same-paragraph or separate-paragraph both pass.
+- (Tess) "Append to the existing STOP paragraph" means the note continues the same paragraph after one space, no blank line before it.
+- (Tess) PreToolUse entry order in hooks.json is not checked, only that the set of matchers is preserved and none is lost.
+- (Tess, strengthen after Devon) Reworked the gate-prose check to operate on real (non-flattened) paragraphs so a gate/anchor hidden in an HTML comment, heading, or code fence - or split across a blank line - cannot pass; added neighbour-paragraph and section-boundary checks so a sentence can't be relocated elsewhere in the file; added a banned-phrase check so prose that contradicts the gate (e.g. "may be ignored") cannot pass.
+- (Ivan) None reported.
