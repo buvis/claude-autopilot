@@ -3252,3 +3252,31 @@
 {"id":"d8c91391","ended_at":1791169097,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"id":"db5ad7d9","ended_at":1791169097,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"kind":"handoff","site":"review","edge":"leave","at":1791169097,"phase":"review","prd":"00256-finish-the-review-verbs-before-release-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1791169156,"phase":"review","prd":"00256-finish-the-review-verbs-before-release-v1.md"}
+{"id":"f5b1c024","kind":"tess","task":"8","queued_at":1791169281,"prompt_bytes":12084}
+{"id":"f5b1c024","ended_at":1791169313,"elapsed_s":32,"outcome":"ok","detail":null}
+{"id":"d296026e","kind":"ivan","task":"8","queued_at":1791169388,"prompt_bytes":9942}
+{"id":"d296026e","ended_at":1791169423,"elapsed_s":35,"outcome":"ok","detail":null}
+{"id":"d89611ee","kind":"pat","task":"8","queued_at":1791169501,"prompt_bytes":12551}
+{"id":"d89611ee","ended_at":1791169531,"elapsed_s":30,"outcome":"ok","detail":null}
+{"id":"79ddaef4","kind":"tess","task":"9","queued_at":1791169626,"prompt_bytes":20458}
+{"id":"79ddaef4","ended_at":1791169836,"elapsed_s":210,"outcome":"ok","detail":null}
+{"id":"5a3bbde8","kind":"devon","task":"9","queued_at":1791169890,"prompt_bytes":4430}
+{"id":"5a3bbde8","ended_at":1791170165,"elapsed_s":275,"outcome":"ok","detail":"broke the tests: 9 weak points"}
+{"id":"bb69051d","kind":"tess","task":"9","queued_at":1791170194,"prompt_bytes":12481}
+{"id":"bb69051d","ended_at":1791170532,"elapsed_s":338,"outcome":"ok","detail":null}
+{"id":"d6cd4341","kind":"ivan","task":"9","queued_at":1791170569,"prompt_bytes":22581}
+{"id":"d6cd4341","ended_at":1791170851,"elapsed_s":282,"outcome":"ok","detail":null}
+{"id":"9aad8d91","kind":"deslop","task":"9","queued_at":1791170932,"prompt_bytes":7519}
+{"id":"9aad8d91","ended_at":1791171144,"elapsed_s":212,"outcome":"ok","detail":"committed e7fff75"}
+{"id":"5cacfa62","kind":"ivan","task":"9","queued_at":1791171207,"prompt_bytes":5577}
+{"id":"5cacfa62","ended_at":1791171283,"elapsed_s":76,"outcome":"ok","detail":null}
+{"id":"d38ef91f","kind":"pat","task":"9","queued_at":1791171329,"prompt_bytes":17656}
+{"id":"fd17be96","kind":"pat","task":"9","queued_at":1791171337,"prompt_bytes":28942}
+{"id":"d38ef91f","ended_at":1791171341,"elapsed_s":12,"outcome":"killed","detail":"superseded by a re-render with the correct base sha"}
+{"id":"fd17be96","ended_at":1791171373,"elapsed_s":36,"outcome":"ok","detail":"5 closures resolved, 1 MEDIUM in-task"}
+{"id":"a860e4e0","kind":"ivan","task":"9","queued_at":1791171393,"prompt_bytes":6984}
+{"id":"a860e4e0","ended_at":1791171493,"elapsed_s":100,"outcome":"ok","detail":null}
+{"id":"28bd7d49","kind":"pat","task":"9","queued_at":1791171527,"prompt_bytes":6169}
+{"id":"28bd7d49","ended_at":1791171557,"elapsed_s":30,"outcome":"ok","detail":"medium-retry fixed; 1 pre-existing LOW left open"}
+{"kind":"handoff","site":"review","edge":"leave","at":1791171629,"phase":"review","prd":"00256-finish-the-review-verbs-before-release-v1.md"}

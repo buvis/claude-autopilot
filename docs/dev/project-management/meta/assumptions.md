@@ -150,6 +150,27 @@
 - (Tess) `Row.severity` normalizes to the lowercase English word, so a `High` cell keys as `"high"`; pinned together with equality against the emoji spelling so the test stays honest if only the literal is wrong.
 - (Tess) `TABLE_DATA_ROW_RE` is anchored or at least bracket-gated, so `.search` on the header and separator lines returns None.
 - (Tess) Mid-table fixture rows are addressed by index, assuming `_reviewed_keys` preserves table order - the same assumption the pre-existing `rows[21]` assertion already made.
+
+## 8: [D1] Tail: release-checks counts the exit status and the harness summaries (00256, cycle 1)
+
+- (Tess) The `INFRA_FAIL=1` case is asserted through the computed exit line, not by reading `INFRA_FAIL` directly; that also assumes the parsed passed count is still added when the exit is non-zero.
+- (Tess) For the no-SUMMARY fallback, exit codes 0 and 3 were picked - any non-zero exit counts as one fail.
+- (Tess) For the SUMMARY case, the harness's own exit code does not change the counts.
+- (Ivan) The harness SUMMARY regex is `^SUMMARY: [0-9]+ passed, [0-9]+ failed` and the last match wins.
+- (Ivan) A SUMMARY line with a non-zero exit and `failed` = 0 forces EXIT 1 through `INFRA_FAIL`, matching the `run_pytest` rule.
+
+## 9: [D1] Tail: verification.py honours the deadline, refuses a failed record, states its rule (00256, cycle 1)
+
+- (Tess) The "failed gate" record shapes were tested as given (`commands[0]["exit"]` a non-zero int, `failed` an int > 0); other red shapes (a non-zero exit deeper in `commands`, a string `"1"`) were not invented.
+- (Tess) The docstring wording is unspecified, so substrings were pinned ("rename", "copy", "both", "endpoint", the store path, "dirty") rather than a sentence; a correct docstring avoiding any one of those words would fail the test.
+- (Tess) The `_drain_bounded` spy uses the documented positional signature `(proc, cap, deadline)`; renaming those parameters would need the same rename in two tests.
+- (Tess) The `done is False` case uses a child with pipes still open, because the requirements do not say whether the exit deadline lands inside `_drain_bounded` or in `run_gate`'s wait.
+- (Tess) Wall-clock slack (6s timeout asserting `5 < elapsed < 10`, 1s asserting `0.5 < elapsed < 4`, drain deadline 0.5s asserting `elapsed < 5`) is a judgement of a non-flaky margin on this machine.
+- (Tess) `pyproject.toml` and `Makefile` are throwaway non-store paths in the temporary git repos; the fixture has no real build files, so the names carry no meaning beyond being outside the store and outside `src/`.
+- (Ivan) A record whose `commands` key is missing, not a list, empty, or holding a non-dict entry is treated as NOT green (stale), following the module's fail-toward-re-running invariant.
+- (Ivan) "Under 50 lines" is counted from the `def` line through the last body line inclusive.
+- (Ivan) `_reap` takes an explicit `drained` flag rather than inferring it, preserving the old unconditional process-group kill when output never drained; no test covers the shell-exited-but-pipes-held case.
+- (Ivan) `record["failed"] != 0` was left untouched: a non-int `failed` (e.g. `"0"`) is out of the named scope.
 - (Tess) Import style `from cli.test_gate import ...` plus `sys.path.insert(0, parent.parent)` is the pack's convention; reaching `FindingsCrossCheckTests` through the module rather than binding its name, to stop pytest re-collecting that suite (34 vs 17 collected, measured).
 - (Ivan) `Row.issue` preserves case and `_backed` lowercases at compare time, resolving the conflict between the design's "normalized per rule 6" and the fixture assertions requiring mixed-case substrings. `_finding_key` still returns a lowercased issue, so the chosen side is byte-identical to before.
 - (Ivan) A header carrying Severity and Issue but no File column is treated as not-a-header, implementing "a header missing any of the three contributes no keys" with one predicate.
