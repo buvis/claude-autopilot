@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: the test gate's deadline now bounds the child's exit as well as its output, so a command that closes its pipes and lingers can no longer run unbounded; its pipes are closed before returning, and a recorded verdict from a failed gate is never reused
 - **run-autopilot**: release-checks can no longer report green over a block that exited non-zero without counting a failure, the shell harnesses' own measured `SUMMARY` totals are counted instead of one pass per invocation, and the review-verbs prose tests are wired into the gate
 - **run-autopilot**: the findings cross-check reads the consolidated-findings pipe table every saved review file actually uses, instead of only the bullet shape, so `autopilot gate --findings` and `autopilot review-close` no longer refuse every real batch; consolidated findings gain a `Ref` column (`R1`, `R2`, ...) and a chosen finding carrying `"ref"` is matched by that token plus severity and file rather than by issue wording
+- **run-autopilot**: a persona entirely absent from a review file's `agents:` block now closes its mapped lens as failed instead of leaving it running forever
 
 ## [0.8.0] - 2026-10-04
 
