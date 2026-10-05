@@ -151,8 +151,6 @@ def test_reuse_verdict_rejects_dirty_tree(repo: Path) -> None:
 
 
 def test_rename_out_of_store_is_not_clean(repo: Path) -> None:
-    head = _git(repo, "rev-parse", "HEAD")
-    record = _record(head)
     store_dir = repo / STORE / "notes"
     store_dir.mkdir(parents=True)
     (store_dir / "old.md").write_text("x\n")
@@ -168,7 +166,6 @@ def test_rename_out_of_store_is_not_clean(repo: Path) -> None:
 
 
 def test_reuse_verdict_ignores_dirty_paths_under_the_store(repo: Path) -> None:
-    head = _git(repo, "rev-parse", "HEAD")
     store_dir = repo / STORE / "autopilot"
     store_dir.mkdir(parents=True)
     tracked = store_dir / "state.json"
