@@ -646,6 +646,16 @@
       "file": "skills/run-autopilot/cli/test_main_review_close_validation.py",
       "reason": "rework cap reached with this finding unresolved",
       "prd": "00249-stage-and-close-reviews-in-code-v1.md"
+    },
+    {
+      "type": "review-finding",
+      "severity": "critical",
+      "cycle": 1,
+      "consensus": "2/4",
+      "issue": "gate._reviewed_keys parses only the bullet finding shape, so the --findings cross-check reports mismatch on every real pipe-table review file and review_close.close() refuses with exit 2, stalling the review loop",
+      "file": "skills/run-autopilot/cli/gate.py:102",
+      "reason": "Critical severity always defers to batch end for the audit trail; the fix itself runs in cycle 1 rework behind a rework design (phase-review.md Phase 6)",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md"
     }
   ]
 }

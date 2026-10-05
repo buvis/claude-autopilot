@@ -1,0 +1,12 @@
+[
+  {
+    "source": "bob",
+    "finding": "Cannot statically verify: VERIFY by running the PRD acceptance tests and bash dev/bin/release-checks and confirming their exit statuses and measured totals.",
+    "file": "dev/bin/release-checks",
+    "command": "bash dev/bin/release-checks",
+    "result": {
+      "exit": 0,
+      "detail": "PASS 2390 FAIL 0 SKIP 0 EXIT 0, run in the review session at HEAD b4c071ddd8a0b48fa5a1ac3439145f4e4a06ae56"
+    }
+  }
+]

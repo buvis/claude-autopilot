@@ -3224,3 +3224,9 @@
 {"id":"51e6952b","kind":"ivan","task":"7","queued_at":1791161140,"prompt_bytes":7049}
 {"id":"51e6952b","ended_at":1791161160,"elapsed_s":20,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1791161437,"phase":"review","prd":"00256-finish-the-review-verbs-before-release-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1791161769,"phase":"review","prd":"00256-finish-the-review-verbs-before-release-v1.md"}
+{"id":"3528825c","kind":"bob","task":"review-00256-c1","queued_at":1791162075,"prompt_bytes":12817}
+{"id":"349b147b","kind":"carl","task":"review-00256-c1","queued_at":1791162077,"prompt_bytes":6572}
+{"id":"3528825c","ended_at":1791162880,"elapsed_s":805,"outcome":"ok","detail":null}
+{"id":"349b147b","ended_at":1791162881,"elapsed_s":804,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"review","edge":"leave","at":1791164528,"phase":"review","prd":"00256-finish-the-review-verbs-before-release-v1.md"}

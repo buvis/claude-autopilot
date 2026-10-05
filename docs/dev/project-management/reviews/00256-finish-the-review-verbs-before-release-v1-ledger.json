@@ -1,0 +1,26 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "The PRD's exit criterion \"`bash dev/bin/release-checks` exits 0\" is not demonstrated. My run exited 1 with failures in the `[checks] waves` block (`git rev-parse` CalledProcessError inside test_wave_launch_*, apparently environmental). The output was truncated after the waves block, so the later blocks, including \"review verbs\", were not seen. Treat as unverified",
+    "file": "dev/bin/release-checks",
+    "reason": "Refuted by measurement: the review session ran `bash dev/bin/release-checks` at the reviewed HEAD b4c071d and got PASS 2390 FAIL 0 SKIP 0 EXIT 0. Blake's and Carl's exit-1 runs were concurrent with each other and with this session, and the wave tests mutate the repo's git state, so their failures were contention, as Blake himself suspected. The exit criterion IS demonstrated."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "KNOWN: __main__.py has 1665 lines and review_stage.py has 801; these existing file-size violations are outside this targeted correction's scope.",
+    "file": "skills/run-autopilot/cli/__main__.py",
+    "reason": "__main__.py was already over the 800-line cap before this PRD and this PRD does not restructure it; splitting it is its own PRD. The review_stage.py half is NOT settled: it is an actionable medium this cycle, because this PRD's own diff is what pushed stage() over 50 lines and the file to 801."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The hold stub 00255 was moved to `prds/done/` rather than deleted. `test ! -e` on the hold path passes, and this matches the standing close-stubs-into-done rule",
+    "file": "docs/dev/project-management/prds/done/00255-triage-resolve-base-is-a-second-diff-base-resol-v1.md",
+    "reason": "Already decided during the build and recorded in the task-7 attempt record and assumptions.md: a deleted stub of a live batch is re-minted at finalize because 00255 sits in state.batch.minted_stubs, so it was closed into done/ with a `## Closed` note. The acceptance criterion (absent from hold/) is met. Blake flags it as compliant, not as a defect."
+  }
+]
