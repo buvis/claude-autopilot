@@ -9,6 +9,9 @@ severity: critical
 
 # Triage: cycle 2/2 cap reached with an unresolved CRITICAL: bash dev/bin/release-check...
 
+> **Closed 2026-10-05 (operator triage): fixed.** c78527c; custody accepted;
+> `release-checks` at c78527c: `PASS 2572 FAIL 0 SKIP 0 EXIT 0`.
+
 ## Problem
 
 Deferred finding with no PRD owner when this stub was minted: batch `202610031511`, ledger `deferred/202610031511-deferred.json`, type `stall`, site `cap_critical`, op_id `6dcd9cbf27b9`, raised against `00256-finish-the-review-verbs-before-release-v1.md`.

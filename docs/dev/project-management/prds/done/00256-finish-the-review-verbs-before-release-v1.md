@@ -10,6 +10,10 @@ ledger: deferred/202610031511-deferred.json#6dcd9cbf27b9
 
 # Finish the review verbs before release
 
+> **Done 2026-10-05 (operator).** Capped at cycle 2 with one CRITICAL (gate red
+> on a fixture this PRD added) and R4; both fixed by hand in c78527c, custody
+> accepted, shipped in v0.9.0. R2 and R3 remain as hold stubs 00260/00261.
+
 ## Overview
 
 ### Problem Statement
