@@ -1,0 +1,128 @@
+[
+  {
+    "severity": "high",
+    "consensus": "4/4",
+    "issue": "`run_pytest` never checks pytest's exit status, so the release gate can pass with failures it does not count (a fail-open path, the PRD's stated concern). It only greps `N passed/failed/skipped`. Run through the live helper, `echo \"3 passed, 2 errors in 0.1s\"; exit 1` gives `PASS 3 FAIL 0 INFRA 0`, so the script would print `EXIT 0`. Collection or setup errors alongside some passes, and xdist worker crashes, are all treated as green. Fix: when the block's exit code is non-zero and `f` is zero, set `INFRA_FAIL=1` (or add `errors` to `TOTAL_FAIL`). Add a test for that case.",
+    "file": "dev/bin/release-checks:37",
+    "found_by": "ALICE, BLAKE, BOB, CARL"
+  },
+  {
+    "severity": "high",
+    "consensus": "3/4",
+    "issue": "`run_gate` is 60 lines (verification.py:181-240, from the mechanical facts). The PRD says \"under 50 lines per function\" for it, and the design requires it explicitly. About 17 of those lines are docstring. Trim the docstring (the contract already lives in the module docs and `_drain_bounded`), or move the timeout-result dict and the parse loop into small helpers.",
+    "file": "skills/run-autopilot/cli/verification.py:181",
+    "found_by": "ALICE, BOB, CARL"
+  },
+  {
+    "severity": "high",
+    "consensus": "2/4",
+    "issue": "FIX: Closing both output pipes makes _drain_bounded report completion even while the process runs; the subsequent unbounded proc.wait() bypasses the timeout. Apply the remaining deadline to process exit and test a command that closes both pipes before sleeping.",
+    "file": "skills/run-autopilot/cli/verification.py:224",
+    "found_by": "BOB, CARL"
+  },
+  {
+    "severity": "high",
+    "consensus": "1/4",
+    "issue": "`reuse_verdict` accepts a record whenever passed/failed/skipped are non-null. It ignores `commands[0].exit` and `failed > 0`. `run_gate` writes the record even for a nonzero exit, and release-checks deliberately prints \"FAIL 0 ... EXIT 1\" on an infrastructure failure. The next cycle would reuse that record and print \"Tests: N passed, 0 failed (reused ...)\", certifying a failed gate and skipping the rerun. The same path writes `failed` counts. This breaks the PRD's \"never receives a count the gate did not measure\"",
+    "file": "skills/run-autopilot/cli/verification.py:124",
+    "found_by": "BLAKE"
+  },
+  {
+    "severity": "high",
+    "consensus": "1/4",
+    "issue": "The `reuse_verdict` docstring still says it requires `git status --porcelain` to be empty and does not mention renames. The code allows dirty paths under the store and judges a rename by both paths. The PRD requires \"the docstring states the rule the code applies\". Only the helper `_dirty_path_is_in_store` states the rule",
+    "file": "skills/run-autopilot/cli/verification.py:111",
+    "found_by": "BLAKE"
+  },
+  {
+    "severity": "medium",
+    "consensus": "3/4",
+    "issue": "`test_run_gate_streams_and_keeps_tail` passes against the pre-change code (fail-first replay). The old `communicate()` plus `_cap` also kept the tail of an unbroken burst. It asserts only the parsed result, so it cannot fail if the drain stops being byte-bounded. Add an assertion on the bound itself, for example spy `_drain_bounded` and check the returned buffer length is at most the cap. `test_run_gate_uses_last_summary_line_not_first` likewise pins pre-existing behavior (low weight).",
+    "file": "skills/run-autopilot/cli/test_verification.py:235",
+    "found_by": "ALICE, BOB, CARL, mech-check"
+  },
+  {
+    "severity": "medium",
+    "consensus": "2/4",
+    "issue": "This diff pushes `stage()` to 53 lines (review_stage.py:749-801). It was 49 before, and the inlined `_SCOPE_RE` plus merge-base block added the 4 lines that cross 50. Simplification: extract `_replay_base(context, repo_root) -> str | None` containing the scope lookup and the merge-base fallback. `stage()` drops back under 50 and the base logic gets one named home, and the file returns to 800 lines or fewer.",
+    "file": "skills/run-autopilot/cli/review_stage.py:779",
+    "found_by": "ALICE, CARL"
+  },
+  {
+    "severity": "medium",
+    "consensus": "2/4",
+    "issue": "FIX: test_codex_run.sh emits measured “SUMMARY: N passed, M failed” totals, but run_harness replaces them with one pass/fail per invocation. Add the mandated summary adapter and coverage for its real totals.",
+    "file": "dev/bin/release-checks:138",
+    "found_by": "BOB, CARL"
+  },
+  {
+    "severity": "medium",
+    "consensus": "2/4",
+    "issue": "FIX: test_bad_findings_file_fails_cleanly_without_a_traceback passes against pre-change code because argparse rejecting --findings satisfies every assertion. Assert the specific file-read/JSON-validation diagnostic and exclude unrecognized-argument errors.",
+    "file": "skills/run-autopilot/cli/test_gate.py:450",
+    "found_by": "BOB, CARL, mech-check"
+  },
+  {
+    "severity": "medium",
+    "consensus": "1/4",
+    "issue": "Rename and copy handling is under-tested relative to the PRD (\"BOTH endpoints\"). Only `test_rename_out_of_store_is_not_clean` was added, and that case also fails a new-path-only check, so it does not pin the both-endpoints rule. `test_rename_into_store_from_production_is_not_clean` and `test_copy_record_checks_both_paths` were not added. Neither were `test_blank_status_column_does_not_desync_fields` and `test_run_gate_drains_stderr_without_deadlock`, all named in the design. The `_iter_porcelain_z_records` field-consumption logic (R/C in either column) and the stderr draining in `_drain_bounded` have no direct test.",
+    "file": "skills/run-autopilot/cli/test_verification.py:146",
+    "found_by": "ALICE"
+  },
+  {
+    "severity": "medium",
+    "consensus": "1/4",
+    "issue": "Unrelated reformatting churn in this diff. test_verification.py:24-34 splits `-c` pairs and test_verification.py:110-116 re-wraps asserts. test_review_close.py re-wraps many signatures and calls, reorders the import (`review_close, rework_groups`), and adds trailing commas. These lines do not trace to the PRD (the surgical-changes rule). Loupe reflows edited `.py` files at turn end; revert that reflow rather than committing it.",
+    "file": "skills/run-autopilot/cli/test_review_close.py",
+    "found_by": "ALICE"
+  },
+  {
+    "severity": "medium",
+    "consensus": "1/4",
+    "issue": "Two sets of tests the PRD names are not wired into the release gate: `skills/run-autopilot/cli/test_gate.py` (cross-check tests) and `skills/review-work-completion/scripts/test_review_verbs_prose.py` (SKILL/output-format/cap-out prose tests). The gate can pass green with these regressed",
+    "file": "dev/bin/release-checks:276",
+    "found_by": "BLAKE"
+  },
+  {
+    "severity": "medium",
+    "consensus": "1/4",
+    "issue": "The replay base is not what `gather-context.sh` resolved. `stage()` takes the recorded scope and then runs `merge-base HEAD <base>`. gather-context diffs against the branch tip, but the replay runs from the merge-base, so the two bases can differ. The PRD says \"the replay uses the base gather-context.sh resolved, not a second resolver\". Commit 7b1f589 added this deliberately, but it is a second derivation",
+    "file": "skills/run-autopilot/cli/review_stage.py:781",
+    "found_by": "BLAKE"
+  },
+  {
+    "severity": "medium",
+    "consensus": "1/4",
+    "issue": "[MECH] 13 touched test(s) pass against the pre-change code: test_close_refuses_a_gate_failing_review_file, test_close_group_uses_emoji_severity_not_english_word, test_close_idempotency_check_is_inside_the_transaction, test_close_state_mutations_use_parse_path, test_close_uses_statectl_mutate_scoped_validator, test_close_maps_every_classification_row_to_a_chosen_finding_value +7 more",
+    "file": "skills/run-autopilot/cli/test_review_close.py",
+    "found_by": "mech-check"
+  },
+  {
+    "severity": "medium",
+    "consensus": "1/4",
+    "issue": "[MECH] 2 touched test(s) pass against the pre-change code: test_replay_cmd_never_receives_gate_command, test_replay_base_is_branch_point_when_scope_records_a_branch_name",
+    "file": "skills/run-autopilot/cli/test_review_stage.py",
+    "found_by": "mech-check"
+  },
+  {
+    "severity": "low",
+    "consensus": "1/4",
+    "issue": "`_drain_bounded` never closes `proc.stdout` and `proc.stderr`, and `run_gate` does not either after `proc.wait()`. The file descriptors persist until GC. Close both in a `finally` or after the drain.",
+    "file": "skills/run-autopilot/cli/verification.py:154",
+    "found_by": "ALICE"
+  },
+  {
+    "severity": "low",
+    "consensus": "1/4",
+    "issue": "\"Close every lens\" depends on the review file listing all five personas under `agents:`. A hand-written file that omits Blake or Eve leaves those lenses `running`. There is no fail-safe in `_lens_states` or `close()`",
+    "file": "skills/run-autopilot/cli/review_close.py:129",
+    "found_by": "BLAKE"
+  },
+  {
+    "severity": "low",
+    "consensus": "1/4",
+    "issue": "The timed-out gate prints a fabricated \"Tests: 0 passed, 0 failed, 0 skipped (suite timed out ...)\" line in the context file. This is not written to `last-verification.json` but it is an unmeasured count. SKILL.md:203 and :254 keep the hand-append instruction for the bare-repo fallback, and the PRD says \"no longer tells the model to hand-append\"",
+    "file": "skills/run-autopilot/cli/review_stage.py:372",
+    "found_by": "BLAKE"
+  }
+]
