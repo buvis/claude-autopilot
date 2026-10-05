@@ -1,0 +1,12 @@
+{
+  "batch_id": "202610050904",
+  "items": [
+    {
+      "type": "stall",
+      "site": "fast_track_blocked",
+      "detail": "fast-track/00264-require-a-disposition-for-every-review-row-v1-c1: A[HIGH] requeued-row defer classification writes a non-resolving deferred_decisions entry",
+      "op_id": "43a4ac64cc7d",
+      "prd": "00264-require-a-disposition-for-every-review-row-v1.md"
+    }
+  ]
+}
