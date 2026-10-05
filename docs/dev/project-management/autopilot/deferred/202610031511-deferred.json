@@ -908,6 +908,13 @@
       "reason": "rework cap reached with this finding unresolved; a CRITICAL is never a settled deferral, so the PRD stalls under cap_critical rather than finalizing",
       "prd": "00256-finish-the-review-verbs-before-release-v1.md",
       "op_id": "6dcd9cbf27b9-dd23"
+    },
+    {
+      "type": "custody",
+      "choice": "accept",
+      "commit_range": "540edd9e98dce6319c2946b21f5c4890658b454a..6bca6b5f3b85bfb7cea36edd9a05ec6a8cd36d7c",
+      "op_id": "6dcd9cbf27b9-resolve",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md"
     }
   ]
 }
