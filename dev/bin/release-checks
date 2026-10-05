@@ -35,8 +35,9 @@ INFRA_FAIL=0
 # Prints no block header -- the caller's own "echo [checks] ..." line is
 # the header.
 run_pytest() {
-  local out
+  local out rc
   out="$("$@" 2>&1)"
+  rc=$?
   echo "$out"
   local p f s
   p="$(echo "$out" | grep -oE '[0-9]+ passed' | tail -1 | grep -oE '[0-9]+')"
@@ -50,12 +51,30 @@ run_pytest() {
   TOTAL_PASS=$((TOTAL_PASS + ${p:-0}))
   TOTAL_FAIL=$((TOTAL_FAIL + ${f:-0}))
   TOTAL_SKIP=$((TOTAL_SKIP + ${s:-0}))
+  # A non-zero exit with no counted failure (collection errors) is not green.
+  if [[ "$rc" -ne 0 && -z "$f" ]]; then
+    INFRA_FAIL=1
+  fi
 }
 
-# Runs a shell-harness script that has no count of its own: one pass/fail
-# case per invocation, by exit code.
+# Runs a shell-harness script. Its own final "SUMMARY: N passed, M failed"
+# line supplies the counts; without one, one pass/fail case by exit code.
 run_harness() {
-  if "$@"; then
+  local out rc
+  out="$("$@" 2>&1)"
+  rc=$?
+  echo "$out"
+  local line p f
+  line="$(echo "$out" | grep -E '^SUMMARY: [0-9]+ passed, [0-9]+ failed' | tail -1 || true)"
+  if [[ -n "$line" ]]; then
+    p="$(echo "$line" | sed -E 's/^SUMMARY: ([0-9]+) passed, ([0-9]+) failed.*/\1/')"
+    f="$(echo "$line" | sed -E 's/^SUMMARY: ([0-9]+) passed, ([0-9]+) failed.*/\2/')"
+    TOTAL_PASS=$((TOTAL_PASS + p))
+    TOTAL_FAIL=$((TOTAL_FAIL + f))
+    if [[ "$rc" -ne 0 && "$f" -eq 0 ]]; then
+      INFRA_FAIL=1
+    fi
+  elif [[ "$rc" -eq 0 ]]; then
     TOTAL_PASS=$((TOTAL_PASS + 1))
   else
     TOTAL_FAIL=$((TOTAL_FAIL + 1))
@@ -281,7 +300,8 @@ run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_cli_review_verbs.py \
   skills/run-autopilot/cli/test_release_checks_counts.py \
   skills/run-autopilot/cli/test_gate.py \
-  skills/run-autopilot/cli/test_gate_findings_table.py
+  skills/run-autopilot/cli/test_gate_findings_table.py \
+  skills/review-work-completion/scripts/test_review_verbs_prose.py
 
 EXIT_CODE=0
 if [[ "$TOTAL_FAIL" -ne 0 || "$INFRA_FAIL" -ne 0 ]]; then
