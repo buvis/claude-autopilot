@@ -268,11 +268,21 @@ def _table_cells(line: str) -> list[str]:
     return line.strip().strip("|").split("|")
 
 
-def _row_from_table(header: list[str], cells: list[str]) -> Row:
+def _row_from_table(header: list[str], cells: list[str]) -> Row | None:
+    """The row's (ref, severity, file, issue), or None when it is truncated.
+
+    `| [2/4] |` matches the data-row shape yet splits to a single cell, so a
+    header naming Severity at index 1 cannot be read off it. Such a row is
+    unreadable, not empty: indexing it would raise, and the gate owes the
+    caller `malformed`, never a traceback.
+    """
     sev_i = header.index("severity")
     issue_i = header.index("issue")
     file_i = header.index("file")
-    ref = cells[header.index("ref")].strip() if "ref" in header else ""
+    ref_i = header.index("ref") if "ref" in header else 0
+    if len(cells) <= max(sev_i, issue_i, file_i, ref_i):
+        return None
+    ref = cells[ref_i].strip() if "ref" in header else ""
     if len(cells) == len(header):
         issue, file = cells[issue_i], cells[file_i]
     else:
@@ -295,7 +305,11 @@ def _table_keys(section: str) -> tuple[list[Row], str | None]:
     the Ref-bearing form of either are all read without guessing positions. An
     issue cell may itself contain an unescaped `|` — `consolidate_findings.py`
     does not escape it — so the Issue and File cells are split from the RIGHT
-    out of the span between them, exactly as the bullet branch already does.
+    out of the span between them, exactly as the bullet branch already does. A
+    data row too short to reach those columns makes the whole table unreadable:
+    dropping it quietly would hand the caller a short row list and a clean
+    `None`, so a chosen row the truncated row carried would be reported as a
+    refusal (exit 2) instead of the table gap it really is.
     """
     header: list[str] | None = None
     rows: list[Row] = []
@@ -306,7 +320,10 @@ def _table_keys(section: str) -> tuple[list[Row], str | None]:
                 header = cells
             continue
         if TABLE_DATA_ROW_RE.match(line):
-            rows.append(_row_from_table(header, _table_cells(line)))
+            row = _row_from_table(header, _table_cells(line))
+            if row is None:
+                return [], "unreadable-table"
+            rows.append(row)
     if rows:
         return rows, None
     if header is None and not TABLE_DATA_ROW_RE.search(section):

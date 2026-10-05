@@ -402,6 +402,34 @@ class FindingsTableCrossCheckTests(unittest.TestCase):
         proc = self._gate(self._review(section=readable), self._findings(unbacked))
         self.assertEqual(proc.returncode, 2, proc.stdout)
 
+    def test_a_truncated_data_row_is_malformed_not_a_crash(self) -> None:
+        # `| [2/4] |` matches the data-row shape yet splits to ONE cell, so the
+        # Severity column the header names (index 1, and index 2 once a Ref
+        # column leads) is out of range. Reading it by index raises IndexError
+        # and kills the review verb; the gate owes the operator `malformed`.
+        chosen = [_row(HIGH, "src/b.py:10", "wrong default")]
+        cases = {
+            "one cell under the 6-column header": _table_section(
+                TABLE_HEADER_6,
+                "| [2/4] |",
+            ),
+            "two cells under the 7-column Ref header": _table_section(
+                TABLE_HEADER_REF_6,
+                "| R1 | [2/4] |",
+            ),
+        }
+        for label, text in cases.items():
+            with self.subTest(label):
+                self.assertEqual(_keys(text), ([], "unreadable-table"))
+                tag, detail = _check(text, chosen)
+                self.assertEqual(tag, "malformed")
+                self.assertTrue(detail)
+                proc = self._gate(self._review(section=text), self._findings(chosen))
+                # Exit 1 alone would not prove this: an uncaught exception also
+                # exits 1, so the traceback has to be absent as well.
+                self.assertEqual(proc.returncode, 1, proc.stdout)
+                self.assertNotIn("Traceback", proc.stderr)
+
     def test_table_row_issue_containing_a_pipe_keys_correctly(self) -> None:
         # Real review rows quote tables, so the issue cell carries bare pipes.
         issue = "the header `| Consensus | Severity |` is read by name"
