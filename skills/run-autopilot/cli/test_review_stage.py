@@ -99,9 +99,9 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
                     "issue": "LEDGER-ISSUE-MARKER",
                     "file": "src/calc.py:1",
                     "reason": "accepted",
-                }
-            ]
-        )
+                },
+            ],
+        ),
     )
 
     # replay_tests_against_base.py stand-in: records its argv, prints a block.
@@ -110,7 +110,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
     fake_replay.write_text(
         "import json, sys\n"
         f"open({str(replay_log)!r}, 'w').write(json.dumps(sys.argv[1:]))\n"
-        "print('## Replay against base (computed)\\nREPLAY-MARKER')\n"
+        "print('## Replay against base (computed)\\nREPLAY-MARKER')\n",
     )
     monkeypatch.setattr(review_stage, "REPLAY_SCRIPT", fake_replay)
 
@@ -122,7 +122,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
         'pack="$PWD/docs/dev/tmp/engram-pack-$3.md"\n'
         'mkdir -p "$(dirname "$pack")"\n'
         "printf '# Pack\\n\\n## Findings precedent\\n\\nPRECEDENT-MARKER\\n' > \"$pack\"\n"
-        'echo "$pack"\n'
+        'echo "$pack"\n',
     )
     fake_engram.chmod(0o755)
     monkeypatch.setattr(review_stage, "ENGRAM", str(fake_engram))
@@ -175,8 +175,15 @@ def _stage(env: dict, **overrides) -> dict:
 def _prompt_writer(seen: list[list[str]]):
     """A render_roster replacement that writes one prompt file per persona."""
 
-    def fake(context_file, diff_file, prd_file, pack_file, settled_ledger,
-             prior_findings, roster):
+    def fake(
+        context_file,
+        diff_file,
+        prd_file,
+        pack_file,
+        settled_ledger,
+        prior_findings,
+        roster,
+    ):
         seen.append(list(roster))
         out = {}
         for name in roster:
@@ -278,11 +285,14 @@ def test_stage_survives_pack_failure(
 
 
 def test_stage_stamps_roster_and_opens_cli_rows(
-    env: dict, monkeypatch: pytest.MonkeyPatch
+    env: dict,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     state_path = env["repo"] / AUTOPILOT_REL / "state.json"
     state_path.write_text(
-        json.dumps({"phase": "review", "tasks": [], "review_lenses": {"fable": "done"}})
+        json.dumps(
+            {"phase": "review", "tasks": [], "review_lenses": {"fable": "done"}}
+        ),
     )
     seen: list[list[str]] = []
     monkeypatch.setattr(review_stage, "render_roster", _prompt_writer(seen))
@@ -317,7 +327,8 @@ def test_stage_stamps_roster_and_opens_cli_rows(
 
 
 def test_stage_stamps_doubt_and_fable_when_eve_joins(
-    env: dict, monkeypatch: pytest.MonkeyPatch
+    env: dict,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     state_path = env["repo"] / AUTOPILOT_REL / "state.json"
     state_path.write_text(json.dumps({"phase": "review", "tasks": []}))
@@ -335,7 +346,8 @@ def test_stage_stamps_doubt_and_fable_when_eve_joins(
 
 
 def test_stage_standalone_mode_skips_state_write(
-    env: dict, monkeypatch: pytest.MonkeyPatch
+    env: dict,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     state_path = env["repo"] / AUTOPILOT_REL / "state.json"
     state_path.write_text(json.dumps({"phase": "review", "tasks": []}))
@@ -386,13 +398,19 @@ def test_replay_uses_gather_context_base(env: dict) -> None:
 
 
 def test_stage_wires_prior_findings_into_render_roster(
-    env: dict, monkeypatch: pytest.MonkeyPatch
+    env: dict,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     seen: list[object] = []
 
     def fake_render_roster(
-        context_file, diff_file, prd_file, pack_file, settled_ledger,
-        prior_findings, roster,
+        context_file,
+        diff_file,
+        prd_file,
+        pack_file,
+        settled_ledger,
+        prior_findings,
+        roster,
     ):
         seen.append(prior_findings)
         out = {}
@@ -413,18 +431,19 @@ def test_stage_wires_prior_findings_into_render_roster(
 
 
 def test_persona_preflight_fails_closed_on_malformed_frontmatter(
-    env: dict, monkeypatch: pytest.MonkeyPatch
+    env: dict,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     agents = env["tmp"] / "agents"
     agents.mkdir()
     (agents / "alice.md").write_text(
-        "---\nname: alice\ndescription: consensus\ntools: Read, Bash\n---\nbody\n"
+        "---\nname: alice\ndescription: consensus\ntools: Read, Bash\n---\nbody\n",
     )
     (agents / "blake.md").write_text("no frontmatter at all\n")
     (agents / "carl.md").write_text("---\nname: carl\ndescription: ui\n---\nbody\n")
     (agents / "eve.md").write_text("---\nname: eve\ndescription: doubt\ntools: Read\n")
     (agents / "dana.md").write_text(
-        "---\nname: dana\ndescription:\ntools: Read\n---\nbody\n"
+        "---\nname: dana\ndescription:\ntools: Read\n---\nbody\n",
     )
     # bob.md deliberately absent
     monkeypatch.setattr(review_stage, "AGENTS_DIR", agents)
@@ -440,6 +459,11 @@ def test_persona_preflight_fails_closed_on_malformed_frontmatter(
         assert prompts[failed] is None, failed
 
 
+# Passes against the pre-change code too: `env["base"]` is a sha that is
+# already HEAD's direct ancestor (the fixture never moves the branch tip),
+# so merge-base(HEAD, base) == base trivially -- this fixture can't tell the
+# merge-base step apart from using the recorded base as-is. The sibling test
+# below (a branch NAME whose tip actually moves) is the one that pins it.
 def test_replay_cmd_never_receives_gate_command(env: dict) -> None:
     summary = _stage(env)
 
@@ -458,6 +482,10 @@ def test_replay_cmd_never_receives_gate_command(env: dict) -> None:
     assert "REPLAY-MARKER" not in Path(skipped["context_file"]).read_text()
 
 
+# Passes against the pre-change code too: the pre-PRD-00256 stage() called
+# the old standalone resolve_base(), whose "merge-base of HEAD with origin/
+# HEAD, then master" search independently lands on this fixture's same expected
+# commit, for an unrelated reason (that resolver is gone; see the sibling test).
 def test_replay_base_is_branch_point_when_scope_records_a_branch_name(
     env: dict,
 ) -> None:
@@ -524,9 +552,9 @@ def golden(tmp_path: Path) -> dict:
                     "issue": "LEDGER-ISSUE-MARKER",
                     "file": "src/calc.py:1",
                     "reason": "accepted",
-                }
-            ]
-        )
+                },
+            ],
+        ),
     )
     prior = tmp_path / "prior-findings.md"
     prior.write_text("| [2/3] | 🟠 High | PRIOR-FINDING-MARKER | src/calc.py |\n")
@@ -657,7 +685,10 @@ def test_incremental_cycle_reaches_every_persona_but_blake(golden: dict) -> None
     roster = ["alice", "bob", "blake", "carl", "eve"]
 
     rendered = _render(
-        golden, roster, ledger=golden["ledger"], prior=golden["prior"]
+        golden,
+        roster,
+        ledger=golden["ledger"],
+        prior=golden["prior"],
     )
 
     for name in ("alice", "bob", "carl", "eve"):
@@ -672,7 +703,9 @@ def test_incremental_cycle_reaches_every_persona_but_blake(golden: dict) -> None
 
 
 def test_failed_render_marks_only_that_persona_none(
-    golden: dict, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    golden: dict,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     agents = tmp_path / "agents"
     shutil.copytree(review_stage.AGENTS_DIR, agents)
@@ -689,7 +722,8 @@ def test_failed_render_marks_only_that_persona_none(
 
 
 def test_blake_gets_filesystem_notes_only_when_the_store_is_a_symlink(
-    golden: dict, tmp_path: Path
+    golden: dict,
+    tmp_path: Path,
 ) -> None:
     plain = _render(golden, ["blake"])["blake"].read_text()
     assert "## Filesystem notes" not in plain
