@@ -9,6 +9,10 @@ severity: high
 
 # Triage: R3: scope beyond the PRD - the Ref-column mechanism, review_close.close() run...
 
+> **Closed 2026-10-05 (operator triage): ratified.** The Ref column replaces
+> brittle issue-wording matching (the orchestrator rewords issues), shipped in
+> v0.9.0 with tests, and PRD 00264's coverage check builds on it.
+
 ## Problem
 
 Deferred finding with no PRD owner when this stub was minted: batch `202610031511`, ledger `deferred/202610031511-deferred.json`, type `cap-overflow`, cycle `2`, consensus `1/4`, op_id `6dcd9cbf27b9-dd2`, raised against `00256-finish-the-review-verbs-before-release-v1.md`.

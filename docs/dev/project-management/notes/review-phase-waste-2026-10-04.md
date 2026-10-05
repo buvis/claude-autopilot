@@ -210,6 +210,11 @@ on hold for a decision.
 - **V10, found here:** nine of the ten were never stubbed because their
   severity was written as `🟠` and `triage.qualifies` matches only words.
   Fixed in 00256 (emoji accepted; cap-out prose says to write a word).
+- **00256 cap-out (2026-10-05)** → CRITICAL + R4 fixed by hand (c78527c),
+  custody accepted, v0.9.0 released; 00256, 00257, 00258, 00259, 00262, 00263
+  closed into done; **00260** (one-directional cross-check) → PRD 00264,
+  per-row disposition required (user decision); **00261** (Ref-column scope)
+  → ratified and closed (user decision).
 - **Hold 00245** → kept until the 0.8.0 release: PRD 00240 fixed the pattern
   in source (`store_tree.py:33`, `autopilot/**/*.lock`), but the installed
   0.7.0 cache still writes `autopilot/*.lock`. Delete the stub with the
