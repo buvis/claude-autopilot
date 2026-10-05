@@ -256,12 +256,17 @@ def _close_mutator(ctx: dict[str, Any]):
             outcome["already"] = True
             return state
         created = _add_rework_tasks(
-            state, ctx["fixes"], ctx["prefix"], ctx["default_tier"]
+            state,
+            ctx["fixes"],
+            ctx["prefix"],
+            ctx["default_tier"],
         )
         _add_decisions(state, ctx["fixes"], ctx["defers"])
         _set_lens_state(state, ctx["batch_id"], ctx["verdicts"], ctx["lenses"])
         statectl.do_append(
-            state, statectl.parse_path("applied_review_batches"), identity
+            state,
+            statectl.parse_path("applied_review_batches"),
+            identity,
         )
         outcome["created"] = created
         outcome["rework_task_ids"] = list(state.get("rework_task_ids", []))
@@ -342,10 +347,17 @@ def close(
     cross_check, detail = gate._cross_check_findings(text, chosen_findings)
     if cross_check == "mismatch":
         return {"applied": False, "refused": "findings_mismatch", "reason": detail}
+    if cross_check == "uncovered":
+        return {"applied": False, "refused": "findings_uncovered", "reason": detail}
 
     frontmatter = _frontmatter_lines(text)
     ctx = _mutation_context(
-        review_file, text, frontmatter, batch_id, chosen_findings, default_tier
+        review_file,
+        text,
+        frontmatter,
+        batch_id,
+        chosen_findings,
+        default_tier,
     )
     statectl.mutate(state_path, _close_mutator(ctx))
     if ctx["outcome"].get("already"):

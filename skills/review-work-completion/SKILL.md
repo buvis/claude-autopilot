@@ -409,7 +409,7 @@ Outputs consolidated issues sorted by consensus then severity. See `references/o
 
 ### 7. Follow-up tasks (removed, PRD 00249)
 
-This skill creates no tasks. Under autopilot, the decision gate in `run-autopilot/references/phase-review.md` classifies this cycle's consolidated findings and then makes one `autopilot review-close --batch-id decision-gate` call, which creates every task the cycle needs (🔴 rework and 🟠/🟡 follow-ups alike). On a standalone run, report the findings in the review file's consolidated table (step 8) and directly to the user, and say plainly that they were reported, not written as tasks; never fabricate the autopilot state no `/autopilot:run-autopilot` build phase wrote.
+This skill creates no tasks. Under autopilot, the decision gate in `run-autopilot/references/phase-review.md` classifies this cycle's consolidated findings and then makes one `autopilot review-close --batch-id decision-gate` call, which creates every task the cycle needs (🔴 rework and 🟠/🟡 follow-ups alike). The findings JSON that call takes must account for every row this cycle's consolidated table carries: every consolidated row gets one JSON row with its `ref` and a `classification`, `discard` included, or `review-close` refuses the batch for the row it never heard a disposition for. On a standalone run, report the findings in the review file's consolidated table (step 8) and directly to the user, and say plainly that they were reported, not written as tasks; never fabricate the autopilot state no `/autopilot:run-autopilot` build phase wrote.
 
 ### 8. Save review file
 

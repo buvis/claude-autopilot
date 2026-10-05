@@ -207,6 +207,10 @@ class FindingsTableCrossCheckTests(unittest.TestCase):
             dict(row, ref=f"R{n}")
             for row, n in zip(rows, REAL_CHOSEN_REVIEW_ROWS, strict=True)
         ]
+        # Rows 1, 17, 21 and 22 are deliberately not chosen for a fix; every
+        # review row still needs a disposition, so each gets a discard row.
+        not_chosen = set(range(1, 23)) - set(REAL_CHOSEN_REVIEW_ROWS)
+        chosen += [{"ref": f"R{n}", "classification": "discard"} for n in not_chosen]
         text = _with_ref_column(REAL_REVIEW.read_text(encoding="utf-8"))
         self.assertEqual(_check(text, chosen), ("ok", None))
 

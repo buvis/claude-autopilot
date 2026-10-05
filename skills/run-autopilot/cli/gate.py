@@ -409,6 +409,13 @@ def _cross_check_findings(
                 f"findings: {named}{row.get('severity', '')} "
                 f"{row.get('file', '')} | {row.get('issue', '')}"
             )
+    covered_refs = {str(row.get("ref", "")).strip() for row in findings}
+    for row in reviewed:
+        if row.ref and row.ref not in covered_refs:
+            return "uncovered", (
+                f"review row ref {row.ref} has no findings-JSON row naming "
+                "its ref and a classification"
+            )
     return "ok", None
 
 
@@ -434,7 +441,7 @@ def _findings_exit(text: str, findings_file: Path) -> int:
     if tag == "ok":
         return 0
     sys.stderr.write(f"{detail}\n")
-    return 2 if tag == "mismatch" else 1
+    return 2 if tag in ("mismatch", "uncovered") else 1
 
 
 def run_gate(
