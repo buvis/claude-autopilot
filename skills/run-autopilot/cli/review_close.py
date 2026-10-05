@@ -264,6 +264,50 @@ def _close_mutator(ctx: dict[str, Any]):
     return _apply
 
 
+def _mutation_context(
+    review_file: Path,
+    text: str,
+    frontmatter: list[str],
+    batch_id: str,
+    chosen_findings: list[dict],
+    default_tier: str,
+) -> dict[str, Any]:
+    """The `_close_mutator` ctx for one batch: the apply-once identity, the
+    findings split by classification, the doubt verdicts, the lens states and
+    the empty `outcome` the mutator writes back through."""
+    return {
+        "identity": f"{review_file.resolve()}::{batch_id}",
+        "fixes": [f for f in chosen_findings if f["classification"] == "fix"],
+        "defers": [f for f in chosen_findings if f["classification"] == "defer"],
+        "prefix": "Tail sweep: " if batch_id == "tail-sweep" else "",
+        "default_tier": default_tier,
+        "batch_id": batch_id,
+        "verdicts": [
+            {"rule_id": rule, "verdict": verdict}
+            for rule, verdict in _DOUBT_RE.findall(text)
+        ],
+        "lenses": _lens_states(frontmatter),
+        "outcome": {},
+    }
+
+
+def _close_result(ctx: dict[str, Any], cross_check: str | None) -> dict:
+    """The applied-result dict for a committed batch."""
+    outcome = ctx["outcome"]
+    result = {
+        "applied": True,
+        "tasks_created": outcome["created"],
+        "rework_task_ids": outcome["rework_task_ids"],
+        "lenses_closed": ctx["lenses"],
+    }
+    if cross_check == "malformed":
+        # Surfaced, never refused: a legacy review file carries no
+        # consolidated-findings section, and refusing it would be a
+        # behaviour change of its own.
+        result["findings_cross_check"] = cross_check
+    return result
+
+
 def close(
     review_file: Path,
     state_path: Path,
@@ -293,37 +337,14 @@ def close(
     if cross_check == "mismatch":
         return {"applied": False, "refused": "findings_mismatch", "reason": detail}
 
-    identity = f"{review_file.resolve()}::{batch_id}"
     frontmatter = _frontmatter_lines(text)
-    verdicts = [
-        {"rule_id": rule, "verdict": verdict}
-        for rule, verdict in _DOUBT_RE.findall(text)
-    ]
-    lenses = _lens_states(frontmatter)
-    fixes = [f for f in chosen_findings if f["classification"] == "fix"]
-    defers = [f for f in chosen_findings if f["classification"] == "defer"]
-    prefix = "Tail sweep: " if batch_id == "tail-sweep" else ""
-    outcome: dict[str, Any] = {}
-    ctx = {
-        "identity": identity, "fixes": fixes, "defers": defers, "prefix": prefix,
-        "default_tier": default_tier, "batch_id": batch_id, "verdicts": verdicts,
-        "lenses": lenses, "outcome": outcome,
-    }
+    ctx = _mutation_context(
+        review_file, text, frontmatter, batch_id, chosen_findings, default_tier
+    )
     statectl.mutate(state_path, _close_mutator(ctx))
-    if outcome.get("already"):
+    if ctx["outcome"].get("already"):
         return {"applied": False, "reason": "already applied"}
 
     if batch_id != "tail-sweep":
         _end_dispatch_rows(_dispatch_outcomes(frontmatter), state_path.parent)
-    result = {
-        "applied": True,
-        "tasks_created": outcome["created"],
-        "rework_task_ids": outcome["rework_task_ids"],
-        "lenses_closed": lenses,
-    }
-    if cross_check == "malformed":
-        # Surfaced, never refused: a legacy review file carries no
-        # consolidated-findings section, and refusing it would be a
-        # behaviour change of its own.
-        result["findings_cross_check"] = cross_check
-    return result
+    return _close_result(ctx, cross_check)
