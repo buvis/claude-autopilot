@@ -111,6 +111,23 @@
 - (Tess) `review_stage.stage()` gains a `prior_findings: Path | None = None` parameter, threaded through to `render_roster`.
 - (Tess) `_is_chosen_finding` rejects classifications outside `{"fix", "defer", "verify", "discard"}` and requires `found_by`, when present, to be a list of strings.
 - (Ivan, initial) `found_by` list-of-strings validation applies only to `fix`/`defer` rows. Tail-sweep skip covers `doubts_rubric_verdicts`, `review_lenses`, and `_end_dispatch_rows` together. `review_stage.py`'s raw/merged PRD split uses the literal marker `"\n\n## Design Doc\n\n"`. `require_codex_guard` default stays `False`; no CLI flag added yet at this point (added in retry 2).
+
+## 4: review_stage: Eve PRD-only, Bob appendix unconditional, one diff-base resolver (00256)
+
+- (Ivan, review-fix retry) The old `--base master` assertion in `test_replay_cmd_never_receives_gate_command` was superseded by the confirmed review finding, so editing that test was in scope.
+- (Ivan, review-fix retry) During the fail-first check it briefly stashed and restored `review_stage.py` with `git stash`; the stash was popped cleanly.
+
+## 5: gate: findings JSON cross-check, wired into review-close's state mutation (00256)
+
+- (Tess) `gate --findings` takes a path to a JSON file, mirroring `review-close --findings` (confirmed by probing the CLI). Highest-risk assumption of the task: inline JSON would have needed six gate tests changed.
+- (Tess) `test_cli_exit_2_on_findings_mismatch` drives `_run_review_close()` through a real subprocess rather than a hand-built `argparse.Namespace`, since the Namespace field names and `--default-tier`'s default were never pinned.
+- (Tess) In the bullet-list row shape, a combined severity cell sits inline right after the `[M/N]` marker (`- [2/3] 🟠 High wrong default | ...`); the contract described pipe-table "cells" but mandated the bullet-list parser.
+- (Tess) `_normalize_finding_row` is not tested directly: the contract gave its signature only as `(...)`. Its behaviour is pinned indirectly through the severity/file/whitespace cases.
+- (Tess) A "well-formed but empty" consolidated section is the heading plus the three subheadings with no bullet rows.
+- (Tess) A bad `--findings` file asserts only non-zero exit, non-empty stderr and no `Traceback`; the contract never picked between exit 1 and 2 for that case.
+- (Ivan, initial) `--findings` is a trailing positional-capable `findings_file` parameter on `run_gate`, so `review_close`'s existing call and its monkeypatched spy signature keep working. An unusable findings file exits 1, reserving 2 for a real mismatch. The consolidated-findings parse is scoped to the section between `## Consolidated Findings` and the next `## ` heading. The mismatch check runs before `--assert-constraint-met`. Issue text compares case-insensitively with whitespace collapsed; file paths compare case-sensitively after stripping.
+- (Ivan, review-fix retry) Finding 1's symmetry fix lives inside `_finding_key`, the one place both sides converge. Side effect judged unreachable and left unhandled: a findings row whose issue text is *only* a severity word now keys with an empty issue string. `verify` and `discard` are taken as the complete set of non-applied classifications.
+- (orchestrator) On a `"malformed"` cross-check `close()` does not refuse; it surfaces `findings_cross_check: "malformed"` on the applied result. Recorded as an autonomous decision in `state.autonomous_decisions` - the task mandated refusal on mismatch only, and refusing on malformed would have broken ~14 existing fixtures and refused legacy review files.
 - (Ivan, retry 2) Could not add `prd_raw_file` as a new parameter to `render_roster`/`_run_inputs` because tests monkeypatch `render_roster` with fixed-arity fakes; used a filename convention (`review-prd-raw-{id}.md` beside `review-prd-{id}.md`) instead. `autonomous_decisions` entries use a minimal field set (`cycle`, `issue`, `severity`, `action`, `reason`); severity is lowered through an emoji-to-word map to satisfy `schema.py`'s `DECISION_SEVERITIES` vocabulary (discovered only via the test run, `schema.py` outside the file allowlist). A persona in `dispatch_rows:` but absent from `agents:` defaults to outcome `"ok"` (preserves prior behavior for that case).
 - (Ivan, retry 2) `_KNOWN_SEVERITIES` initially accepted both emoji and plain-word severities (no test exercised rejection) - corrected in retry 3 to emoji-only after the per-task reviewer flagged the word form as a live bypass of CRITICAL grouping.
 - (Ivan, retry 3) Used a plain dict (`ctx`) rather than a dataclass to collapse `_close_mutator`'s 9 positional args, to avoid a new import.
