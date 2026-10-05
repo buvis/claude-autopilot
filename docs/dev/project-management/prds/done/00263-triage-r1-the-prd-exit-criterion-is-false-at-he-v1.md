@@ -9,6 +9,11 @@ severity: critical
 
 # Triage: R1: the PRD exit criterion is false at HEAD - bash dev/bin/release-checks exi...
 
+> **Closed 2026-10-05 (operator triage): fixed.** c78527c excludes
+> `cli/fixtures/` from the porcelain prose scan (frozen records, like
+> `golden/`). `bash dev/bin/release-checks` at c78527c: `PASS 2572 FAIL 0
+> SKIP 0 EXIT 0`.
+
 ## Problem
 
 Deferred finding with no PRD owner when this stub was minted: batch `202610031511`, ledger `deferred/202610031511-deferred.json`, type `cap-overflow`, cycle `2`, consensus `1/4`, op_id `6dcd9cbf27b9-dd23`, raised against `00256-finish-the-review-verbs-before-release-v1.md`.

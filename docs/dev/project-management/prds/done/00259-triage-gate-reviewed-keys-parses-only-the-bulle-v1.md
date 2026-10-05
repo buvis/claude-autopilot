@@ -2,18 +2,21 @@
 catchup: skip
 design: skip
 ledger: deferred/202610031511-deferred.json
-ledger_key: 678c6f3c1d2b
+ledger_key: ae9a9bcdf310
 source_prd: 00256-finish-the-review-verbs-before-release-v1.md
-severity: high
+severity: critical
 ---
 
-# Triage: R4: dev/bin/release-checks:55 guards the fail-open case with -z "$f" (empty)...
+# Triage: gate._reviewed_keys parses only the bullet finding shape, so the --findings c...
+
+> **Closed 2026-10-05 (operator triage): fixed, duplicate of 00257.** 996fc70
+> makes `_reviewed_keys` read the pipe table too (`gate.py:334-355`).
 
 ## Problem
 
-Deferred finding with no PRD owner when this stub was minted: batch `202610031511`, ledger `deferred/202610031511-deferred.json`, type `cap-overflow`, cycle `2`, consensus `1/4`, op_id `6dcd9cbf27b9-dd3`, raised against `00256-finish-the-review-verbs-before-release-v1.md`.
+Deferred finding with no PRD owner when this stub was minted: batch `202610031511`, ledger `deferred/202610031511-deferred.json`, type `deferred_decision`, cycle `1`, op_id `6dcd9cbf27b9-dd0`, raised against `00256-finish-the-review-verbs-before-release-v1.md`.
 
-Issue: R4: dev/bin/release-checks:55 guards the fail-open case with -z "$f" (empty) while run_harness:74 uses the numeric "$f" -eq 0, so a block printing an explicit '0 failed' with a non-zero exit still reports green. Confirmed by reading both helpers.
+Issue: gate._reviewed_keys parses only the bullet finding shape, so the --findings cross-check reports mismatch on every real pipe-table review file and review_close.close() refuses with exit 2
 
 ## Solution
 
@@ -22,7 +25,7 @@ Attended triage. A human promotes this finding into a backlog PRD through normal
 ## Requirements
 
 ### Must have
-- A triage decision for ledger key `678c6f3c1d2b`: a backlog PRD, or closed.
+- A triage decision for ledger key `ae9a9bcdf310`: a backlog PRD, or closed.
 
 ### Nice to have
 - None until triage.
@@ -31,7 +34,7 @@ Attended triage. A human promotes this finding into a backlog PRD through normal
 
 ### Module: triage
 - **Location**: `docs/dev/project-management/prds/hold/`
-- **Responsibility**: hold ledger key `678c6f3c1d2b` from `00256-finish-the-review-verbs-before-release-v1.md` until a human triages it
+- **Responsibility**: hold ledger key `ae9a9bcdf310` from `00256-finish-the-review-verbs-before-release-v1.md` until a human triages it
 - **Exports**: none
 
 ### Dependencies
