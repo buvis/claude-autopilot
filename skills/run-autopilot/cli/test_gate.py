@@ -14,6 +14,7 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from uuid import uuid4
 
 CLI_DIR = Path(__file__).resolve().parent
 CLI_MAIN = CLI_DIR / "__main__.py"
@@ -106,6 +107,19 @@ def _run(entry: list[str], args: list[str]) -> subprocess.CompletedProcess:
         [sys.executable, *entry, *args],
         capture_output=True,
         text=True,
+    )
+
+
+def _row(sev: str, file: str, issue: str, cls: str = "fix") -> dict:
+    return {"classification": cls, "severity": sev, "file": file, "issue": issue}
+
+
+def _one_row_section(sev: str, issue: str, file: str) -> str:
+    """A consolidated-findings section holding exactly one finding line."""
+    return (
+        "## Consolidated Findings\n\n"
+        "### Full Consensus (2/2)\n\n"
+        f"- [2/2] {sev} {issue} | {file} | Found by: alice, bob\n"
     )
 
 
@@ -228,6 +242,43 @@ class DirectScriptTests(unittest.TestCase):
             direct = _run([str(GATE_SCRIPT)], ["--review-file", str(path)])
             self.assertEqual(direct.returncode, 0, direct.stderr)
 
+    def test_direct_invocation_cross_checks_findings(self) -> None:
+        """The by-path entry point must honour --findings too: accepting the
+        flag and discarding it would leave review_coverage_hook.py blind."""
+        import tempfile
+
+        bogus = f"issue nobody raised {uuid4().hex}"
+        with tempfile.TemporaryDirectory() as tmp:
+            review = Path(tmp) / "prd-review-1.md"
+            review.write_text(
+                GOOD_FILE.replace(
+                    "Verdict: converged",
+                    f"{FINDINGS_SECTION}\nVerdict: converged",
+                ),
+                encoding="utf-8",
+            )
+            matching = Path(tmp) / "good.json"
+            matching.write_text(
+                json.dumps([_row(HIGH, "src/b.py:10", "wrong default")]),
+                encoding="utf-8",
+            )
+            mismatching = Path(tmp) / "bad.json"
+            mismatching.write_text(
+                json.dumps([_row(HIGH, "src/b.py:10", bogus)]),
+                encoding="utf-8",
+            )
+            ok = _run(
+                [str(GATE_SCRIPT)],
+                ["--review-file", str(review), "--findings", str(matching)],
+            )
+            self.assertEqual(ok.returncode, 0, ok.stderr)
+            bad = _run(
+                [str(GATE_SCRIPT)],
+                ["--review-file", str(review), "--findings", str(mismatching)],
+            )
+            self.assertEqual(bad.returncode, 2, bad.stdout)
+            self.assertIn(bogus, bad.stderr)
+
 
 class ShimParityTests(unittest.TestCase):
     def test_shim_objects_are_the_cli_gate_objects(self) -> None:
@@ -268,6 +319,11 @@ class FindingsCrossCheckTests(unittest.TestCase):
         body = GOOD_FILE
         if section:
             body = body.replace("Verdict: converged", f"{section}\nVerdict: converged")
+        path = self.tmp / "prd-review-1.md"
+        path.write_text(body, encoding="utf-8")
+        return path
+
+    def _raw_review(self, body: str) -> Path:
         path = self.tmp / "prd-review-1.md"
         path.write_text(body, encoding="utf-8")
         return path
@@ -359,6 +415,44 @@ class FindingsCrossCheckTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 2, proc.stdout)
         self.assertIn("wrong default", proc.stderr)
 
+    def test_gate_refuses_file_only_mismatch(self) -> None:
+        # Severity and issue match a real review row; the file does not. The
+        # comparison tuple includes the file, so this is a mismatch.
+        findings = self._findings([_row(HIGH, "src/elsewhere.py:10", "wrong default")])
+        proc = self._gate(self._review(), findings)
+        self.assertEqual(proc.returncode, 2, proc.stdout)
+        self.assertIn("src/elsewhere.py:10", proc.stderr)
+
+    def test_gate_refuses_a_deferred_row_the_review_never_recorded(self) -> None:
+        # A `defer` row is applied to state as a deferred decision, so it has
+        # to cross-check like any other: the classification is not a bypass.
+        bogus = f"deferred issue nobody raised {uuid4().hex}"
+        findings = self._findings([_row(MED, "src/c.py:20", bogus, "defer")])
+        proc = self._gate(self._review(), findings)
+        self.assertEqual(proc.returncode, 2, proc.stdout)
+        self.assertIn(bogus, proc.stderr)
+
+    def test_gate_accepts_a_review_row_invented_at_runtime(self) -> None:
+        # The issue text exists nowhere but this run, so the only way to match
+        # it is to parse the review file.
+        issue = f"freshly minted finding {uuid4().hex}"
+        findings = self._findings([_row(HIGH, "src/new.py:7", issue)])
+        proc = self._gate(
+            self._review(section=_one_row_section(HIGH, issue, "src/new.py:7")),
+            findings,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+
+    def test_gate_refuses_a_runtime_row_absent_from_the_review(self) -> None:
+        # The inverse of the test above: same findings row, a review that
+        # records a different finding at the same file.
+        issue = f"freshly minted finding {uuid4().hex}"
+        findings = self._findings([_row(HIGH, "src/new.py:7", issue)])
+        other = _one_row_section(HIGH, "something else entirely", "src/new.py:7")
+        proc = self._gate(self._review(section=other), findings)
+        self.assertEqual(proc.returncode, 2, proc.stdout)
+        self.assertIn(issue, proc.stderr)
+
     def test_partial_batch_is_not_a_mismatch(self) -> None:
         # A real subset of the review's rows. The two rows findings never
         # mentions must not count against it.
@@ -392,6 +486,44 @@ class FindingsCrossCheckTests(unittest.TestCase):
         # The 1 must come from check()'s gap path, not from argparse rejecting
         # an unknown flag - which also exits 1 here.
         self.assertNotIn("unrecognized arguments", proc.stderr)
+
+    def test_shape_gap_outranks_a_findings_mismatch(self) -> None:
+        # A review that is both shape-broken (no Verdict: line) and carrying a
+        # mismatching batch exits 1 for the shape gap, not 2: the operator has
+        # to fix the file before the findings question means anything.
+        body = GOOD_FILE.replace("Verdict: converged\n", f"{FINDINGS_SECTION}\n")
+        findings = self._findings([_row(HIGH, "src/b.py:10", "unreviewed issue")])
+        proc = self._gate(self._raw_review(body), findings)
+        self.assertEqual(proc.returncode, 1, proc.stdout)
+        self.assertIn("verdict", proc.stderr.lower())
+
+    def test_empty_findings_against_a_missing_section_is_malformed(self) -> None:
+        # An empty batch is not a licence to skip the section check: a review
+        # with no consolidated findings at all stays malformed.
+        from cli import gate
+
+        tag, detail = gate._cross_check_findings(GOOD_FILE, [])
+        self.assertEqual(tag, "malformed")
+        self.assertTrue(detail)
+
+    def test_bad_findings_file_fails_cleanly_without_a_traceback(self) -> None:
+        review = self._review()
+        cases = {
+            "missing file": None,
+            "not json at all": "{not json",
+            "a json object, not an array": '{"severity": "high"}',
+        }
+        for label, body in cases.items():
+            with self.subTest(label):
+                path = self.tmp / "bad-findings.json"
+                if body is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    path.write_text(body, encoding="utf-8")
+                proc = self._gate(review, path)
+                self.assertNotEqual(proc.returncode, 0, proc.stdout)
+                self.assertNotIn("Traceback", proc.stderr)
+                self.assertTrue(proc.stderr.strip(), proc.stdout)
 
     def test_empty_findings_is_not_malformed(self) -> None:
         proc = self._gate(

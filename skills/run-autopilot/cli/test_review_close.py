@@ -11,6 +11,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 
@@ -25,12 +26,17 @@ MED = "\U0001f7e1"
 
 D_LINES = "D1: pass\nD2: fail\nD3: pass\nD4: pass\nD5: pass\n"
 
-# The saved review artifact's consolidated-findings bullet list, carrying two
+# Minted per run, so no implementation can match it without reading the
+# review file this test writes.
+RUNTIME_ISSUE = f"finding minted at runtime {uuid4().hex}"
+
+# The saved review artifact's consolidated-findings bullet list, carrying three
 # rows. Batches applied against it are subsets of these.
 CONSOLIDATED = (
     "## Consolidated Findings\n\n"
     "### Full Consensus (2/2)\n\n"
-    f"- [2/2] {HIGH} wrong default | src/b.py:10 | Found by: alice, bob\n\n"
+    f"- [2/2] {HIGH} wrong default | src/b.py:10 | Found by: alice, bob\n"
+    f"- [2/2] {HIGH} {RUNTIME_ISSUE} | src/d.py:4 | Found by: alice, bob\n\n"
     "### Minority (<=50%)\n\n"
     f"- [1/2] {MED} unclear name | src/c.py:20 | Found by: bob\n\n"
 )
@@ -524,39 +530,74 @@ def _review_close_cli(
     )
 
 
-def test_review_close_refuses_on_findings_mismatch(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("batch_id", "classification"),
+    [
+        ("decision-gate", "fix"),
+        ("tail-sweep", "fix"),
+        ("decision-gate", "defer"),
+    ],
+)
+def test_review_close_refuses_on_findings_mismatch(
+    tmp_path: Path,
+    batch_id: str,
+    classification: str,
+) -> None:
     """The cross-check is mandatory in close(): a chosen finding the review
-    file never recorded is refused, and state stays byte-identical."""
+    file never recorded is refused, whatever the batch or the classification,
+    state stays byte-identical, and the refusal names the offending row."""
     review = _review(tmp_path, consolidated=CONSOLIDATED)
     state_path = _state(tmp_path)
     before = state_path.read_bytes()
+    bogus = "an issue no reviewer raised"
     # The file matches a real review row; the issue text does not.
-    findings = [_finding(HIGH, "src/b.py:10", "an issue no reviewer raised")]
+    findings = [_finding(HIGH, "src/b.py:10", bogus, classification)]
 
-    result = review_close.close(review, state_path, "decision-gate", findings)
+    result = review_close.close(review, state_path, batch_id, findings)
 
     assert result["applied"] is False
     assert result["refused"] == "findings_mismatch"
+    assert bogus in result["reason"]
     assert state_path.read_bytes() == before
     assert not Path(f"{state_path}.lock").exists()
 
 
 def test_close_applies_a_findings_subset_of_the_review(tmp_path: Path) -> None:
     """The counterpart: the cross-check must not block a legitimate batch that
-    applies only some of the review's rows."""
+    applies only some of the review's rows. The one row applied carries an
+    issue text minted this run, so the review file has to be read."""
     review = _review(tmp_path, consolidated=CONSOLIDATED)
     state_path = _state(tmp_path)
-    findings = [_finding(HIGH, "src/b.py:10", "wrong default")]
+    findings = [_finding(HIGH, "src/d.py:4", RUNTIME_ISSUE)]
 
     result = review_close.close(review, state_path, "decision-gate", findings)
 
     assert result["applied"] is True
     assert "refused" not in result
-    assert [t["name"] for t in _load(state_path)["tasks"][1:]] == ["[D2] src/b.py"]
+    assert [t["name"] for t in _load(state_path)["tasks"][1:]] == ["[D2] src/d.py"]
 
 
 def test_cli_exit_2_on_findings_mismatch(tmp_path: Path) -> None:
     review = _review(tmp_path, consolidated=CONSOLIDATED)
+    state_path = _state(tmp_path)
+    before = state_path.read_bytes()
+    bogus = "an issue no reviewer raised"
+    findings = _findings_file(tmp_path, [_finding(HIGH, "src/b.py:10", bogus)])
+
+    proc = _review_close_cli(review, state_path, findings)
+
+    output = proc.stdout + proc.stderr
+    assert proc.returncode == 2, output
+    assert "findings_mismatch" in output
+    # The operator has to learn which row was bogus, not just that one was.
+    assert bogus in output
+    assert state_path.read_bytes() == before
+
+
+def test_cli_exits_1_when_the_review_itself_fails_the_gate(tmp_path: Path) -> None:
+    """Exit 2 belongs to the mismatch alone: a review file the gate rejects
+    keeps exit 1, even though its findings would also mismatch."""
+    review = _review(tmp_path, verdict="", consolidated=CONSOLIDATED)
     state_path = _state(tmp_path)
     before = state_path.read_bytes()
     findings = _findings_file(
@@ -565,8 +606,7 @@ def test_cli_exit_2_on_findings_mismatch(tmp_path: Path) -> None:
 
     proc = _review_close_cli(review, state_path, findings)
 
-    assert proc.returncode == 2, proc.stdout + proc.stderr
-    assert "findings_mismatch" in proc.stdout + proc.stderr
+    assert proc.returncode == 1, proc.stdout + proc.stderr
     assert state_path.read_bytes() == before
 
 
