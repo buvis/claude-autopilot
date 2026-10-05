@@ -150,7 +150,7 @@ Also capture the diff range for the review scope (recorded in the review file; t
 **Stage the cycle with one call (PRD 00249).** From the project root, run:
 
 ```bash
-autopilot review-stage --cycle-id {id} --state docs/dev/project-management/autopilot/state.json --gate-command "<project gate command>" --roster <personas> [--since <sha>] [--replay-cmd "<per-file pytest invocation>"]
+autopilot review-stage --cycle-id {id} --state docs/dev/project-management/autopilot/state.json --gate-command "<project gate command>" --roster <personas> [--since <sha>] [--replay-cmd "<per-file pytest invocation>"] [--settled-ledger <path>] [--prior-findings <path>]
 ```
 
 - `{id}`: one id for the whole cycle (a timestamp or UUID; letters, digits, `.`, `_`, `-` only). Every `docs/dev/tmp/review-*-{id}.*` file, every prompt and every `-o` output path in step 5 shares it.
@@ -158,6 +158,7 @@ autopilot review-stage --cycle-id {id} --state docs/dev/project-management/autop
 - `--roster`: comma-separated persona names of the reviewers step 1 made active: `alice,blake,bob`, plus `carl` when Carl is active and `eve` when the resolved doubt reviewer is `fable`. Always pass it: without it the CLI derives the roster from `state.review_lenses`, which knows neither Carl's batch skip nor his binary check.
 - `--since`: per the scope rules above; omit it for a full review with no `state.work_start_sha`.
 - `--replay-cmd`: the project's per-file pytest invocation (`python3 -m pytest`, unless the project runs one test file another way; this pack: `uv run --no-project --with pytest python -m pytest`). Omitting it skips the fail-first replay.
+- `--settled-ledger`, `--prior-findings`: pass the ledger path and the prior-findings path you already loaded straight to this call; `review-stage` builds the ledger/incremental block itself for every consensus/doubt-lens persona that is supposed to see it. Blake's blind-lens prompt deliberately stays history-free: his branch never reads the ledger or the incremental block, by design.
 
 **Standalone runs (no `state.json`).** Drop `--state` and pass what it would have supplied: `--tasks-json <file>` (a JSON array of `state.tasks`-shaped objects — `id`, `name`, `status`, `description`, plus `commit` and `companions` for a folded task — or `[]` when step 2 found no tasks; write it to `docs/dev/tmp/review-tasks-{id}.json` with the Write tool), `--prd <absolute path of the review-target PRD>`, and `--design-doc docs/dev/project-management/designs/<prd-stem>-design.md` when that file exists (`<prd-stem>` = the wip PRD filename minus `.md`). Under `--state`, `review-stage` reads `state.prd`, `state.tasks` and `state.design_doc` itself and refuses those three flags.
 
@@ -197,9 +198,9 @@ Pass every staged path to subagents and CLIs as an absolute path (resolve a rela
 
 The `review-stage` call in step 3 already rendered one prompt per roster
 persona to `docs/dev/tmp/{agent}-prompt-{id}.md`; their absolute paths are its
-summary's `prompts`. Do not author prompt files: the only hand edits are the two
-appends below that `review-stage` takes no input for, the settled decisions and
-the incremental addendum.
+summary's `prompts`. Do not author prompt files: the settled decisions and the
+incremental addendum below are `review-stage` flags, not hand edits (only the
+bare-repo fallback appends them by hand).
 
 **Every prompt is assembled from the agent registry.** `review-stage` reads the
 persona's file under `${CLAUDE_PLUGIN_ROOT}/agents/`, strips its frontmatter,
@@ -213,11 +214,12 @@ roster persona's file exists and its frontmatter carries non-empty `name`,
 `description` and `tools`. A persona that fails it, or whose render fails
 `render_prompt.py`'s placeholder check, never gets a prompt file written.
 
-**Settled decisions — do not re-raise (PRD 00095).** `review-stage` takes no
-ledger input, so when step 3 loaded ledger entries, append this section with
-the Edit tool to the end of **Alice's, Bob's, Carl's and Eve's** prompts,
-one line per entry (`disposition`, `severity`, `issue`, `file`, `reason`), under
-the heading `## Settled decisions — do not re-raise`:
+**Settled decisions — do not re-raise (PRD 00095).** When step 3 loaded ledger
+entries, pass `--settled-ledger <path>` on the step-3 `review-stage` call; it
+renders the settled-decisions section into **Alice's, Bob's, Carl's and Eve's**
+prompts itself (Blake excluded), one line per entry (`disposition`, `severity`,
+`issue`, `file`, `reason`), under the heading
+`## Settled decisions — do not re-raise`:
 
 > These calls were already made in an earlier cycle of this same review, with
 > the reasons given. Do not re-raise them. Raise a NEW finding only if you can
@@ -245,11 +247,11 @@ Per persona (the table `review-stage` applies):
 | Blake | `agents/blake.md` | `{PRD}` and `{RUBRIC}` (from `review-blindly/references/rubric.md`) **only** — no context file, no diff file, no incremental addendum; blind every cycle. Run inputs gain the `## Filesystem notes` block when this project's trigger holds (above) |
 | Eve | `agents/eve.md` | `{PACK_FINDINGS}`; the PRD, diff range, changed-file list, the pack's Findings-precedent section and step 3's two mechanical test-check blocks are appended as her five run inputs (see `references/agent-invocation.md`) |
 
-**For an incremental review** (step 3 found a prior cycle): `review-stage` renders no incremental addendum, so append it with the Edit tool to Alice's, Bob's, Carl's and Eve's prompts — the prior cycle's consolidated findings, plus this instruction. Blake is blind every cycle and never gets it.
+**For an incremental review** (step 3 found a prior cycle): pass `--prior-findings <path>` on the same call; it adds the addendum to Alice's, Bob's, Carl's and Eve's prompts — the prior cycle's consolidated findings, plus this instruction. Blake is blind every cycle and never gets it.
 
 > This is an **incremental review** of the rework done since the previous review cycle — the diff is scoped to changes since then. Two jobs: (1) for each prior finding listed below, verify it is now resolved in the code; (2) review the scoped diff for any regression the rework introduced. You need not re-review unchanged code; the previous cycle already reviewed the full implementation.
 
-**Bare-repo fallback (step 3's carve-out).** With no `review-stage` run, run the same fail-closed preflight yourself, then render each active persona with `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py <persona file> --out <absolute prompt path> --set-file <PLACEHOLDER>=<value file>` per the table above, the paths pointing at the `/tmp` inputs. For Bob, the persona file is a `/tmp` copy of `agents/bob.md` with the two `agents/eve.md` sections appended; Eve's run inputs and Blake's Filesystem notes go after the render. A non-zero exit fails that reviewer. Then make the same two appends above.
+**Bare-repo fallback (step 3's carve-out).** With no `review-stage` run, run the same fail-closed preflight yourself, then render each active persona with `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py <persona file> --out <absolute prompt path> --set-file <PLACEHOLDER>=<value file>` per the table above, the paths pointing at the `/tmp` inputs. For Bob, the persona file is a `/tmp` copy of `agents/bob.md` with the two `agents/eve.md` sections appended; Eve's run inputs and Blake's Filesystem notes go after the render. A non-zero exit fails that reviewer. Then make the same two appends (settled decisions, incremental addendum) by hand: with no `review-stage` run there are no flags, so on this path they remain hand edits.
 
 ### 5. Run agent review
 

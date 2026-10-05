@@ -252,11 +252,17 @@ codex_thread_id: <codex session thread id, optional>
 consensus_run_id: <review-fanout workflow runId, optional>
 agents:
   alice: available
+  blake: available
   bob: available
   carl: available
+  eve: available
+dispatch_rows:
+  <persona>: <dispatch-id>
 ---
 
-Agent states: `available` (ran successfully), `unavailable` (failed after retries), `disabled` (not invoked).
+Agent states: `available` (ran successfully), `unavailable` (failed after retries), `timeout` (no result in time), `disabled` (not invoked).
+
+`dispatch_rows`: keyed by persona, not by dispatch id. `review_close.py`'s `close()` reads this block to map each persona in `agents:` to the dispatch id it opened, then ends that id with the outcome `_DISPATCH_OUTCOME[agents[persona]]`; every dispatch the session opened must have its persona listed here before the review file is saved.
 
 `head_sha`: the `git rev-parse HEAD` value captured when this review ran. The next rework cycle reads it and passes `--since <head_sha>` to `gather-context.sh`, scoping that cycle's diff to the rework commits. Absent on review files created before this field existed — consumers fall back to a full-branch diff.
 
