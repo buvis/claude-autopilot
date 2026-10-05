@@ -3292,3 +3292,15 @@
 {"id":"816dc1be","kind":"pat","task":"11","queued_at":1791178790,"prompt_bytes":16421}
 {"id":"721b5899","kind":"pat","task":"11","queued_at":1791180271,"prompt_bytes":6775}
 {"id":"67df8d83","kind":"pat","task":"11","queued_at":1791180573,"prompt_bytes":6002}
+{"id":"e1d19184","ended_at":1791182037,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"c09ef97e","ended_at":1791182037,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"fc51a6a1","ended_at":1791182037,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"829157a0","ended_at":1791182037,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"c682b7da","ended_at":1791182037,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"536941dd","ended_at":1791182037,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"c565cd08","ended_at":1791182037,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"721adb1b","ended_at":1791182037,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"816dc1be","ended_at":1791182037,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"721b5899","ended_at":1791182037,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"67df8d83","ended_at":1791182037,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"kind":"handoff","site":"review","edge":"leave","at":1791182037,"phase":"review","prd":"00256-finish-the-review-verbs-before-release-v1.md"}
