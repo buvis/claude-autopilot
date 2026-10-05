@@ -550,6 +550,28 @@ class FindingsCrossCheckTests(unittest.TestCase):
         }
         self.assertEqual(gate._cross_check_findings(text, [row]), ("ok", None))
 
+    def test_cross_check_matches_an_issue_starting_with_a_severity_word(self) -> None:
+        """`High coupling ...` is ordinary issue text, not a severity cell: both
+        sides must treat that leading word the same or a valid batch is refused."""
+        from cli import gate
+
+        issue = "High coupling between the gate and the closer"
+        text = _one_row_section(HIGH, issue, "src/b.py:10")
+        row = _row(HIGH, "src/b.py:10", issue)
+        self.assertEqual(gate._cross_check_findings(text, [row]), ("ok", None))
+
+    def test_gate_refuses_an_unbacked_row_carrying_no_classification(self) -> None:
+        # Only `verify` and `discard` are exempt. A row with no classification
+        # key at all is not exempt - the by-path gate has no other validator,
+        # so skipping it would let a fabricated row through.
+        bogus = f"unclassified issue nobody raised {uuid4().hex}"
+        findings = self._findings(
+            [{"severity": HIGH, "file": "src/b.py:10", "issue": bogus}],
+        )
+        proc = self._gate(self._review(), findings)
+        self.assertEqual(proc.returncode, 2, proc.stdout)
+        self.assertIn(bogus, proc.stderr)
+
     def test_cross_check_reports_the_missing_section_as_malformed(self) -> None:
         from cli import gate
 

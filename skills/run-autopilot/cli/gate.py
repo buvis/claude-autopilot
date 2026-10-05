@@ -108,8 +108,9 @@ _SEVERITY_EMOJI = {
 }
 _SEVERITY_WORDS = frozenset(_SEVERITY_EMOJI.values())
 # verify/discard rows are never applied to state, so nothing of theirs has to
-# be backed by a review row.
-_APPLIED_CLASSIFICATIONS = ("fix", "defer")
+# be backed by a review row. Only those two classifications are exempt: a row
+# with a missing or unknown classification is checked like any applied row.
+_SKIPPED_CLASSIFICATIONS = ("verify", "discard")
 
 
 def reviewer_section_nonempty(lines: list[str], name: str) -> bool:
@@ -203,10 +204,13 @@ def _split_severity_cell(cell: str) -> tuple[str, str]:
 
 
 def _finding_key(severity: str, file: str, issue: str) -> tuple[str, str, str]:
+    """Both sides of the cross-check run the issue through the same split, so
+    an issue that begins with a severity word (`High coupling ...`) keys the
+    same whether that word was written in the severity cell or the text."""
     return (
         _split_severity_cell(severity)[0],
         file.strip(),
-        " ".join(issue.split()).lower(),
+        " ".join(_split_severity_cell(issue)[1].split()).lower(),
     )
 
 
@@ -222,7 +226,9 @@ def _reviewed_keys(text: str) -> set[tuple[str, str, str]] | None:
         section = section[: following.start()]
     keys = set()
     for row in _FINDING_ROW_RE.findall(section):
-        cells = [c.strip() for c in row.split("|")]
+        # From the right: the row always ends `| {file} | Found by: {agents}`,
+        # so an issue text carrying a pipe cannot shift the file cell.
+        cells = [c.strip() for c in row.rsplit("|", 2)]
         severity, issue = _split_severity_cell(cells[0])
         keys.add(_finding_key(severity, cells[1] if len(cells) > 1 else "", issue))
     return keys
@@ -243,7 +249,7 @@ def _cross_check_findings(
     if reviewed is None:
         return "malformed", "no '## Consolidated Findings' section in the review file"
     for row in findings:
-        if row.get("classification") not in _APPLIED_CLASSIFICATIONS:
+        if row.get("classification") in _SKIPPED_CLASSIFICATIONS:
             continue
         severity = str(row.get("severity", ""))
         file = str(row.get("file", ""))
