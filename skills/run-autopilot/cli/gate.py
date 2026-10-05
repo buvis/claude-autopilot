@@ -42,21 +42,31 @@ still wins when both are present: a file that fails the shape check cannot
 be trusted for a constraint reading, so it exits 1, not 2. Without this
 flag, `; constraint UNMET` remains a validly-shaped, exit-0 recorded form.
 
+--findings <path> is a second opt-in check: every row of that chosen-findings
+JSON array must be backed by a row of the review file's `## Consolidated
+Findings` section (severity, file and issue, normalized), so a batch cannot
+apply a finding no reviewer recorded. One direction only — the review may
+carry rows the batch is not applying. A review file with no such section is
+reported as a shape gap (exit 1), not a mismatch.
+
 CLI: autopilot gate --review-file <path> [--reviewers alice,bob,...]
-[--require-codex-guard] [--assert-constraint-met]
+[--require-codex-guard] [--assert-constraint-met] [--findings <path>]
 When --reviewers is omitted, the file's frontmatter `reviewers:` line (a
 comma-separated list written by consolidation) is used; if neither names any
 reviewer, only the verdict and tests lines are checked.
 
 Exit codes (gate-scoped, unchanged from check_review_file.py):
     0  shape holds (or unreadable file — fail open, loud)
-    1  shape gap (or missing review file)
-    2  --assert-constraint-met and the guard line records `; constraint UNMET`
+    1  shape gap (or missing review file, or an unusable --findings file, or
+       no consolidated-findings section to check --findings against)
+    2  --assert-constraint-met and the guard line records `; constraint UNMET`;
+       or a --findings row the review file never recorded
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -86,6 +96,20 @@ FIRED_GUARD_RE = re.compile(
     re.MULTILINE,
 )
 FRONTMATTER_REVIEWERS_RE = re.compile(r"^reviewers:\s*(.+)$", re.MULTILINE)
+_FINDINGS_HEADING_RE = re.compile(r"^##\s+Consolidated Findings\s*$", re.MULTILINE)
+_NEXT_H2_RE = re.compile(r"^##\s", re.MULTILINE)
+# `- [2/3] 🟠 wrong default | src/b.py:10 | Found by: alice, bob`
+_FINDING_ROW_RE = re.compile(r"^-\s*\[\d+/\d+\]\s*(.+)$", re.MULTILINE)
+_SEVERITY_EMOJI = {
+    "\U0001f534": "critical",
+    "\U0001f7e0": "high",
+    "\U0001f7e1": "medium",
+    "⚪": "low",
+}
+_SEVERITY_WORDS = frozenset(_SEVERITY_EMOJI.values())
+# verify/discard rows are never applied to state, so nothing of theirs has to
+# be backed by a review row.
+_APPLIED_CLASSIFICATIONS = ("fix", "defer")
 
 
 def reviewer_section_nonempty(lines: list[str], name: str) -> bool:
@@ -165,11 +189,109 @@ def _guard_matches_roster(text: str, lines: list[str]) -> str | None:
     return None
 
 
+def _split_severity_cell(cell: str) -> tuple[str, str]:
+    """(severity word, remaining text) for a cell written `🟠`, `high`,
+    `🟠 wrong default` or `🟠 High wrong default`."""
+    rest = cell.strip()
+    severity = ""
+    if rest[:1] in _SEVERITY_EMOJI:
+        severity, rest = _SEVERITY_EMOJI[rest[:1]], rest[1:].strip()
+    word, _, tail = rest.partition(" ")
+    if word.lower() in _SEVERITY_WORDS:
+        severity, rest = severity or word.lower(), tail
+    return severity, rest
+
+
+def _finding_key(severity: str, file: str, issue: str) -> tuple[str, str, str]:
+    """The comparison tuple: severity as a word, file as written, issue with
+    its whitespace collapsed and its case folded away."""
+    return (
+        _split_severity_cell(severity)[0],
+        file.strip(),
+        " ".join(issue.split()).lower(),
+    )
+
+
+def _reviewed_keys(text: str) -> set[tuple[str, str, str]] | None:
+    """Every row of the `## Consolidated Findings` section, or None when the
+    review file carries no such section."""
+    heading = _FINDINGS_HEADING_RE.search(text)
+    if heading is None:
+        return None
+    section = text[heading.end() :]
+    following = _NEXT_H2_RE.search(section)
+    if following is not None:
+        section = section[: following.start()]
+    keys = set()
+    for row in _FINDING_ROW_RE.findall(section):
+        cells = [c.strip() for c in row.split("|")]
+        severity, issue = _split_severity_cell(cells[0])
+        keys.add(_finding_key(severity, cells[1] if len(cells) > 1 else "", issue))
+    return keys
+
+
+def _cross_check_findings(
+    text: str,
+    findings: list[dict],
+) -> tuple[str, str | None]:
+    """Check every chosen finding against the review file's consolidated rows.
+
+    One direction only: a review row the batch is not applying is fine, a
+    chosen row the review never recorded is not. Returns ("ok", None),
+    ("mismatch", <the first unbacked row>) or ("malformed", <why>) when the
+    review file has no consolidated-findings section to check against.
+    """
+    reviewed = _reviewed_keys(text)
+    if reviewed is None:
+        return "malformed", "no '## Consolidated Findings' section in the review file"
+    for row in findings:
+        if row.get("classification") not in _APPLIED_CLASSIFICATIONS:
+            continue
+        severity = str(row.get("severity", ""))
+        file = str(row.get("file", ""))
+        issue = str(row.get("issue", ""))
+        if _finding_key(severity, file, issue) not in reviewed:
+            return "mismatch", (
+                "chosen finding absent from the review file's consolidated "
+                f"findings: {severity} {file} | {issue}"
+            )
+    return "ok", None
+
+
+def _load_findings(path: Path) -> tuple[list[dict] | None, str | None]:
+    """(rows, None) for a JSON array of objects, else (None, one-line error)."""
+    try:
+        rows = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        return None, f"cannot read findings file {path} ({exc})"
+    except ValueError as exc:
+        return None, f"cannot parse findings file {path} ({exc})"
+    if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
+        return None, f"findings file {path} is not a JSON array of objects"
+    return rows, None
+
+
+def _findings_exit(text: str, findings_file: Path) -> int:
+    """The exit code --findings contributes: 0 when every chosen row is backed
+    by a review row, 2 on a mismatch, 1 on an unusable findings file or a
+    review file with no consolidated-findings section to check against."""
+    rows, error = _load_findings(findings_file)
+    if rows is None:
+        sys.stderr.write(f"{error}\n")
+        return 1
+    tag, detail = _cross_check_findings(text, rows)
+    if tag == "ok":
+        return 0
+    sys.stderr.write(f"{detail}\n")
+    return 2 if tag == "mismatch" else 1
+
+
 def run_gate(
     review_file: Path,
     reviewers: str | None = None,
     require_codex_guard: bool = False,
     assert_constraint_met: bool = False,
+    findings_file: Path | None = None,
 ) -> int:
     """The full gate flow behind both entry points (`autopilot gate` and the
     direct script/shim invocation): read, resolve reviewers, check, exit code."""
@@ -199,6 +321,13 @@ def run_gate(
         sys.stderr.write(gap + "\n")
         return 1
 
+    # After the shape check, never before: a file that fails the shape check
+    # cannot be trusted for a findings reading either.
+    if findings_file is not None:
+        rc = _findings_exit(text, findings_file)
+        if rc != 0:
+            return rc
+
     if assert_constraint_met and CONSTRAINT_UNMET_RE.search(text):
         sys.stderr.write(
             "codex_rung_guard: constraint UNMET; doubt-roster constraint not certified\n",
@@ -213,12 +342,14 @@ def main() -> int:
     parser.add_argument("--reviewers", default=None)
     parser.add_argument("--require-codex-guard", action="store_true", default=False)
     parser.add_argument("--assert-constraint-met", action="store_true", default=False)
+    parser.add_argument("--findings", type=Path, default=None)
     args = parser.parse_args()
     return run_gate(
         args.review_file,
         args.reviewers,
         args.require_codex_guard,
         args.assert_constraint_met,
+        args.findings,
     )
 
 

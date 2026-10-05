@@ -60,10 +60,11 @@ Subcommands:
     resume-target --state
         resume.resume_target(), after the schema-version preflight.
     gate      --review-file [--reviewers] [--require-codex-guard]
-              [--assert-constraint-met]
+              [--assert-constraint-met] [--findings]
         gate.run_gate() — the review-file shape gate (PRD 00107). Takes no
         --state and keeps the gate's own exit contract (0 pass / 1 shape gap
-        / 2 constraint UNMET, see cli/gate.py), NOT the state-CLI codes below.
+        / 2 constraint UNMET or a --findings row the review file never
+        recorded, see cli/gate.py), NOT the state-CLI codes below.
     review-stage --cycle-id --gate-command [--state] [--since] [--repo-root]
                  [--replay-cmd] [--roster] [--tasks-json --prd [--design-doc]]
         review_stage.stage() (PRD 00249): stages one review cycle's input
@@ -77,7 +78,8 @@ Subcommands:
         review_close.close() (PRD 00249) over the --findings JSON array;
         prints its result as one JSON line. Exit 1 when close() refuses
         (gate failure, unreadable review file, batch already applied), 2 on
-        an unreadable or malformed findings file or a failed state write.
+        an unreadable or malformed findings file, a failed state write, or a
+        chosen finding the review file's consolidated findings never recorded.
     render    {audit|report|metrics} --state [--stdout] [--now ISO]
               [--summary] [--stalled --site --detail] [--metrics PATH]
         The deterministic render surfaces (PRD 00107): `audit` writes
@@ -784,6 +786,7 @@ def _add_gate(subparsers) -> None:
     p.add_argument("--reviewers", default=None)
     p.add_argument("--require-codex-guard", action="store_true", default=False)
     p.add_argument("--assert-constraint-met", action="store_true", default=False)
+    p.add_argument("--findings", type=Path, default=None)
 
 
 def _run_gate(args: argparse.Namespace) -> int:
@@ -792,6 +795,7 @@ def _run_gate(args: argparse.Namespace) -> int:
         args.reviewers,
         args.require_codex_guard,
         args.assert_constraint_met,
+        args.findings,
     )
 
 
@@ -1091,7 +1095,9 @@ def _run_review_close(args: argparse.Namespace) -> int:
     if result.get("applied"):
         return 0
     print(f"autopilot: review-close: {result.get('reason')}", file=sys.stderr)
-    return 1
+    # Exit 2 is the mismatch's alone: a chosen finding the review file never
+    # recorded is a different failure from a gate gap or an applied batch.
+    return 2 if result.get("refused") == "findings_mismatch" else 1
 
 
 def _utc_now() -> str:

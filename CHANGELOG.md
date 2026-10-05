@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **hooks**: autopilot build sessions can no longer delegate running a whole phase skill to a subagent in loop mode
 - **run-autopilot**: new `autopilot review-stage` and `autopilot review-close` CLI verbs replace review-work-completion's hand-run staging/prompt-writing and the decision gate's/Tail sweep's hand-run `task-add`/`group-rework` sequences, moving each into code
 - **run-autopilot**: a review cycle's test gate result can now be reused from `last-verification.json` instead of re-run, when only store-tree paths changed since the recorded sha
+- **run-autopilot**: `autopilot gate` takes an optional `--findings` JSON file and refuses (exit 2) when a chosen finding was never recorded in the review's consolidated findings; `autopilot review-close` runs the same cross-check on every batch it applies, so a finding the review never raised can no longer reach state
 
 ### Fixed
 

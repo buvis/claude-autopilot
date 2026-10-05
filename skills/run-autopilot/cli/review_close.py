@@ -250,12 +250,17 @@ def _close_mutator(ctx: dict[str, Any]):
             outcome["already"] = True
             return state
         created = _add_rework_tasks(
-            state, ctx["fixes"], ctx["prefix"], ctx["default_tier"]
+            state,
+            ctx["fixes"],
+            ctx["prefix"],
+            ctx["default_tier"],
         )
         _add_decisions(state, ctx["fixes"], ctx["defers"])
         _set_lens_state(state, ctx["batch_id"], ctx["verdicts"], ctx["lenses"])
         statectl.do_append(
-            state, statectl.parse_path("applied_review_batches"), identity
+            state,
+            statectl.parse_path("applied_review_batches"),
+            identity,
         )
         outcome["created"] = created
         outcome["rework_task_ids"] = list(state.get("rework_task_ids", []))
@@ -278,12 +283,20 @@ def close(
     whole list after the write), "lenses_closed"}, or {"applied": False,
     "reason"} when the review file fails the shape gate, cannot be read, or
     this batch was already applied.
+
+    A chosen finding the review file's consolidated-findings section never
+    recorded is refused before any lock, with "refused": "findings_mismatch".
+    A review file carrying no such section is not refused: the fact lands on
+    the applied result as "findings_cross_check": "malformed".
     """
     review_file = Path(review_file)
     state_path = Path(state_path)
     text, refusal = _gate_review(review_file, require_codex_guard)
     if refusal is not None:
         return {"applied": False, "reason": refusal}
+    cross_check, detail = gate._cross_check_findings(text, chosen_findings)
+    if cross_check == "mismatch":
+        return {"applied": False, "refused": "findings_mismatch", "reason": detail}
 
     identity = f"{review_file.resolve()}::{batch_id}"
     frontmatter = _frontmatter_lines(text)
@@ -297,9 +310,15 @@ def close(
     prefix = "Tail sweep: " if batch_id == "tail-sweep" else ""
     outcome: dict[str, Any] = {}
     ctx = {
-        "identity": identity, "fixes": fixes, "defers": defers, "prefix": prefix,
-        "default_tier": default_tier, "batch_id": batch_id, "verdicts": verdicts,
-        "lenses": lenses, "outcome": outcome,
+        "identity": identity,
+        "fixes": fixes,
+        "defers": defers,
+        "prefix": prefix,
+        "default_tier": default_tier,
+        "batch_id": batch_id,
+        "verdicts": verdicts,
+        "lenses": lenses,
+        "outcome": outcome,
     }
     statectl.mutate(state_path, _close_mutator(ctx))
     if outcome.get("already"):
@@ -307,9 +326,15 @@ def close(
 
     if batch_id != "tail-sweep":
         _end_dispatch_rows(_dispatch_outcomes(frontmatter), state_path.parent)
-    return {
+    result = {
         "applied": True,
         "tasks_created": outcome["created"],
         "rework_task_ids": outcome["rework_task_ids"],
         "lenses_closed": lenses,
     }
+    if cross_check == "malformed":
+        # Surfaced, never refused: a legacy review file carries no
+        # consolidated-findings section, and refusing it would be a
+        # behaviour change of its own.
+        result["findings_cross_check"] = cross_check
+    return result
