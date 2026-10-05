@@ -118,6 +118,11 @@ together at 2030-2040 s, so the blind lens (418 s) and the doubt lens (164 s)
 both read 969 s. Fixed on branch `fix/fast-track-lane-rows` (close each row on
 return; dispatch the fallback at once), cherry-picked to master between PRDs.
 
+**V6 verified on 0.9.0 (00264, 2026-10-05):** the refused fanout row closed
+`error` at 35 s and the Alice fallback went out 40 s after the roster (was 14
+min late); rows now read their own times (Alice 165 s, Blake 426 s, Bob 752 s,
+Carl 751 s); review wall ~12.5 min against ~16 min on 00243.
+
 **V8 measured:** the 00248 planning session grew 82K → 371K tokens; the design
 step accounts for most of it (design-doc reads ~41K, design edits ~21K, the
 codex design-review output ~21K, prompt writes ~10K, reading the codex runner
