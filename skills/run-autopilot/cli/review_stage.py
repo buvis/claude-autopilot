@@ -747,16 +747,9 @@ def _append_context_blocks(
 
 
 def _replay_base(context: Path, repo_root: Path) -> str | None:
-    """The branch/sha the context file's `_Diff scope:` line names, resolved
-    to its merge-base with HEAD. This is not a second, independent base
-    resolver: commit 7b1f589 anchors the one base gather-context.sh already
-    named to a fixed point in time, since a recorded branch name is a
-    mutable ref whose tip can move after gather-context ran."""
-    scope = _SCOPE_RE.search(_read(context))
-    base = scope.group(1) if scope else None
-    if base:
-        base = _git_out(repo_root, "merge-base", "HEAD", base) or base
-    return base
+    # Scope's base, merge-based with HEAD (not a 2nd resolver - 7b1f589).
+    base = scope.group(1) if (scope := _SCOPE_RE.search(_read(context))) else None
+    return (_git_out(repo_root, "merge-base", "HEAD", base) or base) if base else None
 
 
 def stage(
@@ -789,12 +782,11 @@ def stage(
         return gathered
     context, diff = gathered["context"], gathered["diff"]
     summary = _build_summary(tasks_file, prd_file, context, diff, state_path)
-    base = _replay_base(context, repo_root)
     pack = _append_context_blocks(
         context,
         diff,
         repo_root,
-        base,
+        _replay_base(context, repo_root),
         replay_cmd,
         settled_ledger,
         cycle_id,
