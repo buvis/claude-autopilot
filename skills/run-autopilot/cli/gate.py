@@ -44,10 +44,15 @@ flag, `; constraint UNMET` remains a validly-shaped, exit-0 recorded form.
 
 --findings <path> is a second opt-in check: every row of that chosen-findings
 JSON array must be backed by a row of the review file's `## Consolidated
-Findings` section (severity, file and issue, normalized), so a batch cannot
-apply a finding no reviewer recorded. One direction only — the review may
-carry rows the batch is not applying. A review file with no such section is
-reported as a shape gap (exit 1), not a mismatch.
+Findings` section, so a batch cannot apply a finding no reviewer recorded.
+That section is read in both shapes it is written in: the bullet list and the
+pipe table `| Ref | Consensus | Severity | Issue | File | Task | Found By |`.
+A chosen row carrying a `"ref"` is backed by the review row holding that exact
+ref, severity and file; a row carrying none falls back to an exact (severity,
+file, normalized issue) match. One direction only — the review may carry rows
+the batch is not applying. A review file with no such section, or one whose
+findings table cannot be read, is reported as a shape gap (exit 1), not a
+mismatch.
 
 CLI: autopilot gate --review-file <path> [--reviewers alice,bob,...]
 [--require-codex-guard] [--assert-constraint-met] [--findings <path>]
@@ -70,6 +75,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 VERDICT_RE = re.compile(r"^Verdict: (converged|\d+ findings?)\s*$", re.MULTILINE)
 TESTS_RE = re.compile(
@@ -100,6 +106,17 @@ _FINDINGS_HEADING_RE = re.compile(r"^##\s+Consolidated Findings\s*$", re.MULTILI
 _NEXT_H2_RE = re.compile(r"^##\s", re.MULTILINE)
 # `- [2/3] 🟠 wrong default | src/b.py:10 | Found by: alice, bob`
 _FINDING_ROW_RE = re.compile(r"^-\s*\[\d+/\d+\]\s*(.+)$", re.MULTILINE)
+# `| [2/3] | 🟠 | wrong default | src/b.py:10 | 4 | alice, bob |` and the
+# Ref-bearing form `| R2 | [2/3] | 🟠 | ... |`. Public, no leading underscore,
+# because convergence.py counts severities with it: the optional leading cell
+# is what keeps every row of every existing review file matching once the Ref
+# column lands.
+TABLE_DATA_ROW_RE = re.compile(r"^\|(?:\s*R\d+\s*\|)?\s*\[\d+/\d+\]\s*\|", re.MULTILINE)
+# `| Consensus | Severity | Issue | File | Task | Found By |`
+_TABLE_HEADER_RE = re.compile(r"^\|(.+)\|\s*$", re.MULTILINE)
+# The three columns a findings table must name; a header missing any of them
+# contributes no keys.
+_TABLE_COLUMNS = ("severity", "issue", "file")
 _SEVERITY_EMOJI = {
     "\U0001f534": "critical",
     "\U0001f7e0": "high",
@@ -107,6 +124,17 @@ _SEVERITY_EMOJI = {
     "⚪": "low",
 }
 _SEVERITY_WORDS = frozenset(_SEVERITY_EMOJI.values())
+# What `_reviewed_keys` could not read, as the operator has to hear it. The two
+# must stay distinct: "the section is missing" and "the section is there and its
+# table is what failed" are different repairs.
+_FINDINGS_PROBLEMS = {
+    "no-section": "no '## Consolidated Findings' section in the review file",
+    "unreadable-table": (
+        "found a findings table whose header or rows could not be read: "
+        "expected a header naming Severity, Issue and File, and rows shaped "
+        "| [m/n] | ... | (optionally led by a | R1 | ref cell)"
+    ),
+}
 # verify/discard rows are never applied to state, so nothing of theirs has to
 # be backed by a review row. Only those two classifications are exempt: a row
 # with a missing or unknown classification is checked like any applied row.
@@ -203,35 +231,140 @@ def _split_severity_cell(cell: str) -> tuple[str, str]:
     return severity, rest
 
 
+def _normalize_issue(issue: str) -> str:
+    """Issue text as both sides of the cross-check compare it, bar the case:
+    escaped pipes collapsed (a row quoting a table carries `\\|`), a leading
+    severity word dropped, whitespace squeezed."""
+    return " ".join(_split_severity_cell(issue.replace("\\|", "|"))[1].split())
+
+
 def _finding_key(severity: str, file: str, issue: str) -> tuple[str, str, str]:
     """Both sides of the cross-check run the issue through the same split, so
     an issue that begins with a severity word (`High coupling ...`) keys the
-    same whether that word was written in the severity cell or the text."""
+    same whether that word was written in the severity cell or the text. Escape
+    collapsing lives here for the same reason: a row copied verbatim out of a
+    table cell carries `\\|` where the hand-written one carries `|`."""
     return (
         _split_severity_cell(severity)[0],
-        file.strip(),
-        " ".join(_split_severity_cell(issue)[1].split()).lower(),
+        file.replace("\\|", "|").strip(),
+        _normalize_issue(issue).lower(),
     )
 
 
-def _reviewed_keys(text: str) -> set[tuple[str, str, str]] | None:
-    """Every row of the `## Consolidated Findings` section, or None when the
-    review file carries no such section."""
+class Row(NamedTuple):
+    """One consolidated-findings row, from either shape the section is written
+    in. `ref` is "" for a bullet row or a table carrying no Ref column."""
+
+    ref: str
+    severity: str
+    file: str
+    issue: str
+
+
+def _table_cells(line: str) -> list[str]:
+    """A pipe row's cells, deliberately UNSTRIPPED: stripping here would delete
+    the space that followed an embedded `\\|`, and no later escape collapse
+    restores it. The caller strips once it knows which cell is which."""
+    return line.strip().strip("|").split("|")
+
+
+def _row_from_table(header: list[str], cells: list[str]) -> Row:
+    """One data row, its columns located by the header's own names."""
+    sev_i = header.index("severity")
+    issue_i = header.index("issue")
+    file_i = header.index("file")
+    ref = cells[header.index("ref")].strip() if "ref" in header else ""
+    if len(cells) == len(header):
+        issue, file = cells[issue_i], cells[file_i]
+    else:
+        # The issue cell absorbed one or more `|`. Rejoin the Issue..File span
+        # BEFORE stripping - that is what puts a halved `\|` back together with
+        # its whitespace intact - then take the file off its right end.
+        trailing = len(header) - 1 - file_i
+        span = "|".join(cells[issue_i : len(cells) - trailing]).strip()
+        issue, _, file = span.rpartition("|")
+    severity, file, _ = _finding_key(cells[sev_i], file, issue)
+    return Row(ref, severity, file, _normalize_issue(issue))
+
+
+def _table_keys(section: str) -> tuple[list[Row], str | None]:
+    """Rows of the pipe-table form of the consolidated-findings section.
+
+    The header row names the columns, so the documented 5-column shape
+    (Consensus, Severity, Issue, File, Found By), the 6-column shape this
+    repo's `consolidate_findings.py` emits (… Issue, File, Task, Found By) and
+    the Ref-bearing form of either are all read without guessing positions. An
+    issue cell may itself contain an unescaped `|` — `consolidate_findings.py`
+    does not escape it — so the Issue and File cells are split from the RIGHT
+    out of the span between them, exactly as the bullet branch already does.
+    """
+    header: list[str] | None = None
+    rows: list[Row] = []
+    for line in section.splitlines():
+        if header is None:
+            cells = [c.strip().lower() for c in _table_cells(line)]
+            if _TABLE_HEADER_RE.match(line) and all(c in cells for c in _TABLE_COLUMNS):
+                header = cells
+            continue
+        if TABLE_DATA_ROW_RE.match(line):
+            rows.append(_row_from_table(header, _table_cells(line)))
+    if rows:
+        return rows, None
+    if header is None and not TABLE_DATA_ROW_RE.search(section):
+        return [], None  # no table here at all; the bullet rows are the section
+    return [], "unreadable-table"
+
+
+def _reviewed_keys(text: str) -> tuple[list[Row], str | None]:
+    """Every row of the `## Consolidated Findings` section, in both shapes it
+    is written in, and what went wrong reading them: None, `"no-section"` when
+    the review file carries no such section, or `"unreadable-table"` when it
+    holds a findings table whose header or rows could not be read."""
     heading = _FINDINGS_HEADING_RE.search(text)
     if heading is None:
-        return None
+        return [], "no-section"
     section = text[heading.end() :]
     following = _NEXT_H2_RE.search(section)
     if following is not None:
         section = section[: following.start()]
-    keys = set()
+    rows: list[Row] = []
     for row in _FINDING_ROW_RE.findall(section):
         # From the right: the row always ends `| {file} | Found by: {agents}`,
         # so an issue text carrying a pipe cannot shift the file cell.
         cells = [c.strip() for c in row.rsplit("|", 2)]
         severity, issue = _split_severity_cell(cells[0])
-        keys.add(_finding_key(severity, cells[1] if len(cells) > 1 else "", issue))
-    return keys
+        key = _finding_key(severity, cells[1] if len(cells) > 1 else "", issue)
+        rows.append(Row("", key[0], key[1], _normalize_issue(issue)))
+    table, problem = _table_keys(section)
+    return rows + table, problem
+
+
+def _backed(row: dict, reviewed: list[Row]) -> bool:
+    """Is this chosen row carried by a review row?
+
+    A row naming a `ref` is backed by the review row holding that exact ref,
+    with an agreeing severity and file, and by nothing else — its issue text is
+    not compared at all, because the orchestrator re-words it. A ref-less row is
+    backed by an exact (severity, file, normalized issue) match, as before. An
+    empty issue backs nothing: it would otherwise key as a substring of
+    everything.
+    """
+    severity, file, issue = _finding_key(
+        str(row.get("severity", "")),
+        str(row.get("file", "")),
+        str(row.get("issue", "")),
+    )
+    ref = str(row.get("ref", "")).strip()
+    if ref:
+        return any(
+            r.ref == ref and (r.severity, r.file) == (severity, file) for r in reviewed
+        )
+    if not issue:
+        return False
+    return any(
+        (r.severity, r.file, r.issue.lower()) == (severity, file, issue)
+        for r in reviewed
+    )
 
 
 def _cross_check_findings(
@@ -243,21 +376,22 @@ def _cross_check_findings(
     One direction only: a review row the batch is not applying is fine, a
     chosen row the review never recorded is not. Returns ("ok", None),
     ("mismatch", <the first unbacked row>) or ("malformed", <why>) when the
-    review file has no consolidated-findings section to check against.
+    review file has no consolidated-findings section to check against, or holds
+    a findings table that cannot be read.
     """
-    reviewed = _reviewed_keys(text)
-    if reviewed is None:
-        return "malformed", "no '## Consolidated Findings' section in the review file"
+    reviewed, problem = _reviewed_keys(text)
+    if problem is not None:
+        return "malformed", _FINDINGS_PROBLEMS[problem]
     for row in findings:
         if row.get("classification") in _SKIPPED_CLASSIFICATIONS:
             continue
-        severity = str(row.get("severity", ""))
-        file = str(row.get("file", ""))
-        issue = str(row.get("issue", ""))
-        if _finding_key(severity, file, issue) not in reviewed:
+        if not _backed(row, reviewed):
+            ref = str(row.get("ref", "")).strip()
+            named = f"ref {ref} " if ref else ""
             return "mismatch", (
                 "chosen finding absent from the review file's consolidated "
-                f"findings: {severity} {file} | {issue}"
+                f"findings: {named}{row.get('severity', '')} "
+                f"{row.get('file', '')} | {row.get('issue', '')}"
             )
     return "ok", None
 

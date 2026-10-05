@@ -87,11 +87,16 @@ Parse agent outputs and merge:
 
 ## Consolidated Findings Table
 
-| Consensus | Severity | Issue | File | Found By |
-|-----------|----------|-------|------|----------|
-| [3/3] | 🔴 Critical | XSS in input handler | src/input.ts | Alice, Bob, Carl |
-| [2/3] | 🟠 High | Missing null check | src/api.ts | Alice, Bob |
-| [1/3] | 🟡 Medium | No test coverage | src/utils.ts | Blake |
+| Ref | Consensus | Severity | Issue | File | Found By |
+|-----|-----------|----------|-------|------|----------|
+| R1 | [3/3] | 🔴 Critical | XSS in input handler | src/input.ts | Alice, Bob, Carl |
+| R2 | [2/3] | 🟠 High | Missing null check | src/api.ts | Alice, Bob |
+| R3 | [1/3] | 🟡 Medium | No test coverage | src/utils.ts | Blake |
+
+`Ref` is `R1`, `R2`, ... in rendered row order. It is the token the findings
+cross-check matches on: anything copying a row into a chosen-findings JSON
+carries the row's `Ref` into its `"ref"` field, so the issue text may be
+re-worded without `autopilot gate --findings` refusing the batch.
 
 ## Issue Documentation Format
 

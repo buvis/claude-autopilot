@@ -279,7 +279,9 @@ run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_review_stage.py \
   skills/run-autopilot/cli/test_review_close.py \
   skills/run-autopilot/cli/test_cli_review_verbs.py \
-  skills/run-autopilot/cli/test_release_checks_counts.py
+  skills/run-autopilot/cli/test_release_checks_counts.py \
+  skills/run-autopilot/cli/test_gate.py \
+  skills/run-autopilot/cli/test_gate_findings_table.py
 
 EXIT_CODE=0
 if [[ "$TOTAL_FAIL" -ne 0 || "$INFRA_FAIL" -ne 0 ]]; then

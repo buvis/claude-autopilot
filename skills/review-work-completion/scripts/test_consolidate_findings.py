@@ -215,7 +215,7 @@ def test_four_reviewers_wording_one_defect_merge_to_one_row(tmp_path: Path) -> N
 
     result = _run(*pairs)
     assert result.returncode == 0
-    rows = [ln for ln in result.stdout.splitlines() if ln.startswith("| [")]
+    rows = [ln for ln in result.stdout.splitlines() if " | [" in ln]
     assert len(rows) == 1, result.stdout
     assert "[4/4]" in rows[0]
     # Most severe severity wins, first-seen description is kept.
@@ -289,7 +289,7 @@ def test_distinct_defects_stay_separate_rows(tmp_path: Path) -> None:
         ],
     )
     result = _run(f"ALICE:{a}")
-    rows = [ln for ln in result.stdout.splitlines() if ln.startswith("| [")]
+    rows = [ln for ln in result.stdout.splitlines() if " | [" in ln]
     assert len(rows) == 2, result.stdout
     assert all("[1/1]" in row for row in rows)
 
@@ -302,9 +302,10 @@ def test_single_reviewer_output_matches_the_legacy_table_format(tmp_path: Path) 
     )
     result = _run(f"ALICE:{a}")
     assert result.stdout == (
-        "| Consensus | Severity | Issue | File | Task | Found By |\n"
-        "|-----------|----------|-------|------|------|----------|\n"
-        "| [1/1] | 🔴 | SQL injection in query builder | src/db/query.ts | 3 | ALICE |\n"
+        "| Ref | Consensus | Severity | Issue | File | Task | Found By |\n"
+        "|-----|-----------|----------|-------|------|------|----------|\n"
+        "| R1 | [1/1] | 🔴 | SQL injection in query builder | src/db/query.ts "
+        "| 3 | ALICE |\n"
     )
 
 
@@ -324,10 +325,10 @@ def test_rows_sort_by_consensus_then_severity(tmp_path: Path) -> None:
         ["[BOB] 🟠 shared high about retry backoff | File: c.py | Task: 3"],
     )
     result = _run(f"ALICE:{a}", f"BOB:{b}")
-    rows = [ln for ln in result.stdout.splitlines() if ln.startswith("| [")]
-    assert rows[0].startswith("| [2/2] | 🟠")  # consensus first
-    assert rows[1].startswith("| [1/2] | 🔴")  # then severity
-    assert rows[2].startswith("| [1/2] | 🟡")
+    rows = [ln for ln in result.stdout.splitlines() if " | [" in ln]
+    assert rows[0].startswith("| R1 | [2/2] | 🟠")  # consensus first
+    assert rows[1].startswith("| R2 | [1/2] | 🔴")  # then severity
+    assert rows[2].startswith("| R3 | [1/2] | 🟡")
 
 
 def test_no_findings_prints_the_sentinel(tmp_path: Path) -> None:
@@ -387,7 +388,7 @@ def test_blake_reraising_a_settled_deferral_is_auto_dismissed(tmp_path: Path) ->
     assert "✅ No issues found" in result.stdout
     assert "### Auto-dismissed (ledger)" in result.stdout
     assert "deferred to batch end, out of PRD scope" in result.stdout
-    assert not [ln for ln in result.stdout.splitlines() if ln.startswith("| [")]
+    assert not [ln for ln in result.stdout.splitlines() if " | [" in ln]
 
 
 def test_the_filter_is_blake_only(tmp_path: Path) -> None:
@@ -527,7 +528,7 @@ def test_three_real_00122_findings_merge_via_shared_numeric_signature(
         f"DAVE:{tmp_path / 'never-written.txt'}",
     )
     assert result.returncode == 0
-    rows = [ln for ln in result.stdout.splitlines() if ln.startswith("| [")]
+    rows = [ln for ln in result.stdout.splitlines() if " | [" in ln]
     assert len(rows) == 1, result.stdout
     assert "[3/4]" in rows[0]
     assert "ALICE, BOB, CARL" in rows[0]
@@ -695,9 +696,9 @@ def test_review_00186_agreements_merge() -> None:
     merged = cf.consolidate(findings)
     assert len(merged) == 28
     table = cf.render(merged, total_agents=4)
-    rows = [ln for ln in table.splitlines() if ln.startswith("| [2/4]")]
+    rows = [ln for ln in table.splitlines() if " | [2/4] | " in ln]
     assert len(rows) == 4, table
-    assert not [ln for ln in table.splitlines() if ln.startswith("| [3/4]")]
+    assert not [ln for ln in table.splitlines() if " | [3/4] | " in ln]
     for alice_idx, bob_idx in REVIEW_00186_AGREEMENTS:
         row = next(r for r in rows if found["ALICE"][alice_idx].desc in r)
         assert row.endswith("| ALICE, BOB |")

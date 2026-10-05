@@ -18,12 +18,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from cli.gate import FRONTMATTER_REVIEWERS_RE, VERDICT_RE
+from cli.gate import FRONTMATTER_REVIEWERS_RE, TABLE_DATA_ROW_RE, VERDICT_RE
 
 # Mark -> findings bucket, in severity order; the first mark met scanning a
 # consolidated table row left to right picks the bucket.
 SEVERITY_MARKS = {"🔴": "critical", "🟠": "high", "🟡": "medium", "⚪": "low"}
-CONSENSUS_ROW_RE = re.compile(r"^\| \[\d+/\d+\] \|")
 CHECKBOX_RE = re.compile(r"^- \[[ x]\] ", re.MULTILINE)
 
 
@@ -67,7 +66,7 @@ def read_cycle(reviews_dir: Path, prd: str, n: int) -> dict:
 
     findings = {bucket: 0 for bucket in SEVERITY_MARKS.values()}
     for line in text.splitlines():
-        if not CONSENSUS_ROW_RE.match(line):
+        if not TABLE_DATA_ROW_RE.match(line):
             continue
         bucket = next((SEVERITY_MARKS[c] for c in line if c in SEVERITY_MARKS), None)
         if bucket is not None:

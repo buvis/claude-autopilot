@@ -412,8 +412,8 @@ def suffix_stripped_citations(row: Finding) -> list[str]:
 
 def render(merged: list[Finding], total_agents: int) -> str:
     rows = [
-        "| Consensus | Severity | Issue | File | Task | Found By |",
-        "|-----------|----------|-------|------|------|----------|",
+        "| Ref | Consensus | Severity | Issue | File | Task | Found By |",
+        "|-----|-----------|----------|-------|------|------|----------|",
     ]
     ordered = sorted(
         enumerate(merged),
@@ -424,9 +424,12 @@ def render(merged: list[Finding], total_agents: int) -> str:
         ),
     )
     for position, (_, f) in enumerate(ordered, start=1):
+        # `Ref` is the token the findings cross-check matches on, so it has to
+        # be the rendered row order: an orchestrator copies `R{position}` into
+        # the chosen-findings JSON and `autopilot gate --findings` looks it up.
         rows.append(
-            f"| [{len(f.finders)}/{total_agents}] | {f.severity} | {f.desc} | "
-            f"{f.file} | {f.task} | {', '.join(f.finders)} |",
+            f"| R{position} | [{len(f.finders)}/{total_agents}] | {f.severity} | "
+            f"{f.desc} | {f.file} | {f.task} | {', '.join(f.finders)} |",
         )
         drifted = suffix_stripped_citations(f)
         if drifted:

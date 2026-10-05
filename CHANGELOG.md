@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: release-checks reports the real pytest totals instead of counting its own check-block headers, `run_gate` streams its output under a byte cap, and a reused verification verdict survives a file rename
 - **run-autopilot**: an unavailable reviewer's dispatch row closes with an error outcome instead of staying open
 - **run-autopilot**: a review cycle's test replay diffs from the branch point rather than the base branch's tip, so it no longer picks up unrelated commits; Eve's prompt carries the raw PRD body, and Bob's doubt appendix is included every cycle
+- **run-autopilot**: the findings cross-check reads the consolidated-findings pipe table every saved review file actually uses, instead of only the bullet shape, so `autopilot gate --findings` and `autopilot review-close` no longer refuse every real batch; consolidated findings gain a `Ref` column (`R1`, `R2`, ...) and a chosen finding carrying `"ref"` is matched by that token plus severity and file rather than by issue wording
 
 ## [0.8.0] - 2026-10-04
 
