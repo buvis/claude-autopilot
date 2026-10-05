@@ -12,6 +12,7 @@ import json
 import subprocess
 import sys
 import unittest
+from itertools import groupby
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -116,10 +117,39 @@ class FindingsTableCrossCheckTests(unittest.TestCase):
         ]
         self.assertEqual(_check(text, rows), ("ok", None))
 
+    def _assert_rows_are_the_real_fixture(self, rows: list) -> None:
+        """Pins the fixture's own 22 rows: a hardcoded row list cannot pass."""
+        sevs = [r.severity for r in rows]
+        # The fixture's real severity sequence, in table order: one red row,
+        # then five, then eleven, then five, and four distinct severities.
+        self.assertEqual([len(list(g)) for _s, g in groupby(sevs)], [1, 5, 11, 5])
+        self.assertEqual(len(set(sevs)), 4)
+        # The red row keys as a red cell keys anywhere else.
+        red, _err = _keys(_table_section(TABLE_HEADER_6, _table_row(CRIT, "x", "y")))
+        self.assertEqual(sevs[0], red[0].severity)
+        cli = "skills/run-autopilot/cli"
+        mid = {
+            6: ("fail-first replay", f"{cli}/test_verification.py:235"),
+            10: (
+                "Rename and copy handling is under-tested",
+                f"{cli}/test_verification.py:146",
+            ),
+            15: ("[MECH] 2 touched test(s)", f"{cli}/test_review_stage.py"),
+        }
+        for index, (issue, file) in mid.items():
+            with self.subTest(row=index + 1):
+                self.assertIn(issue, rows[index].issue)
+                self.assertEqual(rows[index].file, file)
+
     def test_cross_check_reads_a_real_saved_review_file(self) -> None:
         rows, err = _keys(REAL_REVIEW.read_text(encoding="utf-8"))
         self.assertIsNone(err)
         self.assertEqual(len(rows), 22)
+        # The documented field order: anyone unpacking a Row positionally gets
+        # (ref, severity, file, issue), not some other arrangement.
+        self.assertEqual(type(rows[0])._fields, ("ref", "severity", "file", "issue"))
+        # This real table has no Ref column, so every row's ref is empty.
+        self.assertEqual({r.ref for r in rows}, {""})
         # File is column 4 of 6 and has to be found by header name. Row 1's
         # issue cell itself carries escaped pipes, so a naive split would put
         # the wrong cell here.
@@ -130,6 +160,27 @@ class FindingsTableCrossCheckTests(unittest.TestCase):
             rows[21].file,
             "docs/dev/project-management/prds/done/"
             "00255-triage-resolve-base-is-a-second-diff-base-resol-v1.md",
+        )
+        self._assert_rows_are_the_real_fixture(rows)
+
+    def test_table_columns_are_located_by_header_name_not_position(self) -> None:
+        # File and Issue swapped against the shape this repo emits. A reader
+        # that guesses the layout from the column count, or from a fixed
+        # position, hands back the Issue cell as the file.
+        text = (
+            "## Consolidated Findings\n\n"
+            "| Consensus | Severity | File | Issue | Task | Found By |\n"
+            "|-----------|----------|------|-------|------|----------|\n"
+            f"| [2/4] | {HIGH} | src/b.py:10 | wrong default | 3 | ALICE, BOB |\n"
+        )
+        rows, err = _keys(text)
+        self.assertIsNone(err)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].file, "src/b.py:10")
+        self.assertEqual(rows[0].issue, "wrong default")
+        self.assertEqual(
+            _check(text, [_row(HIGH, "src/b.py:10", "wrong default")]),
+            ("ok", None),
         )
 
     def test_cross_check_refuses_the_real_paraphrased_findings_json_without_refs(
@@ -186,6 +237,18 @@ class FindingsTableCrossCheckTests(unittest.TestCase):
         tag, detail = _check(text, chosen)
         self.assertEqual(tag, "mismatch")
         self.assertIn("R9", detail or "")
+        # R2 is a prefix of the only ref this review holds: a ref is matched
+        # whole, never as a substring.
+        prefixed = _table_section(
+            TABLE_HEADER_REF_6,
+            _ref_row("R20", HIGH, "wrong default", "src/b.py:10"),
+        )
+        row = _row(HIGH, "src/b.py:10", "wrong default")
+        tag, detail = _check(prefixed, [dict(row, ref="R2")])
+        self.assertEqual(tag, "mismatch")
+        self.assertIn("R2", detail or "")
+        # Control: the whole ref is backed, so this is not a refuse-everything.
+        self.assertEqual(_check(prefixed, [dict(row, ref="R20")]), ("ok", None))
 
     def test_cross_check_refuses_a_ref_whose_severity_or_file_disagrees(self) -> None:
         text = _table_section(
@@ -255,8 +318,18 @@ class FindingsTableCrossCheckTests(unittest.TestCase):
             _check(text, [_row(MED, "src/c.py:20", "unclear name")]),
             ("ok", None),
         )
-        tag, _detail = _check(text, [_row(MED, "src/c.py:20", "unclear naming")])
-        self.assertEqual(tag, "mismatch")
+        # The key is the whole (severity, file, issue) triple: changing any one
+        # of the three on its own leaves the row unbacked.
+        cases = {
+            "only the issue text differs": _row(MED, "src/c.py:20", "unclear naming"),
+            "only the severity differs": _row(HIGH, "src/c.py:20", "unclear name"),
+            "only the file differs": _row(MED, "src/d.py:20", "unclear name"),
+        }
+        for label, chosen in cases.items():
+            with self.subTest(label):
+                tag, detail = _check(text, [chosen])
+                self.assertEqual(tag, "mismatch")
+                self.assertTrue(detail)
 
     def test_gate_imports_cleanly_as_the_first_package_import(self) -> None:
         # cli/convergence.py imports from cli/gate.py, never the reverse: in a
@@ -269,6 +342,23 @@ class FindingsTableCrossCheckTests(unittest.TestCase):
             text=True,
         )
         self.assertEqual(proc.returncode, 0, proc.stderr)
+        from cli import gate
+
+        # That detector has to find real data rows and only those: convergence
+        # counts severities with it, so a regex matching nothing counts none,
+        # and one matching the header or the |---| rule counts phantoms.
+        data_row = _table_row(HIGH, "wrong default", "src/b.py:10")
+        self.assertTrue(gate.TABLE_DATA_ROW_RE.match(data_row))
+        # The old exact single-space spelling must keep counting.
+        old_spelling = f"| [2/4] | {HIGH} | x | src/b.py:10 | 3 | B |"
+        self.assertTrue(gate.TABLE_DATA_ROW_RE.match(old_spelling))
+        not_data = {
+            "header": "| Consensus | Severity | Issue | File | Task | Found By |",
+            "separator": "|-----------|----------|-------|------|------|----------|",
+        }
+        for label, line in not_data.items():
+            with self.subTest(label):
+                self.assertIsNone(gate.TABLE_DATA_ROW_RE.search(line))
 
     def test_a_findings_table_whose_rows_do_not_match_is_malformed(self) -> None:
         no_required_columns = _table_section(
@@ -287,7 +377,14 @@ class FindingsTableCrossCheckTests(unittest.TestCase):
                 self.assertEqual(_keys(text), ([], "unreadable-table"))
                 tag, detail = _check(text, chosen)
                 self.assertEqual(tag, "malformed")
-                self.assertIn("row", (detail or "").lower())
+                reason = (detail or "").lower()
+                self.assertIn("row", reason)
+                # The reason has to name what failed, not just say "row": the
+                # operator fixes the table or its header from this text alone.
+                self.assertTrue(
+                    "table" in reason or "header" in reason,
+                    f"table-specific reason expected, got {detail!r}",
+                )
                 # Not the missing-section reason: the operator has to know the
                 # section is there and the table is what failed.
                 self.assertNotEqual(detail, no_section_detail)
@@ -295,6 +392,15 @@ class FindingsTableCrossCheckTests(unittest.TestCase):
         proc = self._gate(self._review(section=broken_rows), self._findings(chosen))
         self.assertEqual(proc.returncode, 1, proc.stdout)
         self.assertNotIn("unrecognized arguments", proc.stderr)
+        # Control, so exit 1 above is not a hardcoded exit code: an unbacked
+        # row against a table the gate CAN read is the exit 2 refusal.
+        readable = _table_section(
+            TABLE_HEADER_6,
+            _table_row(HIGH, "wrong default", "src/b.py:10"),
+        )
+        unbacked = [_row(HIGH, "src/b.py:10", "a finding nobody raised")]
+        proc = self._gate(self._review(section=readable), self._findings(unbacked))
+        self.assertEqual(proc.returncode, 2, proc.stdout)
 
     def test_table_row_issue_containing_a_pipe_keys_correctly(self) -> None:
         # Real review rows quote tables, so the issue cell carries bare pipes.
@@ -318,6 +424,27 @@ class FindingsTableCrossCheckTests(unittest.TestCase):
         self.assertEqual(rows[0].file, "src/input.ts")
         chosen = [_row("critical", "src/input.ts", "XSS in input handler")]
         self.assertEqual(_check(text, chosen), ("ok", None))
+        # A Severity cell spelled as the bare English word, no emoji at all:
+        # reading only the cell's first character would key it as nothing and
+        # refuse the row.
+        worded = _table_section(
+            TABLE_HEADER_5,
+            "| [3/3] | High | wrong default | src/b.py:10 | Alice, Bob |",
+        )
+        by_word, word_err = _keys(worded)
+        self.assertIsNone(word_err)
+        self.assertEqual(len(by_word), 1)
+        self.assertEqual(by_word[0].severity, "high")
+        emoji_text = _table_section(
+            TABLE_HEADER_6,
+            _table_row(HIGH, "wrong default", "src/b.py:10"),
+        )
+        by_emoji, _emoji_err = _keys(emoji_text)
+        self.assertEqual(by_word[0].severity, by_emoji[0].severity)
+        self.assertEqual(
+            _check(worded, [_row(HIGH, "src/b.py:10", "wrong default")]),
+            ("ok", None),
+        )
 
     def test_table_and_bullet_rows_key_identically(self) -> None:
         bullet = (
@@ -336,9 +463,20 @@ class FindingsTableCrossCheckTests(unittest.TestCase):
             (from_bullet[0].severity, from_bullet[0].file, from_bullet[0].issue),
             (from_table[0].severity, from_table[0].file, from_table[0].issue),
         )
+        # Neither shape invents a ref: a bullet carries none and this table has
+        # no Ref column.
+        self.assertEqual(from_bullet[0].ref, "")
+        self.assertEqual(from_table[0].ref, "")
         chosen = [_row(HIGH, "src/b.py:10", "wrong default")]
         self.assertEqual(_check(bullet, chosen), ("ok", None))
         self.assertEqual(_check(table, chosen), ("ok", None))
+        # So a chosen row naming R1 is not backed by either review: nothing in
+        # them holds that ref, however well the text lines up.
+        for label, text in {"bullet": bullet, "table": table}.items():
+            with self.subTest(label):
+                tag, detail = _check(text, [dict(chosen[0], ref="R1")])
+                self.assertEqual(tag, "mismatch")
+                self.assertIn("R1", detail or "")
 
     def test_escaped_pipe_in_a_table_cell_keys_like_an_unescaped_one(self) -> None:
         # Normalization applies to BOTH sides, so a verbatim-copied escaped row
