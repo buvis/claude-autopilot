@@ -1,0 +1,24 @@
+{
+  "phase": "done",
+  "next_phase": "",
+  "schema_version": 1,
+  "batch": {
+    "id": "202610050904",
+    "completed_prds": [],
+    "parks_consecutive": 0
+  },
+  "prd": "00264-require-a-disposition-for-every-review-row-v1.md",
+  "catchup_mode": "skip",
+  "doubt_reviewer": "codex",
+  "consensus_engine": "legacy",
+  "session_model": "sonnet",
+  "rework_cap": 2,
+  "lane": "fast-track",
+  "lane_reason": "card_sized",
+  "lane_effective": "fast-track",
+  "tasks_total": 0,
+  "phases_completed": [],
+  "cycle": 1,
+  "tasks_completed": 0,
+  "replan_count": 0
+}
