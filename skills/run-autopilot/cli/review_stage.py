@@ -747,8 +747,7 @@ def _append_context_blocks(
 
 
 def _replay_base(context: Path, repo_root: Path) -> str | None:
-    # The one base gather-context.sh recorded, anchored to its merge-base
-    # with HEAD: not a second resolver, a moving branch tip's fix (7b1f589).
+    # Not a 2nd resolver: anchors gather-context.sh's own base (7b1f589).
     base = scope.group(1) if (scope := _SCOPE_RE.search(_read(context))) else None
     return (_git_out(repo_root, "merge-base", "HEAD", base) or base) if base else None
 

@@ -443,8 +443,7 @@ def test_persona_preflight_fails_closed_on_malformed_frontmatter(
 # Passes against the pre-change code too: `env["base"]` is a sha that is
 # already HEAD's direct ancestor (the fixture never moves the branch tip),
 # so merge-base(HEAD, base) == base trivially -- this fixture can't tell the
-# merge-base step apart from using the recorded base as-is. The sibling test
-# below (a branch NAME whose tip actually moves) is the one that pins it.
+# merge-base step apart from using the recorded base as-is.
 def test_replay_cmd_never_receives_gate_command(env: dict) -> None:
     summary = _stage(env)
 
@@ -464,9 +463,10 @@ def test_replay_cmd_never_receives_gate_command(env: dict) -> None:
 
 
 # Passes against the pre-change code too: the pre-PRD-00256 stage() called
-# the old standalone resolve_base(), whose "merge-base of HEAD with origin/
-# HEAD, then master" search independently lands on this fixture's same expected
-# commit, for an unrelated reason (that resolver is gone; see the sibling test).
+# a since-removed resolve_base(), whose own "merge-base of HEAD with origin/
+# HEAD, then master" search runs fresh at call time and lands on the same
+# commit for an unrelated reason -- it predates the scope-recording this
+# test targets entirely, so it cannot discriminate the two mechanisms.
 def test_replay_base_is_branch_point_when_scope_records_a_branch_name(
     env: dict,
 ) -> None:
