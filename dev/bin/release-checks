@@ -52,7 +52,7 @@ run_pytest() {
   TOTAL_FAIL=$((TOTAL_FAIL + ${f:-0}))
   TOTAL_SKIP=$((TOTAL_SKIP + ${s:-0}))
   # A non-zero exit with no counted failure (collection errors) is not green.
-  if [[ "$rc" -ne 0 && -z "$f" ]]; then
+  if [[ "$rc" -ne 0 && "${f:-0}" -eq 0 ]]; then
     INFRA_FAIL=1
   fi
 }

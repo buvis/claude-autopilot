@@ -109,6 +109,18 @@ def test_nonzero_exit_keeps_the_real_failed_count() -> None:
     assert "PASS 6 FAIL 4 SKIP 0 EXIT 1" in out
 
 
+def test_nonzero_exit_with_a_literal_zero_failed_is_not_reported_green() -> None:
+    # "0 failed" parses as the string "0", not as empty: an emptiness check
+    # waved this exit 1 through as green (00256 cycle-2 review, R4).
+    out = _run_helpers(
+        """
+        run_pytest bash -c 'echo "3 passed, 0 failed in 0.1s"; exit 1'
+        """
+        + _EXIT_LINE
+    )
+    assert "PASS 3 FAIL 0 SKIP 0 EXIT 1" in out
+
+
 def test_harness_summary_line_supplies_the_measured_totals() -> None:
     out = _run_helpers(
         """

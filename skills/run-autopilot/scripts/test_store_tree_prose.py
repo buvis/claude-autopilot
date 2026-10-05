@@ -66,9 +66,10 @@ _EXEMPT = (
 
 
 def _prose_files() -> list[Path]:
-    """Every `.md` under skills/, bar the golden fixtures (frozen records)."""
-    golden = _RUN_AUTOPILOT / "cli" / "golden"
-    return [p for p in sorted(_SKILLS.rglob("*.md")) if golden not in p.parents]
+    """Every `.md` under skills/, bar the golden and test fixtures (frozen
+    records: a fixture review file quotes findings, it instructs nothing)."""
+    frozen = (_RUN_AUTOPILOT / "cli" / "golden", _RUN_AUTOPILOT / "cli" / "fixtures")
+    return [p for p in sorted(_SKILLS.rglob("*.md")) if not any(r in p.parents for r in frozen)]
 
 
 def test_no_gate_parses_porcelain_by_hand() -> None:
