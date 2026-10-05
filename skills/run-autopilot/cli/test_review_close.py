@@ -101,6 +101,7 @@ def _finding(sev: str, file: str, issue: str, cls: str = "fix") -> dict:
     }
 
 
+# Pins pre-existing one-task-per-group behavior; unrelated to the new cross-check.
 def test_close_adds_one_task_per_group(tmp_path: Path) -> None:
     review = _review(tmp_path, agents="  alice: available\n  bob: unavailable\n")
     state_path = _state(tmp_path)
@@ -129,6 +130,7 @@ def test_close_adds_one_task_per_group(tmp_path: Path) -> None:
     assert data["review_lenses"] == {"consensus": "done", "doubt": "failed"}
 
 
+# Pins pre-existing idempotency behavior; unrelated to the new cross-check.
 def test_close_is_idempotent(tmp_path: Path) -> None:
     review = _review(tmp_path)
     state_path = _state(tmp_path)
@@ -144,6 +146,7 @@ def test_close_is_idempotent(tmp_path: Path) -> None:
     assert len(after_first["applied_review_batches"]) == 1
 
 
+# Pins pre-existing gate-failure refusal behavior; unrelated to the new cross-check.
 def test_close_refuses_a_gate_failing_review_file(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -170,6 +173,7 @@ def test_close_refuses_a_gate_failing_review_file(
     assert not Path(f"{state_path}.bak").exists()
 
 
+# Pins pre-existing doubt-verdict recording behavior; unrelated to the new cross-check.
 def test_close_records_doubt_verdicts(tmp_path: Path) -> None:
     state_path = _state(tmp_path)
     review = _review(tmp_path)
@@ -190,6 +194,7 @@ def test_close_records_doubt_verdicts(tmp_path: Path) -> None:
     assert len(_load(state_path)["doubts_rubric_verdicts"]) == 5
 
 
+# Pins pre-existing emoji-severity grouping behavior; unrelated to the new cross-check.
 def test_close_group_uses_emoji_severity_not_english_word(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -218,6 +223,7 @@ def test_close_group_uses_emoji_severity_not_english_word(
     assert names == ["[D2] src/a.py", "[D2] src/a.py"]
 
 
+# Pins pre-existing in-lock idempotency behavior; unrelated to the new cross-check.
 def test_close_idempotency_check_is_inside_the_transaction(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -245,6 +251,7 @@ def test_close_idempotency_check_is_inside_the_transaction(
     assert len(_load(state_path)["tasks"]) == 2
 
 
+# Pins pre-existing per-batch idempotency behavior; unrelated to the new cross-check.
 def test_close_decision_gate_and_tail_sweep_batches_are_independently_idempotent(
     tmp_path: Path,
 ) -> None:
@@ -272,6 +279,7 @@ def test_close_decision_gate_and_tail_sweep_batches_are_independently_idempotent
     ]
 
 
+# Pins pre-existing parse-path routing behavior; unrelated to the new cross-check.
 def test_close_state_mutations_use_parse_path(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -309,6 +317,7 @@ def test_close_state_mutations_use_parse_path(
     assert not {"r", "a", "d"} & set(_load(state_path))
 
 
+# Pins pre-existing scoped-validator usage behavior; unrelated to the new cross-check.
 def test_close_uses_statectl_mutate_scoped_validator(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -340,6 +349,7 @@ def test_close_uses_statectl_mutate_scoped_validator(
     assert _load(state_path)["phase"] == "not-a-phase"
 
 
+# Pins pre-existing classification-mapping behavior; unrelated to the new cross-check.
 def test_close_maps_every_classification_row_to_a_chosen_finding_value(
     tmp_path: Path,
 ) -> None:
@@ -371,6 +381,7 @@ def test_close_maps_every_classification_row_to_a_chosen_finding_value(
     assert "discard me" not in every_text
 
 
+# Pins pre-existing found-by-suffix omission behavior; unrelated to the new cross-check.
 def test_close_omits_found_by_suffix_when_no_author(tmp_path: Path) -> None:
     review = _review(tmp_path)
     state_path = _state(tmp_path)
@@ -384,6 +395,7 @@ def test_close_omits_found_by_suffix_when_no_author(tmp_path: Path) -> None:
     assert "wrong default" in desc
 
 
+# Pins pre-existing codex-guard threading behavior; unrelated to the new cross-check.
 def test_close_threads_require_codex_guard_flag_to_the_gate(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -421,6 +433,7 @@ def test_close_threads_require_codex_guard_flag_to_the_gate(
     assert calls == [True, False]
 
 
+# Pins pre-existing tail-sweep skip behavior; unrelated to the new cross-check.
 def test_close_tail_sweep_skips_lens_verdict_and_dispatch_row_steps(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -447,6 +460,7 @@ def test_close_tail_sweep_skips_lens_verdict_and_dispatch_row_steps(
     assert commands == []
 
 
+# Pins pre-existing best-effort dispatch-row behavior; unrelated to the new cross-check.
 def test_close_ends_frontmatter_dispatch_rows_best_effort(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -508,9 +522,7 @@ def _findings_file(tmp_path: Path, rows: list[dict]) -> Path:
 
 
 def _review_close_cli(
-    review: Path,
-    state_path: Path,
-    findings: Path,
+    review: Path, state_path: Path, findings: Path
 ) -> subprocess.CompletedProcess:
     return subprocess.run(
         [
@@ -608,8 +620,7 @@ def test_cli_exits_1_when_the_review_itself_fails_the_gate(tmp_path: Path) -> No
     state_path = _state(tmp_path)
     before = state_path.read_bytes()
     findings = _findings_file(
-        tmp_path,
-        [_finding(HIGH, "src/b.py:10", "an issue no reviewer raised")],
+        tmp_path, [_finding(HIGH, "src/b.py:10", "an issue no reviewer raised")]
     )
 
     proc = _review_close_cli(review, state_path, findings)
@@ -626,8 +637,7 @@ def test_cli_still_exits_1_on_other_not_applied_reasons(tmp_path: Path) -> None:
     review = _review(tmp_path, consolidated=CONSOLIDATED)
     state_path = _state(tmp_path)
     findings = _findings_file(
-        tmp_path,
-        [_finding(HIGH, "src/b.py:10", "wrong default")],
+        tmp_path, [_finding(HIGH, "src/b.py:10", "wrong default")]
     )
 
     first = _review_close_cli(review, state_path, findings)
