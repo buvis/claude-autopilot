@@ -140,3 +140,23 @@
 - (Ivan) The `dispatch_rows` explanation sentence went after the "Agent states" line, not inside the YAML example.
 - (Ivan) The `timeout` gloss "(no result in time)" is Ivan's wording; the contract named only the value.
 - (orchestrator) The self-deslop pass removed the contract-mandated Blake "stays history-free" sentence (and the blank line before the Standalone-runs paragraph); its commit `2e5a234` was reverted as `f040476` because the sentence traces straight to the task's verbatim contract.
+
+## 12: [D1] Read the findings table in the cross-check (cycle-1 CRITICAL) (00256, cycle 1)
+
+- (Tess) The table-specific malformed reason contains the word "row" and differs from the no-section reason; the exact wording is not asserted. Later tightened to also require "table" or "header", so the literal string `"row"` cannot pass.
+- (Tess) `Row.severity` and `Row.issue` may be raw or normalized, so their exact values are never asserted - only `Row.file` equality, substring presence in `issue`, and bullet-vs-table triple equality.
+- (Tess) A section holding a pipe table from which zero findings rows can be read is `"unreadable-table"`, for both a header missing required columns and malformed data rows.
+- (Tess) The chosen-findings `ref` values are `"R1"`, `"R2"`, ... in review-table row order, and the `Ref` column is the first column of both the header and every data row.
+- (Tess) `Row.severity` normalizes to the lowercase English word, so a `High` cell keys as `"high"`; pinned together with equality against the emoji spelling so the test stays honest if only the literal is wrong.
+- (Tess) `TABLE_DATA_ROW_RE` is anchored or at least bracket-gated, so `.search` on the header and separator lines returns None.
+- (Tess) Mid-table fixture rows are addressed by index, assuming `_reviewed_keys` preserves table order - the same assumption the pre-existing `rows[21]` assertion already made.
+- (Tess) Import style `from cli.test_gate import ...` plus `sys.path.insert(0, parent.parent)` is the pack's convention; reaching `FindingsCrossCheckTests` through the module rather than binding its name, to stop pytest re-collecting that suite (34 vs 17 collected, measured).
+- (Ivan) `Row.issue` preserves case and `_backed` lowercases at compare time, resolving the conflict between the design's "normalized per rule 6" and the fixture assertions requiring mixed-case substrings. `_finding_key` still returns a lowercased issue, so the chosen side is byte-identical to before.
+- (Ivan) A header carrying Severity and Issue but no File column is treated as not-a-header, implementing "a header missing any of the three contributes no keys" with one predicate.
+- (Ivan) The `Ref` separator cell is `-----` (five dashes); no source states it.
+- (Ivan) `" | ["` is the replacement data-row filter idiom in `test_consolidate_findings.py`; the dispatch named no replacement because it did not anticipate five further functions breaking on the new leading column.
+- (Ivan) "No exception raised" at the CLI boundary is asserted as "no `Traceback` on stderr", since Python exits 1 on an uncaught exception and the expected malformed exit is also 1.
+- (orchestrator) `dev/bin/release-checks` ran neither `test_gate.py` nor the new `test_gate_findings_table.py`; both were added to its `[checks] review verbs` block. This is outside the task's declared file list, kept because a new suite outside the release gate is a gap this change would otherwise introduce.
+- (orchestrator) Ivan was permitted to update `test_consolidate_findings.py`'s exact-header golden because the `Ref` column deliberately changes that rendered contract; he then widened five further row filters in the same file, two of which were `assert not [...]` checks that the new leading column would have made vacuously true.
+- (orchestrator) Pat's cycle-1 prompt measured 60007 bytes against the 50000-byte dispatch budget after the one permitted trim pass (fixture data dropped); dispatched anyway through the sonnet helper-script lane rather than narrowing the reviewer's view of the diff.
+- (orchestrator) No CHANGELOG entry for the truncated-row crash fix: the crash existed only in this same unreleased change, which already carries an entry.

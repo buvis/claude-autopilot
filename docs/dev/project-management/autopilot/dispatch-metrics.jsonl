@@ -3230,3 +3230,25 @@
 {"id":"3528825c","ended_at":1791162880,"elapsed_s":805,"outcome":"ok","detail":null}
 {"id":"349b147b","ended_at":1791162881,"elapsed_s":804,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"review","edge":"leave","at":1791164528,"phase":"review","prd":"00256-finish-the-review-verbs-before-release-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1791164569,"phase":"review","prd":"00256-finish-the-review-verbs-before-release-v1.md"}
+{"id":"2cefa637","kind":"tess","task":"12","queued_at":1791164745,"prompt_bytes":47117}
+{"id":"2cefa637","ended_at":1791165274,"elapsed_s":529,"outcome":"ok","detail":null}
+{"id":"f7be985c","kind":"tess","task":"12","queued_at":1791165365,"prompt_bytes":13646}
+{"id":"f7be985c","ended_at":1791165786,"elapsed_s":421,"outcome":"ok","detail":null}
+{"id":"17a47070","kind":"devon","task":"12","queued_at":1791165856,"prompt_bytes":4432}
+{"id":"17a47070","ended_at":1791166946,"elapsed_s":1090,"outcome":"ok","detail":null}
+{"id":"1d13163e","kind":"tess","task":"12","queued_at":1791166986,"prompt_bytes":17618}
+{"id":"1d13163e","ended_at":1791167301,"elapsed_s":315,"outcome":"ok","detail":null}
+{"id":"13b06e6b","kind":"ivan","task":"12","queued_at":1791167434,"prompt_bytes":41402}
+{"id":"13b06e6b","ended_at":1791168204,"elapsed_s":770,"outcome":"ok","detail":null}
+{"id":"969cc7e6","kind":"deslop","task":"12","queued_at":1791168318,"prompt_bytes":10893}
+{"id":"969cc7e6","ended_at":1791168506,"elapsed_s":188,"outcome":"ok","detail":null}
+{"id":"a34276ec","kind":"pat","task":"12","queued_at":1791168622,"prompt_bytes":83864}
+{"id":"d8c91391","kind":"pat","task":"12","queued_at":1791168650,"prompt_bytes":60007}
+{"id":"001da0c2","kind":"ivan","task":"12","queued_at":1791168767,"prompt_bytes":21315}
+{"id":"001da0c2","ended_at":1791168900,"elapsed_s":133,"outcome":"ok","detail":null}
+{"id":"db5ad7d9","kind":"pat","task":"12","queued_at":1791168952,"prompt_bytes":7961}
+{"id":"a34276ec","ended_at":1791169097,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"d8c91391","ended_at":1791169097,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"db5ad7d9","ended_at":1791169097,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"kind":"handoff","site":"review","edge":"leave","at":1791169097,"phase":"review","prd":"00256-finish-the-review-verbs-before-release-v1.md"}
