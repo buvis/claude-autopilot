@@ -79,3 +79,68 @@ def test_gather_context_harness_counts_pass_lines() -> None:
         """
     )
     assert "PASS 2 FAIL 0 SKIP 0 EXIT 0" in out
+
+
+_EXIT_LINE = """
+    EXIT_CODE=0
+    if [[ "$TOTAL_FAIL" -ne 0 || "$INFRA_FAIL" -ne 0 ]]; then EXIT_CODE=1; fi
+    echo "PASS $TOTAL_PASS FAIL $TOTAL_FAIL SKIP $TOTAL_SKIP EXIT $EXIT_CODE"
+"""
+
+
+def test_nonzero_exit_with_zero_failed_count_is_not_reported_green() -> None:
+    out = _run_helpers(
+        """
+        run_pytest bash -c 'echo "3 passed, 2 errors in 0.1s"; exit 1'
+        """
+        + _EXIT_LINE
+    )
+    assert "EXIT 0" not in out
+    assert "PASS 3 FAIL 0 SKIP 0 EXIT 1" in out
+
+
+def test_nonzero_exit_keeps_the_real_failed_count() -> None:
+    out = _run_helpers(
+        """
+        run_pytest bash -c 'echo "4 failed, 6 passed in 0.1s"; exit 1'
+        """
+        + _EXIT_LINE
+    )
+    assert "PASS 6 FAIL 4 SKIP 0 EXIT 1" in out
+
+
+def test_harness_summary_line_supplies_the_measured_totals() -> None:
+    out = _run_helpers(
+        """
+        run_harness bash -c 'echo "ok"; echo "SUMMARY: 7 passed, 0 failed"; exit 0'
+        run_harness bash -c 'echo "SUMMARY: 4 passed, 2 failed"; exit 1'
+        echo "PASS $TOTAL_PASS FAIL $TOTAL_FAIL"
+        """
+    )
+    assert "PASS 11 FAIL 2" in out
+
+
+def test_harness_without_summary_line_counts_one_pass_per_clean_exit() -> None:
+    out = _run_helpers(
+        """
+        run_harness bash -c 'echo "no summary here"; exit 0'
+        echo "PASS $TOTAL_PASS FAIL $TOTAL_FAIL"
+        """
+    )
+    assert "PASS 1 FAIL 0" in out
+
+
+def test_harness_without_summary_line_counts_one_fail_per_bad_exit() -> None:
+    out = _run_helpers(
+        """
+        run_harness bash -c 'echo "no summary here"; exit 3'
+        echo "PASS $TOTAL_PASS FAIL $TOTAL_FAIL"
+        """
+    )
+    assert "PASS 0 FAIL 1" in out
+
+
+def test_gate_invokes_the_gate_and_review_verbs_prose_test_sets() -> None:
+    text = _RELEASE_CHECKS.read_text()
+    assert "skills/run-autopilot/cli/test_gate.py" in text
+    assert "skills/review-work-completion/scripts/test_review_verbs_prose.py" in text
