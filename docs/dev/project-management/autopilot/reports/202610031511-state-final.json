@@ -1,0 +1,176 @@
+{
+  "phase": "done",
+  "next_phase": "",
+  "schema_version": 1,
+  "batch": {
+    "id": "202610031511",
+    "mode": "autopilot",
+    "completed_prds": [
+      {
+        "filename": "00240-ignore-nested-store-lock-files-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 6,
+        "escalated_decisions": 0,
+        "tasks_completed": 4,
+        "tasks_total": 4,
+        "lane": "full",
+        "lane_reason": "uncardable",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00241-bound-rework-batches-by-file-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 15,
+        "escalated_decisions": 0,
+        "tasks_completed": 7,
+        "tasks_total": 7,
+        "lane": "fast-track",
+        "lane_reason": "uncardable",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00242-harden-the-wave-verbs-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 12,
+        "escalated_decisions": 0,
+        "tasks_completed": 13,
+        "tasks_total": 13,
+        "lane": "full",
+        "lane_reason": "design",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00243-make-the-headroom-wall-scan-match-its-contract-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 1,
+        "tasks_total": 1,
+        "lane": "fast-track",
+        "lane_reason": "card_sized",
+        "lane_effective": "fast-track",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00244-tidy-the-enter-verb-and-the-review-diff-plumbing-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 15,
+        "escalated_decisions": 0,
+        "tasks_completed": 9,
+        "tasks_total": 9,
+        "lane": "full",
+        "lane_reason": "uncardable",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00248-keep-phase-skills-in-the-session-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 9,
+        "escalated_decisions": 0,
+        "tasks_completed": 8,
+        "tasks_total": 8,
+        "lane": "full",
+        "lane_reason": "hook",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00249-stage-and-close-reviews-in-code-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 9,
+        "escalated_decisions": 0,
+        "tasks_completed": 11,
+        "tasks_total": 11,
+        "lane": "full",
+        "lane_reason": "design",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00250-finish-the-rework-grouping-fixes-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 0,
+        "tasks_total": 1,
+        "lane": "fast-track",
+        "lane_reason": "card_sized",
+        "lane_effective": "fast-track",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00254-tighten-the-phase-delegation-guard-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 4,
+        "escalated_decisions": 0,
+        "tasks_completed": 5,
+        "tasks_total": 5,
+        "lane": "full",
+        "lane_reason": "hook",
+        "lane_effective": "full",
+        "lane_escalated": null
+      }
+    ],
+    "plugin_versions": {
+      "aegis@buvis-plugins": "0.4.0",
+      "warden@buvis-plugins": "0.14.0"
+    },
+    "parks_consecutive": 0,
+    "minted_stubs": [
+      "00245-triage-the-store-gitignore-recursive-lock-patte-v1.md",
+      "00246-triage-tail-sweep-step-2-still-reads-build-one-v1.md",
+      "00247-triage-line-suffix-still-misses-three-citation-v1.md",
+      "00251-triage-the-store-gitignore-recursive-lock-patte-v1.md",
+      "00252-triage-guard-phase-delegation-s-negation-window-v1.md",
+      "00253-triage-five-of-235-real-reviewer-prompts-are-st-v1.md",
+      "00255-triage-resolve-base-is-a-second-diff-base-resol-v1.md",
+      "00257-triage-gate-reviewed-keys-parses-only-the-bulle-v1.md",
+      "00258-triage-cycle-2-2-cap-reached-with-an-unresolved-v1.md",
+      "00259-triage-gate-reviewed-keys-parses-only-the-bulle-v1.md",
+      "00260-triage-r2-prd-test-strategy-says-a-findings-jso-v1.md",
+      "00261-triage-r3-scope-beyond-the-prd-the-ref-column-m-v1.md",
+      "00262-triage-r4-dev-bin-release-checks-55-guards-the-v1.md",
+      "00263-triage-r1-the-prd-exit-criterion-is-false-at-he-v1.md"
+    ],
+    "critical_on_master": [
+      {
+        "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+        "batch": "202610031511",
+        "op_id": "6dcd9cbf27b9",
+        "detail": "cycle 2/2 cap reached with an unresolved CRITICAL: bash dev/bin/release-checks exits 1 at HEAD 6bca6b5 (PASS 2590 FAIL 1 SKIP 0 EXIT 1), falsifying PRD Success Metric 1. test_no_gate_parses_porcelain_by_hand is tripped by cli/fixtures/00256-review-1.md, the fixture task 12 added in dbe0ad5; the prose test predates this PRD. Fix: exempt that fixture path in test_store_tree_prose.py _EXEMPT, or exclude cli/fixtures/ from _prose_files(). 22 further findings deferred (3 high: PRD-vs-design one-directional cross-check, Ref-column scope beyond the PRD, release-checks:55 -z vs numeric fail-open guard). Review: docs/dev/project-management/reviews/00256-finish-the-review-verbs-before-release-v1-review-2.md",
+        "commit_range": "540edd9e98dce6319c2946b21f5c4890658b454a..6bca6b5f3b85bfb7cea36edd9a05ec6a8cd36d7c",
+        "commits": 57,
+        "branch": "master",
+        "repo_root": "/Users/bob/git/src/github.com/buvis/claude-autopilot",
+        "git_dir": null
+      }
+    ]
+  },
+  "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+  "catchup_mode": "skipped",
+  "doubt_reviewer": "codex",
+  "consensus_engine": "legacy",
+  "session_model": "sonnet",
+  "rework_cap": 2,
+  "lane": "full",
+  "lane_reason": "design",
+  "lane_effective": "full",
+  "tasks_total": 0,
+  "tasks_completed": 0,
+  "cycle": 1,
+  "codex_probe": {
+    "batch_id": "202610031511",
+    "verdict": "unhealthy",
+    "backend": "codex",
+    "detail": "hook_doctor: empty\t/Users/bob/.codex/hooks/analyze-instincts.py",
+    "hook_doctor": "summary\t4 ok, 7 stale, 2 broken",
+    "checked_at": "2026-10-03T13:52:27Z"
+  },
+  "phases_completed": [],
+  "replan_count": 0,
+  "contract_card": "step: PRD 00256 cycle-2 review ran all four lenses (Alice, Blake, Bob/codex resumed, Carl); 23 findings, one CRITICAL. Cycle 2 == rework_cap 2, so Phase 5's cap check took the loop-mode cap_critical branch: `autopilot stall` exit 0 (PRD moved to hold/, custody recorded over 540edd9..6bca6b5, 57 commits, 23 deferrals migrated into custody), then `mint-stubs` minted 7 triage stubs (00257-00263). | invariants: the CRITICAL is real and measured twice \u2014 `bash dev/bin/release-checks` exits 1 at HEAD 6bca6b5 (PASS 2590 FAIL 1 SKIP 0 EXIT 1) because task 12's fixture `cli/fixtures/00256-review-1.md` (commit dbe0ad5) trips `test_no_gate_parses_porcelain_by_hand`, which predates this PRD; the prior session's \"pre-existing unrelated failure\" note was wrong. Do NOT re-enter Phase 4/5/6 for 00256 \u2014 it is no longer in wip/. The batch keeps draining; custody needs an attended `autopilot custody resolve --prd 00256-finish-the-review-verbs-before-release-v1 --choice revert|branch-and-revert|accept`. | next: fresh session enters the build gate at Phase 0 (`next_phase: build`), which must first handle the pending custody (phase-build.md \u00a7 Handle pending custody) and then select the next PRD from backlog/."
+}
