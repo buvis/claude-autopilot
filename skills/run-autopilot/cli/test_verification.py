@@ -8,7 +8,9 @@ real git behavior (ancestry, diff paths, dirty tree), not a mock of it.
 from __future__ import annotations
 
 import json
+import os
 import re
+import signal
 import subprocess
 import time
 from pathlib import Path
@@ -86,6 +88,10 @@ def test_stale_when_code_changed(repo: Path) -> None:
 
     assert verification.reuse_verdict(_record(base), repo, head) == ("stale", {})
 
+    # Any path outside the store counts, not only the ones under src/.
+    later = _commit(repo, "Makefile", "all:\n\t@true\n")
+    assert verification.reuse_verdict(_record(head), repo, later) == ("stale", {})
+
 
 @pytest.mark.parametrize("field", ["passed", "failed", "skipped"])
 def test_stale_when_counts_null(repo: Path, field: str) -> None:
@@ -156,7 +162,8 @@ def test_rename_out_of_store_is_not_clean(repo: Path) -> None:
     record = _record(head)
     assert verification.reuse_verdict(record, repo, head) == ("reused", record)
 
-    _git(repo, "mv", f"{STORE}/notes/old.md", "src/moved.md")
+    # Destination at the repo root, outside the store and outside src/.
+    _git(repo, "mv", f"{STORE}/notes/old.md", "moved.md")
     assert verification.reuse_verdict(record, repo, head) == ("stale", {})
 
 
@@ -177,9 +184,81 @@ def test_reuse_verdict_ignores_dirty_paths_under_the_store(repo: Path) -> None:
     (store_dir / "dispatch-metrics.jsonl").write_text("{}\n")
     assert verification.reuse_verdict(record, repo, head) == ("reused", record)
 
+    # A store path that merely contains "src/" in its name is still store.
+    nested = store_dir.parent / "notes" / "src"
+    nested.mkdir(parents=True)
+    (nested / "x.md").write_text("note\n")
+    assert verification.reuse_verdict(record, repo, head) == ("reused", record)
+
     # A non-store path dirty at the same time still makes the record stale.
     (repo / "src" / "app.py").write_text("print('dirty')\n")
     assert verification.reuse_verdict(record, repo, head) == ("stale", {})
+
+    # ... and so does one that lives outside src/ entirely.
+    _git(repo, "checkout", "--", "src/app.py")
+    (repo / "pyproject.toml").write_text("[project]\n")
+    assert verification.reuse_verdict(record, repo, head) == ("stale", {})
+
+
+def _spy_on_drain(monkeypatch) -> list[dict]:
+    """Records every drain call's cap and the tail it handed back, while
+    still running the real drain."""
+    real = verification._drain_bounded
+    calls: list[dict] = []
+
+    def _wrapper(proc, cap, deadline):
+        tail, done = real(proc, cap, deadline)
+        calls.append({"cap": cap, "tail": tail, "done": done})
+        return tail, done
+
+    monkeypatch.setattr(verification, "_drain_bounded", _wrapper)
+    return calls
+
+
+def _popen(command: str) -> subprocess.Popen:
+    return subprocess.Popen(
+        ["/bin/sh", "-c", command],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+
+
+def test_gate_timeout_default_lets_a_real_suite_finish() -> None:
+    # A default deadline of a few seconds would kill every real gate run
+    # mid-flight; the suite this gate runs takes minutes.
+    assert verification.GATE_TIMEOUT_S >= 600
+    assert verification.GATE_OUTPUT_CAP >= 100_000
+
+
+def test_drain_bounded_keeps_only_the_last_cap_bytes() -> None:
+    proc = _popen("printf '%0300d' 0")
+    try:
+        tail, done = verification._drain_bounded(proc, 64, time.monotonic() + 10)
+    finally:
+        proc.wait()
+        proc.stdout.close()
+        proc.stderr.close()
+
+    assert tail == b"0" * 64
+    assert done is True
+
+
+def test_drain_bounded_reports_not_done_for_a_lingering_child() -> None:
+    proc = _popen("echo hi; sleep 30")
+    try:
+        start = time.monotonic()
+        tail, done = verification._drain_bounded(proc, 4096, time.monotonic() + 0.5)
+        elapsed = time.monotonic() - start
+    finally:
+        os.killpg(proc.pid, signal.SIGKILL)
+        proc.wait()
+        proc.stdout.close()
+        proc.stderr.close()
+
+    assert done is False
+    assert tail == b"hi\n"
+    assert elapsed < 5
 
 
 def test_run_gate_prints_one_summary_line(tmp_path: Path) -> None:
@@ -215,14 +294,27 @@ def test_run_gate_unparseable_output_records_nothing(tmp_path: Path) -> None:
     assert result["timed_out"] is False
     assert not (tmp_path / RECORD_REL).exists()
 
+    # A line that merely looks like the summary is not one either.
+    near_miss = verification.run_gate(
+        "echo 'PASSED 3 of 4 in 5 s 6'",
+        tmp_path,
+        "abc",
+        1,
+    )
+    assert near_miss["passed"] is None
+    assert near_miss["raw_line"] is None
+    assert not (tmp_path / RECORD_REL).exists()
+
 
 def test_run_gate_keeps_tail_so_a_late_summary_line_still_parses(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(verification, "GATE_OUTPUT_CAP", 64)
+    calls = _spy_on_drain(monkeypatch)
     # The summary line is always last; a cap that keeps the tail (not the
-    # head) of output exceeding GATE_OUTPUT_CAP must still find it.
+    # head) of output exceeding GATE_OUTPUT_CAP must still find it, and the
+    # bytes beyond the cap really are dropped.
     command = "printf '%0100d\\n' 0; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
     result = verification.run_gate(command, tmp_path, "abc", None)
 
@@ -231,18 +323,23 @@ def test_run_gate_keeps_tail_so_a_late_summary_line_still_parses(
     assert result["skipped"] == 0
     assert result["raw_line"] == "PASS 1 FAIL 0 SKIP 0 EXIT 0"
     assert (tmp_path / RECORD_REL).exists()
+    assert [call["cap"] for call in calls] == [verification.GATE_OUTPUT_CAP]
+    assert len(calls[0]["tail"]) <= 64
 
 
 def test_run_gate_streams_and_keeps_tail(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(verification, "GATE_OUTPUT_CAP", 4096)
+    calls = _spy_on_drain(monkeypatch)
     # One unbroken burst, no newlines, far larger than the cap -- proves the
     # drain is byte-bounded as it reads, not only truncated after a full
-    # buffered capture.
+    # buffered capture: what it hands back never exceeds the cap.
     command = "head -c 2000000 /dev/zero | tr '\\0' 'x'; echo; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
     result = verification.run_gate(command, tmp_path, "abc", None, timeout=30)
 
     assert result["passed"] == 1
     assert result["raw_line"] == "PASS 1 FAIL 0 SKIP 0 EXIT 0"
+    assert [call["cap"] for call in calls] == [4096]
+    assert len(calls[0]["tail"]) <= 4096
 
 
 def test_run_gate_uses_last_summary_line_not_first(tmp_path: Path) -> None:
@@ -262,7 +359,7 @@ def test_run_gate_times_out_and_writes_nothing(tmp_path: Path) -> None:
         tmp_path,
         "abc",
         1,
-        timeout=0.5,
+        timeout=6,
     )
     elapsed = time.monotonic() - start
 
@@ -274,7 +371,9 @@ def test_run_gate_times_out_and_writes_nothing(tmp_path: Path) -> None:
         "raw_line": None,
         "timed_out": True,
     }
-    assert elapsed < 10
+    # The deadline tracks the `timeout` argument: waiting out the given 6s
+    # (not some constant deadline of its own) and then returning promptly.
+    assert 5 < elapsed < 10
     assert not (tmp_path / RECORD_REL).exists()
 
 
@@ -302,7 +401,9 @@ def test_run_gate_times_out_when_the_child_closes_both_pipes_and_lingers(
         "raw_line": None,
         "timed_out": True,
     }
-    assert elapsed < 4
+    # A 1s timeout returns in about 1s: paired with the 6s case above, no
+    # single hardcoded deadline can satisfy both bounds.
+    assert 0.5 < elapsed < 4
     assert not (tmp_path / RECORD_REL).exists()
 
 
@@ -328,14 +429,14 @@ def test_reuse_verdict_docstring_states_the_tolerances_it_applies() -> None:
     # The empty-porcelain claim is gone: no clause pairs the two any more.
     clauses = re.split(r"[.;\n]", doc)
     assert [c for c in clauses if "porcelain" in c and "empty" in c] == []
-    # Dirty paths under the store tree are tolerated.
-    assert "docs/dev/project-management/" in doc
-    assert "dirty" in doc
-    # A rename or copy is judged by both of its endpoints.
-    assert "rename" in doc
-    assert "copy" in doc
-    assert "both" in doc
-    assert "endpoint" in doc
+    # One clause says dirty paths under the store tree are tolerated.
+    assert [c for c in clauses if "docs/dev/project-management/" in c and "dirty" in c]
+    # One clause says a rename or copy is judged by both of its endpoints.
+    assert [
+        c
+        for c in clauses
+        if ("rename" in c or "copy" in c) and ("both" in c or "endpoint" in c)
+    ]
 
 
 def test_run_gate_closes_the_child_pipes_before_returning(
@@ -380,3 +481,17 @@ def test_run_gate_writes_last_verification_json_on_fresh_run(tmp_path: Path) -> 
         "failed": 2,
         "skipped": 1,
     }
+
+
+def test_run_gate_reports_the_process_exit_not_the_printed_one(
+    tmp_path: Path,
+) -> None:
+    # The command lies about its own status: the gate reports what the
+    # process actually exited with.
+    command = "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'; exit 2"
+    result = verification.run_gate(command, tmp_path, "cafe", 1)
+
+    assert result["exit"] == 2
+    assert result["passed"] == 1
+    written = json.loads((tmp_path / RECORD_REL).read_text())
+    assert written["commands"] == [{"command": command, "exit": 2}]
