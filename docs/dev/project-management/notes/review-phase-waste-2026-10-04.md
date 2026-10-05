@@ -165,6 +165,21 @@ at the top. Verified: `release-checks` exits 0 with all three set.
 ~10 min reviewers, 2.7 min bookkeeping, then a 2-task tail sweep and the
 3-min final gate.
 
+### V12. The push-on-critical guard fires on `git stash push` (open)
+
+With 00256's cap_critical custody pending, `hooks/guard_push_on_critical.py`
+(0.7.0 cache, still registered) blocked a Bash command whose only "push" was
+`git stash push -q -- <file>`. Harmless here (plain `git stash` worked), but
+a guard that reads any `push` token will also stop rework sessions that
+stash. Fix: match `git push` as a subcommand, not the word.
+
+00256 capped with 1 CRITICAL (the gate failed at HEAD on a fixture the PRD
+added) and 3 HIGH. The CRITICAL and R4 (`release-checks:55` emptiness check)
+were mechanical and fixed by hand in c78527c (fail-first test included); the
+gate is green at c78527c. Stubs 00257/00259/00262/00263 closed into done.
+R2 (one-directional cross-check vs PRD text) and R3 (Ref-column scope) stay
+on hold for a decision.
+
 ## Not waste (kept)
 
 - The four-lens roster, two cycles, and the cap: standing rule, and cycle 2
