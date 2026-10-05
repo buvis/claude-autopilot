@@ -126,8 +126,17 @@ def test_close_adds_one_task_per_group(tmp_path: Path) -> None:
     assert "wrong default" in b_desc and "unclear name" in b_desc
     assert "crash on empty input" not in b_desc
     assert data["tasks_total"] == 3
-    assert result["lenses_closed"] == {"consensus": "done", "doubt": "failed"}
-    assert data["review_lenses"] == {"consensus": "done", "doubt": "failed"}
+    # blake/carl/eve have no line at all under agents: here, so the
+    # missing-persona fail-safe closes their lenses as "failed" too.
+    expected_lenses = {
+        "consensus": "done",
+        "doubt": "failed",
+        "blind": "failed",
+        "ui": "failed",
+        "fable": "failed",
+    }
+    assert result["lenses_closed"] == expected_lenses
+    assert data["review_lenses"] == expected_lenses
 
 
 # Pins pre-existing idempotency behavior; unrelated to the new cross-check.
@@ -522,7 +531,9 @@ def _findings_file(tmp_path: Path, rows: list[dict]) -> Path:
 
 
 def _review_close_cli(
-    review: Path, state_path: Path, findings: Path
+    review: Path,
+    state_path: Path,
+    findings: Path,
 ) -> subprocess.CompletedProcess:
     return subprocess.run(
         [
@@ -620,7 +631,8 @@ def test_cli_exits_1_when_the_review_itself_fails_the_gate(tmp_path: Path) -> No
     state_path = _state(tmp_path)
     before = state_path.read_bytes()
     findings = _findings_file(
-        tmp_path, [_finding(HIGH, "src/b.py:10", "an issue no reviewer raised")]
+        tmp_path,
+        [_finding(HIGH, "src/b.py:10", "an issue no reviewer raised")],
     )
 
     proc = _review_close_cli(review, state_path, findings)
@@ -637,7 +649,8 @@ def test_cli_still_exits_1_on_other_not_applied_reasons(tmp_path: Path) -> None:
     review = _review(tmp_path, consolidated=CONSOLIDATED)
     state_path = _state(tmp_path)
     findings = _findings_file(
-        tmp_path, [_finding(HIGH, "src/b.py:10", "wrong default")]
+        tmp_path,
+        [_finding(HIGH, "src/b.py:10", "wrong default")],
     )
 
     first = _review_close_cli(review, state_path, findings)

@@ -128,11 +128,17 @@ def _dispatch_outcomes(frontmatter: list[str]) -> list[tuple[str, str]]:
 
 def _lens_states(frontmatter: list[str]) -> dict[str, str]:
     """`review_lenses` state per lens, from the `agents:` status of every
-    persona that lens maps to."""
-    return {
+    persona that lens maps to. A persona absent from `agents:` entirely
+    defaults to "failed", the same default an unrecognized status gets."""
+    agents = _nested_pairs(frontmatter, "agents")
+    lenses = {
         _PERSONA_LENS.get(name, name): _LENS_STATUS.get(status, "failed")
-        for name, status in _nested_pairs(frontmatter, "agents").items()
+        for name, status in agents.items()
     }
+    for persona, lens in _PERSONA_LENS.items():
+        if persona not in agents:
+            lenses.setdefault(lens, "failed")
+    return lenses
 
 
 def _gate_refusal(review_file: Path, text: str | None, reviewer_csv: str | None) -> str:
