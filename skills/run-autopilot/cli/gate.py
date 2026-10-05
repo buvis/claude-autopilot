@@ -269,7 +269,6 @@ def _table_cells(line: str) -> list[str]:
 
 
 def _row_from_table(header: list[str], cells: list[str]) -> Row:
-    """One data row, its columns located by the header's own names."""
     sev_i = header.index("severity")
     issue_i = header.index("issue")
     file_i = header.index("file")
