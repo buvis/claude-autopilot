@@ -386,6 +386,7 @@ def _backed(row: dict, reviewed: list[Row]) -> bool:
 def _cross_check_findings(
     text: str,
     findings: list[dict],
+    require_coverage: bool = True,
 ) -> tuple[str, str | None]:
     """Check every chosen finding against the review file's consolidated rows.
 
@@ -394,6 +395,11 @@ def _cross_check_findings(
     ("mismatch", <the first unbacked row>) or ("malformed", <why>) when the
     review file has no consolidated-findings section to check against, or holds
     a findings table that cannot be read.
+
+    `require_coverage=False` (the tail-sweep batch) skips the reverse check:
+    a tail-sweep findings JSON is a deliberate, documented subset of the
+    consolidated table (actionable Medium/Low rows only), so its rows not
+    naming every review-row ref is expected, not an error.
     """
     reviewed, problem = _reviewed_keys(text)
     if problem is not None:
@@ -409,6 +415,8 @@ def _cross_check_findings(
                 f"findings: {named}{row.get('severity', '')} "
                 f"{row.get('file', '')} | {row.get('issue', '')}"
             )
+    if not require_coverage:
+        return "ok", None
     covered_refs = {str(row.get("ref", "")).strip() for row in findings}
     for row in reviewed:
         if row.ref and row.ref not in covered_refs:

@@ -611,6 +611,28 @@ def test_close_refuses_an_uncovered_review_row(tmp_path: Path) -> None:
     assert not Path(f"{state_path}.lock").exists()
 
 
+def test_tail_sweep_applies_cleanly_against_a_partial_ref_table(tmp_path: Path) -> None:
+    """The tail-sweep step's findings JSON deliberately names only a subset of
+    the consolidated table's refs (actionable Medium/Low rows); close() must
+    not refuse it as uncovered the way a decision-gate batch would."""
+    consolidated = (
+        "## Consolidated Findings\n\n"
+        "| Ref | Consensus | Severity | Issue | File | Task | Found By |\n"
+        "|-----|-----------|----------|-------|------|------|----------|\n"
+        f"| R1 | [2/2] | {HIGH} | wrong default | src/b.py:10 | 3 | alice, bob |\n"
+        f"| R2 | [1/2] | {MED} | unclear name | src/c.py:20 | 3 | bob |\n"
+    )
+    review = _review(tmp_path, consolidated=consolidated)
+    state_path = _state(tmp_path)
+    # Only R2 (the actionable Medium row) carries a findings-JSON entry.
+    findings = [dict(_finding(MED, "src/c.py:20", "unclear name"), ref="R2")]
+
+    result = review_close.close(review, state_path, "tail-sweep", findings)
+
+    assert result["applied"] is True
+    assert "refused" not in result
+
+
 def test_close_applies_a_findings_subset_of_the_review(tmp_path: Path) -> None:
     """The counterpart: the cross-check must not block a legitimate batch that
     applies only some of the review's rows. The one row applied carries an
@@ -643,6 +665,34 @@ def test_cli_exit_2_on_findings_mismatch(tmp_path: Path) -> None:
     assert "findings_mismatch" in output
     # The operator has to learn which row was bogus, not just that one was.
     assert bogus in output
+    assert state_path.read_bytes() == before
+
+
+def test_cli_exit_2_on_findings_uncovered(tmp_path: Path) -> None:
+    """The uncovered refusal is mapped to exit 2 the same way the mismatch
+    refusal is: a review row no findings-JSON row names is just as much a
+    refusal to apply as a row whose findings don't match."""
+    consolidated = (
+        "## Consolidated Findings\n\n"
+        "| Ref | Consensus | Severity | Issue | File | Task | Found By |\n"
+        "|-----|-----------|----------|-------|------|------|----------|\n"
+        f"| R1 | [2/2] | {HIGH} | wrong default | src/b.py:10 | 3 | alice, bob |\n"
+        f"| R2 | [2/2] | {HIGH} | {RUNTIME_ISSUE} | src/d.py:4 | 3 | alice, bob |\n"
+    )
+    review = _review(tmp_path, consolidated=consolidated)
+    state_path = _state(tmp_path)
+    before = state_path.read_bytes()
+    # Only R1 carries a findings-JSON row; R2 is dropped entirely.
+    findings = _findings_file(
+        tmp_path, [dict(_finding(HIGH, "src/b.py:10", "wrong default"), ref="R1")]
+    )
+
+    proc = _review_close_cli(review, state_path, findings)
+
+    output = proc.stdout + proc.stderr
+    assert proc.returncode == 2, output
+    assert "findings_uncovered" in output
+    assert "R2" in output
     assert state_path.read_bytes() == before
 
 

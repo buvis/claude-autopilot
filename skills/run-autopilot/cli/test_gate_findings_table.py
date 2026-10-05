@@ -577,6 +577,27 @@ class FindingsTableCrossCheckTests(unittest.TestCase):
         ]
         self.assertEqual(_check(text, chosen), ("ok", None))
 
+    def test_tail_sweep_subset_of_a_ref_table_is_not_uncovered(self) -> None:
+        # The tail-sweep step's findings JSON is a deliberate, documented
+        # subset of the consolidated table (actionable Medium/Low rows only),
+        # so the reverse coverage check must not apply to it.
+        from cli import gate
+
+        text = _table_section(
+            TABLE_HEADER_REF_6,
+            _ref_row("R1", HIGH, "wrong default", "src/b.py:10"),
+            _ref_row("R2", MED, "unclear name", "src/c.py:20"),
+        )
+        chosen = [dict(_row(MED, "src/c.py:20", "unclear name"), ref="R2")]
+        self.assertEqual(
+            gate._cross_check_findings(text, chosen, require_coverage=False),
+            ("ok", None),
+        )
+        # Control: the same partial JSON under full coverage still refuses.
+        tag, detail = gate._cross_check_findings(text, chosen)
+        self.assertEqual(tag, "uncovered")
+        self.assertIn("R1", detail or "")
+
     def test_bullet_rows_without_ref_need_no_coverage(self) -> None:
         # Bullet-shape rows, and table rows with no Ref column, key with an
         # empty ref - the coverage check only applies to a non-empty ref, so

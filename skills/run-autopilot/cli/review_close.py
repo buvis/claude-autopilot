@@ -339,7 +339,9 @@ def close(
     text, refusal = _gate_review(review_file, require_codex_guard)
     if refusal is not None:
         return {"applied": False, "reason": refusal}
-    cross_check, detail = gate._cross_check_findings(text, chosen_findings)
+    cross_check, detail = gate._cross_check_findings(
+        text, chosen_findings, require_coverage=batch_id != "tail-sweep"
+    )
     if cross_check == "mismatch":
         return {"applied": False, "refused": "findings_mismatch", "reason": detail}
     if cross_check == "uncovered":

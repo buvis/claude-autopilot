@@ -1095,7 +1095,7 @@ def _run_review_close(args: argparse.Namespace) -> int:
     if result.get("applied"):
         return 0
     print(f"autopilot: review-close: {result.get('reason')}", file=sys.stderr)
-    return 2 if result.get("refused") == "findings_mismatch" else 1
+    return 2 if result.get("refused") in ("findings_mismatch", "findings_uncovered") else 1
 
 
 def _utc_now() -> str:
