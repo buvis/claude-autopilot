@@ -585,6 +585,32 @@ def test_review_close_refuses_on_findings_mismatch(
     assert not Path(f"{state_path}.lock").exists()
 
 
+def test_close_refuses_an_uncovered_review_row(tmp_path: Path) -> None:
+    """Hold stub 00260 / PRD 00264: a review row the findings JSON drops
+    entirely is refused exactly like a mismatch - nothing written, named by
+    its Ref. Needs a Ref column, so the row's ref is non-empty: bullet rows
+    (CONSOLIDATED's shape) always key with an empty ref and are exempt."""
+    consolidated = (
+        "## Consolidated Findings\n\n"
+        "| Ref | Consensus | Severity | Issue | File | Task | Found By |\n"
+        "|-----|-----------|----------|-------|------|------|----------|\n"
+        f"| R1 | [2/2] | {HIGH} | wrong default | src/b.py:10 | 3 | alice, bob |\n"
+        f"| R2 | [2/2] | {HIGH} | {RUNTIME_ISSUE} | src/d.py:4 | 3 | alice, bob |\n"
+    )
+    review = _review(tmp_path, consolidated=consolidated)
+    state_path = _state(tmp_path)
+    before = state_path.read_bytes()
+    # Only R1 carries a findings-JSON row; R2 is dropped entirely.
+    findings = [dict(_finding(HIGH, "src/b.py:10", "wrong default"), ref="R1")]
+
+    result = review_close.close(review, state_path, "decision-gate", findings)
+
+    assert result["applied"] is False
+    assert "R2" in result["reason"]
+    assert state_path.read_bytes() == before
+    assert not Path(f"{state_path}.lock").exists()
+
+
 def test_close_applies_a_findings_subset_of_the_review(tmp_path: Path) -> None:
     """The counterpart: the cross-check must not block a legitimate batch that
     applies only some of the review's rows. The one row applied carries an

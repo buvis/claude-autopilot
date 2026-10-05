@@ -537,6 +537,84 @@ class FindingsTableCrossCheckTests(unittest.TestCase):
         chosen = [_row(HIGH, "src/b.py:10", "wrong default")]
         self.assertEqual(_check(text, chosen), ("ok", None))
 
+    def test_dropped_table_row_is_uncovered(self) -> None:
+        # Hold stub 00260 / PRD 00264: the cross-check used to look only one
+        # way (a chosen row the review never recorded is refused). A review
+        # row the findings JSON drops entirely passed silently - this is the
+        # other direction, now also refused, named by its Ref.
+        text = _table_section(
+            TABLE_HEADER_REF_6,
+            _ref_row("R1", HIGH, "wrong default", "src/b.py:10"),
+            _ref_row("R2", MED, "unclear name", "src/c.py:20"),
+        )
+        chosen = [dict(_row(HIGH, "src/b.py:10", "wrong default"), ref="R1")]
+        tag, detail = _check(text, chosen)
+        self.assertEqual(tag, "uncovered")
+        self.assertIn("R2", detail or "")
+        self.assertIn("classification", (detail or "").lower())
+        # Control: naming both refs leaves nothing uncovered.
+        covered = chosen + [
+            dict(_row(MED, "src/c.py:20", "unclear name"), ref="R2"),
+        ]
+        self.assertEqual(_check(text, covered), ("ok", None))
+
+    def test_discarded_row_counts_as_covered(self) -> None:
+        # A `discard` row is never applied to state, but it is still the
+        # operator's explicit disposition for that review row - it must count
+        # as coverage, not leave the row looking dropped.
+        text = _table_section(
+            TABLE_HEADER_REF_6,
+            _ref_row("R1", HIGH, "wrong default", "src/b.py:10"),
+            _ref_row("R2", MED, "unclear name", "src/c.py:20"),
+        )
+        chosen = [
+            dict(_row(HIGH, "src/b.py:10", "wrong default"), ref="R1"),
+            dict(_row(MED, "src/c.py:20", "unclear name", "discard"), ref="R2"),
+        ]
+        self.assertEqual(_check(text, chosen), ("ok", None))
+
+    def test_bullet_rows_without_ref_need_no_coverage(self) -> None:
+        # Bullet-shape rows, and table rows with no Ref column, key with an
+        # empty ref - the coverage check only applies to a non-empty ref, so
+        # neither shape is newly refused by this direction.
+        bullet = (
+            "## Consolidated Findings\n\n"
+            f"- [2/3] {HIGH} wrong default | src/b.py:10 | Found by: alice, bob\n"
+        )
+        table_no_ref = _table_section(
+            TABLE_HEADER_6,
+            _table_row(HIGH, "wrong default", "src/b.py:10"),
+        )
+        for label, text in {"bullet": bullet, "table_no_ref": table_no_ref}.items():
+            with self.subTest(label):
+                self.assertEqual(_check(text, []), ("ok", None))
+
+
+# PRD 00264's third checkbox: the decision-gate prose in phase-review.md and
+# the findings-JSON step of review-work-completion's SKILL.md both have to
+# tell a human operator the same rule this file pins mechanically above -
+# every consolidated row needs one findings-JSON row naming its `ref` and a
+# `classification`, `discard` included.
+_SKILLS_DIR = CLI_DIR.parents[1]
+_PHASE_REVIEW = _SKILLS_DIR / "run-autopilot" / "references" / "phase-review.md"
+_REVIEW_SKILL = _SKILLS_DIR / "review-work-completion" / "SKILL.md"
+_COVERAGE_SENTENCE = (
+    "every consolidated row gets one JSON row with its `ref` and a "
+    "`classification`, `discard` included"
+)
+
+
+class FindingsJsonCoverageProseTests(unittest.TestCase):
+    def test_findings_json_covers_every_row_prose(self) -> None:
+        for path in (_PHASE_REVIEW, _REVIEW_SKILL):
+            with self.subTest(path.name):
+                text = path.read_text(encoding="utf-8")
+                self.assertIn(
+                    _COVERAGE_SENTENCE,
+                    text,
+                    f"{path}: expected the sentence {_COVERAGE_SENTENCE!r} - not found.",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
