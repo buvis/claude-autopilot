@@ -187,8 +187,7 @@ def _drain_bounded(
 
 
 def _timed_out_result() -> dict:
-    """The all-None result of a gate killed at its deadline. Nothing is
-    written to last-verification.json for it."""
+    """The all-None result of a gate killed at its deadline."""
     return {
         "passed": None,
         "failed": None,
