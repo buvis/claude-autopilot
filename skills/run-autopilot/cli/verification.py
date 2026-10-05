@@ -99,21 +99,24 @@ def reuse_verdict(
     record: the parsed contents of last-verification.json, or None if the
         file is missing/unreadable/unparseable.
     Returns ("reused", record) only when ALL hold:
-      - record is not None, record["sha"] is a non-empty str
-      - record["passed"], record["failed"], record["skipped"] are all
+      - record["sha"] is a non-empty str, and passed/failed/skipped are all
         present and not None
-      - `git merge-base --is-ancestor <record["sha"]> <head_sha>` exits 0
-        (record["sha"] is a real ancestor of head_sha — rejects a record
-        from a sibling or descendant commit surviving a reset/rebase)
+      - the run was green: failed is 0 and every record["commands"] entry
+        exited 0
+      - `git merge-base --is-ancestor <record["sha"]> <head_sha>` exits 0,
+        rejecting a sibling or descendant surviving a reset/rebase
       - every path in `git log <record["sha"]>..<head_sha> --name-only`
-        (cwd=repo_root) starts with "docs/dev/project-management/" (an empty
-        diff also counts — vacuously true)
-      - `git status --porcelain` (cwd=repo_root) is empty — reuse never
-        certifies a dirty working tree, since gather-context.sh's diff is
-        against the working tree, not just HEAD
+        (cwd=repo_root) starts with "docs/dev/project-management/" (an
+        empty diff also counts, vacuously)
+      - `git status --porcelain=1 -z` (cwd=repo_root) reports no dirty path
+        outside the store tree, since gather-context.sh's diff is against
+        the working tree, not just HEAD
+      - a dirty or untracked docs/dev/project-management/ path is tolerated
+      - a rename or copy is judged by both of its endpoint paths, so a move
+        out of the store tree counts as dirty
     Returns ("stale", {}) otherwise, including when any git call itself
     fails (missing sha, unknown ref, non-git repo, non-zero exit on the
-    ancestor check) — fail toward re-running the gate, never toward
+    ancestor check): fail toward re-running the gate, never toward
     skipping it.
     """
     if not isinstance(record, dict):
@@ -122,6 +125,11 @@ def reuse_verdict(
     if not isinstance(sha, str) or not sha:
         return _STALE
     if any(record.get(key) is None for key in ("passed", "failed", "skipped")):
+        return _STALE
+    commands = record.get("commands")
+    if not isinstance(commands, list):
+        return _STALE
+    if record["failed"] != 0 or any(c.get("exit") != 0 for c in commands):
         return _STALE
     try:
         if not _ancestor_and_clean(repo_root, sha, head_sha):
@@ -178,6 +186,40 @@ def _drain_bounded(
     return stdout_buf, not open_fds
 
 
+def _timed_out_result() -> dict:
+    """The all-None result of a gate killed at its deadline. Nothing is
+    written to last-verification.json for it."""
+    return {
+        "passed": None,
+        "failed": None,
+        "skipped": None,
+        "exit": None,
+        "raw_line": None,
+        "timed_out": True,
+    }
+
+
+def _reap(proc: subprocess.Popen, deadline: float, drained: bool) -> bool:
+    """Bounds the child's EXIT, not only its output: waits for `proc` until
+    `deadline` when both pipes reached EOF, else kills its process group (a
+    grandchild can outlive the shell while holding the pipes open) and
+    reaps it. Closes both pipes either way. Returns True iff the child
+    exited on its own, before the deadline, with its output fully drained."""
+    exited = False
+    if drained:
+        try:
+            proc.wait(timeout=max(0.0, deadline - time.monotonic()))
+            exited = True
+        except subprocess.TimeoutExpired:
+            pass
+    if not exited:
+        os.killpg(proc.pid, signal.SIGKILL)
+        proc.wait()
+    proc.stdout.close()
+    proc.stderr.close()
+    return exited
+
+
 def run_gate(
     command: str,
     cwd: Path,
@@ -186,20 +228,16 @@ def run_gate(
     timeout: float = GATE_TIMEOUT_S,
 ) -> dict:
     """
-    Runs `command` (the project's test-gate command, e.g.
-    `dev/bin/release-checks` -- resolved by the caller, never hardcoded
-    here) via subprocess.Popen(shell=True), draining stdout/stderr in
-    bounded chunks (never buffering the full output) against a wall-clock
-    deadline. On deadline expiry with the child not yet reaped: kill the
-    process group, return {"passed": None, "failed": None, "skipped": None,
-    "exit": None, "raw_line": None, "timed_out": True} and write NOTHING to
-    last-verification.json. On a clean exit, parse the command's own final
-    summary line via SUMMARY_RE, keeping the LAST match in the (bounded)
-    stdout tail -- a command that prints the pattern more than once (a
-    retry) is read as its final, superseding line. If no line matches,
-    passed/failed/skipped are None and nothing is written. On a successful
-    parse, writes last-verification.json per
-    skills/work/references/final-verification.md.
+    Runs `command` (the gate command, e.g. `dev/bin/release-checks` --
+    resolved by the caller, never hardcoded here) via Popen(shell=True),
+    draining stdout/stderr in bounded chunks (never buffering the full
+    output) against a wall-clock deadline that bounds the child's exit too,
+    not only its output. On expiry: kill the process group, return
+    `_timed_out_result()` and write NOTHING. On a clean exit, parse the
+    LAST SUMMARY_RE match in the (bounded) stdout tail -- a command that
+    prints the pattern twice (a retry) is read as its final, superseding
+    line. No match: passed/failed/skipped are None and nothing is written;
+    a parse writes last-verification.json (shape: `_write_record`).
     """
     proc = subprocess.Popen(
         command,
@@ -209,19 +247,10 @@ def run_gate(
         stderr=subprocess.PIPE,
         start_new_session=True,
     )
-    stdout_buf, done = _drain_bounded(proc, GATE_OUTPUT_CAP, time.monotonic() + timeout)
-    if not done:
-        os.killpg(proc.pid, signal.SIGKILL)
-        proc.wait()
-        return {
-            "passed": None,
-            "failed": None,
-            "skipped": None,
-            "exit": None,
-            "raw_line": None,
-            "timed_out": True,
-        }
-    proc.wait()
+    deadline = time.monotonic() + timeout
+    stdout_buf, done = _drain_bounded(proc, GATE_OUTPUT_CAP, deadline)
+    if not _reap(proc, deadline, done):
+        return _timed_out_result()
     raw_line, found = None, None
     for line in stdout_buf.decode("utf-8", errors="ignore").splitlines():
         hit = SUMMARY_RE.search(line)
