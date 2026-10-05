@@ -165,13 +165,14 @@ at the top. Verified: `release-checks` exits 0 with all three set.
 ~10 min reviewers, 2.7 min bookkeeping, then a 2-task tail sweep and the
 3-min final gate.
 
-### V12. The push-on-critical guard fires on `git stash push` (open)
+### V12. The push-on-critical guard blocked a `git stash push` (by design, closed)
 
 With 00256's cap_critical custody pending, `hooks/guard_push_on_critical.py`
-(0.7.0 cache, still registered) blocked a Bash command whose only "push" was
-`git stash push -q -- <file>`. Harmless here (plain `git stash` worked), but
-a guard that reads any `push` token will also stop rework sessions that
-stash. Fix: match `git push` as a subcommand, not the word.
+blocked `bash -c "cd ... && git stash push ..."`. Not a bug: the command ran
+inside an opaque `bash -c`, and `is_push_like` deliberately fails closed on a
+push-capable wrapper whose text says "push", since it cannot see what runs
+inside. A bare `git stash push` parses as subcommand `stash` and passes. No
+change.
 
 00256 capped with 1 CRITICAL (the gate failed at HEAD on a fixture the PRD
 added) and 3 HIGH. The CRITICAL and R4 (`release-checks:55` emptiness check)
