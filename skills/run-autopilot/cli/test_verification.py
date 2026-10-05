@@ -420,6 +420,33 @@ def test_reuse_verdict_refuses_a_record_of_a_failed_gate(repo: Path) -> None:
     assert verification.reuse_verdict(some_failed, repo, head) == ("stale", {})
 
 
+def test_reuse_verdict_refuses_a_non_dict_commands_entry(repo: Path) -> None:
+    # reuse_verdict fails toward a rerun and never raises, so a record whose
+    # commands hold a non-dict entry is stale, not an AttributeError in the
+    # caller.
+    base = _git(repo, "rev-parse", "HEAD")
+    head = _commit(repo, f"{STORE}/autopilot/state.json", "{}\n")
+
+    a_string = _record(base)
+    a_string["commands"] = ["x"]
+    assert verification.reuse_verdict(a_string, repo, head) == ("stale", {})
+
+    a_null = _record(base)
+    a_null["commands"] = [None]
+    assert verification.reuse_verdict(a_null, repo, head) == ("stale", {})
+
+
+def test_reuse_verdict_refuses_an_empty_commands_list(repo: Path) -> None:
+    # run_gate always records one entry, so a record with no recorded exit
+    # never certifies a green gate -- it is malformed.
+    base = _git(repo, "rev-parse", "HEAD")
+    head = _commit(repo, f"{STORE}/autopilot/state.json", "{}\n")
+
+    empty = _record(base)
+    empty["commands"] = []
+    assert verification.reuse_verdict(empty, repo, head) == ("stale", {})
+
+
 def test_reuse_verdict_docstring_states_the_tolerances_it_applies() -> None:
     doc = (verification.reuse_verdict.__doc__ or "").lower()
 

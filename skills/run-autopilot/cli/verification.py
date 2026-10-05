@@ -101,8 +101,8 @@ def reuse_verdict(
     Returns ("reused", record) only when ALL hold:
       - record["sha"] is a non-empty str, and passed/failed/skipped are all
         present and not None
-      - the run was green: failed is 0 and every record["commands"] entry
-        exited 0
+      - the run was green: failed is 0 and record["commands"] is a non-empty
+        list whose every entry is a dict that exited 0
       - `git merge-base --is-ancestor <record["sha"]> <head_sha>` exits 0,
         rejecting a sibling or descendant surviving a reset/rebase
       - every path in `git log <record["sha"]>..<head_sha> --name-only`
@@ -127,9 +127,11 @@ def reuse_verdict(
     if any(record.get(key) is None for key in ("passed", "failed", "skipped")):
         return _STALE
     commands = record.get("commands")
-    if not isinstance(commands, list):
+    if not isinstance(commands, list) or not commands:
         return _STALE
-    if record["failed"] != 0 or any(c.get("exit") != 0 for c in commands):
+    if record["failed"] != 0 or not all(
+        isinstance(c, dict) and c.get("exit") == 0 for c in commands
+    ):
         return _STALE
     try:
         if not _ancestor_and_clean(repo_root, sha, head_sha):
@@ -160,7 +162,9 @@ def _write_record(
 
 
 def _drain_bounded(
-    proc: subprocess.Popen, cap: int, deadline: float
+    proc: subprocess.Popen,
+    cap: int,
+    deadline: float,
 ) -> tuple[bytes, bool]:
     """Drains stdout and stderr against `deadline`, keeping only the last
     `cap` bytes of stdout (dropping from the front, never the back) and
