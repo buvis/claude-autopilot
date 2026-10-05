@@ -165,6 +165,57 @@ def test_rename_out_of_store_is_not_clean(repo: Path) -> None:
     assert verification.reuse_verdict(record, repo, head) == ("stale", {})
 
 
+def test_rename_into_store_from_production_is_not_clean() -> None:
+    # A rename into the store from outside it is judged by both endpoints
+    # too: a clean destination alone must not excuse a dirty source.
+    assert (
+        verification._dirty_path_is_in_store(f"{STORE}/moved.md", "production.md")
+        is False
+    )
+
+
+def test_copy_record_checks_both_paths() -> None:
+    # A copy's status code ("C") can land in either XY column; both of its
+    # paths -- the new copy and the source it was copied from -- must be
+    # checked, the same as a rename's.
+    raw = f"C  {STORE}/dst.md\0src.md\0"
+    assert verification._iter_porcelain_z_records(raw) == [
+        (f"{STORE}/dst.md", "src.md"),
+    ]
+    assert verification._dirty_path_is_in_store(f"{STORE}/dst.md", "src.md") is False
+
+
+def test_blank_status_column_does_not_desync_fields() -> None:
+    # A rename/copy code can sit in either XY column: a blank first column
+    # (" R") must still be read as a rename and consume the following field
+    # as its source path, not misread as an ordinary record and leave the
+    # source path to be parsed as its own, separate entry.
+    raw = f" R {STORE}/dst.md\0src.md\0 M {STORE}/other.md\0"
+    assert verification._iter_porcelain_z_records(raw) == [
+        (f"{STORE}/dst.md", "src.md"),
+        (f"{STORE}/other.md", None),
+    ]
+
+
+def test_run_gate_drains_stderr_without_deadlock(tmp_path: Path) -> None:
+    # Passes against the pre-change code too: `communicate()` already read
+    # both pipes concurrently, so this is pre-existing, unchanged behavior,
+    # not something the new manual `_drain_bounded` loop had to add -- it
+    # only has to not regress it, which this still pins.
+    # A child writing far more than one OS pipe buffer's worth to stderr,
+    # before it ever prints its stdout summary line: a drain that reads
+    # stdout but never stderr would leave the child blocked writing to a
+    # full stderr pipe, and run_gate would hang past its deadline.
+    command = (
+        "head -c 2000000 /dev/zero | tr '\\0' 'e' 1>&2; "
+        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
+    )
+    result = verification.run_gate(command, tmp_path, "abc", None, timeout=10)
+
+    assert result["passed"] == 1
+    assert result["timed_out"] is False
+
+
 def test_reuse_verdict_ignores_dirty_paths_under_the_store(repo: Path) -> None:
     store_dir = repo / STORE / "autopilot"
     store_dir.mkdir(parents=True)
@@ -339,6 +390,10 @@ def test_run_gate_streams_and_keeps_tail(tmp_path: Path, monkeypatch) -> None:
     assert len(calls[0]["tail"]) <= 4096
 
 
+# Passes against the pre-change code too: last-match selection over the
+# fully captured output is pre-existing, unchanged behavior, not the
+# byte-bounded drain this PRD adds (that gap is covered by
+# test_run_gate_streams_and_keeps_tail's _drain_bounded spy instead).
 def test_run_gate_uses_last_summary_line_not_first(tmp_path: Path) -> None:
     command = "echo 'PASS 1 FAIL 1 SKIP 0 EXIT 1'; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
     result = verification.run_gate(command, tmp_path, "abc", None)

@@ -508,7 +508,9 @@ def _findings_file(tmp_path: Path, rows: list[dict]) -> Path:
 
 
 def _review_close_cli(
-    review: Path, state_path: Path, findings: Path
+    review: Path,
+    state_path: Path,
+    findings: Path,
 ) -> subprocess.CompletedProcess:
     return subprocess.run(
         [
@@ -565,7 +567,10 @@ def test_review_close_refuses_on_findings_mismatch(
 def test_close_applies_a_findings_subset_of_the_review(tmp_path: Path) -> None:
     """The counterpart: the cross-check must not block a legitimate batch that
     applies only some of the review's rows. The one row applied carries an
-    issue text minted this run, so the review file has to be read."""
+    issue text minted this run, so the review file has to be read.
+    Passes against the pre-change code too: applying a legitimate findings
+    subset is pre-existing close() behavior the new cross-check must not
+    break, not a case the cross-check itself needs to refuse."""
     review = _review(tmp_path, consolidated=CONSOLIDATED)
     state_path = _state(tmp_path)
     findings = [_finding(HIGH, "src/d.py:4", RUNTIME_ISSUE)]
@@ -596,12 +601,15 @@ def test_cli_exit_2_on_findings_mismatch(tmp_path: Path) -> None:
 
 def test_cli_exits_1_when_the_review_itself_fails_the_gate(tmp_path: Path) -> None:
     """Exit 2 belongs to the mismatch alone: a review file the gate rejects
-    keeps exit 1, even though its findings would also mismatch."""
+    keeps exit 1, even though its findings would also mismatch.
+    Passes against the pre-change code too: the gate-failure exit path is
+    pre-existing, unchanged behavior, not the new exit-2 mismatch path."""
     review = _review(tmp_path, verdict="", consolidated=CONSOLIDATED)
     state_path = _state(tmp_path)
     before = state_path.read_bytes()
     findings = _findings_file(
-        tmp_path, [_finding(HIGH, "src/b.py:10", "an issue no reviewer raised")]
+        tmp_path,
+        [_finding(HIGH, "src/b.py:10", "an issue no reviewer raised")],
     )
 
     proc = _review_close_cli(review, state_path, findings)
@@ -612,11 +620,14 @@ def test_cli_exits_1_when_the_review_itself_fails_the_gate(tmp_path: Path) -> No
 
 def test_cli_still_exits_1_on_other_not_applied_reasons(tmp_path: Path) -> None:
     """Exit 2 is reserved for the mismatch: the already-applied refusal, whose
-    findings do cross-check, keeps the old exit 1."""
+    findings do cross-check, keeps the old exit 1.
+    Passes against the pre-change code too: the already-applied exit path
+    is pre-existing, unchanged behavior, not the new exit-2 mismatch path."""
     review = _review(tmp_path, consolidated=CONSOLIDATED)
     state_path = _state(tmp_path)
     findings = _findings_file(
-        tmp_path, [_finding(HIGH, "src/b.py:10", "wrong default")]
+        tmp_path,
+        [_finding(HIGH, "src/b.py:10", "wrong default")],
     )
 
     first = _review_close_cli(review, state_path, findings)
@@ -627,6 +638,10 @@ def test_cli_still_exits_1_on_other_not_applied_reasons(tmp_path: Path) -> None:
     assert "findings_mismatch" not in second.stdout + second.stderr
 
 
+# Passes against the pre-change code too: this pins pre-existing,
+# unchanged lens-bookkeeping behavior, not the new findings-mismatch
+# cross-check this diff adds (flagged touched only by its proximity to the
+# new tests above, not by any edit to its own body).
 def test_close_leaves_no_lens_running(tmp_path: Path) -> None:
     review = _review(
         tmp_path,
