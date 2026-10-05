@@ -656,6 +656,258 @@
       "file": "skills/run-autopilot/cli/gate.py:102",
       "reason": "Critical severity always defers to batch end for the audit trail; the fix itself runs in cycle 1 rework behind a rework design (phase-review.md Phase 6)",
       "prd": "00256-finish-the-review-verbs-before-release-v1.md"
+    },
+    {
+      "type": "stall",
+      "site": "cap_critical",
+      "detail": "cycle 2/2 cap reached with an unresolved CRITICAL: bash dev/bin/release-checks exits 1 at HEAD 6bca6b5 (PASS 2590 FAIL 1 SKIP 0 EXIT 1), falsifying PRD Success Metric 1. test_no_gate_parses_porcelain_by_hand is tripped by cli/fixtures/00256-review-1.md, the fixture task 12 added in dbe0ad5; the prose test predates this PRD. Fix: exempt that fixture path in test_store_tree_prose.py _EXEMPT, or exclude cli/fixtures/ from _prose_files(). 22 further findings deferred (3 high: PRD-vs-design one-directional cross-check, Ref-column scope beyond the PRD, release-checks:55 -z vs numeric fail-open guard). Review: docs/dev/project-management/reviews/00256-finish-the-review-verbs-before-release-v1-review-2.md",
+      "op_id": "6dcd9cbf27b9",
+      "commit_range": "540edd9e98dce6319c2946b21f5c4890658b454a..6bca6b5f3b85bfb7cea36edd9a05ec6a8cd36d7c",
+      "commits": 57,
+      "branch": "master",
+      "repo_root": "/Users/bob/git/src/github.com/buvis/claude-autopilot",
+      "git_dir": null,
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md"
+    },
+    {
+      "cycle": 1,
+      "issue": "gate._reviewed_keys parses only the bullet finding shape, so the --findings cross-check reports mismatch on every real pipe-table review file and review_close.close() refuses with exit 2",
+      "severity": "critical",
+      "action": "deferred to batch end for the audit trail; fixed in cycle 1 rework behind a rework design",
+      "reason": "Critical severity always defers (phase-review.md Classification), and a CRITICAL is never a settled deferral: it blocks convergence until fixed",
+      "type": "deferred_decision",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd0"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "issue": "R2: PRD Test Strategy says a findings JSON that drops a table row makes the gate exit 2, but _cross_check_findings is deliberately one-directional (a subset exits 0). PRD text and design doc are unreconciled.",
+      "severity": "high",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd1"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "issue": "R3: scope beyond the PRD - the Ref-column mechanism, review_close.close() running the cross-check itself, the new refused: findings_mismatch result and the findings_cross_check key. Design-sanctioned but not asked for by the PRD, and it changes the review-table format.",
+      "severity": "high",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd2"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "issue": "R4: dev/bin/release-checks:55 guards the fail-open case with -z \"$f\" (empty) while run_harness:74 uses the numeric \"$f\" -eq 0, so a block printing an explicit '0 failed' with a non-zero exit still reports green. Confirmed by reading both helpers.",
+      "severity": "high",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd3"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "issue": "R5: a header-only findings table with no rows returns unreadable-table, so gate --findings with an empty JSON array exits 1 instead of 0; the cycle-1 design says an empty set is valid.",
+      "severity": "medium",
+      "consensus": "2/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd4"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "issue": "R6: review_stage.py is 802 lines, not 800, so task 11's acceptance ('800 lines or fewer') is unmet and the 800-line cap in R13 is still breached.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd5"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "issue": "R7: _replay_base still derives a second base (merge-base HEAD <recorded base>) and its one-line comment asserts rather than shows why that equals the base gather-context.sh resolved.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd6"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "issue": "R8: _lens_states closes a persona absent from the agents: block as failed, so a never-rostered Carl or Eve gets a phantom ui: failed / fable: failed key in state.review_lenses.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd7"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "issue": "R9: review_lenses can now take the value 'skipped', but state-schema.md and tracon/model.py document only running|done|failed.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd8"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "issue": "R10: suspected, unconfirmed - _ancestor_and_clean checks committed paths with git log --name-only, which prints only a rename's NEW path, so a committed git mv from outside the store into it would look clean.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd9"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "issue": "R11: truncated table rows that reach the File column but omit trailing columns pass the length guard and enter the embedded-pipe reconstruction branch, corrupting Issue/File.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd10"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "issue": "R12: a matching ref returns before the empty-issue guard, so a chosen finding with issue: \"\" passes and can create an empty task description.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd11"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "issue": "R13: three new parser tests pass against the pre-change code (test_a_truncated_data_row_is_malformed_not_a_crash, test_cross_check_still_refuses_a_different_finding_about_the_same_file, test_escaped_pipe_in_a_table_cell_keys_like_an_unescaped_one).",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd12"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "issue": "R14: [MECH] test_blake_reraising_a_settled_deferral_is_auto_dismissed passes against the pre-change code in test_consolidate_findings.py.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd13"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "issue": "R15: [MECH] test_bad_findings_file_fails_cleanly_without_a_traceback still passes at the cycle-1 head - the very test task 11 was asked to make discriminating.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd14"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "issue": "R16: [MECH] three touched tests in test_release_checks_counts.py pass against the pre-change code (test_nonzero_exit_keeps_the_real_failed_count and the two test_harness_without_summary_line_counts_one_* tests).",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd15"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "issue": "R17: [MECH] three touched tests in test_review_close.py pass against the pre-change code (test_close_applies_a_findings_subset_of_the_review, test_cli_exits_1_when_the_review_itself_fails_the_gate, test_cli_still_exits_1_on_other_not_applied_reasons).",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd16"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "issue": "R18: the timed-out gate still prints a fabricated 'Tests: 0 passed, 0 failed, 0 skipped (suite timed out ...)' line; task 11 listed the finding as to-be-closed but the code is unchanged and the only record is a deferral line in meta/assumptions.md.",
+      "severity": "low",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd17"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "issue": "R19: task 10 required a fail-at-base result or a one-line pass-at-base note per test; test_rename_into_store_from_production_is_not_clean, test_copy_record_checks_both_paths and test_blank_status_column_does_not_desync_fields pass at the cycle-1 head with no note.",
+      "severity": "low",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd18"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "issue": "R20: _lens_states marking an unrostered persona as failed writes review_lenses.ui = failed for a lens that never ran, and tracon panels read that state. Unproven side effect.",
+      "severity": "low",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd19"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "issue": "R21: the release-checks count tests re-implement the EXIT_CODE and summary lines inside the test body, so a regression in the real script's final summary or exit block would not fail them.",
+      "severity": "low",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd20"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "issue": "R22: several tests in test_review_close.py and test_review_stage.py carry comments saying they pass against the pre-change code too, so they do not prove the regression the PRD names.",
+      "severity": "low",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd21"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "issue": "R23: Bob's VERIFY item (run the acceptance tests and bash dev/bin/release-checks, confirming exit statuses) was queued to -checks-2.json and discharged this cycle: exit 1, which is finding R1.",
+      "severity": "low",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved; the check itself was run and recorded",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd22"
+    },
+    {
+      "cycle": 2,
+      "type": "cap-overflow",
+      "issue": "R1: the PRD exit criterion is false at HEAD - bash dev/bin/release-checks exits 1 (PASS 2590 FAIL 1 SKIP 0 EXIT 1, measured twice with no concurrent suites). test_no_gate_parses_porcelain_by_hand is tripped by skills/run-autopilot/cli/fixtures/00256-review-1.md, a fixture this cycles task 12 added in dbe0ad5; the prose test predates this PRD. Fix: exempt the fixture path in test_store_tree_prose.py _EXEMPT, or exclude cli/fixtures/ from _prose_files().",
+      "severity": "critical",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved; a CRITICAL is never a settled deferral, so the PRD stalls under cap_critical rather than finalizing",
+      "prd": "00256-finish-the-review-verbs-before-release-v1.md",
+      "op_id": "6dcd9cbf27b9-dd23"
     }
   ]
 }

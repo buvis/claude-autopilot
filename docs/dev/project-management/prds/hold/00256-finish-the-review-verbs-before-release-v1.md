@@ -4,6 +4,8 @@ design: run
 default_model: opus
 model_tier_rationale: fixes contracts other code consumes (review-file dispatch_rows block, gate cross-check of the findings JSON, last-verification counts) and a fail-open path
 ledger_keys: 36c2461f9d70 6d4f6ba76e71 48f78f9210db fd29fd6660d9 691521d0e855 ea9194742172 51d4e95831ce 80d062746248 301475eacdce fbedf9570240
+critical_on_master: 540edd9e98dce6319c2946b21f5c4890658b454a..6bca6b5f3b85bfb7cea36edd9a05ec6a8cd36d7c
+ledger: deferred/202610031511-deferred.json#6dcd9cbf27b9
 ---
 
 # Finish the review verbs before release
@@ -11,6 +13,9 @@ ledger_keys: 36c2461f9d70 6d4f6ba76e71 48f78f9210db fd29fd6660d9 691521d0e855 ea
 ## Overview
 
 ### Problem Statement
+
+> **Custody (cap_critical, batch 202610031511):** cycle 2/2 cap reached with an unresolved CRITICAL: bash dev/bin/release-checks exits 1 at HEAD 6bca6b5 (PASS 2590 FAIL 1 SKIP 0 EXIT 1), falsifying PRD Success Metric 1. test_no_gate_parses_porcelain_by_hand is tripped by cli/fixtures/00256-review-1.md, the fixture task 12 added in dbe0ad5; the prose test predates this PRD. Fix: exempt that fixture path in test_store_tree_prose.py _EXEMPT, or exclude cli/fixtures/ from _prose_files(). 22 further findings deferred (3 high: PRD-vs-design one-directional cross-check, Ref-column scope beyond the PRD, release-checks:55 -z vs numeric fail-open guard). Review: docs/dev/project-management/reviews/00256-finish-the-review-verbs-before-release-v1-review-2.md Commits 540edd9e98dce6319c2946b21f5c4890658b454a..6bca6b5f3b85bfb7cea36edd9a05ec6a8cd36d7c (57) are live on master. Resolve with autopilot custody resolve.
+
 
 PRD 00249 (`review-stage`, `review-close`, gate reuse) reached its rework cap
 with ten HIGH findings open, ledger `deferred/202610031511-deferred.json`

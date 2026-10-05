@@ -3304,3 +3304,9 @@
 {"id":"721b5899","ended_at":1791182037,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"id":"67df8d83","ended_at":1791182037,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"kind":"handoff","site":"review","edge":"leave","at":1791182037,"phase":"review","prd":"00256-finish-the-review-verbs-before-release-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1791182105,"phase":"review","prd":"00256-finish-the-review-verbs-before-release-v1.md"}
+{"id":"0f5fa9a4","kind":"bob","task":"review-00256-c2","queued_at":1791182525,"prompt_bytes":14431}
+{"id":"1b4c19a5","kind":"carl","task":"review-00256-c2","queued_at":1791182528,"prompt_bytes":12616}
+{"id":"0f5fa9a4","ended_at":1791182911,"elapsed_s":386,"outcome":"ok","detail":null}
+{"id":"1b4c19a5","ended_at":1791182914,"elapsed_s":386,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"review","edge":"leave","at":1791183682,"phase":"build","prd":"00256-finish-the-review-verbs-before-release-v1.md"}

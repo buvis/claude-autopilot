@@ -1,0 +1,13 @@
+[
+  {
+    "cycle": 2,
+    "finding": "Cannot statically verify: VERIFY cycle-2 acceptance tests and `bash dev/bin/release-checks` exit 0; run the gate without concurrent suites that mutate repository state.",
+    "file": null,
+    "command": "bash dev/bin/release-checks",
+    "source": "bob",
+    "result": {
+      "exit": 1,
+      "detail": "PASS 2590 FAIL 1 SKIP 0 EXIT 1, run in the review session at HEAD 6bca6b5f3b85bfb7cea36edd9a05ec6a8cd36d7c with no concurrent reviewer suites. The single failure is skills/run-autopilot/scripts/test_store_tree_prose.py::test_no_gate_parses_porcelain_by_hand, tripped by the fixture skills/run-autopilot/cli/fixtures/00256-review-1.md that task 12 added in commit dbe0ad5."
+    }
+  }
+]
