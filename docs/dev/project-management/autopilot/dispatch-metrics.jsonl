@@ -3215,3 +3215,12 @@
 {"id":"07efce9a","ended_at":1791160240,"elapsed_s":1533,"outcome":"ok","detail":null}
 {"id":"95985f6c","ended_at":1791160240,"elapsed_s":741,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1791160321,"phase":"build","prd":"00256-finish-the-review-verbs-before-release-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791160687,"phase":"build","prd":"00256-finish-the-review-verbs-before-release-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791160693,"phase":"build","prd":"00256-finish-the-review-verbs-before-release-v1.md"}
+{"id":"631c5a80","kind":"ivan","task":"6","queued_at":1791160833,"prompt_bytes":12416}
+{"id":"631c5a80","ended_at":1791160902,"elapsed_s":69,"outcome":"ok","detail":null}
+{"id":"d6d47309","kind":"deslop","task":"6","queued_at":1791160985,"prompt_bytes":8681}
+{"id":"d6d47309","ended_at":1791161008,"elapsed_s":23,"outcome":"ok","detail":null}
+{"id":"51e6952b","kind":"ivan","task":"7","queued_at":1791161140,"prompt_bytes":7049}
+{"id":"51e6952b","ended_at":1791161160,"elapsed_s":20,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"build","edge":"leave","at":1791161437,"phase":"review","prd":"00256-finish-the-review-verbs-before-release-v1.md"}
