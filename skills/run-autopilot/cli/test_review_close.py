@@ -677,3 +677,25 @@ def test_close_leaves_no_lens_running(tmp_path: Path) -> None:
         "ui": "skipped",
         "fable": "done",
     }
+
+
+# A persona with no line at all under agents: (not even "unavailable") must
+# still close its mapped lens as "failed", not leave it absent. Fails against
+# the current _lens_states, which only emits a key for personas present in
+# the agents: block, so "blind" never gets written here.
+def test_close_fails_a_lens_whose_persona_is_absent_from_agents_block(
+    tmp_path: Path,
+) -> None:
+    review = _review(
+        tmp_path,
+        # blake has no line here at all: not "available", not "unavailable".
+        agents="  alice: available\n  bob: available\n",
+    )
+    state_path = _state(tmp_path)
+
+    result = review_close.close(review, state_path, "decision-gate", [])
+
+    assert result["applied"] is True
+    lenses = _load(state_path)["review_lenses"]
+    assert "blind" in lenses
+    assert lenses["blind"] == "failed"

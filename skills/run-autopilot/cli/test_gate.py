@@ -524,6 +524,12 @@ class FindingsCrossCheckTests(unittest.TestCase):
                 self.assertNotEqual(proc.returncode, 0, proc.stdout)
                 self.assertNotIn("Traceback", proc.stderr)
                 self.assertTrue(proc.stderr.strip(), proc.stdout)
+                # Against an older CLI that doesn't understand --findings at
+                # all, argparse would reject the flag itself and trivially
+                # satisfy the three assertions above without the findings-
+                # file diagnostic ever running. Rule that false-pass out.
+                self.assertNotIn("unrecognized arguments", proc.stderr)
+                self.assertIn("findings file", proc.stderr)
 
     def test_empty_findings_is_not_malformed(self) -> None:
         proc = self._gate(
