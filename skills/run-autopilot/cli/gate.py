@@ -203,8 +203,6 @@ def _split_severity_cell(cell: str) -> tuple[str, str]:
 
 
 def _finding_key(severity: str, file: str, issue: str) -> tuple[str, str, str]:
-    """The comparison tuple: severity as a word, file as written, issue with
-    its whitespace collapsed and its case folded away."""
     return (
         _split_severity_cell(severity)[0],
         file.strip(),
@@ -272,9 +270,6 @@ def _load_findings(path: Path) -> tuple[list[dict] | None, str | None]:
 
 
 def _findings_exit(text: str, findings_file: Path) -> int:
-    """The exit code --findings contributes: 0 when every chosen row is backed
-    by a review row, 2 on a mismatch, 1 on an unusable findings file or a
-    review file with no consolidated-findings section to check against."""
     rows, error = _load_findings(findings_file)
     if rows is None:
         sys.stderr.write(f"{error}\n")

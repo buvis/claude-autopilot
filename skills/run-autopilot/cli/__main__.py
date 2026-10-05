@@ -1095,8 +1095,6 @@ def _run_review_close(args: argparse.Namespace) -> int:
     if result.get("applied"):
         return 0
     print(f"autopilot: review-close: {result.get('reason')}", file=sys.stderr)
-    # Exit 2 is the mismatch's alone: a chosen finding the review file never
-    # recorded is a different failure from a gate gap or an applied batch.
     return 2 if result.get("refused") == "findings_mismatch" else 1
 
 
