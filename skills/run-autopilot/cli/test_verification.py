@@ -8,6 +8,7 @@ real git behavior (ancestry, diff paths, dirty tree), not a mock of it.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -275,6 +276,94 @@ def test_run_gate_times_out_and_writes_nothing(tmp_path: Path) -> None:
     }
     assert elapsed < 10
     assert not (tmp_path / RECORD_REL).exists()
+
+
+def test_run_gate_times_out_when_the_child_closes_both_pipes_and_lingers(
+    tmp_path: Path,
+) -> None:
+    # The deadline bounds the process's exit, not just its output: a child
+    # that closes stdout AND stderr hits EOF on both pipes immediately, so a
+    # drain-only deadline would then wait 30s for the shell to exit.
+    start = time.monotonic()
+    result = verification.run_gate(
+        "exec 1>&-; exec 2>&-; sleep 30",
+        tmp_path,
+        "abc",
+        1,
+        timeout=1,
+    )
+    elapsed = time.monotonic() - start
+
+    assert result == {
+        "passed": None,
+        "failed": None,
+        "skipped": None,
+        "exit": None,
+        "raw_line": None,
+        "timed_out": True,
+    }
+    assert elapsed < 4
+    assert not (tmp_path / RECORD_REL).exists()
+
+
+def test_reuse_verdict_refuses_a_record_of_a_failed_gate(repo: Path) -> None:
+    # Otherwise fully reusable: ancestor sha, only store paths changed since,
+    # clean tree. The gate still never certifies HEAD from a red run.
+    base = _git(repo, "rev-parse", "HEAD")
+    head = _commit(repo, f"{STORE}/autopilot/state.json", "{}\n")
+    green = _record(base)
+    assert verification.reuse_verdict(green, repo, head) == ("reused", green)
+
+    nonzero_exit = _record(base)
+    nonzero_exit["commands"] = [{"command": "dev/bin/release-checks", "exit": 1}]
+    assert verification.reuse_verdict(nonzero_exit, repo, head) == ("stale", {})
+
+    some_failed = _record(base, passed=5, failed=2)
+    assert verification.reuse_verdict(some_failed, repo, head) == ("stale", {})
+
+
+def test_reuse_verdict_docstring_states_the_tolerances_it_applies() -> None:
+    doc = (verification.reuse_verdict.__doc__ or "").lower()
+
+    # The empty-porcelain claim is gone: no clause pairs the two any more.
+    clauses = re.split(r"[.;\n]", doc)
+    assert [c for c in clauses if "porcelain" in c and "empty" in c] == []
+    # Dirty paths under the store tree are tolerated.
+    assert "docs/dev/project-management/" in doc
+    assert "dirty" in doc
+    # A rename or copy is judged by both of its endpoints.
+    assert "rename" in doc
+    assert "copy" in doc
+    assert "both" in doc
+    assert "endpoint" in doc
+
+
+def test_run_gate_closes_the_child_pipes_before_returning(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    real_popen = subprocess.Popen
+    created: list[subprocess.Popen] = []
+
+    def _spy(*args, **kwargs):
+        proc = real_popen(*args, **kwargs)
+        created.append(proc)
+        return proc
+
+    monkeypatch.setattr(verification.subprocess, "Popen", _spy)
+    result = verification.run_gate(
+        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
+        tmp_path,
+        "abc",
+        1,
+    )
+
+    assert result["passed"] == 1
+    assert result["timed_out"] is False
+    assert len(created) == 1
+    proc = created[0]
+    assert proc.stdout is not None and proc.stdout.closed
+    assert proc.stderr is not None and proc.stderr.closed
 
 
 def test_run_gate_writes_last_verification_json_on_fresh_run(tmp_path: Path) -> None:
