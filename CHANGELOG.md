@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-05
+
 ### Added
 
 - **hooks**: autopilot build sessions can no longer delegate running a whole phase skill to a subagent in loop mode
