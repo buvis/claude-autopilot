@@ -3280,3 +3280,15 @@
 {"id":"28bd7d49","kind":"pat","task":"9","queued_at":1791171527,"prompt_bytes":6169}
 {"id":"28bd7d49","ended_at":1791171557,"elapsed_s":30,"outcome":"ok","detail":"medium-retry fixed; 1 pre-existing LOW left open"}
 {"kind":"handoff","site":"review","edge":"leave","at":1791171629,"phase":"review","prd":"00256-finish-the-review-verbs-before-release-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791171654,"phase":"build","prd":"00256-finish-the-review-verbs-before-release-v1.md"}
+{"id":"e1d19184","kind":"ivan","task":"10","queued_at":1791171785,"prompt_bytes":17956}
+{"id":"c09ef97e","kind":"pat","task":"10","queued_at":1791174401,"prompt_bytes":15089}
+{"id":"fc51a6a1","kind":"ivan","task":"10","queued_at":1791174823,"prompt_bytes":16852}
+{"id":"829157a0","kind":"pat","task":"10","queued_at":1791175362,"prompt_bytes":9478}
+{"id":"c682b7da","kind":"tess","task":"11","queued_at":1791176202,"prompt_bytes":68910}
+{"id":"536941dd","kind":"tess","task":"11","queued_at":1791176213,"prompt_bytes":46492}
+{"id":"c565cd08","kind":"ivan","task":"11","queued_at":1791176919,"prompt_bytes":53704}
+{"id":"721adb1b","kind":"ivan","task":"11","queued_at":1791176926,"prompt_bytes":23561}
+{"id":"816dc1be","kind":"pat","task":"11","queued_at":1791178790,"prompt_bytes":16421}
+{"id":"721b5899","kind":"pat","task":"11","queued_at":1791180271,"prompt_bytes":6775}
+{"id":"67df8d83","kind":"pat","task":"11","queued_at":1791180573,"prompt_bytes":6002}
