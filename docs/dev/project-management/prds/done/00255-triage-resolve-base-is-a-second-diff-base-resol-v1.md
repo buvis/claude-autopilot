@@ -48,3 +48,9 @@ No implementation tasks until attended triage.
 ## Success Criteria
 
 - This file is no longer under `docs/dev/project-management/prds/hold/`.
+
+## Closed
+
+Superseded by PRD 00256 ("Finish the review verbs before release"), whose "one
+diff-base resolver" feature fixed ledger key `36c2461f9d70` directly. Closed
+into `done/` rather than deleted so batch finalize does not re-mint it.

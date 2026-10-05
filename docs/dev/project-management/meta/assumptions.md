@@ -132,3 +132,11 @@
 - (Ivan, retry 2) `_KNOWN_SEVERITIES` initially accepted both emoji and plain-word severities (no test exercised rejection) - corrected in retry 3 to emoji-only after the per-task reviewer flagged the word form as a live bypass of CRITICAL grouping.
 - (Ivan, retry 3) Used a plain dict (`ctx`) rather than a dataclass to collapse `_close_mutator`'s 9 positional args, to avoid a new import.
 - Deferred, not fixed (3-cycle per-task review cap reached): `dispatch_rows:`/`agents:` frontmatter block documentation (needs SKILL.md/output-formats.md edits, outside this task's file allowlist); Eve's PRD-body isolation (F3) and failure-fallback doubt-prompt completeness (F4); per-reviewer doubt-verdict source tagging; `run_gate`'s unsplit length and unbounded `communicate()` buffering. `style_gate` also stayed `failed:` on two pre-existing `__main__.py` functions (`_select_report_block`, `_render_report_surface`) and `review_stage.py`'s file-length cap, both outside this task's fix list.
+
+## 6: skill prose sync: ledger flags, all five lenses, dispatch_rows format, word severity (00256)
+
+- (orchestrator) The three named acceptance tests did not exist, so Ivan wrote them; placed together in a new `skills/review-work-completion/scripts/test_review_verbs_prose.py` because the Verify command collects both skill trees.
+- (Ivan) The new flag bullet went directly after the `--replay-cmd` bullet in step 3's flag list.
+- (Ivan) The `dispatch_rows` explanation sentence went after the "Agent states" line, not inside the YAML example.
+- (Ivan) The `timeout` gloss "(no result in time)" is Ivan's wording; the contract named only the value.
+- (orchestrator) The self-deslop pass removed the contract-mandated Blake "stays history-free" sentence (and the blank line before the Standalone-runs paragraph); its commit `2e5a234` was reverted as `f040476` because the sentence traces straight to the task's verbatim contract.
