@@ -719,6 +719,28 @@ def test_cli_exit_2_on_findings_uncovered(tmp_path: Path) -> None:
     assert state_path.read_bytes() == before
 
 
+def test_cli_accepts_a_carry_classification(tmp_path: Path) -> None:
+    """`carry` must be accepted by the CLI's own classification gate
+    (_is_chosen_finding/_KNOWN_CLASSIFICATIONS in __main__.py), the layer in
+    front of review_close.close() - a findings file holding a `carry` row for
+    a re-queued [C{cycle}] row must not be rejected before close() runs."""
+    review = _review(tmp_path)
+    state_path = _state(tmp_path)
+    findings = _findings_file(
+        tmp_path,
+        [
+            _finding(HIGH, "src/fix.py", "fix me", "fix"),
+            _finding(MED, "src/carry.py", "carry me", "carry"),
+        ],
+    )
+
+    proc = _review_close_cli(review, state_path, findings)
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    new_tasks = _load(state_path)["tasks"][1:]
+    assert [t["name"] for t in new_tasks] == ["[D2] src/fix.py"]
+
+
 def test_cli_exits_1_when_the_review_itself_fails_the_gate(tmp_path: Path) -> None:
     """Exit 2 belongs to the findings cross-check (mismatch or uncovered): a
     review file the gate rejects keeps exit 1, even though its findings would
