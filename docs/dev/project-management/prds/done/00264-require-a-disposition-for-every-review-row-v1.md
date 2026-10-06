@@ -8,6 +8,11 @@ ledger_keys: 83449f8a9b37
 
 # Require a disposition for every review row
 
+> **Superseded 2026-10-06 by `00264-...-v2.md`.** The fast-track card was
+> parked (`a972527`) on one surviving HIGH (re-queued rows); its work stays on
+> branch `fast-track/00264-require-a-disposition-for-every-review-row-v1-c1`
+> and v2 brings it over.
+
 ## Problem
 
 Hold stub 00260 (ledger key `83449f8a9b37`, batch `202610031511`, from PRD
