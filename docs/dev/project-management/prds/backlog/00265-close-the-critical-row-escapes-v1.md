@@ -34,7 +34,17 @@ with the next release unless fixed:
    (`review_close.py:309`).
 
 Operator decision (2026-10-06): fix all three with the report's recommended
-options in one PRD.
+options in one PRD, and fold in the four MEDIUM findings on the same verbs:
+
+4. `--batch-id tail-sweep` is accepted first, at any severity, with coverage
+   skipped; a later decision gate then applies too and duplicates rework.
+5. An empty tail-sweep array exits 0 and stamps the batch applied, so the real
+   sweep gets `already applied` (`phase-review.md:195` says "never zero").
+7. `gate --findings` passes rows with a missing or unknown classification
+   (`"Carry"`, `"carried"`) that `review-close` then refuses with a message
+   naming neither row nor value.
+10. `gate.py:52,67-68,138-141` and `__main__.py:65-67,79-82` still describe the
+   pre-00264 one-way check and omit the uncovered refusal.
 
 ### Target Users
 
@@ -68,6 +78,20 @@ and `autopilot review-close` call.
 - **Description**: `gate` and `review-close` call one function for the cross-check verdict, so they cannot drift again.
 - **Behavior**: `review-close` refuses `unreadable-table` exactly like `gate`; only `no-section` keeps the legacy pass.
 
+#### Feature: Classification checked in both verbs
+- **Description**: `gate --findings` validates each row's classification with the same rule `review-close` uses.
+- **Outputs**: exit 2 with a per-row message, e.g. `row R1: unknown classification 'Carry' (expected verify|discard|fix|defer|carry)`.
+
+### Capability: tail sweep in order
+
+#### Feature: Sweep only after the gate, never empty
+- **Description**: `review-close --batch-id tail-sweep` refuses (exit 2, nothing recorded) unless `<review>::decision-gate` is in `applied_review_batches`, refuses rows above 🟡, and refuses an empty findings array.
+
+### Capability: help text matches the check
+
+#### Feature: Two-way check documented
+- **Description**: the `gate.py` module docstring, its exit table, the `_SKIPPED_CLASSIFICATIONS` comment and `__main__.py`'s help for `gate` and `review-close` describe the two-way check and the `uncovered` and `carry_unmatched` refusals.
+
 ## Structural Decomposition
 
 ### Repository Structure
@@ -92,6 +116,11 @@ skills/run-autopilot/references/phase-review.md   # carry rule, re-queue stampin
 - **Responsibility**: apply a saved review
 - **Exports**:
   - `close()` - unchanged signature, new `carry_unmatched` refusal
+
+### Module: cli entry
+- **Maps to capability**: help text matches the check
+- **Responsibility**: `skills/run-autopilot/cli/__main__.py` help and exit tables for `gate` and `review-close`, pinned by `skills/run-autopilot/scripts/test_review_verbs_prose.py`
+- **Exports**: none new
 
 ### Module: phase-review prose
 - **Maps to capability**: carry is backed
@@ -127,6 +156,9 @@ No dependencies - built first.
 **Tasks**:
 - [ ] review_close: call `findings_verdict`; refuse `unreadable-table`; refuse an unmatched `carry` before the lock (depends on: Phase 0) - Acceptance: `test_refuses_unreadable_table_instead_of_applying`, `test_carry_on_critical_without_requeued_task_is_refused`, `test_ghost_carry_ref_is_refused`, `test_matched_carry_is_accepted` pass in `cli/test_review_close.py`.
 
+- [ ] review_close: tail sweep refused before the decision gate, above 🟡, or empty (depends on: Phase 0) - Acceptance: `test_tail_sweep_refused_before_decision_gate_applied`, `test_tail_sweep_refuses_rows_above_medium`, `test_empty_tail_sweep_is_refused_and_records_nothing` pass in `cli/test_review_close.py`.
+- [ ] gate: per-row classification validation in `gate --findings` (depends on: Phase 0) - Acceptance: `test_gate_names_the_row_with_an_unknown_classification` passes in `cli/test_gate_findings_table.py`.
+
 **Exit Criteria**: `python3 -m pytest skills/run-autopilot/cli/test_review_close.py` passes.
 
 ### Phase 2: Integration
@@ -134,6 +166,7 @@ No dependencies - built first.
 
 **Tasks**:
 - [ ] phase-review prose: the re-queue step records the link the design chose, and the decision gate says `carry` is refused without it (depends on: Phase 1) - Acceptance: `test_requeue_records_the_carry_link_prose` passes.
+- [ ] help text: rewrite the `gate.py` docstring, exit table and skip-list comment, and the `__main__.py` help for `gate` and `review-close`; pin them in `skills/run-autopilot/scripts/test_review_verbs_prose.py` (depends on: Phase 1) - Acceptance: `test_gate_help_describes_the_two_way_check` passes.
 
 **Exit Criteria**: `bash dev/bin/release-checks` exits 0.
 
