@@ -1,0 +1,29 @@
+**Partly done.** I ran the QA pack unattended against the repo at `2b8d607`. It found **32 findings: 3 HIGH, 7 MEDIUM, 22 LOW**, all verified by an actual run except one, and they are written up waiting for your decisions.
+
+The three HIGH findings share one theme: in PRD 00264, which is not released yet, a critical review finding can still get through the decision gate with no task and no record.
+1. A finding marked `carry` disappears, and the PRD can still be closed as done. Three lanes found this separately.
+2. The check that every review row gets a decision silently skips rows whose table is slightly off-format (no Ref column, bullets, `r1`, `R1.`).
+3. `review-close` applies a batch whose findings table `gate` refuses as unreadable.
+
+Also worth knowing:
+- **Released 0.9.0 problems** (affect the running loop now): `review-stage` reuses an old or forged green test record without running the requested test command. The hook that stops subagents from being handed a whole phase misses many everyday wordings.
+- **Lanes:** walter, heidi, wendy, peggy and trudy ran; judy was skipped because the repo has no browser surface. Trudy was authorized through your `--authorized autoclaude-drain` flag; the profile line still reads "not asserted".
+- **Profile:** it was stale, so recon refreshed it. The first attempt died on an API 529 before writing anything; the retry worked. Your pins and vetoes section is byte-identical (same checksum before and after).
+- **Report location:** the skill names `dev/local/`, but this repo keeps its store in `docs/dev/project-management/`, so I wrote the report there, same as the 2026-10-03 run.
+
+```
+jq over sidecar -> 32 findings, 0 with empty paths, {HIGH:3, MEDIUM:7, LOW:22}
+pins cksum before/after: 1723024031 52 / 1723024031 52
+```
+
+**Not done:**
+- No tests were authored. The tree has two modified metrics files and the live loop (PID 29625) runs in this checkout, so switching branches was unsafe. Each packet proposes a regression test instead.
+- Finding #32 (five test modules the release gate never runs) is unverified: it rests on searching the gate script, which the lane may not run here.
+- I did not measure prompt sizes byte for byte. None pasted whole files.
+- The profile, report and sidecar are not committed. The loop owns commits in this checkout.
+
+Files:
+- `docs/dev/project-management/audit-results/agoge-2026-10-06.md`
+- `docs/dev/project-management/audit-results/agoge-2026-10-06.json`
+
+**Next:** You: run `/run-agoge --resume /Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/audit-results/agoge-2026-10-06.md` and walk the packets, ideally before PRD 00264 ships.

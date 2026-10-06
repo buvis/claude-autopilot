@@ -1,0 +1,46 @@
+{
+  "phase": "done",
+  "next_phase": "",
+  "schema_version": 1,
+  "batch": {
+    "id": "202610061116",
+    "mode": "autopilot",
+    "completed_prds": [
+      {
+        "filename": "00264-require-a-disposition-for-every-review-row-v2.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 1,
+        "tasks_total": 1,
+        "lane": "fast-track",
+        "lane_reason": "card_sized",
+        "lane_effective": "fast-track",
+        "lane_escalated": null
+      }
+    ],
+    "plugin_versions": {
+      "aegis@buvis-plugins": "0.4.0",
+      "warden@buvis-plugins": "0.14.0"
+    },
+    "parks_consecutive": 0
+  },
+  "prd": "00264-require-a-disposition-for-every-review-row-v2.md",
+  "catchup_mode": "skip",
+  "design_mode": "skip",
+  "doubt_reviewer": "codex",
+  "consensus_engine": "legacy",
+  "session_model": "sonnet",
+  "rework_cap": 2,
+  "lane": "fast-track",
+  "lane_reason": "card_sized",
+  "lane_effective": "fast-track",
+  "work_start_sha": "41fcf590d822467655815b5cb2ae29f08fa8db58",
+  "tasks": [],
+  "tasks_total": 0,
+  "tasks_completed": 0,
+  "phases_completed": [
+    "review"
+  ],
+  "contract_card": "step: PRD 00264-v2 fast-track lane closed (card c1 committed, review-1.md written, lane_reviewed -> done) | invariants: the one residual CRITICAL from roster was fixed in rework a0dd64e and confirmed resolved by Delta (eve) over cd274534e..HEAD; no CRITICAL/HIGH survived (exit-action: commit); 8 LOW/MEDIUM findings are recorded in review-1.md as non-blocking follow-up, not fixed (lane opens no second round after Delta); full release-checks is green at HEAD 1fa6630 (PASS 2585 FAIL 0 SKIP 0 EXIT 0) | next: fresh session enters the build gate at Phase 0 (next_phase: done -> handled by done gate: finalize PRD to done/, then select next PRD from backlog/ if any)"
+}
