@@ -3336,3 +3336,5 @@
 {"id":"7630c5bf","kind":"fast-track:delta","task":"00264-require-a-disposition-for-every-review-row-v2-c1","queued_at":1791288394,"prompt_bytes":4955}
 {"id":"7630c5bf","ended_at":1791288398,"elapsed_s":4,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1791288571,"phase":"done","prd":"00264-require-a-disposition-for-every-review-row-v2.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1791288988,"phase":"done","prd":"00264-require-a-disposition-for-every-review-row-v2.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1791289065,"phase":"done","prd":"00264-require-a-disposition-for-every-review-row-v2.md"}

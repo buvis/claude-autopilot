@@ -44,6 +44,15 @@ Generated: 2026-09-14
 
 ## Active Work
 
+### Batch 202610061116
+- [x] 00264-require-a-disposition-for-every-review-row-v2 (1 cycle)
+
+Observations: fast-track lane (card_sized), one cycle, lane-reviewed and
+converged (Delta/eve confirmed the one residual CRITICAL fixed in rework,
+8 LOW/MEDIUM non-blocking findings recorded in review-1.md). Full release
+checks green at HEAD (PASS 2585 FAIL 0 SKIP 0 EXIT 0). Backlog empty at
+batch end.
+
 ### Batch 202610031511
 - [x] 00240-ignore-nested-store-lock-files-v1 (1 cycle)
 - [x] 00241-bound-rework-batches-by-file-v1 (2 cycles)
