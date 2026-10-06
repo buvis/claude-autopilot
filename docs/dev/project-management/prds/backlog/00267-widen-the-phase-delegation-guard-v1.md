@@ -49,6 +49,11 @@ around a skill name, and do not treat `not`/`never` followed by
 - **Responsibility**: deny whole-phase delegation to a subagent in loop mode
 - **Exports**: `is_phase_delegation()` (unchanged signature)
 
+### Module: _common
+- **Location**: `hooks/_common.py`
+- **Responsibility**: `read_input` fails open cleanly on any payload
+- **Exports**: `read_input()` (unchanged signature)
+
 ### Module: fixtures
 - **Location**: `hooks/fixtures/phase_delegation/denied/`
 - **Responsibility**: one file per missed phrasing above
@@ -64,6 +69,7 @@ around a skill name, and do not treat `not`/`never` followed by
 - [ ] fixtures: add each phrasing above as a file under `hooks/fixtures/phase_delegation/denied/` (no deps) - Acceptance: the existing denied-corpus test in `hooks/test_guard_phase_delegation.py` fails at base on the new files.
 
 ### Phase 1: Core
+- [ ] _common: `read_input` reads `sys.stdin.buffer`, decodes with `errors="replace"`, and catches `RecursionError`, failing open with the documented stderr line (agoge #21, LOW: non-UTF-8 and `[`*100000 payloads exit 1 with a traceback today) (depends on: Phase 0) - Acceptance: `test_non_utf8_payload_fails_open_cleanly` and `test_deeply_nested_payload_fails_open_cleanly` pass in `hooks/test_guard_phase_delegation.py`.
 - [ ] guard_phase_delegation: NFKC plus zero-width stripping, the 3-word gap, the wider verb list, single-quote skill names, and the `hesitate|fail|only` negation exception (depends on: Phase 0) - Acceptance: `python3 -m pytest hooks/test_guard_phase_delegation.py` passes, denied and allowed corpora both included.
 
 ## Success Criteria

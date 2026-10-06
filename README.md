@@ -24,13 +24,24 @@ Eleven skills:
 | `fast-track` | Runs one spec card through the full review roster, skipping the loop phases |
 | `use-codex`, `use-gemini`, `use-sonnet` | Non-interactive dispatch to external model CLIs |
 
-Fourteen agents. One implementor (`ivan`), and thirteen reviewers across four
-lenses: consensus (`alice`, `bob`, `carl`), blind (`blake`), doubt (`eve`), and
+Eighteen agents. One implementor (`ivan`), four worker tiers (`worker-haiku`,
+`worker-sonnet`, `worker-opus`, `worker-fable`) that run an assembled persona
+at a set model and effort, and thirteen reviewers across four lenses: consensus (`alice`, `bob`, `carl`), blind (`blake`), doubt (`eve`), and
 dimensions (`rita` requirements, `cora` correctness, `grace` quality, `toby`
 tests, `mallory` security, `trent` rubric, `victor` adversarial verification,
 `pat` per-task patches).
 
-Two hooks. `enforce_prd_location.py` keeps working documents in their
+Nine hooks. Seven keep a loop session on its contract:
+`guard_phase_delegation.py` (no phase skill handed to a subagent),
+`guard_skill_after_leave.py` (no autopilot skill after a hand-off),
+`note_session_leave.py` (records which session wrote its `leave` row),
+`guard_stop_on_live_lanes.py` (no stop while a codex or gemini lane runs),
+`autopilot_context_cap_hook.py` (hands off before the context cap),
+`review_coverage_hook.py` (no exit with an incomplete review file) and
+`validate_state_json_hook.py` (catches an unparseable `state.json` write). The
+other two are below.
+
+`enforce_prd_location.py` keeps working documents in their
 declared homes instead of scattered through the repo. It runs on `PreToolUse`
 for `Edit`, `Write`, `MultiEdit` and `Bash`: file mode blocks a PRD written
 outside a `docs/dev/project-management/prds/` lifecycle directory, and Bash mode blocks a command

@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **hooks**: autopilot build sessions can no longer delegate running a whole phase skill to a subagent in loop mode
+- **run-autopilot**: the loop's session launch prompt tells the model not to call `cat`, `head`, `tail`, `grep` or `find`, which the aegis hooks block, so sessions stop losing a round trip to each refusal
 - **run-autopilot**: new `autopilot review-stage` and `autopilot review-close` CLI verbs replace review-work-completion's hand-run staging/prompt-writing and the decision gate's/Tail sweep's hand-run `task-add`/`group-rework` sequences, moving each into code
 - **run-autopilot**: a review cycle's test gate result can now be reused from `last-verification.json` instead of re-run, when only store-tree paths changed since the recorded sha
 - **run-autopilot**: `autopilot gate` takes an optional `--findings` JSON file and refuses (exit 2) when a chosen finding was never recorded in the review's consolidated findings; `autopilot review-close` runs the same cross-check on every batch it applies, so a finding the review never raised can no longer reach state
@@ -31,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: release-checks can no longer report green over a block that exited non-zero without counting a failure, the shell harnesses' own measured `SUMMARY` totals are counted instead of one pass per invocation, and the review-verbs prose tests are wired into the gate
 - **run-autopilot**: the findings cross-check reads the consolidated-findings pipe table every saved review file actually uses, instead of only the bullet shape, so `autopilot gate --findings` and `autopilot review-close` no longer refuse every real batch; consolidated findings gain a `Ref` column (`R1`, `R2`, ...) and a chosen finding carrying `"ref"` is matched by that token plus severity and file rather than by issue wording
 - **run-autopilot**: a persona entirely absent from a review file's `agents:` block now closes its mapped lens as failed instead of leaving it running forever
+- **run-autopilot**: review rework grouping now treats the citation shapes ` (line 3)`, ` (lines 18-22, 423)` and `#L12-L20` as the same file, so each no longer becomes its own rework task and spends a cap slot
+- **run-autopilot**: the Tail sweep instructions consistently create one task per rework group instead of saying "one task" in two places
 
 ## [0.8.0] - 2026-10-04
 
@@ -43,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **run-autopilot**: nested store lock files such as `deferred/*.json.lock` are now ignored
+- **agents**: the four worker-tier agents declare their tools (`Read`, `Edit`, `Write`, `Bash`) instead of inheriting every tool
 - **run-autopilot**: wave verb hardening - the `[checks] waves` release gate now runs the summary-migration tests (00221); `wave assemble` persists lane state before its destructive teardown and catches `OSError` instead of crashing (00222); `wave review`'s assembly-worktree dirty gate is store-aware and seeds the nested loop's backlog into `hold/` (00225); `wave land` can land a `review_failed` wave after an operator's hand review (00226); concurrent slot reclaim is now locked per-slot (00227); and `review-once` store writes are skipped inside a wave lane (00239). Releasing a slot no longer recreates a `wave-slots/` directory `land` or `abort` already removed, and a backlog PRD whose filename contains a space is held and committed intact
 - **run-autopilot**: the headroom time term scans back past unstamped or malformed tasks and never raises on a malformed task list
 - **review-work-completion**: `gather-context.sh` refuses an empty full-review diff instead of silently handing reviewers nothing; a full review now passes `--since <work_start_sha>` when running under autopilot

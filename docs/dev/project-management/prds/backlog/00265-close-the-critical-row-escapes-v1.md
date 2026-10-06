@@ -87,6 +87,24 @@ and `autopilot review-close` call.
 #### Feature: Sweep only after the gate, never empty
 - **Description**: `review-close --batch-id tail-sweep` refuses (exit 2, nothing recorded) unless `<review>::decision-gate` is in `applied_review_batches`, refuses rows above 🟡, and refuses an empty findings array.
 
+### Capability: low-severity review-verb fixes
+
+Agoge LOW findings on the same code, approved 2026-10-06 (#25, the quadratic
+`_backed` pass, is accepted as harmless at real sizes: 5000 rows in 0.28 s):
+
+#### Feature: Small review-close and gate corrections
+- **#12**: a tail-sweep row matching an open deferral (same severity and file key) is refused, not applied twice; `review-close`'s `deferred_decisions` entries gain the `cycle` and `action` keys `phase-review.md:145` requires.
+- **#13**: the coverage refusal lists every uncovered ref in one message and ends `(re-queued [C] rows use classification carry)`.
+- **#14**: a tail sweep returns `lenses_closed: {}`.
+- **#17**: a persona absent from `agents:` closes its dispatch row as `lost`, not `ok`.
+- **#20**: the apply-once check runs in a read before `statectl.mutate`, so a refused repeat leaves `state.json.bak` untouched.
+- **#24**: `_end_dispatch_rows` passes `--` before the id and refuses ids not matching `[A-Za-z0-9._][A-Za-z0-9._-]*`.
+- **#32**: `dev/bin/release-checks` runs `cli/test_main_review_close_validation.py`, `cli/test_store_tree_legibility.py`, `cli/test_role_effort.py`, `scripts/test_phase_review_closes_via_review_close.py` and `review-work-completion/scripts/test_skill_stages_via_review_stage.py`, pinned by a test that every review-verb test file is listed (shaped like `cli/test_wave_docs.py::test_every_wave_test_file_is_listed`).
+
+#### Feature: carry documented as shipped
+- **#15, #29**: the `[Unreleased]` CHANGELOG line states the final coverage and `carry` behaviour, the tail-sweep rules, and that `carry` and coverage ship together, so a batch in flight must not mix 0.9.0 prose with the new CLI.
+- **#30**: `phase-review.md:280` reads `"verify"`, `"discard"` and `"carry"` rows create nothing.
+
 ### Capability: help text matches the check
 
 #### Feature: Two-way check documented
@@ -103,6 +121,8 @@ skills/run-autopilot/cli/
 ├── test_gate_findings_table.py
 └── test_review_close.py
 skills/run-autopilot/references/phase-review.md   # carry rule, re-queue stamping
+dev/bin/release-checks                            # five unlisted test modules
+CHANGELOG.md                                      # [Unreleased] carry line
 ```
 
 ### Module: gate
@@ -121,6 +141,16 @@ skills/run-autopilot/references/phase-review.md   # carry rule, re-queue stampin
 - **Maps to capability**: help text matches the check
 - **Responsibility**: `skills/run-autopilot/cli/__main__.py` help and exit tables for `gate` and `review-close`, pinned by `skills/run-autopilot/scripts/test_review_verbs_prose.py`
 - **Exports**: none new
+
+### Module: release gate
+- **Maps to capability**: low-severity review-verb fixes
+- **Responsibility**: `dev/bin/release-checks` lists every review-verb test module
+- **Exports**: none
+
+### Module: changelog
+- **Maps to capability**: carry documented as shipped
+- **Responsibility**: `CHANGELOG.md` `[Unreleased]`
+- **Exports**: none
 
 ### Module: phase-review prose
 - **Maps to capability**: carry is backed
@@ -166,6 +196,9 @@ No dependencies - built first.
 
 **Tasks**:
 - [ ] phase-review prose: the re-queue step records the link the design chose, and the decision gate says `carry` is refused without it (depends on: Phase 1) - Acceptance: `test_requeue_records_the_carry_link_prose` passes.
+- [ ] low-severity corrections #12, #13, #14, #17, #20, #24 (depends on: Phase 1) - Acceptance: `test_tail_sweep_refuses_an_open_deferral`, `test_deferred_entries_carry_cycle_and_action`, `test_coverage_refusal_lists_every_uncovered_ref`, `test_tail_sweep_reports_no_lenses_closed`, `test_absent_persona_closes_dispatch_as_lost`, `test_refused_repeat_leaves_backup_untouched`, `test_dispatch_id_with_leading_dash_is_refused` pass.
+- [ ] release-checks: list the five modules (#32) and add `test_every_review_verb_test_file_is_listed` (depends on: Phase 1) - Acceptance: that test passes, and `bash dev/bin/release-checks` exits 0.
+- [ ] CHANGELOG `[Unreleased]` and `phase-review.md:280` (#15, #29, #30), after the code tasks so they state final behaviour (depends on: Phase 1) - Acceptance: `rg -c "carry" CHANGELOG.md` is at least 2 and `test_carry_creates_nothing_prose` passes.
 - [ ] help text: rewrite the `gate.py` docstring, exit table and skip-list comment, and the `__main__.py` help for `gate` and `review-close`; pin them in `skills/run-autopilot/scripts/test_review_verbs_prose.py` (depends on: Phase 1) - Acceptance: `test_gate_help_describes_the_two_way_check` passes.
 
 **Exit Criteria**: `bash dev/bin/release-checks` exits 0.
