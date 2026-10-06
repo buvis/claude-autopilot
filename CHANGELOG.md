@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **run-autopilot**: the findings cross-check also refuses a review row the findings JSON leaves without a disposition (exit 2); re-queued rows use the new `carry` classification
+
 ## [0.9.0] - 2026-10-05
 
 ### Added

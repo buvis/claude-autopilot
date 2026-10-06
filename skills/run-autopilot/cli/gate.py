@@ -138,7 +138,7 @@ _FINDINGS_PROBLEMS = {
 # verify/discard rows are never applied to state, so nothing of theirs has to
 # be backed by a review row. Only those two classifications are exempt: a row
 # with a missing or unknown classification is checked like any applied row.
-_SKIPPED_CLASSIFICATIONS = ("verify", "discard")
+_SKIPPED_CLASSIFICATIONS = ("verify", "discard", "carry")
 
 
 def reviewer_section_nonempty(lines: list[str], name: str) -> bool:
@@ -388,13 +388,13 @@ def _cross_check_findings(
     findings: list[dict],
     require_coverage: bool = True,
 ) -> tuple[str, str | None]:
-    """Check every chosen finding against the review file's consolidated rows.
-
-    One direction only: a review row the batch is not applying is fine, a
-    chosen row the review never recorded is not. Returns ("ok", None),
-    ("mismatch", <the first unbacked row>) or ("malformed", <why>) when the
-    review file has no consolidated-findings section to check against, or holds
-    a findings table that cannot be read.
+    """Check every chosen finding against the review file's consolidated rows,
+    in both directions: a chosen row the review never recorded is refused, and
+    (when `require_coverage` is true) a review row no chosen finding names is
+    refused too. Returns ("ok", None), ("mismatch", <the first unbacked row>),
+    ("uncovered", <the first review row no chosen finding named>) or
+    ("malformed", <why>) when the review file has no consolidated-findings
+    section to check against, or holds a findings table that cannot be read.
 
     `require_coverage=False` (the tail-sweep batch) skips the reverse check:
     a tail-sweep findings JSON is a deliberate, documented subset of the

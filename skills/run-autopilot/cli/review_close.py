@@ -331,8 +331,10 @@ def close(
 
     A chosen finding the review file's consolidated-findings section never
     recorded is refused before any lock, with "refused": "findings_mismatch".
-    A review file carrying no such section is not refused: the fact lands on
-    the applied result as "findings_cross_check": "malformed".
+    A consolidated row the chosen findings never named is refused the same
+    way, with "refused": "findings_uncovered". A review file carrying no such
+    section is not refused: the fact lands on the applied result as
+    "findings_cross_check": "malformed".
     """
     review_file = Path(review_file)
     state_path = Path(state_path)

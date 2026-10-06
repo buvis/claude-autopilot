@@ -390,6 +390,29 @@ def test_close_maps_every_classification_row_to_a_chosen_finding_value(
     assert "discard me" not in every_text
 
 
+def test_carry_row_writes_no_decision_and_no_task(tmp_path: Path) -> None:
+    """A `carry` row is a re-queued `[C{cycle}]` row's classification: it
+    satisfies coverage but, like `verify`/`discard`, writes no decision and
+    creates no rework task - a carry-forward row is already matched to its
+    own re-queued task, so a second write here would be a duplicate."""
+    review = _review(tmp_path)
+    state_path = _state(tmp_path)
+    findings = [
+        _finding(HIGH, "src/fix.py", "fix me", "fix"),
+        _finding(MED, "src/carry.py", "carry me", "carry"),
+    ]
+
+    result = review_close.close(review, state_path, "decision-gate", findings)
+
+    data = _load(state_path)
+    new_tasks = data["tasks"][1:]
+    assert [t["name"] for t in new_tasks] == ["[D2] src/fix.py"]
+    assert result["tasks_created"] == [new_tasks[0]["id"]]
+    assert data["deferred_decisions"] == []
+    every_text = json.dumps(data, ensure_ascii=False)
+    assert "carry me" not in every_text
+
+
 # Pins pre-existing found-by-suffix omission behavior; unrelated to the new cross-check.
 def test_close_omits_found_by_suffix_when_no_author(tmp_path: Path) -> None:
     review = _review(tmp_path)
@@ -697,8 +720,9 @@ def test_cli_exit_2_on_findings_uncovered(tmp_path: Path) -> None:
 
 
 def test_cli_exits_1_when_the_review_itself_fails_the_gate(tmp_path: Path) -> None:
-    """Exit 2 belongs to the mismatch alone: a review file the gate rejects
-    keeps exit 1, even though its findings would also mismatch.
+    """Exit 2 belongs to the findings cross-check (mismatch or uncovered): a
+    review file the gate rejects keeps exit 1, even though its findings would
+    also mismatch.
     Passes against the pre-change code too: the gate-failure exit path is
     pre-existing, unchanged behavior, not the new exit-2 mismatch path."""
     review = _review(tmp_path, verdict="", consolidated=CONSOLIDATED)

@@ -577,6 +577,21 @@ class FindingsTableCrossCheckTests(unittest.TestCase):
         ]
         self.assertEqual(_check(text, chosen), ("ok", None))
 
+    def test_carry_row_counts_as_covered(self) -> None:
+        # A re-queued `[C{cycle}]` row is classified `carry` - like `discard`,
+        # it is never applied to state, but it is still the operator's
+        # explicit disposition for that review row, so it counts as coverage.
+        text = _table_section(
+            TABLE_HEADER_REF_6,
+            _ref_row("R1", HIGH, "wrong default", "src/b.py:10"),
+            _ref_row("R2", MED, "unclear name", "src/c.py:20"),
+        )
+        chosen = [
+            dict(_row(HIGH, "src/b.py:10", "wrong default"), ref="R1"),
+            dict(_row(MED, "src/c.py:20", "unclear name", "carry"), ref="R2"),
+        ]
+        self.assertEqual(_check(text, chosen), ("ok", None))
+
     def test_tail_sweep_subset_of_a_ref_table_is_not_uncovered(self) -> None:
         # The tail-sweep step's findings JSON is a deliberate, documented
         # subset of the consolidated table (actionable Medium/Low rows only),
@@ -629,6 +644,12 @@ _COVERAGE_SENTENCE = (
 )
 
 
+_CARRY_PHRASE = "so give it a `chosen_findings` entry too, with `classification` set to `carry`"
+_TAIL_SWEEP_EXEMPT_PHRASE = (
+    "The tail-sweep step's findings JSON is exempt from this coverage check"
+)
+
+
 class FindingsJsonCoverageProseTests(unittest.TestCase):
     def test_findings_json_covers_every_row_prose(self) -> None:
         for path in (_PHASE_REVIEW, _REVIEW_SKILL):
@@ -639,6 +660,14 @@ class FindingsJsonCoverageProseTests(unittest.TestCase):
                     text,
                     f"{path}: expected the sentence {_COVERAGE_SENTENCE!r} - not found.",
                 )
+
+    def test_requeued_rows_are_classified_carry_prose(self) -> None:
+        text = _PHASE_REVIEW.read_text(encoding="utf-8")
+        self.assertIn(_CARRY_PHRASE, text)
+
+    def test_tail_sweep_is_exempt_from_coverage_prose(self) -> None:
+        text = _PHASE_REVIEW.read_text(encoding="utf-8")
+        self.assertIn(_TAIL_SWEEP_EXEMPT_PHRASE, text)
 
 
 if __name__ == "__main__":
