@@ -55,6 +55,10 @@ _DISPATCH_OUTCOME = {
     None: "lost",
 }
 _NO_ROW = ("", "null", "None")
+# The id shape `record_dispatch.py` rows actually use (`token_hex(4)`, plus
+# the hand-written `d-NNN` ids these tests use): never a leading dash, which
+# argparse would read as a flag.
+_ROW_ID_RE = re.compile(r"^[A-Za-z0-9._][A-Za-z0-9._-]*$")
 # A finding's severity is one of rework_groups.py's emoji; schema.py's
 # DECISION_SEVERITIES vocabulary for an `autonomous_decisions` entry is the
 # lowercase word instead.
@@ -111,7 +115,12 @@ def _findings_block(findings: list[dict]) -> str:
 
 
 def _end_dispatch_rows(rows: list[tuple[str, str]], cwd: Path) -> None:
-    """Best-effort: a row left open is re-ended by a later call, never raised."""
+    """Best-effort: a row left open is re-ended by a later call, never raised.
+
+    `_dispatch_outcomes`'s shape check already refused anything starting with
+    `-` before it reached this list, so every `row_id` here is safe as a bare
+    argv word.
+    """
     for row_id, outcome in rows:
         try:
             subprocess.run(
@@ -134,16 +143,25 @@ def _end_dispatch_rows(rows: list[tuple[str, str]], cwd: Path) -> None:
 
 def _dispatch_outcomes(frontmatter: list[str]) -> list[tuple[str, str]]:
     """(row id, --outcome) for every open `dispatch_rows:` entry, the
-    outcome read from that persona's `agents:` status. A row id leading with a
-    dash is dropped: it reaches `record_dispatch` as an argv word, where it
-    would be read as a flag rather than as the row to end."""
+    outcome read from that persona's `agents:` status. A row id outside the
+    accepted id shape is refused, loudly, naming the persona and the id on
+    stderr - not silently dropped. The shape check is what keeps a dash-led
+    id out of `record_dispatch`'s argv, where it would be read as a flag
+    rather than as the row to end."""
     agents = _nested_pairs(frontmatter, "agents")
     rows = _nested_pairs(frontmatter, "dispatch_rows")
-    return [
-        (row_id, _DISPATCH_OUTCOME.get(agents.get(persona), "ok"))
-        for persona, row_id in rows.items()
-        if row_id not in _NO_ROW and not row_id.startswith("-")
-    ]
+    outcomes = []
+    for persona, row_id in rows.items():
+        if row_id in _NO_ROW:
+            continue
+        if not _ROW_ID_RE.match(row_id):
+            sys.stderr.write(
+                f"review_close: refusing malformed dispatch row id "
+                f"{row_id!r} for {persona}\n",
+            )
+            continue
+        outcomes.append((row_id, _DISPATCH_OUTCOME.get(agents.get(persona), "ok")))
+    return outcomes
 
 
 def _lens_states(frontmatter: list[str]) -> dict[str, str]:
@@ -400,17 +418,27 @@ def _carry_refusal(loaded: dict, chosen_findings: list[dict]) -> dict | None:
 
 
 def _severity_file_key(row: dict) -> tuple[str, str]:
-    return str(row.get("severity", "")).strip(), str(row.get("file", "")).strip()
+    """Normalized (severity word, file) for the duplicate-deferral match.
+    `deferred_decisions`/`autonomous_decisions` entries mix two severity
+    vocabularies - the emoji copied verbatim from a chosen finding, and
+    schema.py's lowercase-word `DECISION_SEVERITIES` - so comparing the raw
+    strings misses a word-vocabulary deferral against an emoji-vocabulary
+    finding for the same file. `gate._split_severity_cell` is the one place
+    that already reads both forms."""
+    severity = gate._split_severity_cell(str(row.get("severity", "")))[0]
+    return severity, str(row.get("file", "")).strip()
 
 
 def _matches_open_deferral(findings: list[dict], deferred: list) -> str | None:
     """The FIRST finding whose (severity, file) pair an open deferral already
-    holds, described as "<severity> <file>", else None."""
+    holds, described as "<severity> <file>" - the finding's OWN severity
+    spelling, not the normalized key, so the reported reason still reads the
+    way the operator wrote the batch - else None."""
     open_keys = {_severity_file_key(d) for d in deferred if isinstance(d, dict)}
     for row in findings:
-        severity, file = _severity_file_key(row)
-        if (severity, file) in open_keys:
-            return f"{severity} {file}"
+        key = _severity_file_key(row)
+        if key in open_keys:
+            return f"{row.get('severity', '')} {key[1]}"
     return None
 
 
@@ -420,8 +448,15 @@ def _tail_sweep_refusal(
     chosen_findings: list[dict],
 ) -> dict | None:
     """The tail-sweep-only refusals, in the order the operator hears them: a
-    carry row, a sweep before this cycle's decision-gate batch, an empty sweep,
-    a row above Medium, a row duplicating an open deferral."""
+    carry row, a sweep before this cycle's decision-gate batch, an empty
+    sweep, a row above Medium, a row duplicating an open deferral.
+
+    The decision-gate-first fix for a converged cycle with no 🔴/🟠 row lives
+    in the caller's procedure (`run-autopilot/references/phase-review.md`
+    Converged Outcome), which applies an empty decision-gate batch before
+    ever calling tail-sweep, so this stamp always exists by the time a sweep
+    reaches this check.
+    """
     if any(f.get("classification") == "carry" for f in chosen_findings):
         return {
             "applied": False,
