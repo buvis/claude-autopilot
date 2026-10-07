@@ -412,7 +412,6 @@ def close(
         and detail == gate._FINDINGS_PROBLEMS["unreadable-table"]
     ):
         return {"applied": False, "refused": "findings_malformed", "reason": detail}
-    # "malformed" + no-section detail: legacy pass-through, unchanged.
 
     # Advisory pre-lock read: it refuses before paying for mutate()'s lock,
     # but _close_mutator's in-lock check stays the race-safe authority.
