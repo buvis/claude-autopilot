@@ -50,7 +50,7 @@ def _allow_corpus() -> list[Path]:
 
 def _denied() -> list[Path]:
     fixtures = sorted((FIXTURES / "denied").glob("*.txt"))
-    assert len(fixtures) == 4, fixtures
+    assert len(fixtures) == 17, fixtures
     return fixtures
 
 
@@ -98,7 +98,7 @@ def _guard_module():
 
 def test_the_four_observed_delegations_are_denied() -> None:
     fixtures = _denied()
-    assert len(fixtures) == 4
+    assert len(fixtures) == 17
     results = {f.name: _run(_agent_payload(_tool_input(f)), loop=True) for f in fixtures}
     let_through = sorted(name for name, r in results.items() if r.returncode != 2)
     assert let_through == []
