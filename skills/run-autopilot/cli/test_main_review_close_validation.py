@@ -13,12 +13,13 @@ mapping: every refusal close() can return is a validation refusal worth exit
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
 from cli import __main__ as cli_main
-from cli import review_close
+from cli import gate, review_close
 from cli.test_review_close import (
     CARRY_CONSOLIDATED,
     CONSOLIDATED,
@@ -99,6 +100,20 @@ def test_rejects_plain_word_severity() -> None:
     assert cli_main._is_chosen_finding(_row("fix", severity="CRITICAL")) is False
 
 
+def test_rejects_an_actionable_row_missing_the_file_or_issue_close_reads() -> None:
+    """close() reads `file` and `issue` off every fix/defer row to name the
+    task and quote the finding, so a row without them must never reach it."""
+    assert cli_main._is_chosen_finding(_row("fix", file=None)) is False
+    assert cli_main._is_chosen_finding(_row("defer", issue=None)) is False
+
+
+def test_rejects_a_findings_entry_that_is_not_a_row() -> None:
+    """A JSON array of bare strings is not a findings file: each entry has to
+    be an object before any field of it can be read."""
+    assert cli_main._is_chosen_finding("fix") is False
+    assert cli_main._is_chosen_finding(["fix"]) is False
+
+
 def _cli_refusal(tmp_path: Path, consolidated: str, findings: list[dict]) -> tuple:
     """Run the real CLI over a review file the cross-check or the carry match
     must refuse, and prove the run left state.json alone."""
@@ -144,6 +159,9 @@ def test_cli_exits_2_when_the_table_has_no_ref_column(tmp_path: Path) -> None:
 
     assert code == 2, out
     assert "findings_ref_required" in out
+    # Naming the kind is not enough: the operator has to be told what to fix,
+    # which is the cross-check's own diagnostic for the missing Ref column.
+    assert gate._FINDINGS_PROBLEMS["ref-required"] in out
 
 
 def test_cli_exits_2_when_the_findings_table_cannot_be_read(tmp_path: Path) -> None:
@@ -218,6 +236,32 @@ def test_every_refusal_kind_exits_2_and_names_itself(
     assert kind in captured.out + captured.err
 
 
+def test_a_refusal_kind_outside_todays_list_also_exits_2(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """A `refused` key is what makes a result a refusal, so the next kind
+    close() learns to return is exit 2 the day it is added - a mapping that
+    enumerates only today's kinds would quietly call it a plain "not
+    applied"."""
+    monkeypatch.setattr(
+        review_close,
+        "close",
+        lambda *_a, **_k: {
+            "applied": False,
+            "refused": "future_kind",
+            "reason": "future_kind happened",
+        },
+    )
+
+    code = _run_main(tmp_path)
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "future_kind" in captured.out + captured.err
+
+
 def test_a_not_applied_result_with_no_refused_key_still_exits_1(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -233,19 +277,23 @@ def test_a_not_applied_result_with_no_refused_key_still_exits_1(
     assert _run_main(tmp_path) == 1
 
 
-def test_an_applied_batch_exits_0(
+def test_an_applied_batch_exits_0_after_reporting_what_it_created(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
 ) -> None:
-    monkeypatch.setattr(
-        review_close,
-        "close",
-        lambda *_a, **_k: {
-            "applied": True,
-            "tasks_created": ["2"],
-            "rework_task_ids": ["2"],
-            "lenses_closed": {"consensus": "done"},
-        },
-    )
+    """Exit 0 alone tells the caller nothing: the applied result is the only
+    place the new task ids and the closed lenses are reported, so it has to be
+    printed before the exit."""
+    applied = {
+        "applied": True,
+        "tasks_created": ["2"],
+        "rework_task_ids": ["2"],
+        "lenses_closed": {"consensus": "done"},
+    }
+    monkeypatch.setattr(review_close, "close", lambda *_a, **_k: applied)
 
-    assert _run_main(tmp_path) == 0
+    code = _run_main(tmp_path)
+
+    assert code == 0
+    assert json.loads(capsys.readouterr().out) == applied

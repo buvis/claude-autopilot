@@ -125,26 +125,34 @@ def test_a_tail_sweep_batch_skips_the_carry_match(tmp_path: Path) -> None:
         (_carry_task(refs=(" r1  ",)), ["4"], False),
         (_carry_task(task_id=4), ["4"], False),
         (_carry_task(escalation_reason="fable_rescue"), ["4"], False),
+        (_carry_task(status="failed"), ["4"], False),
         (_carry_task(refs=("R9",)), ["4"], True),
+        (_carry_task(refs=("R10",)), ["4"], True),
         (_carry_task(refs=()), ["4"], True),
         (_carry_task(carry_cycle=1, name="[C1] carry: src/b.py"), ["4"], True),
         (_carry_task(), [], True),
+        (_carry_task(task_id="4"), ["9"], True),
         (_carry_task(name="[D2] src/b.py"), ["4"], True),
         (_carry_task(status="completed"), ["4"], True),
         (_carry_task(escalation_reason="model_floor"), ["4"], True),
+        (_carry_task(escalation_reason=None), ["4"], True),
     ],
     ids=[
         "matching-task",
         "ref-compared-stripped-and-case-folded",
         "int-task-id-matches-string-rework-id",
         "fable-rescue-requeue-also-backs-a-carry",
+        "a-failed-task-is-still-live-enough-to-back-a-carry",
         "task-carries-another-ref",
+        "task-carries-a-ref-this-one-is-only-a-prefix-of",
         "task-carries-no-refs",
         "stale-earlier-cycle",
         "not-in-rework-task-ids",
+        "another-task-id-was-requeued",
         "D-named-task-is-not-a-carry-requeue",
         "task-already-completed",
         "unrelated-escalation-reason",
+        "no-escalation-reason",
     ],
 )
 def test_carry_unmatched_matches_only_a_live_this_cycle_requeued_task(
@@ -155,6 +163,77 @@ def test_carry_unmatched_matches_only_a_live_this_cycle_requeued_task(
     row = _carry_row(" r1 ")
 
     assert review_close._carry_unmatched(row, 2, [task], rework_ids) is unmatched
+
+
+@pytest.mark.parametrize(
+    ("carry_cycle", "unmatched"),
+    [(3, False), (2, True)],
+    ids=["requeued-for-the-given-cycle", "requeued-for-the-cycle-before"],
+)
+def test_carry_unmatched_judges_against_the_cycle_it_is_given(
+    carry_cycle: int,
+    unmatched: bool,
+) -> None:
+    """The cycle to match is the one the caller passes (the state's current
+    `cycle`), not a fixed number: asked about cycle 3, a task re-queued for
+    cycle 3 backs the row and the cycle-2 task that backed it last cycle no
+    longer does."""
+    task = _carry_task(
+        carry_cycle=carry_cycle,
+        name=f"[C{carry_cycle}] carry: src/b.py",
+    )
+
+    assert review_close._carry_unmatched(_carry_row(), 3, [task], ["4"]) is unmatched
+
+
+def test_a_carry_is_refused_when_no_single_task_satisfies_every_condition(
+    tmp_path: Path,
+) -> None:
+    """Every word a reader skimming state.json for reassurance would find is
+    there: a `[C2]`-named task, a carry_refs list, carry_cycle 2, a non-empty
+    rework_task_ids, and the ref R1 spelled out in a task description. No ONE
+    task carries R1 for this cycle, so the Critical is still unbacked and the
+    batch is refused."""
+    review = _review(tmp_path, consolidated=CARRY_CONSOLIDATED)
+    decoy = {
+        "id": "1",
+        "name": "original",
+        "status": "completed",
+        "description": "carry_refs: see R1 in the cycle-2 review",
+    }
+    state_path = _state(
+        tmp_path,
+        tasks=[decoy, _carry_task(task_id="5", refs=("R2",))],
+        tasks_total=2,
+        rework_task_ids=["5"],
+    )
+    before = state_path.read_bytes()
+
+    result = review_close.close(review, state_path, "decision-gate", _carry_batch())
+
+    assert result["applied"] is False
+    assert result["refused"] == "carry_unmatched"
+    assert result["reason"] == _carry_reason("R1")
+    assert state_path.read_bytes() == before
+
+
+def test_the_refusal_names_the_first_unmatched_carry_row(tmp_path: Path) -> None:
+    """Two rows are carried, R1 then R3, and nothing was re-queued at all: the
+    operator is sent to the first unmatched row of their findings file, not the
+    last, so the row they will meet first is the one named."""
+    review = _review(tmp_path, consolidated=CARRY_CONSOLIDATED)
+    state_path = _state(tmp_path)
+
+    result = review_close.close(
+        review,
+        state_path,
+        "decision-gate",
+        _carry_batch(("R1", "R3")),
+    )
+
+    assert result["applied"] is False
+    assert result["refused"] == "carry_unmatched"
+    assert result["reason"] == _carry_reason("R1")
 
 
 def test_carry_unmatched_ignores_task_entries_that_are_not_dicts() -> None:
