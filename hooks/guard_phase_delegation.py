@@ -25,16 +25,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _common import allow, block, read_input
 
+# The six original verbs only, for the colon-lead pattern: "Work phase:
+# complete" and "In the work phase: do not skip tests" are status prose.
 # Widened to the -ing form of each verb: recovered transcripts say "You are
 # executing the `autopilot:design-solution` skill" (autonomous decision,
 # PRD 00248 task 1).
-_IMPERATIVE = (
-    r"(run(?:ning)?|execut(?:e|ing)|invok(?:e|ing)|follow(?:ing)?|continu(?:e|ing)|resum(?:e|ing)"
-    r"|start|do|perform|complete|launch|call)"
-)
-# The six original verbs only, for the colon-lead pattern: "Work phase:
-# complete" and "In the work phase: do not skip tests" are status prose.
-_IMPERATIVE_COLON = r"(run(?:ning)?|execut(?:e|ing)|invok(?:e|ing)|follow(?:ing)?|continu(?:e|ing)|resum(?:e|ing))"
+_COLON_VERBS = r"run(?:ning)?|execut(?:e|ing)|invok(?:e|ing)|follow(?:ing)?|continu(?:e|ing)|resum(?:e|ing)"
+_IMPERATIVE_COLON = rf"({_COLON_VERBS})"
+# Built from the six colon verbs plus six widened verbs, so the two lists
+# cannot drift.
+_IMPERATIVE = rf"({_COLON_VERBS}|start|do|perform|complete|launch|call)"
 # Code points that split a word without showing, stripped before matching.
 # U+200B, U+200C, U+200D, U+2060, U+00AD.
 _INVISIBLE = dict.fromkeys((0x200B, 0x200C, 0x200D, 0x2060, 0x00AD))
@@ -53,24 +53,42 @@ _BARE_SKILL = r"(?P<bt>[`'\"]?)(?:/)?(autopilot:work|autopilot:plan-tasks|autopi
 # Only an autopilot:-prefixed skill name takes the word gap: a bare
 # "plan-tasks" is ordinary prose ("call the helper in plan-tasks").
 _PREFIXED_SKILL = r"(?P<bt>[`'\"]?)(?:/)?(autopilot:work|autopilot:plan-tasks|autopilot:design-solution)(?P=bt)"
-_SKILL_READ = (
-    r"read\s+(?:skills/)?(work|plan-tasks|design-solution)/SKILL\.md"
-    rf".{{0,60}}\b{_IMPERATIVE}\b.{{0,20}}\b(every|all)\s+tasks?\b"
-)
 # No "n't" alternative: \b never matches before the "n" inside a
 # contraction, so that alternative was dead. Contractions are spelled out.
-# "not/never hesitate|fail|only" is a double negation ("do not hesitate to
-# run ..."), so it does not count.
+# "not/never/don't ... hesitate|fail|only" is a double negation ("do not
+# hesitate to run ...", "don't hesitate to run ..."), so it does not count.
+# The exception covers the contractions too; one without hesitate|fail|only
+# after it ("Don't run the work phase") stays a plain negation.
 _NEGATION = (
-    r"\b(not|never|does\s+not)\b(?!\s+(?:hesitate|fail|only)\b)"
-    r"|\b(doesn't|don't|won't|can't|cannot|isn't|shouldn't|wasn't|weren't)\b"
+    r"\b(not|never|does\s+not|doesn't|don't|won't|can't|cannot|isn't|shouldn't|wasn't|weren't)\b"
+    r"(?!\s+(?:hesitate|fail|only)\b)"
 )
 _NEGATION_RE = re.compile(_NEGATION, re.IGNORECASE)
+# _negated_before only sees text BEFORE a match start, so a prohibition inside
+# the match ("Read skills/work/SKILL.md and do not perform all tasks") needs
+# the in-pattern guard: no negation may sit before the verb or between the
+# verb and "all tasks".
+_NO_NEGATION = rf"(?:(?!{_NEGATION}).)"
+_SKILL_READ = (
+    r"read\s+(?:skills/)?(work|plan-tasks|design-solution)/SKILL\.md"
+    rf"{_NO_NEGATION}{{0,60}}\b{_IMPERATIVE}\b{_NO_NEGATION}{{0,20}}\b(every|all)\s+tasks?\b"
+)
 # Up to three words between the verb and its object ("run the entire work
 # phase"). Word-count bounded, never a character gap: a {0,40}-char gap once
 # denied 21 of 231 real review prompts. A negation never counts as a gap word,
 # or "Do not run the work phase" would match from "Do" past its own "not".
-_GAP = rf"(?:(?!{_NEGATION})\w+\s+){{0,3}}"
+# Gap words are a closed set of determiners and modifiers, never `\w+`:
+# prepositions and nouns ("do in the work phase", "Start with the work phase
+# fixtures") are ordinary prose. The set is the articles/demonstratives
+# (the, a, an, this, that), the quantifiers (all, every, each, remaining) and
+# the size modifiers (entire, whole, full); chosen as the smallest set that
+# keeps every denied fixture denied.
+_GAP_WORD = r"(?:the|an?|this|that|all|every|each|remaining|entire|whole|full)"
+_GAP = rf"(?:(?!{_NEGATION}){_GAP_WORD}\s+){{0,3}}"
+# A phase-jargon match followed by a compound-noun head ("the work phase
+# reviewer", "complete the work phase checklist") names a thing, not an
+# instruction to run the phase.
+_NOT_COMPOUND = r"(?!\s+(?:reviewers?|reviews?|fixtures?|checklists?|diffs?)\b)"
 _SENTENCE_BOUNDARY_RE = re.compile(r"[.;,\n]")
 
 # Read-only reviewer personas: none of their persona files grant the Skill
@@ -94,7 +112,7 @@ _READ_ONLY_REVIEWERS = frozenset(
 # docs/dev/tmp/probe-blake-high-00248.py). No reverse-direction ("work phase
 # ... run") pattern: none of the four observed denial fixtures needs it, and
 # it is pure false-positive surface.
-_PHASE_JARGON_TIGHT = rf"\b{_IMPERATIVE}\s+{_GAP}{_PHASE_JARGON}\b"
+_PHASE_JARGON_TIGHT = rf"\b{_IMPERATIVE}\s+{_GAP}{_PHASE_JARGON}\b{_NOT_COMPOUND}"
 
 _DELEGATION_PATTERNS = (
     re.compile(_PHASE_JARGON_TIGHT, re.IGNORECASE),
