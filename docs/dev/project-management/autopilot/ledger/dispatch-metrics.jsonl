@@ -3370,3 +3370,8 @@
 {"id":"e101d269","kind":"pat","task":"3","queued_at":1791355516,"prompt_bytes":5324}
 {"id":"b69f7cb2","kind":"ivan","task":"2","queued_at":1791355922,"prompt_bytes":12637}
 {"id":"b69f7cb2","ended_at":1791355956,"elapsed_s":34,"outcome":"ok","detail":null}
+{"id":"10a46346","ended_at":1791356469,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"f6ecf1b2","ended_at":1791356469,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"c2e748bc","ended_at":1791356469,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"e101d269","ended_at":1791356469,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791356469,"phase":"review","prd":"00267-widen-the-phase-delegation-guard-v1.md"}
