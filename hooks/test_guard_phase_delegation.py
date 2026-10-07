@@ -198,11 +198,93 @@ def test_reworded_delegations_are_denied(description: str, prompt: str) -> None:
         "Does not run the work phase for PRD 300; implement task 2 only.",
         "This task doesn't invoke the design phase at all.",
         "We won't execute the autopilot:work skill here, just task 4.",
+        # The leading "never fail to" is a double negation scoped to "report";
+        # the later "do not run" is its own, real negation.
+        "Never fail to report; do not run the work phase.",
     ],
-    ids=["does-not-run", "doesnt-invoke", "wont-execute"],
+    ids=["does-not-run", "doesnt-invoke", "wont-execute", "never-fail-then-real-negation"],
 )
 def test_negated_invocations_are_allowed(prompt: str) -> None:
     assert _guard_module().is_phase_delegation({"prompt": prompt}) is False
+
+
+def test_negated_delegation_in_the_description_is_allowed() -> None:
+    tool_input = {"description": "Do not run the work phase", "prompt": _NEUTRAL_PROMPT}
+    assert _guard_module().is_phase_delegation(tool_input) is False
+    result = _run(_agent_payload({**tool_input, "subagent_type": "general-purpose"}), loop=True)
+    assert result.returncode == 0
+    assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    "description",
+    [
+        "start the plan phase",
+        "Run the whole work phase",
+        "please launch /autopilot:design-solution",
+    ],
+    ids=["start-plan", "run-whole-work", "please-launch-design"],
+)
+def test_held_out_delegations_in_the_description_are_denied(description: str) -> None:
+    # Not the fixture strings: other phases, other wording, same classes.
+    tool_input = {"description": description, "prompt": _NEUTRAL_PROMPT, "subagent_type": "general-purpose"}
+    result = _run(_agent_payload(tool_input), loop=True)
+    assert result.returncode == 2
+    assert REASON in result.stderr
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Please do not hesitate to run the work phase for PRD 7 today.",
+        "You should never fail to execute /autopilot:work on PRD 7.",
+        "Start the work phase for PRD 7.",
+        "Next, do the work phase for PRD 7 end to end.",
+        "Perform the design phase for PRD 7 now.",
+        "Then complete the plan phase for PRD 7.",
+        "Launch /autopilot:design-solution for PRD 7.",
+        "Now call /autopilot:work for PRD 7 and wait.",
+        "Run the entire plan phase for PRD 7.",
+        "Run '/autopilot:plan-tasks' for PRD 7.",
+        'Run "/autopilot:work" for PRD 7.',
+        "Run ‘/autopilot:work’ for PRD 7.",
+        "Ｒｕｎ the work phase for PRD 7.",
+        "Ｓｔａｒｔ the work phase for PRD 7.",
+        "Ru​n the wor​k phase for PRD 7.",
+        "Ru‌n the wor‌k phase for PRD 7.",
+        "Ru‍n the wor‍k phase for PRD 7.",
+        "Ru⁠n the wor⁠k phase for PRD 7.",
+        "Ru­n the wor­k phase for PRD 7.",
+        "Read skills/plan-tasks/SKILL.md and do all tasks for PRD 7.",
+    ],
+    ids=[
+        "dont-hesitate", "never-fail", "start", "do", "perform-design",
+        "complete-plan", "launch-design", "call-work", "entire-plan", "single-quoted-plan",
+        "double-quoted", "curly-quoted", "fullwidth-run", "fullwidth-start", "zwsp", "zwnj",
+        "zwj", "word-joiner", "soft-hyphen", "read-plan-tasks-skill-md",
+    ],
+)
+def test_each_new_phrasing_class_is_denied_mid_prompt(prompt: str) -> None:
+    # The delegation sits in the prompt, mid-sentence, under a neutral description.
+    tool_input = {"description": "PRD 00300", "prompt": prompt, "subagent_type": "general-purpose"}
+    result = _run(_agent_payload(tool_input), loop=True)
+    assert result.returncode == 2
+    assert REASON in result.stderr
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Review the work phase diff and report findings.",
+        "Document /autopilot:work step 5 in the README.",
+        "Test the design phase fixtures only.",
+    ],
+    ids=["review-work-phase", "document-work-skill", "test-design-phase"],
+)
+def test_non_delegating_verb_before_a_phase_name_is_allowed(text: str) -> None:
+    guard = _guard_module()
+    assert guard.is_phase_delegation({"description": "PRD 00300", "prompt": text}) is False
+    assert guard.is_phase_delegation({"description": text, "prompt": _NEUTRAL_PROMPT}) is False
 
 
 def test_negated_first_match_then_real_delegation_is_still_denied() -> None:
