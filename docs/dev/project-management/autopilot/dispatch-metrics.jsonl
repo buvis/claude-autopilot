@@ -3440,3 +3440,28 @@
 {"id":"4fc05c43","ended_at":1791383110,"elapsed_s":38,"outcome":"error","detail":null}
 {"id":"a56f6f10","ended_at":1791383179,"elapsed_s":80,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1791383288,"phase":"build","prd":"00265-close-the-critical-row-escapes-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791383328,"phase":"build","prd":"00265-close-the-critical-row-escapes-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791383346,"phase":"build","prd":"00265-close-the-critical-row-escapes-v1.md"}
+{"id":"d848e5e3","kind":"tess","task":"3","queued_at":1791383528,"prompt_bytes":36933}
+{"id":"d848e5e3","ended_at":1791384051,"elapsed_s":523,"outcome":"ok","detail":null}
+{"id":"a10ab492","kind":"devon","task":"3","queued_at":1791384140,"prompt_bytes":4261}
+{"id":"a10ab492","ended_at":1791384525,"elapsed_s":385,"outcome":"ok","detail":"broke tests, 8 weak points"}
+{"id":"33f37736","kind":"tess","task":"3","queued_at":1791384568,"prompt_bytes":14525}
+{"id":"33f37736","ended_at":1791384969,"elapsed_s":401,"outcome":"ok","detail":"8/8 weak points answered"}
+{"id":"0ac4f277","kind":"ivan","task":"3","queued_at":1791385043,"prompt_bytes":48866}
+{"id":"0ac4f277","ended_at":1791385199,"elapsed_s":156,"outcome":"ok","detail":null}
+{"id":"3a301d03","kind":"deslop","task":"3","queued_at":1791385304,"prompt_bytes":8082}
+{"id":"3a301d03","ended_at":1791385497,"elapsed_s":193,"outcome":"ok","detail":"committed 23a60f2"}
+{"id":"4470567e","kind":"pat","task":"3","queued_at":1791385589,"prompt_bytes":34604}
+{"id":"4470567e","ended_at":1791385637,"elapsed_s":48,"outcome":"ok","detail":"3 LOW findings"}
+{"id":"a1b3108f","kind":"tess","task":"4","queued_at":1791385803,"prompt_bytes":45837}
+{"id":"a1b3108f","ended_at":1791386222,"elapsed_s":419,"outcome":"ok","detail":null}
+{"id":"19b05bf1","kind":"devon","task":"4","queued_at":1791386286,"prompt_bytes":4281}
+{"id":"19b05bf1","ended_at":1791386916,"elapsed_s":630,"outcome":"ok","detail":"broke tests, 8 weak points"}
+{"id":"f4d28485","kind":"tess","task":"4","queued_at":1791386969,"prompt_bytes":14993}
+{"id":"f4d28485","ended_at":1791387338,"elapsed_s":369,"outcome":"ok","detail":"8/8 weak points answered"}
+{"id":"e21546df","kind":"ivan","task":"4","queued_at":1791387421,"prompt_bytes":22611}
+{"id":"e21546df","ended_at":1791387508,"elapsed_s":87,"outcome":"ok","detail":null}
+{"id":"3d441543","kind":"pat","task":"4","queued_at":1791387594,"prompt_bytes":32088}
+{"id":"3d441543","ended_at":1791387626,"elapsed_s":32,"outcome":"ok","detail":"NO FINDINGS"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791387740,"phase":"build","prd":"00265-close-the-critical-row-escapes-v1.md"}
