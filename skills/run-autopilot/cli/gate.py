@@ -501,12 +501,17 @@ def _cross_check_findings(
     if not require_coverage:
         return "ok", None
     covered_refs = {str(row.get("ref", "")).strip().upper() for row in findings}
-    for row in reviewed:
-        if row.ref and row.ref not in covered_refs:
-            return "uncovered", (
-                f"review row ref {row.ref} has no findings-JSON row naming "
-                "its ref and a classification"
-            )
+    uncovered = [
+        row.ref for row in reviewed if row.ref and row.ref not in covered_refs
+    ]
+    if uncovered:
+        # Every uncovered ref, not just the first: naming one costs the
+        # operator a whole re-run per row still missing.
+        return "uncovered", (
+            "review rows with no findings-JSON row naming their ref and a "
+            f"classification: {', '.join(uncovered)} "
+            "(re-queued [C] rows use classification carry)"
+        )
     return "ok", None
 
 

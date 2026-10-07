@@ -56,13 +56,15 @@ def test_close_adds_one_task_per_group(tmp_path: Path) -> None:
     assert "crash on empty input" not in b_desc
     assert data["tasks_total"] == 3
     # blake/carl/eve have no line at all under agents: here, so the
-    # missing-persona fail-safe closes their lenses as "failed" too.
+    # missing-persona fail-safe closes their lenses as "lost" - never
+    # dispatched is a different fact from reported-and-failed, which is
+    # bob's case: present with an unrecognized status, so still "failed".
     expected_lenses = {
         "consensus": "done",
         "doubt": "failed",
-        "blind": "failed",
-        "ui": "failed",
-        "fable": "failed",
+        "blind": "lost",
+        "ui": "lost",
+        "fable": "lost",
     }
     assert result["lenses_closed"] == expected_lenses
     assert data["review_lenses"] == expected_lenses
@@ -308,9 +310,11 @@ def test_close_maps_every_classification_row_to_a_chosen_finding_value(
     assert result["tasks_created"] == [new_tasks[0]["id"]]
     assert data["deferred_decisions"] == [
         {
+            "cycle": 2,
             "issue": "defer me",
             "severity": MED,
             "file": "src/defer.py",
+            "action": "deferred",
             "reason": "deferred by review-close",
         },
     ]
@@ -453,7 +457,10 @@ def test_close_ends_frontmatter_dispatch_rows_best_effort(
 
     assert result["applied"] is True
     assert [cmd[cmd.index("end") + 1] for cmd in commands] == ["d-111", "d-222"]
-    assert all(cmd[-2:] == ["--outcome", "ok"] for cmd in commands)
+    # bob is available, so d-111 closes "ok"; carl has no agents: line at all,
+    # so d-222 closes "lost" - the row was never reported back.
+    assert [cmd[-1] for cmd in commands] == ["ok", "lost"]
+    assert all(cmd[-2] == "--outcome" for cmd in commands)
     assert _load(state_path)["applied_review_batches"]
 
 

@@ -45,8 +45,17 @@ _PERSONA_LENS = {
 _LENS_STATUS = {"available": "done", "disabled": "skipped"}
 # agents: status -> the dispatch row's closing --outcome (SKILL.md step 6's
 # attempt-outcome table). A persona absent from the agents: block at all
-# (status None) defaults to "ok", same as the prior hardcoded value.
-_DISPATCH_OUTCOME = {"available": "ok", "unavailable": "error", "timeout": "timeout"}
+# (status None) was never dispatched back, so its row closes "lost" rather
+# than as a success the ledger would average into its timings; a persona taken
+# off the roster on purpose ("disabled") keeps "ok", the vocabulary's value for
+# a row nobody failed.
+_DISPATCH_OUTCOME = {
+    "available": "ok",
+    "unavailable": "error",
+    "timeout": "timeout",
+    "disabled": "ok",
+    None: "lost",
+}
 _NO_ROW = ("", "null", "None")
 # A finding's severity is one of rework_groups.py's emoji; schema.py's
 # DECISION_SEVERITIES vocabulary for an `autonomous_decisions` entry is the
@@ -127,20 +136,23 @@ def _end_dispatch_rows(rows: list[tuple[str, str]], cwd: Path) -> None:
 
 def _dispatch_outcomes(frontmatter: list[str]) -> list[tuple[str, str]]:
     """(row id, --outcome) for every open `dispatch_rows:` entry, the
-    outcome read from that persona's `agents:` status."""
+    outcome read from that persona's `agents:` status. A row id leading with a
+    dash is dropped: it reaches `record_dispatch` as an argv word, where it
+    would be read as a flag rather than as the row to end."""
     agents = _nested_pairs(frontmatter, "agents")
     rows = _nested_pairs(frontmatter, "dispatch_rows")
     return [
         (row_id, _DISPATCH_OUTCOME.get(agents.get(persona), "ok"))
         for persona, row_id in rows.items()
-        if row_id not in _NO_ROW
+        if row_id not in _NO_ROW and not row_id.startswith("-")
     ]
 
 
 def _lens_states(frontmatter: list[str]) -> dict[str, str]:
     """`review_lenses` state per lens, from the `agents:` status of every
-    persona that lens maps to. A persona absent from `agents:` entirely
-    defaults to "failed", the same default an unrecognized status gets."""
+    persona that lens maps to. A persona absent from `agents:` entirely closes
+    its lens as "lost" (nothing ever reported back), while a persona present
+    with an unrecognized status stays "failed"."""
     agents = _nested_pairs(frontmatter, "agents")
     lenses = {
         _PERSONA_LENS.get(name, name): _LENS_STATUS.get(status, "failed")
@@ -148,7 +160,7 @@ def _lens_states(frontmatter: list[str]) -> dict[str, str]:
     }
     for persona, lens in _PERSONA_LENS.items():
         if persona not in agents:
-            lenses.setdefault(lens, "failed")
+            lenses.setdefault(lens, "lost")
     return lenses
 
 
@@ -217,9 +229,11 @@ def _add_decisions(state: dict, fixes: list[dict], defers: list[dict]) -> None:
             state,
             statectl.parse_path("deferred_decisions"),
             {
+                "cycle": cycle,
                 "issue": f["issue"],
                 "severity": f["severity"],
                 "file": f["file"],
+                "action": "deferred",
                 "reason": "deferred by review-close",
             },
         )
@@ -296,7 +310,11 @@ def _mutation_context(
 ) -> dict[str, Any]:
     """The `_close_mutator` ctx for one batch: the apply-once identity, the
     findings split by classification, the doubt verdicts, the lens states and
-    the empty `outcome` the mutator writes back through."""
+    the empty `outcome` the mutator writes back through.
+
+    A tail sweep closes no lens (it runs after the lenses are done and leaves
+    `review_lenses` alone), so its lens map is empty rather than the review
+    file's."""
     return {
         "identity": f"{review_file.resolve()}::{batch_id}",
         "fixes": [f for f in chosen_findings if f["classification"] == "fix"],
@@ -308,7 +326,7 @@ def _mutation_context(
             {"rule_id": rule, "verdict": verdict}
             for rule, verdict in _DOUBT_RE.findall(text)
         ],
-        "lenses": _lens_states(frontmatter),
+        "lenses": {} if batch_id == "tail-sweep" else _lens_states(frontmatter),
         "outcome": {},
     }
 
