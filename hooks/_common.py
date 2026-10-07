@@ -27,12 +27,12 @@ def read_input() -> dict[str, Any]:
     Hooks must remain non-fatal on bad input so a malformed payload never
     blocks an otherwise-valid tool call.
     """
-    raw = sys.stdin.read()
+    raw = sys.stdin.buffer.read().decode("utf-8", errors="replace")
     if not raw.strip():
         return {}
     try:
         data = json.loads(raw)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, RecursionError):
         return {}
     return data if isinstance(data, dict) else {}
 
