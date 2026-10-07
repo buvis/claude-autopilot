@@ -46,13 +46,17 @@ Generated: 2026-09-14
 
 ### Batch 202610071409
 - [x] 00265-close-the-critical-row-escapes-v1 (2 cycles)
-- [ ] 00266-bind-gate-reuse-to-the-command-and-renames-v1
+- [x] 00266-bind-gate-reuse-to-the-command-and-renames-v1 (1 cycle)
 
-Observations: full lane, 13/13 tasks, 2 cycles (cap reached). No CRITICAL;
-one unresolved HIGH (R4, gate.py:386 header fail-open) minted to hold stub
-00268-triage-r4-gate-table-keys-fails-open-on-a-findi-v1. 31 deferred items
-migrated to the batch deferred JSON (18 from review-close rework, 13
-cap-overflow records from the rework-cap-2 cycle). Constraint gate exit 0.
+Observations: 00265 full lane, 13/13 tasks, 2 cycles (cap reached). No
+CRITICAL; one unresolved HIGH (R4, gate.py:386 header fail-open) minted to
+hold stub 00268-triage-r4-gate-table-keys-fails-open-on-a-findi-v1. 31
+deferred items migrated to the batch deferred JSON (18 from review-close
+rework, 13 cap-overflow records from the rework-cap-2 cycle). Constraint
+gate exit 0. 00266 fast-track lane, 1/1 task, 1 cycle, lane_reviewed. 3
+residual non-blocking findings + a CHANGELOG gap recorded in the review
+file. Batch suite green (2832 passed, 0 failed, exit 0) at e87f36a. Backlog
+and wip empty at batch end.
 
 ### Batch 202610061930
 - [x] 00267-widen-the-phase-delegation-guard-v1 (1 cycle)

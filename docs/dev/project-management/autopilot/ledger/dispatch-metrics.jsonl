@@ -3549,3 +3549,5 @@
 {"id":"4721633c","kind":"fast-track:delta","task":"00266-bind-gate-reuse-to-the-command-and-renames-v1-c1","queued_at":1791403397,"prompt_bytes":11897}
 {"id":"4721633c","ended_at":1791403872,"elapsed_s":475,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1791404047,"phase":"done","prd":"00266-bind-gate-reuse-to-the-command-and-renames-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1791404093,"phase":"done","prd":"00266-bind-gate-reuse-to-the-command-and-renames-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1791404168,"phase":"done","prd":"00266-bind-gate-reuse-to-the-command-and-renames-v1.md"}
