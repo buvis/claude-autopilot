@@ -13,6 +13,7 @@ PHASE_REVIEW = (ROOT / "skills/run-autopilot/references/phase-review.md").read_t
 RECOVERY = (ROOT / "skills/run-autopilot/references/recovery.md").read_text(
     encoding="utf-8"
 )
+CHANGELOG = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
 
 
 def step(number: int) -> str:
@@ -74,3 +75,17 @@ def test_requeue_records_the_carry_link_prose() -> None:
     )[0]
     assert "| Ref | Consensus | Severity | Issue | File | Found By |" in summary
     assert "| R1 | [N/N] | 🔴 Critical |" in summary
+
+
+def test_carry_creates_nothing_prose() -> None:
+    """A `carry` row creates no task and no decision, next to `verify` and
+    `discard`, and the changelog ships that rule with the coverage check."""
+    dispatch = PHASE_REVIEW.split("### Dispatch rework", 1)[1]
+    assert '`"verify"`, `"discard"` and `"carry"` rows create nothing.' in dispatch
+    assert '`"verify"` and `"discard"` rows create nothing.' not in PHASE_REVIEW
+
+    unreleased = CHANGELOG.split("## [Unreleased]", 1)[1].split("\n## [", 1)[0]
+    assert unreleased.count("carry") >= 2
+    assert "findings coverage check" in unreleased
+    assert "`carry` classification" in unreleased
+    assert "one version" in unreleased
