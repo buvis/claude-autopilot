@@ -351,6 +351,48 @@ def test_unparseable_payload_fails_open(stdin: str, message: str) -> None:
     assert f"guard_phase_delegation: {message}" in result.stderr
 
 
+_FAIL_OPEN = "guard_phase_delegation: empty/unparseable payload, allowing"
+
+
+def _run_bytes(stdin: bytes) -> subprocess.CompletedProcess[bytes]:
+    # Mirrors _run(loop=True) with binary stdin: text=True cannot carry a raw
+    # non-UTF-8 byte sequence to the hook. Strict UTF-8 stdin matches the
+    # harness under a UTF-8 locale; without it the bare env falls back to the
+    # C locale, whose surrogateescape stdin hides the decode error.
+    env = {
+        "PATH": "/usr/bin:/bin",
+        "HOME": str(Path.home()),
+        "_AUTOPILOT_LOOP": "4242",
+        "PYTHONIOENCODING": "utf-8:strict",
+    }
+    return subprocess.run(
+        [sys.executable, str(GUARD)],
+        input=stdin,
+        capture_output=True,
+        text=False,
+        env=env,
+    )
+
+
+def test_non_utf8_payload_fails_open_cleanly() -> None:
+    stdin = b"\xff\xfe\x80"
+    with pytest.raises(UnicodeDecodeError):
+        stdin.decode("utf-8")
+    result = _run_bytes(stdin)
+    stderr = result.stderr.decode("utf-8", errors="replace")
+    assert result.returncode == 0
+    assert _FAIL_OPEN in stderr
+    assert "Traceback" not in stderr
+
+
+def test_deeply_nested_payload_fails_open_cleanly() -> None:
+    depth = 100000
+    result = _run("[" * depth + "]" * depth, loop=True)
+    assert result.returncode == 0
+    assert _FAIL_OPEN in result.stderr
+    assert "Traceback" not in result.stderr
+
+
 @pytest.mark.parametrize(
     "tool_input",
     [{}, {"prompt": None}, {"prompt": None, "description": None}],
