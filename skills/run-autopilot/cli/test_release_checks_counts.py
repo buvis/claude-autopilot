@@ -9,9 +9,13 @@ longer aborts the whole run.
 
 from __future__ import annotations
 
+import ast
 import subprocess
+from collections.abc import Iterable
+from fnmatch import fnmatch
 from pathlib import Path
 
+_ROOT = Path(__file__).resolve().parents[3]
 _RELEASE_CHECKS = Path(__file__).resolve().parents[3] / "dev" / "bin" / "release-checks"
 
 
@@ -156,3 +160,90 @@ def test_gate_invokes_the_gate_and_review_verbs_prose_test_sets() -> None:
     text = _RELEASE_CHECKS.read_text()
     assert "skills/run-autopilot/cli/test_gate.py" in text
     assert "skills/review-work-completion/scripts/test_review_verbs_prose.py" in text
+
+
+# The repo's review-verb test modules, HAND-WRITTEN: the eleven `cli/` files the
+# two globs below reach, plus nine review-verb modules no glob can reach. Paths
+# are repo-relative because the modules span three directories.
+_REVIEW_VERB_TEST_FILES = (
+    "skills/run-autopilot/cli/test_review_close.py",
+    "skills/run-autopilot/cli/test_review_close_apply.py",
+    "skills/run-autopilot/cli/test_review_close_carry.py",
+    "skills/run-autopilot/cli/test_review_close_lowsev.py",
+    "skills/run-autopilot/cli/test_review_close_tail_sweep.py",
+    "skills/run-autopilot/cli/test_review_stage.py",
+    "skills/run-autopilot/cli/test_gate.py",
+    "skills/run-autopilot/cli/test_gate_findings_table.py",
+    "skills/run-autopilot/cli/test_gate_findings_classification.py",
+    "skills/run-autopilot/cli/test_gate_findings_shapes.py",
+    "skills/run-autopilot/cli/test_gate_findings_real_fixtures.py",
+    "skills/run-autopilot/cli/test_verification.py",
+    "skills/run-autopilot/cli/test_cli_review_verbs.py",
+    "skills/run-autopilot/cli/test_release_checks_counts.py",
+    "skills/run-autopilot/cli/test_main_review_close_validation.py",
+    "skills/run-autopilot/cli/test_store_tree_legibility.py",
+    "skills/run-autopilot/cli/test_role_effort.py",
+    "skills/run-autopilot/scripts/test_phase_review_closes_via_review_close.py",
+    "skills/review-work-completion/scripts/test_review_verbs_prose.py",
+    "skills/review-work-completion/scripts/test_skill_stages_via_review_stage.py",
+)
+
+_GLOB_DIR = "skills/run-autopilot/cli"
+_GLOBS = ("test_review*.py", "test_gate*.py")
+
+
+def _literal_tuple(name: str) -> tuple[str, ...]:
+    """The string constants of the module-level tuple `name`, proving it is
+    assigned exactly once as a literal tuple of string constants: a tuple
+    derived from the glob always equals the glob and so can never fail."""
+    tree = ast.parse(Path(__file__).read_text(encoding="utf-8"))
+    values = [
+        node.value
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == name
+            for target in node.targets
+        )
+    ]
+    assert len(values) == 1, f"{name} must be assigned exactly once"
+    assert isinstance(values[0], ast.Tuple) and all(
+        isinstance(elt, ast.Constant) and isinstance(elt.value, str)
+        for elt in values[0].elts
+    ), f"{name} must be a literal tuple of string constants"
+    return tuple(elt.value for elt in values[0].elts)
+
+
+def _in_globs(names: Iterable[str]) -> set[str]:
+    """Those of `names` matching one of `_GLOBS`."""
+    return {name for name in names if any(fnmatch(name, pat) for pat in _GLOBS)}
+
+
+def test_every_review_verb_test_file_is_listed() -> None:
+    """The review-verb test modules on disk and the ones the gate's `review
+    verbs` block runs agree, so a new one cannot be silently left out of the
+    gate the way the twelve 00265 found were.
+    """
+    entries = _literal_tuple("_REVIEW_VERB_TEST_FILES")
+    duplicates = sorted({path for path in entries if entries.count(path) > 1})
+    assert duplicates == [], (
+        f"_REVIEW_VERB_TEST_FILES lists {duplicates} more than once"
+    )
+    absent = [path for path in entries if not (_ROOT / path).is_file()]
+    assert absent == [], (
+        f"_REVIEW_VERB_TEST_FILES names {absent}, which is not a file in this "
+        "checkout - pytest would fail on the path, or worse, collect nothing"
+    )
+    text = _RELEASE_CHECKS.read_text()
+    unrun = [path for path in entries if path not in text]
+    assert unrun == [], f"{_RELEASE_CHECKS}: does not name {unrun}"
+    # Discovery agreement: a NEW `cli/` review-verb module fails here loudly
+    # instead of never running in the gate.
+    on_disk = _in_globs(path.name for path in (_ROOT / _GLOB_DIR).iterdir())
+    listed = _in_globs(
+        Path(path).name for path in entries if str(Path(path).parent) == _GLOB_DIR
+    )
+    assert on_disk == listed, (
+        f"{_GLOB_DIR}: {sorted(on_disk - listed)} not in _REVIEW_VERB_TEST_FILES; "
+        f"_REVIEW_VERB_TEST_FILES: {sorted(listed - on_disk)} not on disk"
+    )

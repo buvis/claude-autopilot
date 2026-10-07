@@ -297,11 +297,23 @@ run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_verification.py \
   skills/run-autopilot/cli/test_review_stage.py \
   skills/run-autopilot/cli/test_review_close.py \
+  skills/run-autopilot/cli/test_review_close_apply.py \
+  skills/run-autopilot/cli/test_review_close_carry.py \
+  skills/run-autopilot/cli/test_review_close_lowsev.py \
+  skills/run-autopilot/cli/test_review_close_tail_sweep.py \
   skills/run-autopilot/cli/test_cli_review_verbs.py \
   skills/run-autopilot/cli/test_release_checks_counts.py \
   skills/run-autopilot/cli/test_gate.py \
   skills/run-autopilot/cli/test_gate_findings_table.py \
-  skills/review-work-completion/scripts/test_review_verbs_prose.py
+  skills/run-autopilot/cli/test_gate_findings_classification.py \
+  skills/run-autopilot/cli/test_gate_findings_shapes.py \
+  skills/run-autopilot/cli/test_gate_findings_real_fixtures.py \
+  skills/run-autopilot/cli/test_main_review_close_validation.py \
+  skills/run-autopilot/cli/test_store_tree_legibility.py \
+  skills/run-autopilot/cli/test_role_effort.py \
+  skills/run-autopilot/scripts/test_phase_review_closes_via_review_close.py \
+  skills/review-work-completion/scripts/test_review_verbs_prose.py \
+  skills/review-work-completion/scripts/test_skill_stages_via_review_stage.py
 
 EXIT_CODE=0
 if [[ "$TOTAL_FAIL" -ne 0 || "$INFRA_FAIL" -ne 0 ]]; then
