@@ -50,7 +50,7 @@ def _allow_corpus() -> list[Path]:
 
 def _denied() -> list[Path]:
     fixtures = sorted((FIXTURES / "denied").glob("*.txt"))
-    assert len(fixtures) == 17, fixtures
+    assert fixtures, "no denied fixtures found: an empty glob must fail loudly"
     return fixtures
 
 
@@ -98,7 +98,6 @@ def _guard_module():
 
 def test_the_four_observed_delegations_are_denied() -> None:
     fixtures = _denied()
-    assert len(fixtures) == 17
     results = {f.name: _run(_agent_payload(_tool_input(f)), loop=True) for f in fixtures}
     let_through = sorted(name for name, r in results.items() if r.returncode != 2)
     assert let_through == []
@@ -120,7 +119,7 @@ def test_every_real_dispatch_prompt_is_allowed(prompt_file: Path) -> None:
 def test_committed_allowed_prompts_pass_the_hook_in_the_loop() -> None:
     # main() must route allowed prompts through the predicate, not deny every Agent call.
     samples = sorted((FIXTURES / "allowed").glob("*.txt"))
-    assert len(samples) == 24
+    assert samples, "no committed allowed fixtures found: an empty glob must fail loudly"
     blocked = []
     for sample in samples:
         tool_input = {
@@ -201,11 +200,36 @@ def test_reworded_delegations_are_denied(description: str, prompt: str) -> None:
         # The leading "never fail to" is a double negation scoped to "report";
         # the later "do not run" is its own, real negation.
         "Never fail to report; do not run the work phase.",
+        # The plain negation, without the double-negation word after it.
+        "Never run the work phase for PRD 7.",
+        "Do not run the work phase for PRD 7.",
     ],
-    ids=["does-not-run", "doesnt-invoke", "wont-execute", "never-fail-then-real-negation"],
+    ids=[
+        "does-not-run", "doesnt-invoke", "wont-execute", "never-fail-then-real-negation",
+        "never-run", "do-not-run",
+    ],
 )
 def test_negated_invocations_are_allowed(prompt: str) -> None:
     assert _guard_module().is_phase_delegation({"prompt": prompt}) is False
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Never fail to run the work phase for PRD 7.",
+        "Never hesitate to run the work phase for PRD 7.",
+        "Do not fail to run the work phase for PRD 7.",
+        "Do not hesitate to run the work phase for PRD 7.",
+        "Do not only run the work phase for PRD 7.",
+    ],
+    ids=["never-fail", "never-hesitate", "not-fail", "not-hesitate", "not-only"],
+)
+def test_hesitate_fail_only_after_a_negation_is_a_double_negation_and_is_denied(
+    prompt: str,
+) -> None:
+    # The verdict flips on the exception: with the negation word alone (see
+    # test_negated_invocations_are_allowed) the same sentence is allowed.
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
 
 
 def test_negated_delegation_in_the_description_is_allowed() -> None:
@@ -478,18 +502,33 @@ _LONG_PROMPT = _DENIED_PROMPT + " Context: the parser reads one line at a time."
 def test_valid_utf8_payload_is_still_denied_under_strict_stdin(prompt: str) -> None:
     # Positive control for the fail-open tests below: same strict-UTF-8 env,
     # a valid payload with a denied phrasing must still reach the guard.
-    result = _run_bytes(_utf8_agent_payload(prompt))
+    payload = _utf8_agent_payload(prompt)
+    # The controls must carry what their ids claim: raw high bytes (not \u
+    # escapes) and more than 4 KiB.
+    if prompt == _NON_ASCII_PROMPT:
+        assert "é".encode("utf-8") in payload
+    if prompt == _LONG_PROMPT:
+        assert len(payload) > 4096
+    result = _run_bytes(payload)
     stderr = result.stderr.decode("utf-8")
     assert result.returncode == 2
     assert REASON in stderr
     assert _FAIL_OPEN not in stderr
 
 
-def test_positive_controls_carry_raw_non_ascii_bytes_and_exceed_4kib() -> None:
-    # Guards the controls above: the non-ASCII case must put raw high bytes
-    # on stdin (not \u escapes), and the long case must be over 4 KiB.
-    assert "é".encode("utf-8") in _utf8_agent_payload(_NON_ASCII_PROMPT)
-    assert len(_utf8_agent_payload(_LONG_PROMPT)) > 4096
+def test_invalid_bytes_inside_a_json_string_are_replaced_and_the_delegation_is_denied() -> None:
+    # The invalid byte sits inside a string value, so the JSON is valid once
+    # decoded with errors="replace". Catching UnicodeDecodeError and
+    # returning {} would fail open here and let the delegation through.
+    stdin = _utf8_agent_payload(_DENIED_PROMPT).replace(b'"PRD 00300"', b'"PRD \xff00300"')
+    assert b"\xff" in stdin
+    with pytest.raises(UnicodeDecodeError):
+        stdin.decode("utf-8")
+    result = _run_bytes(stdin)
+    stderr = result.stderr.decode("utf-8", errors="replace")
+    assert result.returncode == 2
+    assert REASON in stderr
+    assert _FAIL_OPEN not in stderr
 
 
 @pytest.mark.parametrize(

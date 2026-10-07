@@ -91,7 +91,10 @@ def test_delegating_phrasing_with_a_widened_verb_stays_denied(prompt: str) -> No
 def test_compound_noun_head_does_not_excuse_an_original_verb() -> None:
     """The compound-noun exception belongs to the widened verbs only: "run the
     work phase review" was denied before that exception existed."""
-    assert _guard_module().is_phase_delegation({"prompt": "Run the work phase review"}) is True
+    assert (
+        _guard_module().is_phase_delegation({"prompt": "Run the work phase review"})
+        is True
+    )
 
 
 def test_other_contractions_keep_no_double_negation_exception() -> None:
@@ -110,3 +113,72 @@ def test_prohibition_inside_the_skill_md_read_pattern_is_allowed() -> None:
 def test_skill_md_read_without_a_prohibition_stays_denied() -> None:
     prompt = "Read skills/work/SKILL.md and do all tasks"
     assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    ["Work phase: complete", "In the work phase: do not skip tests"],
+)
+def test_colon_lead_does_not_take_the_widened_verbs_and_status_prose_is_allowed(
+    prompt: str,
+) -> None:
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is False
+
+
+def test_colon_lead_still_denies_with_an_original_verb() -> None:
+    prompt = "Planning phase for PRD 00300: continue it from task 4."
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    ["Never only run the work phase", "Do not only run the work phase"],
+)
+def test_only_after_a_negation_is_a_double_negation_and_is_denied(prompt: str) -> None:
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
+
+
+@pytest.mark.parametrize(
+    ("prompt", "expected"),
+    [
+        ("Run the entire remaining work phase", True),
+        ("Run the whole entire remaining work phase", False),
+        ("Start the entire remaining work phase", True),
+        ("Start the whole entire remaining work phase", False),
+        ("Run the entire remaining autopilot:work skill", True),
+        ("Run the whole entire remaining autopilot:work skill", False),
+    ],
+    ids=[
+        "run-three-gap-words", "run-four-gap-words", "start-three-gap-words",
+        "start-four-gap-words", "skill-three-gap-words", "skill-four-gap-words",
+    ],
+)
+def test_exactly_three_gap_words_are_denied_and_four_are_allowed(
+    prompt: str, expected: bool
+) -> None:
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is expected
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Run the entire autopilot:work skill",
+        "Execute every autopilot:work skill",
+        "Run the entire autopilot:plan-tasks skill",
+    ],
+)
+def test_prefixed_skill_with_gap_words_before_it_is_denied(prompt: str) -> None:
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Run the entire plan-tasks skill",
+        "Run the full test suite before touching plan-tasks",
+    ],
+)
+def test_bare_skill_name_takes_no_gap_words_and_far_from_a_verb_is_allowed(
+    prompt: str,
+) -> None:
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is False
