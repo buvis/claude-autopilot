@@ -1,0 +1,67 @@
+{
+  "phase": "done",
+  "next_phase": "",
+  "schema_version": 1,
+  "batch": {
+    "id": "202610071409",
+    "mode": "autopilot",
+    "completed_prds": [
+      {
+        "filename": "00265-close-the-critical-row-escapes-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 10,
+        "escalated_decisions": 0,
+        "tasks_completed": 13,
+        "tasks_total": 13,
+        "lane": "full",
+        "lane_reason": "design",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00266-bind-gate-reuse-to-the-command-and-renames-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 1,
+        "tasks_total": 1,
+        "lane": "fast-track",
+        "lane_reason": "card_sized",
+        "lane_effective": "fast-track",
+        "lane_escalated": null
+      }
+    ],
+    "plugin_versions": {
+      "aegis@buvis-plugins": "0.4.0",
+      "warden@buvis-plugins": "0.14.0"
+    },
+    "parks_consecutive": 0,
+    "minted_stubs": [
+      "00268-triage-r4-gate-table-keys-fails-open-on-a-findi-v1.md"
+    ]
+  },
+  "prd": "00266-bind-gate-reuse-to-the-command-and-renames-v1.md",
+  "catchup_mode": "skip",
+  "doubt_reviewer": "codex",
+  "consensus_engine": "legacy",
+  "session_model": "sonnet",
+  "rework_cap": 2,
+  "lane": "fast-track",
+  "lane_reason": "card_sized",
+  "lane_effective": "fast-track",
+  "tasks_total": 0,
+  "tasks_completed": 0,
+  "cycle": 1,
+  "applied_review_batches": [
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00265-close-the-critical-row-escapes-v1-review-1.md::decision-gate"
+  ],
+  "phases_completed": [
+    "review"
+  ],
+  "replan_count": 0,
+  "contract_card": "step: batch 202610071409 drained (2 PRDs done, 0 stalled, 31 deferred, 1 stub) | invariants: backlog/wip empty; state.json archives to reports/202610071409-state-final.json | next: wrapper stops loop; operator runs /autopilot:run-autopilot review-batch to triage deferred items",
+  "design_mode": "skip",
+  "work_start_sha": "8a777e2092884ec1c9b9d2cabedcf16a5a7c0afb",
+  "repo_root": "/Users/bob/git/src/github.com/buvis/claude-autopilot",
+  "tasks": []
+}

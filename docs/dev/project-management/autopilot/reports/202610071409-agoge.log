@@ -1,0 +1,17 @@
+**Status:** Partly done.
+
+**Changed:**
+- The QA run on PRDs 00265/00266 (checkout at `3e6b841`) found 21 problems: 5 HIGH, 5 MEDIUM, 11 LOW. Report: `docs/dev/project-management/audit-results/agoge-2026-10-07-2.md`, with a `.json` beside it.
+- All 5 HIGH findings are ways a failing or CRITICAL review result slips through looking clean. In three of them a CRITICAL finding gets no task and no refusal: a misspelled findings heading, a second findings heading, or a `*` bullet row. In the other two, a saved green test result gets reused when it shouldn't: one recorded on uncommitted edits, or one written by hand.
+- 7 more findings repeat the earlier unwalked report (`agoge-2026-10-07.md`) and point back to it instead of being filed again. One adds new evidence: once the stricter phase-delegation check ships, it will also block the QA lanes themselves.
+  ```
+  jq '.findings | length' -> 21
+  pins cksum 1723024031 52 before == after
+  ```
+
+**Not done:**
+- The security lane's attempts to slip past the phase-delegation check never ran: a safety classifier stopped that part, and I didn't retry it another way. The earlier report covered that check. Closes with: a manual re-run of that lane.
+- No regression tests were written, because the working tree has uncommitted loop files. Each finding lists the test it needs.
+- Nothing is decided yet: both reports are waiting for you to walk the findings.
+
+**Next:** You: run `/run-agoge --resume /Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/audit-results/agoge-2026-10-07-2.md` (start with finding 1).
