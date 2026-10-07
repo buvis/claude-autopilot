@@ -3419,3 +3419,24 @@
 {"id":"14e18ede","ended_at":1791379700,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"id":"3c508204","ended_at":1791379700,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791379700,"phase":"build","prd":"00265-close-the-critical-row-escapes-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791379758,"phase":"build","prd":"00265-close-the-critical-row-escapes-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791379772,"phase":"build","prd":"00265-close-the-critical-row-escapes-v1.md"}
+{"id":"829dff0d","kind":"tess","task":"2","queued_at":1791379915,"prompt_bytes":83620}
+{"id":"2799d513","kind":"tess","task":"2","queued_at":1791379974,"prompt_bytes":45025}
+{"id":"829dff0d","ended_at":1791379978,"elapsed_s":63,"outcome":"error","detail":null}
+{"id":"2799d513","ended_at":1791380821,"elapsed_s":847,"outcome":"ok","detail":null}
+{"id":"a48ead02","kind":"devon","task":"2","queued_at":1791380923,"prompt_bytes":4777}
+{"id":"a48ead02","ended_at":1791381415,"elapsed_s":492,"outcome":"ok","detail":null}
+{"id":"d9c29021","kind":"tess","task":"2","queued_at":1791381456,"prompt_bytes":15276}
+{"id":"d9c29021","ended_at":1791382028,"elapsed_s":572,"outcome":"ok","detail":null}
+{"id":"1e5c7467","kind":"ivan","task":"2","queued_at":1791382131,"prompt_bytes":9855}
+{"id":"1e5c7467","ended_at":1791382355,"elapsed_s":224,"outcome":"ok","detail":null}
+{"id":"a180c533","kind":"deslop","task":"2","queued_at":1791382438,"prompt_bytes":7534}
+{"id":"a180c533","ended_at":1791382708,"elapsed_s":270,"outcome":"ok","detail":null}
+{"id":"8f09212f","kind":"ivan","task":"2","queued_at":1791382750,"prompt_bytes":8123}
+{"id":"8f09212f","ended_at":1791382997,"elapsed_s":247,"outcome":"ok","detail":null}
+{"id":"4fc05c43","kind":"pat","task":"2","queued_at":1791383072,"prompt_bytes":87955}
+{"id":"a56f6f10","kind":"pat","task":"2","queued_at":1791383099,"prompt_bytes":35104}
+{"id":"4fc05c43","ended_at":1791383110,"elapsed_s":38,"outcome":"error","detail":null}
+{"id":"a56f6f10","ended_at":1791383179,"elapsed_s":80,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"build","edge":"leave","at":1791383288,"phase":"build","prd":"00265-close-the-critical-row-escapes-v1.md"}
