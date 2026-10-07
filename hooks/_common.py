@@ -27,7 +27,8 @@ def read_input() -> dict[str, Any]:
     Hooks must remain non-fatal on bad input so a malformed payload never
     blocks an otherwise-valid tool call.
     """
-    raw = sys.stdin.buffer.read().decode("utf-8", errors="replace")
+    buffer = getattr(sys.stdin, "buffer", None)
+    raw = buffer.read().decode("utf-8", errors="replace") if buffer else sys.stdin.read()
     if not raw.strip():
         return {}
     try:
