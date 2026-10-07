@@ -44,6 +44,14 @@ Generated: 2026-09-14
 
 ## Active Work
 
+### Batch 202610061930
+- [x] 00267-widen-the-phase-delegation-guard-v1 (1 cycle)
+
+Observations: full lane, 7/7 tasks (4-7 were the review sweep), 1 cycle
+converged (no CRITICAL/HIGH). Full release checks green at a86e943 (2625
+passed, 0 failed, exit 0). PRDs 00265 and 00266 parked to hold/ earlier this
+batch pending operator input; backlog/wip empty otherwise at batch end.
+
 ### Batch 202610061116
 - [x] 00264-require-a-disposition-for-every-review-row-v2 (1 cycle)
 

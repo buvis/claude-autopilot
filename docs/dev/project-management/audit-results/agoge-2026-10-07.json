@@ -1,0 +1,20 @@
+{
+  "fixture": "claude-autopilot",
+  "authorization": {"route": "invocation", "source": "autoclaude-drain"},
+  "findings": [
+    {"domain": "journey", "severity": "MEDIUM", "paths": ["hooks/guard_phase_delegation.py", "CHANGELOG.md", "skills/run-autopilot/references/phase-build.md"], "status": "verified", "lanes": ["walter", "wendy"], "title": "Widened verbs refuse ordinary per-task prompts that only mention a phase or a skill name (Ivan, workers, questions)"},
+    {"domain": "ux", "severity": "MEDIUM", "paths": ["hooks/guard_phase_delegation.py"], "status": "verified", "lanes": ["walter"], "title": "Deny message tells the session to dispatch Ivan while refusing an Ivan call, and never names the phrase that matched"},
+    {"domain": "security", "severity": "MEDIUM", "paths": ["hooks/guard_phase_delegation.py", "CHANGELOG.md"], "status": "verified", "lanes": ["trudy", "wendy"], "title": "Common phrasings still slip past the guard: other verbs, other gap words, hyphen or markdown-wrapped jargon, curly double quotes, a bare slash command"},
+    {"domain": "security", "severity": "MEDIUM", "paths": ["hooks/guard_phase_delegation.py"], "status": "verified", "lanes": ["trudy"], "title": "SKILL.md-read rule misses any absolute or plugin-rooted path"},
+    {"domain": "security", "severity": "MEDIUM", "paths": ["hooks/guard_phase_delegation.py"], "status": "verified", "lanes": ["trudy", "wendy"], "title": "An unrelated negation before a colon or dash suppresses a real delegation"},
+    {"domain": "release", "severity": "MEDIUM", "paths": ["dev/bin/release-checks", "hooks/test_guard_phase_delegation_narrowing.py"], "status": "verified", "lanes": ["wendy"], "title": "Release gate never runs the 50 narrowing pins added by 00267"},
+    {"domain": "journey", "severity": "LOW", "paths": ["hooks/guard_phase_delegation.py"], "status": "verified", "lanes": ["walter", "master"], "title": "QA and review sessions that quote the guard's trigger phrases cannot dispatch their lanes (this run lost one dispatch)"},
+    {"domain": "security", "severity": "LOW", "paths": ["hooks/guard_phase_delegation.py"], "status": "verified", "lanes": ["trudy"], "title": "Compound-noun exception and colon-lead with a widened verb used as cover"},
+    {"domain": "security", "severity": "LOW", "paths": ["hooks/guard_phase_delegation.py", "CHANGELOG.md"], "status": "verified", "lanes": ["trudy", "wendy"], "title": "Unicode lookalikes evade the guard: other hyphens, invisibles outside the five-point strip list, homoglyphs, combining marks"},
+    {"domain": "integration", "severity": "LOW", "paths": ["hooks/_common.py", "hooks/guard_phase_delegation.py", "hooks/guard_skill_after_leave.py", "hooks/note_session_leave.py", "hooks/guard_push_on_critical.py", "hooks/guard_stop_on_live_lanes.py", "hooks/enforce_prd_location.py"], "status": "verified", "lanes": ["heidi", "trudy"], "title": "Live 0.9.0 hooks crash with exit 1 on invalid UTF-8 or deep nesting, letting gated calls through; fix is on master, unreleased"},
+    {"domain": "integration", "severity": "LOW", "paths": ["hooks/enforce_prd_location.py", "hooks/_common.py"], "status": "verified", "lanes": ["heidi"], "title": "A Write to a repo-root backlog/ path with a lone surrogate in the name passes the PRD-location gate"},
+    {"domain": "performance", "severity": "LOW", "paths": ["hooks/guard_phase_delegation.py", "hooks/hooks.json"], "status": "verified", "lanes": ["peggy"], "title": "Guard crosses its 5s hook timeout at ~7.8 MB crafted or ~37 MB plain prompt; 00267 made it 2.5x-10x slower per MB"},
+    {"domain": "release", "severity": "LOW", "paths": ["CHANGELOG.md", "hooks/_common.py"], "status": "verified", "lanes": ["wendy"], "title": "CHANGELOG says read_input fails open on non-UTF-8 input, but invalid bytes are replaced and still checked"},
+    {"domain": "release", "severity": "LOW", "paths": ["hooks/test_guard_phase_delegation.py"], "status": "verified", "lanes": ["wendy"], "title": "Guard test docstring and test name state stale fixture counts (four observed, 20 allowed)"}
+  ]
+}
