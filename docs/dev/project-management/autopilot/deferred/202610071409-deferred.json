@@ -1,0 +1,298 @@
+{
+  "batch_id": "202610071409",
+  "items": [
+    {
+      "issue": "Unspecified behaviour added: a tail-sweep batch with a `carry` row is refused with a new `carry_in_tail_sweep` kind, which the PRD does not ask for (though CHANGELOG.md:15 and __main__.py document it).",
+      "severity": "\ud83d\udfe1",
+      "file": "skills/run-autopilot/cli/review_close.py:425",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "issue": "The backup-preservation test exercises three first-time refusals, never an already-applied repeat. Apply a batch, snapshot backup bytes and mtime, repeat that batch, and assert both remain unchanged.",
+      "severity": "\ud83d\udfe1",
+      "file": "skills/run-autopilot/cli/test_review_close_lowsev.py:311",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "issue": "Simplification: the duplicate-deferral test and fixtures substantially repeat test_review_close_lowsev.py:145. Consolidate both input variants into one parametrized test.",
+      "severity": "\ud83d\udfe1",
+      "file": "skills/run-autopilot/cli/test_review_close_tail_sweep.py:111",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "issue": "`_run_review_close` returns `2 if result.get(\"refused\") else 1` instead of the design's explicit `_EXIT_2_REFUSALS` tuple. Behaviour is equivalent today and every kind is pinned by tests.",
+      "severity": "\u26aa",
+      "file": "skills/run-autopilot/cli/__main__.py:1112",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "issue": "For a refless table or bullet-shape findings the spec says `unreadable-table`; the code returns a distinct `ref-required` verdict. Both exit 2, but the tag differs from the spec's wording and `_FINDINGS_REFUSALS` gains a kind.",
+      "severity": "\u26aa",
+      "file": "skills/run-autopilot/cli/gate.py:503",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "issue": "The `review-close` message for an unknown classification is generic; it names neither the row nor the value. The spec only requires the per-row message in `gate --findings`, which is implemented.",
+      "severity": "\u26aa",
+      "file": "skills/run-autopilot/cli/__main__.py:1083",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "issue": "Pre-existing size violations remain: __main__.py has 1,679 lines. Splitting unrelated rendering code is outside this review-verb change.",
+      "severity": "\u26aa",
+      "file": "skills/run-autopilot/cli/__main__.py:1256",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "issue": "6 touched test(s) pass against the pre-change code.",
+      "severity": "\ud83d\udfe1",
+      "file": "skills/run-autopilot/cli/test_gate.py",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "issue": "7 touched test(s) pass against the pre-change code.",
+      "severity": "\ud83d\udfe1",
+      "file": "skills/run-autopilot/cli/test_gate_findings_classification.py",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "issue": "6 touched test(s) pass against the pre-change code.",
+      "severity": "\ud83d\udfe1",
+      "file": "skills/run-autopilot/cli/test_gate_findings_real_fixtures.py",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "issue": "4 touched test(s) pass against the pre-change code.",
+      "severity": "\ud83d\udfe1",
+      "file": "skills/run-autopilot/cli/test_gate_findings_shapes.py",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "issue": "12 touched test(s) pass against the pre-change code.",
+      "severity": "\ud83d\udfe1",
+      "file": "skills/run-autopilot/cli/test_gate_findings_table.py",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "issue": "8 touched test(s) pass against the pre-change code.",
+      "severity": "\ud83d\udfe1",
+      "file": "skills/run-autopilot/cli/test_main_review_close_validation.py",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "issue": "8 touched test(s) pass against the pre-change code.",
+      "severity": "\ud83d\udfe1",
+      "file": "skills/run-autopilot/cli/test_review_close.py",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "issue": "14 touched test(s) pass against the pre-change code.",
+      "severity": "\ud83d\udfe1",
+      "file": "skills/run-autopilot/cli/test_review_close_apply.py",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "issue": "2 touched test(s) pass against the pre-change code.",
+      "severity": "\ud83d\udfe1",
+      "file": "skills/run-autopilot/cli/test_review_close_carry.py",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "issue": "3 touched test(s) pass against the pre-change code.",
+      "severity": "\ud83d\udfe1",
+      "file": "skills/run-autopilot/cli/test_review_close_tail_sweep.py",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "issue": "R4: gate._table_keys fails open on a findings table whose header is not recognised. A CRITICAL row under an unrecognised header gets no task, no record and no refusal - the same escape class as #2.",
+      "severity": "high",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/gate.py:386",
+      "reason": "rework cap reached with this finding unresolved",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "issue": "R1: the _tail_sweep_refusal docstring contradicts the prose it points at (it claims an empty decision-gate batch; the prose supplies full coverage) and pushes the function to 56 lines, over the 50-line style limit.",
+      "severity": "medium",
+      "consensus": "4/4",
+      "file": "skills/run-autopilot/cli/review_close.py:454",
+      "reason": "rework cap reached with this finding unresolved",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "issue": "R2/R8: PRD clause #24 is only partly implemented - the -- separator before the row id is still missing in the review_close end argv and in record_dispatch.py. The id-shape refusal makes it unreachable today, so this is defense-in-depth only.",
+      "severity": "medium",
+      "consensus": "3/4",
+      "file": "skills/run-autopilot/cli/review_close.py:122",
+      "reason": "rework cap reached with this finding unresolved",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "issue": "R3: the unreadable-table refusal message is reworded but still does not name the offending row, so an operator cannot fix it in one round trip as the PRD Risks section promised. Its new test also has a tautological first assert.",
+      "severity": "medium",
+      "consensus": "2/4",
+      "file": "skills/run-autopilot/cli/gate.py:152",
+      "reason": "rework cap reached with this finding unresolved",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "issue": "R5/R11: the converged-path fix (phase-review.md Tail sweep step 0) is prose-only with no regression test, although cycle-1 R4 explicitly asked for a workflow regression. A later prose edit can silently reintroduce the converged-cycle stall.",
+      "severity": "medium",
+      "consensus": "2/4",
+      "file": "skills/run-autopilot/references/phase-review.md:193",
+      "reason": "rework cap reached with this finding unresolved",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "issue": "R6: Tail sweep step 0 runs before step 1 zero-actionable skip, so a clean converged cycle now pays an extra review-close decision-gate call that can itself refuse. Step 0 also forward-references rows step 1 will select. Reorder: select, skip if zero, gate, create.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/references/phase-review.md:193",
+      "reason": "rework cap reached with this finding unresolved",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "issue": "R7: the new lost lens-status documentation does not match the code. state-schema.md and the tracon docstring say lost means an open dispatch row plus no agents line, but _lens_states marks every persona absent from agents as lost, dispatch rows unread.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/references/state-schema.md:218",
+      "reason": "rework cap reached with this finding unresolved",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "issue": "R10: carry_refs is documented as unioned across cycles, but Phase 6 resets refs when the cycle changes. Retaining old refs could authorize unrelated carry rows. Document same-cycle union and cross-cycle reset.",
+      "severity": "medium",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/references/state-schema.md:200",
+      "reason": "rework cap reached with this finding unresolved",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "issue": "R12: the closing-pipe refusal test exercises the gate cross-check only; cycle-1 R7 asked for both verbs. The review-close side is covered only indirectly through shared findings_verdict.",
+      "severity": "low",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/test_gate_findings_shapes.py:529",
+      "reason": "rework cap reached with this finding unresolved",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "issue": "R13: the pre-lock refusals (carry match, tail-sweep order, empty, above-medium, open deferral) run on an advisory read while the in-lock check re-verifies only the apply-once stamp - a check-then-act window under the single-orchestrator assumption.",
+      "severity": "low",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/review_close.py:293",
+      "reason": "rework cap reached with this finding unresolved",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "issue": "R14: _carry_unmatched does not require the [C{cycle}] name prefix its own docstring and error text promise; it rejects only [D-prefixed names and relies on carry_refs, carry_cycle, escalation_reason, rework_task_ids and status instead. Cosmetic - stricter elsewhere.",
+      "severity": "low",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/review_close.py:390",
+      "reason": "rework cap reached with this finding unresolved",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "issue": "R15: the PRD names two homes for the help-text pin (skills/run-autopilot/scripts/test_review_verbs_prose.py in the task, skills/review-work-completion/scripts/test_review_verbs_prose.py in the structure). Only the second exists. A PRD inconsistency, not a code fault.",
+      "severity": "low",
+      "consensus": "1/4",
+      "file": "skills/review-work-completion/scripts/test_review_verbs_prose.py:82",
+      "reason": "rework cap reached with this finding unresolved",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "issue": "R16: a CRITICAL row classified discard or verify still needs no backing row and creates no task or record at the CLI layer, and a discard of a ghost ref is accepted. The PRD closes this only for carry, so it is a residual out of scope.",
+      "severity": "low",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/gate.py:471",
+      "reason": "rework cap reached with this finding unresolved",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "issue": "R19: a tail sweep holding only verify or discard rows passes the new empty check - it applies, creates zero tasks and stamps the batch, which is the never-zero failure mode the prose describes. The refusal tests literal array length only.",
+      "severity": "low",
+      "consensus": "1/4",
+      "file": "skills/run-autopilot/cli/review_close.py:476",
+      "reason": "rework cap reached with this finding unresolved",
+      "cycle": 2,
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    }
+  ]
+}
