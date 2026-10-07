@@ -1,0 +1,10 @@
+[
+  {
+    "cycle": 2,
+    "finding": "Cannot statically verify: release checks pass at the reviewed revision. Exact check: `bash dev/bin/release-checks`. The supplied context reports 2,820 passing tests; this review did not execute them.",
+    "file": null,
+    "command": "bash dev/bin/release-checks",
+    "source": "bob",
+    "result": {"exit": 0}
+  }
+]

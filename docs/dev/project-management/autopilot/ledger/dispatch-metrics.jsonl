@@ -3513,3 +3513,9 @@
 {"id":"38811dda","ended_at":1791397089,"elapsed_s":835,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"review","edge":"leave","at":1791397147,"phase":"review","prd":"00265-close-the-critical-row-escapes-v1.md"}
 {"kind":"handoff","site":"review","edge":"leave","at":1791398593,"phase":"review","prd":"00265-close-the-critical-row-escapes-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1791398730,"phase":"review","prd":"00265-close-the-critical-row-escapes-v1.md"}
+{"id":"8e7ae91f","kind":"bob","task":"review-20261007-c2","queued_at":1791399056,"prompt_bytes":26089}
+{"id":"eb2b6a9c","kind":"carl","task":"review-20261007-c2","queued_at":1791399056,"prompt_bytes":19102}
+{"id":"8e7ae91f","ended_at":1791399713,"elapsed_s":657,"outcome":"ok","detail":null}
+{"id":"eb2b6a9c","ended_at":1791399717,"elapsed_s":661,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"review","edge":"leave","at":1791400052,"phase":"done","prd":"00265-close-the-critical-row-escapes-v1.md"}
