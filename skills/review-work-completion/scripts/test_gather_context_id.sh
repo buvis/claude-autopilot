@@ -128,3 +128,66 @@ echo "$ERR4" | grep -qF "fatal" \
 echo "$ERR4" | grep -qF "gather-context: empty diff against" \
   && FAIL "git diff --quiet failure message" "expected git's own error, not the empty-diff refusal: $ERR4"
 PASS "a git diff --quiet failure against the detected base branch fails loud instead of the empty-diff refusal"
+
+# --- Regression (agoge #19): a full review diffs against the merge-base with
+# the base branch, not its moved tip, so work the base gained since the branch
+# point is never shown as removed ---
+mkdir -p "$DIR/advanced"
+cd "$DIR/advanced"
+git init -q -b master .
+echo "a" > a.txt
+git add a.txt
+git commit -q -m init
+git checkout -q -b feature
+echo "f" > feature.py
+git add feature.py
+git commit -q -m feature
+git checkout -q master
+echo "m" > moved.txt
+git add moved.txt
+git commit -q -m "base moved on"
+git checkout -q feature
+
+OUT5="$(bash "$SCRIPT")"
+DIFF_FILE5="$(echo "$OUT5" | grep -o '[^ ]*review-diff-[^ ]*\.diff')"
+[[ -n "$DIFF_FILE5" && -e "$DIFF_FILE5" ]] || FAIL "advanced master diff file" "stdout: $OUT5"
+grep -qF "feature.py" "$DIFF_FILE5" \
+  || FAIL "advanced master keeps the branch work" "feature.py missing from the diff"
+grep -qF "moved.txt" "$DIFF_FILE5" \
+  && FAIL "advanced master is not shown as removed" "moved.txt (added on master after the branch point) appears in the diff"
+PASS "advanced master is not shown as removed"
+
+# --- Regression (agoge #19): a repo whose base branch is `main` resolves a
+# base instead of refusing for want of one ---
+mkdir -p "$DIR/mainonly"
+cd "$DIR/mainonly"
+git init -q -b main .
+git commit -q --allow-empty -m init
+git checkout -q -b feature
+echo "f" > feature.py
+git add feature.py
+git commit -q -m feature
+
+set +e
+OUT6="$(bash "$SCRIPT" 2>/dev/null)"
+CODE8=$?
+set -e
+[[ "$CODE8" -eq 0 ]] || FAIL "main-only repo resolves a base" "expected exit 0, got $CODE8: $OUT6"
+CONTEXT6="$(echo "$OUT6" | grep -o '[^ ]*review-context-[^ ]*\.md')"
+grep -qF "full review (vs main)" "$CONTEXT6" \
+  || FAIL "main-only repo resolves a base" "expected scope 'full review (vs main)' in $CONTEXT6"
+PASS "main-only repo resolves a base"
+
+# --- Regression (agoge #19): a --since ref that does not resolve warns on
+# stderr instead of being dropped silently; the review still falls back to the
+# branch base ---
+set +e
+ERR5="$(bash "$SCRIPT" --since "$INVALID_SINCE" 2>&1 >/dev/null)"
+CODE9=$?
+set -e
+[[ "$CODE9" -eq 0 ]] || FAIL "bad --since still falls back" "expected exit 0, got $CODE9: $ERR5"
+echo "$ERR5" | grep -qF -e "--since" \
+  || FAIL "bad --since warns on stderr" "expected a warning naming --since, got: '$ERR5'"
+echo "$ERR5" | grep -qF "$INVALID_SINCE" \
+  || FAIL "bad --since warns on stderr" "expected the bad ref $INVALID_SINCE in the warning, got: '$ERR5'"
+PASS "bad --since warns on stderr"

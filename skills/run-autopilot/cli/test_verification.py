@@ -574,3 +574,70 @@ def test_run_gate_reports_the_process_exit_not_the_printed_one(
     assert result["passed"] == 1
     written = json.loads((tmp_path / RECORD_REL).read_text())
     assert written["commands"] == [{"command": command, "exit": 2}]
+
+
+def test_reuse_is_stale_when_the_gate_command_differs(repo: Path) -> None:
+    head = _git(repo, "rev-parse", "HEAD")
+    record = _record(head)  # recorded from "dev/bin/release-checks"
+
+    same = verification.reuse_verdict(
+        record, repo, head, gate_command="dev/bin/release-checks"
+    )
+    assert same == ("reused", record)
+    other = verification.reuse_verdict(record, repo, head, gate_command="make test")
+    assert other == ("stale", {})
+
+
+def test_committed_rename_into_the_store_is_stale(repo: Path) -> None:
+    base = _git(repo, "rev-parse", "HEAD")
+    (repo / STORE / "notes").mkdir(parents=True)
+    _git(repo, "mv", "src/app.py", f"{STORE}/notes/app.md")
+    _git(repo, "commit", "--no-verify", "-q", "-m", "move product file into store")
+    head = _git(repo, "rev-parse", "HEAD")
+
+    verdict = verification.reuse_verdict(
+        _record(base), repo, head, gate_command="dev/bin/release-checks"
+    )
+
+    assert verdict == ("stale", {})
+
+
+def test_symbolic_sha_record_is_stale(repo: Path) -> None:
+    head = _git(repo, "rev-parse", "HEAD")
+
+    for symbolic in ("HEAD", "master", head[:12], head.upper()):
+        verdict = verification.reuse_verdict(
+            _record(symbolic), repo, head, gate_command="dev/bin/release-checks"
+        )
+        assert verdict == ("stale", {}), symbolic
+
+
+def test_store_only_change_below_toplevel_is_reused(repo: Path) -> None:
+    # repo_root is a subdirectory of the git toplevel (like $HOME/.claude under
+    # $HOME): git paths are toplevel-relative, the store prefix is not.
+    root = repo / "sub"
+    _commit(repo, "sub/src/app.py", "print(1)\n")
+    base = _git(repo, "rev-parse", "HEAD")
+    _commit(repo, f"sub/{STORE}/autopilot/state.json", "{}\n")
+    head = _commit(repo, f"sub/{STORE}/reviews/r1.md", "review\n")
+    record = _record(base)
+    command = "dev/bin/release-checks"
+
+    assert verification.reuse_verdict(record, root, head, gate_command=command) == (
+        "reused",
+        record,
+    )
+
+    # A dirty tracked store file and an untracked one stay tolerated.
+    (root / STORE / "reviews" / "r1.md").write_text("edited\n")
+    (root / STORE / "reviews" / "new.md").write_text("new\n")
+    assert verification.reuse_verdict(record, root, head, gate_command=command) == (
+        "reused",
+        record,
+    )
+
+    # Product code below the toplevel still makes it stale.
+    code_head = _commit(repo, "sub/src/app.py", "print(2)\n")
+    assert verification.reuse_verdict(
+        record, root, code_head, gate_command=command
+    ) == ("stale", {})
