@@ -278,8 +278,12 @@ REVIEW_LENSES = ("consensus", "blind", "doubt", "ui", "qwen", "fable")
 
 def review_lenses(state: LoopState) -> list[tuple[str, str]]:
     """Active review lenses stamped by review-work-completion at dispatch:
-    state.review_lenses maps lens -> "running"|"done"|"failed". Canonical
-    order first, unknown lens keys appended as-is."""
+    state.review_lenses maps lens -> "running"|"done"|"failed"|"lost"|"skipped"
+    ("lost": the persona had an open dispatch row and no line at all under
+    `agents:` - nothing was ever reported back; "skipped": the persona was
+    taken off the roster on purpose, `agents:` status "disabled" - cli/review_
+    close.py `_LENS_STATUS`/`reviewer_section_nonempty`). Canonical order
+    first, unknown lens keys appended as-is."""
     raw = state.raw.get("review_lenses")
     if not isinstance(raw, dict):
         return []
