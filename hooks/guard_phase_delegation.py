@@ -32,6 +32,9 @@ _IMPERATIVE = (
     r"(run(?:ning)?|execut(?:e|ing)|invok(?:e|ing)|follow(?:ing)?|continu(?:e|ing)|resum(?:e|ing)"
     r"|start|do|perform|complete|launch|call)"
 )
+# The six original verbs only, for the colon-lead pattern: "Work phase:
+# complete" and "In the work phase: do not skip tests" are status prose.
+_IMPERATIVE_COLON = r"(run(?:ning)?|execut(?:e|ing)|invok(?:e|ing)|follow(?:ing)?|continu(?:e|ing)|resum(?:e|ing))"
 # Code points that split a word without showing, stripped before matching.
 # U+200B, U+200C, U+200D, U+2060, U+00AD.
 _INVISIBLE = dict.fromkeys((0x200B, 0x200C, 0x200D, 0x2060, 0x00AD))
@@ -47,6 +50,9 @@ _PHASE_JARGON = r"(work phase|plan(?:ning)? phase|design phase)"
 # a non-word char, and \b between two non-word chars (backtick, space)
 # never matches.
 _BARE_SKILL = r"(?P<bt>[`'\"]?)(?:/)?(autopilot:work|autopilot:plan-tasks|autopilot:design-solution|plan-tasks|design-solution)(?P=bt)"
+# Only an autopilot:-prefixed skill name takes the word gap: a bare
+# "plan-tasks" is ordinary prose ("call the helper in plan-tasks").
+_PREFIXED_SKILL = r"(?P<bt>[`'\"]?)(?:/)?(autopilot:work|autopilot:plan-tasks|autopilot:design-solution)(?P=bt)"
 _SKILL_READ = (
     r"read\s+(?:skills/)?(work|plan-tasks|design-solution)/SKILL\.md"
     rf".{{0,60}}\b{_IMPERATIVE}\b.{{0,20}}\b(every|all)\s+tasks?\b"
@@ -98,10 +104,11 @@ _DELEGATION_PATTERNS = (
     # phase's own run at this HEAD" does not, because nothing introduces
     # the verb as an instruction.
     re.compile(
-        rf"\b{_PHASE_JARGON}\b[^.;\n:]{{0,25}}:\s*(?:it\s+)?\b{_IMPERATIVE}\b",
+        rf"\b{_PHASE_JARGON}\b[^.;\n:]{{0,25}}:\s*(?:it\s+)?\b{_IMPERATIVE_COLON}\b",
         re.IGNORECASE,
     ),
-    re.compile(rf"\b{_IMPERATIVE}\s+{_GAP}{_BARE_SKILL}", re.IGNORECASE),
+    re.compile(rf"\b{_IMPERATIVE}\s+{_GAP}{_PREFIXED_SKILL}", re.IGNORECASE),
+    re.compile(rf"\b{_IMPERATIVE}\s+(?:the\s+)?{_BARE_SKILL}", re.IGNORECASE),
     re.compile(_SKILL_READ, re.IGNORECASE | re.DOTALL),
 )
 
