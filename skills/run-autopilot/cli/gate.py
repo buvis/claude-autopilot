@@ -42,18 +42,23 @@ still wins when both are present: a file that fails the shape check cannot
 be trusted for a constraint reading, so it exits 1, not 2. Without this
 flag, `; constraint UNMET` remains a validly-shaped, exit-0 recorded form.
 
---findings <path> is a second opt-in check: every row of that chosen-findings
-JSON array must be backed by a row of the review file's `## Consolidated
-Findings` section, so a batch cannot apply a finding no reviewer recorded.
+--findings <path> is a second opt-in check, and it runs in BOTH directions:
+every row of that chosen-findings JSON array must be backed by a row of the
+review file's `## Consolidated Findings` section, AND every review row must be
+named by a `--findings` row carrying a classification - so a batch can neither
+apply a finding no reviewer recorded nor leave a recorded finding undisposed.
 That section is read in both shapes it is written in: the bullet list and the
 pipe table `| Ref | Consensus | Severity | Issue | File | Task | Found By |`.
 A chosen row carrying a `"ref"` is backed by the review row holding that exact
 ref, severity and file; a row carrying none falls back to an exact (severity,
-file, normalized issue) match. Coverage runs the other way too: every review row
-needs a findings row naming its ref. A review file with no such section is a
-shape gap (exit 1); one whose findings table cannot be read, or whose rows carry
-no ref for a findings row to name, is a refusal (exit 2): the gate cannot say a
-batch covers rows it was unable to read.
+file, normalized issue) match. `verify` and `discard` rows need no backing
+review row (nothing of theirs is applied); a `carry` row needs one like every
+other applied row. A review file with no such section is a shape gap (exit 1).
+The refusals (exit 2) are a review row no `--findings` row names a
+classification for, a findings table the gate could not read, a findings
+section with no Ref column for a findings row to name, and a `--findings` row
+with an unknown classification - the gate cannot say a batch covers rows it
+was unable to read.
 
 CLI: autopilot gate --review-file <path> [--reviewers alice,bob,...]
 [--require-codex-guard] [--assert-constraint-met] [--findings <path>]
@@ -66,8 +71,10 @@ Exit codes (gate-scoped, unchanged from check_review_file.py):
     1  shape gap (or missing review file, or an unusable --findings file, or
        no consolidated-findings section to check --findings against)
     2  --assert-constraint-met and the guard line records `; constraint UNMET`;
-       or a --findings row the review file never recorded; or a findings section
-       the gate could not read or could not check coverage against
+       a `--findings` row the review file never recorded; a review row no
+       `--findings` row names a classification for; a `--findings` row with an
+       unknown classification; or a findings section the gate could not read,
+       or one with no Ref column to check coverage against
 """
 
 from __future__ import annotations

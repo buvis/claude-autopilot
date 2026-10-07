@@ -14,6 +14,8 @@ RECOVERY = (ROOT / "skills/run-autopilot/references/recovery.md").read_text(
     encoding="utf-8"
 )
 CHANGELOG = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+CLI_MAIN = (ROOT / "skills/run-autopilot/cli/__main__.py").read_text(encoding="utf-8")
+GATE = (ROOT / "skills/run-autopilot/cli/gate.py").read_text(encoding="utf-8")
 
 
 def step(number: int) -> str:
@@ -75,6 +77,24 @@ def test_requeue_records_the_carry_link_prose() -> None:
     )[0]
     assert "| Ref | Consensus | Severity | Issue | File | Found By |" in summary
     assert "| R1 | [N/N] | 🔴 Critical |" in summary
+
+
+def test_gate_help_describes_the_two_way_check() -> None:
+    """The `gate`/`review-close` help and `cli/gate.py`'s module docstring
+    document the findings check as two-way and name every refusal it can
+    return: an uncovered review row, a findings section with no Ref column,
+    an unknown classification, and the two `carry` refusals."""
+    cli_doc = CLI_MAIN.split('"""', 2)[1]
+    gate_doc = GATE.split('"""', 2)[1]
+    for doc in (cli_doc, gate_doc):
+        assert "no `--findings` row names a" in doc  # the uncovered review row
+        assert "no Ref column" in doc
+        assert "unknown classification" in doc
+    assert "BOTH directions" in gate_doc
+    assert "every review row must be" in gate_doc
+    assert "Coverage runs the other way too" not in gate_doc  # the one-way prose
+    assert "no matching `[C]`-prefixed" in cli_doc
+    assert "a `carry` row inside a tail-sweep batch" in cli_doc
 
 
 def test_carry_creates_nothing_prose() -> None:

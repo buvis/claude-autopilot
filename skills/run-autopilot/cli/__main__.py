@@ -62,9 +62,12 @@ Subcommands:
     gate      --review-file [--reviewers] [--require-codex-guard]
               [--assert-constraint-met] [--findings]
         gate.run_gate() — the review-file shape gate (PRD 00107). Takes no
-        --state and keeps the gate's own exit contract (0 pass / 1 shape gap
-        / 2 constraint UNMET or a --findings row the review file never
-        recorded, see cli/gate.py), NOT the state-CLI codes below.
+        --state and keeps the gate's own exit contract: 0 pass, 1 shape gap,
+        or 2 (constraint UNMET; a `--findings` row the review file never
+        recorded; a review row no `--findings` row names a classification
+        for; an unreadable findings table; a findings section with no Ref
+        column; or a `--findings` row with an unknown classification), see
+        `cli/gate.py`, NOT the state-CLI codes below.
     review-stage --cycle-id --gate-command [--state] [--since] [--repo-root]
                  [--replay-cmd] [--roster] [--tasks-json --prd [--design-doc]]
         review_stage.stage() (PRD 00249): stages one review cycle's input
@@ -77,12 +80,15 @@ Subcommands:
                  --findings [--default-tier]
         review_close.close() (PRD 00249) over the --findings JSON array;
         prints its result as one JSON line. Exit 1 when close() does not
-        apply without refusing (gate failure, unreadable review file, batch
-        already applied), 2 on an unreadable or malformed findings file, a
-        failed state write, or any close() refusal - a chosen finding the
-        review file's consolidated findings never recorded, an uncovered or
-        unreadable findings table, a `carry` row with no re-queued
-        [C{cycle}] task.
+        apply without refusing (gate failure, an unreadable or legacy
+        no-section review file, batch already applied). Exit 2 on an
+        unreadable or malformed findings file, a failed state write, a chosen
+        finding the review file's consolidated findings never recorded or
+        never covers, an unreadable findings table or one with no Ref column,
+        a `carry` row with no matching `[C]`-prefixed task in the current
+        cycle, a `carry` row inside a tail-sweep batch, or a tail sweep that
+        is empty, runs before the decision gate, holds a row above medium, or
+        repeats an open deferral.
     render    {audit|report|metrics} --state [--stdout] [--now ISO]
               [--summary] [--stalled --site --detail] [--metrics PATH]
         The deterministic render surfaces (PRD 00107): `audit` writes
