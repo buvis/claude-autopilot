@@ -121,6 +121,10 @@ skills/run-autopilot/cli/
 ├── test_gate_findings_table.py
 └── test_review_close.py
 skills/run-autopilot/references/phase-review.md   # carry rule, re-queue stamping
+skills/run-autopilot/references/recovery.md       # Fable rescue re-queue stamping
+skills/review-work-completion/references/output-formats.md   # Ref-table findings template
+skills/review-work-completion/scripts/test_review_verbs_prose.py   # help-text pins
+skills/work/scripts/record_dispatch.py            # #24 dispatch-row end
 dev/bin/release-checks                            # five unlisted test modules
 CHANGELOG.md                                      # [Unreleased] carry line
 ```

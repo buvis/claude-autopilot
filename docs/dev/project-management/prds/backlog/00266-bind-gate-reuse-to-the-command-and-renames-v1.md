@@ -48,7 +48,8 @@ every staged input and output inside the repo.
 - A committed rename from a product path into the store is `stale`.
 - From a repo root below the toplevel, a store-only change is `reused`.
 - `gather-context.sh` diffs against `git merge-base <base> HEAD`, tries `main` after `master`, and warns on stderr when `--since` fails `cat-file -e`.
-- `review-stage` refuses (exit 2) a resolved `prd` outside `prds/wip/`, a resolved `design_doc` outside the repo root, and a resolved staging dir outside the repo root.
+- `review-stage --state` refuses (exit 2) a state `prd` that resolves outside `prds/wip/` and a state `design_doc` that resolves outside the repo root; the check lives in `__main__.py`'s state-input builder (`_stage_inputs_from_state`), not in `review_stage.stage()`. Explicit `--prd`/`--design-doc` flags and direct `stage()` callers are operator-chosen and stay unchecked (operator decision 2026-10-07: the existing `test_review_stage.py` fixture passes paths outside the repo on purpose).
+- `review-stage` refuses (exit 2) a resolved staging dir outside the repo root.
 
 ### Nice to have
 - None.
@@ -82,7 +83,7 @@ every staged input and output inside the repo.
 - [ ] gather-context: merge-base diff, `main` candidate, stderr warning on a bad `--since` (#19) - Acceptance: new cases in `skills/review-work-completion/scripts/test_gather_context_id.sh` pass (`advanced master is not shown as removed`, `main-only repo resolves a base`, `bad --since warns on stderr`).
 
 ### Phase 1: Core
-- [ ] review_stage: pass `--gate-command` to `reuse_verdict`; resolve `prd`, `design_doc` and the staging dir and refuse each outside its root (#22, #23) (depends on: Phase 0) - Acceptance: `test_stage_runs_the_gate_when_the_recorded_command_differs`, `test_stage_refuses_a_prd_outside_wip`, `test_stage_refuses_a_design_doc_outside_the_repo`, `test_stage_refuses_a_symlinked_tmp_outside_the_repo` pass in `skills/run-autopilot/cli/test_review_stage.py`.
+- [ ] review_stage: pass `--gate-command` to `reuse_verdict`; resolve the state-derived `prd` and `design_doc` in `_stage_inputs_from_state` and refuse each outside its root (#22; explicit flags and direct `stage()` calls unchecked), and refuse a staging dir outside the repo root (#23) (depends on: Phase 0) - Acceptance: `test_stage_runs_the_gate_when_the_recorded_command_differs`, `test_stage_refuses_a_prd_outside_wip`, `test_stage_refuses_a_design_doc_outside_the_repo` (both drive the CLI with a `--state` file whose `prd`/`design_doc` escape), `test_stage_refuses_a_symlinked_tmp_outside_the_repo` pass in `skills/run-autopilot/cli/test_review_stage.py`.
 
 ## Success Criteria
 
