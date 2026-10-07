@@ -5,11 +5,56 @@ finding F6 at __main__.py:1017).
 _is_chosen_finding is the gate `_run_review_close` runs over every row of
 the findings JSON before review_close.close() is ever called, so a row it
 rejects can never reach a mutation.
+
+The second half (PRD 00265 task 2) pins `_run_review_close`'s exit-code
+mapping: every refusal close() can return is a validation refusal worth exit
+2, distinct from the exit 1 a plain "not applied" carries.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from cli import __main__ as cli_main
+from cli import review_close
+from cli.test_review_close import (
+    CARRY_CONSOLIDATED,
+    CONSOLIDATED,
+    HIGH,
+    UNREADABLE_TABLE,
+    _carry_batch,
+    _finding,
+    _findings_file,
+    _review,
+    _review_close_cli,
+    _state,
+)
+
+# Every refusal kind `_run_review_close` has to report as exit 2.
+REFUSAL_KINDS = (
+    "findings_mismatch",
+    "findings_uncovered",
+    "findings_ref_required",
+    "findings_malformed",
+    "carry_unmatched",
+    "carry_in_tail_sweep",
+    "tail_sweep_before_decision_gate",
+    "tail_sweep_empty",
+    "tail_sweep_above_medium",
+    "tail_sweep_duplicates_deferral",
+    "already_applied_duplicate",
+)
+
+# A readable findings table with no Ref column at all: under coverage (every
+# batch but tail-sweep) the gate calls this the ref-required problem.
+NO_REF_COLUMN = (
+    "## Consolidated Findings\n\n"
+    "| Consensus | Severity | Issue | File | Found By |\n"
+    "|-----------|----------|-------|------|----------|\n"
+    f"| [2/2] | {HIGH} | wrong default | src/b.py:10 | alice, bob |\n\n"
+)
 
 
 def _row(classification: str, **overrides: object) -> dict:
@@ -52,3 +97,155 @@ def test_accepts_found_by_as_a_list_of_strings() -> None:
 
 def test_rejects_plain_word_severity() -> None:
     assert cli_main._is_chosen_finding(_row("fix", severity="CRITICAL")) is False
+
+
+def _cli_refusal(tmp_path: Path, consolidated: str, findings: list[dict]) -> tuple:
+    """Run the real CLI over a review file the cross-check or the carry match
+    must refuse, and prove the run left state.json alone."""
+    review = _review(tmp_path, consolidated=consolidated)
+    state_path = _state(tmp_path)
+    before = state_path.read_bytes()
+
+    proc = _review_close_cli(review, state_path, _findings_file(tmp_path, findings))
+
+    assert state_path.read_bytes() == before, "a refused batch must write nothing"
+    return proc.returncode, proc.stdout + proc.stderr
+
+
+def test_cli_exits_2_when_a_findings_row_mismatches(tmp_path: Path) -> None:
+    code, out = _cli_refusal(
+        tmp_path,
+        CONSOLIDATED,
+        [_finding(HIGH, "src/b.py:10", "an issue no reviewer raised")],
+    )
+
+    assert code == 2, out
+    assert "findings_mismatch" in out
+
+
+def test_cli_exits_2_when_a_review_row_has_no_disposition(tmp_path: Path) -> None:
+    """R1 is the only ref the findings JSON names; R2 and R3 are dropped."""
+    code, out = _cli_refusal(
+        tmp_path,
+        CONSOLIDATED,
+        [dict(_finding(HIGH, "src/b.py:10", "wrong default"), ref="R1")],
+    )
+
+    assert code == 2, out
+    assert "findings_uncovered" in out
+
+
+def test_cli_exits_2_when_the_table_has_no_ref_column(tmp_path: Path) -> None:
+    code, out = _cli_refusal(
+        tmp_path,
+        NO_REF_COLUMN,
+        [_finding(HIGH, "src/b.py:10", "wrong default")],
+    )
+
+    assert code == 2, out
+    assert "findings_ref_required" in out
+
+
+def test_cli_exits_2_when_the_findings_table_cannot_be_read(tmp_path: Path) -> None:
+    code, out = _cli_refusal(
+        tmp_path,
+        UNREADABLE_TABLE,
+        [dict(_finding(HIGH, "src/b.py:10", "wrong default"), ref="R1")],
+    )
+
+    assert code == 2, out
+    assert "findings_malformed" in out
+
+
+def test_cli_exits_2_when_a_carry_row_has_no_requeued_task(tmp_path: Path) -> None:
+    code, out = _cli_refusal(tmp_path, CARRY_CONSOLIDATED, _carry_batch())
+
+    assert code == 2, out
+    assert "carry_unmatched" in out
+    assert "R1" in out
+
+
+def _argv(review: Path, state_path: Path, findings: Path) -> list[str]:
+    return [
+        "review-close",
+        "--review-file",
+        str(review),
+        "--state",
+        str(state_path),
+        "--batch-id",
+        "decision-gate",
+        "--findings",
+        str(findings),
+    ]
+
+
+def _run_main(tmp_path: Path) -> int:
+    review = _review(tmp_path)
+    state_path = _state(tmp_path)
+    findings = _findings_file(
+        tmp_path,
+        [_finding(HIGH, "src/b.py:10", "wrong default")],
+    )
+    return cli_main.main(_argv(review, state_path, findings))
+
+
+@pytest.mark.parametrize("kind", REFUSAL_KINDS)
+def test_every_refusal_kind_exits_2_and_names_itself(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+    kind: str,
+) -> None:
+    """Exit 1 is the generic "not applied"; a refusal is a validation failure
+    the caller must be able to tell apart, so every kind maps to 2 and the
+    operator is told which one fired. The tail-sweep carve-outs and the
+    duplicate stamp have preconditions this task does not specify, so the
+    mapping is driven at the seam close() returns through."""
+    monkeypatch.setattr(
+        review_close,
+        "close",
+        lambda *_a, **_k: {
+            "applied": False,
+            "refused": kind,
+            "reason": f"{kind} happened",
+        },
+    )
+
+    code = _run_main(tmp_path)
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert kind in captured.out + captured.err
+
+
+def test_a_not_applied_result_with_no_refused_key_still_exits_1(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The already-applied no-op is not a refusal: it keeps exit 1, so a
+    caller treating 2 as "the batch was rejected" is not misled by a replay."""
+    monkeypatch.setattr(
+        review_close,
+        "close",
+        lambda *_a, **_k: {"applied": False, "reason": "already applied"},
+    )
+
+    assert _run_main(tmp_path) == 1
+
+
+def test_an_applied_batch_exits_0(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        review_close,
+        "close",
+        lambda *_a, **_k: {
+            "applied": True,
+            "tasks_created": ["2"],
+            "rework_task_ids": ["2"],
+            "lenses_closed": {"consensus": "done"},
+        },
+    )
+
+    assert _run_main(tmp_path) == 0

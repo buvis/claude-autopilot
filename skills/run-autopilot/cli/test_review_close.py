@@ -102,6 +102,82 @@ def _finding(sev: str, file: str, issue: str, cls: str = "fix") -> dict:
     }
 
 
+# A findings section that HAS its header but whose only data row is not shaped
+# `| [m/n] | ... |`: the gate reads this as its "unreadable-table" problem.
+UNREADABLE_TABLE = (
+    "## Consolidated Findings\n\n"
+    "| Ref | Consensus | Severity | Issue | File | Found By |\n"
+    "|-----|-----------|----------|-------|------|----------|\n"
+    f"| R1 | 2 of 2 | {HIGH} | wrong default | src/b.py:10 | alice, bob |\n\n"
+)
+
+# A review artifact whose top row is a Critical the operator carries forward
+# instead of fixing in this cycle.
+CARRY_CONSOLIDATED = (
+    "## Consolidated Findings\n\n"
+    "| Ref | Consensus | Severity | Issue | File | Found By |\n"
+    "|-----|-----------|----------|-------|------|----------|\n"
+    f"| R1 | [2/2] | {CRIT} | crash on empty input | src/b.py:10 | alice, bob |\n"
+    f"| R2 | [2/2] | {HIGH} | wrong default | src/d.py:4 | alice, bob |\n"
+    f"| R3 | [1/2] | {MED} | unclear name | src/c.py:20 | bob |\n\n"
+)
+
+CARRY_ROWS = (
+    (CRIT, "src/b.py:10", "crash on empty input", "R1"),
+    (HIGH, "src/d.py:4", "wrong default", "R2"),
+    (MED, "src/c.py:20", "unclear name", "R3"),
+)
+
+
+def _carry_batch(carried: tuple[str, ...] = ("R1",)) -> list[dict]:
+    """A findings JSON covering every CARRY_CONSOLIDATED ref: the refs named in
+    `carried` classified `carry`, the rest discarded, so the findings
+    cross-check passes and only the carry match can refuse the batch."""
+    return [
+        dict(
+            _finding(sev, file, issue, "carry" if ref in carried else "discard"),
+            ref=ref,
+        )
+        for sev, file, issue, ref in CARRY_ROWS
+    ]
+
+
+def _carry_task(
+    task_id: object = "4",
+    *,
+    refs: tuple[str, ...] = ("R1",),
+    carry_cycle: int = 2,
+    name: str = "[C2] carry: src/b.py",
+    status: str = "pending",
+    escalation_reason: str = "review_flag",
+) -> dict:
+    """One re-queued carry-forward task: what a `carry` row has to point at."""
+    return {
+        "id": task_id,
+        "name": name,
+        "status": status,
+        "escalation_reason": escalation_reason,
+        "carry_refs": list(refs),
+        "carry_cycle": carry_cycle,
+    }
+
+
+def _carry_state(tmp_path: Path, tasks: list[dict], rework_ids: list[str]) -> Path:
+    return _state(
+        tmp_path,
+        tasks=[{"id": "1", "name": "original", "status": "completed"}, *tasks],
+        tasks_total=1 + len(tasks),
+        rework_task_ids=rework_ids,
+    )
+
+
+def _carry_reason(ref: str, cycle: int = 2) -> str:
+    return (
+        f"carry row ref {ref} has no cycle-{cycle} [C]-prefixed task in "
+        f"rework_task_ids carrying carry_refs including {ref}"
+    )
+
+
 # Pins pre-existing one-task-per-group behavior; unrelated to the new cross-check.
 def test_close_adds_one_task_per_group(tmp_path: Path) -> None:
     review = _review(tmp_path, agents="  alice: available\n  bob: unavailable\n")
@@ -395,18 +471,20 @@ def test_carry_row_writes_no_decision_and_no_task(tmp_path: Path) -> None:
     """A `carry` row is a re-queued `[C{cycle}]` row's classification: it
     satisfies coverage but, like `verify`/`discard`, writes no decision and
     creates no rework task - a carry-forward row is already matched to its
-    own re-queued task, so a second write here would be a duplicate."""
+    own re-queued task, so a second write here would be a duplicate. That
+    re-queued task has to be in state for the batch to apply at all, so this
+    one carries it."""
     review = _review(tmp_path)
-    state_path = _state(tmp_path)
+    state_path = _carry_state(tmp_path, [_carry_task()], ["4"])
     findings = [
         _finding(HIGH, "src/fix.py", "fix me", "fix"),
-        _finding(MED, "src/carry.py", "carry me", "carry"),
+        dict(_finding(MED, "src/carry.py", "carry me", "carry"), ref="R1"),
     ]
 
     result = review_close.close(review, state_path, "decision-gate", findings)
 
     data = _load(state_path)
-    new_tasks = data["tasks"][1:]
+    new_tasks = [t for t in data["tasks"] if t["id"] not in {"1", "4"}]
     assert [t["name"] for t in new_tasks] == ["[D2] src/fix.py"]
     assert result["tasks_created"] == [new_tasks[0]["id"]]
     assert data["deferred_decisions"] == []
@@ -733,21 +811,22 @@ def test_cli_accepts_a_carry_classification(tmp_path: Path) -> None:
     """`carry` must be accepted by the CLI's own classification gate
     (_is_chosen_finding/_KNOWN_CLASSIFICATIONS in __main__.py), the layer in
     front of review_close.close() - a findings file holding a `carry` row for
-    a re-queued [C{cycle}] row must not be rejected before close() runs."""
+    a re-queued [C{cycle}] row must not be rejected before close() runs. The
+    state carries that re-queued task, so close() accepts the carry too."""
     review = _review(tmp_path)
-    state_path = _state(tmp_path)
+    state_path = _carry_state(tmp_path, [_carry_task()], ["4"])
     findings = _findings_file(
         tmp_path,
         [
             _finding(HIGH, "src/fix.py", "fix me", "fix"),
-            _finding(MED, "src/carry.py", "carry me", "carry"),
+            dict(_finding(MED, "src/carry.py", "carry me", "carry"), ref="R1"),
         ],
     )
 
     proc = _review_close_cli(review, state_path, findings)
 
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    new_tasks = _load(state_path)["tasks"][1:]
+    new_tasks = [t for t in _load(state_path)["tasks"] if t["id"] not in {"1", "4"}]
     assert [t["name"] for t in new_tasks] == ["[D2] src/fix.py"]
 
 
@@ -846,3 +925,100 @@ def test_close_fails_a_lens_whose_persona_is_absent_from_agents_block(
     lenses = _load(state_path)["review_lenses"]
     assert "blind" in lenses
     assert lenses["blind"] == "failed"
+
+
+def test_refuses_unreadable_table_instead_of_applying(tmp_path: Path) -> None:
+    """A review file that HAS a '## Consolidated Findings' section but whose
+    table cannot be read is refused: there is nothing to cross-check the
+    operator's findings JSON against, so applying it would be a blind write
+    of whatever the JSON happens to say."""
+    review = _review(tmp_path, consolidated=UNREADABLE_TABLE)
+    state_path = _state(tmp_path)
+    before = state_path.read_bytes()
+    findings = [dict(_finding(HIGH, "src/b.py:10", "wrong default"), ref="R1")]
+
+    result = review_close.close(review, state_path, "decision-gate", findings)
+
+    assert result["applied"] is False
+    assert result["refused"] == "findings_malformed"
+    assert result["reason"] == gate._FINDINGS_PROBLEMS["unreadable-table"]
+    assert state_path.read_bytes() == before
+    assert not Path(f"{state_path}.lock").exists()
+    assert not Path(f"{state_path}.bak").exists()
+
+
+def test_a_missing_findings_section_still_applies_as_legacy_malformed(
+    tmp_path: Path,
+) -> None:
+    """The other half of the malformed split: a review file with no findings
+    section at all keeps its legacy pass-through - it applies and only reports
+    the cross-check. Refusing every malformed verdict would strand every
+    review artifact written before the table existed."""
+    review = _review(tmp_path)
+    state_path = _state(tmp_path)
+    findings = [_finding(HIGH, "src/b.py:10", "wrong default")]
+
+    result = review_close.close(review, state_path, "decision-gate", findings)
+
+    assert result["applied"] is True
+    assert "refused" not in result
+    assert result["findings_cross_check"] == "malformed"
+    assert [t["name"] for t in _load(state_path)["tasks"][1:]] == ["[D2] src/b.py"]
+
+
+def test_matched_carry_is_accepted(tmp_path: Path) -> None:
+    """The carry check's accepting side: R1 is classified `carry` and state
+    holds this cycle's re-queued [C2] task carrying ref R1, so the batch
+    applies - and the carry row still writes no task of its own."""
+    review = _review(tmp_path, consolidated=CARRY_CONSOLIDATED)
+    state_path = _carry_state(tmp_path, [_carry_task()], ["4"])
+
+    result = review_close.close(review, state_path, "decision-gate", _carry_batch())
+
+    assert result["applied"] is True
+    assert "refused" not in result
+    data = _load(state_path)
+    assert [t["id"] for t in data["tasks"]] == ["1", "4"]
+    assert data["applied_review_batches"] == [f"{review.resolve()}::decision-gate"]
+
+
+def test_carry_on_critical_without_requeued_task_is_refused(tmp_path: Path) -> None:
+    """The escape this closes: the operator classifies a Critical as `carry`
+    but nothing was re-queued for it, so the Critical would leave the run
+    while the review batch is stamped applied. Refused before the lock, so
+    state.json is byte-unchanged."""
+    review = _review(tmp_path, consolidated=CARRY_CONSOLIDATED)
+    state_path = _state(tmp_path)
+    before = state_path.read_bytes()
+
+    result = review_close.close(review, state_path, "decision-gate", _carry_batch())
+
+    assert result["applied"] is False
+    assert result["refused"] == "carry_unmatched"
+    assert result["reason"] == _carry_reason("R1")
+    assert state_path.read_bytes() == before
+    assert not Path(f"{state_path}.lock").exists()
+    assert not Path(f"{state_path}.bak").exists()
+
+
+def test_ghost_carry_ref_is_refused(tmp_path: Path) -> None:
+    """Two rows are carried, R1 and R3, and the only re-queued task carries
+    R1 alone: R3 is a ghost. Every other condition on that task holds, so
+    only the ref comparison can refuse the batch, and a check that stopped at
+    the first matching carry row would wave R3 through."""
+    review = _review(tmp_path, consolidated=CARRY_CONSOLIDATED)
+    state_path = _carry_state(tmp_path, [_carry_task(refs=("R1",))], ["4"])
+    before = state_path.read_bytes()
+
+    result = review_close.close(
+        review,
+        state_path,
+        "decision-gate",
+        _carry_batch(("R1", "R3")),
+    )
+
+    assert result["applied"] is False
+    assert result["refused"] == "carry_unmatched"
+    assert result["reason"] == _carry_reason("R3")
+    assert state_path.read_bytes() == before
+    assert not Path(f"{state_path}.lock").exists()
