@@ -124,9 +124,12 @@ TABLE_DATA_ROW_RE = re.compile(r"^\|(?:\s*R\d+\s*\|)?\s*\[\d+/\d+\]\s*\|", re.MU
 # Row-shape detection inside a findings table, private on purpose: once the
 # header is found, every pipe line that is not the |---| rule is a data row, so
 # an off-shape cell is refused instead of silently dropping the row (and the
-# finding it carried).
-_CANDIDATE_ROW_RE = re.compile(r"^\|")
-_SEPARATOR_ROW_RE = re.compile(r"^\|(\s*:?-{3,}:?\s*\|)+\s*$")
+# finding it carried). Leading whitespace is tolerated — some renderers indent
+# a data row under an unindented header — and the closing pipe is required, so
+# a row truncated at its last cell is refused rather than silently accepted.
+_CANDIDATE_ROW_RE = re.compile(r"^\s*\|")
+_SEPARATOR_ROW_RE = re.compile(r"^\s*\|(\s*:?-{3,}:?\s*\|)+\s*$")
+_TERMINATED_ROW_RE = re.compile(r"^\s*\|.*\|\s*$")
 _REF_CELL_RE = re.compile(r"^R\d+$", re.IGNORECASE)
 _CONSENSUS_CELL_RE = re.compile(r"^\[\d+/\d+\]$")
 # `| Consensus | Severity | Issue | File | Task | Found By |`
@@ -149,7 +152,9 @@ _FINDINGS_PROBLEMS = {
     "unreadable-table": (
         "found a findings table whose header or rows could not be read: "
         "expected a header naming Severity, Issue and File, and rows shaped "
-        "| [m/n] | ... | (optionally led by a | R1 | ref cell)"
+        "| [m/n] | ... | (optionally led by a | R1 | ref cell), each closed "
+        "with its own trailing | ; a Ref-less table that cannot be covered is "
+        "reported separately as 'ref-required', not here"
     ),
     "ref-required": (
         "coverage requires a Ref column; this section has at least one row "
@@ -369,6 +374,8 @@ def _table_keys(section: str) -> tuple[list[Row], str | None]:
                 header = cells
             continue
         if _CANDIDATE_ROW_RE.match(line) and not _SEPARATOR_ROW_RE.match(line):
+            if not _TERMINATED_ROW_RE.match(line):
+                return [], "unreadable-table"
             row = _row_from_table(header, _table_cells(line))
             if row is None or (row.ref and row.ref in refs):
                 return [], "unreadable-table"
