@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **run-autopilot**: the findings cross-check also refuses a review row the findings JSON leaves without a disposition (exit 2); re-queued rows use the new `carry` classification
+- **hooks**: the phase-delegation guard now catches the phrasings it used to miss - `start`/`do`/`perform`/`complete`/`launch`/`call` before a phase name, up to three determiner words in between, quoted skill names, full-width and zero-width characters, and `do not hesitate to run ...` (including `don't`) - while ordinary prose about a phase stays allowed
+- **hooks**: `read_input` fails open cleanly on a non-UTF-8 or deeply nested payload instead of exiting 1 with a traceback
 
 ## [0.9.0] - 2026-10-05
 
