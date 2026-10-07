@@ -34,6 +34,7 @@ _COLON_VERBS = r"run(?:ning)?|execut(?:e|ing)|invok(?:e|ing)|follow(?:ing)?|cont
 _IMPERATIVE_COLON = rf"({_COLON_VERBS})"
 # Built from the six colon verbs plus six widened verbs, so the two lists
 # cannot drift.
+_WIDENED_VERBS = r"(start|do|perform|complete|launch|call)"
 _IMPERATIVE = rf"({_COLON_VERBS}|start|do|perform|complete|launch|call)"
 # Code points that split a word without showing, stripped before matching.
 # U+200B, U+200C, U+200D, U+2060, U+00AD.
@@ -49,7 +50,9 @@ _PHASE_JARGON = r"(work phase|plan(?:ning)? phase|design phase)"
 # because nothing closes immediately. No trailing \b: a literal backtick is
 # a non-word char, and \b between two non-word chars (backtick, space)
 # never matches.
-_BARE_SKILL = r"(?P<bt>[`'\"]?)(?:/)?(autopilot:work|autopilot:plan-tasks|autopilot:design-solution|plan-tasks|design-solution)(?P=bt)"
+# Bare names only: the autopilot:-prefixed ones are covered by
+# _PREFIXED_SKILL below, which subsumes them and also takes the word gap.
+_BARE_SKILL = r"(?P<bt>[`'\"]?)(?:/)?(plan-tasks|design-solution)(?P=bt)"
 # Only an autopilot:-prefixed skill name takes the word gap: a bare
 # "plan-tasks" is ordinary prose ("call the helper in plan-tasks").
 _PREFIXED_SKILL = r"(?P<bt>[`'\"]?)(?:/)?(autopilot:work|autopilot:plan-tasks|autopilot:design-solution)(?P=bt)"
@@ -57,11 +60,15 @@ _PREFIXED_SKILL = r"(?P<bt>[`'\"]?)(?:/)?(autopilot:work|autopilot:plan-tasks|au
 # contraction, so that alternative was dead. Contractions are spelled out.
 # "not/never/don't ... hesitate|fail|only" is a double negation ("do not
 # hesitate to run ...", "don't hesitate to run ..."), so it does not count.
-# The exception covers the contractions too; one without hesitate|fail|only
-# after it ("Don't run the work phase") stays a plain negation.
+# The exception covers the contracted spellings of that same family
+# ("don't hesitate to run ..."); one without hesitate|fail|only after it
+# ("Don't run the work phase") stays a plain negation. The other
+# contractions keep no exception: "isn't only" is a state, not an
+# instruction wrapped in a double negation.
 _NEGATION = (
-    r"\b(not|never|does\s+not|doesn't|don't|won't|can't|cannot|isn't|shouldn't|wasn't|weren't)\b"
+    r"\b(not|never|does\s+not|doesn't|don't|won't)\b"
     r"(?!\s+(?:hesitate|fail|only)\b)"
+    r"|\b(can't|cannot|isn't|shouldn't|wasn't|weren't)\b"
 )
 _NEGATION_RE = re.compile(_NEGATION, re.IGNORECASE)
 # _negated_before only sees text BEFORE a match start, so a prohibition inside
@@ -75,8 +82,7 @@ _SKILL_READ = (
 )
 # Up to three words between the verb and its object ("run the entire work
 # phase"). Word-count bounded, never a character gap: a {0,40}-char gap once
-# denied 21 of 231 real review prompts. A negation never counts as a gap word,
-# or "Do not run the work phase" would match from "Do" past its own "not".
+# denied 21 of 231 real review prompts.
 # Gap words are a closed set of determiners and modifiers, never `\w+`:
 # prepositions and nouns ("do in the work phase", "Start with the work phase
 # fixtures") are ordinary prose. The set is the articles/demonstratives
@@ -84,10 +90,13 @@ _SKILL_READ = (
 # the size modifiers (entire, whole, full); chosen as the smallest set that
 # keeps every denied fixture denied.
 _GAP_WORD = r"(?:the|an?|this|that|all|every|each|remaining|entire|whole|full)"
-_GAP = rf"(?:(?!{_NEGATION}){_GAP_WORD}\s+){{0,3}}"
+# No negation lookahead: no gap word is a negation, so one would be dead.
+_GAP = rf"(?:{_GAP_WORD}\s+){{0,3}}"
 # A phase-jargon match followed by a compound-noun head ("the work phase
 # reviewer", "complete the work phase checklist") names a thing, not an
-# instruction to run the phase.
+# instruction to run the phase. Applied to the six WIDENED verbs only: the
+# six original ones are unambiguous instructions, and "run the work phase
+# review" was denied before this pattern existed.
 _NOT_COMPOUND = r"(?!\s+(?:reviewers?|reviews?|fixtures?|checklists?|diffs?)\b)"
 _SENTENCE_BOUNDARY_RE = re.compile(r"[.;,\n]")
 
@@ -112,10 +121,13 @@ _READ_ONLY_REVIEWERS = frozenset(
 # docs/dev/tmp/probe-blake-high-00248.py). No reverse-direction ("work phase
 # ... run") pattern: none of the four observed denial fixtures needs it, and
 # it is pure false-positive surface.
-_PHASE_JARGON_TIGHT = rf"\b{_IMPERATIVE}\s+{_GAP}{_PHASE_JARGON}\b{_NOT_COMPOUND}"
+_PHASE_JARGON_TIGHT = rf"\b{_IMPERATIVE_COLON}\s+{_GAP}{_PHASE_JARGON}\b"
+# Same shape for the widened verbs, minus a compound-noun head.
+_PHASE_JARGON_WIDENED = rf"\b{_WIDENED_VERBS}\s+{_GAP}{_PHASE_JARGON}\b{_NOT_COMPOUND}"
 
 _DELEGATION_PATTERNS = (
     re.compile(_PHASE_JARGON_TIGHT, re.IGNORECASE),
+    re.compile(_PHASE_JARGON_WIDENED, re.IGNORECASE),
     # Reverse direction ("<phase> phase ...: <imperative>"), gated on a
     # colon between jargon and verb - "Planning phase for PRD 00300:
     # continue it from task 4." matches; descriptive prose like "the work

@@ -37,12 +37,17 @@ def _guard_module():
         "never fail to execute /autopilot:work",
     ],
 )
-def test_contraction_before_hesitate_fail_or_only_is_a_double_negation_and_is_denied(prompt: str) -> None:
+def test_contraction_before_hesitate_fail_or_only_is_a_double_negation_and_is_denied(
+    prompt: str,
+) -> None:
     assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
 
 
 def test_contraction_without_hesitate_fail_or_only_stays_a_plain_negation() -> None:
-    assert _guard_module().is_phase_delegation({"prompt": "Don't run the work phase"}) is False
+    assert (
+        _guard_module().is_phase_delegation({"prompt": "Don't run the work phase"})
+        is False
+    )
 
 
 @pytest.mark.parametrize(
@@ -60,7 +65,9 @@ def test_contraction_without_hesitate_fail_or_only_stays_a_plain_negation() -> N
         "Start reviewing the design phase",
     ],
 )
-def test_ordinary_prose_with_a_widened_verb_near_phase_jargon_is_allowed(prompt: str) -> None:
+def test_ordinary_prose_with_a_widened_verb_near_phase_jargon_is_allowed(
+    prompt: str,
+) -> None:
     assert _guard_module().is_phase_delegation({"prompt": prompt}) is False
 
 
@@ -79,6 +86,20 @@ def test_ordinary_prose_with_a_widened_verb_near_phase_jargon_is_allowed(prompt:
 )
 def test_delegating_phrasing_with_a_widened_verb_stays_denied(prompt: str) -> None:
     assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
+
+
+def test_compound_noun_head_does_not_excuse_an_original_verb() -> None:
+    """The compound-noun exception belongs to the widened verbs only: "run the
+    work phase review" was denied before that exception existed."""
+    assert _guard_module().is_phase_delegation({"prompt": "Run the work phase review"}) is True
+
+
+def test_other_contractions_keep_no_double_negation_exception() -> None:
+    """Only the not/never/don't/doesn't/won't family gets the
+    hesitate|fail|only exception; "isn't only" is a state, not an instruction
+    wrapped in a double negation, so it still negates what follows."""
+    prompt = "Code review isn't only running the work phase"
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is False
 
 
 def test_prohibition_inside_the_skill_md_read_pattern_is_allowed() -> None:
