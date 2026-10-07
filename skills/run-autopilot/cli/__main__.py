@@ -80,11 +80,11 @@ Subcommands:
                  --findings [--default-tier]
         review_close.close() (PRD 00249) over the --findings JSON array;
         prints its result as one JSON line. Exit 1 when close() does not
-        apply without refusing (gate failure, an unreadable or legacy
-        no-section review file, batch already applied). Exit 2 on an
-        unreadable or malformed findings file, a failed state write, a chosen
-        finding the review file's consolidated findings never recorded or
-        never covers, an unreadable findings table or one with no Ref column,
+        apply without refusing (gate failure, an unreadable review file,
+        batch already applied). Exit 2 on an unreadable or malformed findings
+        file, a failed state write, a chosen finding the review file's
+        consolidated findings never recorded or never covers, an unreadable
+        findings table or one with no Ref column,
         a `carry` row with no matching `[C]`-prefixed task in the current
         cycle, a `carry` row inside a tail-sweep batch, or a tail sweep that
         is empty, runs before the decision gate, holds a row above medium, or
