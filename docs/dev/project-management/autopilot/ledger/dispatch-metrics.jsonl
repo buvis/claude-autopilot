@@ -3521,3 +3521,31 @@
 {"kind":"handoff","site":"review","edge":"leave","at":1791400052,"phase":"done","prd":"00265-close-the-critical-row-escapes-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1791400092,"phase":"done","prd":"00265-close-the-critical-row-escapes-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1791400220,"phase":"build","prd":"00265-close-the-critical-row-escapes-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791400252,"phase":"build","prd":"00266-bind-gate-reuse-to-the-command-and-renames-v1.md"}
+{"id":"f973dd49","kind":"fast-track:tess","task":"00266-bind-gate-reuse-to-the-command-and-renames-v1-c1","queued_at":1791400367,"prompt_bytes":107089}
+{"id":"f973dd49","ended_at":1791400538,"elapsed_s":171,"outcome":"ok","detail":null}
+{"id":"81c1e44f","kind":"fast-track:ivan","task":"00266-bind-gate-reuse-to-the-command-and-renames-v1-c1","queued_at":1791400804,"prompt_bytes":64906}
+{"id":"81c1e44f","ended_at":1791400996,"elapsed_s":192,"outcome":"ok","detail":"partial: allowlist missed cli/__main__.py"}
+{"id":"d857138b","kind":"fast-track:ivan","task":"00266-bind-gate-reuse-to-the-command-and-renames-v1-c1","queued_at":1791401011,"prompt_bytes":33648}
+{"id":"d857138b","ended_at":1791401081,"elapsed_s":70,"outcome":"ok","detail":null}
+{"id":"cf251dca","kind":"fast-track:fanout","task":"00266-bind-gate-reuse-to-the-command-and-renames-v1-c1","queued_at":1791401401,"prompt_bytes":6269}
+{"id":"858e1750","kind":"fast-track:blake","task":"00266-bind-gate-reuse-to-the-command-and-renames-v1-c1","queued_at":1791401404,"prompt_bytes":9187}
+{"id":"be8c2636","kind":"fast-track:eve","task":"00266-bind-gate-reuse-to-the-command-and-renames-v1-c1","queued_at":1791401409,"prompt_bytes":8192}
+{"id":"666ea53f","kind":"fast-track:bob","task":"00266-bind-gate-reuse-to-the-command-and-renames-v1-c1","queued_at":1791401413,"prompt_bytes":8943}
+{"id":"0e6b0213","kind":"fast-track:carl","task":"00266-bind-gate-reuse-to-the-command-and-renames-v1-c1","queued_at":1791401417,"prompt_bytes":6625}
+{"id":"cf251dca","ended_at":1791401432,"elapsed_s":31,"outcome":"error","detail":"workflow backend not used: personas args require inlining 7 persona bodies; alice fallback dispatched"}
+{"id":"a352b084","kind":"fast-track:alice","task":"00266-bind-gate-reuse-to-the-command-and-renames-v1-c1","queued_at":1791401437,"prompt_bytes":6269}
+{"id":"a352b084","ended_at":1791401584,"elapsed_s":147,"outcome":"ok","detail":null}
+{"id":"858e1750","ended_at":1791401587,"elapsed_s":183,"outcome":"ok","detail":null}
+{"id":"666ea53f","ended_at":1791401590,"elapsed_s":177,"outcome":"ok","detail":null}
+{"id":"be8c2636","ended_at":1791402098,"elapsed_s":689,"outcome":"ok","detail":null}
+{"id":"0e6b0213","ended_at":1791402102,"elapsed_s":685,"outcome":"ok","detail":null}
+{"id":"bf78bd36","kind":"fast-track:victor","task":"00266-bind-gate-reuse-to-the-command-and-renames-v1-c1","queued_at":1791402219,"prompt_bytes":2404}
+{"id":"10c02581","kind":"fast-track:victor","task":"00266-bind-gate-reuse-to-the-command-and-renames-v1-c1","queued_at":1791402223,"prompt_bytes":2139}
+{"id":"bf78bd36","ended_at":1791402253,"elapsed_s":34,"outcome":"ok","detail":null}
+{"id":"10c02581","ended_at":1791402272,"elapsed_s":49,"outcome":"ok","detail":null}
+{"id":"310e5670","kind":"fast-track:ivan","task":"00266-bind-gate-reuse-to-the-command-and-renames-v1-c1","queued_at":1791402315,"prompt_bytes":7721}
+{"id":"310e5670","ended_at":1791402431,"elapsed_s":116,"outcome":"ok","detail":null}
+{"id":"4721633c","kind":"fast-track:delta","task":"00266-bind-gate-reuse-to-the-command-and-renames-v1-c1","queued_at":1791403397,"prompt_bytes":11897}
+{"id":"4721633c","ended_at":1791403872,"elapsed_s":475,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"build","edge":"leave","at":1791404047,"phase":"done","prd":"00266-bind-gate-reuse-to-the-command-and-renames-v1.md"}
