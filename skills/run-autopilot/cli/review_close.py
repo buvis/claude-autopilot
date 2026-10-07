@@ -45,10 +45,8 @@ _PERSONA_LENS = {
 _LENS_STATUS = {"available": "done", "disabled": "skipped"}
 # agents: status -> the dispatch row's closing --outcome (SKILL.md step 6's
 # attempt-outcome table). A persona absent from the agents: block at all
-# (status None) was never dispatched back, so its row closes "lost" rather
-# than as a success the ledger would average into its timings; a persona taken
-# off the roster on purpose ("disabled") keeps "ok", the vocabulary's value for
-# a row nobody failed.
+# (status None) was never dispatched back, so its row closes "lost"; a persona
+# taken off the roster on purpose ("disabled") keeps "ok".
 _DISPATCH_OUTCOME = {
     "available": "ok",
     "unavailable": "error",

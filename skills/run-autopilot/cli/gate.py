@@ -505,8 +505,6 @@ def _cross_check_findings(
         row.ref for row in reviewed if row.ref and row.ref not in covered_refs
     ]
     if uncovered:
-        # Every uncovered ref, not just the first: naming one costs the
-        # operator a whole re-run per row still missing.
         return "uncovered", (
             "review rows with no findings-JSON row naming their ref and a "
             f"classification: {', '.join(uncovered)} "
