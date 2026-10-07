@@ -57,6 +57,13 @@ _DECISION_SEVERITY = {
     "\U0001f7e1": "medium",
     "⚪": "low",
 }
+# gate.findings_verdict verdict -> the refusal kind it earns. "malformed" is
+# absent on purpose: only its unreadable-table detail refuses.
+_FINDINGS_REFUSALS = {
+    "mismatch": "findings_mismatch",
+    "uncovered": "findings_uncovered",
+    "ref-required": "findings_ref_required",
+}
 
 
 def _frontmatter_lines(text: str) -> list[str]:
@@ -257,12 +264,17 @@ def _close_mutator(ctx: dict[str, Any]):
             outcome["already"] = True
             return state
         created = _add_rework_tasks(
-            state, ctx["fixes"], ctx["prefix"], ctx["default_tier"]
+            state,
+            ctx["fixes"],
+            ctx["prefix"],
+            ctx["default_tier"],
         )
         _add_decisions(state, ctx["fixes"], ctx["defers"])
         _set_lens_state(state, ctx["batch_id"], ctx["verdicts"], ctx["lenses"])
         statectl.do_append(
-            state, statectl.parse_path("applied_review_batches"), identity
+            state,
+            statectl.parse_path("applied_review_batches"),
+            identity,
         )
         outcome["created"] = created
         outcome["rework_task_ids"] = list(state.get("rework_task_ids", []))
@@ -351,7 +363,10 @@ def _carry_refusal(loaded: dict, chosen_findings: list[dict]) -> dict | None:
     cycle = loaded.get("cycle", 1)
     for row in chosen_findings:
         if row.get("classification") == "carry" and _carry_unmatched(
-            row, cycle, tasks, rework_ids
+            row,
+            cycle,
+            tasks,
+            rework_ids,
         ):
             ref = str(row.get("ref", "")).strip() or "(none)"
             return {
@@ -363,6 +378,56 @@ def _carry_refusal(loaded: dict, chosen_findings: list[dict]) -> dict | None:
                 ),
             }
     return None
+
+
+def _findings_refusal(
+    text: str,
+    chosen_findings: list[dict],
+    batch_id: str,
+) -> tuple[str | None, dict | None]:
+    """The consolidated-findings cross-check: (verdict, refusal or None).
+
+    A chosen finding the section never recorded refuses with
+    "findings_mismatch", a consolidated row the chosen findings never named
+    with "findings_uncovered", a table with no Ref column for it to name
+    with "findings_ref_required", and a table that cannot be read at all
+    with "findings_malformed". A review file carrying no such section is not
+    refused: `_close_result` surfaces its "malformed" verdict instead.
+    """
+    cross_check, detail = gate.findings_verdict(
+        text,
+        chosen_findings,
+        require_coverage=batch_id != "tail-sweep",
+    )
+    refused = _FINDINGS_REFUSALS.get(cross_check)
+    if (
+        cross_check == "malformed"
+        and detail == gate._FINDINGS_PROBLEMS["unreadable-table"]
+    ):
+        refused = "findings_malformed"
+    if refused is None:
+        return cross_check, None
+    return cross_check, {"applied": False, "refused": refused, "reason": detail}
+
+
+def _prelock_refusal(
+    state_path: Path,
+    review_file: Path,
+    batch_id: str,
+    chosen_findings: list[dict],
+) -> dict | None:
+    """Advisory pre-lock read: the refusal this batch earns before paying for
+    `statectl.mutate()`'s lock, else None. `_close_mutator`'s in-lock
+    idempotency check stays the race-safe authority."""
+    loaded, _version = state_mod.load(state_path)
+    if f"{review_file.resolve()}::{batch_id}" in loaded.get(
+        "applied_review_batches",
+        [],
+    ):
+        return {"applied": False, "reason": "already applied"}
+    if batch_id == "tail-sweep":
+        return None
+    return _carry_refusal(loaded, chosen_findings)
 
 
 def close(
@@ -380,54 +445,32 @@ def close(
     "reason"} when the review file fails the shape gate, cannot be read, or
     this batch was already applied.
 
-    A chosen finding the review file's consolidated-findings section never
-    recorded is refused before any lock, with "refused": "findings_mismatch".
-    A consolidated row the chosen findings never named is refused the same
-    way, with "refused": "findings_uncovered"; a table with no Ref column for
-    it to name with "refused": "findings_ref_required"; a findings table that
-    cannot be read at all with "refused": "findings_malformed". A review file
-    carrying no such section is not refused: the fact lands on the applied
-    result as "findings_cross_check": "malformed".
-
-    On that remaining non-tail-sweep "ok"/legacy-no-section path, every
-    `carry` row must point at a re-queued `[C{cycle}]` task of this cycle
-    (see `_carry_unmatched`), else "refused": "carry_unmatched".
+    A findings cross-check the review file fails is refused before any lock
+    (see `_findings_refusal`). On the remaining non-tail-sweep
+    "ok"/legacy-no-section path, every `carry` row must point at a re-queued
+    `[C{cycle}]` task of this cycle (see `_carry_unmatched`), else
+    "refused": "carry_unmatched".
     """
     review_file = Path(review_file)
     state_path = Path(state_path)
     text, refusal = _gate_review(review_file, require_codex_guard)
     if refusal is not None:
         return {"applied": False, "reason": refusal}
-    cross_check, detail = gate.findings_verdict(
-        text, chosen_findings, require_coverage=batch_id != "tail-sweep"
-    )
-    if cross_check == "mismatch":
-        return {"applied": False, "refused": "findings_mismatch", "reason": detail}
-    if cross_check == "uncovered":
-        return {"applied": False, "refused": "findings_uncovered", "reason": detail}
-    if cross_check == "ref-required":
-        return {"applied": False, "refused": "findings_ref_required", "reason": detail}
-    if (
-        cross_check == "malformed"
-        and detail == gate._FINDINGS_PROBLEMS["unreadable-table"]
-    ):
-        return {"applied": False, "refused": "findings_malformed", "reason": detail}
-
-    # Advisory pre-lock read: it refuses before paying for mutate()'s lock,
-    # but _close_mutator's in-lock check stays the race-safe authority.
-    loaded, _version = state_mod.load(state_path)
-    if f"{review_file.resolve()}::{batch_id}" in loaded.get(
-        "applied_review_batches", []
-    ):
-        return {"applied": False, "reason": "already applied"}
-    if batch_id != "tail-sweep":
-        carry_refusal = _carry_refusal(loaded, chosen_findings)
-        if carry_refusal is not None:
-            return carry_refusal
+    cross_check, findings_refused = _findings_refusal(text, chosen_findings, batch_id)
+    if findings_refused is not None:
+        return findings_refused
+    prelock = _prelock_refusal(state_path, review_file, batch_id, chosen_findings)
+    if prelock is not None:
+        return prelock
 
     frontmatter = _frontmatter_lines(text)
     ctx = _mutation_context(
-        review_file, text, frontmatter, batch_id, chosen_findings, default_tier
+        review_file,
+        text,
+        frontmatter,
+        batch_id,
+        chosen_findings,
+        default_tier,
     )
     statectl.mutate(state_path, _close_mutator(ctx))
     if ctx["outcome"].get("already"):
