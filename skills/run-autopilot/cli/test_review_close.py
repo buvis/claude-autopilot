@@ -30,15 +30,16 @@ D_LINES = "D1: pass\nD2: fail\nD3: pass\nD4: pass\nD5: pass\n"
 # review file this test writes.
 RUNTIME_ISSUE = f"finding minted at runtime {uuid4().hex}"
 
-# The saved review artifact's consolidated-findings bullet list, carrying three
-# rows. Batches applied against it are subsets of these.
+# The saved review artifact's consolidated-findings table, carrying three rows.
+# Batches applied against it are subsets of these. Every row names a Ref: a
+# findings section whose rows key with an empty ref is refused outright now.
 CONSOLIDATED = (
     "## Consolidated Findings\n\n"
-    "### Full Consensus (2/2)\n\n"
-    f"- [2/2] {HIGH} wrong default | src/b.py:10 | Found by: alice, bob\n"
-    f"- [2/2] {HIGH} {RUNTIME_ISSUE} | src/d.py:4 | Found by: alice, bob\n\n"
-    "### Minority (<=50%)\n\n"
-    f"- [1/2] {MED} unclear name | src/c.py:20 | Found by: bob\n\n"
+    "| Ref | Consensus | Severity | Issue | File | Found By |\n"
+    "|-----|-----------|----------|-------|------|----------|\n"
+    f"| R1 | [2/2] | {HIGH} | wrong default | src/b.py:10 | alice, bob |\n"
+    f"| R2 | [2/2] | {HIGH} | {RUNTIME_ISSUE} | src/d.py:4 | alice, bob |\n"
+    f"| R3 | [1/2] | {MED} | unclear name | src/c.py:20 | bob |\n\n"
 )
 
 
@@ -554,7 +555,9 @@ def _findings_file(tmp_path: Path, rows: list[dict]) -> Path:
 
 
 def _review_close_cli(
-    review: Path, state_path: Path, findings: Path
+    review: Path,
+    state_path: Path,
+    findings: Path,
 ) -> subprocess.CompletedProcess:
     return subprocess.run(
         [
@@ -665,7 +668,13 @@ def test_close_applies_a_findings_subset_of_the_review(tmp_path: Path) -> None:
     break, not a case the cross-check itself needs to refuse."""
     review = _review(tmp_path, consolidated=CONSOLIDATED)
     state_path = _state(tmp_path)
-    findings = [_finding(HIGH, "src/d.py:4", RUNTIME_ISSUE)]
+    # R2 is the one row being fixed; R1 and R3 carry the operator's `discard`
+    # disposition, which is coverage without a task or a decision.
+    findings = [
+        dict(_finding(HIGH, "src/d.py:4", RUNTIME_ISSUE), ref="R2"),
+        dict(_finding(HIGH, "src/b.py:10", "wrong default", "discard"), ref="R1"),
+        dict(_finding(MED, "src/c.py:20", "unclear name", "discard"), ref="R3"),
+    ]
 
     result = review_close.close(review, state_path, "decision-gate", findings)
 
@@ -707,7 +716,8 @@ def test_cli_exit_2_on_findings_uncovered(tmp_path: Path) -> None:
     before = state_path.read_bytes()
     # Only R1 carries a findings-JSON row; R2 is dropped entirely.
     findings = _findings_file(
-        tmp_path, [dict(_finding(HIGH, "src/b.py:10", "wrong default"), ref="R1")]
+        tmp_path,
+        [dict(_finding(HIGH, "src/b.py:10", "wrong default"), ref="R1")],
     )
 
     proc = _review_close_cli(review, state_path, findings)
@@ -751,7 +761,8 @@ def test_cli_exits_1_when_the_review_itself_fails_the_gate(tmp_path: Path) -> No
     state_path = _state(tmp_path)
     before = state_path.read_bytes()
     findings = _findings_file(
-        tmp_path, [_finding(HIGH, "src/b.py:10", "an issue no reviewer raised")]
+        tmp_path,
+        [_finding(HIGH, "src/b.py:10", "an issue no reviewer raised")],
     )
 
     proc = _review_close_cli(review, state_path, findings)
@@ -768,7 +779,12 @@ def test_cli_still_exits_1_on_other_not_applied_reasons(tmp_path: Path) -> None:
     review = _review(tmp_path, consolidated=CONSOLIDATED)
     state_path = _state(tmp_path)
     findings = _findings_file(
-        tmp_path, [_finding(HIGH, "src/b.py:10", "wrong default")]
+        tmp_path,
+        [
+            dict(_finding(HIGH, "src/b.py:10", "wrong default"), ref="R1"),
+            dict(_finding(HIGH, "src/d.py:4", RUNTIME_ISSUE, "discard"), ref="R2"),
+            dict(_finding(MED, "src/c.py:20", "unclear name", "discard"), ref="R3"),
+        ],
     )
 
     first = _review_close_cli(review, state_path, findings)

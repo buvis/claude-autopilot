@@ -75,21 +75,22 @@ CRIT = "\U0001f534"
 HIGH = "\U0001f7e0"
 MED = "\U0001f7e1"
 
-# The SAVED review artifact: the Review Summary Format's bullet list, which is
-# what `gate --review-file` reads.
+# The header of the Ref-bearing pipe table every saved review file carries. A
+# findings section whose rows key with an empty ref is refused outright now
+# (verdict `ref-required`), so every shared fixture here names a Ref column.
+TABLE_HEADER_REF_5 = (
+    "| Ref | Consensus | Severity | Issue | File | Found By |\n"
+    "|-----|-----------|----------|-------|------|----------|\n"
+)
+
+# The SAVED review artifact: the Review Summary Format's consolidated table,
+# which is what `gate --review-file` reads.
 FINDINGS_SECTION = f"""## Consolidated Findings
 
-### Full Consensus (3/3)
-
-- [3/3] {CRIT} crash on empty input | src/a.py:3 | Found by: alice, blake, bob
-
-### Majority Consensus (>50%)
-
-- [2/3] {HIGH} wrong default | src/b.py:10 | Found by: alice, bob
-
-### Minority (<=50%)
-
-- [1/3] {MED} unclear name | src/c.py:20 | Found by: bob
+{TABLE_HEADER_REF_5}\
+| R1 | [3/3] | {CRIT} | crash on empty input | src/a.py:3 | alice, blake, bob |
+| R2 | [2/3] | {HIGH} | wrong default | src/b.py:10 | alice, bob |
+| R3 | [1/3] | {MED} | unclear name | src/c.py:20 | bob |
 """
 
 EMPTY_FINDINGS_SECTION = """## Consolidated Findings
@@ -115,11 +116,12 @@ def _row(sev: str, file: str, issue: str, cls: str = "fix") -> dict:
 
 
 def _one_row_section(sev: str, issue: str, file: str) -> str:
-    """A consolidated-findings section holding exactly one finding line."""
+    """A consolidated-findings section holding exactly one finding row, keyed
+    by the ref `R1`."""
     return (
         "## Consolidated Findings\n\n"
-        "### Full Consensus (2/2)\n\n"
-        f"- [2/2] {sev} {issue} | {file} | Found by: alice, bob\n"
+        f"{TABLE_HEADER_REF_5}"
+        f"| R1 | [2/2] | {sev} | {issue} | {file} | alice, bob |\n"
     )
 
 
@@ -258,8 +260,22 @@ class DirectScriptTests(unittest.TestCase):
                 encoding="utf-8",
             )
             matching = Path(tmp) / "good.json"
+            # Every row of the Ref table needs a disposition, so the two rows
+            # this batch is not fixing carry a `discard` row naming their ref.
             matching.write_text(
-                json.dumps([_row(HIGH, "src/b.py:10", "wrong default")]),
+                json.dumps(
+                    [
+                        dict(_row(HIGH, "src/b.py:10", "wrong default"), ref="R2"),
+                        dict(
+                            _row(CRIT, "src/a.py:3", "crash on empty input", "discard"),
+                            ref="R1",
+                        ),
+                        dict(
+                            _row(MED, "src/c.py:20", "unclear name", "discard"),
+                            ref="R3",
+                        ),
+                    ],
+                ),
                 encoding="utf-8",
             )
             mismatching = Path(tmp) / "bad.json"
@@ -346,18 +362,21 @@ class FindingsCrossCheckTests(unittest.TestCase):
             [
                 {
                     "classification": "fix",
+                    "ref": "R1",
                     "severity": CRIT,
                     "file": "src/a.py:3",
                     "issue": "crash on empty input",
                 },
                 {
                     "classification": "fix",
+                    "ref": "R2",
                     "severity": "high",
                     "file": "src/b.py:10",
                     "issue": "wrong   default",
                 },
                 {
                     "classification": "defer",
+                    "ref": "R3",
                     "severity": MED,
                     "file": " src/c.py:20 ",
                     "issue": "unclear name",
@@ -436,7 +455,9 @@ class FindingsCrossCheckTests(unittest.TestCase):
         # The issue text exists nowhere but this run, so the only way to match
         # it is to parse the review file.
         issue = f"freshly minted finding {uuid4().hex}"
-        findings = self._findings([_row(HIGH, "src/new.py:7", issue)])
+        findings = self._findings(
+            [dict(_row(HIGH, "src/new.py:7", issue), ref="R1")],
+        )
         proc = self._gate(
             self._review(section=_one_row_section(HIGH, issue, "src/new.py:7")),
             findings,
@@ -454,16 +475,23 @@ class FindingsCrossCheckTests(unittest.TestCase):
         self.assertIn(issue, proc.stderr)
 
     def test_partial_batch_is_not_a_mismatch(self) -> None:
-        # A real subset of the review's rows. The two rows findings never
-        # mentions must not count against it.
+        # Only one of the review's three rows is being fixed. The other two get
+        # the operator's explicit `discard` disposition, so a batch that applies
+        # a real subset of the review is still not a mismatch.
         findings = self._findings(
             [
                 {
                     "classification": "fix",
+                    "ref": "R2",
                     "severity": HIGH,
                     "file": "src/b.py:10",
                     "issue": "wrong default",
                 },
+                dict(
+                    _row(CRIT, "src/a.py:3", "crash on empty input", "discard"),
+                    ref="R1",
+                ),
+                dict(_row(MED, "src/c.py:20", "unclear name", "discard"), ref="R3"),
             ],
         )
         proc = self._gate(self._review(), findings)
@@ -544,9 +572,8 @@ class FindingsCrossCheckTests(unittest.TestCase):
 
         text = (
             "## Consolidated Findings\n\n"
-            "### Majority Consensus (>50%)\n\n"
-            f"- [2/3] {HIGH} High wrong default | src/b.py:10 | "
-            "Found by: alice, bob\n"
+            f"{TABLE_HEADER_REF_5}"
+            f"| R1 | [2/3] | {HIGH} High | wrong default | src/b.py:10 | alice, bob |\n"
         )
         row = {
             "classification": "fix",
@@ -554,7 +581,12 @@ class FindingsCrossCheckTests(unittest.TestCase):
             "file": "src/b.py:10",
             "issue": "wrong default",
         }
-        self.assertEqual(gate._cross_check_findings(text, [row]), ("ok", None))
+        # Coverage is off so the severity question is the only one asked: this
+        # ref-less row is keyed by its (severity, file, issue) triple alone.
+        self.assertEqual(
+            gate._cross_check_findings(text, [row], require_coverage=False),
+            ("ok", None),
+        )
 
     def test_cross_check_matches_an_issue_starting_with_a_severity_word(self) -> None:
         """`High coupling ...` is ordinary issue text, not a severity cell: both
@@ -564,7 +596,12 @@ class FindingsCrossCheckTests(unittest.TestCase):
         issue = "High coupling between the gate and the closer"
         text = _one_row_section(HIGH, issue, "src/b.py:10")
         row = _row(HIGH, "src/b.py:10", issue)
-        self.assertEqual(gate._cross_check_findings(text, [row]), ("ok", None))
+        # Coverage is off so the row is keyed by its text, not by R1: matching
+        # on the ref would skip the issue cell and prove nothing here.
+        self.assertEqual(
+            gate._cross_check_findings(text, [row], require_coverage=False),
+            ("ok", None),
+        )
 
     def test_gate_refuses_an_unbacked_row_carrying_no_classification(self) -> None:
         # Only `verify` and `discard` are exempt. A row with no classification
