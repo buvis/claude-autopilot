@@ -119,3 +119,43 @@ Implementor (Ivan):
 - `skills/work/scripts/record_dispatch.py` was not changed: `argparse` already rejects a dash-led positional and `"lost"` was already in `OUTCOMES`.
 - `state-schema.md`'s lens vocabulary was not updated to document `"lost"` (outside the allowlist) - a follow-on.
 
+## 7: release-checks: list the review-verb test modules and pin the list (#32)
+
+Orchestrator:
+- The PRD names FIVE modules to add, but the same contract demands a discovery pin ("a newly added review-verb test file fails the guard until it is listed"), and a pin forces the honest superset: the two globs `cli/test_review*.py` and `cli/test_gate*.py` reach eleven files on disk, seven of which were unlisted, and the PRD's five are out-of-glob names. `_REVIEW_VERB_TEST_FILES` therefore holds TWENTY paths and twelve were added to the gate block, not five. The discovery shape (two globs over `cli/` only, with the out-of-glob modules hand-listed) is the orchestrator's choice; the PRD named no mechanism.
+- `bash dev/bin/release-checks` does NOT exit 0, so the task's second acceptance criterion is unmet. The gate reports `PASS 2811 FAIL 1 EXIT 1`, and the single failure is `cli/test_gate.py::FindingsCrossCheckTests::test_gate_refuses_an_unbacked_row_carrying_no_classification`, which fails identically in isolation at this task's base commit and sits outside this task's allowlist. It is a pre-existing regression from an earlier task in this PRD (the classification check now refuses the row before the unbacked-row message is built, so stderr reads `row ?: unknown classification None` instead of naming the row). Owned by step 7's regression loop, not by task 7. All twelve newly listed modules pass.
+- `cli/test_store_tree_legibility.py` now runs twice per gate (it is also in the `[checks] store tree` block). That is what the twenty-entry list requires; it inflates `TOTAL_PASS` and adds ~2s. Flagged, not changed.
+- Four LOW findings from the per-task review were noted and not fixed, per the LOW-only ladder. One is a real gap worth the review phase's attention: discovery pins only `cli/`, so a new review-verb test under `scripts/` or `review-work-completion/scripts/` can still be left out of the gate silently, and the nine out-of-glob entries have no on-disk pin. The other three: `_ROOT` duplicates the pre-existing `_RELEASE_CHECKS` expression, the listed-path assertion is a whole-file substring test rather than block-scoped (a commented-out path would pass), and `_literal_tuple`'s AST proof was called over-engineering - it is kept because it IS the contract's anti-glob pin, mirrored verbatim from `test_wave_docs.py`.
+
+Implementor (Ivan):
+- Used `fnmatch` on basenames for both sides of the discovery check; the dispatch named globs but no mechanism. `Path.iterdir()` supplies the on-disk side.
+- Added a new module-level `_ROOT` rather than refactoring the existing `_RELEASE_CHECKS` line to use it, to keep the diff additive.
+- Identified the tuple's `cli/` entries by `str(Path(path).parent) == "skills/run-autopilot/cli"`, since the dispatch specified repo-relative paths but not how to pick the `cli/` subset.
+- A loupe reflow added magic trailing commas to ten pre-existing call sites in `test_release_checks_counts.py` mid-task; all ten were reverted so the commit is a pure 91-line addition.
+
+## 8: CHANGELOG [Unreleased] carry line and phase-review.md:280 (#15, #29, #30)
+
+Orchestrator:
+- `#30`'s "phase-review.md:280" is now line 303 (the file grew during this PRD); the sentence it names, `"verify"` and `"discard"` rows create nothing.`, was located by content rather than by line number.
+- Pat was skipped as docs-only: all three files are prose or test, no production path. `review: skipped:docs-only`.
+- The formatter reflowed task 7's `cli/test_release_checks_counts.py` again during this task; reverted with `git checkout`, never committed.
+
+Implementor (Ivan):
+- The new CHANGELOG bullet went at the end of the `**run-autopilot**:` group (before the two `**hooks**:` bullets) rather than at the very end of `### Fixed`, matching where the earlier tasks of this PRD appended.
+- The test's changelog assertions use `str.count("carry")` on the sliced `[Unreleased]` text, not `rg -c`'s line count.
+- `rg -c "carry" CHANGELOG.md` was already >= 2 before the edit, so that acceptance criterion does not by itself prove the new bullet landed; the `findings coverage check` / `` `carry` classification `` / `one version` assertions are what pin it.
+
+## 9: help text: the two-way check and the new refusals, pinned by a prose test (#10)
+
+Orchestrator:
+- **The PRD's verbatim contract wording for `review-close` is factually wrong and was NOT shipped.** It specifies "Exit 1 when `close()` refuses on a legacy no-section review file", but a legacy review file with no `## Consolidated Findings` section is never refused: `_FINDINGS_REFUSALS` in `cli/review_close.py:69` holds only `mismatch`, `uncovered` and `ref-required`, and the `malformed` (no-section) verdict is applied with a surfaced note (`review_close.py:342`, "Surfaced, never refused"), so that file exits 0. The deslop pass caught it and reverted the clause to the pre-existing "an unreadable review file, batch already applied"; the orchestrator verified the claim against `_FINDINGS_REFUSALS` directly before accepting it. **The same wrong sentence is in the design doc at `designs/00265-...-design.md:608`**, while the same doc's reconciliation table (lines 271/279) correctly records no-section as "legacy pass (unchanged)". The review phase should decide whether the design doc's block quote gets corrected.
+- Pat was skipped as docs-only: the diff is docstrings plus one prose test, no production path. `review: skipped:docs-only`.
+- The formatter reflowed `cli/gate.py` and `test_review_verbs_prose.py` twice during this task (once under the implementor, once under the deslop pass). Both reverted with `git checkout`, never committed.
+
+Implementor (Ivan):
+- The dispatch asked for all five substrings in BOTH docstrings, but `carry_unmatched` and `carry_in_tail_sweep` are `review-close` refusals, not gate refusals, so writing them into `gate.py`'s docstring would make it lie. Read as the union across the two files: the three gate-side substrings in both, the two `carry` ones in `__main__.py` only.
+- Kept `gate failure` and `unreadable review file` in `review-close`'s exit-1 list (the PRD wording omits them) rather than dropping documented causes it could not verify; `review_close.py` was outside its allowlist.
+- The tail-sweep refusal list and the "legacy no-section" wording were taken verbatim from the PRD contract and could not be verified against `review_close.py` from inside the allowlist. The orchestrator verified them afterwards: the tail-sweep list is right, the no-section clause was not (above).
+- Wrap points were chosen so each asserted substring sits on one line, which leaves one short line in each file.
+- `_SKIPPED_CLASSIFICATIONS`'s comment was left unchanged: re-read against the code it is accurate, nothing stale to extend.
+
