@@ -554,10 +554,13 @@ def _findings_exit(text: str, findings_file: Path) -> int:
     # a sixth disposition reaches the line the day it joins the tuple.
     for row in rows:
         if not known_classification(row.get("classification")):
+            # A ref names the row on its own. A row carrying none still has to
+            # be findable, so its issue text (else its file) is appended.
+            tail = "" if row.get("ref") else f" [{row.get('issue') or row.get('file')}]"
             sys.stderr.write(
                 f"row {row.get('ref', '?')}: unknown classification "
                 f"{row.get('classification')!r} (expected "
-                f"{'|'.join(KNOWN_CLASSIFICATIONS)})\n",
+                f"{'|'.join(KNOWN_CLASSIFICATIONS)}){tail}\n",
             )
             return 2
     tag, detail = findings_verdict(text, rows)
