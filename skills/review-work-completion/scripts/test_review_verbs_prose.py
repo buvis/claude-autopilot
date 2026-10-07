@@ -10,6 +10,9 @@ FORMATS = (ROOT / "skills/review-work-completion/references/output-formats.md").
 PHASE_REVIEW = (ROOT / "skills/run-autopilot/references/phase-review.md").read_text(
     encoding="utf-8"
 )
+RECOVERY = (ROOT / "skills/run-autopilot/references/recovery.md").read_text(
+    encoding="utf-8"
+)
 
 
 def step(number: int) -> str:
@@ -41,3 +44,33 @@ def test_cap_out_severity_is_a_word() -> None:
     cap = PHASE_REVIEW.split('"type": "cap-overflow"', 1)[1].split("\n", 1)[0]
     assert "the word (critical/high/medium/low), not the emoji cell" in cap
     assert "Tail-sweep chosen_findings" in cap
+
+
+def test_requeue_records_the_carry_link_prose() -> None:
+    escalate = PHASE_REVIEW.split("### Escalate review-flagged tasks by tier", 1)[1]
+    escalate = escalate.split("\n### Dispatch rework", 1)[0]
+    assert '"carry_refs": ["<Ref cell, upper-cased>", ...existing entries]' in escalate
+    assert '"carry_cycle": <state.cycle>' in escalate
+    assert "base = current if current_cycle == state.cycle else []" in escalate
+    assert "new_carry_refs = sorted(set(base) | {this_finding_ref.upper()})" in escalate
+    assert "a task re-queued again in a LATER cycle starts its list fresh" in escalate
+    assert "stamps no `carry_refs` entry for that flagging" in escalate
+    assert (
+        "re-runs `task-set-meta <task-id> <meta-json-file>` with the missing "
+        "`carry_refs`/`carry_cycle` pair" in escalate
+    )
+
+    dispatch = PHASE_REVIEW.split("### Dispatch rework", 1)[1]
+    assert 'refused: "carry_unmatched"`, exit 2' in dispatch
+    assert "must appear in some task's `carry_refs`" in dispatch
+
+    gate = RECOVERY.split("### Fable rescue gate", 1)[1].split("\n## ", 1)[0]
+    assert '"carry_refs": ["<Ref cell, upper-cased>", ...existing entries]' in gate
+    assert '"carry_cycle": <state.cycle>' in gate
+    assert 'refused: "carry_unmatched"`, exit 2' in gate
+
+    summary = FORMATS.split("## Review Summary Format", 1)[1].split(
+        "## Zero Issues Handling", 1
+    )[0]
+    assert "| Ref | Consensus | Severity | Issue | File | Found By |" in summary
+    assert "| R1 | [N/N] | 🔴 Critical |" in summary

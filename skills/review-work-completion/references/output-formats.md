@@ -141,14 +141,11 @@ PRDs checked: {list}
 
 ## Consolidated Findings
 
-### Full Consensus (N/N)
-- [N/N] 🔴 {issue} | {file} | Found by: {agents}
-
-### Majority Consensus (>50%)
-- [M/N] 🟠 {issue} | {file} | Found by: {agents}
-
-### Minority (<=50%)
-- [1/N] 🟡 {issue} | {file} | Found by: {agent}
+| Ref | Consensus | Severity | Issue | File | Found By |
+|-----|-----------|----------|-------|------|----------|
+| R1 | [N/N] | 🔴 Critical | {issue} | {file} | {agents} |
+| R2 | [M/N] | 🟠 High | {issue} | {file} | {agents} |
+| R3 | [1/N] | 🟡 Medium | {issue} | {file} | {agent} |
 
 ## Follow-up Tasks Created
 
