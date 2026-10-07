@@ -128,9 +128,21 @@ def test_close_records_doubt_verdicts(tmp_path: Path) -> None:
         {"rule_id": "D5", "verdict": "pass"},
     ]
 
-    # A review file with no D{n} lines must not wipe what is recorded.
+    # A review file with no D{n} lines must not wipe what is recorded. A
+    # tail-sweep batch is refused outright without its decision-gate stamp
+    # and a non-empty findings list (`_tail_sweep_refusal`), so both
+    # prerequisites are supplied here - a vacuous refused call would leave
+    # the five verdicts untouched for the wrong reason and pass regardless.
     bare = _review(tmp_path, d_lines="", name="tail.md")
-    review_close.close(bare, state_path, "tail-sweep", [])
+    gate_result = review_close.close(bare, state_path, "decision-gate", [])
+    assert gate_result["applied"] is True
+    sweep_result = review_close.close(
+        bare,
+        state_path,
+        "tail-sweep",
+        [_finding(MED, "src/c.py:20", "unclear name")],
+    )
+    assert sweep_result["applied"] is True
     assert len(_load(state_path)["doubts_rubric_verdicts"]) == 5
 
 
