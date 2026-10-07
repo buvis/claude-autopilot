@@ -538,6 +538,18 @@ def _findings_exit(text: str, findings_file: Path) -> int:
     if rows is None:
         sys.stderr.write(f"{error}\n")
         return 1
+    # Every row, in batch order, before the cross-check runs: a disposition the
+    # gate cannot read is what the operator fixes first, and `review-close`
+    # would refuse it anyway. The expected list is joined here, not hoisted, so
+    # a sixth disposition reaches the line the day it joins the tuple.
+    for row in rows:
+        if not known_classification(row.get("classification")):
+            sys.stderr.write(
+                f"row {row.get('ref', '?')}: unknown classification "
+                f"{row.get('classification')!r} (expected "
+                f"{'|'.join(KNOWN_CLASSIFICATIONS)})\n",
+            )
+            return 2
     tag, detail = findings_verdict(text, rows)
     if tag == "ok":
         return 0

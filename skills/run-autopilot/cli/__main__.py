@@ -1035,7 +1035,9 @@ def _add_review_close(subparsers) -> None:
     p.add_argument("--require-codex-guard", action="store_true", default=False)
 
 
-_KNOWN_CLASSIFICATIONS = ("verify", "discard", "fix", "defer", "carry")
+# The gate's own tuple, not a copy: two lists is how the gate and review-close
+# drift apart on what a disposition may be spelled.
+_KNOWN_CLASSIFICATIONS = gate.KNOWN_CLASSIFICATIONS
 # The emoji severities review_close.py/rework_groups.py key on. The plain
 # English words are not accepted: rework_groups.group only recognises the
 # emoji form for CRITICAL grouping, so a word-form severity would silently
