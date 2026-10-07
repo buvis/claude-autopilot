@@ -384,8 +384,6 @@ def _carry_refusal(loaded: dict, chosen_findings: list[dict]) -> dict | None:
 
 
 def _severity_file_key(row: dict) -> tuple[str, str]:
-    """The (severity, file) pair a swept row and an open deferral are compared
-    on, normalized the way `_carry_unmatched` normalizes a ref."""
     return str(row.get("severity", "")).strip(), str(row.get("file", "")).strip()
 
 
