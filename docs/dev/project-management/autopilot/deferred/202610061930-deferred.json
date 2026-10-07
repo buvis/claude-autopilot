@@ -1,0 +1,19 @@
+{
+  "batch_id": "202610061930",
+  "items": [
+    {
+      "type": "stall",
+      "site": "plan_expansion",
+      "detail": "module_drift; note docs/dev/project-management/autopilot/split-notes/00265-close-the-critical-row-escapes-v1.md",
+      "op_id": "bc9919894026",
+      "prd": "00265-close-the-critical-row-escapes-v1.md"
+    },
+    {
+      "type": "stall",
+      "site": "fast_track_blocked",
+      "detail": "fast-track/00266-bind-gate-reuse-to-the-command-and-renames-v1-c1: stopped: ambiguous contract (#22) - prd_path/design_doc containment check (outside repo_root vs outside prds/wip, relative-escape vs absolute-external) conflicts with existing test_review_stage.py env fixture using absolute paths outside repo_root; needs operator decision before implementation",
+      "op_id": "546dab73d8f1",
+      "prd": "00266-bind-gate-reuse-to-the-command-and-renames-v1.md"
+    }
+  ]
+}

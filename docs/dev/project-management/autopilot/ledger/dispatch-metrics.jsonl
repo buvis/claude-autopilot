@@ -3338,3 +3338,10 @@
 {"kind":"handoff","site":"build","edge":"leave","at":1791288571,"phase":"done","prd":"00264-require-a-disposition-for-every-review-row-v2.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1791288988,"phase":"done","prd":"00264-require-a-disposition-for-every-review-row-v2.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1791289065,"phase":"done","prd":"00264-require-a-disposition-for-every-review-row-v2.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791315040,"phase":"build","prd":"00265-close-the-critical-row-escapes-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791351729,"phase":"build","prd":"00265-close-the-critical-row-escapes-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791352379,"phase":"build","prd":"00266-bind-gate-reuse-to-the-command-and-renames-v1.md"}
+{"id":"c8b08658","kind":"fast-track:tess","task":"00266-bind-gate-reuse-to-the-command-and-renames-v1-c1","queued_at":1791352510,"prompt_bytes":75037}
+{"id":"c8b08658","ended_at":1791353008,"elapsed_s":498,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"build","edge":"resume","at":1791353059,"phase":"build","prd":"00267-widen-the-phase-delegation-guard-v1.md"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791353386,"phase":"build","prd":"00267-widen-the-phase-delegation-guard-v1.md"}
