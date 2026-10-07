@@ -27,7 +27,7 @@ GATE_OUTPUT_CAP = 2_000_000  # bytes of combined stdout+stderr kept
 STORE_PREFIX = "docs/dev/project-management/"
 RECORD_REL = Path(STORE_PREFIX) / "autopilot" / "last-verification.json"
 SUMMARY_RE = re.compile(r"PASS (\d+) FAIL (\d+) SKIP (\d+) EXIT (\d+)")
-_FULL_SHA_RE = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
+_FULL_SHA_RE = re.compile(r"[0-9a-f]{40}")
 _STALE: tuple[str, dict] = ("stale", {})
 
 
@@ -44,7 +44,7 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess:
 def _dirty_path_is_in_store(
     new_path: str,
     old_path: str | None,
-    store: str = STORE_PREFIX,
+    store: str,
 ) -> bool:
     """A porcelain -z status record's store check: the path field
     (and the second, source path field when the record is a rename/copy)
@@ -107,16 +107,34 @@ def _ancestor_and_clean(repo_root: Path, sha: str, head_sha: str) -> bool:
     return all(_dirty_path_is_in_store(new, old, store) for new, old in records)
 
 
+def _record_shape_ok(record: dict, gate_command: str) -> bool:
+    """True iff the record has a full sha, all counts, and a green run of
+    exactly `gate_command`."""
+    sha = record.get("sha")
+    if not isinstance(sha, str) or not _FULL_SHA_RE.fullmatch(sha):
+        return False
+    if any(record.get(key) is None for key in ("passed", "failed", "skipped")):
+        return False
+    commands = record.get("commands")
+    if not isinstance(commands, list) or not commands:
+        return False
+    if record["failed"] != 0 or not all(
+        isinstance(c, dict) and c.get("exit") == 0 for c in commands
+    ):
+        return False
+    return all(c.get("command") == gate_command for c in commands)
+
+
 def reuse_verdict(
     record: dict | None,
     repo_root: Path,
     head_sha: str,
-    gate_command: str | None = None,
+    gate_command: str,
 ) -> tuple[str, dict]:
     """
     record: the parsed contents of last-verification.json, or None if the
         file is missing/unreadable/unparseable.
-    gate_command: when given, every recorded command must equal it.
+    gate_command: every recorded command must equal it.
     Returns ("reused", record) only when ALL hold:
       - record["sha"] is a full lowercase hex object id (never a symbolic
         ref or abbreviation), and passed/failed/skipped are all present and
@@ -139,24 +157,10 @@ def reuse_verdict(
     ancestor check): fail toward re-running the gate, never toward
     skipping it.
     """
-    if not isinstance(record, dict):
-        return _STALE
-    sha = record.get("sha")
-    if not isinstance(sha, str) or not _FULL_SHA_RE.fullmatch(sha):
-        return _STALE
-    if any(record.get(key) is None for key in ("passed", "failed", "skipped")):
-        return _STALE
-    commands = record.get("commands")
-    if not isinstance(commands, list) or not commands:
-        return _STALE
-    if record["failed"] != 0 or not all(
-        isinstance(c, dict) and c.get("exit") == 0 for c in commands
-    ):
-        return _STALE
-    if gate_command is not None and any(c.get("command") != gate_command for c in commands):
+    if not isinstance(record, dict) or not _record_shape_ok(record, gate_command):
         return _STALE
     try:
-        if not _ancestor_and_clean(repo_root, sha, head_sha):
+        if not _ancestor_and_clean(repo_root, record["sha"], head_sha):
             return _STALE
     except OSError:
         return _STALE

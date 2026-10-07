@@ -20,6 +20,8 @@ import pytest
 from cli import verification
 
 STORE = "docs/dev/project-management"
+GATE = "dev/bin/release-checks"
+STORE_PREFIX = verification.STORE_PREFIX
 RECORD_REL = Path(STORE) / "autopilot" / "last-verification.json"
 
 
@@ -75,10 +77,10 @@ def test_reuse_when_only_store_paths_changed(repo: Path) -> None:
     head = _commit(repo, f"{STORE}/reviews/r1.md", "review\n")
     record = _record(base)
 
-    assert verification.reuse_verdict(record, repo, head) == ("reused", record)
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("reused", record)
     # An empty diff (record at HEAD itself) is vacuously store-only.
     same = _record(head)
-    assert verification.reuse_verdict(same, repo, head) == ("reused", same)
+    assert verification.reuse_verdict(same, repo, head, gate_command=GATE) == ("reused", same)
 
 
 def test_stale_when_code_changed(repo: Path) -> None:
@@ -86,11 +88,11 @@ def test_stale_when_code_changed(repo: Path) -> None:
     _commit(repo, f"{STORE}/autopilot/state.json", "{}\n")
     head = _commit(repo, "src/app.py", "print(2)\n")
 
-    assert verification.reuse_verdict(_record(base), repo, head) == ("stale", {})
+    assert verification.reuse_verdict(_record(base), repo, head, gate_command=GATE) == ("stale", {})
 
     # Any path outside the store counts, not only the ones under src/.
     later = _commit(repo, "Makefile", "all:\n\t@true\n")
-    assert verification.reuse_verdict(_record(head), repo, later) == ("stale", {})
+    assert verification.reuse_verdict(_record(head), repo, later, gate_command=GATE) == ("stale", {})
 
 
 @pytest.mark.parametrize("field", ["passed", "failed", "skipped"])
@@ -101,27 +103,27 @@ def test_stale_when_counts_null(repo: Path, field: str) -> None:
     missing = _record(head)
     del missing[field]
 
-    assert verification.reuse_verdict(nulled, repo, head) == ("stale", {})
-    assert verification.reuse_verdict(missing, repo, head) == ("stale", {})
+    assert verification.reuse_verdict(nulled, repo, head, gate_command=GATE) == ("stale", {})
+    assert verification.reuse_verdict(missing, repo, head, gate_command=GATE) == ("stale", {})
 
 
 def test_reuse_verdict_fails_closed_on_git_error(repo: Path, tmp_path_factory) -> None:
     head = _git(repo, "rev-parse", "HEAD")
     not_a_repo = tmp_path_factory.mktemp("plain")
 
-    assert verification.reuse_verdict(None, repo, head) == ("stale", {})
-    assert verification.reuse_verdict(_record(""), repo, head) == ("stale", {})
+    assert verification.reuse_verdict(None, repo, head, gate_command=GATE) == ("stale", {})
+    assert verification.reuse_verdict(_record(""), repo, head, gate_command=GATE) == ("stale", {})
     no_sha = _record(head)
     del no_sha["sha"]
-    assert verification.reuse_verdict(no_sha, repo, head) == ("stale", {})
-    assert verification.reuse_verdict(_record(123), repo, head) == ("stale", {})
+    assert verification.reuse_verdict(no_sha, repo, head, gate_command=GATE) == ("stale", {})
+    assert verification.reuse_verdict(_record(123), repo, head, gate_command=GATE) == ("stale", {})
     unknown = _record("0123456789abcdef0123456789abcdef01234567")
-    assert verification.reuse_verdict(unknown, repo, head) == ("stale", {})
-    assert verification.reuse_verdict(_record("no-such-ref"), repo, head) == (
+    assert verification.reuse_verdict(unknown, repo, head, gate_command=GATE) == ("stale", {})
+    assert verification.reuse_verdict(_record("no-such-ref"), repo, head, gate_command=GATE) == (
         "stale",
         {},
     )
-    assert verification.reuse_verdict(_record(head), not_a_repo, head) == ("stale", {})
+    assert verification.reuse_verdict(_record(head), not_a_repo, head, gate_command=GATE) == ("stale", {})
 
 
 def test_reuse_verdict_rejects_non_ancestor_sha(repo: Path) -> None:
@@ -132,22 +134,22 @@ def test_reuse_verdict_rejects_non_ancestor_sha(repo: Path) -> None:
     head = _commit(repo, f"{STORE}/notes/main.md", "main\n")
 
     # Sibling commit (survived a reset/rebase): not an ancestor of HEAD.
-    assert verification.reuse_verdict(_record(sibling), repo, head) == ("stale", {})
+    assert verification.reuse_verdict(_record(sibling), repo, head, gate_command=GATE) == ("stale", {})
     # Descendant: record newer than the HEAD being checked.
-    assert verification.reuse_verdict(_record(head), repo, root) == ("stale", {})
+    assert verification.reuse_verdict(_record(head), repo, root, gate_command=GATE) == ("stale", {})
 
 
 def test_reuse_verdict_rejects_dirty_tree(repo: Path) -> None:
     head = _git(repo, "rev-parse", "HEAD")
     record = _record(head)
-    assert verification.reuse_verdict(record, repo, head) == ("reused", record)
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("reused", record)
 
     (repo / "src" / "app.py").write_text("print('dirty')\n")
-    assert verification.reuse_verdict(record, repo, head) == ("stale", {})
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("stale", {})
 
     _git(repo, "checkout", "--", "src/app.py")
     (repo / "src" / "new.py").write_text("untracked\n")
-    assert verification.reuse_verdict(record, repo, head) == ("stale", {})
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("stale", {})
 
 
 def test_rename_out_of_store_is_not_clean(repo: Path) -> None:
@@ -158,18 +160,18 @@ def test_rename_out_of_store_is_not_clean(repo: Path) -> None:
     _git(repo, "commit", "--no-verify", "-q", "-m", "add store note")
     head = _git(repo, "rev-parse", "HEAD")
     record = _record(head)
-    assert verification.reuse_verdict(record, repo, head) == ("reused", record)
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("reused", record)
 
     # Destination at the repo root, outside the store and outside src/.
     _git(repo, "mv", f"{STORE}/notes/old.md", "moved.md")
-    assert verification.reuse_verdict(record, repo, head) == ("stale", {})
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("stale", {})
 
 
 def test_rename_into_store_from_production_is_not_clean() -> None:
     # A rename into the store from outside it is judged by both endpoints
     # too: a clean destination alone must not excuse a dirty source.
     assert (
-        verification._dirty_path_is_in_store(f"{STORE}/moved.md", "production.md")
+        verification._dirty_path_is_in_store(f"{STORE}/moved.md", "production.md", STORE_PREFIX)
         is False
     )
 
@@ -182,7 +184,7 @@ def test_copy_record_checks_both_paths() -> None:
     assert verification._iter_porcelain_z_records(raw) == [
         (f"{STORE}/dst.md", "src.md"),
     ]
-    assert verification._dirty_path_is_in_store(f"{STORE}/dst.md", "src.md") is False
+    assert verification._dirty_path_is_in_store(f"{STORE}/dst.md", "src.md", STORE_PREFIX) is False
 
 
 def test_blank_status_column_does_not_desync_fields() -> None:
@@ -225,27 +227,27 @@ def test_reuse_verdict_ignores_dirty_paths_under_the_store(repo: Path) -> None:
     _git(repo, "commit", "--no-verify", "-q", "-m", "add store file")
     head = _git(repo, "rev-parse", "HEAD")
     record = _record(head)
-    assert verification.reuse_verdict(record, repo, head) == ("reused", record)
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("reused", record)
 
     # Dirty a tracked store file and add an untracked one: both ignored.
     tracked.write_text('{"dirty": true}\n')
     (store_dir / "dispatch-metrics.jsonl").write_text("{}\n")
-    assert verification.reuse_verdict(record, repo, head) == ("reused", record)
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("reused", record)
 
     # A store path that merely contains "src/" in its name is still store.
     nested = store_dir.parent / "notes" / "src"
     nested.mkdir(parents=True)
     (nested / "x.md").write_text("note\n")
-    assert verification.reuse_verdict(record, repo, head) == ("reused", record)
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("reused", record)
 
     # A non-store path dirty at the same time still makes the record stale.
     (repo / "src" / "app.py").write_text("print('dirty')\n")
-    assert verification.reuse_verdict(record, repo, head) == ("stale", {})
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("stale", {})
 
     # ... and so does one that lives outside src/ entirely.
     _git(repo, "checkout", "--", "src/app.py")
     (repo / "pyproject.toml").write_text("[project]\n")
-    assert verification.reuse_verdict(record, repo, head) == ("stale", {})
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("stale", {})
 
 
 def _spy_on_drain(monkeypatch) -> list[dict]:
@@ -465,14 +467,14 @@ def test_reuse_verdict_refuses_a_record_of_a_failed_gate(repo: Path) -> None:
     base = _git(repo, "rev-parse", "HEAD")
     head = _commit(repo, f"{STORE}/autopilot/state.json", "{}\n")
     green = _record(base)
-    assert verification.reuse_verdict(green, repo, head) == ("reused", green)
+    assert verification.reuse_verdict(green, repo, head, gate_command=GATE) == ("reused", green)
 
     nonzero_exit = _record(base)
     nonzero_exit["commands"] = [{"command": "dev/bin/release-checks", "exit": 1}]
-    assert verification.reuse_verdict(nonzero_exit, repo, head) == ("stale", {})
+    assert verification.reuse_verdict(nonzero_exit, repo, head, gate_command=GATE) == ("stale", {})
 
     some_failed = _record(base, passed=5, failed=2)
-    assert verification.reuse_verdict(some_failed, repo, head) == ("stale", {})
+    assert verification.reuse_verdict(some_failed, repo, head, gate_command=GATE) == ("stale", {})
 
 
 def test_reuse_verdict_refuses_a_non_dict_commands_entry(repo: Path) -> None:
@@ -484,11 +486,11 @@ def test_reuse_verdict_refuses_a_non_dict_commands_entry(repo: Path) -> None:
 
     a_string = _record(base)
     a_string["commands"] = ["x"]
-    assert verification.reuse_verdict(a_string, repo, head) == ("stale", {})
+    assert verification.reuse_verdict(a_string, repo, head, gate_command=GATE) == ("stale", {})
 
     a_null = _record(base)
     a_null["commands"] = [None]
-    assert verification.reuse_verdict(a_null, repo, head) == ("stale", {})
+    assert verification.reuse_verdict(a_null, repo, head, gate_command=GATE) == ("stale", {})
 
 
 def test_reuse_verdict_refuses_an_empty_commands_list(repo: Path) -> None:
@@ -499,7 +501,7 @@ def test_reuse_verdict_refuses_an_empty_commands_list(repo: Path) -> None:
 
     empty = _record(base)
     empty["commands"] = []
-    assert verification.reuse_verdict(empty, repo, head) == ("stale", {})
+    assert verification.reuse_verdict(empty, repo, head, gate_command=GATE) == ("stale", {})
 
 
 def test_reuse_verdict_docstring_states_the_tolerances_it_applies() -> None:

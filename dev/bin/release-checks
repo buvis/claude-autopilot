@@ -296,6 +296,7 @@ echo "[checks] review verbs"
 run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_verification.py \
   skills/run-autopilot/cli/test_review_stage.py \
+  skills/run-autopilot/cli/test_review_stage_paths.py \
   skills/run-autopilot/cli/test_review_close.py \
   skills/run-autopilot/cli/test_review_close_apply.py \
   skills/run-autopilot/cli/test_review_close_carry.py \

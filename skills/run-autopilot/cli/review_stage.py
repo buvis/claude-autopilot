@@ -753,6 +753,16 @@ def _replay_base(context: Path, repo_root: Path) -> str | None:
     return (_git_out(repo_root, "merge-base", "HEAD", base) or base) if base else None
 
 
+def _tmp_escape_refusal(tmp_dir: Path, repo_root: Path) -> dict | None:
+    if tmp_dir.resolve().is_relative_to(repo_root.resolve()):
+        return None
+    return {
+        "ok": False,
+        "error": f"{TMP_REL} resolves outside the repo; refusing to stage",
+        "exit": 1,
+    }
+
+
 def stage(
     cycle_id: str,
     tasks: list[dict],
@@ -776,13 +786,9 @@ def stage(
     started = time.monotonic()
     repo_root = Path(repo_root)
     tmp_dir = repo_root / TMP_REL
+    if refusal := _tmp_escape_refusal(tmp_dir, repo_root):
+        return refusal
     tmp_dir.mkdir(parents=True, exist_ok=True)
-    if not tmp_dir.resolve().is_relative_to(repo_root.resolve()):
-        return {
-            "ok": False,
-            "error": f"{TMP_REL} resolves outside the repo; refusing to stage",
-            "exit": 1,
-        }
     tasks_file, prd_file = _write_inputs(tmp_dir, cycle_id, tasks, prd_path, design_doc)
     gathered = _gather(repo_root, since, cycle_id)
     if not gathered["ok"]:

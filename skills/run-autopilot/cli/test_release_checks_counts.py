@@ -172,6 +172,7 @@ _REVIEW_VERB_TEST_FILES = (
     "skills/run-autopilot/cli/test_review_close_lowsev.py",
     "skills/run-autopilot/cli/test_review_close_tail_sweep.py",
     "skills/run-autopilot/cli/test_review_stage.py",
+    "skills/run-autopilot/cli/test_review_stage_paths.py",
     "skills/run-autopilot/cli/test_gate.py",
     "skills/run-autopilot/cli/test_gate_findings_table.py",
     "skills/run-autopilot/cli/test_gate_findings_classification.py",
