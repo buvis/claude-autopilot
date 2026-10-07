@@ -29,11 +29,6 @@ TABLE_HEADER_6 = (
     "| Consensus | Severity | Issue | File | Task | Found By |\n"
     "|-----------|----------|-------|------|------|----------|\n"
 )
-# The shape references/output-formats.md documents.
-TABLE_HEADER_5 = (
-    "| Consensus | Severity | Issue | File | Found By |\n"
-    "|-----------|----------|-------|------|----------|\n"
-)
 TABLE_HEADER_REF_6 = (
     "| Ref | Consensus | Severity | Issue | File | Task | Found By |\n"
     "|-----|-----------|----------|-------|------|------|----------|\n"
