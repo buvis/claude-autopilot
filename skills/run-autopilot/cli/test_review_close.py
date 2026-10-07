@@ -184,10 +184,29 @@ def _findings_file(tmp_path: Path, rows: list[dict]) -> Path:
     return path
 
 
+# The two severities a tail sweep is allowed to carry.
+LOW = "⚪"
+
+# One actionable Medium row: the shape every legitimate tail-sweep row has.
+TAIL_MED = dict(_finding(MED, "src/c.py:20", "unclear name"), ref="R3")
+
+
+def _gate_entry(review: Path) -> str:
+    """The applied_review_batches entry that unlocks a tail sweep."""
+    return f"{review.resolve()}::decision-gate"
+
+
+def _swept(tmp_path: Path, review: Path, **extra: object) -> Path:
+    """State whose decision-gate batch for `review` is already applied, so a
+    tail sweep against it is past the before-decision-gate refusal."""
+    return _state(tmp_path, applied_review_batches=[_gate_entry(review)], **extra)
+
+
 def _review_close_cli(
     review: Path,
     state_path: Path,
     findings: Path,
+    batch_id: str = "decision-gate",
 ) -> subprocess.CompletedProcess:
     return subprocess.run(
         [
@@ -199,7 +218,7 @@ def _review_close_cli(
             "--state",
             str(state_path),
             "--batch-id",
-            "decision-gate",
+            batch_id,
             "--findings",
             str(findings),
         ],
@@ -279,7 +298,8 @@ def test_tail_sweep_applies_cleanly_against_a_partial_ref_table(tmp_path: Path) 
         f"| R2 | [1/2] | {MED} | unclear name | src/c.py:20 | 3 | bob |\n"
     )
     review = _review(tmp_path, consolidated=consolidated)
-    state_path = _state(tmp_path)
+    # A tail sweep only applies once this cycle's decision-gate batch has.
+    state_path = _state(tmp_path, applied_review_batches=[_gate_entry(review)])
     # Only R2 (the actionable Medium row) carries a findings-JSON entry.
     findings = [dict(_finding(MED, "src/c.py:20", "unclear name"), ref="R2")]
 
@@ -652,5 +672,80 @@ def test_ghost_carry_ref_is_refused(tmp_path: Path) -> None:
     assert result["applied"] is False
     assert result["refused"] == "carry_unmatched"
     assert result["reason"] == _carry_reason("R3")
+    assert state_path.read_bytes() == before
+    assert not Path(f"{state_path}.lock").exists()
+
+
+def test_tail_sweep_refused_before_decision_gate_applied(tmp_path: Path) -> None:
+    """A tail sweep is a cycle's second batch: run before this cycle's
+    decision-gate batch is applied, it would stamp a cycle whose Critical and
+    High dispositions were never recorded. Another artifact's decision-gate
+    entry is seeded, so a non-empty applied_review_batches cannot satisfy it."""
+    review = _review(tmp_path)
+    other = (tmp_path / "other-02.md").resolve()
+    state_path = _state(tmp_path, applied_review_batches=[f"{other}::decision-gate"])
+    before = state_path.read_bytes()
+
+    result = review_close.close(review, state_path, "tail-sweep", [TAIL_MED])
+
+    assert result["applied"] is False
+    assert result["refused"] == "tail_sweep_before_decision_gate"
+    assert "decision-gate" in result["reason"]
+    assert state_path.read_bytes() == before
+    assert not Path(f"{state_path}.lock").exists()
+
+
+@pytest.mark.parametrize(
+    ("rows", "named", "unnamed"),
+    [
+        (
+            [
+                TAIL_MED,
+                dict(_finding(HIGH, "src/b.py:10", "wrong default"), ref="R1"),
+                dict(_finding(CRIT, "src/a.py:3", "crash on empty input"), ref="R2"),
+            ],
+            "R1",
+            "R2",
+        ),
+        ([_finding(CRIT, "src/a.py:3", "crash on empty input")], "src/a.py:3", "R1"),
+    ],
+)
+def test_tail_sweep_refuses_rows_above_medium(
+    tmp_path: Path,
+    rows: list[dict],
+    named: str,
+    unnamed: str,
+) -> None:
+    """A tail sweep closes Medium and Low rows only: a red or orange row is the
+    decision gate's business, and letting one through here would close it
+    without a dispatch. The reason names the FIRST offending row, by Ref when
+    it has one and by file when it does not, so the operator can move it."""
+    review = _review(tmp_path)
+    state_path = _swept(tmp_path, review)
+    before = state_path.read_bytes()
+
+    result = review_close.close(review, state_path, "tail-sweep", rows)
+
+    assert result["applied"] is False
+    assert result["refused"] == "tail_sweep_above_medium"
+    assert named in result["reason"]
+    assert unnamed not in result["reason"]
+    assert state_path.read_bytes() == before
+    assert not Path(f"{state_path}.lock").exists()
+
+
+def test_empty_tail_sweep_is_refused_and_records_nothing(tmp_path: Path) -> None:
+    """An empty tail sweep is a sweep that never ran: applying it would stamp
+    the cycle swept. Refused even though every other condition holds, and
+    state.json is byte-identical, so the batch is not recorded either."""
+    review = _review(tmp_path)
+    state_path = _swept(tmp_path, review)
+    before = state_path.read_bytes()
+
+    result = review_close.close(review, state_path, "tail-sweep", [])
+
+    assert result["applied"] is False
+    assert result["refused"] == "tail_sweep_empty"
+    assert result["reason"] == "tail sweep findings must not be empty"
     assert state_path.read_bytes() == before
     assert not Path(f"{state_path}.lock").exists()

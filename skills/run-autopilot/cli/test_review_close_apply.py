@@ -402,8 +402,11 @@ def test_close_tail_sweep_skips_lens_verdict_and_dispatch_row_steps(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     review = _review(tmp_path, extra_frontmatter="dispatch_rows:\n  bob: d-999\n")
+    # A tail sweep only applies once this cycle's decision-gate batch has, and
+    # never with an empty findings list, so this one carries a Medium row.
     state_path = _state(
         tmp_path,
+        applied_review_batches=[f"{review.resolve()}::decision-gate"],
         review_lenses={"consensus": "running"},
         doubts_rubric_verdicts=[{"rule_id": "D9", "verdict": "pass"}],
     )
@@ -414,7 +417,12 @@ def test_close_tail_sweep_skips_lens_verdict_and_dispatch_row_steps(
         lambda cmd, **_kwargs: commands.append(cmd),
     )
 
-    result = review_close.close(review, state_path, "tail-sweep", [])
+    result = review_close.close(
+        review,
+        state_path,
+        "tail-sweep",
+        [_finding(MED, "src/c.py:20", "unclear name")],
+    )
 
     assert result["applied"] is True
     data = _load(state_path)
