@@ -3465,3 +3465,26 @@
 {"id":"3d441543","kind":"pat","task":"4","queued_at":1791387594,"prompt_bytes":32088}
 {"id":"3d441543","ended_at":1791387626,"elapsed_s":32,"outcome":"ok","detail":"NO FINDINGS"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791387740,"phase":"build","prd":"00265-close-the-critical-row-escapes-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791387779,"phase":"build","prd":"00265-close-the-critical-row-escapes-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791387793,"phase":"build","prd":"00265-close-the-critical-row-escapes-v1.md"}
+{"id":"3a6d1d4e","kind":"ivan","task":"5","queued_at":1791387987,"prompt_bytes":12284}
+{"id":"3a6d1d4e","ended_at":1791388286,"elapsed_s":299,"outcome":"ok","detail":null}
+{"id":"1861ca74","kind":"deslop","task":"5","queued_at":1791388401,"prompt_bytes":7791}
+{"id":"1861ca74","ended_at":1791388573,"elapsed_s":172,"outcome":"ok","detail":null}
+{"id":"c61d0f2a","kind":"pat","task":"5","queued_at":1791388674,"prompt_bytes":26033}
+{"id":"c61d0f2a","ended_at":1791388725,"elapsed_s":51,"outcome":"ok","detail":null}
+{"id":"888a5ff7","kind":"tess","task":"6","queued_at":1791388924,"prompt_bytes":31091}
+{"id":"888a5ff7","ended_at":1791389419,"elapsed_s":495,"outcome":"ok","detail":null}
+{"id":"90396bfd","kind":"tess","task":"6","queued_at":1791389465,"prompt_bytes":11960}
+{"id":"90396bfd","ended_at":1791389588,"elapsed_s":123,"outcome":"ok","detail":null}
+{"id":"572ca1bb","kind":"devon","task":"6","queued_at":1791389659,"prompt_bytes":3997}
+{"id":"572ca1bb","ended_at":1791390033,"elapsed_s":374,"outcome":"ok","detail":null}
+{"id":"41538bcd","kind":"tess","task":"6","queued_at":1791390199,"prompt_bytes":15773}
+{"id":"41538bcd","ended_at":1791390850,"elapsed_s":651,"outcome":"ok","detail":null}
+{"id":"3aac1b66","kind":"ivan","task":"6","queued_at":1791390933,"prompt_bytes":22558}
+{"id":"3aac1b66","ended_at":1791391317,"elapsed_s":384,"outcome":"ok","detail":null}
+{"id":"9e9e4698","kind":"deslop","task":"6","queued_at":1791391516,"prompt_bytes":8119}
+{"id":"9e9e4698","ended_at":1791391687,"elapsed_s":171,"outcome":"ok","detail":null}
+{"id":"29ca3f12","kind":"pat","task":"6","queued_at":1791391799,"prompt_bytes":37075}
+{"id":"29ca3f12","ended_at":1791391937,"elapsed_s":138,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"build","edge":"leave","at":1791392065,"phase":"build","prd":"00265-close-the-critical-row-escapes-v1.md"}

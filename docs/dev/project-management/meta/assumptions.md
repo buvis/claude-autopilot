@@ -84,3 +84,38 @@ Implementor (Ivan):
 - `_is_chosen_finding` was wired to keep reading the module-level `_KNOWN_CLASSIFICATIONS` (now aliased to the gate's tuple) rather than calling `gate.known_classification`; the brief permitted either, and this needed no change inside the function.
 - `cli/__main__.py` is 1671 lines, already far over the 800-line limit before this task. Pre-existing; untouched beyond the one-line change.
 
+## 5: phase-review and recovery prose: the re-queue records the carry link the code checks
+
+Implementor (Ivan):
+- `recovery.md` cross-references phase-review's conditional-union computation instead of repeating the five-line block; the task said "computed the same way" without demanding duplication. The test therefore asserts the union lines in phase-review only, and the keys in both payloads.
+- The `### Full Consensus` / `### Majority Consensus` / `### Minority` subheadings were dropped from the Review Summary Format template, their information preserved in the table's Consensus column; a single pipe table has no room for bucket subheadings and `consolidate_findings.py` emits one flat table.
+- Step 4's "These two fields" phrase was rewritten to name `escalation_reason` and `escalated_from`, because the payload now carries four fields and the phrase no longer resolved. The task did not name that phrase.
+- The decision-gate refusal sentence said "Phase 5 step 4", following phase-review.md's own wording, even though recovery.md calls the same step "Phase 6 step 4"; the pre-existing inconsistency was left alone. (The deslop pass then removed that sentence as duplicative.)
+- Test line width targeted at 88 columns (black default), inferred from the existing wrapped constants rather than read from `pyproject.toml`.
+
+Self-deslop pass:
+- Removed the "Phase 5 step 4 and the Fable rescue gate ... are the only two sites" sentence from phase-review.md's `chosen_findings` paragraph and the "(the existing list is kept only when `carry_cycle` already equals `state.cycle`)" parenthetical from recovery.md, both as duplicative of adjacent text. The 4 prose tests stayed green after each removal.
+
+## 6: low-severity review-verb corrections #12, #13, #14, #17, #20, #24
+
+Orchestrator:
+- The acceptance criteria name tests in `cli/test_review_close.py`, but that module is at 763 of its 800-line limit, so the seven tests live in a new sibling `cli/test_review_close_lowsev.py`. Like task 3's and task 4's siblings, it is NOT yet listed in `dev/bin/release-checks` - task 7's scope, which now has SIX files to add, not five.
+- The task's file list omitted `cli/test_review_close_apply.py`, but three pins there encode the old contract #13 and #17 replace. The implementor reported it as a blocker rather than editing outside its allowlist; the orchestrator verified the three failures and retargeted them (absent-persona lens map to `lost`, the deferral entry to six keys, the dispatch assertion to per-row `ok`/`lost`). A planning gap in the file list, not a defect.
+- `cli/state.py` arrived dirty with a loupe trailing-comma reflow and was reverted with `git checkout`, not committed. The `.bak` rollback write at `state.py:161` was confirmed intact afterwards - Devon had edited that exact line as an exploit and restored it correctly.
+- Five LOW findings from the per-task review were noted and not fixed, per the LOW-only ladder. One is a real contract deviation worth the review phase's attention: #24 specifies the shape check `^[A-Za-z0-9._][A-Za-z0-9._-]*$`, and the implementation tests only `startswith("-")`, so an id containing whitespace still reaches the argv. The other four: a stale `_cross_check_findings` docstring, no de-duplication of repeated refs in the uncovered message, the `lost` mapping expressed two different ways across the two planes, and `test_refused_repeat_leaves_backup_untouched` pinning three first-time refusals rather than a repeat call.
+
+Test author (Tess):
+- `#17`'s `"skipped"` clause is lens-plane only: `record_dispatch.OUTCOMES` has no `"skipped"` member and `test_every_dispatch_outcome_is_recordable` pins `_DISPATCH_OUTCOME.values() <= OUTCOMES`, so a `disabled` persona's dispatch row keeps `"ok"` while its lens stays `"skipped"`.
+- `#24`'s refusal lands in the producer (`review_close`'s dispatch-row path) and drops only the offending row while the batch still applies, matching the existing best-effort dispatch-row behaviour.
+- A consolidated-findings ref must match gate's `_REF_CELL_RE` (`^R\d+$`), so the runtime-minted refs that defeat a constant refusal message are `R` + digits from one `uuid4()` with +1/+2 offsets.
+- The lens vocabulary: absent from `agents:` is `"lost"`, an unrecognized status (e.g. `unavailable`) is `"failed"`, `disabled` is `"skipped"`. The requirements pin only the dispatch plane's `"lost"` explicitly; `schema.py` constrains no `review_lenses` value.
+- A `decision-gate` close with an empty findings list and a review file carrying no consolidated section applies (the legacy "malformed" verdict is surfaced, not refused); used as the applied control in the backup test.
+
+Implementor (Ivan):
+- The uncovered-refs message wording is the implementor's; the tests pin only that it contains each uncovered ref, contains "classification", excludes the covered ref, and ends with the carry hint.
+- Uncovered refs are listed in consolidated-table order, since no test pins an order.
+- An absent persona's dispatch outcome is expressed as a `None` key in `_DISPATCH_OUTCOME` rather than a branch; a status present but unrecognized keeps today's `"ok"` dispatch default.
+- Tail-sweep `lenses_closed` is emptied in `_mutation_context` (one place feeding both the result and the mutator) rather than only in `_close_result`.
+- `skills/work/scripts/record_dispatch.py` was not changed: `argparse` already rejects a dash-led positional and `"lost"` was already in `OUTCOMES`.
+- `state-schema.md`'s lens vocabulary was not updated to document `"lost"` (outside the allowlist) - a follow-on.
+
