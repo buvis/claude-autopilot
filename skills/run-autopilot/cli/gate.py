@@ -49,10 +49,11 @@ That section is read in both shapes it is written in: the bullet list and the
 pipe table `| Ref | Consensus | Severity | Issue | File | Task | Found By |`.
 A chosen row carrying a `"ref"` is backed by the review row holding that exact
 ref, severity and file; a row carrying none falls back to an exact (severity,
-file, normalized issue) match. One direction only — the review may carry rows
-the batch is not applying. A review file with no such section, or one whose
-findings table cannot be read, is reported as a shape gap (exit 1), not a
-mismatch.
+file, normalized issue) match. Coverage runs the other way too: every review row
+needs a findings row naming its ref. A review file with no such section is a
+shape gap (exit 1); one whose findings table cannot be read, or whose rows carry
+no ref for a findings row to name, is a refusal (exit 2): the gate cannot say a
+batch covers rows it was unable to read.
 
 CLI: autopilot gate --review-file <path> [--reviewers alice,bob,...]
 [--require-codex-guard] [--assert-constraint-met] [--findings <path>]
@@ -65,7 +66,8 @@ Exit codes (gate-scoped, unchanged from check_review_file.py):
     1  shape gap (or missing review file, or an unusable --findings file, or
        no consolidated-findings section to check --findings against)
     2  --assert-constraint-met and the guard line records `; constraint UNMET`;
-       or a --findings row the review file never recorded
+       or a --findings row the review file never recorded; or a findings section
+       the gate could not read or could not check coverage against
 """
 
 from __future__ import annotations
@@ -112,6 +114,14 @@ _FINDING_ROW_RE = re.compile(r"^-\s*\[\d+/\d+\]\s*(.+)$", re.MULTILINE)
 # is what keeps every row of every existing review file matching once the Ref
 # column lands.
 TABLE_DATA_ROW_RE = re.compile(r"^\|(?:\s*R\d+\s*\|)?\s*\[\d+/\d+\]\s*\|", re.MULTILINE)
+# Row-shape detection inside a findings table, private on purpose: once the
+# header is found, every pipe line that is not the |---| rule is a data row, so
+# an off-shape cell is refused instead of silently dropping the row (and the
+# finding it carried). The cells themselves are then checked one by one.
+_CANDIDATE_ROW_RE = re.compile(r"^\|")
+_SEPARATOR_ROW_RE = re.compile(r"^\|(\s*:?-{3,}:?\s*\|)+\s*$")
+_REF_CELL_RE = re.compile(r"^R(\d+)$", re.IGNORECASE)
+_CONSENSUS_CELL_RE = re.compile(r"^\[\d+/\d+\]$")
 # `| Consensus | Severity | Issue | File | Task | Found By |`
 _TABLE_HEADER_RE = re.compile(r"^\|(.+)\|\s*$", re.MULTILINE)
 # The three columns a findings table must name; a header missing any of them
@@ -134,11 +144,24 @@ _FINDINGS_PROBLEMS = {
         "expected a header naming Severity, Issue and File, and rows shaped "
         "| [m/n] | ... | (optionally led by a | R1 | ref cell)"
     ),
+    "ref-required": (
+        "coverage requires a Ref column; this section has at least one row "
+        "with none - R1 R2 ... are keys the gate normalizes case-insensitively "
+        "from the pipe table's Ref column"
+    ),
 }
 # verify/discard rows are never applied to state, so nothing of theirs has to
 # be backed by a review row. Only those two classifications are exempt: a row
-# with a missing or unknown classification is checked like any applied row.
-_SKIPPED_CLASSIFICATIONS = ("verify", "discard", "carry")
+# with a missing or unknown classification is checked like any applied row, and
+# so is a `carry` row - a re-queued finding still names a real review row.
+_SKIPPED_CLASSIFICATIONS = ("verify", "discard")
+# The five dispositions a findings row may carry.
+KNOWN_CLASSIFICATIONS = ("verify", "discard", "fix", "defer", "carry")
+
+
+def known_classification(value: object) -> bool:
+    """True for exactly the five dispositions, spelled exactly."""
+    return isinstance(value, str) and value in KNOWN_CLASSIFICATIONS
 
 
 def reviewer_section_nonempty(lines: list[str], name: str) -> bool:
@@ -275,14 +298,30 @@ def _row_from_table(header: list[str], cells: list[str]) -> Row | None:
     header naming Severity at index 1 cannot be read off it. Such a row is
     unreadable, not empty: indexing it would raise, and the gate owes the
     caller `malformed`, never a traceback.
+
+    The Ref and Consensus cells are checked before anything is built: a ref must
+    be a single `R<digits>` (read case-insensitively, kept upper case) and a
+    consensus must be a bracketed `[m/n]`. A trailing dot, a second ref in the
+    same cell, an empty cell or an unbracketed `2/2` makes the row unreadable
+    too - dropping it quietly would hide the finding it carried.
     """
     sev_i = header.index("severity")
     issue_i = header.index("issue")
     file_i = header.index("file")
     ref_i = header.index("ref") if "ref" in header else 0
-    if len(cells) <= max(sev_i, issue_i, file_i, ref_i):
+    consensus_i = header.index("consensus") if "consensus" in header else 0
+    if len(cells) <= max(sev_i, issue_i, file_i, ref_i, consensus_i):
         return None
-    ref = cells[ref_i].strip() if "ref" in header else ""
+    ref = ""
+    if "ref" in header:
+        matched = _REF_CELL_RE.match(cells[ref_i].strip())
+        if matched is None:
+            return None
+        ref = matched.group(0).upper()
+    if "consensus" in header and not _CONSENSUS_CELL_RE.match(
+        cells[consensus_i].strip(),
+    ):
+        return None
     if len(cells) == len(header):
         issue, file = cells[issue_i], cells[file_i]
     else:
@@ -309,20 +348,25 @@ def _table_keys(section: str) -> tuple[list[Row], str | None]:
     data row too short to reach those columns makes the whole table unreadable:
     dropping it quietly would hand the caller a short row list and a clean
     `None`, so a chosen row the truncated row carried would be reported as a
-    refusal (exit 2) instead of the table gap it really is.
+    refusal (exit 2) instead of the table gap it really is. For the same reason
+    every pipe line under the header is a data row, the |---| rule aside: a row
+    the shape checks reject is refused, never skipped. Two rows sharing a ref
+    make every findings row naming it ambiguous, so that table is unreadable too.
     """
     header: list[str] | None = None
     rows: list[Row] = []
+    refs: set[str] = set()
     for line in section.splitlines():
         if header is None:
             cells = [c.strip().lower() for c in _table_cells(line)]
             if _TABLE_HEADER_RE.match(line) and all(c in cells for c in _TABLE_COLUMNS):
                 header = cells
             continue
-        if TABLE_DATA_ROW_RE.match(line):
+        if _CANDIDATE_ROW_RE.match(line) and not _SEPARATOR_ROW_RE.match(line):
             row = _row_from_table(header, _table_cells(line))
-            if row is None:
+            if row is None or (row.ref and row.ref in refs):
                 return [], "unreadable-table"
+            refs.add(row.ref)
             rows.append(row)
     if rows:
         return rows, None
@@ -335,7 +379,9 @@ def _reviewed_keys(text: str) -> tuple[list[Row], str | None]:
     """Every row of the `## Consolidated Findings` section, in both shapes it
     is written in, and what went wrong reading them: None, `"no-section"` when
     the review file carries no such section, or `"unreadable-table"` when it
-    holds a findings table whose header or rows could not be read."""
+    holds a findings table whose header or rows could not be read. The third
+    problem the caller can report, `"ref-required"`, is not read here: it is a
+    verdict on the rows this returns, not a reading failure."""
     heading = _FINDINGS_HEADING_RE.search(text)
     if heading is None:
         return [], "no-section"
@@ -370,7 +416,7 @@ def _backed(row: dict, reviewed: list[Row]) -> bool:
         str(row.get("file", "")),
         str(row.get("issue", "")),
     )
-    ref = str(row.get("ref", "")).strip()
+    ref = str(row.get("ref", "")).strip().upper()
     if ref:
         return any(
             r.ref == ref and (r.severity, r.file) == (severity, file) for r in reviewed
@@ -391,8 +437,10 @@ def _cross_check_findings(
     """Check every chosen finding against the review file's consolidated rows,
     in both directions: a chosen row the review never recorded is refused, and
     (when `require_coverage` is true) a review row no chosen finding names is
-    refused too. Returns ("ok", None), ("mismatch", <the first unbacked row>),
-    ("uncovered", <the first review row no chosen finding named>) or
+    refused too. Returns ("ok", None), ("mismatch", <the first unbacked row, or
+    the first ref given two classifications>), ("uncovered", <the first review
+    row no chosen finding named>), ("ref-required", <why coverage cannot be
+    checked>) when a review row carries no ref for a findings row to name, or
     ("malformed", <why>) when the review file has no consolidated-findings
     section to check against, or holds a findings table that cannot be read.
 
@@ -404,6 +452,20 @@ def _cross_check_findings(
     reviewed, problem = _reviewed_keys(text)
     if problem is not None:
         return "malformed", _FINDINGS_PROBLEMS[problem]
+    dispositions: dict[str, object] = {}
+    for row in findings:
+        ref = str(row.get("ref", "")).strip().upper()
+        if not ref:
+            continue
+        classification = row.get("classification")
+        if ref in dispositions and dispositions[ref] != classification:
+            return "mismatch", (
+                f"finding ref {ref} given two classifications: "
+                f"{dispositions[ref]} and {classification}"
+            )
+        dispositions[ref] = classification
+    if require_coverage and reviewed and any(row.ref == "" for row in reviewed):
+        return "ref-required", _FINDINGS_PROBLEMS["ref-required"]
     for row in findings:
         if row.get("classification") in _SKIPPED_CLASSIFICATIONS:
             continue
@@ -417,7 +479,7 @@ def _cross_check_findings(
             )
     if not require_coverage:
         return "ok", None
-    covered_refs = {str(row.get("ref", "")).strip() for row in findings}
+    covered_refs = {str(row.get("ref", "")).strip().upper() for row in findings}
     for row in reviewed:
         if row.ref and row.ref not in covered_refs:
             return "uncovered", (
@@ -425,6 +487,16 @@ def _cross_check_findings(
                 "its ref and a classification"
             )
     return "ok", None
+
+
+def findings_verdict(
+    text: str,
+    findings: list[dict],
+    require_coverage: bool = True,
+) -> tuple[str, str | None]:
+    """The findings cross-check under its public name, for callers outside the
+    gate: "ok" | "mismatch" | "uncovered" | "ref-required" | "malformed"."""
+    return _cross_check_findings(text, findings, require_coverage)
 
 
 def _load_findings(path: Path) -> tuple[list[dict] | None, str | None]:
@@ -445,11 +517,17 @@ def _findings_exit(text: str, findings_file: Path) -> int:
     if rows is None:
         sys.stderr.write(f"{error}\n")
         return 1
-    tag, detail = _cross_check_findings(text, rows)
+    tag, detail = findings_verdict(text, rows)
     if tag == "ok":
         return 0
     sys.stderr.write(f"{detail}\n")
-    return 2 if tag in ("mismatch", "uncovered") else 1
+    if tag in ("mismatch", "uncovered", "ref-required"):
+        return 2
+    # The two malformed reasons part ways here, on the tag's own detail and
+    # never on words sniffed out of it: a table the gate could not read is a
+    # refusal (it may hold the finding nobody covered), while a review file
+    # carrying no findings section at all is the operator's own shape gap.
+    return 2 if detail == _FINDINGS_PROBLEMS["unreadable-table"] else 1
 
 
 def run_gate(

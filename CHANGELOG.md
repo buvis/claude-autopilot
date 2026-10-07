@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **run-autopilot**: the findings cross-check also refuses a review row the findings JSON leaves without a disposition (exit 2); re-queued rows use the new `carry` classification
+- **run-autopilot**: the findings-table parser fails closed - an off-shape Ref or Consensus cell, a row missing its closing pipe and a duplicated table ref make the table unreadable (exit 2 now, not 1) instead of being skipped, a findings section with no Ref column is refused because coverage cannot be checked, one ref given two classifications is refused, and a `carry` row is no longer exempt from the cross-check
 - **hooks**: the phase-delegation guard now catches the phrasings it used to miss - `start`/`do`/`perform`/`complete`/`launch`/`call` before a phase name, up to three determiner words in between, quoted skill names, full-width and zero-width characters, and `do not hesitate to run ...` (including `don't`) - while ordinary prose about a phase stays allowed
 - **hooks**: `read_input` fails open cleanly on a non-UTF-8 or deeply nested payload instead of exiting 1 with a traceback
 
