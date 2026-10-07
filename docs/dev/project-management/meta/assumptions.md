@@ -64,3 +64,23 @@ Implementor (Ivan):
 - A `deferred_decisions` entry that is not a dict is skipped rather than raising; no test exercises a malformed entry.
 - The above-medium reason names a row by `ref` only when `ref` is truthy (falling back to `file` for an empty-string ref), rather than the design block's `dict.get`-default semantics, which would name an empty string.
 
+## 4: gate: per-row classification validation in gate --findings
+
+Orchestrator:
+- The acceptance criteria name `cli/test_gate_findings_table.py`, but that module is at 781 of its 800-line limit, so the tests live in a new sibling `cli/test_gate_findings_classification.py`. Like `cli/test_review_close_tail_sweep.py` from task 3, it is NOT yet listed in `dev/bin/release-checks` - task 7's scope.
+
+Test author (Tess):
+- `gate._findings_exit(text, ...)` accepts just the consolidated-findings section text, not necessarily a whole review file (the shape the sibling `_check` helper already feeds `_cross_check_findings`).
+- The refusal line is the gate's whole stderr output (exactly one non-blank line); a prefix such as `gate: ` before it would still pass.
+- `uncovered`/`mismatch` detail may land on stdout or stderr, so the ordering test asserts absence against the concatenation of both.
+- `"fix "` and `1` were included as unknown values, extrapolated from "False for a non-string and for a wrong-case string".
+- `"park"`/`"parked"` is the sixth-disposition probe for the derive-at-call-time test; the task names no such value, it is only a word absent from the real tuple.
+- Four extra review rows (`R3`/`stale comment`/`src/d.py:30`, `R4`/`missing guard`/`src/e.py:40`) were invented for the four-row fixture; the task pinned no refs beyond R1/R2.
+- Weak point 7 is pinned as `findings_verdict(...) != ("ok", None)` rather than by naming a new verdict tag, because the task describes only `_findings_exit` and the CLI. Today's unfiltered code already satisfies it; only a row-dropping implementation fails.
+- `_is_chosen_finding`'s severity/file/issue/`found_by` validation is NOT re-pinned here: five tests in `cli/test_main_review_close_validation.py` already cover it.
+
+Implementor (Ivan):
+- The existing `return 2 if detail == _FINDINGS_PROBLEMS["unreadable-table"] else 1` tail was left as-is rather than reformatted into the design doc's two-statement form; behaviourally identical.
+- `_is_chosen_finding` was wired to keep reading the module-level `_KNOWN_CLASSIFICATIONS` (now aliased to the gate's tuple) rather than calling `gate.known_classification`; the brief permitted either, and this needed no change inside the function.
+- `cli/__main__.py` is 1671 lines, already far over the 800-line limit before this task. Pre-existing; untouched beyond the one-line change.
+
