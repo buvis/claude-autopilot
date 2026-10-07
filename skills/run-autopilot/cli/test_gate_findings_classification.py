@@ -34,26 +34,50 @@ from cli.test_gate_findings_table import (
 
 EXPECTED_LIST = "|".join(KNOWN_CLASSIFICATIONS)
 
-# One review row, R1, matching `_r1_finding` cell for cell: every refusal below
-# is the classification check alone, never a cross-check verdict in disguise.
-ONE_ROW_TABLE = _table_section(
-    TABLE_HEADER_REF_6,
-    _ref_row("R1", HIGH, "wrong default", "src/b.py:10"),
+# Four review rows a findings batch can match cell for cell, so every refusal
+# below is the classification check alone, never a cross-check verdict in
+# disguise.
+_ROWS = (
+    ("R1", HIGH, "wrong default", "src/b.py:10"),
+    ("R2", MED, "unclear name", "src/c.py:20"),
+    ("R3", MED, "stale comment", "src/d.py:30"),
+    ("R4", HIGH, "missing guard", "src/e.py:40"),
 )
-TWO_ROW_TABLE = _table_section(
-    TABLE_HEADER_REF_6,
-    _ref_row("R1", HIGH, "wrong default", "src/b.py:10"),
-    _ref_row("R2", MED, "unclear name", "src/c.py:20"),
-)
+ONE_ROW_TABLE = _table_section(TABLE_HEADER_REF_6, _ref_row(*_ROWS[0]))
+TWO_ROW_TABLE = _table_section(TABLE_HEADER_REF_6, *(_ref_row(*r) for r in _ROWS[:2]))
+FOUR_ROW_TABLE = _table_section(TABLE_HEADER_REF_6, *(_ref_row(*r) for r in _ROWS))
 
 
-def _line(ref: str, value: object) -> str:
+def _finding(spec: tuple, cls: object) -> dict:
+    """A findings-JSON row matching one `_ROWS` entry cell for cell."""
+    ref, sev, issue, file = spec
+    return dict(_row(sev, file, issue, cls), ref=ref)
+
+
+def _batch4(last: object) -> list[dict]:
+    """Four backed, covered rows for FOUR_ROW_TABLE. Only the LAST row's
+    classification varies, so a reader that stops after row one or two, or that
+    reads the batch backwards, cannot answer these cases correctly."""
+    rows = [_finding(_ROWS[i], cls) for i, cls in enumerate(("fix", "carry", "defer"))]
+    rows.append(_finding(_ROWS[3], last))
+    return rows
+
+
+def _line(ref: str, value: object, expected: str = EXPECTED_LIST) -> str:
     """The one stderr line the gate owes for an unknown classification."""
-    return f"row {ref}: unknown classification {value!r} (expected {EXPECTED_LIST})"
+    return f"row {ref}: unknown classification {value!r} (expected {expected})"
 
 
 def _said(stderr: str) -> list[str]:
     return [line for line in stderr.splitlines() if line.strip()]
+
+
+def _exit(text: str, rows: list[dict], tmp_path: Path) -> int:
+    from cli import gate
+
+    path = tmp_path / "findings.json"
+    path.write_text(json.dumps(rows), encoding="utf-8")
+    return gate._findings_exit(text, path)
 
 
 class GateClassificationRefusalTests(unittest.TestCase):
@@ -104,6 +128,29 @@ class GateClassificationRefusalTests(unittest.TestCase):
         self.assertIn(_line("?", "carried"), proc.stderr)
         self.assertNotIn("Traceback", proc.stderr)
 
+    def test_gate_names_the_offending_row_not_the_first_one(self) -> None:
+        # R1 is dispositioned correctly and R2 is the slip, so a line that
+        # quotes the batch's first ref sends the operator to the wrong row.
+        proc = self._run_gate(
+            [_r1_finding("fix"), _finding(_ROWS[1], "Carry")],
+            section=TWO_ROW_TABLE,
+        )
+        self.assertEqual(proc.returncode, 2, proc.stdout)
+        self.assertEqual(_said(proc.stderr), [_line("R2", "Carry")])
+        self.assertNotIn("R1", proc.stderr)
+
+    def test_gate_names_the_first_unknown_row_when_two_rows_are_unknown(self) -> None:
+        # Both rows are bad. The operator is handed the first one, in batch
+        # order: hiding it behind the last one costs a second round trip.
+        proc = self._run_gate(
+            [_r1_finding("Carry"), _finding(_ROWS[1], "carried")],
+            section=TWO_ROW_TABLE,
+        )
+        self.assertEqual(proc.returncode, 2, proc.stdout)
+        self.assertEqual(_said(proc.stderr), [_line("R1", "Carry")])
+        self.assertNotIn("carried", proc.stderr)
+        self.assertNotIn("R2", proc.stderr)
+
     def test_unknown_classification_outranks_the_cross_check_verdict(self) -> None:
         # Both problems at once. The classification is what the operator has to
         # fix first, so it is what the gate reports: the cross-check never runs.
@@ -132,10 +179,7 @@ class GateClassificationRefusalTests(unittest.TestCase):
     def test_a_batch_of_known_classifications_still_exits_0(self) -> None:
         # Both refs dispositioned with known values, one of them the `carry`
         # whose wrong-case twin is refused above: a clean batch is untouched.
-        rows = [
-            _r1_finding("fix"),
-            dict(_row(MED, "src/c.py:20", "unclear name", "carry"), ref="R2"),
-        ]
+        rows = [_r1_finding("fix"), _finding(_ROWS[1], "carry")]
         proc = self._run_gate(rows, section=TWO_ROW_TABLE)
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(proc.stderr.strip(), "")
@@ -146,11 +190,9 @@ def test_findings_exit_accepts_every_known_classification(
     value: str,
     tmp_path: Path,
 ) -> None:
-    from cli import gate
-
-    path = tmp_path / "findings.json"
-    path.write_text(json.dumps([_r1_finding(value)]), encoding="utf-8")
-    assert gate._findings_exit(ONE_ROW_TABLE, path) == 0
+    # Also the control for the refusal cases below: this very batch, with only
+    # the last row's classification swapped, is backed, covered and clean.
+    assert _exit(FOUR_ROW_TABLE, _batch4(value), tmp_path) == 0
 
 
 _UNKNOWN_VALUES = {
@@ -161,7 +203,13 @@ _UNKNOWN_VALUES = {
     "empty string": "",
     "not a string": 1,
     "null": None,
+    # Not drawn from any list a deny-list could carry, so the gate has to decide
+    # by membership in the five, not by spotting known-bad spellings.
+    "an arbitrary word": uuid4().hex,
 }
+# A prefix of a known disposition is not that disposition: `fi` is nobody's
+# verdict, and a gate that matches on prefixes accepts all five of these.
+_UNKNOWN_VALUES.update({f"a truncated {k}": k[:-1] for k in KNOWN_CLASSIFICATIONS})
 
 
 @pytest.mark.parametrize(
@@ -174,22 +222,58 @@ def test_findings_exit_refuses_an_unknown_classification(
     tmp_path: Path,
 ) -> None:
     # 2, not 1: an unknown disposition is a refusal the operator has to answer,
-    # not the gate tripping over a shape it could not read. Both review rows are
-    # backed and covered, so the cross-check has nothing to say here and only
-    # the second row's classification can produce the refusal - and a reader
-    # that stops at row one produces none.
+    # not the gate tripping over a shape it could not read. All four review rows
+    # are backed and covered, so the cross-check has nothing to say here and
+    # only the LAST row's classification can produce the refusal.
+    assert _exit(FOUR_ROW_TABLE, _batch4(value), tmp_path) == 2
+
+
+def test_the_refusal_line_lists_whatever_the_gate_tuple_holds(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+    tmp_path: Path,
+) -> None:
+    """The expected list is read off `KNOWN_CLASSIFICATIONS`, not spelled out a
+    second time: a sixth disposition has to show up in the line, and in the
+    gate's verdict, the day it joins the tuple."""
     from cli import gate
 
-    path = tmp_path / "findings.json"
-    rows = [
-        _r1_finding("fix"),
-        dict(_row(MED, "src/c.py:20", "unclear name", value), ref="R2"),
-    ]
-    path.write_text(json.dumps(rows), encoding="utf-8")
-    assert gate._findings_exit(TWO_ROW_TABLE, path) == 2
+    grown = gate.KNOWN_CLASSIFICATIONS + ("park",)
+    monkeypatch.setattr(gate, "KNOWN_CLASSIFICATIONS", grown)
+    assert _exit(FOUR_ROW_TABLE, _batch4("park"), tmp_path) == 0
+    capsys.readouterr()
+    assert _exit(FOUR_ROW_TABLE, _batch4("parked"), tmp_path) == 2
+    out = capsys.readouterr()
+    assert _line("R4", "parked", "|".join(grown)) in out.err + out.out
 
 
-def test_main_module_shares_the_gate_classification_tuple() -> None:
+def test_findings_verdict_keeps_a_row_it_cannot_classify(tmp_path: Path) -> None:
+    """`review-close` reads the public verdict, so a row the gate cannot
+    classify must not quietly vanish from the batch it judges: dropping it hands
+    `review-close` an `ok` for findings that were never checked."""
+    from cli import gate
+
+    # R9 is in no table, so an honest verdict refuses this batch whatever it
+    # makes of `Carry`. Only an implementation that drops the row it could not
+    # classify gets to call the rest of the batch clean.
+    ghost = dict(_row(HIGH, "src/z.py:90", "ghost row"), ref="R9")
+    assert gate.findings_verdict(
+        ONE_ROW_TABLE,
+        [_r1_finding("fix"), dict(ghost, classification="Carry")],
+    ) != ("ok", None)
+    # Control: with a known disposition the same ghost is reported, by ref, as
+    # the mismatch it is - so the refusal above is not a refuse-everything.
+    tag, detail = gate.findings_verdict(
+        ONE_ROW_TABLE,
+        [_r1_finding("fix"), dict(ghost, classification="carry")],
+    )
+    assert tag != "ok"
+    assert "R9" in (detail or "")
+
+
+def test_main_module_shares_the_gate_classification_tuple(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Two copies of the five dispositions is how the gate and `review-close`
     drift apart, so __main__.py references the gate's tuple instead of carrying
     its own literal."""
@@ -198,14 +282,22 @@ def test_main_module_shares_the_gate_classification_tuple() -> None:
 
     assert cli_main._KNOWN_CLASSIFICATIONS is gate.KNOWN_CLASSIFICATIONS
     squeezed = "".join(Path(cli_main.__file__).read_text(encoding="utf-8").split())
-    literal = "(" + ",".join(f'"{v}"' for v in KNOWN_CLASSIFICATIONS) + ")"
-    assert literal not in squeezed
-    assert literal.replace('"', "'") not in squeezed
+    for quote in ('"', "'"):
+        body = ",".join(f"{quote}{v}{quote}" for v in KNOWN_CLASSIFICATIONS)
+        for open_, close in (("(", ")"), ("{", "}"), ("[", "]")):
+            assert open_ + body + close not in squeezed
     # `_is_chosen_finding` keeps the behaviour it had: a complete fix row is
     # still chosen, and the unknown value is still the only thing refused.
     good = dict(_r1_finding("fix"), found_by=["bob"])
     assert cli_main._is_chosen_finding(good) is True
     assert cli_main._is_chosen_finding(dict(good, classification="Carry")) is False
+    # And it reads the shared tuple when it runs, so a sixth disposition reaches
+    # `review-close` too instead of being refused by a stale inline copy.
+    grown = gate.KNOWN_CLASSIFICATIONS + ("park",)
+    monkeypatch.setattr(gate, "KNOWN_CLASSIFICATIONS", grown)
+    monkeypatch.setattr(cli_main, "_KNOWN_CLASSIFICATIONS", grown)
+    assert cli_main._is_chosen_finding(dict(good, classification="park")) is True
+    assert cli_main._is_chosen_finding(dict(good, classification="parked")) is False
 
 
 if __name__ == "__main__":
