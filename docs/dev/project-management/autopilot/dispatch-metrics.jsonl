@@ -3504,3 +3504,11 @@
 {"id":"b4d45d1e","kind":"ivan","task":"4","queued_at":1791395408,"prompt_bytes":8706}
 {"id":"b4d45d1e","ended_at":1791395616,"elapsed_s":208,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1791396100,"phase":"review","prd":"00265-close-the-critical-row-escapes-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1791396186,"phase":"review","prd":"00265-close-the-critical-row-escapes-v1.md"}
+{"id":"cbea0069","kind":"bob","task":"review-20261007-c1","queued_at":1791396254,"prompt_bytes":13619}
+{"id":"38811dda","kind":"carl","task":"review-20261007-c1","queued_at":1791396254,"prompt_bytes":6621}
+{"id":"cbea0069","ended_at":1791396805,"elapsed_s":551,"outcome":"ok","detail":null}
+{"id":"38811dda","ended_at":1791396805,"elapsed_s":551,"outcome":"ok","detail":null}
+{"id":"cbea0069","ended_at":1791397089,"elapsed_s":835,"outcome":"ok","detail":null}
+{"id":"38811dda","ended_at":1791397089,"elapsed_s":835,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"review","edge":"leave","at":1791397147,"phase":"review","prd":"00265-close-the-critical-row-escapes-v1.md"}

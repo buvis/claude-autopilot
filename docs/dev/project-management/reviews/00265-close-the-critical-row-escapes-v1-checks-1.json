@@ -1,0 +1,9 @@
+[
+  {
+    "cycle": 1,
+    "finding": "Cannot statically verify: release-checks passes at the reviewed revision. The context reports cached results; the exact check is `bash dev/bin/release-checks`.",
+    "file": null,
+    "command": "bash dev/bin/release-checks",
+    "source": "bob"
+  }
+]
