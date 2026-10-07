@@ -117,10 +117,10 @@ TABLE_DATA_ROW_RE = re.compile(r"^\|(?:\s*R\d+\s*\|)?\s*\[\d+/\d+\]\s*\|", re.MU
 # Row-shape detection inside a findings table, private on purpose: once the
 # header is found, every pipe line that is not the |---| rule is a data row, so
 # an off-shape cell is refused instead of silently dropping the row (and the
-# finding it carried). The cells themselves are then checked one by one.
+# finding it carried).
 _CANDIDATE_ROW_RE = re.compile(r"^\|")
 _SEPARATOR_ROW_RE = re.compile(r"^\|(\s*:?-{3,}:?\s*\|)+\s*$")
-_REF_CELL_RE = re.compile(r"^R(\d+)$", re.IGNORECASE)
+_REF_CELL_RE = re.compile(r"^R\d+$", re.IGNORECASE)
 _CONSENSUS_CELL_RE = re.compile(r"^\[\d+/\d+\]$")
 # `| Consensus | Severity | Issue | File | Task | Found By |`
 _TABLE_HEADER_RE = re.compile(r"^\|(.+)\|\s*$", re.MULTILINE)
@@ -155,7 +155,6 @@ _FINDINGS_PROBLEMS = {
 # with a missing or unknown classification is checked like any applied row, and
 # so is a `carry` row - a re-queued finding still names a real review row.
 _SKIPPED_CLASSIFICATIONS = ("verify", "discard")
-# The five dispositions a findings row may carry.
 KNOWN_CLASSIFICATIONS = ("verify", "discard", "fix", "defer", "carry")
 
 
@@ -464,7 +463,7 @@ def _cross_check_findings(
                 f"{dispositions[ref]} and {classification}"
             )
         dispositions[ref] = classification
-    if require_coverage and reviewed and any(row.ref == "" for row in reviewed):
+    if require_coverage and any(row.ref == "" for row in reviewed):
         return "ref-required", _FINDINGS_PROBLEMS["ref-required"]
     for row in findings:
         if row.get("classification") in _SKIPPED_CLASSIFICATIONS:
