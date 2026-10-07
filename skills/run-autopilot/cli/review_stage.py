@@ -352,6 +352,7 @@ def run_gate_line(repo_root: Path, gate_command: str, cycle_id: str) -> dict:
         _read_record(repo_root),
         repo_root,
         head,
+        gate_command,
     )
     if verdict == "reused":
         counts = (record["passed"], record["failed"], record["skipped"])
@@ -776,6 +777,12 @@ def stage(
     repo_root = Path(repo_root)
     tmp_dir = repo_root / TMP_REL
     tmp_dir.mkdir(parents=True, exist_ok=True)
+    if not tmp_dir.resolve().is_relative_to(repo_root.resolve()):
+        return {
+            "ok": False,
+            "error": f"{TMP_REL} resolves outside the repo; refusing to stage",
+            "exit": 1,
+        }
     tasks_file, prd_file = _write_inputs(tmp_dir, cycle_id, tasks, prd_path, design_doc)
     gathered = _gather(repo_root, since, cycle_id)
     if not gathered["ok"]:

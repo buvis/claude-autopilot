@@ -27,6 +27,7 @@ GATE_OUTPUT_CAP = 2_000_000  # bytes of combined stdout+stderr kept
 STORE_PREFIX = "docs/dev/project-management/"
 RECORD_REL = Path(STORE_PREFIX) / "autopilot" / "last-verification.json"
 SUMMARY_RE = re.compile(r"PASS (\d+) FAIL (\d+) SKIP (\d+) EXIT (\d+)")
+_FULL_SHA_RE = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
 _STALE: tuple[str, dict] = ("stale", {})
 
 
@@ -40,15 +41,19 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess:
     )
 
 
-def _dirty_path_is_in_store(new_path: str, old_path: str | None) -> bool:
-    """A porcelain -z status record's STORE_PREFIX check: the path field
+def _dirty_path_is_in_store(
+    new_path: str,
+    old_path: str | None,
+    store: str = STORE_PREFIX,
+) -> bool:
+    """A porcelain -z status record's store check: the path field
     (and the second, source path field when the record is a rename/copy)
-    must both be under STORE_PREFIX, or the record counts as dirty outside
+    must both be under `store`, or the record counts as dirty outside
     the store. A rename or copy is judged by both its destination and
     source path -- crossing the store boundary in either direction, on
     either path, is dirty."""
     paths = (new_path, old_path) if old_path else (new_path,)
-    return all(p.startswith(STORE_PREFIX) for p in paths)
+    return all(p.startswith(store) for p in paths)
 
 
 def _iter_porcelain_z_records(raw: str) -> list[tuple[str, str | None]]:
@@ -77,30 +82,45 @@ def _ancestor_and_clean(repo_root: Path, sha: str, head_sha: str) -> bool:
     none. May raise OSError, same as the `_git` calls it wraps."""
     if _git(repo_root, "merge-base", "--is-ancestor", sha, head_sha).returncode != 0:
         return False
-    log = _git(repo_root, "log", f"{sha}..{head_sha}", "--name-only", "--format=")
+    # Git paths are toplevel-relative; repo_root may sit below the toplevel.
+    prefix = _git(repo_root, "rev-parse", "--show-prefix")
+    if prefix.returncode != 0:
+        return False
+    store = prefix.stdout.strip() + STORE_PREFIX
+    log = _git(
+        repo_root,
+        "log",
+        f"{sha}..{head_sha}",
+        "--no-renames",
+        "--name-only",
+        "--format=",
+    )
     if log.returncode != 0:
         return False
     paths = [line for line in log.stdout.splitlines() if line.strip()]
-    if not all(path.startswith(STORE_PREFIX) for path in paths):
+    if not all(path.startswith(store) for path in paths):
         return False
     status = _git(repo_root, "status", "--porcelain=1", "-z")
     if status.returncode != 0:
         return False
     records = _iter_porcelain_z_records(status.stdout)
-    return all(_dirty_path_is_in_store(new, old) for new, old in records)
+    return all(_dirty_path_is_in_store(new, old, store) for new, old in records)
 
 
 def reuse_verdict(
     record: dict | None,
     repo_root: Path,
     head_sha: str,
+    gate_command: str | None = None,
 ) -> tuple[str, dict]:
     """
     record: the parsed contents of last-verification.json, or None if the
         file is missing/unreadable/unparseable.
+    gate_command: when given, every recorded command must equal it.
     Returns ("reused", record) only when ALL hold:
-      - record["sha"] is a non-empty str, and passed/failed/skipped are all
-        present and not None
+      - record["sha"] is a full lowercase hex object id (never a symbolic
+        ref or abbreviation), and passed/failed/skipped are all present and
+        not None
       - the run was green: failed is 0 and record["commands"] is a non-empty
         list whose every entry is a dict that exited 0
       - `git merge-base --is-ancestor <record["sha"]> <head_sha>` exits 0,
@@ -122,7 +142,7 @@ def reuse_verdict(
     if not isinstance(record, dict):
         return _STALE
     sha = record.get("sha")
-    if not isinstance(sha, str) or not sha:
+    if not isinstance(sha, str) or not _FULL_SHA_RE.fullmatch(sha):
         return _STALE
     if any(record.get(key) is None for key in ("passed", "failed", "skipped")):
         return _STALE
@@ -132,6 +152,8 @@ def reuse_verdict(
     if record["failed"] != 0 or not all(
         isinstance(c, dict) and c.get("exit") == 0 for c in commands
     ):
+        return _STALE
+    if gate_command is not None and any(c.get("command") != gate_command for c in commands):
         return _STALE
     try:
         if not _ancestor_and_clean(repo_root, sha, head_sha):

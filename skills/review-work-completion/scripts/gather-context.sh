@@ -52,7 +52,7 @@ fi
 
 # Try: find merge-base with common defaults
 if [[ -z "$BASE_BRANCH" ]]; then
-  for candidate in master develop; do
+  for candidate in master main develop; do
     if git -C "$PROJECT_ROOT" rev-parse --verify "$candidate" >/dev/null 2>&1; then
       BASE_BRANCH="$candidate"
       break
@@ -80,6 +80,14 @@ if [[ -n "$SINCE_REF" ]] && git -C "$PROJECT_ROOT" cat-file -e "$SINCE_REF" >/de
   DIFF_BASE="$SINCE_REF"
   DIFF_SCOPE="incremental review (changes since ${SINCE_REF})"
   SINCE_APPLIED=1
+else
+  if [[ -n "$SINCE_REF" ]]; then
+    echo "gather-context: --since ref ${SINCE_REF} does not resolve; using the branch base" >&2
+  fi
+  # Diff from the branch point, not the base's moved tip, so work the base
+  # gained since is never shown as removed. An unresolvable base stays as is
+  # and fails loud in the diff check below.
+  DIFF_BASE="$(git -C "$PROJECT_ROOT" merge-base HEAD "$BASE_BRANCH" 2>/dev/null || echo "$BASE_BRANCH")"
 fi
 
 # Scope both diff calls to the paths listed in the review-paths marker
@@ -106,7 +114,7 @@ fi
 # branch diffs against itself at a clean HEAD).
 if [[ -z "$SINCE_APPLIED" ]]; then
   if [[ -z "$DIFF_BASE" ]]; then
-    echo "gather-context: empty diff against ${DIFF_BASE}; pass --since <work_start_sha> for a full review" >&2
+    echo "gather-context: empty diff against ${BASE_BRANCH}; pass --since <work_start_sha> for a full review" >&2
     exit 3
   fi
   DIFF_QUIET_ERR="$(git -C "$PROJECT_ROOT" diff --quiet "$DIFF_BASE" ${PATH_ARGS[@]+"${PATH_ARGS[@]}"} 2>&1)" && DIFF_QUIET_EXIT=0 || DIFF_QUIET_EXIT=$?
@@ -114,7 +122,7 @@ if [[ -z "$SINCE_APPLIED" ]]; then
     echo "$DIFF_QUIET_ERR" >&2
     exit "$DIFF_QUIET_EXIT"
   elif [[ "$DIFF_QUIET_EXIT" -eq 0 ]]; then
-    echo "gather-context: empty diff against ${DIFF_BASE}; pass --since <work_start_sha> for a full review" >&2
+    echo "gather-context: empty diff against ${BASE_BRANCH}; pass --since <work_start_sha> for a full review" >&2
     exit 3
   fi
 fi
