@@ -19,6 +19,13 @@ minutes. Everything else is the orchestrator, on opus at xhigh.
 
 | 00248 c1 (0.8.0, 15:4x) | 22.4 min | 7.1 min | ~10 min | 5.0 min |
 | 00248 c2 (0.8.0, converged) | 23.5 min | 5.2 min | ~14 min | 3.6 min |
+| 00267 c1 (0.9.0, converged) | 39.0 min | **2.4 min** | 6.3 min | 5.3 min to the sweep, then 25 min tail sweep (4 tasks + 3.5-min gate) |
+
+00267 c1 is the first 0.9.0 full-lane review (`review-stage` 18 s). Setup
+fell from 5-7 min to 2.4 min. The first `release-checks` (209 s) ran beside
+the reviewers, so it cost no wall time; the second one, after the sweep's
+code changes, is needed. The 5.3 min of bookkeeping still holds V13 (below)
+and three writes of the review file (646 s, 725 s, 773 s, ~2 min of gaps).
 
 00248 c2 repeated V3 exactly: `release-checks` ran at 368 s (181 s), then
 again at 632 s (180 s) only "to a log", because the first run's counts could
@@ -185,6 +192,17 @@ were mechanical and fixed by hand in c78527c (fail-first test included); the
 gate is green at c78527c. Stubs 00257/00259/00262/00263 closed into done.
 R2 (one-directional cross-check vs PRD text) and R3 (Ref-column scope) stay
 on hold for a decision.
+
+### V13. The consolidator dropped every bulleted Bob line (fixed)
+
+On 00267 c1 codex wrote `- [BOB] 🟡 ... | File: ... | Task: ...`.
+`consolidate_findings._LINE_RE` anchored on `^\[`, so all of Bob's findings
+fell out of the table with no warning. The orchestrator noticed, stripped
+the bullets with `sed` and re-ran (~50 s). Unnoticed, the doubt lens would
+have been silently empty. Fixed on `fix/consolidate-bullet-lines` (6139c81):
+an optional `- `/`* ` bullet is accepted, and any line holding `| File:`
+that still fails to parse is named on stderr. Fail-first: 3 new tests
+failed at base, 57 pass after.
 
 ## Not waste (kept)
 
