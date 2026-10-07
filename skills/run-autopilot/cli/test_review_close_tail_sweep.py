@@ -139,6 +139,29 @@ def test_tail_sweep_refuses_a_row_duplicating_an_open_deferral(
     assert not Path(f"{state_path}.lock").exists()
 
 
+def test_tail_sweep_duplicate_deferral_match_is_severity_vocabulary_agnostic(
+    tmp_path: Path,
+) -> None:
+    """`autonomous_decisions`/`deferred_decisions` entries are sometimes
+    written with the emoji severity (copied verbatim from a chosen finding)
+    and sometimes with schema.py's lowercase-word `DECISION_SEVERITIES`
+    vocabulary. The duplicate-deferral match used to compare the two strings
+    as-is, so a word-vocabulary deferral never matched an emoji-vocabulary
+    swept row for the same file - the exact pair this test seeds."""
+    review = _review(tmp_path)
+    word_deferral = {**OPEN_DEFERRAL, "severity": "medium"}
+    state_path = _swept(tmp_path, review, deferred_decisions=[word_deferral])
+    before = state_path.read_bytes()
+
+    result = review_close.close(review, state_path, "tail-sweep", [TAIL_MED])
+
+    assert result["applied"] is False
+    assert result["refused"] == "tail_sweep_duplicates_deferral"
+    assert "src/c.py:20" in result["reason"]
+    assert state_path.read_bytes() == before
+    assert not Path(f"{state_path}.lock").exists()
+
+
 # The row a clean sweep defers: an accepted sweep has to record it as an open
 # decision, not drop it.
 DEFER_ROW = _finding(MED, "src/d.py:4", "later", "defer")

@@ -491,3 +491,32 @@ def test_close_ends_unavailable_dispatch_with_error_outcome(
 
     assert result["applied"] is True
     assert commands[0][-2:] == ["--outcome", "error"]
+
+
+def test_malformed_dispatch_row_id_is_named_on_stderr(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A dash-led id is already refused (test_review_close_lowsev.py); this
+    pins the other half of PRD #24 - the refusal names the persona and the
+    id on stderr instead of dropping it silently."""
+    review = _review(
+        tmp_path,
+        extra_frontmatter="dispatch_rows:\n  bob: -d-111\n  carl: d-222\n",
+    )
+    state_path = _state(tmp_path)
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        review_close.subprocess,
+        "run",
+        lambda cmd, **_kwargs: commands.append(cmd),
+    )
+
+    result = review_close.close(review, state_path, "decision-gate", [])
+
+    assert result["applied"] is True
+    assert [cmd[cmd.index("end") + 1] for cmd in commands] == ["d-222"]
+    captured = capsys.readouterr()
+    assert "-d-111" in captured.err
+    assert "bob" in captured.err
