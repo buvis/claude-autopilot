@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 # The TestCase class is reached through the module: binding its name here would
 # make pytest collect that whole suite a second time under this file.
 from cli import test_gate as gate_tests
-from cli.test_gate import GOOD_FILE, HIGH, MED, _row
+from cli.test_gate import CRIT, GOOD_FILE, HIGH, MED, _row
 from cli.test_gate_findings_table import (
     _REF_CELL_CASES,
     KNOWN_CLASSIFICATIONS,
@@ -293,6 +293,59 @@ class FindingsExitCodeTests(unittest.TestCase):
                 self.assertNotIn("Traceback", proc.stderr)
                 if label.endswith("names a section"):
                     self.assertIn("section", detail or "")
+
+
+def test_an_indented_data_row_under_a_valid_header_is_still_read() -> None:
+    """`_CANDIDATE_ROW_RE` used to be anchored at column zero (`^\\|`), so a
+    data row some editor or renderer indented with leading spaces matched
+    neither the candidate-row check nor the separator check and was silently
+    dropped — along with the CRITICAL finding it carried, which then reached
+    no disposition at all. The header itself stays unindented in this fixture:
+    only the data row is indented, which is the exact shape the escape used."""
+    text = _table_section(TABLE_HEADER_REF_6, "  " + _ref_row(
+        "R1", CRIT, "crash on empty input", "src/a.py:3",
+    ))
+    rows, err = _keys(text)
+    assert err is None
+    assert [r.ref for r in rows] == ["R1"]
+    chosen = [dict(_row(CRIT, "src/a.py:3", "crash on empty input"), ref="R1")]
+    assert _check(text, chosen) == ("ok", None)
+
+
+def test_a_data_row_missing_its_closing_pipe_is_refused() -> None:
+    """A row shaped `| [2/4] | high | wrong default | src/b.py:10 | 3 | B` with
+    no trailing `|` still has every cell a well-formed row would have, so a
+    check that only counts cells accepts it. The row's termination has to be
+    checked too, or a truncated row silently parses as complete."""
+    unterminated = TABLE_HEADER_6 + _table_row(HIGH, "wrong default", "src/b.py:10").rstrip(
+        "|",
+    ).rstrip()
+    text = "## Consolidated Findings\n\n" + unterminated
+    assert _keys(text) == ([], "unreadable-table")
+    chosen = [_row(HIGH, "src/b.py:10", "wrong default")]
+    tag, detail = _check(text, chosen)
+    assert tag == "malformed"
+    assert detail
+    # Control: the same row with its closing pipe reads fine.
+    whole = _table_section(
+        TABLE_HEADER_6,
+        _table_row(HIGH, "wrong default", "src/b.py:10"),
+    )
+    rows, err = _keys(whole)
+    assert err is None
+    assert len(rows) == 1
+
+
+def test_unreadable_table_message_names_the_ref_required_shape() -> None:
+    """The `unreadable-table` operator message used to describe only the old
+    row shape and never mentioned that a Ref-less table is refused under the
+    distinct `ref-required` tag, leaving the exit-2 operator no way to tell
+    which gap they are looking at from the message alone."""
+    from cli import gate
+
+    message = gate._FINDINGS_PROBLEMS["unreadable-table"]
+    assert "ref" in message.lower()
+    assert "ref-required" in message
 
 
 if __name__ == "__main__":
