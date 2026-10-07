@@ -1,0 +1,18 @@
+[
+  {
+    "cycle": 1,
+    "finding": "Cannot statically verify: tests and release checks pass at the reviewed revision. Run `python3 -m pytest hooks/test_guard_phase_delegation.py` and `bash dev/bin/release-checks`; require exit 0 from both. The supplied gate reports 2620 passing tests, but execution was prohibited for this review.",
+    "file": null,
+    "command": "python3 -m pytest hooks/test_guard_phase_delegation.py",
+    "source": "bob",
+    "result": {"exit": 0, "detail": "151 passed in 6.02s (run as uv run --no-project --with pytest python -m pytest)"}
+  },
+  {
+    "cycle": 1,
+    "finding": "Cannot statically verify: tests and release checks pass at the reviewed revision. Run `python3 -m pytest hooks/test_guard_phase_delegation.py` and `bash dev/bin/release-checks`; require exit 0 from both. The supplied gate reports 2620 passing tests, but execution was prohibited for this review.",
+    "file": null,
+    "command": "bash dev/bin/release-checks",
+    "source": "bob",
+    "result": {"exit": 0, "detail": "PASS 2625 FAIL 0 SKIP 0 EXIT 0"}
+  }
+]

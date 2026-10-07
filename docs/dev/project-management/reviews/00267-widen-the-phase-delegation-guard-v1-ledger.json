@@ -1,0 +1,42 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Beyond the PRD: double-quote and curly-quote skill names are now accepted (`[`'\\\"]`, `_CURLY_QUOTES`, soft hyphen and word joiner stripping). The PRD asks only for single quotes and zero-width characters. The extras are harmless and tested, but they widen the match surface unrequested",
+    "file": "hooks/guard_phase_delegation.py:41",
+    "reason": "Deliberate superset. The PRD's goal is denying whole-phase delegation; accepting more quote styles can only deny more delegation phrasings, never allow one. Removing it would narrow the guard for no benefit, and it is already covered by tests."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The added design document contains 1022 lines, exceeding the rubric's 800-line limit. It belongs to held PRD 00265, outside this guard's tasks; the repository's mechanical style gate explicitly skips non-Python files.",
+    "file": "docs/dev/project-management/designs/00265-close-the-critical-row-escapes-v1-design.md:1022",
+    "reason": "Out of scope: the file belongs to parked PRD 00265, not to this PRD's tasks, and the 800-line limit is a code rule the project's style gate deliberately does not apply to Markdown."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Curly double quotes around a skill name are not accepted. `Run “/autopilot:work”` is allowed (probed: returns False), while curly single quotes are mapped to `'` at line 43. The spec only requires single quotes, so this is a minor gap and not a spec violation.",
+    "file": "hooks/guard_phase_delegation.py:43",
+    "reason": "Blake's own words: not a spec violation. The PRD asks for single quotes only; a model writing curly double quotes around a skill name is not an observed drift pattern."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Whitespace is not normalized after NFKC. The literal single space in `_PHASE_JARGON` (\"work phase\") means a double-spaced `Run the work  phase` is allowed (probed: returns False). Other whitespace runs between verb and gap words are handled via `\\s+`, so only the jargon's internal space is exploitable. The guard targets model drift, not a hostile user, so this is low severity.",
+    "file": "hooks/guard_phase_delegation.py:44",
+    "reason": "Not in the PRD's phrasing list and not an observed drift shape. The PRD states the guard targets model drift, not a hostile user; a model does not double-space inside 'work phase'."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Negation exception is broader than a pure double-negation reading. `not|never` followed by `hesitate|fail|only` is exempt, as the spec says. So `Do not only run the work phase` and `never only run the work phase` are now denied (probed: both True). That matches the spec text, but \"not only\" is rarely a real delegation.",
+    "file": "hooks/guard_phase_delegation.py:64",
+    "reason": "Implements the PRD's literal instruction ('do not treat not/never followed by hesitate|fail|only as a negation'). Narrowing it would contradict the spec; a false deny here costs one dispatch and the phrasing is rare."
+  }
+]

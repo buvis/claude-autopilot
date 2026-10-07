@@ -225,3 +225,30 @@
 
 - (orchestrator) Step 7's full-suite run caught a real regression task 2 introduced: `hooks/test_enforce_prd_location.py`'s `LayoutVocabularyTest` went from 2 passed to 2 failed (exit 0 instead of 2), confirmed against the pre-PRD baseline (76d9b7d) via a disposable git worktree. Root cause: `read_input()`'s `sys.stdin.buffer.read()...` has no `.buffer` to read when `_common.py`'s `capture_main()` swaps `sys.stdin` for an `io.StringIO` (the in-process `hook.run(payload)` test pattern several hooks' test suites use) - the resulting `AttributeError` was silently swallowed by `capture_main`'s own exception isolation, turning a real deny into a false allow.
 - (Ivan) Fixed by reading `getattr(sys.stdin, "buffer", None)`: real subprocess stdin still reads/decodes bytes; the `capture_main`/`StringIO` in-process case falls back to `sys.stdin.read()` directly (already `str`, no decode needed). Re-verified both `hooks/test_enforce_prd_location.py` and `hooks/test_guard_phase_delegation.py` green, then the full `dev/bin/release-checks` suite (2620 passed, 0 failed).
+
+## 5: [D1] Tail sweep: hooks/guard_phase_delegation.py (00267, cycle 1)
+
+- (orchestrator) Ran task 5 before task 4 although `rework_task_ids` lists 4 first: task 4's own finding says the guard narrowing "has to land first", and writing its negative tests before the fix would have left task 4 red at its own verification gate.
+- (Tess) Put the new tests in a new sibling file, `hooks/test_guard_phase_delegation_narrowing.py`, because `hooks/test_guard_phase_delegation.py` was already near the project's 800-line limit.
+- (Tess) Included `doesn't` and `won't` followed by `only` in the denied set, reading "a contraction followed by hesitate, fail or only behaves exactly like the spelled-out form" literally.
+- (Ivan) The gap-word set (`the a an this that all every each remaining entire whole full`) was chosen conservatively rather than measured against the 17 denied fixtures: reading the fixtures was outside his allowlist. The corpus test is what confirms it; the set is a passing guess, not a measured minimum.
+- (Ivan) Added `_NOT_COMPOUND`, a lookahead excluding a jargon match followed by `reviewers?|reviews?|fixtures?|checklists?|diffs?`. The task text did not ask for it, but the reviewers' own false-positive probes ("Call the work phase reviewer", "complete the work phase checklist") cannot pass the gap restriction alone.
+- (orchestrator, review fixes) Scoped `_NOT_COMPOUND` to the six WIDENED verbs: as Ivan left it, "Run the work phase review" became allowed although it was denied before the exception existed. Pinned with a test.
+- (orchestrator, review fixes) Narrowed the `hesitate|fail|only` exception to the `not|never|does not|don't|doesn't|won't` family. Ivan's single alternation gave it to `can't`, `isn't`, `wasn't`, `weren't`, `shouldn't` and `cannot` too, which no finding asked for and no test covered.
+- (orchestrator, review fixes) Reduced `_BARE_SKILL` to the bare names, the second half of the simplification finding, and dropped the now-dead negation lookahead inside `_GAP`.
+
+## 4: [D1] Tail sweep: hooks/test_guard_phase_delegation.py (00267, cycle 1)
+
+- (Ivan) Finding 4's test sits in the first test file rather than the narrowing file, so it can reuse `_run_bytes` and `_utf8_agent_payload`.
+- (Ivan) Finding 4's test relies on `read_input` decoding with `errors="replace"`; he could not read `_common.py` and took the passing run as confirmation.
+- (Ivan) Read "a bare skill name far from a verb" as a bare `plan-tasks` that gap words do not bridge, plus one with unrelated words between verb and name.
+- (Ivan) Replaced the hard-coded fixture counts with a bare non-empty assertion and added no lower bound.
+- (orchestrator) Pat's one `unresolved` closure (the widened-verb negatives "have no test") was refuted: `test_ordinary_prose_with_a_widened_verb_near_phase_jargon_is_allowed` holds 10 such cases and passes. They landed in task 5's commit, outside the task-4 diff Pat was given.
+
+## 6: [D1] Tail sweep: hooks/_common.py (00267, cycle 1)
+
+- (orchestrator) Micro lane: one finding, one file, docstring only. Pat's lone LOW (do not open the added sentence with "So") was not actioned - the causal tie to the non-fatal rule above it is the intended reading.
+
+## 7: [D1] Tail sweep: the zero-width fixture (00267, cycle 1)
+
+- (orchestrator) Replaced the combined `zero-width-run-work.txt` with two fixtures rather than keeping all three: the combined case adds no coverage the two isolated ones lack, and nothing in the tests references the old filename (the corpus is globbed).
