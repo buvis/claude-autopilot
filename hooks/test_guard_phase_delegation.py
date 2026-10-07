@@ -374,8 +374,52 @@ def _run_bytes(stdin: bytes) -> subprocess.CompletedProcess[bytes]:
     )
 
 
-def test_non_utf8_payload_fails_open_cleanly() -> None:
-    stdin = b"\xff\xfe\x80"
+_DENIED_PROMPT = "Run the autopilot:work skill on PRD 00300 and report back."
+
+
+def _utf8_agent_payload(prompt: str) -> bytes:
+    # ensure_ascii=False keeps non-ASCII characters as raw UTF-8 bytes on
+    # stdin instead of \uXXXX escapes, so the hook's decoder must handle them.
+    tool_input = {"description": "PRD 00300", "prompt": prompt, "subagent_type": "general-purpose"}
+    return json.dumps({"tool_name": "Agent", "tool_input": tool_input}, ensure_ascii=False).encode("utf-8")
+
+
+_NON_ASCII_PROMPT = "Opravte chybu v modulu é: " + _DENIED_PROMPT
+_LONG_PROMPT = _DENIED_PROMPT + " Context: the parser reads one line at a time." * 120
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [_DENIED_PROMPT, _NON_ASCII_PROMPT, _LONG_PROMPT],
+    ids=["ascii", "non-ascii-utf8", "over-4kib"],
+)
+def test_valid_utf8_payload_is_still_denied_under_strict_stdin(prompt: str) -> None:
+    # Positive control for the fail-open tests below: same strict-UTF-8 env,
+    # a valid payload with a denied phrasing must still reach the guard.
+    result = _run_bytes(_utf8_agent_payload(prompt))
+    stderr = result.stderr.decode("utf-8")
+    assert result.returncode == 2
+    assert REASON in stderr
+    assert _FAIL_OPEN not in stderr
+
+
+def test_positive_controls_carry_raw_non_ascii_bytes_and_exceed_4kib() -> None:
+    # Guards the controls above: the non-ASCII case must put raw high bytes
+    # on stdin (not \u escapes), and the long case must be over 4 KiB.
+    assert "é".encode("utf-8") in _utf8_agent_payload(_NON_ASCII_PROMPT)
+    assert len(_utf8_agent_payload(_LONG_PROMPT)) > 4096
+
+
+@pytest.mark.parametrize(
+    "stdin",
+    [
+        b"\xff\xfe\x80",
+        b"\xc3(",
+        _utf8_agent_payload(_DENIED_PROMPT) + b"\xe2\x82",
+    ],
+    ids=["lone-high-bytes", "invalid-continuation", "truncated-multibyte-at-end"],
+)
+def test_non_utf8_payload_fails_open_cleanly(stdin: bytes) -> None:
     with pytest.raises(UnicodeDecodeError):
         stdin.decode("utf-8")
     result = _run_bytes(stdin)
@@ -383,14 +427,23 @@ def test_non_utf8_payload_fails_open_cleanly() -> None:
     assert result.returncode == 0
     assert _FAIL_OPEN in stderr
     assert "Traceback" not in stderr
+    assert result.stdout == b""
 
 
-def test_deeply_nested_payload_fails_open_cleanly() -> None:
-    depth = 100000
-    result = _run("[" * depth + "]" * depth, loop=True)
+@pytest.mark.parametrize(
+    "payload",
+    [
+        "[" * 100000 + "]" * 100000,
+        '{"a":' * 100000 + "1" + "}" * 100000,
+    ],
+    ids=["nested-arrays", "nested-objects"],
+)
+def test_deeply_nested_payload_fails_open_cleanly(payload: str) -> None:
+    result = _run(payload, loop=True)
     assert result.returncode == 0
     assert _FAIL_OPEN in result.stderr
     assert "Traceback" not in result.stderr
+    assert result.stdout == ""
 
 
 @pytest.mark.parametrize(
