@@ -307,6 +307,10 @@ def test_tail_sweep_applies_cleanly_against_a_partial_ref_table(tmp_path: Path) 
 
     assert result["applied"] is True
     assert "refused" not in result
+    # Applying means recording: a result that only claims it applied, over a
+    # state.json this batch never reached, is not an applied batch.
+    batches = _load(state_path)["applied_review_batches"]
+    assert f"{review.resolve()}::tail-sweep" in batches
 
 
 def test_close_applies_a_findings_subset_of_the_review(tmp_path: Path) -> None:
@@ -679,11 +683,19 @@ def test_ghost_carry_ref_is_refused(tmp_path: Path) -> None:
 def test_tail_sweep_refused_before_decision_gate_applied(tmp_path: Path) -> None:
     """A tail sweep is a cycle's second batch: run before this cycle's
     decision-gate batch is applied, it would stamp a cycle whose Critical and
-    High dispositions were never recorded. Another artifact's decision-gate
-    entry is seeded, so a non-empty applied_review_batches cannot satisfy it."""
+    High dispositions were never recorded. Two other artifacts' decision-gate
+    entries are seeded, so neither a non-empty applied_review_batches nor a
+    same-file-name entry from another directory can satisfy it."""
     review = _review(tmp_path)
     other = (tmp_path / "other-02.md").resolve()
-    state_path = _state(tmp_path, applied_review_batches=[f"{other}::decision-gate"])
+    namesake = (tmp_path / "sub" / review.name).resolve()
+    state_path = _state(
+        tmp_path,
+        applied_review_batches=[
+            f"{other}::decision-gate",
+            f"{namesake}::decision-gate",
+        ],
+    )
     before = state_path.read_bytes()
 
     result = review_close.close(review, state_path, "tail-sweep", [TAIL_MED])
