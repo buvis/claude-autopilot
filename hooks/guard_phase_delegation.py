@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+import unicodedata
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -27,27 +28,43 @@ from _common import allow, block, read_input
 # Widened to the -ing form of each verb: recovered transcripts say "You are
 # executing the `autopilot:design-solution` skill" (autonomous decision,
 # PRD 00248 task 1).
-_IMPERATIVE = r"(run(?:ning)?|execut(?:e|ing)|invok(?:e|ing)|follow(?:ing)?|continu(?:e|ing)|resum(?:e|ing))"
+_IMPERATIVE = (
+    r"(run(?:ning)?|execut(?:e|ing)|invok(?:e|ing)|follow(?:ing)?|continu(?:e|ing)|resum(?:e|ing)"
+    r"|start|do|perform|complete|launch|call)"
+)
+# Code points that split a word without showing, stripped before matching.
+# U+200B, U+200C, U+200D, U+2060, U+00AD.
+_INVISIBLE = dict.fromkeys((0x200B, 0x200C, 0x200D, 0x2060, 0x00AD))
+# Curly single quotes (U+2018, U+2019) read like the straight one around a
+# skill name.
+_CURLY_QUOTES = {0x2018: "'", 0x2019: "'"}
 _PHASE_JARGON = r"(work phase|plan(?:ning)? phase|design phase)"
-# (?P=bt) requires the SAME backtick-or-nothing to close immediately after
+# (?P=bt) requires the SAME backtick, quote or nothing to close immediately after
 # the skill name - "`/autopilot:plan-tasks`" (tight close) matches; "invoke
 # `/autopilot:design-solution dev/local/prds/wip/..." (an opening backtick
 # whose matching close is many words later, around an args list) does not,
 # because nothing closes immediately. No trailing \b: a literal backtick is
 # a non-word char, and \b between two non-word chars (backtick, space)
 # never matches.
-_BARE_SKILL = r"(?P<bt>`?)(?:/)?(autopilot:work|autopilot:plan-tasks|autopilot:design-solution|plan-tasks|design-solution)(?P=bt)"
+_BARE_SKILL = r"(?P<bt>[`'\"]?)(?:/)?(autopilot:work|autopilot:plan-tasks|autopilot:design-solution|plan-tasks|design-solution)(?P=bt)"
 _SKILL_READ = (
     r"read\s+(?:skills/)?(work|plan-tasks|design-solution)/SKILL\.md"
-    r".{0,60}\b(run|follow|execute|continue)\b.{0,20}\b(every|all)\s+tasks?\b"
+    rf".{{0,60}}\b{_IMPERATIVE}\b.{{0,20}}\b(every|all)\s+tasks?\b"
 )
 # No "n't" alternative: \b never matches before the "n" inside a
 # contraction, so that alternative was dead. Contractions are spelled out.
+# "not/never hesitate|fail|only" is a double negation ("do not hesitate to
+# run ..."), so it does not count.
 _NEGATION = (
-    r"\b(not|never|does\s+not|doesn't|don't|won't|can't|cannot|isn't|"
-    r"shouldn't|wasn't|weren't)\b"
+    r"\b(not|never|does\s+not)\b(?!\s+(?:hesitate|fail|only)\b)"
+    r"|\b(doesn't|don't|won't|can't|cannot|isn't|shouldn't|wasn't|weren't)\b"
 )
 _NEGATION_RE = re.compile(_NEGATION, re.IGNORECASE)
+# Up to three words between the verb and its object ("run the entire work
+# phase"). Word-count bounded, never a character gap: a {0,40}-char gap once
+# denied 21 of 231 real review prompts. A negation never counts as a gap word,
+# or "Do not run the work phase" would match from "Do" past its own "not".
+_GAP = rf"(?:(?!{_NEGATION})\w+\s+){{0,3}}"
 _SENTENCE_BOUNDARY_RE = re.compile(r"[.;,\n]")
 
 # Read-only reviewer personas: none of their persona files grant the Skill
@@ -62,16 +79,16 @@ _READ_ONLY_REVIEWERS = frozenset(
     }
 )
 
-# Tight (immediate-adjacency) phase-jargon pattern, forward direction only:
-# "run the work phase" / "run work phase" matches; "run by the work phase"
-# and "run at this exact HEAD by the work phase" do not, because nothing
-# sits between the verb and its object. The looser bidirectional {0,40}-gap
+# Word-gap phase-jargon pattern, forward direction only: "run the work
+# phase" / "run the entire work phase" matches; "run at this exact HEAD by
+# the work phase" does not, because more than three words sit between the
+# verb and its object. The looser bidirectional {0,40}-gap
 # form this replaced matched ordinary reviewer prose ("run by the work
 # phase"), denying 21 of 231 real review-roster prompts (verified by
 # docs/dev/tmp/probe-blake-high-00248.py). No reverse-direction ("work phase
 # ... run") pattern: none of the four observed denial fixtures needs it, and
 # it is pure false-positive surface.
-_PHASE_JARGON_TIGHT = rf"\b{_IMPERATIVE}\s+(?:the\s+|this\s+)?{_PHASE_JARGON}\b"
+_PHASE_JARGON_TIGHT = rf"\b{_IMPERATIVE}\s+{_GAP}{_PHASE_JARGON}\b"
 
 _DELEGATION_PATTERNS = (
     re.compile(_PHASE_JARGON_TIGHT, re.IGNORECASE),
@@ -80,8 +97,11 @@ _DELEGATION_PATTERNS = (
     # continue it from task 4." matches; descriptive prose like "the work
     # phase's own run at this HEAD" does not, because nothing introduces
     # the verb as an instruction.
-    re.compile(rf"\b{_PHASE_JARGON}\b[^.;\n:]{{0,25}}:\s*(?:it\s+)?\b{_IMPERATIVE}\b", re.IGNORECASE),
-    re.compile(rf"\b{_IMPERATIVE}\s+(?:the\s+)?{_BARE_SKILL}", re.IGNORECASE),
+    re.compile(
+        rf"\b{_PHASE_JARGON}\b[^.;\n:]{{0,25}}:\s*(?:it\s+)?\b{_IMPERATIVE}\b",
+        re.IGNORECASE,
+    ),
+    re.compile(rf"\b{_IMPERATIVE}\s+{_GAP}{_BARE_SKILL}", re.IGNORECASE),
     re.compile(_SKILL_READ, re.IGNORECASE | re.DOTALL),
 )
 
@@ -119,6 +139,7 @@ def is_phase_delegation(tool_input: dict) -> bool:
     prompt = prompt if isinstance(prompt, str) else ""
     description = description if isinstance(description, str) else ""
     text = f"{prompt}\n{description}"
+    text = unicodedata.normalize("NFKC", text.translate(_INVISIBLE)).translate(_CURLY_QUOTES)
     return any(
         not _negated_before(text, match.start())
         for pattern in _DELEGATION_PATTERNS
