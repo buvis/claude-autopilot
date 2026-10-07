@@ -138,9 +138,10 @@ STOPWORDS = frozenset(
 
 # The bracketed name is skipped, not captured: the NAME half of the caller's
 # NAME:FILE pair is authoritative, so a reviewer whose output mislabels its
-# own bracket is still attributed to the file it was read from.
+# own bracket is still attributed to the file it was read from. An optional
+# markdown bullet is tolerated: codex emitted `- [BOB] ...` in review 00267 c1.
 _LINE_RE = re.compile(
-    r"^\[[^\]]+\]\s+(?P<severity>.)\s+(?P<desc>.*?)"
+    r"^(?:[-*]\s+)?\[[^\]]+\]\s+(?P<severity>.)\s+(?P<desc>.*?)"
     r"\s+\|\s+File:\s*(?P<file>.*?)"
     r"\s+\|\s+Task:\s*(?P<task>.*?)\s*$",
 )
@@ -284,7 +285,19 @@ def parse_agent_output(path: Path, agent: str) -> list[Finding]:
         text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return []
-    return [f for f in (parse_line(line, agent) for line in text.splitlines()) if f]
+    found = []
+    for line in text.splitlines():
+        finding = parse_line(line, agent)
+        if finding:
+            found.append(finding)
+        elif "| File:" in line:
+            # A cited line that fails the pattern is format drift, not prose:
+            # say so, or the reviewer's finding vanishes from the table.
+            print(
+                f"consolidate_findings: {agent}: unparsed finding-shaped line: {line.strip()}",
+                file=sys.stderr,
+            )
+    return found
 
 
 def _fold(group: list[Finding]) -> Finding:

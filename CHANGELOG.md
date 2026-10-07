@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: the findings coverage check and the new `carry` classification ship as one change, so every consolidated review row now needs a disposition and a carried row needs its re-queued task's recorded link; do not run a batch already in flight with 0.9.0 review prose against this CLI, finish or restart the batch on one version
 - **hooks**: the phase-delegation guard now catches the phrasings it used to miss - `start`/`do`/`perform`/`complete`/`launch`/`call` before a phase name, up to three determiner words in between, quoted skill names, full-width and zero-width characters, and `do not hesitate to run ...` (including `don't`) - while ordinary prose about a phase stays allowed
 - **hooks**: `read_input` fails open cleanly on a non-UTF-8 or deeply nested payload instead of exiting 1 with a traceback
+- **review-work-completion**: the findings consolidator keeps a reviewer's markdown-bulleted finding lines (`- [BOB] ...`) instead of silently dropping them, and warns on stderr about any cited line it still cannot parse
 
 ## [0.9.0] - 2026-10-05
 

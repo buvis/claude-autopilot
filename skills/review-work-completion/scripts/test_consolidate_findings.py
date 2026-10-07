@@ -85,6 +85,30 @@ def test_non_finding_lines_are_ignored(line: str) -> None:
     assert cf.parse_line(line, "ALICE") is None
 
 
+@pytest.mark.parametrize("bullet", ["- ", "* "])
+def test_a_markdown_bulleted_finding_line_still_parses(bullet: str) -> None:
+    """Bob (codex) emitted `- [BOB] ...` in review 00267 c1; the anchored
+    pattern dropped every one of its findings until the orchestrator
+    noticed and stripped the bullets by hand."""
+    f = cf.parse_line(f"{bullet}[BOB] 🟡 guard misses a verb | File: hooks/g.py | Task: 5", "BOB")
+    assert f is not None
+    assert (f.severity, f.desc, f.file) == ("🟡", "guard misses a verb", "hooks/g.py")
+
+
+def test_a_finding_shaped_line_that_does_not_parse_warns(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = _write(
+        tmp_path,
+        "bob.txt",
+        ["1. [BOB] 🟡 numbered drift | File: a.py | Task: 1", "prose without a citation"],
+    )
+    assert cf.parse_agent_output(out, "BOB") == []
+    err = capsys.readouterr().err
+    assert "numbered drift" in err
+    assert "prose without a citation" not in err
+
+
 def test_non_ascii_description_survives_intact() -> None:
     """The defect that killed the bash predecessor: BSD `tr` mangled the
     lead byte of a Latin-1-range character and BSD `sed` then refused the
