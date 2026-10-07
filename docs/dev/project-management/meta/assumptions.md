@@ -45,3 +45,22 @@ Implementor (Ivan):
 - The pre-lock already-applied check rebuilds `f"{review_file.resolve()}::{batch_id}"`, duplicating the identity `_mutation_context` builds; no test pins where the string is built.
 - The style-limit fix moved `close()`'s refusal-name prose into `_findings_refusal`'s docstring, since the docstring counts toward the measured span.
 
+## 3: review_close: tail sweep refused before the decision gate, above medium, or empty
+
+Orchestrator:
+- The task's write-set was extended by `cli/test_review_close_apply.py`: its `test_close_tail_sweep_skips_lens_verdict_and_dispatch_row_steps` asserted that an empty tail sweep applies, which this task deliberately turns into a refusal. The test was updated (decision-gate entry seeded, one Medium row passed), never weakened.
+- The acceptance criteria name `cli/test_review_close.py`, but that module reached 750 of its 800-line limit, so the four non-acceptance tests live in a new sibling `cli/test_review_close_tail_sweep.py` that imports its fixtures. That new file is NOT yet listed in `dev/bin/release-checks` - task 7's scope.
+- `check_split_hygiene.py` reports `LOW` at `test_review_close.py:188` as an unused module-level binding. It is a false positive of a per-file checker (the sibling module imports and uses it), so no deletion was dispatched and the gate is recorded as `failed:` rather than fixed.
+
+Test author (Tess):
+- An accepted tail sweep writes through the same classification machinery as a decision-gate batch (fix -> rework task + `rework_task_ids`, defer -> `deferred_decisions`): taken from already-passing tests in `test_review_close_apply.py`, not from the task text.
+- Nothing is asserted about an `autonomous_decisions` key for a swept row: no requirement or existing test pins its name or shape, so pinning it would have invented a contract.
+- A gate failure's reason contains "no verdict line" and its result may carry no `refused` key at all; the gate test asserts only that the kind is not a `tail_sweep_*` one. The gate's ordering against the five tail-sweep checks is not asserted.
+- A LOW-severity `fix` row's task-creation behaviour is unspecified, so the clean-sweep test asserts task creation only for the Medium row.
+- Refusal reason wording is asserted by substring (the colliding ref/file, the severity emoji), never by exact phrasing, except the two reasons the contract gives verbatim.
+
+Implementor (Ivan):
+- `(severity, file)` normalization for the deferral match is `str(value).strip()` on each field. The task said to reuse a `_backed()`/`_finding_key` helper "already in this module"; neither exists in `review_close.py` (they are private to `cli/gate.py`, and `_finding_key` is a three-part key including the issue), so a local `_severity_file_key` was written instead.
+- A `deferred_decisions` entry that is not a dict is skipped rather than raising; no test exercises a malformed entry.
+- The above-medium reason names a row by `ref` only when `ref` is truthy (falling back to `file` for an empty-string ref), rather than the design block's `dict.get`-default semantics, which would name an empty string.
+
