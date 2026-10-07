@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 
@@ -47,15 +48,29 @@ OPEN_DEFERRAL = {
 # A second open deferral no swept row collides with: the bystander.
 OTHER_DEFERRAL = dict(OPEN_DEFERRAL, file="src/other.py:7")
 
+# Refs minted per run (the gate reads a ref cell as `R<digits>`), so no
+# implementation can name an uncovered ref without reading the table below.
+_REF_SEED = uuid4().int % 10**9
+REF_COVERED = f"R{_REF_SEED}"
+REF_LOOSE_HIGH = f"R{_REF_SEED + 1}"
+REF_LOOSE_MED = f"R{_REF_SEED + 2}"
+
+# Dispatch row ids no implementation can have seen before this run: two for
+# the personas absent from `agents:`, one for the disabled persona, and one
+# leading with a dash.
+LOST_ROWS = (f"d-{uuid4().hex}", f"d-{uuid4().hex}")
+DISABLED_ROW = f"d-{uuid4().hex}"
+DASH_ID = f"-{uuid4().hex}"
+
 # A consolidated table with three Ref'd rows, so a findings JSON naming one of
 # them leaves TWO uncovered - the case a refusal naming only the first hides.
 THREE_ROWS = (
     "## Consolidated Findings\n\n"
     "| Ref | Consensus | Severity | Issue | File | Task | Found By |\n"
     "|-----|-----------|----------|-------|------|------|----------|\n"
-    f"| R1 | [2/2] | {HIGH} | wrong default | src/b.py:10 | 3 | alice, bob |\n"
-    f"| R2 | [2/2] | {HIGH} | {RUNTIME_ISSUE} | src/d.py:4 | 3 | alice, bob |\n"
-    f"| R3 | [1/2] | {MED} | unclear name | src/c.py:20 | 3 | bob |\n"
+    f"| {REF_COVERED} | [2/2] | {HIGH} | wrong default | src/b.py:10 | 3 | alice, bob |\n"
+    f"| {REF_LOOSE_HIGH} | [2/2] | {HIGH} | {RUNTIME_ISSUE} | src/d.py:4 | 3 | alice, bob |\n"
+    f"| {REF_LOOSE_MED} | [1/2] | {MED} | unclear name | src/c.py:20 | 3 | bob |\n"
 )
 
 CARRY_HINT = "(re-queued [C] rows use classification carry)"
@@ -79,6 +94,54 @@ def _ended(commands: list[list[str]]) -> dict[str, str]:
     }
 
 
+def _deferral_entry(cycle: int) -> dict:
+    """The `deferred_decisions` entry the orchestrator contract requires."""
+    return {
+        "cycle": cycle,
+        "issue": "later",
+        "severity": MED,
+        "file": "src/d.py:4",
+        "action": "deferred",
+        "reason": "deferred by review-close",
+    }
+
+
+def _gate_lenses(tmp_path: Path, agents: str, name: str) -> dict:
+    """`lenses_closed` of one decision-gate batch over an `agents:` block."""
+    home = tmp_path / name
+    home.mkdir()
+    review = _review(home, agents=agents)
+    result = review_close.close(review, _state(home), "decision-gate", [])
+    assert result["applied"] is True
+    return result["lenses_closed"]
+
+
+def _prelock_refusals(tmp_path: Path, state_path: Path, bare_state: Path) -> list[dict]:
+    """The three refusals close() reaches before any state mutation starts: a
+    review file failing the shape gate, an uncovered consolidated row, and a
+    carry row no re-queued task backs."""
+    return [
+        review_close.close(
+            _review(tmp_path, verdict="", name="gate-01.md"),
+            state_path,
+            "decision-gate",
+            [_finding(HIGH, "src/b.py:10", "wrong default")],
+        ),
+        review_close.close(
+            _review(tmp_path, consolidated=THREE_ROWS, name="uncovered-01.md"),
+            state_path,
+            "decision-gate",
+            [dict(_finding(HIGH, "src/b.py:10", "wrong default"), ref=REF_COVERED)],
+        ),
+        review_close.close(
+            _review(tmp_path, consolidated=CARRY_CONSOLIDATED, name="carry-01.md"),
+            bare_state,
+            "decision-gate",
+            _carry_batch(),
+        ),
+    ]
+
+
 def test_tail_sweep_refuses_an_open_deferral(tmp_path: Path) -> None:
     """A swept row the operator already deferred would re-open settled work, so
     the sweep is refused instead of applying the row a second time. The match is
@@ -86,7 +149,9 @@ def test_tail_sweep_refuses_an_open_deferral(tmp_path: Path) -> None:
     the deferral's and it is still refused. Two deferrals are open and only one
     collides, so the reason has to name that one and leave the bystander out, or
     the operator goes looking at the wrong deferral. The batch's first row
-    duplicates nothing, so a check reading only row one would wave it through."""
+    duplicates nothing, so a check reading only row one would wave it through.
+    Severity is half the key: a Low row at the same file as a Medium deferral
+    settles nothing and still sweeps."""
     review = _review(tmp_path)
     state_path = _swept(
         tmp_path,
@@ -106,66 +171,82 @@ def test_tail_sweep_refuses_an_open_deferral(tmp_path: Path) -> None:
     assert state_path.read_bytes() == before
     assert not Path(f"{state_path}.lock").exists()
 
+    quiet = tmp_path / "quiet"
+    quiet.mkdir()
+    other_severity = review_close.close(
+        review,
+        _swept(quiet, review, deferred_decisions=[OPEN_DEFERRAL]),
+        "tail-sweep",
+        [dict(_finding(LOW, "src/c.py:20", "stale name"), ref="R3")],
+    )
+
+    assert other_severity["applied"] is True
+
 
 def test_deferred_entries_carry_cycle_and_action(tmp_path: Path) -> None:
     """The orchestrator reads `deferred_decisions` to report which cycle parked
     a finding and what was done with it, so every entry review-close appends
-    carries six keys, not four. The cycle is the state's own, here 5: an entry
-    stamped with a constant would file this deferral under the wrong cycle."""
+    carries six keys, not four. The cycle is whichever cycle the state is in,
+    so two closes against states in cycle 5 and cycle 7 file their deferral
+    under 5 and 7: a constant stamp would park one of them in the wrong
+    cycle, and the operator would hunt a deferral that cycle never made."""
     review = _review(tmp_path)
-    state_path = _state(tmp_path, cycle=5)
+    filed: dict[int, list] = {}
 
-    result = review_close.close(
-        review,
-        state_path,
-        "decision-gate",
-        [_finding(MED, "src/d.py:4", "later", "defer")],
-    )
+    for cycle in (5, 7):
+        home = tmp_path / f"cycle-{cycle}"
+        home.mkdir()
+        state_path = _state(home, cycle=cycle)
 
-    assert result["applied"] is True
-    assert _load(state_path)["deferred_decisions"] == [
-        {
-            "cycle": 5,
-            "issue": "later",
-            "severity": MED,
-            "file": "src/d.py:4",
-            "action": "deferred",
-            "reason": "deferred by review-close",
-        },
-    ]
+        result = review_close.close(
+            review,
+            state_path,
+            "decision-gate",
+            [_finding(MED, "src/d.py:4", "later", "defer")],
+        )
+
+        assert result["applied"] is True
+        filed[cycle] = _load(state_path)["deferred_decisions"]
+
+    assert filed[5] == [_deferral_entry(5)]
+    assert filed[7] == [_deferral_entry(7)]
 
 
 def test_coverage_refusal_lists_every_uncovered_ref(tmp_path: Path) -> None:
     """Two consolidated rows have no disposition. Naming only the first costs
     the operator a whole re-run per missing row, so one message names them all -
     and ends with the hint that a re-queued row is covered by a `carry` row,
-    which is the disposition people miss. The covered ref stays out of it."""
+    which is the disposition people miss. The covered ref stays out of it. The
+    refs are minted per run, so the message has to be read off this table."""
     review = _review(tmp_path, consolidated=THREE_ROWS)
     state_path = _state(tmp_path)
     before = state_path.read_bytes()
-    findings = [dict(_finding(HIGH, "src/b.py:10", "wrong default"), ref="R1")]
+    findings = [dict(_finding(HIGH, "src/b.py:10", "wrong default"), ref=REF_COVERED)]
 
     result = review_close.close(review, state_path, "decision-gate", findings)
 
     assert result["applied"] is False
     assert result["refused"] == "findings_uncovered"
-    assert "R2" in result["reason"]
-    assert "R3" in result["reason"]
-    assert "R1" not in result["reason"]
+    assert REF_LOOSE_HIGH in result["reason"]
+    assert REF_LOOSE_MED in result["reason"]
+    assert REF_COVERED not in result["reason"]
     assert result["reason"].endswith(CARRY_HINT)
     assert state_path.read_bytes() == before
 
 
 def test_tail_sweep_reports_no_lenses_closed(tmp_path: Path) -> None:
     """A tail sweep closes no lens: it runs after the lenses are already done,
-    and it deliberately leaves `review_lenses` alone. Reporting the review
-    file's lens map anyway tells the orchestrator this batch closed five lenses
-    it never touched. The decision-gate batch over the same file still reports
-    its real map, so an empty map is not the answer everywhere."""
+    and it deliberately leaves `review_lenses` alone, in the report and in
+    state.json alike. Reporting the review file's lens map anyway tells the
+    orchestrator this batch closed five lenses it never touched. The
+    decision-gate batch over the same file still reports its real map and
+    stores exactly that map, and a persona reporting an unknown status is a
+    failed lens, not a lost one - so an empty or canned map is wrong."""
     review = _review(tmp_path)
     state_path = _state(tmp_path)
 
     gate_result = review_close.close(review, state_path, "decision-gate", [])
+    stored = _load(state_path)["review_lenses"]
     sweep_result = review_close.close(review, state_path, "tail-sweep", [TAIL_MED])
 
     assert gate_result["applied"] is True
@@ -176,24 +257,41 @@ def test_tail_sweep_reports_no_lenses_closed(tmp_path: Path) -> None:
         "ui": "lost",
         "fable": "lost",
     }
+    assert stored == gate_result["lenses_closed"]
     assert sweep_result["applied"] is True
     assert sweep_result["lenses_closed"] == {}
+    assert _load(state_path)["review_lenses"] == stored
+
+    flaky = _gate_lenses(
+        tmp_path,
+        "  alice: available\n  bob: unavailable\n",
+        "flaky",
+    )
+
+    assert flaky["doubt"] == "failed"
 
 
 def test_absent_persona_closes_dispatch_as_lost(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """bob has an open dispatch row and no line at all under `agents:`: nothing
-    ever reported back for that dispatch, so bob's lens and bob's row both close
-    as lost rather than as a success the ledger would then average into its
-    timings (bob's lens is `doubt`, per the persona map). carl is a
-    different fact - taken off the roster on purpose - so carl's lens stays
-    skipped and carl's row is not called lost."""
+    """bob and blake each have an open dispatch row and no line at all under
+    `agents:`: nothing ever reported back for those dispatches, so their lenses
+    and their rows close as lost rather than as successes the ledger would then
+    average into its timings (bob's lens is `doubt`, blake's is `blind`). Two
+    absent personas with row ids minted for this run, so no id branch covers
+    them. carl is a different fact - taken off the roster on purpose - so
+    carl's lens is skipped and carl's row keeps today's dispatch outcome, `ok`,
+    which is what the dispatch vocabulary has for a row nobody failed."""
     review = _review(
         tmp_path,
         agents="  alice: available\n  carl: disabled\n",
-        extra_frontmatter="dispatch_rows:\n  bob: d-444\n  carl: d-555\n",
+        extra_frontmatter=(
+            "dispatch_rows:\n"
+            f"  bob: {LOST_ROWS[0]}\n"
+            f"  blake: {LOST_ROWS[1]}\n"
+            f"  carl: {DISABLED_ROW}\n"
+        ),
     )
     state_path = _state(tmp_path)
     commands = _dispatch_argv(monkeypatch)
@@ -202,9 +300,11 @@ def test_absent_persona_closes_dispatch_as_lost(
 
     assert result["applied"] is True
     ended = _ended(commands)
-    assert ended["d-444"] == "lost"
-    assert ended["d-555"] != "lost"
+    assert ended[LOST_ROWS[0]] == "lost"
+    assert ended[LOST_ROWS[1]] == "lost"
+    assert ended[DISABLED_ROW] == "ok"
     assert result["lenses_closed"]["doubt"] == "lost"
+    assert result["lenses_closed"]["blind"] == "lost"
     assert result["lenses_closed"]["ui"] == "skipped"
 
 
@@ -213,7 +313,9 @@ def test_refused_repeat_leaves_backup_untouched(tmp_path: Path) -> None:
     repeat call that is refused must not open the backup: an operator re-running
     a refused batch would otherwise overwrite the one copy of state.json they
     could recover from. An existing backup keeps its bytes and its mtime, and
-    where none exists none is created."""
+    where none exists none is created. The applied call at the end is the
+    control: it does write the backup, holding the bytes state.json had before
+    that call, so "never touched" cannot be bought by never backing up."""
     state_path = _state(tmp_path)
     backup = Path(f"{state_path}.bak")
     backup.write_bytes(b'{"cycle": 1, "tasks": [], "recoverable": true}')
@@ -222,27 +324,9 @@ def test_refused_repeat_leaves_backup_untouched(tmp_path: Path) -> None:
     bare = tmp_path / "bare"
     bare.mkdir()
     bare_state = _state(bare)
+    bare_before = bare_state.read_bytes()
 
-    results = [
-        review_close.close(
-            _review(tmp_path, verdict="", name="gate-01.md"),
-            state_path,
-            "decision-gate",
-            [_finding(HIGH, "src/b.py:10", "wrong default")],
-        ),
-        review_close.close(
-            _review(tmp_path, consolidated=THREE_ROWS, name="uncovered-01.md"),
-            state_path,
-            "decision-gate",
-            [dict(_finding(HIGH, "src/b.py:10", "wrong default"), ref="R1")],
-        ),
-        review_close.close(
-            _review(tmp_path, consolidated=CARRY_CONSOLIDATED, name="carry-01.md"),
-            bare_state,
-            "decision-gate",
-            _carry_batch(),
-        ),
-    ]
+    results = _prelock_refusals(tmp_path, state_path, bare_state)
 
     assert [r["applied"] for r in results] == [False, False, False]
     assert [r.get("refused") for r in results] == [
@@ -254,6 +338,16 @@ def test_refused_repeat_leaves_backup_untouched(tmp_path: Path) -> None:
     assert backup.stat().st_mtime_ns == mtime
     assert not Path(f"{bare_state}.bak").exists()
 
+    applied = review_close.close(
+        _review(bare, name="applied-01.md"),
+        bare_state,
+        "decision-gate",
+        [],
+    )
+
+    assert applied["applied"] is True
+    assert Path(f"{bare_state}.bak").read_bytes() == bare_before
+
 
 def test_dispatch_id_with_leading_dash_is_refused(
     tmp_path: Path,
@@ -262,7 +356,8 @@ def test_dispatch_id_with_leading_dash_is_refused(
     """A row id is written into a child process's argv, so an id starting with a
     dash would be read there as a flag: `--outcome` as an id silently rewrites
     the outcome of whatever row follows. Such an id is refused before any argv
-    is built, while the ordinary ids in the same block are still closed - a
+    is built - including one minted for this run, which no blocklist of known
+    ids can hold - while the ordinary ids in the same block are still closed: a
     filter that dropped every row would lose the real dispatch records."""
     review = _review(
         tmp_path,
@@ -271,6 +366,7 @@ def test_dispatch_id_with_leading_dash_is_refused(
             "  alice: 3a6d1d4e\n"
             "  bob: -x\n"
             "  carl: --outcome\n"
+            f"  dave: {DASH_ID}\n"
             "  eve: a.b_c-1\n"
         ),
     )
@@ -281,4 +377,4 @@ def test_dispatch_id_with_leading_dash_is_refused(
 
     assert result["applied"] is True
     assert sorted(_ended(commands)) == ["3a6d1d4e", "a.b_c-1"]
-    assert all(not row_id.startswith("-") for row_id in _ended(commands))
+    assert DASH_ID not in [arg for cmd in commands for arg in cmd]
