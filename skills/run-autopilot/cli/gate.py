@@ -428,6 +428,45 @@ def _backed(row: dict, reviewed: list[Row]) -> bool:
     )
 
 
+def _ref_conflict_verdict(findings: list[dict]) -> tuple[str, str | None] | None:
+    """("mismatch", why) when one ref is given two different classifications
+    anywhere in `findings`, else None. The same ref twice carrying the SAME
+    classification is not a conflict."""
+    dispositions: dict[str, object] = {}
+    for row in findings:
+        ref = str(row.get("ref", "")).strip().upper()
+        if not ref:
+            continue
+        classification = row.get("classification")
+        if ref in dispositions and dispositions[ref] != classification:
+            return "mismatch", (
+                f"finding ref {ref} given two classifications: "
+                f"{dispositions[ref]} and {classification}"
+            )
+        dispositions[ref] = classification
+    return None
+
+
+def _unbacked_verdict(
+    findings: list[dict],
+    reviewed: list[Row],
+) -> tuple[str, str | None] | None:
+    """("mismatch", the first chosen row no review row carries), else None.
+    verify/discard rows are never applied, so they are not checked."""
+    for row in findings:
+        if row.get("classification") in _SKIPPED_CLASSIFICATIONS:
+            continue
+        if not _backed(row, reviewed):
+            ref = str(row.get("ref", "")).strip()
+            named = f"ref {ref} " if ref else ""
+            return "mismatch", (
+                "chosen finding absent from the review file's consolidated "
+                f"findings: {named}{row.get('severity', '')} "
+                f"{row.get('file', '')} | {row.get('issue', '')}"
+            )
+    return None
+
+
 def _cross_check_findings(
     text: str,
     findings: list[dict],
@@ -451,31 +490,14 @@ def _cross_check_findings(
     reviewed, problem = _reviewed_keys(text)
     if problem is not None:
         return "malformed", _FINDINGS_PROBLEMS[problem]
-    dispositions: dict[str, object] = {}
-    for row in findings:
-        ref = str(row.get("ref", "")).strip().upper()
-        if not ref:
-            continue
-        classification = row.get("classification")
-        if ref in dispositions and dispositions[ref] != classification:
-            return "mismatch", (
-                f"finding ref {ref} given two classifications: "
-                f"{dispositions[ref]} and {classification}"
-            )
-        dispositions[ref] = classification
+    conflict = _ref_conflict_verdict(findings)
+    if conflict is not None:
+        return conflict
     if require_coverage and any(row.ref == "" for row in reviewed):
         return "ref-required", _FINDINGS_PROBLEMS["ref-required"]
-    for row in findings:
-        if row.get("classification") in _SKIPPED_CLASSIFICATIONS:
-            continue
-        if not _backed(row, reviewed):
-            ref = str(row.get("ref", "")).strip()
-            named = f"ref {ref} " if ref else ""
-            return "mismatch", (
-                "chosen finding absent from the review file's consolidated "
-                f"findings: {named}{row.get('severity', '')} "
-                f"{row.get('file', '')} | {row.get('issue', '')}"
-            )
+    unbacked = _unbacked_verdict(findings, reviewed)
+    if unbacked is not None:
+        return unbacked
     if not require_coverage:
         return "ok", None
     covered_refs = {str(row.get("ref", "")).strip().upper() for row in findings}
