@@ -25,7 +25,12 @@ def read_input() -> dict[str, Any]:
     """Parse stdin as JSON. Return {} on empty input or parse failure.
 
     Hooks must remain non-fatal on bad input so a malformed payload never
-    blocks an otherwise-valid tool call.
+    blocks an otherwise-valid tool call. So the bytes are read from
+    `sys.stdin.buffer` and decoded with `errors="replace"` - an invalid byte
+    becomes U+FFFD rather than raising - and both `JSONDecodeError` and
+    `RecursionError` (a deeply nested payload) return {}. When `sys.stdin` has
+    no `.buffer`, it is already a text stream and is read directly; that is the
+    case under `capture_main`'s StringIO swap in the hook tests.
     """
     buffer = getattr(sys.stdin, "buffer", None)
     raw = buffer.read().decode("utf-8", errors="replace") if buffer else sys.stdin.read()
