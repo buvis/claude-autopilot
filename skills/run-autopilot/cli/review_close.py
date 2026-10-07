@@ -64,6 +64,9 @@ _FINDINGS_REFUSALS = {
     "uncovered": "findings_uncovered",
     "ref-required": "findings_ref_required",
 }
+# The severities a tail sweep never closes: red and orange are the decision
+# gate's business.
+_ABOVE_MEDIUM = ("\U0001f534", "\U0001f7e0")
 
 
 def _frontmatter_lines(text: str) -> list[str]:
@@ -380,6 +383,74 @@ def _carry_refusal(loaded: dict, chosen_findings: list[dict]) -> dict | None:
     return None
 
 
+def _severity_file_key(row: dict) -> tuple[str, str]:
+    """The (severity, file) pair a swept row and an open deferral are compared
+    on, normalized the way `_carry_unmatched` normalizes a ref."""
+    return str(row.get("severity", "")).strip(), str(row.get("file", "")).strip()
+
+
+def _matches_open_deferral(findings: list[dict], deferred: list) -> str | None:
+    """The FIRST finding whose (severity, file) pair an open deferral already
+    holds, described as "<severity> <file>", else None."""
+    open_keys = {_severity_file_key(d) for d in deferred if isinstance(d, dict)}
+    for row in findings:
+        severity, file = _severity_file_key(row)
+        if (severity, file) in open_keys:
+            return f"{severity} {file}"
+    return None
+
+
+def _tail_sweep_refusal(
+    loaded: dict,
+    review_file: Path,
+    chosen_findings: list[dict],
+) -> dict | None:
+    """The tail-sweep-only refusals, in the order the operator hears them: a
+    carry row, a sweep before this cycle's decision-gate batch, an empty sweep,
+    a row above Medium, a row duplicating an open deferral."""
+    if any(f.get("classification") == "carry" for f in chosen_findings):
+        return {
+            "applied": False,
+            "refused": "carry_in_tail_sweep",
+            "reason": "a tail-sweep batch never carries a carry row",
+        }
+    applied = loaded.get("applied_review_batches") or []
+    if f"{review_file.resolve()}::decision-gate" not in applied:
+        return {
+            "applied": False,
+            "refused": "tail_sweep_before_decision_gate",
+            "reason": (
+                "tail sweep refused: this cycle's decision-gate batch has not "
+                "been applied yet"
+            ),
+        }
+    if not chosen_findings:
+        return {
+            "applied": False,
+            "refused": "tail_sweep_empty",
+            "reason": "tail sweep findings must not be empty",
+        }
+    above_medium = [f for f in chosen_findings if f.get("severity") in _ABOVE_MEDIUM]
+    if above_medium:
+        named = above_medium[0].get("ref") or above_medium[0].get("file")
+        return {
+            "applied": False,
+            "refused": "tail_sweep_above_medium",
+            "reason": f"tail sweep refuses rows above medium: {named}",
+        }
+    dup = _matches_open_deferral(
+        chosen_findings,
+        loaded.get("deferred_decisions") or [],
+    )
+    if dup is not None:
+        return {
+            "applied": False,
+            "refused": "tail_sweep_duplicates_deferral",
+            "reason": f"tail sweep row duplicates an open deferral: {dup}",
+        }
+    return None
+
+
 def _findings_refusal(
     text: str,
     chosen_findings: list[dict],
@@ -426,7 +497,7 @@ def _prelock_refusal(
     ):
         return {"applied": False, "reason": "already applied"}
     if batch_id == "tail-sweep":
-        return None
+        return _tail_sweep_refusal(loaded, review_file, chosen_findings)
     return _carry_refusal(loaded, chosen_findings)
 
 
