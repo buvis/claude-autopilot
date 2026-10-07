@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from . import gate, rework_groups, statectl
+from . import state as state_mod
 
 _RECORD_DISPATCH = (
     Path(__file__).resolve().parents[2] / "work" / "scripts" / "record_dispatch.py"
@@ -314,6 +315,56 @@ def _close_result(ctx: dict[str, Any], cross_check: str | None) -> dict:
     return result
 
 
+def _carry_unmatched(
+    row: dict,
+    cycle: int,
+    tasks: list[dict],
+    rework_ids: list[str],
+) -> bool:
+    """True when a `carry` row has no matching re-queued task in `tasks`.
+
+    The match is one single task carrying the row's ref in `carry_refs`, for
+    THIS cycle, re-queued (its id in `rework_task_ids`) by a review flag or a
+    fable rescue, not completed, and named `[C{cycle}]` rather than `[D...`.
+    A row with no usable ref cannot be matched at all.
+    """
+    ref = str(row.get("ref", "")).strip().upper()
+    if not ref:
+        return True
+    return not any(
+        isinstance(t, dict)
+        and ref in [str(r).strip().upper() for r in (t.get("carry_refs") or [])]
+        and t.get("carry_cycle") == cycle
+        and str(t.get("id")) in rework_ids
+        and t.get("escalation_reason") in ("review_flag", "fable_rescue")
+        and t.get("status") != "completed"
+        and not str(t.get("name", "")).startswith("[D")
+        for t in tasks
+    )
+
+
+def _carry_refusal(loaded: dict, chosen_findings: list[dict]) -> dict | None:
+    """The refusal for the FIRST `carry` row of `chosen_findings` that no
+    re-queued task of `loaded`'s current cycle backs, else None."""
+    tasks = loaded.get("tasks") or []
+    rework_ids = loaded.get("rework_task_ids") or []
+    cycle = loaded.get("cycle", 1)
+    for row in chosen_findings:
+        if row.get("classification") == "carry" and _carry_unmatched(
+            row, cycle, tasks, rework_ids
+        ):
+            ref = str(row.get("ref", "")).strip() or "(none)"
+            return {
+                "applied": False,
+                "refused": "carry_unmatched",
+                "reason": (
+                    f"carry row ref {ref} has no cycle-{cycle} [C]-prefixed "
+                    f"task in rework_task_ids carrying carry_refs including {ref}"
+                ),
+            }
+    return None
+
+
 def close(
     review_file: Path,
     state_path: Path,
@@ -332,22 +383,48 @@ def close(
     A chosen finding the review file's consolidated-findings section never
     recorded is refused before any lock, with "refused": "findings_mismatch".
     A consolidated row the chosen findings never named is refused the same
-    way, with "refused": "findings_uncovered". A review file carrying no such
-    section is not refused: the fact lands on the applied result as
-    "findings_cross_check": "malformed".
+    way, with "refused": "findings_uncovered"; a table with no Ref column for
+    it to name with "refused": "findings_ref_required"; a findings table that
+    cannot be read at all with "refused": "findings_malformed". A review file
+    carrying no such section is not refused: the fact lands on the applied
+    result as "findings_cross_check": "malformed".
+
+    On that remaining non-tail-sweep "ok"/legacy-no-section path, every
+    `carry` row must point at a re-queued `[C{cycle}]` task of this cycle
+    (see `_carry_unmatched`), else "refused": "carry_unmatched".
     """
     review_file = Path(review_file)
     state_path = Path(state_path)
     text, refusal = _gate_review(review_file, require_codex_guard)
     if refusal is not None:
         return {"applied": False, "reason": refusal}
-    cross_check, detail = gate._cross_check_findings(
+    cross_check, detail = gate.findings_verdict(
         text, chosen_findings, require_coverage=batch_id != "tail-sweep"
     )
     if cross_check == "mismatch":
         return {"applied": False, "refused": "findings_mismatch", "reason": detail}
     if cross_check == "uncovered":
         return {"applied": False, "refused": "findings_uncovered", "reason": detail}
+    if cross_check == "ref-required":
+        return {"applied": False, "refused": "findings_ref_required", "reason": detail}
+    if (
+        cross_check == "malformed"
+        and detail == gate._FINDINGS_PROBLEMS["unreadable-table"]
+    ):
+        return {"applied": False, "refused": "findings_malformed", "reason": detail}
+    # "malformed" + no-section detail: legacy pass-through, unchanged.
+
+    # Advisory pre-lock read: it refuses before paying for mutate()'s lock,
+    # but _close_mutator's in-lock check stays the race-safe authority.
+    loaded, _version = state_mod.load(state_path)
+    if f"{review_file.resolve()}::{batch_id}" in loaded.get(
+        "applied_review_batches", []
+    ):
+        return {"applied": False, "reason": "already applied"}
+    if batch_id != "tail-sweep":
+        carry_refusal = _carry_refusal(loaded, chosen_findings)
+        if carry_refusal is not None:
+            return carry_refusal
 
     frontmatter = _frontmatter_lines(text)
     ctx = _mutation_context(

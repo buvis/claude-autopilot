@@ -76,10 +76,13 @@ Subcommands:
     review-close --review-file --state --batch-id {decision-gate,tail-sweep}
                  --findings [--default-tier]
         review_close.close() (PRD 00249) over the --findings JSON array;
-        prints its result as one JSON line. Exit 1 when close() refuses
-        (gate failure, unreadable review file, batch already applied), 2 on
-        an unreadable or malformed findings file, a failed state write, or a
-        chosen finding the review file's consolidated findings never recorded.
+        prints its result as one JSON line. Exit 1 when close() does not
+        apply without refusing (gate failure, unreadable review file, batch
+        already applied), 2 on an unreadable or malformed findings file, a
+        failed state write, or any close() refusal - a chosen finding the
+        review file's consolidated findings never recorded, an uncovered or
+        unreadable findings table, a `carry` row with no re-queued
+        [C{cycle}] task.
     render    {audit|report|metrics} --state [--stdout] [--now ISO]
               [--summary] [--stalled --site --detail] [--metrics PATH]
         The deterministic render surfaces (PRD 00107): `audit` writes
@@ -1095,7 +1098,10 @@ def _run_review_close(args: argparse.Namespace) -> int:
     if result.get("applied"):
         return 0
     print(f"autopilot: review-close: {result.get('reason')}", file=sys.stderr)
-    return 2 if result.get("refused") in ("findings_mismatch", "findings_uncovered") else 1
+    # A `refused` key is what makes a result a validation refusal, whatever
+    # the kind: enumerating today's kinds would call the next one close()
+    # learns to return a plain "not applied".
+    return 2 if result.get("refused") else 1
 
 
 def _utc_now() -> str:
