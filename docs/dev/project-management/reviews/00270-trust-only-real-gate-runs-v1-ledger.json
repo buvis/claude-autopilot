@@ -1,0 +1,26 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "`run_gate` returns before spawning when the pre-run dirty check fires, so the gate never runs on a tree dirty outside the store. The spec has the gate run and only withholds the record (Test Strategy: \"gate runs over an uncommitted product edit ... no record from that run\"; Risks: a project that does not ignore docs/dev/tmp \"fails safe (a rerun)\").",
+    "file": "skills/run-autopilot/cli/verification.py:343",
+    "reason": "The PRD is self-contradictory here: Feature \"Sole writer\" line 70 specifies `run_gate` \"checks before spawning and after reaping\", which is exactly the implemented early return, and success metric line 58 (\"A gate run on a tree dirty outside the store never yields a record\") is satisfied by it. Only the Edge case wording on line 247 implies the gate still runs. Simplest safe reading kept: the early return stands, because spawning a full suite whose result can never be recorded is pure waste. The practical consequence Blake reproduced is the non-hermetic fixture, which IS being fixed this cycle (R4/R11)."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "File __main__.py has 1792 lines, exceeding the 800-line file limit",
+    "file": "skills/run-autopilot/cli/__main__.py:1792",
+    "reason": "Pre-existing file size, not introduced by this diff (the verb added ~60 lines to a file already far over the cap). Splitting the CLI entry point is its own PRD, outside 00270's scope."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "2 touched test(s) pass against the pre-change code: test_a_changing_transaction_still_refreshes_the_backup, test_mutate_still_writes_and_returns_outcome_when_apply_changes_state",
+    "file": "skills/run-autopilot/cli/test_state_no_change.py",
+    "reason": "Both are deliberate behavior-preserving guards (their names say \"still\"): they pin that the NO_CHANGE sentinel did NOT change the changing-transaction path. Passing against base is their purpose, not a defect."
+  }
+]

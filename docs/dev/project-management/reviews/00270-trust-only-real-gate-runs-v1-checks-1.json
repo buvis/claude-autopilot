@@ -1,0 +1,9 @@
+[
+  {
+    "cycle": 1,
+    "finding": "Cannot statically verify: tests pass independently of machine Git configuration. Run `GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_cli_review_verbs.py skills/run-autopilot/cli/test_verification.py skills/run-autopilot/cli/test_state_no_change.py skills/run-autopilot/cli/test_review_stage.py skills/work/scripts/test_gate_record_writer_prose.py skills/work/scripts/test_verify_queue_prose.py skills/work/scripts/test_command_budget_prose.py`.",
+    "file": null,
+    "command": "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_cli_review_verbs.py skills/run-autopilot/cli/test_verification.py skills/run-autopilot/cli/test_state_no_change.py skills/run-autopilot/cli/test_review_stage.py skills/work/scripts/test_gate_record_writer_prose.py skills/work/scripts/test_verify_queue_prose.py skills/work/scripts/test_command_budget_prose.py",
+    "source": "bob"
+  }
+]
