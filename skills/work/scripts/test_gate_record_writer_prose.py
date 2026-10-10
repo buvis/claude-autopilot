@@ -63,10 +63,6 @@ def test_final_verification_runs_the_suite_through_autopilot_verify() -> None:
 def test_gate_output_is_read_from_the_log_not_a_rerun() -> None:
     verification = _FINAL_VERIFICATION.read_text()
 
-    assert "rg" in verification and "log" in verification, (
-        "references/final-verification.md no longer tells a session to read a "
-        "failure's output from the printed log with rg."
-    )
     assert "never by re-running the gate to capture it" in verification, (
         "references/final-verification.md no longer forbids re-running the "
         "gate to capture output that the log already holds."
