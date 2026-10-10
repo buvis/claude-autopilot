@@ -11,6 +11,7 @@ one-line JSON print, and the exit codes.
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -306,3 +307,114 @@ def test_review_close_rejects_an_unknown_batch_id(tmp_path: Path) -> None:
     with pytest.raises(SystemExit) as exc:
         main(argv)
     assert exc.value.code == 1
+
+
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@example.com",
+            "-c",
+            "commit.gpgsign=false",
+            *args,
+        ],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+@pytest.fixture
+def repo(tmp_path: Path) -> Path:
+    _git(tmp_path, "init", "-q")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("print(1)\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "--no-verify", "-q", "-m", "init")
+    return tmp_path
+
+
+def test_verify_runs_the_gate_once_and_writes_the_record_and_log(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = main(
+        [
+            "verify",
+            "--gate-command",
+            "echo 'out'; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
+            "--repo-root",
+            str(repo),
+            "--cycle",
+            "3",
+        ]
+    )
+
+    assert code == 0
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["passed"] == 1
+    assert printed["recorded"] is True
+    assert printed["dirty"] is False
+    log_path = Path(printed["log"])
+    assert log_path.exists()
+    assert b"out" in log_path.read_bytes()
+    record_path = repo / "docs/dev/project-management/autopilot/last-verification.json"
+    assert record_path.exists()
+
+
+def test_verify_exits_1_on_a_red_gate(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = main(
+        [
+            "verify",
+            "--gate-command",
+            "echo 'PASS 1 FAIL 1 SKIP 0 EXIT 1'; exit 1",
+            "--repo-root",
+            str(repo),
+        ]
+    )
+
+    assert code == 1
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["exit"] == 1
+
+
+def test_verify_writes_no_record_on_a_dirty_tree(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (repo / "src" / "app.py").write_text("print('dirty')\n")
+
+    code = main(
+        [
+            "verify",
+            "--gate-command",
+            "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
+            "--repo-root",
+            str(repo),
+        ]
+    )
+
+    assert code == 1
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["dirty"] is True
+    assert printed["recorded"] is False
+    record_path = repo / "docs/dev/project-management/autopilot/last-verification.json"
+    assert not record_path.exists()
+
+
+def test_verify_exits_2_outside_a_git_repo(tmp_path: Path) -> None:
+    code = main(
+        [
+            "verify",
+            "--gate-command",
+            "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
+            "--repo-root",
+            str(tmp_path),
+        ]
+    )
+
+    assert code == 2
