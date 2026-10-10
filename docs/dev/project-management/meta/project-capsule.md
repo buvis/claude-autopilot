@@ -46,7 +46,7 @@ Generated: 2026-09-14
 
 ### Batch 202610101000
 - [x] 00269-sweep-every-findings-token-v1 (2 cycles)
-- [ ] 00270-trust-only-real-gate-runs-v1 (backlog)
+- [ ] 00270-trust-only-real-gate-runs-v1 (wip, in progress)
 - [ ] 00271-guard-v2-structural-delegation-check-v1 (backlog)
 
 Observations: 00269 full lane, 18/18 tasks (14 build + 3 tail-sweep [D1]
