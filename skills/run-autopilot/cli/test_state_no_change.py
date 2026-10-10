@@ -21,8 +21,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from cli import schema, state, statectl
+from cli import review_close, schema, state, statectl
+from cli.test_review_close import HIGH, _covered, _finding, _review, _state
 
 
 def _bak_path(path: Path) -> Path:
@@ -132,6 +135,30 @@ class MutateNoChangeTest(_TempDirTestCase):
         self.assertEqual(outcome, "bumped")
         committed, _ = state.load(self.path)
         self.assertEqual(committed["cycle"], 2)
+
+
+def test_an_in_lock_already_applied_close_keeps_the_backup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The pre-lock _prelock_refusal check normally catches a repeat close()
+    # before statectl.mutate() is ever called; monkeypatching it to None
+    # forces the second call into _close_mutator's in-lock idempotency
+    # branch, exercising the NO_CHANGE return this task adds.
+    consolidated, findings = _covered([_finding(HIGH, "src/b.py", "wrong default")])
+    review = _review(tmp_path, consolidated=consolidated)
+    state_path = _state(tmp_path)
+
+    first = review_close.close(review, state_path, "decision-gate", findings)
+    assert first["applied"] is True
+    bak_before = _bak_path(state_path).read_bytes()
+    bak_mtime_before = _bak_path(state_path).stat().st_mtime_ns
+
+    monkeypatch.setattr(review_close, "_prelock_refusal", lambda *a, **k: None)
+    second = review_close.close(review, state_path, "decision-gate", findings)
+
+    assert second == {"applied": False, "reason": "already applied"}
+    assert _bak_path(state_path).read_bytes() == bak_before
+    assert _bak_path(state_path).stat().st_mtime_ns == bak_mtime_before
 
 
 if __name__ == "__main__":
