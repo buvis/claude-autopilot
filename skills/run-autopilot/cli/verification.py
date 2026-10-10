@@ -77,9 +77,11 @@ def _iter_porcelain_z_records(raw: str) -> list[tuple[str, str | None]]:
 
 
 def _ancestor_and_clean(repo_root: Path, sha: str, head_sha: str) -> bool:
-    """True iff `sha` is an ancestor of `head_sha`, every path changed since
-    then stays under STORE_PREFIX, and the dirty paths outside the store are
-    none. May raise OSError, same as the `_git` calls it wraps."""
+    """Unchanged ancestor check and status check. The change list source
+    becomes `git diff --name-only --no-renames -z <sha> <head_sha>` split on
+    NUL (replacing the `git log` call, which is silent for a merge commit's
+    own resolution edits - `git diff` between the two endpoints is not). The
+    status call gains `--untracked-files=all`."""
     if _git(repo_root, "merge-base", "--is-ancestor", sha, head_sha).returncode != 0:
         return False
     # Git paths are toplevel-relative; repo_root may sit below the toplevel.
@@ -87,20 +89,13 @@ def _ancestor_and_clean(repo_root: Path, sha: str, head_sha: str) -> bool:
     if prefix.returncode != 0:
         return False
     store = prefix.stdout.strip() + STORE_PREFIX
-    log = _git(
-        repo_root,
-        "log",
-        f"{sha}..{head_sha}",
-        "--no-renames",
-        "--name-only",
-        "--format=",
-    )
-    if log.returncode != 0:
+    diff = _git(repo_root, "diff", "--name-only", "--no-renames", "-z", sha, head_sha)
+    if diff.returncode != 0:
         return False
-    paths = [line for line in log.stdout.splitlines() if line.strip()]
+    paths = [p for p in diff.stdout.split("\0") if p]
     if not all(path.startswith(store) for path in paths):
         return False
-    status = _git(repo_root, "status", "--porcelain=1", "-z")
+    status = _git(repo_root, "status", "--porcelain=1", "-z", "--untracked-files=all")
     if status.returncode != 0:
         return False
     records = _iter_porcelain_z_records(status.stdout)
