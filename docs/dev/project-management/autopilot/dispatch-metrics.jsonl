@@ -3551,3 +3551,25 @@
 {"kind":"handoff","site":"build","edge":"leave","at":1791404047,"phase":"done","prd":"00266-bind-gate-reuse-to-the-command-and-renames-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1791404093,"phase":"done","prd":"00266-bind-gate-reuse-to-the-command-and-renames-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1791404168,"phase":"done","prd":"00266-bind-gate-reuse-to-the-command-and-renames-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791618814,"phase":"build","prd":"00269-sweep-every-findings-token-v1.md"}
+{"id":"a25c34eb","kind":"tess","task":"1","queued_at":1791620012,"prompt_bytes":56406}
+{"id":"ac858bce","kind":"tess","task":"1","queued_at":1791620033,"prompt_bytes":49875}
+{"id":"c29bc9c9","kind":"tess","task":"1","queued_at":1791620037,"prompt_bytes":49875}
+{"id":"202bac22","kind":"devon","task":"1","queued_at":1791620575,"prompt_bytes":22248}
+{"id":"822dfc28","kind":"tess","task":"1","queued_at":1791620865,"prompt_bytes":6219}
+{"id":"202bac22","ended_at":1791621169,"elapsed_s":594,"outcome":"ok","detail":null}
+{"id":"822dfc28","ended_at":1791621172,"elapsed_s":307,"outcome":"ok","detail":null}
+{"id":"c29bc9c9","ended_at":1791621176,"elapsed_s":1139,"outcome":"ok","detail":null}
+{"id":"f20681e3","kind":"ivan","task":"1","queued_at":1791621190,"prompt_bytes":92841}
+{"id":"cab2d2e3","kind":"ivan","task":"1","queued_at":1791621239,"prompt_bytes":34869}
+{"id":"54ef2d53","kind":"pat","task":"1","queued_at":1791621734,"prompt_bytes":43747}
+{"id":"d0904ea3","kind":"ivan","task":"1","queued_at":1791621864,"prompt_bytes":6386}
+{"id":"2b280684","kind":"pat","task":"1","queued_at":1791622013,"prompt_bytes":5392}
+{"id":"a25c34eb","ended_at":1791622142,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"ac858bce","ended_at":1791622142,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"f20681e3","ended_at":1791622142,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"cab2d2e3","ended_at":1791622142,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"54ef2d53","ended_at":1791622142,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"d0904ea3","ended_at":1791622142,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"2b280684","ended_at":1791622142,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791622142,"phase":"build","prd":"00269-sweep-every-findings-token-v1.md"}
