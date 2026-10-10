@@ -42,9 +42,13 @@ def test_a_carry_row_with_no_usable_ref_is_refused_naming_none(
     tmp_path: Path,
     ref: object,
 ) -> None:
-    """A carry row with no ref cannot be matched to any re-queued task, so it
-    is unmatched by definition - and the refusal has to say which row it is
-    talking about, which for a ref-less row is the literal `(none)`."""
+    """A carry row with no ref cannot be matched to any re-queued task - but
+    with no `## Consolidated Findings` section to check it against either,
+    the findings cross-check now refuses first, matching `gate --findings`'s
+    own exit 2 on this exact input, before close() ever reaches the carry
+    match. The "(none)" naming this row would otherwise earn is pinned
+    directly against `_carry_reason` in
+    `test_carry_refusal_names_no_usable_ref_for_a_ref_less_row`."""
     review = _review(tmp_path)
     state_path = _carry_state(tmp_path, [_carry_task()], ["4"])
     before = state_path.read_bytes()
@@ -57,8 +61,8 @@ def test_a_carry_row_with_no_usable_ref_is_refused_naming_none(
     )
 
     assert result["applied"] is False
-    assert result["refused"] == "carry_unmatched"
-    assert result["reason"] == _carry_reason("(none)")
+    assert result["refused"] == "findings_malformed"
+    assert "yet the findings JSON names 1 rows" in result["reason"]
     assert state_path.read_bytes() == before
 
 
@@ -248,7 +252,9 @@ def test_a_requeued_d_task_with_correct_stamps_backs_a_carry(tmp_path: Path) -> 
     )
     state_path = _carry_state(tmp_path, [task], ["4"])
 
-    result = review_close.close(review, state_path, "decision-gate", _carry_batch(("R2",)))
+    result = review_close.close(
+        review, state_path, "decision-gate", _carry_batch(("R2",))
+    )
 
     assert result["applied"] is True
     assert "refused" not in result
@@ -267,7 +273,9 @@ def test_a_fresh_d_task_with_no_escalation_reason_is_refused(tmp_path: Path) -> 
 
     assert result["applied"] is False
     assert result["refused"] == "carry_unmatched"
-    assert "escalation_reason: None is not review_flag or fable_rescue" in result["reason"]
+    assert (
+        "escalation_reason: None is not review_flag or fable_rescue" in result["reason"]
+    )
     assert state_path.read_bytes() == before
 
 
@@ -337,7 +345,9 @@ def test_carry_refusal_names_no_task_lists_the_ref_when_no_candidate_exists() ->
     """A ref no task's `carry_refs` mentions at all gets the narrower
     "no task lists" message, never a closest-task guess among tasks that
     were never candidates in the first place."""
-    reason = review_close._carry_reason(_carry_row(), 2, [_carry_task(refs=("R9",))], ["4"])
+    reason = review_close._carry_reason(
+        _carry_row(), 2, [_carry_task(refs=("R9",))], ["4"]
+    )
 
     assert reason == "carry row ref R1: no task lists R1 in carry_refs"
 
@@ -347,7 +357,10 @@ def test_carry_refusal_names_no_usable_ref_for_a_ref_less_row() -> None:
     considered: "(none)" is the row's own problem, not a task mismatch."""
     reason = review_close._carry_reason(_carry_row(None), 2, [_carry_task()], ["4"])
 
-    assert reason == "carry row ref (none): a carry row needs a ref to match a re-queued task"
+    assert (
+        reason
+        == "carry row ref (none): a carry row needs a ref to match a re-queued task"
+    )
 
 
 def test_carry_unmatched_ignores_task_entries_that_are_not_dicts() -> None:

@@ -497,7 +497,7 @@ def test_a_fenced_h2_line_does_not_end_the_findings_section(tmp_path: Path) -> N
     fenced = "```markdown\n## example\n```\n\n"
     rows = f"{_R1_ROW}\n{_R2_ROW}\n"
     text = _review_text(
-        f"## Consolidated Findings\n\n{fenced}{TABLE_HEADER_REF_6}{rows}"
+        f"## Consolidated Findings\n\n{fenced}{TABLE_HEADER_REF_6}{rows}",
     )
     assert _verdict_and_exit(text, _COVERED, tmp_path) == ("ok", None, 0)
 
@@ -550,10 +550,24 @@ def test_an_unclosed_fence_quotes_nothing(tmp_path: Path) -> None:
     assert gate.findings_verdict(closed, _COVERED) == ("ok", None)
 
 
+def test_an_unclosed_opener_does_not_let_a_later_pair_hide_a_row(
+    tmp_path: Path,
+) -> None:
+    """A four-backtick opener that never finds its own four-or-more-backtick
+    closer must not resume scanning as if nothing happened: a three-backtick
+    pair further down used to be read as its OWN fence and blanked, hiding
+    whatever row it wrapped. Once an opener is unclosed, the rest of the text
+    stays live/scanned - no later run of the fence character may start a new
+    fence instead."""
+    alice = f"````\nnever closes\n```\n{_ALICE_ROW}\n```\nafter\n"
+    text = _review_text(alice=alice)
+    verdict = _verdict_and_exit(text, _COVERED, tmp_path)
+    assert verdict == ("malformed", _unread_detail(text, _ALICE_ROW), 2)
+
+
 def test_an_indented_fence_still_quotes_its_rows(tmp_path: Path) -> None:
     """The fence rule reads the stripped line, so a fence indented under a
     list item still opens and closes, quoting the row between."""
-    from cli import gate
 
     indented = f"  ```\n  {_ALICE_ROW}\n  ```"
     text = _review_text(alice=indented)
@@ -563,7 +577,6 @@ def test_an_indented_fence_still_quotes_its_rows(tmp_path: Path) -> None:
 def test_a_closer_with_trailing_text_still_closes_the_fence(tmp_path: Path) -> None:
     """A closer line only needs to START with a run of the fence character at
     least as long as the opener - trailing text after it still closes."""
-    from cli import gate
 
     text = _review_text(alice=f"```\n{_ALICE_ROW}\n``` trailing text")
     assert _verdict_and_exit(text, _COVERED, tmp_path) == ("ok", None, 0)
@@ -678,6 +691,29 @@ _UNRECOGNISED_TABLE = (
     f"| F1 | [3/3] | {CRIT} | crash on empty input | src/a.py:3 |\n"
     f"| F2 | [2/3] | {HIGH} | wrong default | src/b.py:10 |\n"
 )
+
+
+def test_a_second_table_like_block_is_not_swallowed_as_data(tmp_path: Path) -> None:
+    """A findings table whose header carries neither Ref nor Consensus skips
+    `_row_from_table`'s cell checks for both, so a later table-looking block
+    used to be silently parsed as one more data row under the FIRST header's
+    column positions instead of being refused - `in_table` never reset, so
+    `_unread_token` also treated it as already read. A blank line between
+    the two blocks must end the first table's run, so the second one is
+    re-evaluated as its own header and refused when it is not a real one."""
+    from cli import gate
+
+    first_table = (
+        "| Severity | Issue | File | Found By |\n"
+        "|----------|-------|------|----------|\n"
+        f"| {HIGH} | wrong default | src/b.py:10 | alice, bob |\n"
+    )
+    text = _review_text(
+        f"## Consolidated Findings\n\n{first_table}\n{_UNRECOGNISED_TABLE}",
+    )
+    tag, detail = gate.findings_verdict(text, [], require_coverage=False)
+    assert tag == "malformed"
+    assert detail == _unread_detail(text, _UNRECOGNISED_TABLE.splitlines()[0])
 
 
 def test_a_row_under_an_unrecognised_header_is_unreadable(tmp_path: Path) -> None:

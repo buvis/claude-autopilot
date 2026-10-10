@@ -23,7 +23,9 @@ from cli import gate, review_close
 from cli.test_review_close import (
     CARRY_CONSOLIDATED,
     CONSOLIDATED,
+    D_LINES,
     HIGH,
+    RUNTIME_ISSUE,
     UNREADABLE_TABLE,
     _carry_batch,
     _finding,
@@ -39,6 +41,37 @@ REPEATED_SECTION = CONSOLIDATED + "## Consolidated Findings\n\nagain\n\n"
 # A stray consensus token sitting outside the findings section bounds (before
 # the heading): the sweep refuses to let it pass unread.
 UNREAD_TOKEN = "an orphan line carrying [9/9] outside any section\n\n" + CONSOLIDATED
+
+# A misspelled heading: the table under it is never a section, so its rows are
+# stray tokens no section bounds ever cover.
+HEADING_TYPO = (
+    "## Consolidated findings\n\n"
+    "| Ref | Consensus | Severity | Issue | File | Found By |\n"
+    "|-----|-----------|----------|-------|------|----------|\n"
+    f"| R1 | [2/2] | {HIGH} | wrong default | src/b.py:10 | alice, bob |\n\n"
+)
+
+# A bullet-prefixed row using `*` instead of `-`: the findings parser only
+# reads dash bullets, so this one is a stray token under the real heading.
+BULLET_PREFIXED_ROW = (
+    "## Consolidated Findings\n\n"
+    f"* [2/2] {HIGH} wrong default | src/b.py:10 | Found by: alice, bob\n\n"
+)
+
+# The same row hidden inside an HTML comment: a comment quotes nothing, so its
+# consensus token is still a live, unread line.
+COMMENT_ROW = (
+    "## Consolidated Findings\n\n"
+    f"<!-- - [2/2] {HIGH} wrong default | src/b.py:10 | Found by: alice, bob -->\n\n"
+)
+
+# The 00268 shape: a table whose header names none of Severity, Issue, File.
+UNRECOGNISED_HEADER_TABLE = (
+    "## Consolidated Findings\n\n"
+    "| ID | Consensus | Sev | Description | Location |\n"
+    "|----|-----------|-----|-------------|----------|\n"
+    f"| F1 | [2/2] | {HIGH} | wrong default | src/b.py:10 |\n\n"
+)
 
 # Every refusal kind `_run_review_close` has to report as exit 2.
 REFUSAL_KINDS = (
@@ -227,10 +260,62 @@ def test_cli_exits_2_when_a_carry_row_has_no_requeued_task(tmp_path: Path) -> No
     assert "R1" in out
 
 
+def test_review_close_refuses_a_row_an_unclosed_fence_used_to_hide(
+    tmp_path: Path,
+) -> None:
+    """Same defect as gate.py's own regression, through the real review-close
+    CLI: a four-backtick opener with no closer must not let a later
+    three-backtick pair read as its own fence and blank the row it wraps.
+    Before the fix this finding was silently dropped and the batch applied
+    cleanly; after it, the row surfaces and review-close refuses."""
+    fenced = (
+        "````\nnever closes\n```\n"
+        f"- [9/9] {HIGH} fence-hidden finding | src/z.py:1 | Found by: alice, bob\n"
+        "```\nafter\n"
+    )
+    review = _review(tmp_path, consolidated=CONSOLIDATED, d_lines=D_LINES + fenced)
+    state_path = _state(tmp_path)
+    before = state_path.read_bytes()
+    findings = _findings_file(
+        tmp_path,
+        [
+            dict(_finding(HIGH, "src/b.py:10", "wrong default"), ref="R1"),
+            dict(_finding(HIGH, "src/d.py:4", RUNTIME_ISSUE, "discard"), ref="R2"),
+            dict(
+                _finding("\U0001f7e1", "src/c.py:20", "unclear name", "discard"),
+                ref="R3",
+            ),
+        ],
+    )
+
+    proc = _review_close_cli(review, state_path, findings)
+
+    output = proc.stdout + proc.stderr
+    assert proc.returncode == 2, output
+    assert "findings_malformed" in output
+    assert state_path.read_bytes() == before
+
+
 @pytest.mark.parametrize(
     "consolidated",
-    [UNREADABLE_TABLE, REPEATED_SECTION, UNREAD_TOKEN],
-    ids=["unreadable-table", "repeated-section", "unread-token"],
+    [
+        UNREADABLE_TABLE,
+        REPEATED_SECTION,
+        UNREAD_TOKEN,
+        HEADING_TYPO,
+        BULLET_PREFIXED_ROW,
+        COMMENT_ROW,
+        UNRECOGNISED_HEADER_TABLE,
+    ],
+    ids=[
+        "unreadable-table",
+        "repeated-section",
+        "unread-token",
+        "heading-typo",
+        "bullet-prefixed-row",
+        "comment-row",
+        "00268-unrecognised-header",
+    ],
 )
 def test_both_verbs_refuse_every_sweep_payload(
     tmp_path: Path,
@@ -252,18 +337,21 @@ def test_both_verbs_refuse_every_sweep_payload(
     assert "findings_malformed" in out
 
 
-def test_a_missing_section_with_findings_rows_still_applies_as_legacy(
+def test_a_missing_section_with_findings_rows_is_refused(
     tmp_path: Path,
     capsys: pytest.CaptureFixture,
 ) -> None:
-    """A review file with no findings section at all has no table for the
-    findings machinery to check a non-empty findings array against, so it
-    stays on the legacy apply-and-report-malformed path - the same path a
-    truly empty findings array takes - rather than being refused. Only a
-    table that IS present and unreadable, repeated, or carrying an unread
-    token refuses (see `test_both_verbs_refuse_every_sweep_payload`)."""
+    """A review file with no findings section at all, yet a non-empty findings
+    JSON, is refused: the operator named rows nothing in the file backs. The
+    legacy apply-and-report-malformed path is for a truly EMPTY findings
+    array only (see
+    `test_a_missing_section_with_no_tokens_and_no_findings_still_applies_as_legacy`
+    in test_review_close.py); a table that IS present and unreadable,
+    repeated, or carrying an unread token also refuses (see
+    `test_both_verbs_refuse_every_sweep_payload`)."""
     review = _review(tmp_path)
     state_path = _state(tmp_path)
+    before = state_path.read_bytes()
     findings = _findings_file(
         tmp_path,
         [_finding(HIGH, "src/b.py:10", "wrong default")],
@@ -272,8 +360,9 @@ def test_a_missing_section_with_findings_rows_still_applies_as_legacy(
     code = cli_main.main(_argv(review, state_path, findings))
     out = capsys.readouterr().out
 
-    assert code == 0
-    assert "malformed" in out
+    assert code == 2
+    assert "findings_malformed" in out
+    assert state_path.read_bytes() == before
 
 
 def _argv(review: Path, state_path: Path, findings: Path) -> list[str]:

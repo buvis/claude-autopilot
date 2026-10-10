@@ -102,6 +102,52 @@ def _finding(sev: str, file: str, issue: str, cls: str = "fix") -> dict:
     }
 
 
+def _covered(findings: list[dict]) -> tuple[str, list[dict]]:
+    """A `## Consolidated Findings` table covering `findings` one-to-one
+    (Ref R1, R2, ... assigned in order) plus the same findings each carrying
+    the Ref its row got, so the cross-check reads "ok" rather than refusing
+    the now-exact no-section exemption. For tests pinning behavior the
+    cross-check itself is not about."""
+    rows = []
+    refed = []
+    for i, finding in enumerate(findings, start=1):
+        ref = f"R{i}"
+        found_by = ", ".join(finding.get("found_by") or ["alice", "bob"])
+        rows.append(
+            f"| {ref} | [2/2] | {finding['severity']} | {finding['issue']} | "
+            f"{finding['file']} | {found_by} |",
+        )
+        refed.append(dict(finding, ref=ref))
+    consolidated = (
+        "## Consolidated Findings\n\n"
+        "| Ref | Consensus | Severity | Issue | File | Found By |\n"
+        "|-----|-----------|----------|-------|------|----------|\n"
+        + "\n".join(rows)
+        + "\n\n"
+    )
+    return consolidated, refed
+
+
+def _table(findings: list[dict]) -> str:
+    """A `## Consolidated Findings` table with one row per already-ref'd
+    `finding` (read straight off its own `ref`/`severity`/`issue`/`file`/
+    `found_by`), for fixtures whose findings carry a SPECIFIC ref another
+    fixture already has to match (a re-queued task's `carry_refs`, two rows
+    sharing a ref) rather than one `_covered` is free to assign."""
+    rows = [
+        f"| {f['ref']} | [2/2] | {f['severity']} | {f['issue']} | {f['file']} | "
+        f"{', '.join(f.get('found_by') or ['alice', 'bob'])} |"
+        for f in findings
+    ]
+    return (
+        "## Consolidated Findings\n\n"
+        "| Ref | Consensus | Severity | Issue | File | Found By |\n"
+        "|-----|-----------|----------|-------|------|----------|\n"
+        + "\n".join(rows)
+        + "\n\n"
+    )
+
+
 # A findings section that HAS its header but whose only data row is not shaped
 # `| [m/n] | ... |`: the gate reads this as its "unreadable-table" problem.
 UNREADABLE_TABLE = (
@@ -664,7 +710,10 @@ def test_carry_on_critical_without_requeued_task_is_refused(tmp_path: Path) -> N
 
     assert result["applied"] is False
     assert result["refused"] == "carry_unmatched"
-    assert result["reason"] == _carry_reason("R1")
+    # Hardcoded, not built by calling review_close._carry_reason: a wrong
+    # message in production must fail this assertion, not pass it by
+    # construction.
+    assert result["reason"] == "carry row ref R1: no task lists R1 in carry_refs"
     assert state_path.read_bytes() == before
     assert not Path(f"{state_path}.lock").exists()
     assert not Path(f"{state_path}.bak").exists()
@@ -688,7 +737,9 @@ def test_ghost_carry_ref_is_refused(tmp_path: Path) -> None:
 
     assert result["applied"] is False
     assert result["refused"] == "carry_unmatched"
-    assert result["reason"] == _carry_reason("R3")
+    # Hardcoded for the same reason as the test above: the expected message
+    # must not come from the function under test.
+    assert result["reason"] == "carry row ref R3: no task lists R3 in carry_refs"
     assert state_path.read_bytes() == before
     assert not Path(f"{state_path}.lock").exists()
 

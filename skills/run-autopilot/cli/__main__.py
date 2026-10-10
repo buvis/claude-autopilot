@@ -240,6 +240,8 @@ from cli import (
 _SCRIPTS_DIR = _SKILL_ROOT / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
+from datetime import UTC
+
 import _walk_up
 
 
@@ -934,6 +936,43 @@ def _add_review_stage(subparsers) -> None:
     p.add_argument("--prior-findings", type=Path, default=None)
 
 
+def _boundary_refusal_line(
+    field: str,
+    raw: str,
+    resolved: Path,
+    boundary_desc: str,
+    state_path: Path,
+) -> str:
+    """The one-line refusal for a field that escaped its required boundary."""
+    return (
+        f"autopilot: review-stage: `{field}` '{raw}' resolves to"
+        f" {resolved}, outside {boundary_desc} ({state_path})"
+    )
+
+
+def _refuse_escaped_boundaries(
+    boundaries: tuple[tuple[str, str, Path | None, Path, str], ...],
+    state_path: Path,
+) -> bool:
+    """Print a refusal line for each (field, raw, path, boundary, boundary_desc)
+    tuple whose `path` resolves outside its `boundary`; True when any did."""
+    refused = False
+    for field, raw, path, boundary, boundary_desc in boundaries:
+        if path is None:
+            continue
+        if not path.resolve().is_relative_to(boundary):
+            line = _boundary_refusal_line(
+                field,
+                raw,
+                path.resolve(),
+                boundary_desc,
+                state_path,
+            )
+            print(line, file=sys.stderr)
+            refused = True
+    return refused
+
+
 def _stage_inputs_from_state(args: argparse.Namespace, repo_root: Path) -> dict | int:
     mixed = [f"--{n.replace('_', '-')}" for n in _STANDALONE_ONLY if getattr(args, n)]
     if mixed:
@@ -961,23 +1000,17 @@ def _stage_inputs_from_state(args: argparse.Namespace, repo_root: Path) -> dict 
     prd_path = wip / prd
     design_path = repo_root / design if design else None
     repo_root_resolved = repo_root.resolve()
-    refused = False
-    if not prd_path.resolve().is_relative_to(wip):
-        print(
-            f"autopilot: review-stage: `prd` '{prd}' resolves to"
-            f" {prd_path.resolve()}, outside {wip}/ ({args.state})",
-            file=sys.stderr,
-        )
-        refused = True
-    if design_path and not design_path.resolve().is_relative_to(repo_root_resolved):
-        print(
-            f"autopilot: review-stage: `design_doc` '{design}' resolves to"
-            f" {design_path.resolve()}, outside the repo {repo_root_resolved}"
-            f" ({args.state})",
-            file=sys.stderr,
-        )
-        refused = True
-    if refused:
+    boundaries = (
+        ("prd", prd, prd_path, wip, f"{wip}/"),
+        (
+            "design_doc",
+            design,
+            design_path,
+            repo_root_resolved,
+            f"the repo {repo_root_resolved}",
+        ),
+    )
+    if _refuse_escaped_boundaries(boundaries, args.state):
         return 2
     return {
         "tasks": tasks,
@@ -1137,9 +1170,9 @@ def _run_review_close(args: argparse.Namespace) -> int:
 
 
 def _utc_now() -> str:
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _add_render(subparsers) -> None:

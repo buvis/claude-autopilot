@@ -409,6 +409,21 @@ def _table_keys(section: str) -> tuple[list[Row], str | None]:
     return [], "unreadable-table"
 
 
+def _section_bounds(
+    text: str,
+) -> tuple[re.Match[str] | None, re.Match[str] | None]:
+    """The `## Consolidated Findings` heading match and the next live `## `
+    heading's match after it, both against `text`'s own offsets - or
+    (None, None) when `text` carries no such heading at all. Shared by every
+    reader of the section's bounds, so a change to how a heading or its end
+    is found lands in one place."""
+    heading = _FINDINGS_HEADING_RE.search(text)
+    if heading is None:
+        return None, None
+    following = _NEXT_H2_RE.search(text, heading.end())
+    return heading, following
+
+
 def _reviewed_keys(text: str) -> tuple[list[Row], str | None]:
     """Every row of the `## Consolidated Findings` section, in both shapes it
     is written in, and what went wrong reading them: None, `"no-section"` when
@@ -416,13 +431,10 @@ def _reviewed_keys(text: str) -> tuple[list[Row], str | None]:
     holds a findings table whose header or rows could not be read. The third
     problem the caller can report, `"ref-required"`, is not read here: it is a
     verdict on the rows this returns, not a reading failure."""
-    heading = _FINDINGS_HEADING_RE.search(text)
+    heading, following = _section_bounds(text)
     if heading is None:
         return [], "no-section"
-    section = text[heading.end() :]
-    following = _NEXT_H2_RE.search(section)
-    if following is not None:
-        section = section[: following.start()]
+    section = text[heading.end() : following.start() if following else len(text)]
     rows: list[Row] = []
     for row in _FINDING_ROW_RE.findall(section):
         # From the right: the row always ends `| {file} | Found by: {agents}`,
@@ -507,7 +519,10 @@ def _unfenced(text: str) -> str:
     included, so a quoted example is no heading and no row while line numbers
     hold. The stripped line decides: a fence closes only on a line whose
     stripped text starts with a run of its own character at least as long as
-    the opener; one that never closes quotes nothing."""
+    the opener; one that never closes quotes nothing - and stops the scan
+    right there, so a later run of the fence character further down (which
+    would otherwise read as its own, separate fence) cannot blank content
+    that is really just unclosed-fence text."""
     lines = text.splitlines()
     live = list(lines)
     i = 0
@@ -515,11 +530,15 @@ def _unfenced(text: str) -> str:
         opener = _FENCE_RE.match(lines[i].strip())
         if opener is not None:
             run = opener.group(1)
+            closed = False
             for j in range(i + 1, len(lines)):
-                if lines[j].strip().startswith(run[0] * len(run)):
+                if lines[j].strip().startswith(run):
                     live[i : j + 1] = [""] * (j + 1 - i)
                     i = j
+                    closed = True
                     break
+            if not closed:
+                break
         i += 1
     return "\n".join(live)
 
@@ -535,13 +554,18 @@ def _unread_token(live: str) -> str | None:
     """
     lines = live.split("\n")
     consumed: set[int] = set()
-    heading = _FINDINGS_HEADING_RE.search(live)
+    heading, following = _section_bounds(live)
     if heading is not None:
-        following = _NEXT_H2_RE.search(live, heading.end())
         stop = live.count("\n", 0, following.start()) if following else len(lines)
         in_table = False
         for i in range(live.count("\n", 0, heading.end()), stop):
             line = lines[i]
+            if not line.strip():
+                # A blank line ends a table block: the next pipe row has to
+                # be re-evaluated as a header, not treated as more data of
+                # whatever table came before it.
+                in_table = False
+                continue
             in_table = in_table or _table_header(line) is not None
             if (in_table and _CANDIDATE_ROW_RE.match(line)) or _FINDING_ROW_RE.match(
                 line,
@@ -558,17 +582,22 @@ def _unread_token(live: str) -> str | None:
     return None
 
 
-def _malformed_detail(live: str, findings: list[dict]) -> str | None:
-    """The `malformed` detail for `live` (already fence-blanked), or None when
-    the review file's section is readable: a repeated findings heading, an
-    unread [m/n] token or pipe row, a missing section under a non-empty
-    findings array, or whatever `_reviewed_keys` itself could not read."""
+def _malformed_detail(
+    live: str,
+    findings: list[dict],
+    problem: str | None,
+) -> str | None:
+    """The `malformed` detail for `live` (already fence-blanked) given the
+    section-reading `problem` the caller's own `_reviewed_keys(live)` call
+    already returned, or None when the review file's section is readable: a
+    repeated findings heading, an unread [m/n] token or pipe row, a missing
+    section under a non-empty findings array, or whatever `problem` itself
+    names."""
     if len(_FINDINGS_HEADING_RE.findall(live)) > 1:
         return _FINDINGS_PROBLEMS["repeated-section"]
     unread = _unread_token(live)
     if unread is not None:
         return unread
-    _reviewed, problem = _reviewed_keys(live)
     if problem == "no-section" and findings:
         return (
             "no '## Consolidated Findings' section, yet the findings JSON names "
@@ -602,10 +631,10 @@ def _cross_check_findings(
     naming every review-row ref is expected, not an error.
     """
     live = _unfenced(text)
-    malformed = _malformed_detail(live, findings)
+    reviewed, problem = _reviewed_keys(live)
+    malformed = _malformed_detail(live, findings, problem)
     if malformed is not None:
         return "malformed", malformed
-    reviewed, _problem = _reviewed_keys(live)
     conflict = _ref_conflict_verdict(findings)
     if conflict is not None:
         return conflict
@@ -617,9 +646,7 @@ def _cross_check_findings(
     if not require_coverage:
         return "ok", None
     covered_refs = {str(row.get("ref", "")).strip().upper() for row in findings}
-    uncovered = [
-        row.ref for row in reviewed if row.ref and row.ref not in covered_refs
-    ]
+    uncovered = [row.ref for row in reviewed if row.ref and row.ref not in covered_refs]
     if uncovered:
         return "uncovered", (
             "review rows with no findings-JSON row naming their ref and a "
