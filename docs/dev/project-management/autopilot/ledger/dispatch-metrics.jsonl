@@ -3620,3 +3620,9 @@
 {"id":"ba657fb2","ended_at":1791638046,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"id":"f148d10d","ended_at":1791638046,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"kind":"handoff","site":"review","edge":"leave","at":1791638046,"phase":"review","prd":"00270-trust-only-real-gate-runs-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1791638081,"phase":"review","prd":"00270-trust-only-real-gate-runs-v1.md"}
+{"id":"9b9a3313","kind":"bob","task":"review-00270-c2","queued_at":1791638152,"prompt_bytes":31884}
+{"id":"8ad8f66b","kind":"carl","task":"review-00270-c2","queued_at":1791638152,"prompt_bytes":24950}
+{"id":"9b9a3313","ended_at":1791638738,"elapsed_s":586,"outcome":"ok","detail":null}
+{"id":"8ad8f66b","ended_at":1791638741,"elapsed_s":589,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"review","edge":"leave","at":1791639164,"phase":"done","prd":"00270-trust-only-real-gate-runs-v1.md"}
