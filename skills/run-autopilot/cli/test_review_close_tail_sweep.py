@@ -28,6 +28,7 @@ from cli.test_review_close import (
     _review_close_cli,
     _state,
     _swept,
+    _table,
 )
 
 ORIGINAL_TASK = {"id": "1", "name": "original", "status": "completed"}
@@ -86,7 +87,8 @@ def test_tail_sweep_refuses_a_carry_row_ahead_of_its_other_checks(
     different issue, file and severity is refused too. It is reported even when
     the sweep ALSO runs before the decision-gate batch was applied, which pins
     which of the two refusals the operator is told about first."""
-    review = _review(tmp_path)
+    rows = [TAIL_MED, carry_row]
+    review = _review(tmp_path, consolidated=_table(rows))
     state_path = (
         _swept(tmp_path, review, **MATCHED_CARRY_STATE)
         if decision_gate_applied
@@ -98,7 +100,7 @@ def test_tail_sweep_refuses_a_carry_row_ahead_of_its_other_checks(
         review,
         state_path,
         "tail-sweep",
-        [TAIL_MED, carry_row],
+        rows,
     )
 
     assert result["applied"] is False
@@ -117,16 +119,16 @@ def test_tail_sweep_refuses_a_row_duplicating_an_open_deferral(
     are open and only one collides, so the reason has to name that one and not
     the bystander - otherwise the operator reads a constant string and goes
     looking at the wrong deferral."""
-    review = _review(tmp_path)
+    # The first row duplicates nothing: a check that only read row one would
+    # wave this batch through.
+    rows = [dict(_finding(MED, "src/a.py:3", "stale comment"), ref="R1"), TAIL_MED]
+    review = _review(tmp_path, consolidated=_table(rows))
     state_path = _swept(
         tmp_path,
         review,
         deferred_decisions=[OTHER_DEFERRAL, OPEN_DEFERRAL],
     )
     before = state_path.read_bytes()
-    # The first row duplicates nothing: a check that only read row one would
-    # wave this batch through.
-    rows = [dict(_finding(MED, "src/a.py:3", "stale comment"), ref="R1"), TAIL_MED]
 
     result = review_close.close(review, state_path, "tail-sweep", rows)
 
@@ -148,7 +150,7 @@ def test_tail_sweep_duplicate_deferral_match_is_severity_vocabulary_agnostic(
     vocabulary. The duplicate-deferral match used to compare the two strings
     as-is, so a word-vocabulary deferral never matched an emoji-vocabulary
     swept row for the same file - the exact pair this test seeds."""
-    review = _review(tmp_path)
+    review = _review(tmp_path, consolidated=_table([TAIL_MED]))
     word_deferral = {**OPEN_DEFERRAL, "severity": "medium"}
     state_path = _swept(tmp_path, review, deferred_decisions=[word_deferral])
     before = state_path.read_bytes()
@@ -183,14 +185,16 @@ def test_a_clean_tail_sweep_still_applies(tmp_path: Path, deferral: dict) -> Non
     rows land: the `fix` rows become rework tasks and the `defer` row becomes
     an open decision. A sweep that only stamped the batch would have thrown
     every swept finding away."""
-    review = _review(tmp_path)
+    rows = [TAIL_MED, dict(_finding(LOW, "src/a.py:3", "stale comment"), ref="R1")]
+    sweep_findings = [*rows, dict(DEFER_ROW, ref="R2")]
+    review = _review(tmp_path, consolidated=_table(sweep_findings))
     state_path = _swept(tmp_path, review, deferred_decisions=[deferral])
 
     result = review_close.close(
         review,
         state_path,
         "tail-sweep",
-        [TAIL_MED, _finding(LOW, "src/a.py:3", "stale comment"), DEFER_ROW],
+        sweep_findings,
     )
 
     assert result["applied"] is True
@@ -231,7 +235,7 @@ def test_a_tail_sweep_over_a_gate_failing_review_is_refused_by_the_gate(
 
 # A red row, and an open deferral duplicating its (severity, file) pair: a
 # batch holding both trips the above-medium and the duplicate-deferral refusal.
-CRIT_ROW = dict(_finding(CRIT, "src/a.py:3", "crash on empty input"), ref="R1")
+CRIT_ROW = dict(_finding(CRIT, "src/a.py:3", "crash on empty input"), ref="R2")
 CRIT_DEFERRAL = dict(OPEN_DEFERRAL, severity=CRIT, file="src/a.py:3")
 CRIT_DUP_STATE = {"deferred_decisions": [CRIT_DEFERRAL]}
 CARRY_DUP_STATE = dict(MATCHED_CARRY_STATE, deferred_decisions=[CRIT_DEFERRAL])
@@ -265,7 +269,7 @@ def test_a_tail_sweep_tripping_two_refusals_reports_the_earlier_kind(
     and an above-Medium row outranks a duplicated deferral. Naming a later kind
     would send the operator to fix the wrong thing and re-run into the first
     refusal anyway."""
-    review = _review(tmp_path)
+    review = _review(tmp_path, consolidated=_table(rows) if rows else "")
     state_path = (
         _swept(tmp_path, review, **extra)
         if decision_gate_applied
@@ -311,7 +315,7 @@ def test_cli_exits_2_on_every_tail_sweep_refusal(
     """Each refusal has to reach the caller as exit 2 and name its kind: exit 1
     reads as a plain not-applied (an already-applied re-run), so an
     orchestrator would retry instead of stopping. State stays byte-identical."""
-    review = _review(tmp_path)
+    review = _review(tmp_path, consolidated=_table(rows) if rows else "")
     state_path = (
         _swept(tmp_path, review, **extra)
         if decision_gate_applied

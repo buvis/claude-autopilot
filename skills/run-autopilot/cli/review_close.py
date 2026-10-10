@@ -69,22 +69,22 @@ _DECISION_SEVERITY = {
     "⚪": "low",
 }
 # gate.findings_verdict verdict -> the refusal kind it earns. "malformed" is
-# absent on purpose: every malformed detail refuses except one whose review
-# file has no consolidated-findings section at all (bare or paired with a
-# non-empty findings JSON) - there is no table for the findings machinery to
-# check against, so that case applies as legacy instead (see
-# `_findings_refusal`, `_NO_SECTION_PREFIX`).
+# absent on purpose: every malformed detail refuses except `gate.
+# _FINDINGS_PROBLEMS["no-section"]`'s EXACT text, with no findings JSON to
+# report - there is no table for the findings machinery to check against, so
+# that one case applies as legacy instead (see `_findings_refusal`). A review
+# file with no section AND a non-empty findings JSON gets a longer, DIFFERENT
+# detail (gate._malformed_detail's "yet the findings JSON names N rows"
+# form), which does not equal that exact text and so is refused like any
+# other malformed detail - matching `gate --findings`'s exit 2 on the same
+# input. Compared by identity against `gate._FINDINGS_PROBLEMS["no-section"]`
+# itself, the same "exact dict value" idiom `gate._findings_exit` already
+# uses, not a hardcoded copy that could drift from gate's own wording.
 _FINDINGS_REFUSALS = {
     "mismatch": "findings_mismatch",
     "uncovered": "findings_uncovered",
     "ref-required": "findings_ref_required",
 }
-# Shared by both gate._FINDINGS_PROBLEMS["no-section"] and the composed detail
-# gate._malformed_detail builds when a non-empty findings JSON names rows a
-# missing section cannot have recorded - the no-table case the findings
-# machinery cannot check against at all, so review_close bypasses it rather
-# than refuse.
-_NO_SECTION_PREFIX = "no '## Consolidated Findings' section"
 # The severities a tail sweep never closes: red and orange are the decision
 # gate's business.
 _ABOVE_MEDIUM = ("\U0001f534", "\U0001f7e0")
@@ -200,14 +200,12 @@ def _gate_refusal(review_file: Path, text: str | None, reviewer_csv: str | None)
 
 def _gate_review(
     review_file: Path,
+    text: str | None,
     require_codex_guard: bool,
-) -> tuple[str | None, str | None]:
-    """Read and shape-gate `review_file`. Returns (text, None) when it may be
-    applied, or (text-or-None, refusal reason) when close() must refuse."""
-    try:
-        text: str | None = review_file.read_text(encoding="utf-8")
-    except OSError:
-        text = None
+) -> str | None:
+    """Shape-gate `review_file`'s already-read `text` (read once by the
+    caller). Returns None when it may be applied, or the refusal reason when
+    close() must refuse."""
     reviewers = gate.FRONTMATTER_REVIEWERS_RE.search(text or "")
     reviewer_csv = reviewers.group(1) if reviewers else None
     rc = gate.run_gate(
@@ -218,8 +216,47 @@ def _gate_review(
     # run_gate fails open (0) on an unreadable file; close() cannot, since it
     # has nothing to apply.
     if rc != 0 or text is None:
-        return text, _gate_refusal(review_file, text, reviewer_csv)
-    return text, None
+        return _gate_refusal(review_file, text, reviewer_csv)
+    return None
+
+
+def _read_review_file(review_file: Path) -> str | None:
+    """`review_file`'s text, or None when it cannot be read - read exactly
+    once per `close()` call, since both the no-verdict pre-check and the
+    shape gate need it."""
+    try:
+        return review_file.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
+def _no_verdict_refusal(text: str | None) -> dict | None:
+    """The `no_verdict` refusal, checked before the shape gate so it earns
+    its own `refused` key, or None when `text` has a verdict line (or could
+    not be read at all - the shape gate reports that case instead)."""
+    if text is None or gate.VERDICT_RE.search(text):
+        return None
+    return {
+        "applied": False,
+        "refused": "no_verdict",
+        "reason": (
+            "no verdict line (expected 'Verdict: converged' or 'Verdict: N findings')"
+        ),
+    }
+
+
+def _shape_refusal(
+    review_file: Path,
+    text: str | None,
+    require_codex_guard: bool,
+) -> dict | None:
+    """The no-verdict or shape-gate refusal `text` earns, else None when
+    `close()` may proceed to the findings cross-check."""
+    no_verdict = _no_verdict_refusal(text)
+    if no_verdict is not None:
+        return no_verdict
+    refusal = _gate_review(review_file, text, require_codex_guard)
+    return {"applied": False, "reason": refusal} if refusal is not None else None
 
 
 def _add_rework_tasks(
@@ -452,6 +489,10 @@ def _carry_reason(
         ),
         ("status", "completed"),
     )
+    # _rank(best) is never 4 (out of range for `fields`): this function is
+    # only called by `_carry_refusal` after `_carry_unmatched` confirmed no
+    # task - not even one of `candidates`, a subset of the same tasks - passes
+    # all four conditions, so `best`'s own rank tops out at 3.
     field, why = fields[_rank(best)]
     return (
         f"carry row ref {ref}: closest task {best.get('id')} "
@@ -574,8 +615,13 @@ def _findings_refusal(
     "findings_mismatch", a consolidated row the chosen findings never named
     with "findings_uncovered", a table with no Ref column for it to name
     with "findings_ref_required", and a table that cannot be read at all
-    with "findings_malformed". A review file carrying no such section is not
-    refused: `_close_result` surfaces its "malformed" verdict instead.
+    with "findings_malformed". A review file carrying no such section AND no
+    findings JSON is not refused: `_close_result` surfaces its "malformed"
+    verdict instead. That exemption requires an EXACT match against
+    `gate._FINDINGS_PROBLEMS["no-section"]`; a review file with no section
+    but a non-empty findings JSON gets a longer, different detail and is
+    refused like any other malformed table, matching `gate --findings`'s
+    exit 2 on the same input.
     """
     cross_check, detail = gate.findings_verdict(
         text,
@@ -583,11 +629,7 @@ def _findings_refusal(
         require_coverage=batch_id != "tail-sweep",
     )
     refused = _FINDINGS_REFUSALS.get(cross_check)
-    if (
-        cross_check == "malformed"
-        and detail is not None
-        and not detail.startswith(_NO_SECTION_PREFIX)
-    ):
+    if cross_check == "malformed" and detail != gate._FINDINGS_PROBLEMS["no-section"]:
         refused = "findings_malformed"
     if refused is None:
         return cross_check, None
@@ -632,27 +674,15 @@ def close(
     A findings cross-check the review file fails is refused before any lock
     (see `_findings_refusal`). On the remaining non-tail-sweep
     "ok"/legacy-no-section path, every `carry` row must point at a re-queued
-    `[C{cycle}]` task of this cycle (see `_carry_unmatched`), else
+    task of this cycle (see `_carry_unmatched`), else
     "refused": "carry_unmatched".
     """
     review_file = Path(review_file)
     state_path = Path(state_path)
-    try:
-        pre_text: str | None = review_file.read_text(encoding="utf-8")
-    except OSError:
-        pre_text = None
-    if pre_text is not None and not gate.VERDICT_RE.search(pre_text):
-        return {
-            "applied": False,
-            "refused": "no_verdict",
-            "reason": (
-                "no verdict line (expected 'Verdict: converged' or "
-                "'Verdict: N findings')"
-            ),
-        }
-    text, refusal = _gate_review(review_file, require_codex_guard)
-    if refusal is not None:
-        return {"applied": False, "reason": refusal}
+    text = _read_review_file(review_file)
+    shape_refusal = _shape_refusal(review_file, text, require_codex_guard)
+    if shape_refusal is not None:
+        return shape_refusal
     cross_check, findings_refused = _findings_refusal(text, chosen_findings, batch_id)
     if findings_refused is not None:
         return findings_refused
@@ -672,7 +702,6 @@ def close(
     statectl.mutate(state_path, _close_mutator(ctx))
     if ctx["outcome"].get("already"):
         return {"applied": False, "reason": "already applied"}
-
     if batch_id != "tail-sweep":
         _end_dispatch_rows(_dispatch_outcomes(frontmatter), state_path.parent)
     return _close_result(ctx, cross_check)

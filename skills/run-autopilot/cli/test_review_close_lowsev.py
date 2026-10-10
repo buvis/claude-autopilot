@@ -29,11 +29,13 @@ from cli.test_review_close import (
     RUNTIME_ISSUE,
     TAIL_MED,
     _carry_batch,
+    _covered,
     _finding,
     _load,
     _review,
     _state,
     _swept,
+    _table,
 )
 
 # An open deferral sharing TAIL_MED's (severity, file) pair but not its issue:
@@ -164,14 +166,14 @@ def test_tail_sweep_refuses_an_open_deferral(tmp_path: Path) -> None:
     duplicates nothing, so a check reading only row one would wave it through.
     Severity is half the key: a Low row at the same file as a Medium deferral
     settles nothing and still sweeps."""
-    review = _review(tmp_path)
+    rows = [dict(_finding(LOW, "src/a.py:3", "stale comment"), ref="R1"), TAIL_MED]
+    review = _review(tmp_path, consolidated=_table(rows))
     state_path = _swept(
         tmp_path,
         review,
         deferred_decisions=[OTHER_DEFERRAL, OPEN_DEFERRAL],
     )
     before = state_path.read_bytes()
-    rows = [dict(_finding(LOW, "src/a.py:3", "stale comment"), ref="R1"), TAIL_MED]
 
     result = review_close.close(review, state_path, "tail-sweep", rows)
 
@@ -185,11 +187,17 @@ def test_tail_sweep_refuses_an_open_deferral(tmp_path: Path) -> None:
 
     quiet = tmp_path / "quiet"
     quiet.mkdir()
+    other_rows = [dict(_finding(LOW, "src/c.py:20", "stale name"), ref="R3")]
+    # Overwrites the same path: the decision-gate stamp keys off the path
+    # string, not the file's bytes, so the table can change underneath it
+    # once that batch is already applied - R3 now backs a Low row, not
+    # TAIL_MED's Medium one.
+    review = _review(tmp_path, consolidated=_table(other_rows))
     other_severity = review_close.close(
         review,
         _swept(quiet, review, deferred_decisions=[OPEN_DEFERRAL]),
         "tail-sweep",
-        [dict(_finding(LOW, "src/c.py:20", "stale name"), ref="R3")],
+        other_rows,
     )
 
     assert other_severity["applied"] is True
@@ -202,7 +210,8 @@ def test_deferred_entries_carry_cycle_and_action(tmp_path: Path) -> None:
     so two closes against states in cycle 5 and cycle 7 file their deferral
     under 5 and 7: a constant stamp would park one of them in the wrong
     cycle, and the operator would hunt a deferral that cycle never made."""
-    review = _review(tmp_path)
+    consolidated, findings = _covered([_finding(MED, "src/d.py:4", "later", "defer")])
+    review = _review(tmp_path, consolidated=consolidated)
     filed: dict[int, list] = {}
 
     for cycle in (5, 7):
@@ -214,7 +223,7 @@ def test_deferred_entries_carry_cycle_and_action(tmp_path: Path) -> None:
             review,
             state_path,
             "decision-gate",
-            [_finding(MED, "src/d.py:4", "later", "defer")],
+            findings,
         )
 
         assert result["applied"] is True
@@ -259,6 +268,9 @@ def test_tail_sweep_reports_no_lenses_closed(tmp_path: Path) -> None:
 
     gate_result = review_close.close(review, state_path, "decision-gate", [])
     stored = _load(state_path)["review_lenses"]
+    # Overwrites the same path: the decision-gate stamp above keys off the
+    # path string, not the file's bytes, so the table can land afterward.
+    review = _review(tmp_path, consolidated=_table([TAIL_MED]))
     sweep_result = review_close.close(review, state_path, "tail-sweep", [TAIL_MED])
 
     assert gate_result["applied"] is True

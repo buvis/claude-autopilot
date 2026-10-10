@@ -23,22 +23,30 @@ from cli.test_review_close import (
     MED,
     _carry_state,
     _carry_task,
+    _covered,
     _finding,
     _load,
     _review,
     _state,
+    _table,
 )
 
 
 # Pins pre-existing one-task-per-group behavior; unrelated to the new cross-check.
 def test_close_adds_one_task_per_group(tmp_path: Path) -> None:
-    review = _review(tmp_path, agents="  alice: available\n  bob: unavailable\n")
+    consolidated, findings = _covered(
+        [
+            _finding(CRIT, "src/a.py:3", "crash on empty input"),
+            _finding(HIGH, "src/b.py:10", "wrong default"),
+            _finding(MED, "src/b.py:20", "unclear name"),
+        ],
+    )
+    review = _review(
+        tmp_path,
+        agents="  alice: available\n  bob: unavailable\n",
+        consolidated=consolidated,
+    )
     state_path = _state(tmp_path)
-    findings = [
-        _finding(CRIT, "src/a.py:3", "crash on empty input"),
-        _finding(HIGH, "src/b.py:10", "wrong default"),
-        _finding(MED, "src/b.py:20", "unclear name"),
-    ]
 
     result = review_close.close(review, state_path, "decision-gate", findings)
 
@@ -72,9 +80,9 @@ def test_close_adds_one_task_per_group(tmp_path: Path) -> None:
 
 # Pins pre-existing idempotency behavior; unrelated to the new cross-check.
 def test_close_is_idempotent(tmp_path: Path) -> None:
-    review = _review(tmp_path)
+    consolidated, findings = _covered([_finding(HIGH, "src/b.py", "wrong default")])
+    review = _review(tmp_path, consolidated=consolidated)
     state_path = _state(tmp_path)
-    findings = [_finding(HIGH, "src/b.py", "wrong default")]
 
     first = review_close.close(review, state_path, "decision-gate", findings)
     after_first = _load(state_path)
@@ -136,11 +144,17 @@ def test_close_records_doubt_verdicts(tmp_path: Path) -> None:
     bare = _review(tmp_path, d_lines="", name="tail.md")
     gate_result = review_close.close(bare, state_path, "decision-gate", [])
     assert gate_result["applied"] is True
+    sweep_consolidated, sweep_findings = _covered(
+        [_finding(MED, "src/c.py:20", "unclear name")],
+    )
+    bare = _review(
+        tmp_path, d_lines="", name="tail.md", consolidated=sweep_consolidated
+    )
     sweep_result = review_close.close(
         bare,
         state_path,
         "tail-sweep",
-        [_finding(MED, "src/c.py:20", "unclear name")],
+        sweep_findings,
     )
     assert sweep_result["applied"] is True
     assert len(_load(state_path)["doubts_rubric_verdicts"]) == 5
@@ -151,7 +165,13 @@ def test_close_group_uses_emoji_severity_not_english_word(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    review = _review(tmp_path)
+    consolidated, findings = _covered(
+        [
+            _finding(CRIT, "src/a.py:1", "critical bug"),
+            _finding(HIGH, "src/a.py:9", "high bug"),
+        ],
+    )
+    review = _review(tmp_path, consolidated=consolidated)
     state_path = _state(tmp_path)
     seen: list[list[dict]] = []
     real_group = rework_groups.group
@@ -161,10 +181,6 @@ def test_close_group_uses_emoji_severity_not_english_word(
         return real_group(findings)
 
     monkeypatch.setattr(rework_groups, "group", _spy)
-    findings = [
-        _finding(CRIT, "src/a.py:1", "critical bug"),
-        _finding(HIGH, "src/a.py:9", "high bug"),
-    ]
 
     review_close.close(review, state_path, "decision-gate", findings)
 
@@ -183,9 +199,9 @@ def test_close_idempotency_check_is_inside_the_transaction(
     """Two racing calls: the rival commits after the first call has passed
     every pre-lock step but before it takes the lock. Only an in-lock check
     can see the rival's commit, so exactly one call wins."""
-    review = _review(tmp_path)
+    consolidated, findings = _covered([_finding(HIGH, "src/b.py", "wrong default")])
+    review = _review(tmp_path, consolidated=consolidated)
     state_path = _state(tmp_path)
-    findings = [_finding(HIGH, "src/b.py", "wrong default")]
     real_mutate = statectl.mutate
     rival: list[dict] = []
 
@@ -207,12 +223,21 @@ def test_close_idempotency_check_is_inside_the_transaction(
 def test_close_decision_gate_and_tail_sweep_batches_are_independently_idempotent(
     tmp_path: Path,
 ) -> None:
-    review = _review(tmp_path)
     state_path = _state(tmp_path)
-    gate_findings = [_finding(HIGH, "src/b.py", "wrong default")]
-    tail_findings = [_finding(MED, "src/c.py", "small nit")]
+    gate_consolidated, gate_findings = _covered(
+        [_finding(HIGH, "src/b.py", "wrong default")],
+    )
+    review = _review(tmp_path, consolidated=gate_consolidated)
 
     gate_first = review_close.close(review, state_path, "decision-gate", gate_findings)
+
+    tail_consolidated, tail_findings = _covered(
+        [_finding(MED, "src/c.py", "small nit")],
+    )
+    # Overwrites the same path: the decision-gate stamp above keys off the
+    # path string, not the file's bytes, so the table can change underneath
+    # it once that batch is already applied.
+    review = _review(tmp_path, consolidated=tail_consolidated)
     tail_first = review_close.close(review, state_path, "tail-sweep", tail_findings)
     gate_again = review_close.close(review, state_path, "decision-gate", gate_findings)
     tail_again = review_close.close(review, state_path, "tail-sweep", tail_findings)
@@ -236,7 +261,17 @@ def test_close_state_mutations_use_parse_path(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    review = _review(tmp_path, agents="  alice: available\n  blake: available\n")
+    consolidated, findings = _covered(
+        [
+            _finding(HIGH, "src/b.py", "wrong default"),
+            _finding(MED, "src/c.py", "later", "defer"),
+        ],
+    )
+    review = _review(
+        tmp_path,
+        agents="  alice: available\n  blake: available\n",
+        consolidated=consolidated,
+    )
     state_path = _state(tmp_path)
     paths: list[object] = []
     real_set, real_append = statectl.do_set, statectl.do_append
@@ -251,10 +286,6 @@ def test_close_state_mutations_use_parse_path(
 
     monkeypatch.setattr(statectl, "do_set", _spy_set)
     monkeypatch.setattr(statectl, "do_append", _spy_append)
-    findings = [
-        _finding(HIGH, "src/b.py", "wrong default"),
-        _finding(MED, "src/c.py", "later", "defer"),
-    ]
 
     review_close.close(review, state_path, "decision-gate", findings)
 
@@ -274,7 +305,8 @@ def test_close_uses_statectl_mutate_scoped_validator(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    review = _review(tmp_path)
+    consolidated, findings = _covered([_finding(HIGH, "src/b.py", "x")])
+    review = _review(tmp_path, consolidated=consolidated)
     # An unrelated pre-existing odd field: whole-state validation refuses
     # the write, the scoped validator leaves it alone.
     state_path = _state(tmp_path, phase="not-a-phase")
@@ -293,7 +325,7 @@ def test_close_uses_statectl_mutate_scoped_validator(
         review,
         state_path,
         "decision-gate",
-        [_finding(HIGH, "src/b.py", "x")],
+        findings,
     )
 
     assert calls == [state_path]
@@ -305,14 +337,16 @@ def test_close_uses_statectl_mutate_scoped_validator(
 def test_close_maps_every_classification_row_to_a_chosen_finding_value(
     tmp_path: Path,
 ) -> None:
-    review = _review(tmp_path)
+    consolidated, findings = _covered(
+        [
+            _finding(HIGH, "src/fix.py", "fix me", "fix"),
+            _finding(MED, "src/defer.py", "defer me", "defer"),
+            _finding(MED, "src/verify.py", "verify me", "verify"),
+            _finding(MED, "src/discard.py", "discard me", "discard"),
+        ],
+    )
+    review = _review(tmp_path, consolidated=consolidated)
     state_path = _state(tmp_path)
-    findings = [
-        _finding(HIGH, "src/fix.py", "fix me", "fix"),
-        _finding(MED, "src/defer.py", "defer me", "defer"),
-        _finding(MED, "src/verify.py", "verify me", "verify"),
-        _finding(MED, "src/discard.py", "discard me", "discard"),
-    ]
 
     result = review_close.close(review, state_path, "decision-gate", findings)
 
@@ -342,12 +376,12 @@ def test_carry_row_writes_no_decision_and_no_task(tmp_path: Path) -> None:
     own re-queued task, so a second write here would be a duplicate. That
     re-queued task has to be in state for the batch to apply at all, so this
     one carries it."""
-    review = _review(tmp_path)
-    state_path = _carry_state(tmp_path, [_carry_task()], ["4"])
     findings = [
-        _finding(HIGH, "src/fix.py", "fix me", "fix"),
+        dict(_finding(HIGH, "src/fix.py", "fix me", "fix"), ref="R2"),
         dict(_finding(MED, "src/carry.py", "carry me", "carry"), ref="R1"),
     ]
+    review = _review(tmp_path, consolidated=_table(findings))
+    state_path = _carry_state(tmp_path, [_carry_task()], ["4"])
 
     result = review_close.close(review, state_path, "decision-gate", findings)
 
@@ -362,12 +396,13 @@ def test_carry_row_writes_no_decision_and_no_task(tmp_path: Path) -> None:
 
 # Pins pre-existing found-by-suffix omission behavior; unrelated to the new cross-check.
 def test_close_omits_found_by_suffix_when_no_author(tmp_path: Path) -> None:
-    review = _review(tmp_path)
-    state_path = _state(tmp_path)
     finding = _finding(HIGH, "src/b.py", "wrong default")
     finding["found_by"] = []
+    consolidated, findings = _covered([finding])
+    review = _review(tmp_path, consolidated=consolidated)
+    state_path = _state(tmp_path)
 
-    review_close.close(review, state_path, "decision-gate", [finding])
+    review_close.close(review, state_path, "decision-gate", findings)
 
     desc = _load(state_path)["tasks"][1]["description"]
     assert "(found by:" not in desc
@@ -417,7 +452,12 @@ def test_close_tail_sweep_skips_lens_verdict_and_dispatch_row_steps(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    review = _review(tmp_path, extra_frontmatter="dispatch_rows:\n  bob: d-999\n")
+    consolidated, findings = _covered([_finding(MED, "src/c.py:20", "unclear name")])
+    review = _review(
+        tmp_path,
+        extra_frontmatter="dispatch_rows:\n  bob: d-999\n",
+        consolidated=consolidated,
+    )
     # A tail sweep only applies once this cycle's decision-gate batch has, and
     # never with an empty findings list, so this one carries a Medium row.
     state_path = _state(
@@ -437,7 +477,7 @@ def test_close_tail_sweep_skips_lens_verdict_and_dispatch_row_steps(
         review,
         state_path,
         "tail-sweep",
-        [_finding(MED, "src/c.py:20", "unclear name")],
+        findings,
     )
 
     assert result["applied"] is True
