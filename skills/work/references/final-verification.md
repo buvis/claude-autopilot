@@ -102,8 +102,20 @@ hits its budget is handled by § Timed-out commands above and reported as
 
 ## Recorded verification result
 
-At the end of this step, write `docs/dev/project-management/autopilot/last-verification.json` with
-the **Write tool**, replacing any prior content:
+Run the full suite through the `autopilot verify` CLI verb, never a bare suite
+command and never a hand-written `docs/dev/project-management/autopilot/last-verification.json`:
+
+```
+autopilot verify --gate-command "<full suite command>" [--cycle <state.cycle>]
+```
+
+`autopilot verify` is the **sole writer** of `last-verification.json` — no
+prose anywhere tells a session to write that file directly. It prints one JSON
+line to stdout and streams the full combined stdout/stderr of the run to a log
+file (its own default path, or the printed `"log"` key). Read a failure's
+output from that log with `rg`, never by re-running the gate to capture it —
+untrusted-input and budget rules aside, a second run can land on a different
+tree than the one the record just certified.
 
 ```json
 {
@@ -114,26 +126,30 @@ the **Write tool**, replacing any prior content:
 }
 ```
 
-**Single writer:** this step. **Single reader:** `review-work-completion` step 6,
-which composes the review file's `Tests:` line from the record when its `sha`
-equals the reviewed HEAD and the three counts are non-null. That record is what
-replaces the review's own second run of the same suite.
+**Single writer:** `autopilot verify`, called from this step. **Single
+reader:** `review-work-completion` step 6, which composes the review file's
+`Tests:` line from the record when its `sha` equals the reviewed HEAD and the
+three counts are non-null. That record is what replaces the review's own
+second run of the same suite.
 
-- The counts come from the runner's own summary line. A suite whose output
-  carries **no parseable counts records `null` for all three** — the reader then
-  runs the suite itself rather than guessing.
-- A phase that ran no suite writes the file with an empty `commands` array. The
-  reader treats that exactly like an absent file.
-- Write it whatever the outcome — a failed command, a timed-out one, an
-  improvised suite. The record says what ran; the exit codes carry the verdict.
-  Never omit the file to hide a red run. A command that timed out records
-  `"exit": "timeout"`, never a number.
+- The counts come from the runner's own summary line. A run whose output
+  carries **no parseable counts writes no record at all** — the verb's own
+  reuse-or-run contract never writes a partial one, and the reader then runs
+  the suite itself rather than guessing.
+- A dirty working tree (anything outside the store, before the run or
+  introduced by it) also writes no record — `autopilot verify` refuses to
+  certify a tree it cannot itself vouch for.
+- A command that timed out writes no record either — a timeout is "attempted,
+  no verdict," and the verb never invents one. Report the timeout in the phase
+  report (§ Timed-out commands above); do not treat its absence from
+  `last-verification.json` as a gap to fill by hand.
 - **After any fix cycle below**, the full-suite counts belong to a pre-fix HEAD
-  and § Handling failures re-ran only the commands that failed. Record `null`
-  counts unless the whole suite re-ran clean at the final HEAD; the reader then
-  runs it itself. Recording the pre-fix counts against the final sha would let
-  the review report a red run over a green tree, or a narrow re-run's counts as
-  the suite's.
+  and § Handling failures re-ran only the commands that failed. Re-run
+  `autopilot verify` once the fix cycle settles so its own sha gate takes over:
+  a record from a pre-fix HEAD is never reused, because `reuse_verdict` rejects
+  any sha that is not an ancestor matching the current HEAD. Never hand-write a
+  "stale" sentinel for this case — the verb's own ancestry check already
+  refuses it.
 
 ## Handling failures at this step
 

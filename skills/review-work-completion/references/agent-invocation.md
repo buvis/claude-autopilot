@@ -72,6 +72,18 @@ quota, are one-off runtime failures; record the code/reason and follow
 as a completed Carl review. On exit 4 no new `-o` file is published; an existing
 file is untouched and must never be consolidated as this run's result.
 
+## Blake: Test gate
+
+The staged context carries a `## Test gate` section with this cycle's
+`Tests:` line (`run_stage.run_gate_line`, PRD 00270). Blake's run inputs
+include it unchanged whenever it is present (`review_stage._run_inputs`
+reads it with `_section(context_text, "Test gate")`); a context with no such
+section — a direct `render_roster()` call outside `stage()` — adds nothing.
+`agents/blake.md` carries the matching instruction: when his run inputs carry
+this block, it is the cycle's full-suite result at HEAD, so he must not rerun
+the full suite — a narrow run of one test file to check a specific spec claim
+stays fine.
+
 ## Blake: Filesystem notes
 
 Blake locates the code himself, and he sweeps with `rg --files`, which does not

@@ -188,6 +188,7 @@ _REVIEW_VERB_TEST_FILES = (
     "skills/run-autopilot/scripts/test_phase_review_closes_via_review_close.py",
     "skills/review-work-completion/scripts/test_review_verbs_prose.py",
     "skills/review-work-completion/scripts/test_skill_stages_via_review_stage.py",
+    "skills/work/scripts/test_gate_record_writer_prose.py",
 )
 
 _GLOB_DIR = "skills/run-autopilot/cli"

@@ -85,11 +85,13 @@ task (Phase 0 finds `state.lane_effective == "solo"` and re-enters here).
 ## 3. Suite
 
 After the last task, run the repo suite once under
-`${CLAUDE_PLUGIN_ROOT}/skills/work/references/final-verification.md` and
-write `docs/dev/project-management/autopilot/last-verification.json` per its § Recorded
-verification result (`sha`, the commands, the three counts). A red suite
-here is fixed in-session as its own task-shaped commit before step 4; a suite
-that stays red is the `suite_red` signal below.
+`${CLAUDE_PLUGIN_ROOT}/skills/work/references/final-verification.md` § Recorded
+verification result: `autopilot verify --gate-command "<full suite command>"
+[--cycle <state.cycle>]`, the sole writer of
+`docs/dev/project-management/autopilot/last-verification.json` (`sha`, the
+commands, the three counts) — never a hand-written file. A red suite here is
+fixed in-session as its own task-shaped commit before step 4; a suite that
+stays red is the `suite_red` signal below.
 
 ## 4. Escalation checks
 

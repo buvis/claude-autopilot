@@ -519,8 +519,10 @@ def test_a_queued_command_is_treated_as_untrusted_input() -> None:
 
 
 def test_a_command_with_no_verdict_never_records_a_number() -> None:
-    # The report line says `exit timeout` but the JSON shape said {"exit": <n>},
-    # so the writer had to invent a value - and any number reads as a verdict.
+    # The queue's own report line says `exit timeout` but its JSON shape said
+    # {"exit": <n>}, so the writer had to invent a value - and any number
+    # reads as a verdict. The full-suite record (autopilot verify's own) never
+    # faces this: a timed-out run writes no record at all.
     verification = _FINAL_VERIFICATION.read_text()
     formats = _OUTPUT_FORMATS.read_text()
 
@@ -528,19 +530,21 @@ def test_a_command_with_no_verdict_never_records_a_number() -> None:
         "output-formats.md no longer states what result.exit holds for a "
         "timed-out check, so a budget-blown command gets an invented number."
     )
-    assert '`"exit": "timeout"`, never a number' in verification, (
-        "references/final-verification.md no longer forbids recording a numeric "
-        "exit for a command that returned no verdict."
+    assert "writes no record either" in verification, (
+        "references/final-verification.md no longer says a timed-out full-suite "
+        "run writes no last-verification.json record, so a reader could be "
+        "handed an invented exit code for a run with no verdict."
     )
 
 
 def test_counts_after_a_fix_cycle_are_null_unless_the_suite_re_ran() -> None:
     # The regression loop re-runs only the failing commands, so the full-suite
     # counts belong to a pre-fix HEAD. Recording them against the final sha is
-    # exactly the stale reuse the sha gate exists to prevent.
+    # exactly the stale reuse the sha gate exists to prevent - now enforced by
+    # autopilot verify's own ancestry check in reuse_verdict, not by hand.
     verification = _FINAL_VERIFICATION.read_text()
 
-    assert "unless the whole suite re-ran clean at the final HEAD" in verification, (
+    assert "a record from a pre-fix HEAD is never reused" in verification, (
         "references/final-verification.md lost the post-fix-cycle rule. The "
         "review would reuse pre-fix counts against the fixed tree."
     )
@@ -569,16 +573,13 @@ def test_the_verification_record_names_its_writer_and_its_reader() -> None:
 
 def test_unparseable_counts_record_null_rather_than_a_guess() -> None:
     # The dangerous failure is a record that reads green over counts nobody
-    # measured. Null is the honest value and sends the reader back to the suite.
+    # measured. `autopilot verify` writes no record at all rather than a
+    # record with guessed or null counts, which sends the reader back to the
+    # suite exactly as a missing file always has.
     verification = _FINAL_VERIFICATION.read_text()
 
-    assert "no parseable counts records `null` for all three" in verification, (
-        "references/final-verification.md lost the null-counts fallback. A "
-        "suite whose summary line does not parse must record null, not a "
-        "guessed or omitted count."
-    )
-    assert "empty `commands` array" in verification, (
-        "references/final-verification.md lost the empty-commands case: a phase "
-        "that ran no suite must write a record the reader treats as absent, "
-        "rather than one that reads as a clean run of nothing."
+    assert "writes no record at all" in verification, (
+        "references/final-verification.md lost the unparseable-output rule. A "
+        "suite whose summary line does not parse must leave no "
+        "last-verification.json record, not one with guessed or null counts."
     )
