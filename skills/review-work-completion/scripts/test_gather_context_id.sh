@@ -231,10 +231,13 @@ VALID_SINCE="$(git rev-parse HEAD~1)"
 echo ":(nosuchmagic)x" > docs/dev/project-management/autopilot/review-paths
 
 set +e
-ERR6="$(bash "$SCRIPT" --since "$VALID_SINCE" 2>&1 >/dev/null)"
+OUT8="$(bash "$SCRIPT" --since "$VALID_SINCE" 2>"$DIR/baddiff-stderr.txt")"
 CODE11=$?
+ERR6="$(cat "$DIR/baddiff-stderr.txt")"
 set -e
 [[ "$CODE11" -ne 0 ]] || FAIL "failing diff exit code" "expected non-zero, got $CODE11"
 echo "$ERR6" | grep -qiF "nosuchmagic" \
   || FAIL "failing diff message" "expected git's own pathspec error, got: $ERR6"
+echo "$OUT8" | grep -qo '[^ ]*review-context-[^ ]*\.md' \
+  && FAIL "failing diff prints no file paths on stdout" "expected no review-context path on stdout, got: $OUT8"
 PASS "a failing diff exits non-zero"
