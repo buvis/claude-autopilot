@@ -172,6 +172,22 @@ def test_cli_exits_2_when_the_table_has_no_ref_column(tmp_path: Path) -> None:
     assert gate._FINDINGS_PROBLEMS["ref-required"] in out
 
 
+def test_ref_required_refusal_names_the_0_9_0_version_skew(tmp_path: Path) -> None:
+    """review-close's `findings_ref_required` refusal reads the same
+    `_FINDINGS_PROBLEMS["ref-required"]` dict value `gate --findings` prints
+    (single source of truth), so the 0.9.0 version-skew clause task 2 added
+    to that value must reach the operator through this verb too."""
+    code, out = _cli_refusal(
+        tmp_path,
+        NO_REF_COLUMN,
+        [_finding(HIGH, "src/b.py:10", "wrong default")],
+    )
+
+    assert code == 2, out
+    assert "0.9.0" in out
+    assert "finish or restart the batch on one version" in out
+
+
 def test_cli_exits_2_when_the_findings_table_cannot_be_read(tmp_path: Path) -> None:
     code, out = _cli_refusal(
         tmp_path,
