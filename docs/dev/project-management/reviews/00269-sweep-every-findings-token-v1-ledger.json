@@ -1,0 +1,50 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Unrelated formatter reflow of pre-existing tests, from the end-of-turn reformat. Hunks: `test_duplicate_table_ref_is_refused_wherever_the_pair_sits`, `test_an_indented_data_row_under_a_valid_header_is_still_read` and `test_a_data_row_missing_its_closing_pipe_is_refused`. Revert them to keep the diff surgical.",
+    "file": "skills/run-autopilot/cli/test_gate_findings_shapes.py",
+    "reason": "already resolved before the review ran: this session reverted the loupe end-of-turn reflow in test_review_verbs_prose.py and cli/__main__.py with git checkout, and the tree is clean, so the finding no longer reproduces"
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`__main__.py` has 1703 lines and `review_stage.py` has 815, exceeding 800. Both already exceeded the limit before this diff; splitting these modules is outside this bounded refusal-fix PRD.",
+    "file": "skills/run-autopilot/cli/__main__.py",
+    "reason": "pre-existing before this diff and out of scope for a bounded refusal-fix PRD; Bob filed it as KNOWN himself. Splitting these modules needs its own PRD"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "8 touched test(s) pass against the pre-change code: test_duplicate_table_ref_is_refused_wherever_the_pair_sits, test_each_findings_verdict_exits_by_its_own_tag, test_an_indented_data_row_under_a_valid_header_is_still_read, test_a_data_row_missing_its_closing_pipe_is_refused +2 more",
+    "file": "skills/run-autopilot/cli/test_gate_findings_shapes.py",
+    "reason": "pre-existing tests touched only by the reverted reformat, not new behavior. The change's own new tests do pin it: Alice's base-overlay run confirmed the repeated-section and unread-token sweep params and the blob --since case fail against the pre-change tree"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "1 touched test(s) pass against the pre-change code: test_a_findings_table_whose_rows_do_not_match_is_malformed",
+    "file": "skills/run-autopilot/cli/test_gate_findings_table.py",
+    "reason": "pre-existing test touched by an adjacent edit, not new behavior; same evidence as the test_gate_findings_shapes.py replay row"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "6 touched test(s) pass against the pre-change code: test_cli_accepts_a_carry_classification, test_cli_exits_1_when_the_review_itself_fails_the_gate, test_a_missing_section_with_no_tokens_and_no_findings_still_applies_as_legacy, test_tail_sweep_refused_before_decision_gate_applied, test_tail_sweep_refuses_rows_above_medium",
+    "file": "skills/run-autopilot/cli/test_review_close.py",
+    "reason": "pre-existing tests touched by adjacent edits, not new behavior; same evidence as the test_gate_findings_shapes.py replay row"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "14 touched test(s) pass against the pre-change code: test_carry_unmatched_matches_only_a_live_this_cycle_requeued_task +8 more",
+    "file": "skills/run-autopilot/cli/test_review_close_carry.py",
+    "reason": "pre-existing tests touched by adjacent edits, not new behavior; same evidence as the test_gate_findings_shapes.py replay row"
+  }
+]
