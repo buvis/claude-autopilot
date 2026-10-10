@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run the project's test gate once and decide when its record can be reused.
 
-`run_gate` is the code-side writer of
+`run_gate` is the only writer of
 `docs/dev/project-management/autopilot/last-verification.json` (shape defined
 in skills/work/references/final-verification.md § Recorded verification
 result). `reuse_verdict` decides whether a prior record still certifies HEAD.
@@ -100,6 +100,29 @@ def _ancestor_and_clean(repo_root: Path, sha: str, head_sha: str) -> bool:
         return False
     records = _iter_porcelain_z_records(status.stdout)
     return all(_dirty_path_is_in_store(new, old, store) for new, old in records)
+
+
+def _dirty_outside_store(repo_root: Path) -> bool:
+    """True iff the working tree has any change outside STORE_PREFIX, or the
+    git calls themselves fail (non-git cwd, any OSError/non-zero exit counts
+    as dirty - fail toward refusing the record). Runs
+    `git rev-parse --show-prefix` + `git status --porcelain=1 -z
+    --untracked-files=all` and reuses `_iter_porcelain_z_records` and
+    `_dirty_path_is_in_store`, exactly as `_ancestor_and_clean` already does."""
+    try:
+        prefix = _git(repo_root, "rev-parse", "--show-prefix")
+        if prefix.returncode != 0:
+            return True
+        store = prefix.stdout.strip() + STORE_PREFIX
+        status = _git(
+            repo_root, "status", "--porcelain=1", "-z", "--untracked-files=all"
+        )
+        if status.returncode != 0:
+            return True
+        records = _iter_porcelain_z_records(status.stdout)
+        return not all(_dirty_path_is_in_store(new, old, store) for new, old in records)
+    except OSError:
+        return True
 
 
 def _record_shape_ok(record: dict, gate_command: str) -> bool:
@@ -204,12 +227,17 @@ def _drain_bounded(
     proc: subprocess.Popen,
     cap: int,
     deadline: float,
+    sink=None,
 ) -> tuple[bytes, bool]:
     """Drains stdout and stderr against `deadline`, keeping only the last
     `cap` bytes of stdout (dropping from the front, never the back) and
     discarding stderr after reading it (so its pipe can never fill and
-    block the child). Returns (stdout_tail, done) where `done` is True iff
-    the child exited and both pipes reached EOF before the deadline."""
+    block the child). When `sink` is given, every chunk read from either
+    pipe is written to it immediately, in read order, in addition to the
+    bounded in-memory retention above (memory stays bounded exactly as
+    before; only the parse tail is kept in memory). Returns
+    (stdout_tail, done) where `done` is True iff the child exited and both
+    pipes reached EOF before the deadline."""
     sel = selectors.DefaultSelector()
     sel.register(proc.stdout, selectors.EVENT_READ)
     sel.register(proc.stderr, selectors.EVENT_READ)
@@ -223,6 +251,8 @@ def _drain_bounded(
                 sel.unregister(fobj)
                 open_fds.discard(fobj)
                 continue
+            if sink is not None:
+                sink.write(chunk)
             if fobj is proc.stdout:
                 stdout_buf = (stdout_buf + chunk)[-cap:]
     sel.close()
@@ -238,6 +268,26 @@ def _timed_out_result() -> dict:
         "exit": None,
         "raw_line": None,
         "timed_out": True,
+        "recorded": False,
+        "dirty": False,
+    }
+
+
+def _dirty_result() -> dict:
+    """The refusal shape for a dirty-tree check, pre-spawn or post-reap.
+    `timed_out` is explicitly False here, never inherited from
+    `_timed_out_result()`, because `run_gate_line` branches on `timed_out`
+    first to build its human-readable Tests line and a dirty tree is not a
+    timeout."""
+    return {
+        "passed": None,
+        "failed": None,
+        "skipped": None,
+        "exit": None,
+        "raw_line": None,
+        "timed_out": False,
+        "recorded": False,
+        "dirty": True,
     }
 
 
@@ -268,6 +318,7 @@ def run_gate(
     sha: str,
     cycle: int | None,
     timeout: float = GATE_TIMEOUT_S,
+    log_path: Path | None = None,
 ) -> dict:
     """
     Runs `command` (the gate command, e.g. `dev/bin/release-checks` --
@@ -278,34 +329,56 @@ def run_gate(
     `_timed_out_result()` and write NOTHING. On a clean exit, parse the
     LAST SUMMARY_RE match in the (bounded) stdout tail -- a command that
     prints the pattern twice (a retry) is read as its final, superseding
-    line. No match: passed/failed/skipped are None and nothing is written;
-    a parse writes last-verification.json (shape: `_write_record`).
+    line. `run_gate` is the only writer of last-verification.json (shape:
+    `_write_record`); it checks `_dirty_outside_store(cwd)` before spawning
+    the child AND again after `_reap` returns, and writes the record only
+    when both checks are clean AND a summary line parsed. A dirty-tree
+    refusal (`_dirty_result()`) is never recorded. When `log_path` is
+    given, every byte of stdout and stderr is streamed to it, in read
+    order, in addition to the bounded in-memory parse tail; `run_gate`
+    opens `log_path` itself (creating parent directories first) before its
+    pre-spawn dirty check, and a failure to open it raises the bare
+    OSError rather than being caught here.
     """
-    proc = subprocess.Popen(
-        command,
-        shell=True,
-        cwd=cwd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        start_new_session=True,
-    )
-    deadline = time.monotonic() + timeout
-    stdout_buf, done = _drain_bounded(proc, GATE_OUTPUT_CAP, deadline)
-    if not _reap(proc, deadline, done):
-        return _timed_out_result()
-    raw_line, found = None, None
-    for line in stdout_buf.decode("utf-8", errors="ignore").splitlines():
-        hit = SUMMARY_RE.search(line)
-        if hit:
-            raw_line, found = line, hit
-    result = {
-        "passed": int(found.group(1)) if found else None,
-        "failed": int(found.group(2)) if found else None,
-        "skipped": int(found.group(3)) if found else None,
-        "exit": proc.returncode,
-        "raw_line": raw_line,
-        "timed_out": False,
-    }
-    if found:
-        _write_record(cwd, command, sha, cycle, result)
-    return result
+    log_file = None
+    if log_path is not None:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_file = open(log_path, "wb")
+    try:
+        if _dirty_outside_store(cwd):
+            return _dirty_result()
+        proc = subprocess.Popen(
+            command,
+            shell=True,
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+        deadline = time.monotonic() + timeout
+        stdout_buf, done = _drain_bounded(proc, GATE_OUTPUT_CAP, deadline, log_file)
+        if not _reap(proc, deadline, done):
+            return _timed_out_result()
+        raw_line, found = None, None
+        for line in stdout_buf.decode("utf-8", errors="ignore").splitlines():
+            hit = SUMMARY_RE.search(line)
+            if hit:
+                raw_line, found = line, hit
+        dirty = _dirty_outside_store(cwd)
+        result = {
+            "passed": int(found.group(1)) if found else None,
+            "failed": int(found.group(2)) if found else None,
+            "skipped": int(found.group(3)) if found else None,
+            "exit": proc.returncode,
+            "raw_line": raw_line,
+            "timed_out": False,
+            "recorded": False,
+            "dirty": dirty,
+        }
+        if found and not dirty:
+            _write_record(cwd, command, sha, cycle, result)
+            result["recorded"] = True
+        return result
+    finally:
+        if log_file is not None:
+            log_file.close()
