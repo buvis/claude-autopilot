@@ -171,11 +171,14 @@ def _carry_state(tmp_path: Path, tasks: list[dict], rework_ids: list[str]) -> Pa
     )
 
 
-def _carry_reason(ref: str, cycle: int = 2) -> str:
-    return (
-        f"carry row ref {ref} has no cycle-{cycle} [C]-prefixed task in "
-        f"rework_task_ids carrying carry_refs including {ref}"
-    )
+def _carry_reason(
+    ref: str,
+    cycle: int = 2,
+    tasks: list[dict] | None = None,
+    rework_ids: list[str] | None = None,
+) -> str:
+    row = {} if ref == "(none)" else {"ref": ref}
+    return review_close._carry_reason(row, cycle, tasks or [], rework_ids or [])
 
 
 def _findings_file(tmp_path: Path, rows: list[dict]) -> Path:

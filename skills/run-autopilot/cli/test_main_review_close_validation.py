@@ -252,17 +252,28 @@ def test_both_verbs_refuse_every_sweep_payload(
     assert "findings_malformed" in out
 
 
-def test_a_missing_section_with_findings_rows_is_refused(tmp_path: Path) -> None:
-    """A review file with no findings section at all used to apply as legacy
-    unconditionally. That is only honest when the findings JSON is empty too
-    (nothing was ever classified): a non-empty findings array naming rows the
-    missing section cannot possibly have recorded is now refused instead."""
-    findings = [_finding(HIGH, "src/b.py:10", "wrong default")]
+def test_a_missing_section_with_findings_rows_still_applies_as_legacy(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """A review file with no findings section at all has no table for the
+    findings machinery to check a non-empty findings array against, so it
+    stays on the legacy apply-and-report-malformed path - the same path a
+    truly empty findings array takes - rather than being refused. Only a
+    table that IS present and unreadable, repeated, or carrying an unread
+    token refuses (see `test_both_verbs_refuse_every_sweep_payload`)."""
+    review = _review(tmp_path)
+    state_path = _state(tmp_path)
+    findings = _findings_file(
+        tmp_path,
+        [_finding(HIGH, "src/b.py:10", "wrong default")],
+    )
 
-    code, out = _cli_refusal(tmp_path, "", findings)
+    code = cli_main.main(_argv(review, state_path, findings))
+    out = capsys.readouterr().out
 
-    assert code == 2, out
-    assert "findings_malformed" in out
+    assert code == 0
+    assert "malformed" in out
 
 
 def _argv(review: Path, state_path: Path, findings: Path) -> list[str]:

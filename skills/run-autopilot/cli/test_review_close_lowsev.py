@@ -116,13 +116,25 @@ def _gate_lenses(tmp_path: Path, agents: str, name: str) -> dict:
     return result["lenses_closed"]
 
 
+def _no_tests_line_review(tmp_path: Path, name: str) -> Path:
+    """A review file that fails the shape gate for a reason OTHER than a
+    missing verdict line (which earns its own named `no_verdict` refusal)."""
+    review = _review(tmp_path, name=name)
+    text = review.read_text(encoding="utf-8").replace(
+        "Tests: 12 passed, 0 failed\n",
+        "",
+    )
+    review.write_text(text, encoding="utf-8")
+    return review
+
+
 def _prelock_refusals(tmp_path: Path, state_path: Path, bare_state: Path) -> list[dict]:
     """The three refusals close() reaches before any state mutation starts: a
     review file failing the shape gate, an uncovered consolidated row, and a
     carry row no re-queued task backs."""
     return [
         review_close.close(
-            _review(tmp_path, verdict="", name="gate-01.md"),
+            _no_tests_line_review(tmp_path, "gate-01.md"),
             state_path,
             "decision-gate",
             [_finding(HIGH, "src/b.py:10", "wrong default")],

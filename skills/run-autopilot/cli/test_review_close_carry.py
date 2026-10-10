@@ -96,7 +96,7 @@ def test_a_stale_earlier_cycle_carry_task_does_not_back_this_cycles_carry(
 
     assert result["applied"] is False
     assert result["refused"] == "carry_unmatched"
-    assert result["reason"] == _carry_reason("R1")
+    assert result["reason"] == _carry_reason("R1", tasks=[stale], rework_ids=["4"])
     assert state_path.read_bytes() == before
 
 
@@ -132,7 +132,7 @@ def test_a_tail_sweep_batch_skips_the_carry_match(tmp_path: Path) -> None:
         (_carry_task(carry_cycle=1, name="[C1] carry: src/b.py"), ["4"], True),
         (_carry_task(), [], True),
         (_carry_task(task_id="4"), ["9"], True),
-        (_carry_task(name="[D2] src/b.py"), ["4"], True),
+        (_carry_task(name="[D2] src/b.py"), ["4"], False),
         (_carry_task(status="completed"), ["4"], True),
         (_carry_task(escalation_reason="model_floor"), ["4"], True),
         (_carry_task(escalation_reason=None), ["4"], True),
@@ -149,7 +149,7 @@ def test_a_tail_sweep_batch_skips_the_carry_match(tmp_path: Path) -> None:
         "stale-earlier-cycle",
         "not-in-rework-task-ids",
         "another-task-id-was-requeued",
-        "D-named-task-is-not-a-carry-requeue",
+        "D-named-requeued-task-backs-a-carry",
         "task-already-completed",
         "unrelated-escalation-reason",
         "no-escalation-reason",
@@ -234,6 +234,120 @@ def test_the_refusal_names_the_first_unmatched_carry_row(tmp_path: Path) -> None
     assert result["applied"] is False
     assert result["refused"] == "carry_unmatched"
     assert result["reason"] == _carry_reason("R1")
+
+
+def test_a_requeued_d_task_with_correct_stamps_backs_a_carry(tmp_path: Path) -> None:
+    """Dropping the `[D` exclusion means a D-named task (heidi's own naming,
+    not just `[C{cycle}]`) backs a carry row when every other condition
+    holds."""
+    review = _review(tmp_path, consolidated=CARRY_CONSOLIDATED)
+    task = _carry_task(
+        refs=("R2",),
+        name="[D1] src/d.py",
+        escalation_reason="fable_rescue",
+    )
+    state_path = _carry_state(tmp_path, [task], ["4"])
+
+    result = review_close.close(review, state_path, "decision-gate", _carry_batch(("R2",)))
+
+    assert result["applied"] is True
+    assert "refused" not in result
+
+
+def test_a_fresh_d_task_with_no_escalation_reason_is_refused(tmp_path: Path) -> None:
+    """A D-named task is eligible now, but still has to be a genuine
+    escalation requeue - one carrying no `escalation_reason` at all is not,
+    and the refusal names that exact failing field."""
+    review = _review(tmp_path, consolidated=CARRY_CONSOLIDATED)
+    task = _carry_task(name="[D1] src/d.py", escalation_reason=None)
+    state_path = _carry_state(tmp_path, [task], ["4"])
+    before = state_path.read_bytes()
+
+    result = review_close.close(review, state_path, "decision-gate", _carry_batch())
+
+    assert result["applied"] is False
+    assert result["refused"] == "carry_unmatched"
+    assert "escalation_reason: None is not review_flag or fable_rescue" in result["reason"]
+    assert state_path.read_bytes() == before
+
+
+def test_a_completed_carry_task_is_still_refused(tmp_path: Path) -> None:
+    """A re-queued task that has already completed can no longer carry
+    anything forward - its work is done, so it cannot still be "carrying" a
+    Critical the operator deferred."""
+    review = _review(tmp_path, consolidated=CARRY_CONSOLIDATED)
+    task = _carry_task(status="completed")
+    state_path = _carry_state(tmp_path, [task], ["4"])
+    before = state_path.read_bytes()
+
+    result = review_close.close(review, state_path, "decision-gate", _carry_batch())
+
+    assert result["applied"] is False
+    assert result["refused"] == "carry_unmatched"
+    assert "status: completed" in result["reason"]
+    assert state_path.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    ("task", "rework_ids", "expected_fragment"),
+    [
+        (
+            dict(_carry_task(), escalation_reason=None),
+            ["4"],
+            'closest task 4 "[C2] carry: src/b.py" fails escalation_reason: '
+            "None is not review_flag or fable_rescue",
+        ),
+        (
+            dict(_carry_task(), carry_cycle=1),
+            ["4"],
+            'closest task 4 "[C2] carry: src/b.py" fails carry_cycle: 1 is not 2',
+        ),
+        (
+            dict(_carry_task(), id="9"),
+            ["4"],
+            'closest task 9 "[C2] carry: src/b.py" fails rework_task_ids: 9 is not listed',
+        ),
+        (
+            dict(_carry_task(), status="completed"),
+            ["4"],
+            'closest task 4 "[C2] carry: src/b.py" fails status: completed',
+        ),
+    ],
+    ids=[
+        "no-escalation-reason",
+        "stale-carry-cycle",
+        "id-not-in-rework-task-ids",
+        "completed",
+    ],
+)
+def test_carry_refusal_names_the_closest_task_and_its_first_failing_condition(
+    task: dict,
+    rework_ids: list[str],
+    expected_fragment: str,
+) -> None:
+    """Among the candidates whose `carry_refs` list the ref, the reason names
+    the one passing the longest run of conditions in order, and its exact
+    first failing field - not a generic "no task backs this" message."""
+    reason = review_close._carry_reason(_carry_row(), 2, [task], rework_ids)
+
+    assert expected_fragment in reason
+
+
+def test_carry_refusal_names_no_task_lists_the_ref_when_no_candidate_exists() -> None:
+    """A ref no task's `carry_refs` mentions at all gets the narrower
+    "no task lists" message, never a closest-task guess among tasks that
+    were never candidates in the first place."""
+    reason = review_close._carry_reason(_carry_row(), 2, [_carry_task(refs=("R9",))], ["4"])
+
+    assert reason == "carry row ref R1: no task lists R1 in carry_refs"
+
+
+def test_carry_refusal_names_no_usable_ref_for_a_ref_less_row() -> None:
+    """A carry row with no ref at all is refused before any task is even
+    considered: "(none)" is the row's own problem, not a task mismatch."""
+    reason = review_close._carry_reason(_carry_row(None), 2, [_carry_task()], ["4"])
+
+    assert reason == "carry row ref (none): a carry row needs a ref to match a re-queued task"
 
 
 def test_carry_unmatched_ignores_task_entries_that_are_not_dicts() -> None:

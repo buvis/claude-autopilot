@@ -69,13 +69,22 @@ _DECISION_SEVERITY = {
     "⚪": "low",
 }
 # gate.findings_verdict verdict -> the refusal kind it earns. "malformed" is
-# absent on purpose: every malformed detail refuses except the legacy
-# no-section text, which `_close_result` applies instead (see `_findings_refusal`).
+# absent on purpose: every malformed detail refuses except one whose review
+# file has no consolidated-findings section at all (bare or paired with a
+# non-empty findings JSON) - there is no table for the findings machinery to
+# check against, so that case applies as legacy instead (see
+# `_findings_refusal`, `_NO_SECTION_PREFIX`).
 _FINDINGS_REFUSALS = {
     "mismatch": "findings_mismatch",
     "uncovered": "findings_uncovered",
     "ref-required": "findings_ref_required",
 }
+# Shared by both gate._FINDINGS_PROBLEMS["no-section"] and the composed detail
+# gate._malformed_detail builds when a non-empty findings JSON names rows a
+# missing section cannot have recorded - the no-table case the findings
+# machinery cannot check against at all, so review_close bypasses it rather
+# than refuse.
+_NO_SECTION_PREFIX = "no '## Consolidated Findings' section"
 # The severities a tail sweep never closes: red and orange are the decision
 # gate's business.
 _ABOVE_MEDIUM = ("\U0001f534", "\U0001f7e0")
@@ -375,8 +384,8 @@ def _carry_unmatched(
 
     The match is one single task carrying the row's ref in `carry_refs`, for
     THIS cycle, re-queued (its id in `rework_task_ids`) by a review flag or a
-    fable rescue, not completed, and named `[C{cycle}]` rather than `[D...`.
-    A row with no usable ref cannot be matched at all.
+    fable rescue, and not completed. A row with no usable ref cannot be
+    matched at all.
     """
     ref = str(row.get("ref", "")).strip().upper()
     if not ref:
@@ -388,8 +397,65 @@ def _carry_unmatched(
         and str(t.get("id")) in rework_ids
         and t.get("escalation_reason") in ("review_flag", "fable_rescue")
         and t.get("status") != "completed"
-        and not str(t.get("name", "")).startswith("[D")
         for t in tasks
+    )
+
+
+def _carry_reason(
+    row: dict,
+    cycle: int,
+    tasks: list[dict],
+    rework_ids: list[str],
+) -> str:
+    """The operator-facing reason a `carry` row is unmatched.
+
+    A row with no usable ref earns its own message; a ref no task's
+    `carry_refs` lists earns another. Otherwise the message names the
+    CLOSEST candidate - among tasks whose `carry_refs` lists the ref, the one
+    passing the longest run of carry_cycle -> rework_task_ids ->
+    escalation_reason -> status, in that order (ties broken by first
+    occurrence in `tasks`) - and its first failing condition.
+    """
+    ref = str(row.get("ref", "")).strip().upper()
+    if not ref:
+        return "carry row ref (none): a carry row needs a ref to match a re-queued task"
+    candidates = [
+        t
+        for t in tasks
+        if isinstance(t, dict)
+        and ref in [str(r).strip().upper() for r in (t.get("carry_refs") or [])]
+    ]
+    if not candidates:
+        return f"carry row ref {ref}: no task lists {ref} in carry_refs"
+
+    def _rank(t: dict) -> int:
+        conditions = [
+            t.get("carry_cycle") == cycle,
+            str(t.get("id")) in rework_ids,
+            t.get("escalation_reason") in ("review_flag", "fable_rescue"),
+            t.get("status") != "completed",
+        ]
+        passed = 0
+        for ok in conditions:
+            if not ok:
+                break
+            passed += 1
+        return passed
+
+    best = max(candidates, key=_rank)
+    fields = (
+        ("carry_cycle", f"{best.get('carry_cycle')} is not {cycle}"),
+        ("rework_task_ids", f"{best.get('id')} is not listed"),
+        (
+            "escalation_reason",
+            f"{best.get('escalation_reason')} is not review_flag or fable_rescue",
+        ),
+        ("status", "completed"),
+    )
+    field, why = fields[_rank(best)]
+    return (
+        f"carry row ref {ref}: closest task {best.get('id')} "
+        f'"{best.get("name", "")}" fails {field}: {why}'
     )
 
 
@@ -406,14 +472,10 @@ def _carry_refusal(loaded: dict, chosen_findings: list[dict]) -> dict | None:
             tasks,
             rework_ids,
         ):
-            ref = str(row.get("ref", "")).strip() or "(none)"
             return {
                 "applied": False,
                 "refused": "carry_unmatched",
-                "reason": (
-                    f"carry row ref {ref} has no cycle-{cycle} [C]-prefixed "
-                    f"task in rework_task_ids carrying carry_refs including {ref}"
-                ),
+                "reason": _carry_reason(row, cycle, tasks, rework_ids),
             }
     return None
 
@@ -521,7 +583,11 @@ def _findings_refusal(
         require_coverage=batch_id != "tail-sweep",
     )
     refused = _FINDINGS_REFUSALS.get(cross_check)
-    if cross_check == "malformed" and detail != gate._FINDINGS_PROBLEMS["no-section"]:
+    if (
+        cross_check == "malformed"
+        and detail is not None
+        and not detail.startswith(_NO_SECTION_PREFIX)
+    ):
         refused = "findings_malformed"
     if refused is None:
         return cross_check, None
