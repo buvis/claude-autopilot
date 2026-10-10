@@ -98,6 +98,8 @@ cross-check matches on: anything copying a row into a chosen-findings JSON
 carries the row's `Ref` into its `"ref"` field, so the issue text may be
 re-worded without `autopilot gate --findings` refusing the batch.
 
+A [m/n] token or a pipe-table row anywhere outside the Consolidated Findings table makes gate --findings and review-close refuse the file (exit 2); quote an example row inside a code fence.
+
 ## Issue Documentation Format
 
 ```

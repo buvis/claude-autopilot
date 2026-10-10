@@ -122,6 +122,17 @@ def test_carry_rule_prose_has_no_d_name_test() -> None:
     assert "must appear in some task's `carry_refs`" in dispatch
 
 
+def test_output_formats_tells_writers_to_fence_example_rows() -> None:
+    """A reviewer who quotes a worked example of a findings row outside a
+    code fence writes an unconsumed token the sweep refuses - output-formats
+    must tell writers to fence any example row."""
+    assert (
+        "A [m/n] token or a pipe-table row anywhere outside the Consolidated "
+        "Findings table makes gate --findings and review-close refuse the "
+        "file (exit 2); quote an example row inside a code fence."
+    ) in FORMATS
+
+
 def test_carry_creates_nothing_prose() -> None:
     """A `carry` row creates no task and no decision, next to `verify` and
     `discard`, and the changelog ships that rule with the coverage check."""
