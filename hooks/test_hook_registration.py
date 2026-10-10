@@ -98,3 +98,13 @@ def test_each_guard_hook_has_a_short_timeout() -> None:
         timeout = hooks[0].get("timeout")
         assert isinstance(timeout, int) and not isinstance(timeout, bool), hooks[0]
         assert 0 < timeout <= 5, hooks[0]
+
+
+def test_every_hooks_test_file_is_in_the_release_gate() -> None:
+    """agoge 2026-10-07 #6: the 00267 narrowing pins sat outside
+    dev/bin/release-checks, so a release could break them with the gate
+    green. Every hooks/test_*.py must appear there by its repo path."""
+    hooks_dir = HOOKS_JSON.parent
+    gate = (hooks_dir.parent / "dev" / "bin" / "release-checks").read_text(encoding="utf-8")
+    missing = [p.name for p in sorted(hooks_dir.glob("test_*.py")) if f"hooks/{p.name}" not in gate]
+    assert not missing, missing

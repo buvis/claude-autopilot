@@ -5,13 +5,14 @@ a stdin payload, exactly as the harness invokes it; the allow corpus goes
 straight through `is_phase_delegation` because it is ~180 prompts.
 
 Fixtures:
-- `fixtures/phase_delegation/denied/*.txt` - the four Agent calls the
-  2026-10-03 00242 build session made instead of running the phase skills
-  itself, captured byte-for-byte from that session's transcript. Line 1 is
-  the call's `description`, the rest is its `prompt`.
-- `fixtures/phase_delegation/allowed/*.txt` - 20 real per-task dispatch
-  prompts copied verbatim from `docs/dev/tmp/dispatch-*.txt`; each file is a
-  whole `prompt`. Six of them name a phase skill without delegating it.
+- `fixtures/phase_delegation/denied/*.txt` - Agent calls that hand a phase
+  over: the four the 2026-10-03 00242 build session made instead of running
+  the phase skills itself (captured byte-for-byte from its transcript), plus
+  hand-written phrasings PRD 00267 added. Line 1 is the call's
+  `description`, the rest is its `prompt`.
+- `fixtures/phase_delegation/allowed/*.txt` - real per-task and reviewer
+  dispatch prompts copied verbatim from `docs/dev/tmp/dispatch-*.txt`; each
+  file is a whole `prompt`. Some name a phase skill without delegating it.
 """
 
 from __future__ import annotations
@@ -96,8 +97,9 @@ def _guard_module():
     return importlib.import_module("guard_phase_delegation")
 
 
-def test_the_four_observed_delegations_are_denied() -> None:
+def test_every_denied_fixture_is_denied() -> None:
     fixtures = _denied()
+    assert fixtures
     results = {f.name: _run(_agent_payload(_tool_input(f)), loop=True) for f in fixtures}
     let_through = sorted(name for name, r in results.items() if r.returncode != 2)
     assert let_through == []

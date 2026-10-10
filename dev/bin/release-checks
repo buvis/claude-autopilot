@@ -132,7 +132,8 @@ run_pytest uv run --no-project --with pytest python -m pytest -q \
   hooks/test_enforce_prd_location.py \
   hooks/test_guard_skill_after_leave.py \
   hooks/test_guard_stop_on_live_lanes.py \
-  hooks/test_guard_phase_delegation.py
+  hooks/test_guard_phase_delegation.py \
+  hooks/test_guard_phase_delegation_narrowing.py
 
 echo "[checks] custody push guard"
 run_pytest uv run --no-project --with pytest python -m pytest -q hooks/test_guard_push_on_critical.py
