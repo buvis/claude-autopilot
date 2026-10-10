@@ -69,7 +69,8 @@ _DECISION_SEVERITY = {
     "⚪": "low",
 }
 # gate.findings_verdict verdict -> the refusal kind it earns. "malformed" is
-# absent on purpose: only its unreadable-table detail refuses.
+# absent on purpose: every malformed detail refuses except the legacy
+# no-section text, which `_close_result` applies instead (see `_findings_refusal`).
 _FINDINGS_REFUSALS = {
     "mismatch": "findings_mismatch",
     "uncovered": "findings_uncovered",
@@ -520,10 +521,7 @@ def _findings_refusal(
         require_coverage=batch_id != "tail-sweep",
     )
     refused = _FINDINGS_REFUSALS.get(cross_check)
-    if (
-        cross_check == "malformed"
-        and detail == gate._FINDINGS_PROBLEMS["unreadable-table"]
-    ):
+    if cross_check == "malformed" and detail != gate._FINDINGS_PROBLEMS["no-section"]:
         refused = "findings_malformed"
     if refused is None:
         return cross_check, None

@@ -33,6 +33,13 @@ from cli.test_review_close import (
     _state,
 )
 
+# Two "## Consolidated Findings" headings: there is no single section to read.
+REPEATED_SECTION = CONSOLIDATED + "## Consolidated Findings\n\nagain\n\n"
+
+# A stray consensus token sitting outside the findings section bounds (before
+# the heading): the sweep refuses to let it pass unread.
+UNREAD_TOKEN = "an orphan line carrying [9/9] outside any section\n\n" + CONSOLIDATED
+
 # Every refusal kind `_run_review_close` has to report as exit 2.
 REFUSAL_KINDS = (
     "findings_mismatch",
@@ -181,6 +188,44 @@ def test_cli_exits_2_when_a_carry_row_has_no_requeued_task(tmp_path: Path) -> No
     assert code == 2, out
     assert "carry_unmatched" in out
     assert "R1" in out
+
+
+@pytest.mark.parametrize(
+    "consolidated",
+    [UNREADABLE_TABLE, REPEATED_SECTION, UNREAD_TOKEN],
+    ids=["unreadable-table", "repeated-section", "unread-token"],
+)
+def test_both_verbs_refuse_every_sweep_payload(
+    tmp_path: Path,
+    consolidated: str,
+) -> None:
+    """Every malformed detail the PRD 00269 sweep can now produce - not just
+    the pre-existing unreadable-table shape - refuses in both `gate
+    --findings` and `review-close`, and the refusal leaves state.json
+    untouched."""
+    findings = [_finding(HIGH, "src/b.py:10", "wrong default")]
+    review = _review(tmp_path, consolidated=consolidated)
+    text = review.read_text(encoding="utf-8")
+    findings_file = _findings_file(tmp_path, findings)
+
+    assert gate._findings_exit(text, findings_file) == 2
+
+    code, out = _cli_refusal(tmp_path, consolidated, findings)
+    assert code == 2, out
+    assert "findings_malformed" in out
+
+
+def test_a_missing_section_with_findings_rows_is_refused(tmp_path: Path) -> None:
+    """A review file with no findings section at all used to apply as legacy
+    unconditionally. That is only honest when the findings JSON is empty too
+    (nothing was ever classified): a non-empty findings array naming rows the
+    missing section cannot possibly have recorded is now refused instead."""
+    findings = [_finding(HIGH, "src/b.py:10", "wrong default")]
+
+    code, out = _cli_refusal(tmp_path, "", findings)
+
+    assert code == 2, out
+    assert "findings_malformed" in out
 
 
 def _argv(review: Path, state_path: Path, findings: Path) -> list[str]:

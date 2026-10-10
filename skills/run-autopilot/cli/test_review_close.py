@@ -389,12 +389,19 @@ def test_cli_accepts_a_carry_classification(tmp_path: Path) -> None:
     front of review_close.close() - a findings file holding a `carry` row for
     a re-queued [C{cycle}] row must not be rejected before close() runs. The
     state carries that re-queued task, so close() accepts the carry too."""
-    review = _review(tmp_path)
+    consolidated = (
+        "## Consolidated Findings\n\n"
+        "| Ref | Consensus | Severity | Issue | File | Found By |\n"
+        "|-----|-----------|----------|-------|------|----------|\n"
+        f"| R1 | [2/2] | {MED} | carry me | src/carry.py | alice, bob |\n"
+        f"| R2 | [2/2] | {HIGH} | fix me | src/fix.py | alice, bob |\n\n"
+    )
+    review = _review(tmp_path, consolidated=consolidated)
     state_path = _carry_state(tmp_path, [_carry_task()], ["4"])
     findings = _findings_file(
         tmp_path,
         [
-            _finding(HIGH, "src/fix.py", "fix me", "fix"),
+            dict(_finding(HIGH, "src/fix.py", "fix me", "fix"), ref="R2"),
             dict(_finding(MED, "src/carry.py", "carry me", "carry"), ref="R1"),
         ],
     )
@@ -529,7 +536,7 @@ def test_refuses_unreadable_table_instead_of_applying(tmp_path: Path) -> None:
     assert not Path(f"{state_path}.bak").exists()
 
 
-def test_a_missing_findings_section_still_applies_as_legacy_malformed(
+def test_a_missing_section_with_no_tokens_and_no_findings_still_applies_as_legacy(
     tmp_path: Path,
 ) -> None:
     """The other half of the malformed split: a review file with no findings
@@ -538,14 +545,12 @@ def test_a_missing_findings_section_still_applies_as_legacy_malformed(
     review artifact written before the table existed."""
     review = _review(tmp_path)
     state_path = _state(tmp_path)
-    findings = [_finding(HIGH, "src/b.py:10", "wrong default")]
 
-    result = review_close.close(review, state_path, "decision-gate", findings)
+    result = review_close.close(review, state_path, "decision-gate", [])
 
     assert result["applied"] is True
     assert "refused" not in result
     assert result["findings_cross_check"] == "malformed"
-    assert [t["name"] for t in _load(state_path)["tasks"][1:]] == ["[D2] src/b.py"]
 
 
 def _pin_verdict(
@@ -687,7 +692,7 @@ def test_tail_sweep_refused_before_decision_gate_applied(tmp_path: Path) -> None
     High dispositions were never recorded. Two other artifacts' decision-gate
     entries are seeded, so neither a non-empty applied_review_batches nor a
     same-file-name entry from another directory can satisfy it."""
-    review = _review(tmp_path)
+    review = _review(tmp_path, consolidated=CONSOLIDATED)
     other = (tmp_path / "other-02.md").resolve()
     namesake = (tmp_path / "sub" / review.name).resolve()
     state_path = _state(
@@ -733,7 +738,15 @@ def test_tail_sweep_refuses_rows_above_medium(
     decision gate's business, and letting one through here would close it
     without a dispatch. The reason names the FIRST offending row, by Ref when
     it has one and by file when it does not, so the operator can move it."""
-    review = _review(tmp_path)
+    consolidated = (
+        "## Consolidated Findings\n\n"
+        "| Ref | Consensus | Severity | Issue | File | Found By |\n"
+        "|-----|-----------|----------|-------|------|----------|\n"
+        f"| R1 | [2/2] | {HIGH} | wrong default | src/b.py:10 | alice, bob |\n"
+        f"| R2 | [2/2] | {CRIT} | crash on empty input | src/a.py:3 | alice, bob |\n"
+        f"| R3 | [1/2] | {MED} | unclear name | src/c.py:20 | bob |\n\n"
+    )
+    review = _review(tmp_path, consolidated=consolidated)
     state_path = _swept(tmp_path, review)
     before = state_path.read_bytes()
 
