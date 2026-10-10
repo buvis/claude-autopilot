@@ -759,7 +759,7 @@ def _tmp_escape_refusal(tmp_dir: Path, repo_root: Path) -> dict | None:
     return {
         "ok": False,
         "error": f"{TMP_REL} resolves outside the repo; refusing to stage",
-        "exit": 1,
+        "exit": 2,
     }
 
 

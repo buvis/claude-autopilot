@@ -112,6 +112,38 @@ def test_stage_refuses_a_symlinked_tmp_outside_the_repo(env: dict) -> None:
     assert list(outside.iterdir()) == []
 
 
+def test_a_symlinked_tmp_outside_the_repo_exits_2(env: dict) -> None:
+    """The staging escape refusal is a refusal to apply, not a plain
+    argument error - it has to be distinguishable from exit 1, both at
+    `stage()` itself and through the `review-stage` CLI wrapper that
+    propagates its `exit` field verbatim."""
+    outside = env["tmp"] / "elsewhere"
+    outside.mkdir()
+    (env["repo"] / "docs" / "dev").mkdir(parents=True, exist_ok=True)
+    (env["repo"] / "docs" / "dev" / "tmp").symlink_to(outside)
+
+    summary = _stage(env)
+
+    assert summary["ok"] is False
+    assert summary["exit"] == 2
+
+    code = main(
+        [
+            "review-stage",
+            "--cycle-id",
+            CYCLE,
+            "--gate-command",
+            GATE,
+            "--repo-root",
+            str(env["repo"]),
+            "--state",
+            str(_state_file(env)),
+        ],
+    )
+
+    assert code == 2
+
+
 def test_stage_refuses_a_symlinked_dev_dir_before_creating_tmp(env: dict) -> None:
     outside = env["tmp"] / "elsewhere"
     outside.mkdir()
