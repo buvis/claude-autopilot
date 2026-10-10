@@ -112,6 +112,16 @@ def test_help_names_the_token_sweep_and_no_verdict_refusals() -> None:
     assert "`[C]`-prefixed" not in gate_doc
 
 
+def test_carry_rule_prose_has_no_d_name_test() -> None:
+    """The carry rule's prose used to also require the backing task's name
+    not start with `[D`, mirroring the `_carry_unmatched` clause task 6
+    removed (a carry row is matched by its stamps now, never by name) - the
+    prose must not still state the removed name test."""
+    dispatch = PHASE_REVIEW.split("### Dispatch rework", 1)[1]
+    assert "name not starting with `[D`" not in dispatch
+    assert "must appear in some task's `carry_refs`" in dispatch
+
+
 def test_carry_creates_nothing_prose() -> None:
     """A `carry` row creates no task and no decision, next to `verify` and
     `discard`, and the changelog ships that rule with the coverage check."""
