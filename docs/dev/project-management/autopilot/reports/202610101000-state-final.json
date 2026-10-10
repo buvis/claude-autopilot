@@ -1,0 +1,66 @@
+{
+  "phase": "done",
+  "next_phase": "",
+  "schema_version": 1,
+  "batch": {
+    "id": "202610101000",
+    "mode": "autopilot",
+    "completed_prds": [
+      {
+        "filename": "00269-sweep-every-findings-token-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 9,
+        "escalated_decisions": 0,
+        "tasks_completed": 18,
+        "tasks_total": 18,
+        "lane": "full",
+        "lane_reason": "design",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00270-trust-only-real-gate-runs-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 25,
+        "escalated_decisions": 0,
+        "tasks_completed": 15,
+        "tasks_total": 15,
+        "lane": "full",
+        "lane_reason": "design",
+        "lane_effective": "full",
+        "lane_escalated": null
+      }
+    ],
+    "plugin_versions": {
+      "aegis@buvis-plugins": "0.4.0",
+      "warden@buvis-plugins": "0.14.0"
+    },
+    "parks_consecutive": 0,
+    "minted_stubs": [
+      "00272-triage-r1-from-datetime-import-utc-at-skills-ru-v1.md",
+      "00273-triage-run-gate-returns-before-spawning-when-th-v1.md",
+      "00274-triage-prior-r6-half-fixed-drain-bounded-still-v1.md",
+      "00275-triage-prior-r1-a-still-unfixed-the-except-oser-v1.md"
+    ],
+    "catchup_head_sha": "fe93a28fd291c364f0bc5a90004ce91a4d6a0058",
+    "catchup_completed_at": "2026-10-10T14:10:00Z"
+  },
+  "prd": "00271-guard-v2-structural-delegation-check-v1.md",
+  "catchup_mode": "run",
+  "doubt_reviewer": "codex",
+  "consensus_engine": "legacy",
+  "session_model": "sonnet",
+  "rework_cap": 2,
+  "lane": "full",
+  "lane_reason": "hook",
+  "lane_effective": "full",
+  "tasks_total": 0,
+  "tasks_completed": 0,
+  "cycle": 1,
+  "applied_review_batches": [
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00269-sweep-every-findings-token-v1-review-1.md::decision-gate",
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00270-trust-only-real-gate-runs-v1-review-1.md::decision-gate"
+  ],
+  "phases_completed": [],
+  "replan_count": 0
+}

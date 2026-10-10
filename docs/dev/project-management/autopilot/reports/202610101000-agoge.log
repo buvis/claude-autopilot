@@ -1,0 +1,33 @@
+Lanes still running; I'll wait for their notifications.
+
+Walter is back with 1 verified MEDIUM finding. Four lanes still running.
+
+Trudy is back with 6 verified findings and 1 verified LOW. Her HIGH on `verify --log` pointed at the record is serious. Three lanes still running: heidi, wendy and peggy.
+
+Heidi is back with 5 verified findings. F1 is a HIGH regression: the gate never runs in a repo that does not gitignore `docs/dev/tmp/`. Her F2 is the same defect as trudy #2, so I'll merge them. Wendy and peggy are still running.
+
+The live repo is clean apart from the expected dirt, and has no stray worktree. Waiting on peggy.
+
+**Done.** The agoge run on claude-autopilot at `e5d09f0` finished unattended. The 20 findings are written up as decision packets for you to walk; none has been decided yet. 7 are HIGH.
+
+**Changed**
+- Report: `docs/dev/project-management/audit-results/agoge-2026-10-10.md`, plus a `.json` sidecar for scoring.
+- Profile refreshed from `3e6b841` to `e5d09f0`. Your Pins and vetoes section came through unchanged: the checksum was the same before and after (`1723024031 52`).
+- Five specialists ran: journeys, integration, release, performance and security. The UX/browser lane did not run because there is no browser surface. Security ran because you passed `--authorized autoclaude-drain`; the profile itself still reads "not asserted". The 24 raw findings merged into 20; every "verified" one quotes the command that was run. One is labelled mocked because it used a stand-in gate script.
+
+```
+findings 20 | no paths 0 | HIGH 7  MEDIUM 5  LOW 8
+```
+
+**Top issues**
+- **Gate never runs in other repos (regression):** a repo that does not gitignore `docs/dev/tmp/` never runs its test gate. The review prints "gate skipped" and still exits 0, where 0.9.0 ran the suite.
+- **Faked green results:** `verify --log` pointed at the record file turns a failing gate into a green record that the next review reuses. Edits that `git status` cannot see also get certified as passing.
+- **CRITICALs escape:** a CRITICAL finding written in a few unusual shapes passes the review's decision gate with no task.
+- **The "full suite" isn't full:** the gate skips 113 test files, and 3 of those fail at HEAD and at v0.9.0.
+
+**Not done**
+- No tests were written. The profile assigns test writing, but the skill skips it when the tree is dirty. It is dirty with loop metrics and the refreshed profile; each packet names the test to add.
+- Three security probes could not run, because policy refused creating symlinks and writing into the store. I did not route around the refusals.
+- The live loop (PID 64956) is still running. I left the report uncommitted, since earlier agoge reports were committed by the loop's own drain step.
+
+**Next:** You: run `/run-agoge --resume /Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/audit-results/agoge-2026-10-10.md` to walk the packets, starting with packet 1.
