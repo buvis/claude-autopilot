@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **run-autopilot**: `autopilot verify` is the way to run the full suite - it runs the gate, streams the log and writes the verification record itself, so no session hand-writes `last-verification.json`
+
 ### Fixed
 
 - **run-autopilot**: the findings cross-check also refuses a review row the findings JSON leaves without a disposition (exit 2); re-queued rows use the new `carry` classification
@@ -31,6 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: `review-close`'s carry match no longer excludes a `[D`-named task - a carry row is matched by its stamps (`carry_refs`, `carry_cycle`, `rework_task_ids`, `escalation_reason`, status) alone - and an unmatched carry row's reason now names the closest candidate task and its first failing condition, not a generic "no cycle-N task" message
 - **run-autopilot**: `review-stage --state` names the failing field, its raw value and its resolved path on a `prd`/`design_doc` path refusal, one line per field, instead of one generic message for both
 - **review-work-completion**: `gather-context.sh` validates `--since` as a resolvable commit (not any git object) and no longer swallows a `git diff` failure into a fake "no diff" success
+- **run-autopilot**: a gate run on a dirty tree records nothing - the run is refused instead of certifying a tree nobody committed
+- **run-autopilot**: `run_gate` is the only writer of the verification record; a timed-out or unparsed run writes no record at all, so a reader is never handed invented counts
+- **run-autopilot**: gate reuse sees merge-resolution edits, untracked files and non-ASCII paths - the change list runs with `--untracked-files=all` and `-z`
+- **run-autopilot**: gate commands match after normalizing, so the same suite command spelled with different whitespace reuses its record instead of rerunning
+- **run-autopilot**: a racing `review-close` keeps `state.json.bak` - an already-applied batch returns no-change rather than overwriting the backup
+- **review-work-completion**: Blake no longer reruns the suite; his prompt carries this cycle's `## Test gate` block
 
 ## [0.9.0] - 2026-10-05
 
