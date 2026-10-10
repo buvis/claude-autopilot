@@ -199,7 +199,7 @@ def test_blank_status_column_does_not_desync_fields() -> None:
     ]
 
 
-def test_run_gate_drains_stderr_without_deadlock(tmp_path: Path) -> None:
+def test_run_gate_drains_stderr_without_deadlock(repo: Path) -> None:
     # Passes against the pre-change code too: `communicate()` already read
     # both pipes concurrently, so this is pre-existing, unchanged behavior,
     # not something the new manual `_drain_bounded` loop had to add -- it
@@ -212,7 +212,7 @@ def test_run_gate_drains_stderr_without_deadlock(tmp_path: Path) -> None:
         "head -c 2000000 /dev/zero | tr '\\0' 'e' 1>&2; "
         "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
     )
-    result = verification.run_gate(command, tmp_path, "abc", None, timeout=10)
+    result = verification.run_gate(command, repo, "abc", None, timeout=10)
 
     assert result["passed"] == 1
     assert result["timed_out"] is False
@@ -256,8 +256,8 @@ def _spy_on_drain(monkeypatch) -> list[dict]:
     real = verification._drain_bounded
     calls: list[dict] = []
 
-    def _wrapper(proc, cap, deadline):
-        tail, done = real(proc, cap, deadline)
+    def _wrapper(proc, cap, deadline, sink=None):
+        tail, done = real(proc, cap, deadline, sink)
         calls.append({"cap": cap, "tail": tail, "done": done})
         return tail, done
 
@@ -311,13 +311,13 @@ def test_drain_bounded_reports_not_done_for_a_lingering_child() -> None:
     assert elapsed < 5
 
 
-def test_run_gate_prints_one_summary_line(tmp_path: Path) -> None:
+def test_run_gate_prints_one_summary_line(repo: Path) -> None:
     command = (
         "printf 'PASS 1 FAIL 1 SKIP 1 EXIT 1\\n"
         "noise PASS x\\n"
         "PASS 12 FAIL 0 SKIP 3 EXIT 0\\n'"
     )
-    result = verification.run_gate(command, tmp_path, "abc123", 2)
+    result = verification.run_gate(command, repo, "abc123", 2)
 
     assert result == {
         "passed": 12,
@@ -326,13 +326,15 @@ def test_run_gate_prints_one_summary_line(tmp_path: Path) -> None:
         "exit": 0,
         "raw_line": "PASS 12 FAIL 0 SKIP 3 EXIT 0",
         "timed_out": False,
+        "recorded": True,
+        "dirty": False,
     }
 
 
-def test_run_gate_unparseable_output_records_nothing(tmp_path: Path) -> None:
+def test_run_gate_unparseable_output_records_nothing(repo: Path) -> None:
     result = verification.run_gate(
         "echo 'pass 1 fail 0 skip 0 exit 0'; exit 3",
-        tmp_path,
+        repo,
         "abc",
         1,
     )
@@ -342,22 +344,22 @@ def test_run_gate_unparseable_output_records_nothing(tmp_path: Path) -> None:
     assert result["skipped"] is None
     assert result["exit"] == 3
     assert result["timed_out"] is False
-    assert not (tmp_path / RECORD_REL).exists()
+    assert not (repo / RECORD_REL).exists()
 
     # A line that merely looks like the summary is not one either.
     near_miss = verification.run_gate(
         "echo 'PASSED 3 of 4 in 5 s 6'",
-        tmp_path,
+        repo,
         "abc",
         1,
     )
     assert near_miss["passed"] is None
     assert near_miss["raw_line"] is None
-    assert not (tmp_path / RECORD_REL).exists()
+    assert not (repo / RECORD_REL).exists()
 
 
 def test_run_gate_keeps_tail_so_a_late_summary_line_still_parses(
-    tmp_path: Path,
+    repo: Path,
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(verification, "GATE_OUTPUT_CAP", 64)
@@ -366,25 +368,25 @@ def test_run_gate_keeps_tail_so_a_late_summary_line_still_parses(
     # head) of output exceeding GATE_OUTPUT_CAP must still find it, and the
     # bytes beyond the cap really are dropped.
     command = "printf '%0100d\\n' 0; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
-    result = verification.run_gate(command, tmp_path, "abc", None)
+    result = verification.run_gate(command, repo, "abc", None)
 
     assert result["passed"] == 1
     assert result["failed"] == 0
     assert result["skipped"] == 0
     assert result["raw_line"] == "PASS 1 FAIL 0 SKIP 0 EXIT 0"
-    assert (tmp_path / RECORD_REL).exists()
+    assert (repo / RECORD_REL).exists()
     assert [call["cap"] for call in calls] == [verification.GATE_OUTPUT_CAP]
     assert len(calls[0]["tail"]) <= 64
 
 
-def test_run_gate_streams_and_keeps_tail(tmp_path: Path, monkeypatch) -> None:
+def test_run_gate_streams_and_keeps_tail(repo: Path, monkeypatch) -> None:
     monkeypatch.setattr(verification, "GATE_OUTPUT_CAP", 4096)
     calls = _spy_on_drain(monkeypatch)
     # One unbroken burst, no newlines, far larger than the cap -- proves the
     # drain is byte-bounded as it reads, not only truncated after a full
     # buffered capture: what it hands back never exceeds the cap.
     command = "head -c 2000000 /dev/zero | tr '\\0' 'x'; echo; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
-    result = verification.run_gate(command, tmp_path, "abc", None, timeout=30)
+    result = verification.run_gate(command, repo, "abc", None, timeout=30)
 
     assert result["passed"] == 1
     assert result["raw_line"] == "PASS 1 FAIL 0 SKIP 0 EXIT 0"
@@ -396,21 +398,21 @@ def test_run_gate_streams_and_keeps_tail(tmp_path: Path, monkeypatch) -> None:
 # fully captured output is pre-existing, unchanged behavior, not the
 # byte-bounded drain this PRD adds (that gap is covered by
 # test_run_gate_streams_and_keeps_tail's _drain_bounded spy instead).
-def test_run_gate_uses_last_summary_line_not_first(tmp_path: Path) -> None:
+def test_run_gate_uses_last_summary_line_not_first(repo: Path) -> None:
     command = "echo 'PASS 1 FAIL 1 SKIP 0 EXIT 1'; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
-    result = verification.run_gate(command, tmp_path, "abc", None)
+    result = verification.run_gate(command, repo, "abc", None)
 
     assert result["raw_line"] == "PASS 1 FAIL 0 SKIP 0 EXIT 0"
     assert result["failed"] == 0
 
 
-def test_run_gate_times_out_and_writes_nothing(tmp_path: Path) -> None:
+def test_run_gate_times_out_and_writes_nothing(repo: Path) -> None:
     # `sleep 30; echo` keeps sleep as a child of the shell: killing only the
     # shell would leave sleep holding the pipes open for 30s.
     start = time.monotonic()
     result = verification.run_gate(
         "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'; sleep 30; echo done",
-        tmp_path,
+        repo,
         "abc",
         1,
         timeout=6,
@@ -424,15 +426,17 @@ def test_run_gate_times_out_and_writes_nothing(tmp_path: Path) -> None:
         "exit": None,
         "raw_line": None,
         "timed_out": True,
+        "recorded": False,
+        "dirty": False,
     }
     # The deadline tracks the `timeout` argument: waiting out the given 6s
     # (not some constant deadline of its own) and then returning promptly.
     assert 5 < elapsed < 10
-    assert not (tmp_path / RECORD_REL).exists()
+    assert not (repo / RECORD_REL).exists()
 
 
 def test_run_gate_times_out_when_the_child_closes_both_pipes_and_lingers(
-    tmp_path: Path,
+    repo: Path,
 ) -> None:
     # The deadline bounds the process's exit, not just its output: a child
     # that closes stdout AND stderr hits EOF on both pipes immediately, so a
@@ -440,7 +444,7 @@ def test_run_gate_times_out_when_the_child_closes_both_pipes_and_lingers(
     start = time.monotonic()
     result = verification.run_gate(
         "exec 1>&-; exec 2>&-; sleep 30",
-        tmp_path,
+        repo,
         "abc",
         1,
         timeout=1,
@@ -454,11 +458,13 @@ def test_run_gate_times_out_when_the_child_closes_both_pipes_and_lingers(
         "exit": None,
         "raw_line": None,
         "timed_out": True,
+        "recorded": False,
+        "dirty": False,
     }
     # A 1s timeout returns in about 1s: paired with the 6s case above, no
     # single hardcoded deadline can satisfy both bounds.
     assert 0.5 < elapsed < 4
-    assert not (tmp_path / RECORD_REL).exists()
+    assert not (repo / RECORD_REL).exists()
 
 
 def test_reuse_verdict_refuses_a_record_of_a_failed_gate(repo: Path) -> None:
@@ -521,7 +527,7 @@ def test_reuse_verdict_docstring_states_the_tolerances_it_applies() -> None:
 
 
 def test_run_gate_closes_the_child_pipes_before_returning(
-    tmp_path: Path,
+    repo: Path,
     monkeypatch,
 ) -> None:
     real_popen = subprocess.Popen
@@ -535,25 +541,33 @@ def test_run_gate_closes_the_child_pipes_before_returning(
     monkeypatch.setattr(verification.subprocess, "Popen", _spy)
     result = verification.run_gate(
         "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
-        tmp_path,
+        repo,
         "abc",
         1,
     )
 
     assert result["passed"] == 1
     assert result["timed_out"] is False
-    assert len(created) == 1
-    proc = created[0]
+    # `_dirty_outside_store`'s own `git` calls go through `subprocess.run`,
+    # which also spawns via `Popen` - filter down to the gate's own shell
+    # child, the only one started with shell=True.
+    shell_procs = [
+        proc
+        for proc in created
+        if getattr(proc, "args", None) == "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
+    ]
+    assert len(shell_procs) == 1
+    proc = shell_procs[0]
     assert proc.stdout is not None and proc.stdout.closed
     assert proc.stderr is not None and proc.stderr.closed
 
 
-def test_run_gate_writes_last_verification_json_on_fresh_run(tmp_path: Path) -> None:
+def test_run_gate_writes_last_verification_json_on_fresh_run(repo: Path) -> None:
     command = "echo 'PASS 7 FAIL 2 SKIP 1 EXIT 1'; exit 1"
-    result = verification.run_gate(command, tmp_path, "deadbeef", 4)
+    result = verification.run_gate(command, repo, "deadbeef", 4)
 
     assert result["exit"] == 1
-    written = json.loads((tmp_path / RECORD_REL).read_text())
+    written = json.loads((repo / RECORD_REL).read_text())
     assert written == {
         "sha": "deadbeef",
         "cycle": 4,
@@ -565,16 +579,16 @@ def test_run_gate_writes_last_verification_json_on_fresh_run(tmp_path: Path) -> 
 
 
 def test_run_gate_reports_the_process_exit_not_the_printed_one(
-    tmp_path: Path,
+    repo: Path,
 ) -> None:
     # The command lies about its own status: the gate reports what the
     # process actually exited with.
     command = "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'; exit 2"
-    result = verification.run_gate(command, tmp_path, "cafe", 1)
+    result = verification.run_gate(command, repo, "cafe", 1)
 
     assert result["exit"] == 2
     assert result["passed"] == 1
-    written = json.loads((tmp_path / RECORD_REL).read_text())
+    written = json.loads((repo / RECORD_REL).read_text())
     assert written["commands"] == [{"command": command, "exit": 2}]
 
 
@@ -797,15 +811,90 @@ def test_store_only_commit_with_non_ascii_filename_is_reused(repo: Path) -> None
     assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("reused", record)
 
 
-def test_run_gate_writes_the_normalized_command(tmp_path: Path) -> None:
-    script = tmp_path / "gate.sh"
+def test_run_gate_on_a_dirty_tree_writes_no_record(repo: Path) -> None:
+    (repo / "src" / "app.py").write_text("print('dirty')\n")
+
+    result = verification.run_gate(
+        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'", repo, "abc", 1
+    )
+
+    assert result == {
+        "passed": None,
+        "failed": None,
+        "skipped": None,
+        "exit": None,
+        "raw_line": None,
+        "timed_out": False,
+        "recorded": False,
+        "dirty": True,
+    }
+    assert not (repo / RECORD_REL).exists()
+
+
+def test_run_gate_dirtied_during_the_run_writes_no_record(repo: Path) -> None:
+    # Clean at spawn time; the command itself dirties the tree before it
+    # prints its summary line. The post-reap check must still catch it.
+    command = "echo dirty > src/dirty.py; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
+
+    result = verification.run_gate(command, repo, "abc", 1)
+
+    assert result["passed"] == 1
+    assert result["recorded"] is False
+    assert result["dirty"] is True
+    assert not (repo / RECORD_REL).exists()
+
+
+def test_run_gate_outside_a_git_repo_writes_no_record(tmp_path: Path) -> None:
+    result = verification.run_gate(
+        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'", tmp_path, "abc", 1
+    )
+
+    assert result["recorded"] is False
+    assert result["dirty"] is True
+    assert not (tmp_path / RECORD_REL).exists()
+
+
+def test_run_gate_tolerates_dirty_store_paths(repo: Path) -> None:
+    store_dir = repo / STORE / "autopilot"
+    store_dir.mkdir(parents=True)
+    (store_dir / "state.json").write_text("{}\n")
+
+    result = verification.run_gate(
+        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'", repo, "abc", 1
+    )
+
+    assert result["passed"] == 1
+    assert result["recorded"] is True
+    assert result["dirty"] is False
+    assert (repo / RECORD_REL).exists()
+
+
+def test_run_gate_streams_stdout_and_stderr_to_the_log(
+    repo: Path, tmp_path_factory
+) -> None:
+    log_path = tmp_path_factory.mktemp("log") / "gate.log"
+    command = "echo 'out line'; echo 'err line' 1>&2; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
+
+    result = verification.run_gate(command, repo, "abc", 1, log_path=log_path)
+
+    assert result["passed"] == 1
+    logged = log_path.read_bytes()
+    assert b"out line" in logged
+    assert b"err line" in logged
+    assert b"PASS 1 FAIL 0 SKIP 0 EXIT 0" in logged
+
+
+def test_run_gate_writes_the_normalized_command(repo: Path) -> None:
+    script = repo / "gate.sh"
     script.write_text("echo 'PASS 3 FAIL 0 SKIP 0 EXIT 0'\n")
+    _git(repo, "add", "--", "gate.sh")
+    _git(repo, "commit", "--no-verify", "-q", "-m", "add gate script")
     command = "bash  ./gate.sh   --quick"
 
-    result = verification.run_gate(command, tmp_path, "f00d", 2)
+    result = verification.run_gate(command, repo, "f00d", 2)
 
     assert result["passed"] == 3
-    written = json.loads((tmp_path / RECORD_REL).read_text())
+    written = json.loads((repo / RECORD_REL).read_text())
     assert written == {
         "sha": "f00d",
         "cycle": 2,
