@@ -168,6 +168,8 @@ _FINDINGS_PROBLEMS = {
         "coverage requires a Ref column; this section has at least one row "
         "with none - R1 R2 ... are keys the gate normalizes case-insensitively "
         "from the pipe table's Ref column"
+        "; review files from autopilot 0.9.0 or earlier have no Ref column; "
+        "finish or restart the batch on one version"
     ),
     "repeated-section": (
         "more than one '## Consolidated Findings' heading in the review file: "

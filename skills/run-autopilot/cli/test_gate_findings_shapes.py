@@ -364,6 +364,18 @@ def test_unreadable_table_message_names_the_ref_required_shape() -> None:
     assert "ref-required" in message
 
 
+def test_ref_required_message_names_the_0_9_0_version_skew() -> None:
+    """The `ref-required` operator message never explained WHY a review file
+    can be Ref-less in the first place: it predates the Ref column. Without
+    naming the version skew, an operator mid-batch has no way to tell a
+    genuine gap from a review file simply written by an older autopilot."""
+    from cli import gate
+
+    message = gate._FINDINGS_PROBLEMS["ref-required"]
+    assert "0.9.0" in message
+    assert "finish or restart the batch on one version" in message
+
+
 # PRD 00269: every [m/n] token and every pipe row in the review file is either
 # read by the findings parser or refused. A fenced block quotes its lines, so a
 # worked example is not a finding; nothing else hides a row.
