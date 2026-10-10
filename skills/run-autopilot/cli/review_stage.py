@@ -762,7 +762,15 @@ def _append_context_blocks(
             summary["errors"].append(error)
     pack, summary["pack"] = run_pack(repo_root, cycle_id, prd_path)
     _append_pack(context, pack)
-    summary["gate"] = run_gate_line(repo_root, gate_command, cycle_id)
+    try:
+        summary["gate"] = run_gate_line(repo_root, gate_command, cycle_id)
+    except OSError as err:
+        summary["gate"] = {
+            "verdict": "error",
+            "tests_line": f"Tests: (gate failed to run: {err})",
+            "timed_out": False,
+        }
+        summary["errors"].append(f"gate failed: {err}")
     _append(context, f"## Test gate\n\n{summary['gate']['tests_line']}")
     return pack
 

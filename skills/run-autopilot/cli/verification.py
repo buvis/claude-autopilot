@@ -78,10 +78,10 @@ def _iter_porcelain_z_records(raw: str) -> list[tuple[str, str | None]]:
 
 def _ancestor_and_clean(repo_root: Path, sha: str, head_sha: str) -> bool:
     """Unchanged ancestor check and status check. The change list source
-    becomes `git diff --name-only --no-renames -z <sha> <head_sha>` split on
-    NUL (replacing the `git log` call, which is silent for a merge commit's
-    own resolution edits - `git diff` between the two endpoints is not). The
-    status call gains `--untracked-files=all`."""
+    is `git diff --name-only --no-renames -z <sha> <head_sha>` split on NUL
+    (replacing the `git log` call, which is silent for a merge commit's own
+    resolution edits - `git diff` between the two endpoints is not). The
+    status/store-filter part is shared with `_dirty_outside_store`."""
     if _git(repo_root, "merge-base", "--is-ancestor", sha, head_sha).returncode != 0:
         return False
     # Git paths are toplevel-relative; repo_root may sit below the toplevel.
@@ -95,11 +95,7 @@ def _ancestor_and_clean(repo_root: Path, sha: str, head_sha: str) -> bool:
     paths = [p for p in diff.stdout.split("\0") if p]
     if not all(path.startswith(store) for path in paths):
         return False
-    status = _git(repo_root, "status", "--porcelain=1", "-z", "--untracked-files=all")
-    if status.returncode != 0:
-        return False
-    records = _iter_porcelain_z_records(status.stdout)
-    return all(_dirty_path_is_in_store(new, old, store) for new, old in records)
+    return not _dirty_outside_store(repo_root)
 
 
 def _dirty_outside_store(repo_root: Path) -> bool:
@@ -179,12 +175,13 @@ def reuse_verdict(
         list whose every entry is a dict that exited 0
       - `git merge-base --is-ancestor <record["sha"]> <head_sha>` exits 0,
         rejecting a sibling or descendant surviving a reset/rebase
-      - every path in `git log <record["sha"]>..<head_sha> --name-only`
-        (cwd=repo_root) starts with "docs/dev/project-management/" (an
-        empty diff also counts, vacuously)
-      - `git status --porcelain=1 -z` (cwd=repo_root) reports no dirty path
-        outside the store tree, since gather-context.sh's diff is against
-        the working tree, not just HEAD
+      - every path in `git diff --name-only --no-renames -z <record["sha"]>
+        <head_sha>` (cwd=repo_root) starts with
+        "docs/dev/project-management/" (an empty diff also counts,
+        vacuously)
+      - `git status --porcelain=1 -z --untracked-files=all` (cwd=repo_root)
+        reports no dirty path outside the store tree, since
+        gather-context.sh's diff is against the working tree, not just HEAD
       - a dirty or untracked docs/dev/project-management/ path is tolerated
       - a rename or copy is judged by both of its endpoint paths, so a move
         out of the store tree counts as dirty
@@ -312,6 +309,17 @@ def _reap(proc: subprocess.Popen, deadline: float, drained: bool) -> bool:
     return exited
 
 
+def _parse_summary(stdout_buf: bytes) -> tuple[str | None, re.Match | None]:
+    """The LAST SUMMARY_RE match in `stdout_buf` -- a command that prints the
+    pattern twice (a retry) is read as its final, superseding line."""
+    raw_line, found = None, None
+    for line in stdout_buf.decode("utf-8", errors="ignore").splitlines():
+        hit = SUMMARY_RE.search(line)
+        if hit:
+            raw_line, found = line, hit
+    return raw_line, found
+
+
 def run_gate(
     command: str,
     cwd: Path,
@@ -321,29 +329,24 @@ def run_gate(
     log_path: Path | None = None,
 ) -> dict:
     """
-    Runs `command` (the gate command, e.g. `dev/bin/release-checks` --
-    resolved by the caller, never hardcoded here) via Popen(shell=True),
-    draining stdout/stderr in bounded chunks (never buffering the full
-    output) against a wall-clock deadline that bounds the child's exit too,
-    not only its output. On expiry: kill the process group, return
-    `_timed_out_result()` and write NOTHING. On a clean exit, parse the
-    LAST SUMMARY_RE match in the (bounded) stdout tail -- a command that
-    prints the pattern twice (a retry) is read as its final, superseding
-    line. `run_gate` is the only writer of last-verification.json (shape:
-    `_write_record`); it checks `_dirty_outside_store(cwd)` before spawning
-    the child AND again after `_reap` returns, and writes the record only
-    when both checks are clean AND a summary line parsed. A dirty-tree
-    refusal (`_dirty_result()`) is never recorded. When `log_path` is
-    given, every byte of stdout and stderr is streamed to it, in read
-    order, in addition to the bounded in-memory parse tail; `run_gate`
-    opens `log_path` itself (creating parent directories first) before its
-    pre-spawn dirty check, and a failure to open it raises the bare
-    OSError rather than being caught here.
+    Runs `command` via Popen(shell=True), draining stdout/stderr in bounded
+    chunks against a wall-clock deadline that bounds the child's exit too.
+    On expiry: kill the process group, return `_timed_out_result()` and
+    write NOTHING. `run_gate` is the only writer of last-verification.json
+    (shape: `_write_record`); it checks `_dirty_outside_store(cwd)` before
+    spawning the child AND again after `_reap` returns, and writes the
+    record only when both checks are clean AND a summary line parsed. A
+    dirty-tree refusal (`_dirty_result()`) is never recorded. When
+    `log_path` is given, every byte of stdout and stderr is streamed to it,
+    in read order, in addition to the bounded in-memory parse tail;
+    `run_gate` opens `log_path` itself (creating parent directories first)
+    before its pre-spawn dirty check, and a failure to open it raises the
+    bare OSError rather than being caught here.
     """
     log_file = None
     if log_path is not None:
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        log_file = open(log_path, "wb")
+        log_file = open(log_path, "wb", buffering=0)
     try:
         if _dirty_outside_store(cwd):
             return _dirty_result()
@@ -359,11 +362,7 @@ def run_gate(
         stdout_buf, done = _drain_bounded(proc, GATE_OUTPUT_CAP, deadline, log_file)
         if not _reap(proc, deadline, done):
             return _timed_out_result()
-        raw_line, found = None, None
-        for line in stdout_buf.decode("utf-8", errors="ignore").splitlines():
-            hit = SUMMARY_RE.search(line)
-            if hit:
-                raw_line, found = line, hit
+        raw_line, found = _parse_summary(stdout_buf)
         dirty = _dirty_outside_store(cwd)
         result = {
             "passed": int(found.group(1)) if found else None,

@@ -24,7 +24,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from cli import review_close, schema, state, statectl
+from cli import review_close, state, statectl
 from cli.test_review_close import HIGH, _covered, _finding, _review, _state
 
 
@@ -45,10 +45,9 @@ class _TempDirTestCase(unittest.TestCase):
 
 
 class NoChangeIdentityTest(_TempDirTestCase):
-    def test_no_change_is_an_object_compared_only_by_identity(self) -> None:
-        self.assertIsInstance(state.NO_CHANGE, object)
-        self.assertIsNot(state.NO_CHANGE, {})
-        self.assertIsNot(state.NO_CHANGE, None)
+    def test_no_change_is_not_equal_to_any_dict(self) -> None:
+        self.assertNotEqual(state.NO_CHANGE, {})
+        self.assertNotEqual(state.NO_CHANGE, {"phase": "build"})
 
 
 class TransactionNoChangeTest(_TempDirTestCase):
