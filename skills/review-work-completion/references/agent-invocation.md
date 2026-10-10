@@ -75,7 +75,7 @@ file is untouched and must never be consolidated as this run's result.
 ## Blake: Test gate
 
 The staged context carries a `## Test gate` section with this cycle's
-`Tests:` line (`run_stage.run_gate_line`, PRD 00270). Blake's run inputs
+`Tests:` line (`review_stage.run_gate_line`, PRD 00270). Blake's run inputs
 include it unchanged whenever it is present (`review_stage._run_inputs`
 reads it with `_section(context_text, "Test gate")`); a context with no such
 section — a direct `render_roster()` call outside `stage()` — adds nothing.

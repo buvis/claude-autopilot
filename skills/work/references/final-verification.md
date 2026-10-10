@@ -13,7 +13,7 @@ that used to sit here as step 7.0 now runs per task at step 5.65
 Each bullet names its `timeout` class from `references/subagent-dispatch.md` §
 Foreground command budgets — pass the value on the Bash call.
 
-- Full workspace tests (**full suite**, 600000 ms in the foreground; backgrounded, the existing 20 min `Monitor` wait instead) — Rust: `cargo nextest run --workspace` when nextest is installed (probe once with `cargo nextest --version`; on any nextest infra error fall back to `cargo test --workspace` — doc-tests are NOT run by nextest, so add `cargo test --workspace --doc` when the project has doc-tests); otherwise `cargo test --workspace`. Other stacks: `pytest`, `npm test` — add `-n auto` (with `pytest-xdist` installed) when the project's tests are worker-safe; cap the worker count (e.g. `-n auto --maxprocesses 4`, as this repo's own `dev/bin/release-checks` does) when the host's full core count causes fork/process-table exhaustion.
+- Full workspace tests (**full suite**, 600000 ms in the foreground; backgrounded, the existing 20 min `Monitor` wait instead) — Rust: `cargo nextest run --workspace` when nextest is installed (probe once with `cargo nextest --version`; on any nextest infra error fall back to `cargo test --workspace` — doc-tests are NOT run by nextest, so add `cargo test --workspace --doc` when the project has doc-tests); otherwise `cargo test --workspace`. Other stacks: `pytest`, `npm test` — add `-n auto` (with `pytest-xdist` installed) when the project's tests are worker-safe; cap the worker count (e.g. `-n auto --maxprocesses 4`, as this repo's own `dev/bin/release-checks` does) when the host's full core count causes fork/process-table exhaustion. Invoke this one through `autopilot verify --gate-command "<command>" [--cycle <state.cycle>]` (§ Recorded verification result below) — it IS the invocation, not a second run after this bullet's own Bash call.
 - Lint (**lint and narrow tests**, 300000 ms) (e.g., `cargo clippy --workspace`, `ruff check`, `eslint .`)
 - Smoke tests if the project defines them (**lint and narrow tests**, 300000 ms) (e.g., `./tests/smoke.sh`)
 - Integration / e2e tests if the project defines them (**full suite**, 600000 ms) (e.g., `./tests/integration.sh`, `cargo test -p <crate>-e2e`)
@@ -102,20 +102,27 @@ hits its budget is handled by § Timed-out commands above and reported as
 
 ## Recorded verification result
 
-Run the full suite through the `autopilot verify` CLI verb, never a bare suite
-command and never a hand-written `docs/dev/project-management/autopilot/last-verification.json`:
+The full-suite bullet in § What to run above is itself run through the
+`autopilot verify` CLI verb — never as a bare suite command, and never
+followed by a second, separate invocation just to produce a record; there is
+one full-suite run, not two. Never hand-write
+`docs/dev/project-management/autopilot/last-verification.json`:
 
 ```
 autopilot verify --gate-command "<full suite command>" [--cycle <state.cycle>]
 ```
+
+The log file itself is written before the dirty check runs, so a project
+whose `docs/dev/tmp/` is not gitignored will see `dirty: true` and no record
+written on an otherwise-clean tree. Ignore `docs/dev/tmp/` first.
 
 `autopilot verify` is the **sole writer** of `last-verification.json` — no
 prose anywhere tells a session to write that file directly. It prints one JSON
 line to stdout and streams the full combined stdout/stderr of the run to a log
 file (its own default path, or the printed `"log"` key). Read a failure's
 output from that log with `rg`, never by re-running the gate to capture it —
-untrusted-input and budget rules aside, a second run can land on a different
-tree than the one the record just certified.
+a second run can land on a different tree than the one the record just
+certified.
 
 ```json
 {
@@ -133,9 +140,10 @@ three counts are non-null. That record is what replaces the review's own
 second run of the same suite.
 
 - The counts come from the runner's own summary line. A run whose output
-  carries **no parseable counts writes no record at all** — the verb's own
-  reuse-or-run contract never writes a partial one, and the reader then runs
-  the suite itself rather than guessing.
+  carries **no parseable counts writes no record at all** — `autopilot
+  verify` always runs the gate (it never reuses a prior record) and never
+  writes a partial one, and the reader then runs the suite itself rather
+  than guessing.
 - A dirty working tree (anything outside the store, before the run or
   introduced by it) also writes no record — `autopilot verify` refuses to
   certify a tree it cannot itself vouch for.
