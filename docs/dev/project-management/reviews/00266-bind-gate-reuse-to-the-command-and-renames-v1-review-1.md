@@ -93,6 +93,8 @@ not covering an in-repo symlink target.
 
 ## Bob
 
+**Correction (2026-10-10, PRD 00269):** the staging-refusal exit code (1 vs 2) was not fixed in the 00266 rework; PRD 00269 fixes it.
+
 **00266-bind-gate-reuse-to-the-command-and-renames-v1-c1**
 
 Static-only sandbox (codex, gpt-6-astra). 8 findings, all 🟡: `gate_command`
@@ -112,6 +114,8 @@ text. The table in the detail report is the re-run over the lanes whose files
 hold findings only.
 
 ## Carl
+
+**Correction (2026-10-10, PRD 00269):** the staging-refusal exit code (1 vs 2) was not fixed in the 00266 rework; PRD 00269 fixes it.
 
 **00266-bind-gate-reuse-to-the-command-and-renames-v1-c1**
 
