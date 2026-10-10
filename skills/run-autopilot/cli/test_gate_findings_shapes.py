@@ -156,8 +156,7 @@ def test_duplicate_table_ref_is_refused_wherever_the_pair_sits(
     """Two rows sharing a ref make every findings row naming it ambiguous. The
     pair is found by looking at every row, not only at neighbours."""
     rows = [
-        _ref_row(ref, HIGH, f"issue {i}", f"src/{i}.py:1")
-        for i, ref in enumerate(refs)
+        _ref_row(ref, HIGH, f"issue {i}", f"src/{i}.py:1") for i, ref in enumerate(refs)
     ]
     text = _table_section(TABLE_HEADER_REF_6, *rows)
     assert _keys(text) == ([], "unreadable-table")
@@ -307,9 +306,16 @@ def test_an_indented_data_row_under_a_valid_header_is_still_read() -> None:
     dropped — along with the CRITICAL finding it carried, which then reached
     no disposition at all. The header itself stays unindented in this fixture:
     only the data row is indented, which is the exact shape the escape used."""
-    text = _table_section(TABLE_HEADER_REF_6, "  " + _ref_row(
-        "R1", CRIT, "crash on empty input", "src/a.py:3",
-    ))
+    text = _table_section(
+        TABLE_HEADER_REF_6,
+        "  "
+        + _ref_row(
+            "R1",
+            CRIT,
+            "crash on empty input",
+            "src/a.py:3",
+        ),
+    )
     rows, err = _keys(text)
     assert err is None
     assert [r.ref for r in rows] == ["R1"]
@@ -322,9 +328,14 @@ def test_a_data_row_missing_its_closing_pipe_is_refused() -> None:
     no trailing `|` still has every cell a well-formed row would have, so a
     check that only counts cells accepts it. The row's termination has to be
     checked too, or a truncated row silently parses as complete."""
-    unterminated = TABLE_HEADER_6 + _table_row(HIGH, "wrong default", "src/b.py:10").rstrip(
-        "|",
-    ).rstrip()
+    unterminated = (
+        TABLE_HEADER_6
+        + _table_row(HIGH, "wrong default", "src/b.py:10")
+        .rstrip(
+            "|",
+        )
+        .rstrip()
+    )
     text = "## Consolidated Findings\n\n" + unterminated
     assert _keys(text) == ([], "unreadable-table")
     chosen = [_row(HIGH, "src/b.py:10", "wrong default")]
@@ -359,7 +370,17 @@ def test_unreadable_table_message_names_the_ref_required_shape() -> None:
 _COVERED = [_r1_finding("fix"), _r2_finding("fix")]
 _REF_TABLE = _table_section(TABLE_HEADER_REF_6, _R1_ROW, _R2_ROW)
 _UNREAD = "a [m/n] token or table row the findings parser did not read: "
-_ALICE_ROW = f"- [1/3] {CRIT} crash on empty input | src/a.py:3 | Found by: alice"
+
+# Consensus tokens beyond the fixtures' own [1/3] [2/4] [3/3] [2/3]: any
+# `[m/n]` is a token, so a sweep that knows only the fixture values fails here.
+_CONSENSUS_TOKENS = ("[1/3]", "[4/5]", "[10/12]")
+
+
+def _alice_row(consensus: str = "[1/3]") -> str:
+    return f"- {consensus} {CRIT} crash on empty input | src/a.py:3 | Found by: alice"
+
+
+_ALICE_ROW = _alice_row()
 
 
 def _review_text(section: str = _REF_TABLE, alice: str = "- finding one") -> str:
@@ -421,6 +442,7 @@ def test_heading_typo_with_a_ref_table_is_unreadable(
     assert gate.findings_verdict(_review_text(), _COVERED) == ("ok", None)
 
 
+@pytest.mark.parametrize("consensus", _CONSENSUS_TOKENS)
 @pytest.mark.parametrize(
     "section",
     ["", "## Consolidated Findings\n\nNo findings.\n"],
@@ -428,21 +450,25 @@ def test_heading_typo_with_a_ref_table_is_unreadable(
 )
 def test_a_critical_row_only_under_a_reviewer_heading_is_unreadable(
     section: str,
+    consensus: str,
     tmp_path: Path,
 ) -> None:
     """A red row left under `## Alice` never reached the consolidated section,
-    so an empty batch cannot pass it - with or without a section to look in."""
-    text = _review_text(section, alice=_ALICE_ROW)
+    so an empty batch cannot pass it - with or without a section to look in,
+    whatever numbers its `[m/n]` token carries."""
+    row = _alice_row(consensus)
+    text = _review_text(section, alice=row)
     verdict = _verdict_and_exit(text, [], tmp_path)
-    assert verdict == ("malformed", _unread_detail(text, _ALICE_ROW), 2)
+    assert verdict == ("malformed", _unread_detail(text, row), 2)
 
 
-def test_a_second_findings_heading_is_unreadable(tmp_path: Path) -> None:
-    """Two live findings headings leave no single section to read. The readable
-    one comes first, so taking the first match passes this file."""
+@pytest.mark.parametrize("extra", [1, 2], ids=["two headings", "three headings"])
+def test_a_second_findings_heading_is_unreadable(extra: int, tmp_path: Path) -> None:
+    """Two or more live findings headings leave no single section to read. The
+    readable one comes first, so taking the first match passes this file."""
     from cli import gate
 
-    second = "## Consolidated Findings\n\nNo findings.\n"
+    second = "## Consolidated Findings\n\nNo findings.\n" * extra
     text = _review_text(f"{_REF_TABLE}\n{second}")
     tag, detail, code = _verdict_and_exit(text, _COVERED, tmp_path)
     assert tag == "malformed"
@@ -458,8 +484,24 @@ def test_a_fenced_h2_line_does_not_end_the_findings_section(tmp_path: Path) -> N
     below it are still the section's rows."""
     fenced = "```markdown\n## example\n```\n\n"
     rows = f"{_R1_ROW}\n{_R2_ROW}\n"
-    text = _review_text(f"## Consolidated Findings\n\n{fenced}{TABLE_HEADER_REF_6}{rows}")
+    text = _review_text(
+        f"## Consolidated Findings\n\n{fenced}{TABLE_HEADER_REF_6}{rows}"
+    )
     assert _verdict_and_exit(text, _COVERED, tmp_path) == ("ok", None, 0)
+
+
+def test_a_live_h2_after_the_section_ends_it(tmp_path: Path) -> None:
+    """The section stops at the next live `## ` line: a ref row under a later
+    `## Notes` is no consolidated finding, so no batch backs or covers it."""
+    late = f"| R3 | [1/3] | {MED} | late row | src/d.py:1 | 3 | ALICE, BOB |"
+    text = _review_text(f"{_REF_TABLE}\n## Notes\n\n{late}\n")
+    verdict = _verdict_and_exit(text, _COVERED, tmp_path)
+    assert verdict == ("malformed", _unread_detail(text, late), 2)
+    # A batch naming R3 cannot make the late row a backed, covered finding.
+    r3 = dict(_row(MED, "src/d.py:1", "late row"), ref="R3")
+    tag, _, code = _verdict_and_exit(text, [*_COVERED, r3], tmp_path)
+    assert tag != "ok"
+    assert code == 2
 
 
 def test_a_fenced_example_row_and_heading_are_not_findings(tmp_path: Path) -> None:
@@ -506,11 +548,16 @@ def test_a_row_above_the_table_header_is_unreadable(tmp_path: Path) -> None:
     assert verdict == ("malformed", _unread_detail(text, stray), 2)
 
 
+@pytest.mark.parametrize("consensus", _CONSENSUS_TOKENS)
 @pytest.mark.parametrize("bullet", ["*", "+"])
-def test_a_star_or_plus_bullet_row_is_unreadable(bullet: str, tmp_path: Path) -> None:
+def test_a_star_or_plus_bullet_row_is_unreadable(
+    bullet: str,
+    consensus: str,
+    tmp_path: Path,
+) -> None:
     from cli import gate
 
-    row = f"{bullet} [1/3] {MED} unclear name | src/e.py:5 | Found by: bob"
+    row = f"{bullet} {consensus} {MED} unclear name | src/e.py:5 | Found by: bob"
     text = _review_text(f"{_REF_TABLE}\n{row}\n")
     verdict = _verdict_and_exit(text, _COVERED, tmp_path)
     assert verdict == ("malformed", _unread_detail(text, row), 2)
@@ -525,6 +572,71 @@ def test_a_one_line_html_comment_row_is_unreadable(tmp_path: Path) -> None:
     text = _review_text(f"{_REF_TABLE}\n{row}\n")
     verdict = _verdict_and_exit(text, _COVERED, tmp_path)
     assert verdict == ("malformed", _unread_detail(text, row), 2)
+
+
+# Shapes some markdown renderer would hide, none of which quotes a row here:
+# only a closed fence does.
+_R3_ROW = _ref_row("R3", MED, "hidden row", "src/d.py:1")
+_HIDDEN_ROWS = {
+    "multi-line html comment": ("<!--", _R3_ROW, "-->"),
+    "multi-line html comment, bullet": ("<!--", _alice_row("[4/5]"), "-->"),
+    "blockquoted bullet": ("", f"> {_alice_row()}", ""),
+    "blockquoted ref row": ("", f"> {_R3_ROW}", ""),
+    "4-space indented bullet": ("", f"    {_alice_row()}", ""),
+    "8-space indented bullet": ("", f"        {_alice_row('[10/12]')}", ""),
+    "tab-indented bullet": ("", f"\t{_alice_row()}", ""),
+    "4-space indented ref row": ("", f"    {_R3_ROW}", ""),
+}
+
+
+@pytest.mark.parametrize(
+    ("before", "row", "after"),
+    list(_HIDDEN_ROWS.values()),
+    ids=list(_HIDDEN_ROWS),
+)
+def test_a_row_a_renderer_would_hide_is_unreadable(
+    before: str,
+    row: str,
+    after: str,
+    tmp_path: Path,
+) -> None:
+    """Under `## Alice`, beside a covered table: the row is the first line
+    nothing read, named by its own line, exit 2."""
+    alice = "\n".join(line for line in (before, row, after) if line)
+    text = _review_text(alice=alice)
+    verdict = _verdict_and_exit(text, _COVERED, tmp_path)
+    assert verdict == ("malformed", _unread_detail(text, row), 2)
+
+
+def test_a_tokenless_pipe_row_outside_the_table_is_unreadable(tmp_path: Path) -> None:
+    """A pipe row with no `[m/n]` and no `|---|` below it is still a row: one
+    under `## Alice` is refused, the exact ref table in place notwithstanding."""
+    row = f"| R5 | {CRIT} | crash | src/a.py:3 |"
+    text = _review_text(alice=row)
+    verdict = _verdict_and_exit(text, _COVERED, tmp_path)
+    assert verdict == ("malformed", _unread_detail(text, row), 2)
+
+
+@pytest.mark.parametrize(
+    ("section", "findings"),
+    [("", []), (_REF_TABLE, _COVERED)],
+    ids=["no findings section, empty batch", "covered ref table"],
+)
+def test_an_unread_row_quoting_the_no_section_text_still_exits_2(
+    section: str,
+    findings: list[dict],
+    tmp_path: Path,
+) -> None:
+    """The exit code follows the detail being the no-section one, never words
+    found inside it: this row quotes that text and is still a refusal."""
+    from cli import gate
+
+    no_section = gate._FINDINGS_PROBLEMS["no-section"]
+    row = f"- [1/3] {CRIT} {no_section} | src/a.py:3 | Found by: alice"
+    text = _review_text(section, alice=row)
+    tag, detail, code = _verdict_and_exit(text, findings, tmp_path)
+    assert no_section in (detail or "")
+    assert (tag, detail, code) == ("malformed", _unread_detail(text, row), 2)
 
 
 # A findings table whose header names none of Severity, Issue and File, and
@@ -579,6 +691,13 @@ def test_no_section_no_tokens_and_no_findings_keeps_the_exit_1_shape_gap(
         "2 rows: the findings heading is missing or misspelled"
     )
     assert _verdict_and_exit(GOOD_FILE, _COVERED, tmp_path) == ("malformed", named, 2)
+    # k counts every row, whatever its classification: verify and discard rows
+    # are rows the batch names too.
+    mixed = [_r1_finding("fix"), _r2_finding("discard")]
+    assert _verdict_and_exit(GOOD_FILE, mixed, tmp_path) == ("malformed", named, 2)
+    one = named.replace("names 2 rows", "names 1 rows")
+    verify = [_r1_finding("verify")]
+    assert _verdict_and_exit(GOOD_FILE, verify, tmp_path) == ("malformed", one, 2)
 
 
 if __name__ == "__main__":
