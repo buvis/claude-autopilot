@@ -191,3 +191,50 @@ echo "$ERR5" | grep -qF -e "--since" \
 echo "$ERR5" | grep -qF "$INVALID_SINCE" \
   || FAIL "bad --since warns on stderr" "expected the bad ref $INVALID_SINCE in the warning, got: '$ERR5'"
 PASS "bad --since warns on stderr"
+
+# --- Regression (PRD 00269): a `--since` ref that resolves to a real git
+# object but not a commit (a blob) must fall back to the branch base just
+# like an unresolvable ref - `cat-file -e` alone cannot tell a blob from a
+# commit, which is why the check is now `rev-parse --verify ...^{commit}` ---
+mkdir -p "$DIR/blobsince"
+cd "$DIR/blobsince"
+git init -q -b master .
+git commit -q --allow-empty -m init
+git checkout -q -b feature
+echo "f" > feature.py
+git add feature.py
+git commit -q -m feature
+BLOB_SHA="$(echo "blob-not-a-commit" | git hash-object -w --stdin)"
+
+set +e
+OUT7="$(bash "$SCRIPT" --since "$BLOB_SHA")"
+CODE10=$?
+set -e
+[[ "$CODE10" -eq 0 ]] || FAIL "blob --since falls back" "expected exit 0, got $CODE10: $OUT7"
+CONTEXT7="$(echo "$OUT7" | grep -o '[^ ]*review-context-[^ ]*\.md')"
+grep -qF "full review" "$CONTEXT7" \
+  || FAIL "blob --since falls back" "expected scope 'full review' in $CONTEXT7"
+PASS "blob --since falls back to the branch base"
+
+# --- Regression (PRD 00269): a `git diff` failure (e.g. an invalid pathspec
+# from the review-paths marker) must exit non-zero with git's own error, not
+# the old `|| echo "_No diff available_"` fallback that printed a fake
+# success file and swallowed the failure ---
+mkdir -p "$DIR/baddiff/docs/dev/project-management/autopilot"
+cd "$DIR/baddiff"
+git init -q -b master .
+git commit -q --allow-empty -m init
+echo "x" > change.py
+git add change.py
+git commit -q -m change
+VALID_SINCE="$(git rev-parse HEAD~1)"
+echo ":(nosuchmagic)x" > docs/dev/project-management/autopilot/review-paths
+
+set +e
+ERR6="$(bash "$SCRIPT" --since "$VALID_SINCE" 2>&1 >/dev/null)"
+CODE11=$?
+set -e
+[[ "$CODE11" -ne 0 ]] || FAIL "failing diff exit code" "expected non-zero, got $CODE11"
+echo "$ERR6" | grep -qiF "nosuchmagic" \
+  || FAIL "failing diff message" "expected git's own pathspec error, got: $ERR6"
+PASS "a failing diff exits non-zero"

@@ -76,7 +76,7 @@ fi
 DIFF_BASE="$BASE_BRANCH"
 DIFF_SCOPE="full review (vs ${BASE_BRANCH:-unknown base})"
 SINCE_APPLIED=""
-if [[ -n "$SINCE_REF" ]] && git -C "$PROJECT_ROOT" cat-file -e "$SINCE_REF" >/dev/null 2>&1; then
+if [[ -n "$SINCE_REF" ]] && git -C "$PROJECT_ROOT" rev-parse --verify --quiet "$SINCE_REF^{commit}" >/dev/null 2>&1; then
   DIFF_BASE="$SINCE_REF"
   DIFF_SCOPE="incremental review (changes since ${SINCE_REF})"
   SINCE_APPLIED=1
@@ -158,11 +158,11 @@ CREATED_FILES+=("$CONTEXT_FILE")
     echo "_Diff scope: ${DIFF_SCOPE}_"
     echo
     echo '```'
-    git -C "$PROJECT_ROOT" diff "$DIFF_BASE" --stat ${PATH_ARGS[@]+"${PATH_ARGS[@]}"} 2>/dev/null || echo "_No diff available_"
+    git -C "$PROJECT_ROOT" diff "$DIFF_BASE" --stat ${PATH_ARGS[@]+"${PATH_ARGS[@]}"}
     echo '```'
     echo
     DIFF_FILE="$TMP_DIR/review-diff-${_ID}.diff"
-    git -C "$PROJECT_ROOT" diff "$DIFF_BASE" ${PATH_ARGS[@]+"${PATH_ARGS[@]}"} > "$DIFF_FILE" 2>/dev/null || echo "_No diff available_" > "$DIFF_FILE"
+    git -C "$PROJECT_ROOT" diff "$DIFF_BASE" ${PATH_ARGS[@]+"${PATH_ARGS[@]}"} > "$DIFF_FILE"
     CREATED_FILES+=("$DIFF_FILE")
     echo "### Diff Content"
     echo "Full diff available at: $DIFF_FILE"
