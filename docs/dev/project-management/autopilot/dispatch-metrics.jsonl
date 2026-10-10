@@ -3573,3 +3573,4 @@
 {"id":"d0904ea3","ended_at":1791622142,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"id":"2b280684","ended_at":1791622142,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791622142,"phase":"build","prd":"00269-sweep-every-findings-token-v1.md"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791625183,"phase":"review","prd":"00269-sweep-every-findings-token-v1.md"}
