@@ -44,6 +44,21 @@ Generated: 2026-09-14
 
 ## Active Work
 
+### Batch 202610101000
+- [x] 00269-sweep-every-findings-token-v1 (2 cycles)
+- [ ] 00270-trust-only-real-gate-runs-v1 (backlog)
+- [ ] 00271-guard-v2-structural-delegation-check-v1 (backlog)
+
+Observations: 00269 full lane, 18/18 tasks (14 build + 3 tail-sweep [D1]
+groups over cli/, review_close.py, and prose), 2 cycles (rework_cap 2
+reached). No CRITICAL; one unresolved HIGH (R1: `from datetime import UTC`
+at `cli/__main__.py:243` breaks Python 3.10, an unrelated end-of-turn
+formatter reflow) minted to hold stub
+`00272-triage-r1-from-datetime-import-utc-at-skills-ru-v1`. 16 deferred
+items migrated to the batch deferred JSON (1 settled pre-existing
+800-line-cap deferral plus 15 cycle-2 cap-overflow records). Backlog still
+holds 00270/00271.
+
 ### Batch 202610071409
 - [x] 00265-close-the-critical-row-escapes-v1 (2 cycles)
 - [x] 00266-bind-gate-reuse-to-the-command-and-renames-v1 (1 cycle)
