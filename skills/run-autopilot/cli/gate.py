@@ -53,12 +53,15 @@ A chosen row carrying a `"ref"` is backed by the review row holding that exact
 ref, severity and file; a row carrying none falls back to an exact (severity,
 file, normalized issue) match. `verify` and `discard` rows need no backing
 review row (nothing of theirs is applied); a `carry` row needs one like every
-other applied row. A review file with no such section is a shape gap (exit 1).
+other applied row. A review file with no such section, no [m/n] token or pipe
+row anywhere and an empty `--findings` array is a shape gap (exit 1).
 The refusals (exit 2) are a review row no `--findings` row names a
 classification for, a findings table the gate could not read, a findings
-section with no Ref column for a findings row to name, and a `--findings` row
-with an unknown classification - the gate cannot say a batch covers rows it
-was unable to read.
+section with no Ref column for a findings row to name, a `--findings` row
+with an unknown classification, a missing section under a non-empty
+`--findings` array, a second findings heading, and any [m/n] token or pipe
+row outside a closed fence that the findings parser did not read - the gate
+cannot say a batch covers rows it was unable to read.
 
 CLI: autopilot gate --review-file <path> [--reviewers alice,bob,...]
 [--require-codex-guard] [--assert-constraint-met] [--findings <path>]
@@ -69,12 +72,13 @@ reviewer, only the verdict and tests lines are checked.
 Exit codes (gate-scoped, unchanged from check_review_file.py):
     0  shape holds (or unreadable file — fail open, loud)
     1  shape gap (or missing review file, or an unusable --findings file, or
-       no consolidated-findings section to check --findings against)
+       no consolidated-findings section, no token and an empty --findings)
     2  --assert-constraint-met and the guard line records `; constraint UNMET`;
        a `--findings` row the review file never recorded; a review row no
        `--findings` row names a classification for; a `--findings` row with an
-       unknown classification; or a findings section the gate could not read,
-       or one with no Ref column to check coverage against
+       unknown classification; a findings section the gate could not read,
+       missed, repeated, or one with no Ref column to check coverage against;
+       or a token or pipe row the findings parser did not read
 """
 
 from __future__ import annotations
@@ -132,6 +136,10 @@ _SEPARATOR_ROW_RE = re.compile(r"^\s*\|(\s*:?-{3,}:?\s*\|)+\s*$")
 _TERMINATED_ROW_RE = re.compile(r"^\s*\|.*\|\s*$")
 _REF_CELL_RE = re.compile(r"^R\d+$", re.IGNORECASE)
 _CONSENSUS_CELL_RE = re.compile(r"^\[\d+/\d+\]$")
+# Any `[m/n]` anywhere on a line: the token every findings row carries.
+_CONSENSUS_TOKEN_RE = re.compile(r"\[\d+/\d+\]")
+# A fence opener; its info string (```markdown) is allowed.
+_FENCE_RE = re.compile(r"^(`{3,}|~{3,})")
 # `| Consensus | Severity | Issue | File | Task | Found By |`
 _TABLE_HEADER_RE = re.compile(r"^\|(.+)\|\s*$", re.MULTILINE)
 # The three columns a findings table must name; a header missing any of them
@@ -160,6 +168,10 @@ _FINDINGS_PROBLEMS = {
         "coverage requires a Ref column; this section has at least one row "
         "with none - R1 R2 ... are keys the gate normalizes case-insensitively "
         "from the pipe table's Ref column"
+    ),
+    "repeated-section": (
+        "more than one '## Consolidated Findings' heading in the review file: "
+        "there is no single findings section to read"
     ),
 }
 # verify/discard rows are never applied to state, so nothing of theirs has to
@@ -346,6 +358,15 @@ def _row_from_table(header: list[str], cells: list[str]) -> Row | None:
     return Row(ref, severity, file, _normalize_issue(issue))
 
 
+def _table_header(line: str) -> list[str] | None:
+    """The lower-cased cells of a findings-table header naming Severity, Issue
+    and File, else None."""
+    cells = [c.strip().lower() for c in _table_cells(line)]
+    if _TABLE_HEADER_RE.match(line) and all(c in cells for c in _TABLE_COLUMNS):
+        return cells
+    return None
+
+
 def _table_keys(section: str) -> tuple[list[Row], str | None]:
     """Rows of the pipe-table form of the consolidated-findings section.
 
@@ -369,9 +390,7 @@ def _table_keys(section: str) -> tuple[list[Row], str | None]:
     refs: set[str] = set()
     for line in section.splitlines():
         if header is None:
-            cells = [c.strip().lower() for c in _table_cells(line)]
-            if _TABLE_HEADER_RE.match(line) and all(c in cells for c in _TABLE_COLUMNS):
-                header = cells
+            header = _table_header(line)
             continue
         if _CANDIDATE_ROW_RE.match(line) and not _SEPARATOR_ROW_RE.match(line):
             if not _TERMINATED_ROW_RE.match(line):
@@ -481,6 +500,62 @@ def _unbacked_verdict(
     return None
 
 
+def _unfenced(text: str) -> str:
+    """`text` with every line of a CLOSED fence blanked, opener and closer
+    included, so a quoted example is no heading and no row while line numbers
+    hold. A fence closes only on a line that is a run of its own character at
+    least as long as the opener; one that never closes quotes nothing."""
+    lines = text.splitlines()
+    live = list(lines)
+    i = 0
+    while i < len(lines):
+        opener = _FENCE_RE.match(lines[i])
+        if opener is not None:
+            run = opener.group(1)
+            for j in range(i + 1, len(lines)):
+                close = lines[j].rstrip()
+                if close and set(close) == {run[0]} and len(close) >= len(run):
+                    live[i : j + 1] = [""] * (j + 1 - i)
+                    i = j
+                    break
+        i += 1
+    return "\n".join(live)
+
+
+def _unread_token(live: str) -> str | None:
+    """The first line of `live` holding a [m/n] token or a pipe row that the
+    findings parser does not read, named by number and text, else None.
+
+    Read means: in the one findings section, a `- [m/n]` bullet row, the table
+    header, or a pipe row below that header. Every other token line - under a
+    reviewer heading, above the header, in a comment, a blockquote or an
+    indented block - is a finding nobody would disposition.
+    """
+    lines = live.split("\n")
+    consumed: set[int] = set()
+    heading = _FINDINGS_HEADING_RE.search(live)
+    if heading is not None:
+        following = _NEXT_H2_RE.search(live, heading.end())
+        stop = live.count("\n", 0, following.start()) if following else len(lines)
+        in_table = False
+        for i in range(live.count("\n", 0, heading.end()), stop):
+            line = lines[i]
+            in_table = in_table or _table_header(line) is not None
+            if (in_table and _CANDIDATE_ROW_RE.match(line)) or _FINDING_ROW_RE.match(
+                line,
+            ):
+                consumed.add(i)
+    for i, line in enumerate(lines):
+        if i in consumed:
+            continue
+        if _CONSENSUS_TOKEN_RE.search(line) or _CANDIDATE_ROW_RE.match(line):
+            return (
+                f"line {i + 1}: a [m/n] token or table row the findings parser "
+                f"did not read: {line.strip()[:120]}"
+            )
+    return None
+
+
 def _cross_check_findings(
     text: str,
     findings: list[dict],
@@ -494,14 +569,27 @@ def _cross_check_findings(
     row no chosen finding named>), ("ref-required", <why coverage cannot be
     checked>) when a review row carries no ref for a findings row to name, or
     ("malformed", <why>) when the review file has no consolidated-findings
-    section to check against, or holds a findings table that cannot be read.
+    section to check against, more than one, a [m/n] token or pipe row the
+    parser did not read, or a findings table that cannot be read. Closed
+    fences are blanked first: a quoted example is neither a heading nor a row.
 
     `require_coverage=False` (the tail-sweep batch) skips the reverse check:
     a tail-sweep findings JSON is a deliberate, documented subset of the
     consolidated table (actionable Medium/Low rows only), so its rows not
     naming every review-row ref is expected, not an error.
     """
-    reviewed, problem = _reviewed_keys(text)
+    live = _unfenced(text)
+    if len(_FINDINGS_HEADING_RE.findall(live)) > 1:
+        return "malformed", _FINDINGS_PROBLEMS["repeated-section"]
+    unread = _unread_token(live)
+    if unread is not None:
+        return "malformed", unread
+    reviewed, problem = _reviewed_keys(live)
+    if problem == "no-section" and findings:
+        return "malformed", (
+            "no '## Consolidated Findings' section, yet the findings JSON names "
+            f"{len(findings)} rows: the findings heading is missing or misspelled"
+        )
     if problem is not None:
         return "malformed", _FINDINGS_PROBLEMS[problem]
     conflict = _ref_conflict_verdict(findings)
@@ -574,13 +662,12 @@ def _findings_exit(text: str, findings_file: Path) -> int:
     if tag == "ok":
         return 0
     sys.stderr.write(f"{detail}\n")
-    if tag in ("mismatch", "uncovered", "ref-required"):
-        return 2
-    # The two malformed reasons part ways here, on the tag's own detail and
-    # never on words sniffed out of it: a table the gate could not read is a
-    # refusal (it may hold the finding nobody covered), while a review file
-    # carrying no findings section at all is the operator's own shape gap.
-    return 2 if detail == _FINDINGS_PROBLEMS["unreadable-table"] else 1
+    # The one exit-1 reason, matched on the whole detail and never on words
+    # sniffed out of it: no findings section, no unread token and an empty
+    # batch is the operator's own shape gap. Every other verdict is a refusal.
+    if tag == "malformed" and detail == _FINDINGS_PROBLEMS["no-section"]:
+        return 1
+    return 2
 
 
 def run_gate(
