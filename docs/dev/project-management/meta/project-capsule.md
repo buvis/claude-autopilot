@@ -47,7 +47,7 @@ Generated: 2026-09-14
 ### Batch 202610101000
 - [x] 00269-sweep-every-findings-token-v1 (2 cycles)
 - [x] 00270-trust-only-real-gate-runs-v1 (2 cycles)
-- [ ] 00271-guard-v2-structural-delegation-check-v1 (in progress, design)
+- [ ] 00271-guard-v2-structural-delegation-check-v1 (in progress, design done, entering planning)
 
 Observations: 00269 full lane, 18/18 tasks (14 build + 3 tail-sweep [D1]
 groups over cli/, review_close.py, and prose), 2 cycles (rework_cap 2

@@ -465,6 +465,13 @@
       "file": "docs/dev/project-management/reviews/00270-trust-only-real-gate-runs-v1-checks-1.json",
       "reason": "rework cap reached with this finding unresolved",
       "prd": "00270-trust-only-real-gate-runs-v1.md"
+    },
+    {
+      "type": "stall",
+      "site": "plan_expansion",
+      "detail": "module_drift 4 > 1 (., dev/bin, hooks, hooks/fixtures/phase_delegation); note docs/dev/project-management/autopilot/split-notes/00271-guard-v2-structural-delegation-check-v1.md",
+      "op_id": "7080cab327b4",
+      "prd": "00271-guard-v2-structural-delegation-check-v1.md"
     }
   ]
 }
