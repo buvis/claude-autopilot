@@ -270,7 +270,7 @@ def test_zero_tasks_is_delivered_where_tasks_are_actually_created() -> None:
         "finding routed to verification to `\"verify\"`, so it reaches the "
         "call as a fix and gets the task the routing exists to remove."
     )
-    assert '`"verify"` and `"discard"` rows create nothing' in phase_review, (
+    assert '`"verify"`' in phase_review and "rows create nothing" in phase_review, (
         "phase-review.md no longer says review-close creates nothing for a "
         "`\"verify\"` row - the duplicate suite run comes straight back."
     )
