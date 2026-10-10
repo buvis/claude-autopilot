@@ -19,7 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: `autopilot gate --findings` names a refused row that carries no `Ref` by its issue text (else its file), so an unclassified row is identifiable instead of reported only as `row ?`
 - **run-autopilot**: the findings coverage check and the new `carry` classification ship as one change, so every consolidated review row now needs a disposition and a carried row needs its re-queued task's recorded link; do not run a batch already in flight with 0.9.0 review prose against this CLI, finish or restart the batch on one version
 - **hooks**: the phase-delegation guard now catches the phrasings it used to miss - `start`/`do`/`perform`/`complete`/`launch`/`call` before a phase name, up to three determiner words in between, quoted skill names, full-width and zero-width characters, and `do not hesitate to run ...` (including `don't`) - while ordinary prose about a phase stays allowed
-- **hooks**: `read_input` fails open cleanly on a non-UTF-8 or deeply nested payload instead of exiting 1 with a traceback
+- **hooks**: `read_input` no longer exits 1 with a traceback on non-UTF-8 or deeply nested input: invalid bytes are replaced and the payload is still checked, and only unparseable input fails open
+- **run-autopilot**: `review-stage` reuses a saved gate result only when it was recorded for the same gate command and a full 40-character sha, so a record from another command or a short sha triggers a rerun instead of certifying the tree
+- **run-autopilot**: gate reuse treats a commit that renames a product file into the store as a product change (rerun), not a store-only change
+- **run-autopilot**: `review-stage --state` refuses (exit 2) a state `prd` that resolves outside `prds/wip/` and a `design_doc` that resolves outside the repo root, and refuses a `docs/dev/tmp` staging dir that resolves outside the repo before creating anything in it
+- **review-work-completion**: `gather-context.sh` diffs against the merge-base with the base branch (so commits that advanced `master` no longer show as removed), falls back to `main` when there is no `master`, and warns on stderr when `--since` names no object instead of exiting 3
 - **review-work-completion**: the findings consolidator keeps a reviewer's markdown-bulleted finding lines (`- [BOB] ...`) instead of silently dropping them, and warns on stderr about any cited line it still cannot parse
 
 ## [0.9.0] - 2026-10-05

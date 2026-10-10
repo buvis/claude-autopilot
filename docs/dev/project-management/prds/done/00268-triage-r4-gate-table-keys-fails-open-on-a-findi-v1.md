@@ -9,6 +9,8 @@ severity: high
 
 # Triage: R4: gate._table_keys fails open on a findings table whose header is not recog...
 
+> **Triaged 2026-10-10 (operator):** folded into `prds/backlog/00269-sweep-every-findings-token-v1.md`, whose token sweep refuses any `[m/n]` token or pipe row the parser did not consume, an unrecognised header included. Closed here.
+
 ## Problem
 
 Deferred finding with no PRD owner when this stub was minted: batch `202610071409`, ledger `deferred/202610071409-deferred.json`, type `cap-overflow`, cycle `2`, consensus `1/4`, raised against `00265-close-the-critical-row-escapes-v1.md`.
