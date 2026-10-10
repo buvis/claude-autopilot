@@ -9,6 +9,10 @@ severity: high
 
 # Triage: R1: `from datetime import UTC` at skills/run-autopilot/cli/__main__.py:243 br...
 
+## Triage decision (2026-10-10)
+
+Closed, not promoted. The operator chose to declare Python 3.11 as the pack's floor (agoge 2026-10-10 packet 11, option 2) instead of restoring 3.10 support, so `from datetime import UTC` stays. PRD 00280 states the floor in `skills/run-autopilot/SKILL.md` and the CHANGELOG. Source: `docs/dev/project-management/audit-results/agoge-2026-10-10.md` § Minutes.
+
 ## Problem
 
 Deferred finding with no PRD owner when this stub was minted: batch `202610101000`, ledger `deferred/202610101000-deferred.json`, type `cap-overflow`, cycle `2`, consensus `3/4`, raised against `00269-sweep-every-findings-token-v1.md`.
