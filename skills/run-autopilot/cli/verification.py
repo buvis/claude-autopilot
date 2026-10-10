@@ -122,7 +122,24 @@ def _record_shape_ok(record: dict, gate_command: str) -> bool:
         isinstance(c, dict) and c.get("exit") == 0 for c in commands
     ):
         return False
-    return all(c.get("command") == gate_command for c in commands)
+    gate = normalize_command(gate_command)
+    return all(
+        isinstance(c.get("command"), str) and normalize_command(c["command"]) == gate
+        for c in commands
+    )
+
+
+def normalize_command(command: object) -> str:
+    """Collapses whitespace, then strips one leading `bash `/`sh ` and one
+    leading `./`. A non-str maps to ""."""
+    if not isinstance(command, str):
+        return ""
+    text = " ".join(command.split())
+    for shell in ("bash ", "sh "):
+        if text.startswith(shell):
+            text = text[len(shell):]
+            break
+    return text.removeprefix("./")
 
 
 def reuse_verdict(
@@ -134,7 +151,8 @@ def reuse_verdict(
     """
     record: the parsed contents of last-verification.json, or None if the
         file is missing/unreadable/unparseable.
-    gate_command: every recorded command must equal it.
+    gate_command: every recorded command must equal it after both sides
+        pass through `normalize_command`.
     Returns ("reused", record) only when ALL hold:
       - record["sha"] is a full lowercase hex object id (never a symbolic
         ref or abbreviation), and passed/failed/skipped are all present and
@@ -179,7 +197,7 @@ def _write_record(
     record = {
         "sha": sha,
         "cycle": cycle,
-        "commands": [{"command": command, "exit": result["exit"]}],
+        "commands": [{"command": normalize_command(command), "exit": result["exit"]}],
         "passed": result["passed"],
         "failed": result["failed"],
         "skipped": result["skipped"],
