@@ -23,9 +23,7 @@ _CRITICAL = "\U0001f534"
 _RANK = {_CRITICAL: 0, "\U0001f7e0": 1, "\U0001f7e1": 2, "⚪": 3}
 # Every citation suffix the findings table uses, anchored at the end so a path
 # that merely contains a space or a `#` keeps it.
-_LINE_SUFFIX = re.compile(
-    r"(?:\s*\(lines?\s+\d[\d,\s-]*\)|:\d+(?:-\d+)?|#L\d+(?:-L?\d+)?)$"
-)
+_LINE_SUFFIX = re.compile(r"(?:\s*\(lines?\s+\d[\d,\s-]*\)|:\d+(?:-\d+)?|#L\d+(?:-L?\d+)?)$")
 # The table's own "no file" marker, bare or wrapping a citation.
 _NOT_APPLICABLE = re.compile(r"n/a(\s*\(.*\))?", re.IGNORECASE)
 _NOT_A_MERGE_TARGET = ("general", "prose")
@@ -137,6 +135,6 @@ def group(findings: list[dict]) -> list[dict]:
             min(_RANK.get(f["severity"], len(_RANK)) for f in g["findings"]),
             -len(g["findings"]),
             g["name_hint"],
-        ),
+        )
     )
     return critical + rest

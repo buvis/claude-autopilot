@@ -247,6 +247,24 @@ def test_stage_writes_the_gate_log(env: dict) -> None:
     assert log_path.exists()
 
 
+def test_stage_renders_the_dirty_tests_line_when_the_tree_is_dirty(
+    env: dict,
+) -> None:
+    # The PRD design's test strategy lists the dirty-first Tests-line branch
+    # of run_gate_line ("gate skipped: working tree dirty outside the
+    # store"); nothing exercised it before this test, so removing that
+    # branch would fall through to "counts unavailable" with no test
+    # failing.
+    (env["repo"] / "src" / "untracked.py").write_text("print('dirty')\n")
+
+    summary = _stage(env)
+
+    assert (
+        summary["gate"]["tests_line"]
+        == "Tests: (gate skipped: working tree dirty outside the store)"
+    )
+
+
 def test_gate_log_write_failure_degrades_instead_of_crashing(env: dict) -> None:
     # verification._drain_bounded writes to the log sink with no OSError
     # guard; _run_verify already wraps its own call to verification.run_gate

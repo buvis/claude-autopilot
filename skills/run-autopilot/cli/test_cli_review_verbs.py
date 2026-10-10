@@ -333,6 +333,7 @@ def repo(tmp_path: Path) -> Path:
     _git(tmp_path, "init", "-q")
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "app.py").write_text("print(1)\n")
+    (tmp_path / ".gitignore").write_text("docs/dev/tmp/\n")
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "--no-verify", "-q", "-m", "init")
     return tmp_path
@@ -406,7 +407,63 @@ def test_verify_writes_no_record_on_a_dirty_tree(
     assert not record_path.exists()
 
 
+def test_verify_dirtied_during_the_run_still_reports_the_process_exit(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Dirtying the tree mid-run only suppresses the record; it does not
+    # change what the gate command itself exited with, and the verb's
+    # own exit code tracks the process exit, not `recorded`/`dirty`.
+    command = "echo dirty > src/dirty.py; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
+
+    code = main(
+        [
+            "verify",
+            "--gate-command",
+            command,
+            "--repo-root",
+            str(repo),
+        ]
+    )
+
+    assert code == 0
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["recorded"] is False
+    assert printed["dirty"] is True
+    record_path = repo / "docs/dev/project-management/autopilot/last-verification.json"
+    assert not record_path.exists()
+
+
 def test_verify_exits_2_outside_a_git_repo(tmp_path: Path) -> None:
+    code = main(
+        [
+            "verify",
+            "--gate-command",
+            "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
+            "--repo-root",
+            str(tmp_path),
+        ]
+    )
+
+    assert code == 2
+
+
+def test_verify_exits_2_when_head_resolution_raises_oserror(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A missing git binary (or any other OSError the HEAD-resolution
+    # subprocess.run call can raise) must exit 2 like every other verify
+    # failure, not crash with a bare traceback.
+    import subprocess as subprocess_module
+
+    real_run = subprocess_module.run
+
+    def _boom(args, **kwargs):
+        if args[:2] == ["git", "rev-parse"]:
+            raise FileNotFoundError("git: command not found")
+        return real_run(args, **kwargs)
+
+    monkeypatch.setattr(subprocess_module, "run", _boom)
+
     code = main(
         [
             "verify",

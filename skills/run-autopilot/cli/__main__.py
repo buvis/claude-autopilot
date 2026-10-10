@@ -943,13 +943,20 @@ def _add_verify(subparsers) -> None:
 
 def _run_verify(args: argparse.Namespace) -> int:
     repo_root = args.repo_root if args.repo_root is not None else Path.cwd()
-    proc = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as err:
+        print(
+            f"autopilot: verify: cannot resolve HEAD in {repo_root}: {err}",
+            file=sys.stderr,
+        )
+        return 2
     if proc.returncode != 0:
         print(
             f"autopilot: verify: cannot resolve HEAD in {repo_root}: {proc.stderr.strip()}",
