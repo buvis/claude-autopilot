@@ -3631,3 +3631,4 @@
 {"kind":"handoff","site":"build","edge":"leave","at":1791640665,"phase":"build","prd":"00271-guard-v2-structural-delegation-check-v1.md"}
 {"kind":"handoff","site":"build","edge":"resume","at":1791640707,"phase":"build","prd":"00271-guard-v2-structural-delegation-check-v1.md"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791641186,"phase":"build","prd":"00271-guard-v2-structural-delegation-check-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1791641293,"phase":"done","prd":""}
