@@ -232,10 +232,19 @@ def test_stage_writes_every_input_file(env: dict) -> None:
         "verdict": "stale",
         "tests_line": "Tests: 3 passed, 0 failed, 1 skipped (suite run this cycle)",
         "timed_out": False,
+        "log": str(env["repo"] / "docs/dev/tmp" / f"gate-{CYCLE}.log"),
     }
     assert summary["mode"] == "standalone"
     assert set(summary["prompts"]) == {"alice", "bob", "blake", "carl"}
     assert isinstance(summary["elapsed_s"], float)
+
+
+def test_stage_writes_the_gate_log(env: dict) -> None:
+    summary = _stage(env)
+
+    log_path = Path(summary["gate"]["log"])
+    assert log_path == env["repo"] / "docs/dev/tmp" / f"gate-{CYCLE}.log"
+    assert log_path.exists()
 
 
 @pytest.mark.parametrize(
@@ -611,6 +620,30 @@ def test_blake_prompt_carries_no_diff_or_ledger(golden: dict) -> None:
     ):
         assert leak not in blake, leak
     assert "Tidy the enter verb and the review diff plumbing" in blake
+
+
+def test_blake_prompt_carries_the_staged_tests_line(golden: dict) -> None:
+    blake = _render(golden, ["blake"])["blake"].read_text()
+
+    assert "## Test gate" in blake
+    assert "Tests: 12 passed, 0 failed, 0 skipped (suite run this cycle)" in blake
+
+
+def test_blake_prompt_has_no_test_gate_block_without_one_in_the_context(
+    tmp_path: Path,
+) -> None:
+    context = tmp_path / "review-context-x1.md"
+    context.write_text("## Completed Tasks\n\nNone.\n")
+    prd = tmp_path / "review-prd-x1.md"
+    prd.write_text("PRD body\n")
+
+    rendered = review_stage.render_roster(context, None, prd, None, None, None, ["blake"])
+
+    blake = rendered["blake"].read_text()
+    # The persona's own instructional sentence mentions the heading inline
+    # (backtick-quoted, inside a sentence) - only the appended block itself,
+    # a standalone heading followed by a blank line, is what must be absent.
+    assert "\n## Test gate\n\n" not in blake
 
 
 def test_blake_prompt_includes_output_format(golden: dict) -> None:
