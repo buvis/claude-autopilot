@@ -571,6 +571,19 @@ def close(
     """
     review_file = Path(review_file)
     state_path = Path(state_path)
+    try:
+        pre_text: str | None = review_file.read_text(encoding="utf-8")
+    except OSError:
+        pre_text = None
+    if pre_text is not None and not gate.VERDICT_RE.search(pre_text):
+        return {
+            "applied": False,
+            "refused": "no_verdict",
+            "reason": (
+                "no verdict line (expected 'Verdict: converged' or "
+                "'Verdict: N findings')"
+            ),
+        }
     text, refusal = _gate_review(review_file, require_codex_guard)
     if refusal is not None:
         return {"applied": False, "reason": refusal}

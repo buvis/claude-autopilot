@@ -42,6 +42,7 @@ UNREAD_TOKEN = "an orphan line carrying [9/9] outside any section\n\n" + CONSOLI
 
 # Every refusal kind `_run_review_close` has to report as exit 2.
 REFUSAL_KINDS = (
+    "no_verdict",
     "findings_mismatch",
     "findings_uncovered",
     "findings_ref_required",
@@ -180,6 +181,26 @@ def test_cli_exits_2_when_the_findings_table_cannot_be_read(tmp_path: Path) -> N
 
     assert code == 2, out
     assert "findings_malformed" in out
+
+
+def test_cli_exits_2_when_the_review_file_has_no_verdict_line(tmp_path: Path) -> None:
+    """`close()` must check the verdict line before the existing shape gate
+    runs, so a missing `Verdict:` line is its own named refusal - exit 2 with
+    `no_verdict` - instead of falling through to the generic exit-1 shape-gap
+    path a different missing line would still take."""
+    review = _review(tmp_path, verdict="")
+    state_path = _state(tmp_path)
+    before = state_path.read_bytes()
+
+    proc = _review_close_cli(
+        review,
+        state_path,
+        _findings_file(tmp_path, [_finding(HIGH, "src/b.py:10", "wrong default")]),
+    )
+
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    assert "no_verdict" in proc.stdout + proc.stderr
+    assert state_path.read_bytes() == before
 
 
 def test_cli_exits_2_when_a_carry_row_has_no_requeued_task(tmp_path: Path) -> None:

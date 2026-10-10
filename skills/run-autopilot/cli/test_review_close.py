@@ -419,12 +419,16 @@ def test_cli_accepts_a_carry_classification(tmp_path: Path) -> None:
 
 
 def test_cli_exits_1_when_the_review_itself_fails_the_gate(tmp_path: Path) -> None:
-    """Exit 2 belongs to the findings cross-check (mismatch or uncovered): a
-    review file the gate rejects keeps exit 1, even though its findings would
-    also mismatch.
+    """Exit 2 belongs to the findings cross-check (mismatch or uncovered) and
+    to the no-verdict refusal: a review file the gate rejects for a different
+    shape gap (here, no Tests line) keeps exit 1, even though its findings
+    would also mismatch.
     Passes against the pre-change code too: the gate-failure exit path is
     pre-existing, unchanged behavior, not the new exit-2 mismatch path."""
-    review = _review(tmp_path, verdict="", consolidated=CONSOLIDATED)
+    text = _review(tmp_path, consolidated=CONSOLIDATED).read_text(encoding="utf-8")
+    text = text.replace("Tests: 12 passed, 0 failed\n", "")
+    review = tmp_path / "no-tests-line-review.md"
+    review.write_text(text, encoding="utf-8")
     state_path = _state(tmp_path)
     before = state_path.read_bytes()
     findings = _findings_file(
