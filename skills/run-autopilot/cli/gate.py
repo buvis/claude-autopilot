@@ -556,6 +556,27 @@ def _unread_token(live: str) -> str | None:
     return None
 
 
+def _malformed_detail(live: str, findings: list[dict]) -> str | None:
+    """The `malformed` detail for `live` (already fence-blanked), or None when
+    the review file's section is readable: a repeated findings heading, an
+    unread [m/n] token or pipe row, a missing section under a non-empty
+    findings array, or whatever `_reviewed_keys` itself could not read."""
+    if len(_FINDINGS_HEADING_RE.findall(live)) > 1:
+        return _FINDINGS_PROBLEMS["repeated-section"]
+    unread = _unread_token(live)
+    if unread is not None:
+        return unread
+    _reviewed, problem = _reviewed_keys(live)
+    if problem == "no-section" and findings:
+        return (
+            "no '## Consolidated Findings' section, yet the findings JSON names "
+            f"{len(findings)} rows: the findings heading is missing or misspelled"
+        )
+    if problem is not None:
+        return _FINDINGS_PROBLEMS[problem]
+    return None
+
+
 def _cross_check_findings(
     text: str,
     findings: list[dict],
@@ -579,19 +600,10 @@ def _cross_check_findings(
     naming every review-row ref is expected, not an error.
     """
     live = _unfenced(text)
-    if len(_FINDINGS_HEADING_RE.findall(live)) > 1:
-        return "malformed", _FINDINGS_PROBLEMS["repeated-section"]
-    unread = _unread_token(live)
-    if unread is not None:
-        return "malformed", unread
-    reviewed, problem = _reviewed_keys(live)
-    if problem == "no-section" and findings:
-        return "malformed", (
-            "no '## Consolidated Findings' section, yet the findings JSON names "
-            f"{len(findings)} rows: the findings heading is missing or misspelled"
-        )
-    if problem is not None:
-        return "malformed", _FINDINGS_PROBLEMS[problem]
+    malformed = _malformed_detail(live, findings)
+    if malformed is not None:
+        return "malformed", malformed
+    reviewed, _problem = _reviewed_keys(live)
     conflict = _ref_conflict_verdict(findings)
     if conflict is not None:
         return conflict
