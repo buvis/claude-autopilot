@@ -342,7 +342,7 @@ def _close_mutator(ctx: dict[str, Any]):
         outcome = ctx["outcome"]
         if identity in state.get("applied_review_batches", []):
             outcome["already"] = True
-            return state
+            return statectl.NO_CHANGE
         created = _add_rework_tasks(
             state,
             ctx["fixes"],
