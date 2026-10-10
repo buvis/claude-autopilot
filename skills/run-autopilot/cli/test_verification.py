@@ -643,3 +643,109 @@ def test_store_only_change_below_toplevel_is_reused(repo: Path) -> None:
     assert verification.reuse_verdict(
         record, root, code_head, gate_command=command
     ) == ("stale", {})
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("dev/bin/release-checks", "dev/bin/release-checks"),
+        ("bash  ./dev/bin/release-checks", "dev/bin/release-checks"),
+        ("sh ./dev/bin/release-checks", "dev/bin/release-checks"),
+        ("./dev/bin/release-checks", "dev/bin/release-checks"),
+        ("  dev/bin/release-checks\t--fast\n", "dev/bin/release-checks --fast"),
+        # Whitespace collapses before the prefix strip, so a tab counts.
+        ("bash\t./dev/bin/release-checks", "dev/bin/release-checks"),
+        # Exactly one shell prefix and exactly one "./" are stripped.
+        ("bash bash ./dev/bin/release-checks", "bash ./dev/bin/release-checks"),
+        ("sh sh dev/bin/release-checks", "sh dev/bin/release-checks"),
+        ("././dev/bin/release-checks", "./dev/bin/release-checks"),
+        # Only the first shell prefix goes, even when a different one follows.
+        ("bash sh ./x", "sh ./x"),
+        # Any whitespace collapses (str.split semantics), an inner newline too.
+        ("dev/bin/release-checks\n--fast", "dev/bin/release-checks --fast"),
+        # A prefix needs its trailing space: "bashful" is not "bash ".
+        ("bashful ./x", "bashful ./x"),
+        ("make test", "make test"),
+    ],
+)
+def test_normalize_command_collapses_space_then_strips_one_shell_and_one_dot_slash(
+    raw: str, expected: str
+) -> None:
+    assert verification.normalize_command(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "value",
+    [None, 123, ["dev/bin/release-checks"], b"dev/bin/release-checks", {"command": "x"}],
+)
+def test_normalize_command_maps_non_str_to_empty_string(value: object) -> None:
+    assert verification.normalize_command(value) == ""
+
+
+def test_reuse_matches_a_command_spelled_with_bash_dot_slash_and_extra_spaces(
+    repo: Path,
+) -> None:
+    head = _git(repo, "rev-parse", "HEAD")
+    record = _record(head)  # recorded from "dev/bin/release-checks"
+
+    for spelled in (
+        "bash  ./dev/bin/release-checks",
+        "sh ./dev/bin/release-checks",
+        "  ./dev/bin/release-checks ",
+    ):
+        verdict = verification.reuse_verdict(record, repo, head, gate_command=spelled)
+        assert verdict == ("reused", record), spelled
+
+    # The match runs both ways: a record spelled loosely matches a plain gate.
+    loose = _record(head)
+    loose["commands"] = [{"command": "bash   ./dev/bin/release-checks", "exit": 0}]
+    assert verification.reuse_verdict(loose, repo, head, gate_command=GATE) == ("reused", loose)
+
+    # Normalizing never makes a different command match.
+    for other in ("bash bash ./dev/bin/release-checks", "dev/bin/release-checks --fast"):
+        assert verification.reuse_verdict(record, repo, head, gate_command=other) == (
+            "stale",
+            {},
+        ), other
+
+
+def test_reuse_is_stale_not_raising_when_a_recorded_command_is_missing_or_null(
+    repo: Path,
+) -> None:
+    head = _git(repo, "rev-parse", "HEAD")
+
+    missing = _record(head)
+    missing["commands"] = [{"exit": 0}]
+    assert verification.reuse_verdict(missing, repo, head, gate_command=GATE) == ("stale", {})
+
+    null = _record(head)
+    null["commands"] = [{"command": None, "exit": 0}]
+    assert verification.reuse_verdict(null, repo, head, gate_command=GATE) == ("stale", {})
+
+    # Any other non-str command is stale too, not just None.
+    for bad in ({"a": 1}, 1.5):
+        odd = _record(head)
+        odd["commands"] = [{"command": bad, "exit": 0}]
+        assert verification.reuse_verdict(odd, repo, head, gate_command=GATE) == (
+            "stale",
+            {},
+        ), bad
+
+
+def test_run_gate_writes_the_normalized_command(tmp_path: Path) -> None:
+    script = tmp_path / "gate.sh"
+    script.write_text("echo 'PASS 3 FAIL 0 SKIP 0 EXIT 0'\n")
+    command = "bash  ./gate.sh   --quick"
+
+    result = verification.run_gate(command, tmp_path, "f00d", 2)
+
+    assert result["passed"] == 3
+    written = json.loads((tmp_path / RECORD_REL).read_text())
+    assert written == {
+        "sha": "f00d",
+        "cycle": 2,
+        "commands": [{"command": "gate.sh --quick", "exit": 0}],
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0,
+    }
