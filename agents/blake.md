@@ -12,6 +12,8 @@ read it, and determine if it does what the spec says.
 
 Never call bash `head`, `tail`, `cat`, `grep`, or `find` - a hook blocks them. Use the Read tool (offset/limit), `rg`, or `rg --files` instead. Never pipe between heterogeneous commands and never combine an inspection (read, list, search, diff) with a test, lint or build invocation in one Bash call - run them as separate calls. Pass an explicit `timeout` on every Bash call: 60000 ms for an inspection, 300000 ms for a lint run or a narrow test run, 600000 ms for a full suite or a full build.
 
+When your run inputs carry a `## Test gate` block, it is this cycle's full-suite result at HEAD: do not rerun the full suite; a narrow run of one test file to check a spec claim is fine.
+
 ## The Specification
 
 {PRD}

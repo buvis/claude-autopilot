@@ -363,8 +363,17 @@ def run_gate_line(repo_root: Path, gate_command: str, cycle_id: str) -> dict:
             "timed_out": False,
         }
     cycle = int(cycle_id) if cycle_id.isascii() and cycle_id.isdigit() else None
-    result = verification.run_gate(gate_command, repo_root, sha=head, cycle=cycle)
-    if result["timed_out"]:
+    log_path = repo_root / TMP_REL / f"gate-{cycle_id}.log"
+    result = verification.run_gate(
+        gate_command,
+        repo_root,
+        sha=head,
+        cycle=cycle,
+        log_path=log_path,
+    )
+    if result["dirty"]:
+        line = "Tests: (gate skipped: working tree dirty outside the store)"
+    elif result["timed_out"]:
         # TESTS_RE needs counts; zeros plus the suffix say none were read.
         suffix = (
             f"(suite timed out after {int(verification.GATE_TIMEOUT_S)}s, "
@@ -379,7 +388,12 @@ def run_gate_line(repo_root: Path, gate_command: str, cycle_id: str) -> dict:
     else:
         counts = (result["passed"], result["failed"], result["skipped"])
         line = _tests_line(counts, "(suite run this cycle)")
-    return {"verdict": verdict, "tests_line": line, "timed_out": result["timed_out"]}
+    return {
+        "verdict": verdict,
+        "tests_line": line,
+        "timed_out": result["timed_out"],
+        "log": str(log_path),
+    }
 
 
 def preflight_persona(name: str) -> bool:
@@ -444,8 +458,13 @@ def _run_inputs(
 ) -> dict:
     """Everything the per-persona plans draw on, read once."""
     context = Path(context_file).absolute()
+    context_text = _read(context)
     diff_text = _read(diff_file) if diff_file else ""
     prd = _read(prd_file).strip()
+    try:
+        test_gate = _section(context_text, "Test gate")
+    except ValueError:
+        test_gate = None
     return {
         "context": context,
         "id": context.name.removeprefix("review-context-").removesuffix(".md"),
@@ -466,6 +485,7 @@ def _run_inputs(
         "findings": findings_section(Path(pack_file)) if pack_file else NO_PACK,
         "ledger": _ledger_block(Path(settled_ledger))[0] if settled_ledger else None,
         "incremental": _incremental_block(prior_findings) if prior_findings else None,
+        "test_gate": test_gate,
     }
 
 
@@ -523,7 +543,7 @@ def _plan(name: str, run: dict) -> tuple[str, dict[str, str], list[str | None]]:
             "RUBRIC": _read(BLIND_RUBRIC).strip(),
             "OUTPUT_FORMAT": _output_format(name),
         }
-        return source, values, [_filesystem_notes(run["root"])]
+        return source, values, [run["test_gate"], _filesystem_notes(run["root"])]
     if name == "eve":
         return source, {"PACK_FINDINGS": run["findings"]}, [_eve_inputs(run), *history]
     values = {
