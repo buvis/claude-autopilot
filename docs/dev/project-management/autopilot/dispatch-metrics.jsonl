@@ -3627,3 +3627,5 @@
 {"id":"8ad8f66b","ended_at":1791638741,"elapsed_s":589,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"review","edge":"leave","at":1791639164,"phase":"done","prd":"00270-trust-only-real-gate-runs-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1791639373,"phase":"build","prd":"00270-trust-only-real-gate-runs-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791639391,"phase":"build","prd":"00271-guard-v2-structural-delegation-check-v1.md"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791640665,"phase":"build","prd":"00271-guard-v2-structural-delegation-check-v1.md"}
