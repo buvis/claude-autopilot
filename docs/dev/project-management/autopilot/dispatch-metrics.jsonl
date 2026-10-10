@@ -3602,3 +3602,6 @@
 {"id":"b3a292de","ended_at":1791631690,"elapsed_s":550,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1791631780,"phase":"build","prd":"00270-trust-only-real-gate-runs-v1.md"}
 {"kind":"handoff","site":"build","edge":"resume","at":1791631798,"phase":"build","prd":"00270-trust-only-real-gate-runs-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791633950,"phase":"build","prd":"00270-trust-only-real-gate-runs-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791634042,"phase":"build","prd":"00270-trust-only-real-gate-runs-v1.md"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791634539,"phase":"review","prd":"00270-trust-only-real-gate-runs-v1.md"}
