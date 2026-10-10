@@ -66,7 +66,8 @@ Subcommands:
         or 2 (constraint UNMET; a `--findings` row the review file never
         recorded; a review row no `--findings` row names a classification
         for; an unreadable findings table; a findings section with no Ref
-        column; or a `--findings` row with an unknown classification), see
+        column; a `--findings` row with an unknown classification; or
+        a [m/n] token or table row the findings parser did not read), see
         `cli/gate.py`, NOT the state-CLI codes below.
     review-stage --cycle-id --gate-command [--state] [--since] [--repo-root]
                  [--replay-cmd] [--roster] [--tasks-json --prd [--design-doc]]
@@ -85,10 +86,11 @@ Subcommands:
         file, a failed state write, a chosen finding the review file's
         consolidated findings never recorded or never covers, an unreadable
         findings table or one with no Ref column,
-        a `carry` row with no matching `[C]`-prefixed task in the current
+        a `carry` row with no matching re-queued task in the current
         cycle, a `carry` row inside a tail-sweep batch, or a tail sweep that
         is empty, runs before the decision gate, holds a row above medium, or
-        repeats an open deferral.
+        repeats an open deferral. Exit 2 also on a missing `Verdict:` line
+        (`no_verdict`), checked before the shape gate.
     render    {audit|report|metrics} --state [--stdout] [--now ISO]
               [--summary] [--stalled --site --detail] [--metrics PATH]
         The deterministic render surfaces (PRD 00107): `audit` writes

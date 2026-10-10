@@ -93,8 +93,23 @@ def test_gate_help_describes_the_two_way_check() -> None:
     assert "BOTH directions" in gate_doc
     assert "every review row must be" in gate_doc
     assert "Coverage runs the other way too" not in gate_doc  # the one-way prose
-    assert "no matching `[C]`-prefixed" in cli_doc
+    assert "no matching re-queued task" in cli_doc
     assert "a `carry` row inside a tail-sweep batch" in cli_doc
+
+
+def test_help_names_the_token_sweep_and_no_verdict_refusals() -> None:
+    """The `gate` and `review-close` help and `cli/gate.py`'s module
+    docstring name the unconsumed-token sweep refusal, the no-Verdict exit 2,
+    and describe the carry match by its stamps - never by a `[C]`-prefix
+    naming rule, which the match no longer checks."""
+    cli_doc = CLI_MAIN.split('"""', 2)[1]
+    gate_doc = GATE.split('"""', 2)[1]
+    assert "a [m/n] token or table row the findings parser did not read" in cli_doc
+    assert "token or pipe row the findings parser did not read" in gate_doc
+    assert "no_verdict" in cli_doc
+    assert "no matching re-queued task" in cli_doc
+    assert "`[C]`-prefixed" not in cli_doc
+    assert "`[C]`-prefixed" not in gate_doc
 
 
 def test_carry_creates_nothing_prose() -> None:
