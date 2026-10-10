@@ -503,18 +503,18 @@ def _unbacked_verdict(
 def _unfenced(text: str) -> str:
     """`text` with every line of a CLOSED fence blanked, opener and closer
     included, so a quoted example is no heading and no row while line numbers
-    hold. A fence closes only on a line that is a run of its own character at
-    least as long as the opener; one that never closes quotes nothing."""
+    hold. The stripped line decides: a fence closes only on a line whose
+    stripped text starts with a run of its own character at least as long as
+    the opener; one that never closes quotes nothing."""
     lines = text.splitlines()
     live = list(lines)
     i = 0
     while i < len(lines):
-        opener = _FENCE_RE.match(lines[i])
+        opener = _FENCE_RE.match(lines[i].strip())
         if opener is not None:
             run = opener.group(1)
             for j in range(i + 1, len(lines)):
-                close = lines[j].rstrip()
-                if close and set(close) == {run[0]} and len(close) >= len(run):
+                if lines[j].strip().startswith(run[0] * len(run)):
                     live[i : j + 1] = [""] * (j + 1 - i)
                     i = j
                     break

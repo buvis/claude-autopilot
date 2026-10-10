@@ -538,6 +538,25 @@ def test_an_unclosed_fence_quotes_nothing(tmp_path: Path) -> None:
     assert gate.findings_verdict(closed, _COVERED) == ("ok", None)
 
 
+def test_an_indented_fence_still_quotes_its_rows(tmp_path: Path) -> None:
+    """The fence rule reads the stripped line, so a fence indented under a
+    list item still opens and closes, quoting the row between."""
+    from cli import gate
+
+    indented = f"  ```\n  {_ALICE_ROW}\n  ```"
+    text = _review_text(alice=indented)
+    assert _verdict_and_exit(text, _COVERED, tmp_path) == ("ok", None, 0)
+
+
+def test_a_closer_with_trailing_text_still_closes_the_fence(tmp_path: Path) -> None:
+    """A closer line only needs to START with a run of the fence character at
+    least as long as the opener - trailing text after it still closes."""
+    from cli import gate
+
+    text = _review_text(alice=f"```\n{_ALICE_ROW}\n``` trailing text")
+    assert _verdict_and_exit(text, _COVERED, tmp_path) == ("ok", None, 0)
+
+
 def test_a_row_above_the_table_header_is_unreadable(tmp_path: Path) -> None:
     stray = _ref_row("R3", MED, "stray row", "src/d.py:1")
     rows = f"{_R1_ROW}\n{_R2_ROW}\n"
