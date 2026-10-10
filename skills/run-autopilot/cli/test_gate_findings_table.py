@@ -321,9 +321,12 @@ class FindingsTableCrossCheckTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 2, proc.stdout)
         self.assertNotIn("unrecognized arguments", proc.stderr)
         # Control, so exit 2 above is not a hardcoded exit code: the OTHER
-        # malformed reason, a review file carrying no findings section at all,
-        # is the operator's own shape gap and stays exit 1.
-        proc = self._gate(self._review(section=""), self._findings(chosen))
+        # malformed reason, a review file carrying no findings section at
+        # all, stays the operator's own shape gap (exit 1) only when the
+        # findings JSON is also empty - a non-empty chosen list against no
+        # section at all is exit 2 (PRD 00269's no-section-with-findings-rows
+        # rule), so the control here passes an empty findings list instead.
+        proc = self._gate(self._review(section=""), self._findings([]))
         self.assertEqual(proc.returncode, 1, proc.stdout)
 
     def test_a_truncated_data_row_is_malformed_not_a_crash(self) -> None:

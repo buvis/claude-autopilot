@@ -497,8 +497,10 @@ class FindingsCrossCheckTests(unittest.TestCase):
         proc = self._gate(self._review(), findings)
         self.assertEqual(proc.returncode, 0, proc.stderr)
 
-    def test_malformed_findings_section_exits_1_not_2(self) -> None:
-        # GOOD_FILE has no `## Consolidated Findings` heading at all.
+    def test_a_missing_section_with_findings_rows_exits_2(self) -> None:
+        # GOOD_FILE has no `## Consolidated Findings` heading at all, yet the
+        # findings JSON names a row: the heading is missing or misspelled, which
+        # is a refusal. Only an empty batch keeps the exit-1 shape gap.
         findings = self._findings(
             [
                 {
@@ -510,9 +512,14 @@ class FindingsCrossCheckTests(unittest.TestCase):
             ],
         )
         proc = self._gate(self._review(section=""), findings)
-        self.assertEqual(proc.returncode, 1, proc.stdout)
-        # The 1 must come from check()'s gap path, not from argparse rejecting
-        # an unknown flag - which also exits 1 here.
+        self.assertEqual(proc.returncode, 2, proc.stdout)
+        self.assertIn(
+            "no '## Consolidated Findings' section, yet the findings JSON names "
+            "1 rows: the findings heading is missing or misspelled",
+            proc.stderr,
+        )
+        # The 2 must come from the findings check, not from argparse rejecting
+        # an unknown flag - which also exits 2.
         self.assertNotIn("unrecognized arguments", proc.stderr)
 
     def test_shape_gap_outranks_a_findings_mismatch(self) -> None:
