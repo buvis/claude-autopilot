@@ -46,7 +46,7 @@ Generated: 2026-09-14
 
 ### Batch 202610101000
 - [x] 00269-sweep-every-findings-token-v1 (2 cycles)
-- [ ] 00270-trust-only-real-gate-runs-v1 (wip, in progress)
+- [x] 00270-trust-only-real-gate-runs-v1 (2 cycles)
 - [ ] 00271-guard-v2-structural-delegation-check-v1 (backlog)
 
 Observations: 00269 full lane, 18/18 tasks (14 build + 3 tail-sweep [D1]
@@ -56,8 +56,11 @@ at `cli/__main__.py:243` breaks Python 3.10, an unrelated end-of-turn
 formatter reflow) minted to hold stub
 `00272-triage-r1-from-datetime-import-utc-at-skills-ru-v1`. 16 deferred
 items migrated to the batch deferred JSON (1 settled pre-existing
-800-line-cap deferral plus 15 cycle-2 cap-overflow records). Backlog still
-holds 00270/00271.
+800-line-cap deferral plus 15 cycle-2 cap-overflow records).
+00270 full lane, 15/15 tasks, 2 cycles (rework_cap 2 reached). No CRITICAL;
+28 deferred records migrated to the batch deferred JSON (cycle-2
+cap-overflow), minting 3 new hold stubs (00273, 00274, 00275) for
+unowned severe rows. Backlog still holds 00271.
 
 ### Batch 202610071409
 - [x] 00265-close-the-critical-row-escapes-v1 (2 cycles)
