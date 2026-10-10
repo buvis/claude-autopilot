@@ -1,0 +1,9 @@
+[
+  {
+    "cycle": 2,
+    "finding": "Cannot statically verify: tests and release checks pass. Run `bash dev/bin/release-checks` after corrections; the supplied context reports 2943 passing tests, but this review executed none.",
+    "file": null,
+    "command": "bash dev/bin/release-checks",
+    "source": "bob"
+  }
+]
