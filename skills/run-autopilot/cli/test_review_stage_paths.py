@@ -80,6 +80,37 @@ def test_stage_refuses_a_prd_outside_wip(
     assert calls == []
 
 
+@pytest.mark.parametrize(
+    ("field", "raw"),
+    [("prd", "../outside.md"), ("design_doc", "../design.md")],
+    ids=["prd", "design_doc"],
+)
+def test_path_refusal_names_the_field_the_raw_value_and_the_resolved_path(
+    env: dict,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+    field: str,
+    raw: str,
+) -> None:
+    """The generic "prd must resolve inside prds/wip/ and design_doc inside
+    the repo" message left the operator guessing which field and which raw
+    value actually escaped. Each failing field now gets its own line naming
+    the field, the raw string, and the resolved absolute path it escaped to."""
+    state_path = _state_file(env, **{field: raw})
+
+    code, calls = _cli_stage(env, monkeypatch, state_path)
+    err = capsys.readouterr().err
+
+    assert code == 2
+    assert calls == []
+    assert f"`{field}` '{raw}' resolves to" in err
+    if field == "prd":
+        resolved = ((env["repo"] / "docs/dev/project-management/prds/wip") / raw).resolve()
+    else:
+        resolved = (env["repo"] / raw).resolve()
+    assert str(resolved) in err
+
+
 def test_stage_refuses_a_design_doc_outside_the_repo(
     env: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -958,14 +958,24 @@ def _stage_inputs_from_state(args: argparse.Namespace, repo_root: Path) -> dict 
     wip = (Path(_resolve_prds_path(None, args.state.parent)) / "wip").resolve()
     prd_path = wip / prd
     design_path = repo_root / design if design else None
-    if not prd_path.resolve().is_relative_to(wip) or (
-        design_path and not design_path.resolve().is_relative_to(repo_root.resolve())
-    ):
+    repo_root_resolved = repo_root.resolve()
+    refused = False
+    if not prd_path.resolve().is_relative_to(wip):
         print(
-            f"autopilot: review-stage: `prd` must resolve inside prds/wip/ and"
-            f" `design_doc` inside the repo ({args.state})",
+            f"autopilot: review-stage: `prd` '{prd}' resolves to"
+            f" {prd_path.resolve()}, outside {wip}/ ({args.state})",
             file=sys.stderr,
         )
+        refused = True
+    if design_path and not design_path.resolve().is_relative_to(repo_root_resolved):
+        print(
+            f"autopilot: review-stage: `design_doc` '{design}' resolves to"
+            f" {design_path.resolve()}, outside the repo {repo_root_resolved}"
+            f" ({args.state})",
+            file=sys.stderr,
+        )
+        refused = True
+    if refused:
         return 2
     return {
         "tasks": tasks,
