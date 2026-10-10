@@ -133,6 +133,20 @@ def test_output_formats_tells_writers_to_fence_example_rows() -> None:
     ) in FORMATS
 
 
+def test_changelog_states_what_review_close_refuses_truthfully() -> None:
+    """The old `[Unreleased]` claim - "refuses exactly what `autopilot gate`
+    refuses ... every refusal exits 2" - is false: a no-section, empty-
+    findings file is a gate shape gap (exit 1) review-close still applies.
+    The entry must state the true claim instead."""
+    unreleased = CHANGELOG.split("## [Unreleased]", 1)[1].split("\n## [", 1)[0]
+    assert "refuses exactly what" not in unreleased
+    assert (
+        "review-close` refuses, exit 2, every findings file `gate --findings`"
+        " refuses with exit 2" in unreleased
+    )
+    assert "a file with no Verdict line exits 2" in unreleased
+
+
 def test_carry_creates_nothing_prose() -> None:
     """A `carry` row creates no task and no decision, next to `verify` and
     `discard`, and the changelog ships that rule with the coverage check."""
