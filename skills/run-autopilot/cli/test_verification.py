@@ -732,6 +732,71 @@ def test_reuse_is_stale_not_raising_when_a_recorded_command_is_missing_or_null(
         ), bad
 
 
+def test_merge_resolution_change_outside_the_store_is_stale(repo: Path) -> None:
+    # `git log --name-only` over a merge commit's range is silent for the
+    # merge commit's own resolution edits (it only shows them against the
+    # first parent's default diff, which can hide a resolution that touched
+    # product code). `git diff` between the two endpoints is not: it must
+    # catch an outside-the-store edit introduced only by the merge's own
+    # resolution.
+    base = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "-b", "feature")
+    _commit(repo, f"{STORE}/notes/feature.md", "feature\n")
+    feature_tip = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "-")
+    _commit(repo, f"{STORE}/notes/main.md", "main\n")
+
+    _git(repo, "merge", "--no-ff", "-q", "-m", "merge feature", feature_tip)
+    # Resolve the merge by touching a file outside the store - this edit is
+    # part of the merge commit itself, not a prior commit on either branch.
+    (repo / "src" / "app.py").write_text("print('merged')\n")
+    _git(repo, "add", "--", "src/app.py")
+    _git(repo, "commit", "--no-verify", "-q", "--amend", "--no-edit")
+    head = _git(repo, "rev-parse", "HEAD")
+
+    assert verification.reuse_verdict(_record(base), repo, head, gate_command=GATE) == (
+        "stale",
+        {},
+    )
+
+
+def test_untracked_product_file_is_stale_when_status_hides_untracked(repo: Path) -> None:
+    # With status.showUntrackedFiles=no, a plain `git status --porcelain=1`
+    # hides an untracked file entirely; reuse_verdict must still catch it by
+    # requesting --untracked-files=all explicitly.
+    _git(repo, "config", "status.showUntrackedFiles", "no")
+    head = _git(repo, "rev-parse", "HEAD")
+    record = _record(head)
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("reused", record)
+
+    (repo / "src" / "untracked.py").write_text("print('new')\n")
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("stale", {})
+
+
+def test_an_untracked_store_dir_stays_reused(repo: Path) -> None:
+    # The whole docs/ tree untracked: base `git status` prints only
+    # "?? docs/" (a directory, not per-file entries) when the directory
+    # itself is untracked. That single record must still resolve as
+    # store-only, not fall through the store check by looking unfamiliar.
+    base = _git(repo, "rev-parse", "HEAD")
+    store_dir = repo / STORE / "autopilot"
+    store_dir.mkdir(parents=True)
+    (store_dir / "state.json").write_text("{}\n")
+    assert verification.reuse_verdict(_record(base), repo, base, gate_command=GATE) == (
+        "reused",
+        _record(base),
+    )
+
+
+def test_store_only_commit_with_non_ascii_filename_is_reused(repo: Path) -> None:
+    # git quotes non-ASCII paths in its default status/log output; the NUL
+    # separated forms used here must not need that quoting resolved.
+    base = _git(repo, "rev-parse", "HEAD")
+    head = _commit(repo, f"{STORE}/notes/café.md", "note\n")
+    record = _record(base)
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("reused", record)
+
+
 def test_run_gate_writes_the_normalized_command(tmp_path: Path) -> None:
     script = tmp_path / "gate.sh"
     script.write_text("echo 'PASS 3 FAIL 0 SKIP 0 EXIT 0'\n")
