@@ -46,6 +46,12 @@ from pathlib import Path
 from . import schema
 
 
+NO_CHANGE = object()
+"""Module-level sentinel, compared only by identity (`is NO_CHANGE`). A
+`transaction` mutator returns it to signal nothing changed: the validator,
+schema-version stamp, `.bak` write and atomic replace are all skipped."""
+
+
 class StateError(Exception):
     """State file missing or corrupt."""
 
@@ -134,6 +140,13 @@ def transaction(
     is touched. The `.bak` is written only after validation succeeds: writing
     it earlier (as scripts/statectl.py does, before mutating) would destroy
     the rollback point the moment a mutation raises.
+
+    `fn(current)` may return `NO_CHANGE` instead of the mutated state: the
+    validator, the schema-version stamp, the `.bak` write and the atomic
+    replace are all skipped, and a FRESH `json.loads(raw)` of the
+    pre-transaction bytes is returned instead of `current` - `current` is
+    unsafe to return as-is because `fn` may have mutated it in place before
+    deciding nothing changed.
     """
     path = Path(path)
     lock_path = Path(f"{path}.lock")
@@ -150,6 +163,8 @@ def transaction(
                 f"v{stamp} > v{schema.SCHEMA_VERSION}, refusing",
             )
         new_state = fn(current)
+        if new_state is NO_CHANGE:
+            return json.loads(raw)
         validator(new_state)
         new_state["schema_version"] = schema.SCHEMA_VERSION
         # Back up the raw pre-transaction BYTES, not a re-serialization of

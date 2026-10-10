@@ -67,6 +67,7 @@ StateError = state.StateError
 # here so the shim re-exports one implementation rather than a copy.
 read_and_parse = state.read_and_parse
 atomic_write = state.atomic_write
+NO_CHANGE = state.NO_CHANGE
 
 Token = str | int
 
@@ -490,6 +491,8 @@ def mutate(state_path: Path, apply: Callable[[Any], Any]) -> Any:
         nonlocal outcome
         before.update(copy.deepcopy(current))
         outcome = apply(current)
+        if outcome is state.NO_CHANGE:
+            return state.NO_CHANGE
         return current
 
     state.transaction(
