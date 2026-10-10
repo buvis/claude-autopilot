@@ -132,13 +132,14 @@ skills/work/references/
 - [ ] verification: skip-worktree and assume-unchanged entries outside the store count as dirt; docstring names the ignored-file route as accepted (no deps) - Acceptance: `test_skip_worktree_edit_blocks_record` and `test_assume_unchanged_edit_blocks_record` pass and fail at base.
 - [ ] verification: `dirty_paths` in the result (no deps) - Acceptance: `test_dirty_result_lists_the_dirty_paths` passes and fails at base.
 - [ ] verification: remove the record before spawn; flock `docs/dev/tmp/gate.lock` around the run (no deps) - Acceptance: in `test_verification.py`, `test_failed_run_leaves_no_older_green_record` and `test_concurrent_runs_serialize_on_the_gate_lock` pass and fail at base.
+- [ ] verification: a log-sink write error in `_drain_bounded` (OSError) kills the gate's process group and reaps it before the error leaves `run_gate`; no record is written (hold stub 00274, ledger key `7e7e4a58095b`) (no deps) - Acceptance: in `test_verification.py`, `test_log_write_error_kills_and_reaps_the_gate` (a sink whose `write` raises OSError; afterwards the child pid is gone and the error propagates) passes and fails at base.
 - [ ] verification: product symlink into the store makes reuse stale (no deps) - Acceptance: `test_store_edit_behind_a_product_symlink_is_stale` passes and fails at base; `test_store_only_change_below_toplevel_is_reused` still passes.
 
 **Exit Criteria**: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_verification.py skills/run-autopilot/cli/test_verification_dirty.py` exits 0.
 
 ### Phase 1: Core
 **Tasks**:
-- [ ] cli: relative `--log` joins `--repo-root`; a store-resolving `--log` exits 2 before anything is opened; exit 3 when green but unrecorded; print `dirty_paths` (depends on: Phase 0) - Acceptance: in `test_cli_review_verbs.py`, `rejects_log_path_resolving_to_record` (record bytes unchanged), `test_relative_log_resolves_against_repo_root` and `test_verify_exits_3_when_green_but_unrecorded` pass and fail at base.
+- [ ] cli: relative `--log` joins `--repo-root`; a store-resolving `--log` exits 2 before anything is opened; exit 3 when green but unrecorded; print `dirty_paths` (depends on: Phase 0) - Acceptance: in `test_cli_review_verbs.py`, `rejects_log_path_resolving_to_record` (record bytes unchanged), `test_relative_log_resolves_against_repo_root` and `test_verify_exits_3_when_green_but_unrecorded` pass and fail at base; `test_verify_exits_2_when_the_log_cannot_be_opened` (hold stub 00275, ledger key from that stub: the `except OSError` branch prints `{sha, log, error}` and exits 2) passes.
 
 **Exit Criteria**: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_cli_review_verbs.py` exits 0.
 

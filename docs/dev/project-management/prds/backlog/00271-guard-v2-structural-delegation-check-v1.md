@@ -146,29 +146,28 @@ Decide from the shape of a sentence, not from verb or gap-word lists, whether an
 ### Repository Structure
 
 ```
-claude-autopilot/
-├── CHANGELOG.md                                   # Maps to: CHANGELOG line for v2 (task 10)
-├── dev/
-│   └── bin/
-│       ├── release-checks                         # gate entries for every new test file (tasks 2-9)
-│       ├── replay_delegation_guard.py             # NEW. Maps to: Full local replay (task 9)
-│       └── test_replay_delegation_guard.py        # NEW. Full local replay tests (task 9)
-└── hooks/
-    ├── guard_phase_delegation.py                  # Maps to: Structural delegation check, Dispatch policy (tasks 1, 5, 6, 7)
-    ├── enforce_prd_location.py                    # Maps to: Lone surrogate in a PRD path (task 3)
-    ├── note_session_leave.py                      # Maps to: Replaced byte in a session id (task 4)
-    ├── guard_skill_after_leave.py                 # Maps to: Replaced byte in a session id (task 4)
-    ├── test_guard_phase_delegation.py             # existing; must stay green, edit only an assertion v2 makes false (task 5)
-    ├── test_guard_phase_delegation_narrowing.py   # existing; v1-mechanics cases re-sorted (task 5)
-    ├── test_guard_phase_delegation_structure.py   # NEW. predicate tests (tasks 1, 5)
-    ├── test_guard_phase_delegation_dispatch.py    # NEW. exemptions, messages, timing (tasks 6, 7)
-    ├── test_guard_phase_delegation_replay.py      # NEW. committed replay fixture (task 2)
-    ├── test_read_input.py                         # NEW. six-hook stdin matrix (task 8)
-    ├── test_enforce_prd_location.py               # existing; surrogate test (task 3)
-    ├── test_guard_skill_after_leave.py            # existing; U+FFFD session tests (task 4)
-    └── fixtures/
-        └── phase_delegation/
-            └── replay.jsonl                       # NEW. Maps to: Committed replay fixture (task 2)
+CHANGELOG.md                                   # Maps to: CHANGELOG line for v2 (task 10)
+dev/
+└── bin/
+    ├── release-checks                         # gate entries for every new test file (tasks 2-9)
+    ├── replay_delegation_guard.py             # NEW. Maps to: Full local replay (task 9)
+    └── test_replay_delegation_guard.py        # NEW. Full local replay tests (task 9)
+hooks/
+├── guard_phase_delegation.py                  # Maps to: Structural delegation check, Dispatch policy (tasks 1, 5, 6, 7)
+├── enforce_prd_location.py                    # Maps to: Lone surrogate in a PRD path (task 3)
+├── note_session_leave.py                      # Maps to: Replaced byte in a session id (task 4)
+├── guard_skill_after_leave.py                 # Maps to: Replaced byte in a session id (task 4)
+├── test_guard_phase_delegation.py             # existing; must stay green, edit only an assertion v2 makes false (task 5)
+├── test_guard_phase_delegation_narrowing.py   # existing; v1-mechanics cases re-sorted (task 5)
+├── test_guard_phase_delegation_structure.py   # NEW. predicate tests (tasks 1, 5)
+├── test_guard_phase_delegation_dispatch.py    # NEW. exemptions, messages, timing (tasks 6, 7)
+├── test_guard_phase_delegation_replay.py      # NEW. committed replay fixture (task 2)
+├── test_read_input.py                         # NEW. six-hook stdin matrix (task 8)
+├── test_enforce_prd_location.py               # existing; surrogate test (task 3)
+├── test_guard_skill_after_leave.py            # existing; U+FFFD session tests (task 4)
+└── fixtures/
+    └── phase_delegation/
+        └── replay.jsonl                       # NEW. Maps to: Committed replay fixture (task 2)
 ```
 
 No other file changes. `hooks/hooks.json`, `hooks/_common.py` and `hooks/fixtures/phase_delegation/{allowed,denied}/` stay as they are; must-deny and must-allow cases live as escaped strings in the new test modules, so invisible code points survive editors.
