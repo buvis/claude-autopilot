@@ -247,6 +247,38 @@ def test_stage_writes_the_gate_log(env: dict) -> None:
     assert log_path.exists()
 
 
+def test_gate_log_write_failure_degrades_instead_of_crashing(env: dict) -> None:
+    # verification._drain_bounded writes to the log sink with no OSError
+    # guard; _run_verify already wraps its own call to verification.run_gate
+    # in try/except OSError (exit 2) -- run_gate_line's caller must do the
+    # same instead of letting a log-sink open/write failure raise a bare
+    # OSError out of the review-stage gate step.
+    log_path = env["repo"] / "docs/dev/tmp" / f"gate-{CYCLE}.log"
+    log_path.mkdir(parents=True)  # a directory in the log's place: open() raises OSError
+    context = env["tmp"] / "context.md"
+    context.write_text("## Completed Tasks\n\nNone.\n")
+    summary = {"errors": []}
+
+    review_stage._append_context_blocks(
+        context,
+        None,
+        env["repo"],
+        None,
+        None,
+        None,
+        CYCLE,
+        env["prd"],
+        GATE,
+        summary,
+    )
+
+    # the call above must not raise; the failure is signalled through the
+    # summary instead (an errors entry, or the gate result itself saying so)
+    assert "gate" in summary
+    signalled = bool(summary["errors"]) or "error" in json.dumps(summary["gate"]).lower()
+    assert signalled, summary
+
+
 @pytest.mark.parametrize(
     "engram_body, reason_fragment",
     [
