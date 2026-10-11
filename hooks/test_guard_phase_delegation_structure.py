@@ -610,6 +610,9 @@ _PREPOSITIONAL_ALLOWED = [
     ("Tasks complete in the work phase", "trailing-in-the"),
     ("In the work phase: do not skip tests", "leading-in-the"),
     ("Decide what to do about the work phase", "about-the"),
+    ("Decide what to do about /autopilot:plan-tasks", "about-a-slash-command"),
+    ("Update the (work phase) docs", "parenthesised-modifier-docs"),
+    ("Do the (work phase) tests", "parenthesised-modifier-tests"),
     ("Work phase: complete", "phase-as-a-label"),
     ("Did you run the work phase?", "question"),
 ]
@@ -618,8 +621,11 @@ _PREPOSITIONAL_ALLOWED = [
 @pytest.mark.parametrize("prompt", _params(_PREPOSITIONAL_ALLOWED))
 def test_prepositional_and_question_mentions_are_allowed(prompt: str) -> None:
     """The weak anchor needs a non-preposition word before the phase name, so
-    "in the work phase" and "about the work phase" stay prose; a clause with
-    no word before the name is a label, and a clause ending in "?" is a
+    "in the work phase" and "about the work phase" stay prose - the skill form
+    included, which the bare form may not shadow from inside; and a phase name
+    in brackets ("the (work phase) docs") is still a noun modifier, since the
+    close bracket belongs to the name, not to the end of the clause. A clause
+    with no word before the name is a label, and a clause ending in "?" is a
     question, not an order."""
     assert _guard_module().is_phase_delegation({"prompt": prompt}) is False
 

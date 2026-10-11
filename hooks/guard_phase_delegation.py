@@ -92,7 +92,7 @@ _PHASE_SKILL = re.compile(
 # hard word boundaries on both sides so it never matches inside a path
 # segment like skills/work/SKILL.md or design-solution/references/x.md.
 _PHASE_BARE = re.compile(
-    rf"{_WRAP}(?<![-/\w])(plan-tasks|design-solution)(?![-/.\w])",
+    rf"{_WRAP}(?<![-/:\w])(plan-tasks|design-solution)(?![-/.\w])",
     re.IGNORECASE,
 )
 # A leading '/' before any of the three forms is consumed as part of the match
@@ -362,7 +362,14 @@ def _field_delegation(text: str, per_task: bool) -> str | None:
     for start, end, is_skill_md in spans:
         index = bisect_left(clause_starts, start)
         clause_start = clause_ends[index - 1] if index else 0
-        clause_end = clause_starts[index] if index < len(clause_starts) else len(text)
+        # Searched from `end`, never from `start`: a wrap character taken into
+        # the span can itself be a boundary (the ')' of "(work phase)" is not
+        # masked), and a clause_end before `end` would make the weak-anchor
+        # tail an empty string, so every wrapped mention would end its clause.
+        tail_index = bisect_left(clause_starts, end)
+        clause_end = (
+            clause_starts[tail_index] if tail_index < len(clause_starts) else len(text)
+        )
         if text[clause_end:clause_end + 1] == "?":
             continue  # a question about the phase, not an order to run it
         if is_skill_md:
