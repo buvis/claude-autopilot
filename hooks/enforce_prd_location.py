@@ -174,6 +174,7 @@ def _check_file_path(file_path: str) -> str | None:
     """Return a block reason if file_path violates the rules, else None."""
     if not file_path:
         return None
+    file_path = file_path.encode("utf-8", "replace").decode("utf-8")
     # Lifecycle check first, on the RESOLVED path: a symlink escape
     # (docs/dev/project-management/prds/sneak -> repo-root backlog/) resolves OUT of docs/dev/project-management
     # and must block with the resolved location, not the layout message.

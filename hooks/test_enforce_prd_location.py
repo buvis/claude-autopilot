@@ -162,10 +162,13 @@ class LayoutVocabularyTest(unittest.TestCase):
                 payload = {"tool_name": "Write", "tool_input": {"file_path": file_path}}
                 exit_code, stdout, stderr = hook.run(payload)
                 self.assertEqual(exit_code, 2)
+                # The hook normalizes un-encodable code points before it
+                # resolves, so the message names the whole relative path with
+                # each surrogate replaced - still the full rel, never a
+                # basename.
+                named = "/".join(rel).encode("utf-8", "replace").decode("utf-8")
                 self.assertIn(
-                    "BLOCKED: `{}` looks like a PRD lifecycle path at repo root".format(
-                        "/".join(rel)
-                    ),
+                    f"BLOCKED: `{named}` looks like a PRD lifecycle path at repo root",
                     stderr,
                 )
                 self.assertEqual(stdout, "")
