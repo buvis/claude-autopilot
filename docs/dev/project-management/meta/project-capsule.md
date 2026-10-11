@@ -1,6 +1,6 @@
 # Project Capsule: claude-autopilot
 
-Generated: 2026-09-14
+Generated: 2026-10-11
 
 ## Key Invariants
 
@@ -43,6 +43,22 @@ Generated: 2026-09-14
   review skill only *reads* `last-verification.json`, never writes it.
 
 ## Active Work
+
+### Batch 202610111300
+- [ ] 00271-guard-v2-structural-delegation-check-v1 (in wip, design reused,
+  planned: 10 tasks, task 1 in_progress)
+- backlog behind it: 00276, 00277, 00278, 00279, 00280 (agoge 2026-10-10 walkthrough)
+
+Observations: 00271 carried over from batch 202610101000, which closed after
+00269 and 00270. Design doc exists and its `## Review log` gate passes, so
+Phase 1.5 reuses it. Planning is done (10 tasks); task 1 was left
+`in_progress` by a prior session with `hooks/test_guard_phase_delegation_structure.py`
+staged but uncommitted, so work resumes there. `batch.catchup_completed_at`
+was stamped 2h in the future (host clock skew), which is why `autopilot enter`
+ordered a full catchup rather than a delta refresh. `gh` is unauthenticated on
+this host, so GitHub State below is stale (no issue/PR/CI refresh this
+session). Untracked discovery doc `00281-loop-efficiency.md` is present but
+not yet a PRD.
 
 ### Batch 202610101000
 - [x] 00269-sweep-every-findings-token-v1 (2 cycles)
@@ -430,22 +446,28 @@ future `_repo()` regressions, and a residual sweep item); the
 
 ## Related context
 
-- gems `dev/local/prds/wip/00055-bim-cli-modularization-v1.md:1-2` (0.016) -
-  another "split the CLI god module" PRD; same shape, different repo.
-- `~/.local/tmp/claude-dev/reviews/00127-loop-registry-lies-about-liveness-v1-review-2.md:126`
-  (0.016) - earlier loop.py review; registry/liveness seam history.
-- `~/.local/tmp/claude-dev/reviews/00129-autoclaude-suite-stubs-do-not-intercept-v1-review-1.md:113-118`
-  (0.016) - "unrelated live foreign WIP in cli/loop.py" incident; the
-  two-writers-one-checkout risk this repo carries.
-- `~/.local/tmp/claude-dev/reviews/00029-...-review-1.md:43` (0.015) - scope
-  note naming loop.py among hook/settings surfaces.
+Repo hits (identical to the portfolio hits - every top result is in this repo):
 
-Topic queried: "Split cli/loop.py and test_loop.py under the file cap"
-(portfolio scope only - this repo is not engram-registered, so `engram index`
-and `engram harvest` both refuse with `no_repo`; every review file harvest
-returned 0). Staleness (`engram status --scope portfolio`, exit 1): memory
-192 (23 stale, 1 dead), prd 5203 (8 stale, 61 dead), code 42722 (42 stale,
-97 dead), transcripts 17713 (17604 dead).
+- `prds/backlog/00271-guard-v2-structural-delegation-check-v1.md:7-8` (0.033) -
+  the PRD under work; its own title row.
+- `prds/backlog/00271-...:146-175` (0.032) and `:244-266` (0.031) - the PRD's
+  Repository Structure and Phase 1 Core sections.
+- `prds/done/00267-widen-the-phase-delegation-guard-v1.md:8-9` (0.016) - the
+  predecessor PRD; the verb-list guard 00271 replaces with a structural check.
+- `prds/backlog/00271-...:176-185` (0.016) - the `guard_phase_delegation`
+  module section.
+
+Note the hits point at `prds/backlog/`, the PRD's pre-selection path; it now
+lives in `prds/wip/`, so the index is one move behind.
+
+Topic queried: "guard v2 structural delegation check". `engram harvest` of
+the review files FAILED this session: every row came back `upsert_failed -
+attempt to write a readonly database` (the parse_failed rows are review files
+with no frontmatter, a pre-existing shape). `engram index` was therefore not
+attempted, so both query scopes read an index refreshed before this session.
+Staleness (`engram status --scope portfolio`, exit 1): memory 192 (23 stale,
+1 dead), prd 7660 (0 stale, 5297 dead), code 51037 (109 stale, 805 dead,
+4432 skipped), transcripts 17713 (17604 dead), findings 12938 (clean).
 
 ## GitHub State
 
@@ -455,14 +477,18 @@ returned 0). Staleness (`engram status --scope portfolio`, exit 1): memory
   released: 0.5.2; the installed cache runs 0.5.2 for new sessions while the
   live loop pid 96616 is still the 0.5.1 driver).
 - No workflow runs found (no CI configured, or none has run).
+- STALE as of 2026-10-11: `gh` is unauthenticated on this host
+  (`github-state.sh` exits 1), so none of the above was refreshed this
+  session.
 
 ## Project Health
 
-CI: none configured/observed. Batch 202609061630 has drained 14 PRDs; 12
-remain in backlog (00194-00206), 00110 parked in hold. Working tree clean on
-`master` at 54b7706. Standing debt: `cli/__main__.py` (1099) and
-`test_state.py` (814) also exceed the 800-line cap; 00192 deliberately
-excludes them.
+CI: none configured/observed. Batch 202610111300 is open with 0 drained;
+00271 in wip, 5 PRDs behind it in backlog, plus the hold triage stubs from
+batch 202610101000 (00272-00275). `master` at b57e425; tree carries the
+batch's own store writes plus the staged task-1 test file. Standing debt:
+`cli/__main__.py` and `test_state.py` exceed the 800-line cap (deliberately
+excluded by 00192).
 
 ## Project Memories
 

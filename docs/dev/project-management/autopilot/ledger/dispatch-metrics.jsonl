@@ -3632,3 +3632,30 @@
 {"kind":"handoff","site":"build","edge":"resume","at":1791640707,"phase":"build","prd":"00271-guard-v2-structural-delegation-check-v1.md"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791641186,"phase":"build","prd":"00271-guard-v2-structural-delegation-check-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1791641293,"phase":"done","prd":""}
+{"kind":"handoff","site":"build","edge":"resume","at":1791669659,"phase":"build","prd":"00271-guard-v2-structural-delegation-check-v1.md"}
+{"id":"381c2d79","kind":"tess","task":"1","queued_at":1791670091,"prompt_bytes":21150}
+{"id":"381c2d79","ended_at":1791670258,"elapsed_s":167,"outcome":"ok","detail":null}
+{"id":"897e3336","kind":"tess","task":"1","queued_at":1791670294,"prompt_bytes":7645}
+{"id":"897e3336","ended_at":1791670440,"elapsed_s":146,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"build","edge":"resume","at":1791717333,"phase":"build","prd":"00271-guard-v2-structural-delegation-check-v1.md"}
+{"id":"21bac747","kind":"devon","task":"1","queued_at":1791717739,"prompt_bytes":7208}
+{"id":"21bac747","ended_at":1791718304,"elapsed_s":565,"outcome":"ok","detail":null}
+{"id":"be219e7b","kind":"tess","task":"1","queued_at":1791718378,"prompt_bytes":13427}
+{"id":"be219e7b","ended_at":1791718720,"elapsed_s":342,"outcome":"ok","detail":null}
+{"id":"b5734984","kind":"ivan","task":"1","queued_at":1791718875,"prompt_bytes":13801}
+{"id":"b5734984","ended_at":1791719062,"elapsed_s":187,"outcome":"ok","detail":null}
+{"id":"1d1e19ec","kind":"tess","task":"1","queued_at":1791719153,"prompt_bytes":8910}
+{"id":"1d1e19ec","ended_at":1791719250,"elapsed_s":97,"outcome":"ok","detail":null}
+{"id":"8d6c9298","kind":"ivan","task":"1","queued_at":1791719307,"prompt_bytes":17147}
+{"id":"8d6c9298","ended_at":1791719372,"elapsed_s":65,"outcome":"ok","detail":null}
+{"id":"def42512","kind":"deslop","task":"1","queued_at":1791719592,"prompt_bytes":7837}
+{"id":"def42512","ended_at":1791719847,"elapsed_s":255,"outcome":"ok","detail":null}
+{"id":"6a83614b","kind":"pat","task":"1","queued_at":1791719981,"prompt_bytes":22609}
+{"id":"5beec117","kind":"tess","task":"1","queued_at":1791720054,"prompt_bytes":8338}
+{"id":"5beec117","ended_at":1791720215,"elapsed_s":161,"outcome":"ok","detail":null}
+{"id":"f01fcf12","kind":"ivan","task":"1","queued_at":1791720273,"prompt_bytes":18905}
+{"id":"f01fcf12","ended_at":1791722199,"elapsed_s":1926,"outcome":"ok","detail":null}
+{"id":"4527a301","kind":"pat","task":"1","queued_at":1791722318,"prompt_bytes":24289}
+{"id":"6a83614b","ended_at":1791722770,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"4527a301","ended_at":1791722770,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791722770,"phase":"build","prd":"00271-guard-v2-structural-delegation-check-v1.md"}

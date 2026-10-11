@@ -1,28 +1,52 @@
-# Assumption ledger — PRD 00269 (sweep every findings token)
+# Assumption ledger
 
-## 1: gate: fence-aware scan, section bounds, unconsumed-token refusal, no-section rule, exit routing
+Per-plan. Replaced at the first completed task of a full-plan pass.
 
-Test author (Tess):
-- Made up the 00268 payload: a table with header `| ID | Consensus | Sev | Description | Location |` and rows `| F1 | [3/3] | ... |`. Neither header nor rows match today's parser.
-- The contract gives no detail text for a second live findings heading, so that test only checks: tag `malformed`, a non-empty detail other than the no-section text, and exit 2.
-- An HTML comment line like `<!-- | R3 | [1/3] | ... | -->` counts as a token line because it holds `[1/3]`, even though it starts with `<!--`, not `|`.
-- A fence opened with `~~~~` does not close on a later `~~~` line (fewer characters) and does close on `~~~~~`, per "at least as many".
-- The exit code is checked by calling `gate._findings_exit(text, path)` directly, not through a subprocess.
-- A Python 3 with pytest installed must be on PATH; ran via `uv run --no-project --with pytest` since the mise python here has none.
+Plan: PRD 00271 (guard v2 structural delegation check), batch 202610111300.
 
-Test author (Tess), strengthening round:
-- The weak-point-6 batch that names R3 asserts only "not ok, exit 2" — the PRD does not say whether the unread-token refusal or the unbacked-row mismatch is checked first.
-- The rows for weak points 2, 3 and 4 sit under `## Alice`, not inside the findings section, because inside the section the table parser would read a commented or indented ref row as a data row (giving `uncovered`) rather than leaving it unread.
-- Read "the same row" in weak point 3 as the row from the one-line comment test.
-- Did not change `test_gate.py::test_a_missing_section_with_findings_rows_exits_2`; the "names 2 rows" check for a mixed batch went into the shapes-file test instead.
+## 1: Normalize lookalike text before any guard matching
 
-Implementor (Ivan):
-- Extracted `_table_header` from `_table_keys` with no change in behavior, reading "reuse `_table_keys` unchanged" as unchanged behavior, not a ban on extracting a shared helper.
-- The sweep runs before the `unreadable-table` check, so a table with an unrecognised header reports the unread-line detail instead of the `unreadable-table` text; both exit 2 and the existing tests accept either.
-- Named the new `_FINDINGS_PROBLEMS` key `repeated-section`; the tests only require its detail to be non-empty, not the no-section text, and exit 2.
-- Fence openers/closers were first implemented requiring column-0 alignment (no indentation) — corrected in the review retry to use the stripped line per the contract's own wording, after a confirmed MEDIUM finding.
-- The no-section-with-rows detail counts every findings row, whatever its classification, as the strengthened test pins.
+Tess (test author):
 
-Implementor (Ivan), MEDIUM-finding retry:
-- Where the dispatch allowlist (gate.py only) and the review's suggested fix (add two tests) conflicted, followed the allowlist and left the test file untouched; the orchestrator added the two regression tests directly instead.
-- Changed the `_unfenced` docstring sentence describing the closer rule so it does not contradict the corrected code — the only change outside the two lines the finding named.
+- A prompt with no phase-skill instruction at all ("Summarize the work you
+  finished...", "Write the regression test...") is the safe shape for the
+  required negative cases; the contract's "True iff the dispatch instructs a
+  subagent to run a phase skill" covers it without touching the module's
+  ambiguous compound-noun handling.
+- The field join inside `is_phase_delegation` stays `f"{prompt}\n{description}"`
+  (pre-existing), so a normalized `description` alone can still match a
+  pattern; the description-only case depends on that join surviving the change.
+  (NOTE: later superseded in part - the join still exists but each field is now
+  normalized separately. The description-only case still passes.)
+- "Strip `*`" removes asterisks with no replacement, so `"2**8 *args"` becomes
+  `"28 args"`.
+- A long-prompt case built by repeating a benign sentence 10 times is an
+  acceptable stand-in for "a real dispatch prompt of hundreds of lines".
+- U+05BE HEBREW PUNCTUATION MAQAF is a fair second out-of-range `Pd` pin
+  alongside U+301C; both confirmed category `Pd` and NFKD-stable before use.
+- "The plain ASCII letter it compatibility-folds to" for U+212B means capital
+  `A` (U+212B -> NFKD -> `A` + U+030A, Mn dropped).
+- The jamo-input case is within the "couple of concrete cases" allowance; it
+  pins the NFKC step without recomputing the contract.
+- A separate test function (not the `_LOOKALIKE_CASES` table) is the cleaner
+  home for the NFKC pin, because the jamo-input case is not a fixed point and
+  does not fit the table's `(raw, plain, id)` shape.
+
+Ivan (implementor):
+
+- `_normalize` is the single normalization entry point for the dispatch text,
+  kept local to the module rather than promoted to `_common.py`.
+- Category-based dropping (`Mn`/`Cf`) over an enumerated code-point table: the
+  tests exercise 8 distinct invisibles and 3 mark forms and the docstring names
+  the families, so the family rule is the spec rather than a lookup list.
+- Deleted every asterisk unconditionally (not just paired emphasis markers),
+  which the `2**8` and `*args` cases require.
+- Appended the new test file at the end of the `[checks] hook registration`
+  list rather than in alphabetical position; the existing list is not strictly
+  alphabetical and the registration test only checks membership.
+- `kept` is left unannotated as a local (the module annotates signatures, not
+  locals), matching the surrounding style.
+- (Superseded) the whole U+2010..U+2015 dash range was folded as "the same
+  family" even though only part of it was tested. That assumption was WRONG
+  against the contract, which says the `Pd` category; it left 15 `Pd` code
+  points unfolded and a live guard bypass, and was fixed in the same task.
