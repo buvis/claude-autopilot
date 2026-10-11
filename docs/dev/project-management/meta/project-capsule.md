@@ -46,19 +46,23 @@ Generated: 2026-10-11
 
 ### Batch 202610111300
 - [ ] 00271-guard-v2-structural-delegation-check-v1 (in wip, design reused,
-  planned: 10 tasks, task 1 in_progress)
+  planned: 10 tasks, 1 done, resuming at task 2)
 - backlog behind it: 00276, 00277, 00278, 00279, 00280 (agoge 2026-10-10 walkthrough)
 
 Observations: 00271 carried over from batch 202610101000, which closed after
 00269 and 00270. Design doc exists and its `## Review log` gate passes, so
-Phase 1.5 reuses it. Planning is done (10 tasks); task 1 was left
-`in_progress` by a prior session with `hooks/test_guard_phase_delegation_structure.py`
-staged but uncommitted, so work resumes there. `batch.catchup_completed_at`
-was stamped 2h in the future (host clock skew), which is why `autopilot enter`
-ordered a full catchup rather than a delta refresh. `gh` is unauthenticated on
-this host, so GitHub State below is stale (no issue/PR/CI refresh this
-session). Untracked discovery doc `00281-loop-efficiency.md` is present but
-not yet a PRD.
+Phase 1.5 reuses it. Task 1 (lookalike-text normalization in the delegation
+guard) landed in 5 commits through d30b77a; `master` is now at 3c10a59 and
+work resumes at task 2 ("Freeze the real-dispatch replay fixture"). Each
+build session re-runs a FULL catchup here because `batch.catchup_head_sha`
+is pinned at the PRD's start sha (b57e425) while the task commits move HEAD —
+the cache's HEAD condition can never hold across a task-boundary hand-off.
+`gh` is unauthenticated on this host, so GitHub State below is stale (no
+issue/PR/CI refresh this session). A second `autopilot loop` runs
+concurrently in `buvis/agent-skills` (pid 23587) — different repo, no
+checkout collision, but it shares this account's usage window, so avoid
+parallel subagent fan-outs. Untracked discovery doc `00281-loop-efficiency.md`
+is present but not yet a PRD.
 
 ### Batch 202610101000
 - [x] 00269-sweep-every-findings-token-v1 (2 cycles)
@@ -469,6 +473,10 @@ Staleness (`engram status --scope portfolio`, exit 1): memory 192 (23 stale,
 1 dead), prd 7660 (0 stale, 5297 dead), code 51037 (109 stale, 805 dead,
 4432 skipped), transcripts 17713 (17604 dead), findings 12938 (clean).
 
+Not refreshed at 2026-10-11T12:49Z (task-2 resume catchup): engram was left
+alone this session because its index is readonly on this host (above) and the
+topic is unchanged; the hits above are the ones to use.
+
 ## GitHub State
 
 - 0 open issues, 0 open PRs.
@@ -485,8 +493,10 @@ Staleness (`engram status --scope portfolio`, exit 1): memory 192 (23 stale,
 
 CI: none configured/observed. Batch 202610111300 is open with 0 drained;
 00271 in wip, 5 PRDs behind it in backlog, plus the hold triage stubs from
-batch 202610101000 (00272-00275). `master` at b57e425; tree carries the
-batch's own store writes plus the staged task-1 test file. Standing debt:
+batch 202610101000 (00272-00275). `master` at 3c10a59, tree clean (a loupe
+end-of-turn reflow of `hooks/guard_phase_delegation.py` was reverted at this
+session's start, per memory `project-loupe-reflows-edited-py-files-at-turn-end`).
+Standing debt:
 `cli/__main__.py` and `test_state.py` exceed the 800-line cap (deliberately
 excluded by 00192).
 

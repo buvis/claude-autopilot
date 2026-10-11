@@ -50,3 +50,33 @@ Ivan (implementor):
   family" even though only part of it was tested. That assumption was WRONG
   against the contract, which says the `Pd` category; it left 15 `Pd` code
   points unfolded and a live guard bypass, and was fixed in the same task.
+
+## 2: Freeze the real-dispatch replay fixture
+
+Tess: skipped (test-and-fixture-only task, no separate test author).
+
+Ivan (implementor):
+
+- `source` label scheme: `00242-build-session` for the four deny records (the
+  contract's own example, and all four do come from that one session) and the
+  bare transcript session id (filename stem, no `.jsonl`) for the 13 allow
+  records; the contract allowed either form.
+- Record order in the file: deny group first, then allow, each in the
+  contract's listing order (the contract specifies no order).
+- `ensure_ascii=False` when serialising, so real prompt text stays readable in
+  diffs; JSON decoding is byte-identical either way.
+- Only the two named test functions were written; no extra schema/shape
+  assertions beyond the pinned-deny-ids check the acceptance criteria name.
+- The parametrized verdict test uses one pytest param per record (rather than a
+  loop inside one test), so the 13 expected reds are individually visible; the
+  criteria said "one subprocess run per record" without fixing the test shape.
+
+Orchestrator:
+
+- Pat's diff was trimmed once to fit the 50 KB dispatch budget (the untrimmed
+  task diff is 255,886 bytes, 252 KB of it the fixture's verbatim prompt data).
+  The fixture body was excluded from his diff and replaced by its `--stat` line
+  plus the mechanical byte-identity evidence; he reviewed the two code files in
+  full. Recorded because it means no model read the fixture's 252 KB end to
+  end - its correctness rests on the mechanical re-harvest comparison, not on
+  reading.
