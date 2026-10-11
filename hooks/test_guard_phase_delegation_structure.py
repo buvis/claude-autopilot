@@ -196,6 +196,26 @@ def test_normalize_keeps_text_outside_the_normalized_families() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (
+            "\ud55c\uae00 run the work phase",
+            "\ud55c\uae00 run the work phase",
+        ),
+        ("\u1112\u1161\u11ab\u1100\u1173\u11af", "\ud55c\uae00"),
+        ("5 \u212b of travel", "5 A of travel"),
+    ],
+    ids=["hangul-syllables", "hangul-jamo", "angstrom-sign"],
+)
+def test_normalize_returns_composed_text(raw: str, expected: str) -> None:
+    """The plain form is COMPOSED, so the character count a caller sees is the
+    one it would read in the source text: _negated_before measures its window
+    in characters, and text left split into jamo inflates that count and moves
+    the window. A compatibility sign still lands on its plain ASCII letter."""
+    assert _guard_module()._normalize(raw) == expected
+
+
 def test_normalize_leaves_whitespace_unchanged() -> None:
     """Nothing in the contract collapses whitespace: the newline between prompt
     and description, and every newline inside a prompt, must stay put."""
