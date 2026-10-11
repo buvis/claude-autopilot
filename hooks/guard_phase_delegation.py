@@ -50,10 +50,9 @@ _DROPPED_CATEGORIES = frozenset({"Mn", "Cf"})
 # name: the math minus (U+2212) in "/autopilot:plan<U+2212>tasks", which is
 # category Sm and so is missed by the Pd fold in _normalize; the curly single
 # quotes (U+2018, U+2019); and the Markdown emphasis asterisks in "Run the **work**
-# phase". The dash family itself is NOT listed here: folding the literal
-# U+2010-U+2015 range left 15 Pd code points outside it unfolded (U+301C wave
-# dash, U+05BE Hebrew maqaf and 13 more), a live bypass, so _normalize folds
-# the whole Pd category per character instead.
+# phase". The dash family itself is NOT listed here: _normalize folds the
+# whole Pd category per character instead, because a literal U+2010-U+2015
+# range leaves the other Pd code points (U+301C, U+05BE) unfolded.
 _FOLDED = {0x2212: "-", 0x2018: "'", 0x2019: "'", 0x002A: None}
 _PHASE_JARGON = r"(work phase|plan(?:ning)? phase|design phase)"
 # (?P=bt) requires the SAME backtick, quote or nothing to close immediately after
