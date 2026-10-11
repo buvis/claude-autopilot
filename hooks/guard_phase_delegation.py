@@ -176,18 +176,21 @@ def _normalize(text: str) -> str:
     NFKD folds the compatibility forms (U+FF57 fullwidth "w", U+2011
     non-breaking hyphen) and splits precomposed accents apart, then one pass
     drops every combining mark and format character (_DROPPED_CATEGORIES) and
-    folds every dash-punctuation (Pd) code point to "-", and the math minus,
-    curly quotes and emphasis asterisks fold to ASCII (_FOLDED). Whitespace is
-    untouched: the newline between prompt and description is a sentence
-    boundary for _negated_before.
+    folds every dash-punctuation (Pd) code point to "-". A trailing NFKC
+    recomposes what survived, so the caller reads the character count of the
+    source text (Hangul left as jamo inflates it and moves the
+    _negated_before window). Finally the math minus, curly quotes and
+    emphasis asterisks fold to ASCII (_FOLDED). Whitespace is untouched: the
+    newline between prompt and description is a sentence boundary for
+    _negated_before.
     """
-    decomposed = unicodedata.normalize("NFKD", text)
-    plain = "".join(
-        "-" if unicodedata.category(char) == "Pd" else char
-        for char in decomposed
-        if unicodedata.category(char) not in _DROPPED_CATEGORIES
-    )
-    return plain.translate(_FOLDED)
+    kept = []
+    for char in unicodedata.normalize("NFKD", text):
+        category = unicodedata.category(char)
+        if category in _DROPPED_CATEGORIES:
+            continue
+        kept.append("-" if category == "Pd" else char)
+    return unicodedata.normalize("NFKC", "".join(kept)).translate(_FOLDED)
 
 
 def is_phase_delegation(tool_input: dict) -> bool:
