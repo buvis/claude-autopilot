@@ -260,7 +260,7 @@ def _candidates(text: str) -> list[tuple[int, int, bool]]:
             end = match.end()
             wrap = match.group("w")
             if wrap and text[end:end + 1] == _WRAP_PAIR.get(wrap, wrap):
-                end += 1  # consume a present-and-correct close-wrap character
+                end += 1
             suffix = _SKILL_SUFFIX.match(text[end:end + 16])
             if suffix:
                 end += suffix.end()
@@ -423,8 +423,6 @@ def is_phase_delegation(tool_input: dict) -> bool:
 
 
 def _deny_message(subagent_type: str | None, span: str) -> str:
-    """The per-task personas get the rephrase-or-scope wording with the span
-    inline; everyone else gets the run-it-here wording plus `Matched:`."""
     if _is_per_task_persona(subagent_type):
         return (
             "autopilot: this per-task prompt names a phase as the thing to run: "
