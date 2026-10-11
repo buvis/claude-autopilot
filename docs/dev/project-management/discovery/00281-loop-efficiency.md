@@ -32,19 +32,25 @@ Split into three PRDs (Q0).
 ### Must have
 
 **PRD A - loop guards (`cli/loop.py`, `cli/loop_decision.py`, `cli/watchdog.py`, `cli/runner.py`)**
-- F1: per-PRD spend budget of $300, summed from the `cost_usd` the metrics
-  row already records. When a PRD's sum crosses it, park the PRD to `hold/`
-  with `stall_reason=budget` and continue the batch (Q1).
-- F2: before launching a build session, loop.py calls `enter()` in code and
-  writes its result (PRD, catchup and design verdicts) into the session
-  brief, so the session does not rediscover state. The done session is
-  unchanged (Q2).
+- F1: per-PRD spend budget read from `_AUTOPILOT_PRD_BUDGET_USD` (default
+  300; 0 disables), summed from the `cost_usd` the metrics row already
+  records over the sessions since the PRD last entered wip/ (a resume from
+  hold/ starts a fresh budget). When the sum crosses it, park the PRD to
+  `hold/` with `stall_reason=budget` and continue the batch (Q1, R3, R7).
+- F2: before launching a build session, loop.py calls `enter()` in code,
+  records `entered_by: loop` with the entered PRD in state, and writes the
+  result (PRD, catchup and design verdicts) into the session brief. The
+  run-autopilot prose skips its own `autopilot enter` call when that
+  marker matches the current PRD, so a manual run still enters normally.
+  The done session is unchanged (Q2, R1).
 - F3: a session with `wall_secs < 30` and `cost_usd == 0` gets its own
-  signal `instant_exit` and goes through the usage-limit check instead of
-  being logged as `continue`.
+  signal `instant_exit`. If the usage-limit check fires, wait; otherwise
+  take the existing died/retry path (retry once, then park) (R4).
 - F4: the idle watchdog arms from launch, not only after the wall cap,
-  using the existing `_AUTOPILOT_SESSION_IDLE` (1200 s). A kill routes to
-  the existing died/retry path (Q3).
+  using the existing `_AUTOPILOT_SESSION_IDLE` (1200 s). The idle timer
+  pauses while the session log has a `tool_use` with no matching
+  `tool_result` (the wall cap still bounds it). A kill routes to the
+  existing died/retry path (Q3, R6).
 
 **PRD B - catchup (`cli/enter.py`, catchup prose)**
 - F5: `catchup: force` gives full catchup unless every commit since
@@ -55,8 +61,9 @@ Split into three PRDs (Q0).
   failing catchup steps while the verdict holds.
 
 **PRD C - launch context (`cli/runner.py`, `cli/brief.py`, decision validator)**
-- F7: loop sessions launch with a strict MCP config that keeps Context7
-  only; an env var overrides the allowlist per repo (Q5).
+- F7: loop sessions load only the Context7 MCP server; an env var
+  overrides the allowlist per repo. The mechanism (`--strict-mcp-config`,
+  a setting, or an env var) is a design choice (Q5, R2).
 - F9: the session brief's `repo root` falls back to
   `custody.project_root` when `state.repo_root` is unset (today it prints
   `none` on every normal run, `brief.py:109`).
@@ -128,21 +135,38 @@ Split into three PRDs (Q0).
 - A test drives the loop with fake sessions whose costs sum past $300 for
   one PRD and asserts that PRD lands in `hold/` with `stall_reason=budget`
   and the next PRD launches.
-- A test feeds a 3 s, $0 session and asserts signal `instant_exit`.
-- A test with a silent fake session asserts a kill at the idle threshold
-  well before the wall cap.
+- A test parks a PRD at $310, moves it back to backlog, and asserts its next
+  session runs without re-parking.
+- A test runs the loop's pre-launch `enter()` and then the skill's enter
+  step for the same PRD, and asserts exactly one resume row is written.
+- A test feeds a 3 s, $0 session and asserts signal `instant_exit`, then
+  the died/retry path when no usage limit is detected.
+- A test with a fake session silent for 1200 s and no open `tool_use`
+  asserts a kill well before the wall cap; one silent for 25 min inside an
+  open Bash `tool_use` is not killed.
 - A test asserts `_catchup` returns `delta` for `force` when all commits
   since `catchup_head_sha` are loop commits, and `full` when one is not.
-- `build_argv` output contains `--strict-mcp-config` and an MCP config
-  naming Context7 only; the env override changes it.
+- With a stubbed `gh` that exits 1, the first catchup in a batch records an
+  `unauthenticated` verdict in a batch-scoped probe object, the second
+  catchup in the same batch does not invoke `gh`, and a new `batch.id`
+  re-probes (same for engram).
+- A headless launch built by `build_argv` emits a stream-json
+  `system/init` event whose `mcp_servers` lists Context7 only; the env
+  override changes that list.
 - The rendered brief shows the project root, never `none`, on a state
   without `repo_root`.
 - The decision validator's rejection message names all missing fields.
 
 ## Risks
 - **Idle kill hits a quiet external reviewer** (codex/gemini CLI silent
-  over 20 min): the kill is retried via the died path; watch review
-  sessions in the first batch and raise the knob if it fires there.
+  over 20 min): the timer pauses while a `tool_use` is open (F4), so a
+  working reviewer is bounded only by the wall cap; a hung tool call is
+  caught by the cap, not the idle check.
+- **`total_cost_usd` may not cover the whole session**: one headless
+  session emits many `result` events (one per resume after background
+  work); in the watched run 14 of them carried the same $18.58 before it
+  rose. F1 relies on the last one being cumulative; the first PRD A task
+  confirms that from a recorded log before the budget sum depends on it.
 - **"Autopilot commit" misdetected** (F5): a human commit treated as a loop
   commit skips a needed catchup. Detect by a trailer or author the loop
   controls, never by message prefix alone.
@@ -156,7 +180,11 @@ Split into three PRDs (Q0).
 - Which marker identifies a loop commit for F5 (author, trailer, or the
   batch's recorded commit list)? Design decides; the PRD must name one.
 - Does `--strict-mcp-config` drop claude.ai connectors in `claude -p`? If
-  not, which flag or env var does? (Verify in PRD C's first task.)
+  not, which flag or env var does? (Design decides; the F7 criterion checks
+  the outcome either way.)
+- What really caused the ten 2-7 s `continue` sessions? They touched state,
+  so not a plain refusal. PRD A's first task greps their session logs, if
+  any were retained, before F3's routing is finalised.
 
 ## Discovery Log
 
@@ -187,6 +215,21 @@ before/after.
 ### Q6: Which low-severity leftovers to include?
 **Answer**: F3 (instant-exit signal) and F9 + F13 (brief repo root,
 validator lists all missing fields). F8, F12, F14 deferred here.
+
+### Review (review-discovery-doc, 2026-10-11)
+- R1 (Blocking): in-code `enter()` collided with the skill's own enter.
+  Resolved: `entered_by: loop` marker, session skips; one-resume-row test.
+- R2 (Blocking): F7 criterion tested the flag, not the effect. Resolved:
+  outcome requirement, `system/init` `mcp_servers` criterion.
+- R3 (Blocking): budget never reset, so a resumed PRD re-parked at once.
+  Resolved: budget per attempt (since last entering wip/).
+- R4: no-limit branch after `instant_exit` unspecified. Resolved: died
+  path; cause confirmation moved to Open Questions.
+- R5: F6 had no criterion. Resolved: stubbed-gh state-level test.
+- R6: F4 mitigation was a human watch. Resolved: idle timer pauses while
+  a `tool_use` is open.
+- R7: $300 hardcoded. Resolved: `_AUTOPILOT_PRD_BUDGET_USD`, default 300.
+- Added from monitoring: risk that `total_cost_usd` is not cumulative.
 
 ### Inferred (not asked)
 - F6 needs no decision: reuse the codex_probe batch-verdict idiom.

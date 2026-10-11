@@ -46,14 +46,18 @@ Generated: 2026-10-11
 
 ### Batch 202610111300
 - [ ] 00271-guard-v2-structural-delegation-check-v1 (in wip, design reused,
-  planned: 10 tasks, 1 done, resuming at task 2)
+  planned: 10 tasks, 2 done, resuming at task 3)
 - backlog behind it: 00276, 00277, 00278, 00279, 00280 (agoge 2026-10-10 walkthrough)
 
 Observations: 00271 carried over from batch 202610101000, which closed after
 00269 and 00270. Design doc exists and its `## Review log` gate passes, so
 Phase 1.5 reuses it. Task 1 (lookalike-text normalization in the delegation
-guard) landed in 5 commits through d30b77a; `master` is now at 3c10a59 and
-work resumes at task 2 ("Freeze the real-dispatch replay fixture"). Each
+guard) landed in 5 commits through d30b77a;
+task 2 ("Freeze the real-dispatch replay fixture") landed in 7a212a1, leaving
+`hooks/test_guard_phase_delegation_replay.py` RED on its 13 `allow-toolu_*`
+params BY DESIGN until task 6's guard rewrite; `dev/bin/release-checks` is
+therefore RED too and must not be read as a regression. Work resumes at task 3
+(lone-surrogate fix in `enforce_prd_location`). `master` is at 640ad95. Each
 build session re-runs a FULL catchup here because `batch.catchup_head_sha`
 is pinned at the PRD's start sha (b57e425) while the task commits move HEAD —
 the cache's HEAD condition can never hold across a task-boundary hand-off.
