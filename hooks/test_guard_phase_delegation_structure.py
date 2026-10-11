@@ -51,6 +51,22 @@ def test_lookalike_dashes_and_invisible_marks_are_normalized_and_denied(
 
 
 @pytest.mark.parametrize(
+    "prompt",
+    [
+        "Invoke /autopilot:plan\u301ctasks for PRD 00300.",
+        "Invoke /autopilot:plan\u05betasks for PRD 00300.",
+    ],
+    ids=["wave-dash", "hebrew-maqaf"],
+)
+def test_a_dash_outside_the_common_block_is_normalized_and_denied(
+    prompt: str,
+) -> None:
+    """Every Pd code point folds to "-", not only the U+2010-U+2015 block: a
+    wave dash hides a skill name from the patterns just as well."""
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
+
+
+@pytest.mark.parametrize(
     "tool_input",
     [
         {"prompt": "Summarize the wo\ufeffrk you finished for PRD 00300."},
@@ -107,6 +123,11 @@ _LOOKALIKE_CASES = [
     ("plan\u2014tasks", "plan-tasks", "em-dash"),
     ("plan\u2010tasks", "plan-tasks", "hyphen"),
     ("plan\u2013tasks", "plan-tasks", "en-dash"),
+    # Pd code points outside the U+2010-U+2015 block, neither folded by NFKD:
+    # the contract names the whole Pd category, so folding a literal dash
+    # range is not enough.
+    ("plan\u301ctasks", "plan-tasks", "wave-dash"),
+    ("plan\u05betasks", "plan-tasks", "hebrew-maqaf"),
     ("wo\ufeffrk", "work", "zero-width-no-break-space"),
     ("wo\u2061rk", "work", "function-application"),
     ("wo\u180erk", "work", "mongolian-vowel-separator"),
