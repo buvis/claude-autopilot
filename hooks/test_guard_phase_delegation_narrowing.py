@@ -1,5 +1,6 @@
 """Narrowing of the phase-delegation guard: contraction double negation,
-bounded gap words, and a prohibition inside the SKILL.md-read pattern.
+determiners before the phase name, and a prohibition inside the SKILL.md-read
+pattern.
 
 Sibling of test_guard_phase_delegation.py (kept apart for the file size limit).
 Each case is one input string and one assertion on `is_phase_delegation`.
@@ -62,7 +63,6 @@ def test_contraction_without_hesitate_fail_or_only_stays_a_plain_negation() -> N
         "Do review the work phase diff",
         "Call the work phase reviewer",
         "Start with the work phase review",
-        "Start reviewing the design phase",
     ],
 )
 def test_ordinary_prose_with_a_widened_verb_near_phase_jargon_is_allowed(
@@ -82,18 +82,21 @@ def test_ordinary_prose_with_a_widened_verb_near_phase_jargon_is_allowed(
         "Complete the work phase",
         "Launch /autopilot:work",
         "Call /autopilot:plan-tasks",
+        "Start reviewing the design phase",
     ],
 )
 def test_delegating_phrasing_with_a_widened_verb_stays_denied(prompt: str) -> None:
     assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
 
 
-def test_compound_noun_head_does_not_excuse_an_original_verb() -> None:
-    """The compound-noun exception belongs to the widened verbs only: "run the
-    work phase review" was denied before that exception existed."""
+def test_a_phase_named_before_a_compound_head_is_allowed() -> None:
+    """A compound-noun head ("work phase review") names a thing: the phase
+    name no longer ends its clause, so no anchor fires and the verb in front
+    of it is irrelevant. The structure suite pins the override - a whole-run
+    marker or a "for PRD" anchor in the same sentence denies it again."""
     assert (
         _guard_module().is_phase_delegation({"prompt": "Run the work phase review"})
-        is True
+        is False
     )
 
 
@@ -139,24 +142,25 @@ def test_only_after_a_negation_is_a_double_negation_and_is_denied(prompt: str) -
 
 
 @pytest.mark.parametrize(
-    ("prompt", "expected"),
+    "prompt",
     [
-        ("Run the entire remaining work phase", True),
-        ("Run the whole entire remaining work phase", False),
-        ("Start the entire remaining work phase", True),
-        ("Start the whole entire remaining work phase", False),
-        ("Run the entire remaining autopilot:work skill", True),
-        ("Run the whole entire remaining autopilot:work skill", False),
+        "Run the entire remaining work phase",
+        "Run the whole entire remaining work phase",
+        "Start the entire remaining work phase",
+        "Start the whole entire remaining work phase",
+        "Run the entire remaining autopilot:work skill",
+        "Run the whole entire remaining autopilot:work skill",
     ],
     ids=[
-        "run-three-gap-words", "run-four-gap-words", "start-three-gap-words",
-        "start-four-gap-words", "skill-three-gap-words", "skill-four-gap-words",
+        "run-three-determiners", "run-four-determiners", "start-three-determiners",
+        "start-four-determiners", "skill-three-determiners", "skill-four-determiners",
     ],
 )
-def test_exactly_three_gap_words_are_denied_and_four_are_allowed(
-    prompt: str, expected: bool
-) -> None:
-    assert _guard_module().is_phase_delegation({"prompt": prompt}) is expected
+def test_gap_words_no_longer_have_a_limit(prompt: str) -> None:
+    """The walk back from the phase name skips every determiner before it, so
+    three of them and four read alike: the old three-word gap budget went with
+    the verb list it served."""
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
 
 
 @pytest.mark.parametrize(
@@ -178,7 +182,9 @@ def test_prefixed_skill_with_gap_words_before_it_is_denied(prompt: str) -> None:
         "Run the full test suite before touching plan-tasks",
     ],
 )
-def test_bare_skill_name_takes_no_gap_words_and_far_from_a_verb_is_allowed(
-    prompt: str,
-) -> None:
-    assert _guard_module().is_phase_delegation({"prompt": prompt}) is False
+def test_bare_skill_name_at_the_end_of_a_clause_is_denied(prompt: str) -> None:
+    """A bare `plan-tasks` that ends its clause behind a word which is not a
+    preposition stands in object position, so distance from a verb no longer
+    excuses it - "before touching plan-tasks" included, since the walk back
+    skips determiners only and stops on "touching"."""
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is True

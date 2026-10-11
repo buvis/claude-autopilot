@@ -9,8 +9,12 @@ Skill tool. Phase skills must stay in the session; Agent calls are for
 per-task subagents (Ivan, Tess, Devon, reviewers) only.
 
 Denies (exit 2, reason on stderr) iff `_AUTOPILOT_LOOP` is set, the tool is
-`Agent`, and `is_phase_delegation` matches the prompt or description. Any
-unparseable payload fails open.
+`Agent`, and `find_phase_delegation` quotes a span of the prompt or the
+description. The rule is structural, not a verb list: a recognized phase name
+counts when it stands as the thing to run - a strong anchor ("for"/"on" a PRD,
+task or number, "from task", a PRD-lifecycle path, or a whole-run marker in the
+same sentence) or a weak one (the name ends its clause, behind a word that is
+not a preposition). Any unparseable payload fails open.
 """
 
 from __future__ import annotations
@@ -19,23 +23,13 @@ import os
 import re
 import sys
 import unicodedata
+from bisect import bisect_left
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _common import allow, block, read_input
 
-# The six original verbs only, for the colon-lead pattern: "Work phase:
-# complete" and "In the work phase: do not skip tests" are status prose.
-# Widened to the -ing form of each verb: recovered transcripts say "You are
-# executing the `autopilot:design-solution` skill" (autonomous decision,
-# PRD 00248 task 1).
-_COLON_VERBS = r"run(?:ning)?|execut(?:e|ing)|invok(?:e|ing)|follow(?:ing)?|continu(?:e|ing)|resum(?:e|ing)"
-_IMPERATIVE_COLON = rf"({_COLON_VERBS})"
-# Built from the six colon verbs plus six widened verbs, so the two lists
-# cannot drift.
-_WIDENED_VERBS = r"(start|do|perform|complete|launch|call)"
-_IMPERATIVE = rf"({_COLON_VERBS}|start|do|perform|complete|launch|call)"
 # Unicode categories dropped outright by _normalize. Mn (combining marks) so a
 # decomposed accent cannot split a word ("work" with U+0301 after the "o"); Cf
 # (format characters) because they are invisible and do the same (U+200B,
@@ -49,68 +43,147 @@ _DROPPED_CATEGORIES = frozenset({"Mn", "Cf"})
 # Characters NFKD leaves alone but that read as plain ASCII around a skill
 # name: the math minus (U+2212) in "/autopilot:plan<U+2212>tasks", which is
 # category Sm and so is missed by the Pd fold in _normalize; the curly single
-# quotes (U+2018, U+2019); and the Markdown emphasis asterisks in "Run the **work**
-# phase". The dash family itself is NOT listed here: _normalize folds the
-# whole Pd category per character instead, because a literal U+2010-U+2015
+# quotes (U+2018, U+2019); and the Markdown emphasis asterisks in "Run the
+# **work** phase". The dash family itself is NOT listed here: _normalize folds
+# the whole Pd category per character instead, because a literal U+2010-U+2015
 # range leaves the other Pd code points (U+301C, U+05BE) unfolded.
 _FOLDED = {0x2212: "-", 0x2018: "'", 0x2019: "'", 0x002A: None}
-_PHASE_JARGON = r"(work phase|plan(?:ning)? phase|design phase)"
-# (?P=bt) requires the SAME backtick, quote or nothing to close immediately after
-# the skill name - "`/autopilot:plan-tasks`" (tight close) matches; "invoke
-# `/autopilot:design-solution dev/local/prds/wip/..." (an opening backtick
-# whose matching close is many words later, around an args list) does not,
-# because nothing closes immediately. No trailing \b: a literal backtick is
-# a non-word char, and \b between two non-word chars (backtick, space)
-# never matches.
-# Bare names only: the autopilot:-prefixed ones are covered by
-# _PREFIXED_SKILL below, which subsumes them and also takes the word gap.
-_BARE_SKILL = r"(?P<bt>[`'\"]?)(?:/)?(plan-tasks|design-solution)(?P=bt)"
-# Only an autopilot:-prefixed skill name takes the word gap: a bare
-# "plan-tasks" is ordinary prose ("call the helper in plan-tasks").
-_PREFIXED_SKILL = r"(?P<bt>[`'\"]?)(?:/)?(autopilot:work|autopilot:plan-tasks|autopilot:design-solution)(?P=bt)"
-# No "n't" alternative: \b never matches before the "n" inside a
-# contraction, so that alternative was dead. Contractions are spelled out.
+
+# --- Phase-name recognition (a phase mention in object position) ------------
+# Wrapper characters around a skill-form or bare-form name: an optional
+# leading '/', then an optional single wrapper from this set that must close
+# with the matching character immediately after the name. '[' is written
+# FIRST in each character class to avoid an unescaped-']' bug.
+_WRAP_OPEN = "[`'\"‘“«「(\\[]"
+_WRAP_CLOSE = "[]`'\"’”»」)]"
+_WRAP = r"(?P<w>" + _WRAP_OPEN + r")?"
+# Open-char -> required close-char map (symmetric for backtick/straight
+# quotes, asymmetric for curly quotes/guillemets/corner brackets/parens/
+# square brackets). A regex backreference cannot express an asymmetric pair,
+# so the close is validated in code, not in the pattern: wrapping is optional
+# per the PRD, so only a present-and-correct close is consumed, never
+# required.
+_WRAP_PAIR = {
+    "‘": "’", "“": "”", "«": "»",
+    "「": "」", "(": ")", "[": "]",
+}
+
+# A "word" for the nearest-preceding-word and clause-end lookups, once wrap
+# characters are stripped: \w plus internal apostrophe/hyphen.
+_WORD = re.compile(r"[\w][\w'-]*")
+
+# Conceptual form: work|plan|planning|design + phase, with [-_ ] joiner.
+# "plan phase" and "planning phase" both count, "plan-tasks phase" does not.
+_PHASE_CONCEPT = re.compile(
+    rf"{_WRAP}/?\b(work|plan|planning|design)[-_ ]phase\b",
+    re.IGNORECASE,
+)
+# Skill form: the autopilot: prefix is MANDATORY - a bare "work" is ordinary
+# English and must never match. Optional /subpath. The optional " skill"
+# suffix is NOT baked in: a quoted name like `` `autopilot:design-solution`
+# skill `` has its closing backtick BETWEEN the name and " skill", so the
+# close-wrap consumption and the skill-suffix probe are ordered algorithm
+# steps (see _candidates), not alternatives folded into one pattern.
+_PHASE_SKILL = re.compile(
+    rf"{_WRAP}/?\bautopilot:(work|plan-tasks|design-solution)(?:/[\w.-]+)?\b",
+    re.IGNORECASE,
+)
+# Bare skill-name form: plan-tasks|design-solution only (never bare "work"),
+# hard word boundaries on both sides so it never matches inside a path
+# segment like skills/work/SKILL.md or design-solution/references/x.md.
+_PHASE_BARE = re.compile(
+    rf"{_WRAP}(?<![-/\w])(plan-tasks|design-solution)(?![-/.\w])",
+    re.IGNORECASE,
+)
+# A leading '/' before any of the three forms is consumed as part of the match
+# span (not part of _WRAP) when present, so "/autopilot:work" and
+# "autopilot:work" match identically past the slash.
+_PHASE_NAME_FORMS = (_PHASE_CONCEPT, _PHASE_SKILL, _PHASE_BARE)
+# Optional " skill" suffix, probed as its own step on the text right after the
+# (already wrap-close-extended) match end.
+_SKILL_SUFFIX = re.compile(r"^\s+skill\b", re.IGNORECASE)
+
+# Strong anchor: matched against the text starting right after the phase-name
+# match's end (post wrap-close extension and post optional-" skill"). PRD
+# number is 3-5 digits; the `[\w-]+\s+PRD\b` branch covers a slug-named PRD.
+_STRONG_ANCHOR_TAIL = re.compile(
+    r"^\s*(?:(?:for|on)\s+(?:the\s+)?(?:PRD\b|task\b|[\w-]+\s+PRD\b|\d{3,5}\b)"
+    r"|from\s+task\b)",
+    re.IGNORECASE,
+)
+# A PRD-lifecycle path immediately after the name anchors on its own, with or
+# without the preposition: "the work phase, prds/wip/00300.md" is never
+# ordinary prose.
+_PRD_PATH_TAIL = re.compile(r"^\s*(?:for|on)?\s*\S*/prds/\S+\.\w+", re.IGNORECASE)
+# Whole-run marker: searched anywhere within the enclosing SENTENCE ("keep
+# going through every task" spans a comma, so a clause is too narrow).
+_WHOLE_RUN_MARKERS = re.compile(
+    r"\bevery\s+task\b|\ball\s+(?:the\s+)?tasks?\b|\bkeep\s+going\b"
+    r"|\buntil\s+(?:done|complete|finished)\b|\bend\s+to\s+end\b|\bonwards?\b",
+    re.IGNORECASE,
+)
+# Weak anchor: the phase name ends its CLAUSE. Matched against the text from
+# the name's end to the clause boundary: optional close-wrap character, then
+# optionally one of now|again|first|immediately|please|in full, then only
+# whitespace to the boundary. " skill" is already consumed by the phase-name
+# step. A clause ending in "?" never counts - checked by the caller.
+_WEAK_ANCHOR_TAIL = re.compile(
+    rf"^{_WRAP_CLOSE}?\s*(?:now|again|first|immediately|please|in\s+full)?\s*$",
+    re.IGNORECASE,
+)
+
+_DETERMINERS = frozenset({"the","a","an","this","that","these","those","my","your","our","its","their","next","all","of","each","every","entire","whole","full","remaining"})
+_PREPOSITIONS = frozenset({"in","about","of","during","before","after","from","with","by","at","into","within","without","under","over","to","for","on","through","between","across","per","via","than","like"})
+
+# Per-task personas count the strong anchor only: their prompts quote phase
+# prose as an edit target all day long.
+_PER_TASK_PERSONAS = frozenset({"autopilot:ivan", "autopilot:tess", "autopilot:devon"})
+
+# Always-delegate form 1: the first token of the prompt is a bare slash
+# command. Checked on `prompt` only - the PRD's own wording names that field,
+# and no captured `description` ever starts with a slash command.
+_BARE_SLASH_PREFIX = re.compile(r"^\s*/autopilot:(work|plan-tasks|design-solution)\b")
+
+# Always-delegate form 2: a SKILL.md path. Scoping is skipped for this form,
+# negation is not.
+_SKILL_MD_PATH = re.compile(
+    r"(?:[^\s/]*/)*(?:skills/)?(work|plan-tasks|design-solution)/SKILL\.md$"
+)
+# One follow regex, not two: verb, then at most 3 words of gap (non-greedy,
+# captured so the gap can be negation-checked), then one object phrase.
+_FOLLOW = re.compile(
+    r"\b(follow|execute|do|run|carry\s+out)\s+((?:\S+\s+){0,3}?)"
+    r"(it\b|its\s+steps\b|its\s+instructions\b|the\s+steps\b|every\s+task\b|all\s+tasks\b)",
+    re.IGNORECASE,
+)
+
+_TASK_ID = re.compile(r"\btasks?\s+#?([A-Z]?\d+)\b", re.IGNORECASE)
+_TASK_RANGE_LEAD = re.compile(r"\b(from|after|starting\s+at|starting\s+with)\s*$", re.IGNORECASE)
+_TASK_RANGE_TAIL = re.compile(r"^\s*(onwards?|through|to|until|and\s+on|and\s+later|,\s*\d|and\s+\d|-\d|\.\.)", re.IGNORECASE)
+_PATH_TOKEN = re.compile(r"\S*/\S+\.\w+")
+
 # "not/never/don't ... hesitate|fail|only" is a double negation ("do not
-# hesitate to run ...", "don't hesitate to run ..."), so it does not count.
-# The exception covers the contracted spellings of that same family
-# ("don't hesitate to run ..."); one without hesitate|fail|only after it
-# ("Don't run the work phase") stays a plain negation. The other
-# contractions keep no exception: "isn't only" is a state, not an
-# instruction wrapped in a double negation.
-_NEGATION = (
-    r"\b(not|never|does\s+not|doesn't|don't|won't)\b"
-    r"(?!\s+(?:hesitate|fail|only)\b)"
-    r"|\b(can't|cannot|isn't|shouldn't|wasn't|weren't)\b"
+# hesitate to run ..."), so it does not count. The other contractions keep no
+# exception: "isn't only" is a state, not an instruction wrapped in a double
+# negation. The bound is a WORD count, not a character count: a single long
+# token can push a real 3-word gap past any fixed character budget.
+_NEGATION = re.compile(
+    r"\b(not|never|does\s+not|doesn't|don't|won't)\b(?!\s+(?:hesitate|fail|only)\b)"
+    r"|\b(can't|cannot|isn't|shouldn't|wasn't|weren't)\b",
+    re.IGNORECASE,
 )
-_NEGATION_RE = re.compile(_NEGATION, re.IGNORECASE)
-# _negated_before only sees text BEFORE a match start, so a prohibition inside
-# the match ("Read skills/work/SKILL.md and do not perform all tasks") needs
-# the in-pattern guard: no negation may sit before the verb or between the
-# verb and "all tasks".
-_NO_NEGATION = rf"(?:(?!{_NEGATION}).)"
-_SKILL_READ = (
-    r"read\s+(?:skills/)?(work|plan-tasks|design-solution)/SKILL\.md"
-    rf"{_NO_NEGATION}{{0,60}}\b{_IMPERATIVE}\b{_NO_NEGATION}{{0,20}}\b(every|all)\s+tasks?\b"
-)
-# Up to three words between the verb and its object ("run the entire work
-# phase"). Word-count bounded, never a character gap: a {0,40}-char gap once
-# denied 21 of 231 real review prompts.
-# Gap words are a closed set of determiners and modifiers, never `\w+`:
-# prepositions and nouns ("do in the work phase", "Start with the work phase
-# fixtures") are ordinary prose. The set is the articles/demonstratives
-# (the, a, an, this, that), the quantifiers (all, every, each, remaining) and
-# the size modifiers (entire, whole, full); chosen as the smallest set that
-# keeps every denied fixture denied.
-_GAP_WORD = r"(?:the|an?|this|that|all|every|each|remaining|entire|whole|full)"
-# No negation lookahead: no gap word is a negation, so one would be dead.
-_GAP = rf"(?:{_GAP_WORD}\s+){{0,3}}"
-# A phase-jargon match followed by a compound-noun head ("the work phase
-# reviewer", "complete the work phase checklist") names a thing, not an
-# instruction to run the phase. Applied to the six WIDENED verbs only: the
-# six original ones are unambiguous instructions, and "run the work phase
-# review" was denied before this pattern existed.
-_NOT_COMPOUND = r"(?!\s+(?:reviewers?|reviews?|fixtures?|checklists?|diffs?)\b)"
-_SENTENCE_BOUNDARY_RE = re.compile(r"[.;,\n]")
+_NEGATION_WORD_GAP = 4  # words between the negation and the name, not characters
+
+# ':' must not fire INSIDE a recognized name's own span ("autopilot:work"),
+# and neither must the '.' a SKILL.md span carries by construction, so
+# boundary detection runs on a per-field scratch copy where every candidate
+# span's internal ':', '/' and '.' are replaced by 'x'. Same length, same
+# offsets: the quoted span always slices the ORIGINAL text.
+_MASKED_IN_SPAN = ":/."
+_CLAUSE_BOUNDARY = re.compile(r"[.;,:!?\n)]|\s-\s")
+_SENTENCE_BOUNDARY = re.compile(r"[.!?\n]")
+
+_AGOGE_PREFIX = "agoge:"
 
 # Read-only reviewer personas: none of their persona files grant the Skill
 # tool (test_every_exempt_reviewer_lacks_the_skill_tool), so exempting them
@@ -124,50 +197,6 @@ _READ_ONLY_REVIEWERS = frozenset(
     }
 )
 
-# Word-gap phase-jargon pattern, forward direction only: "run the work
-# phase" / "run the entire work phase" matches; "run at this exact HEAD by
-# the work phase" does not, because more than three words sit between the
-# verb and its object. The looser bidirectional {0,40}-gap
-# form this replaced matched ordinary reviewer prose ("run by the work
-# phase"), denying 21 of 231 real review-roster prompts (verified by
-# docs/dev/tmp/probe-blake-high-00248.py). No reverse-direction ("work phase
-# ... run") pattern: none of the four observed denial fixtures needs it, and
-# it is pure false-positive surface.
-_PHASE_JARGON_TIGHT = rf"\b{_IMPERATIVE_COLON}\s+{_GAP}{_PHASE_JARGON}\b"
-# Same shape for the widened verbs, minus a compound-noun head.
-_PHASE_JARGON_WIDENED = rf"\b{_WIDENED_VERBS}\s+{_GAP}{_PHASE_JARGON}\b{_NOT_COMPOUND}"
-
-_DELEGATION_PATTERNS = (
-    re.compile(_PHASE_JARGON_TIGHT, re.IGNORECASE),
-    re.compile(_PHASE_JARGON_WIDENED, re.IGNORECASE),
-    # Reverse direction ("<phase> phase ...: <imperative>"), gated on a
-    # colon between jargon and verb - "Planning phase for PRD 00300:
-    # continue it from task 4." matches; descriptive prose like "the work
-    # phase's own run at this HEAD" does not, because nothing introduces
-    # the verb as an instruction.
-    re.compile(
-        rf"\b{_PHASE_JARGON}\b[^.;\n:]{{0,25}}:\s*(?:it\s+)?\b{_IMPERATIVE_COLON}\b",
-        re.IGNORECASE,
-    ),
-    re.compile(rf"\b{_IMPERATIVE}\s+{_GAP}{_PREFIXED_SKILL}", re.IGNORECASE),
-    re.compile(rf"\b{_IMPERATIVE}\s+(?:the\s+)?{_BARE_SKILL}", re.IGNORECASE),
-    re.compile(_SKILL_READ, re.IGNORECASE | re.DOTALL),
-)
-
-
-def _negated_before(text: str, start: int, window: int = 20) -> bool:
-    """True iff a negation word sits in the `window` chars immediately
-    before `start`, without crossing a sentence boundary (`.`, `;`, `,`, or a
-    newline) - the match is `run plan-tasks` inside `does not run
-    plan-tasks`, and that is a prohibition, not a delegation. A negation in
-    an earlier sentence ("Do not wait for me. Run the work phase...") must
-    not suppress a real delegation in a later one, so only the LAST boundary
-    in the window is honored."""
-    window_start = max(0, start - window)
-    preceding = text[window_start:start]
-    preceding = _SENTENCE_BOUNDARY_RE.split(preceding)[-1]
-    return bool(_NEGATION_RE.search(preceding))
-
 
 def _normalize(text: str) -> str:
     """Reduce lookalike text to its plain form, so a dispatch cannot dodge the
@@ -178,11 +207,9 @@ def _normalize(text: str) -> str:
     drops every combining mark and format character (_DROPPED_CATEGORIES) and
     folds every dash-punctuation (Pd) code point to "-". A trailing NFKC
     recomposes what survived, so the caller reads the character count of the
-    source text (Hangul left as jamo inflates it and moves the
-    _negated_before window). Finally the math minus, curly quotes and
-    emphasis asterisks fold to ASCII (_FOLDED). Whitespace is untouched: the
-    newline between prompt and description is a sentence boundary for
-    _negated_before.
+    source text. Finally the math minus, curly quotes and emphasis asterisks
+    fold to ASCII (_FOLDED). Whitespace is untouched: a newline inside a field
+    is a clause and sentence boundary.
     """
     kept = []
     for char in unicodedata.normalize("NFKD", text):
@@ -193,33 +220,224 @@ def _normalize(text: str) -> str:
     return unicodedata.normalize("NFKC", "".join(kept)).translate(_FOLDED)
 
 
+def _is_per_task_persona(subagent_type: str | None) -> bool:
+    return isinstance(subagent_type, str) and (
+        subagent_type in _PER_TASK_PERSONAS or subagent_type.startswith("autopilot:worker-")
+    )
+
+
+def _is_skill_md_basename(path_token: str) -> bool:
+    """True iff path_token's basename is literally 'SKILL.md': a scoping path
+    token is just "a path", so scoping must exclude ANY SKILL.md reference,
+    not only one naming a recognized phase."""
+    return path_token.rsplit("/", 1)[-1] == "SKILL.md"
+
+
+def _find_skill_md_paths(text: str) -> list[tuple[int, int]]:
+    """Spans of every SKILL.md phase-skill path in `text`, O(n) total: one
+    substring scan for the literal 'SKILL.md' (`str.find`, no backtracking),
+    then one bounded regex match per occurrence against a <=120-char slice
+    ending at it. A `.finditer` of _SKILL_MD_PATH over the whole field is
+    worst-case quadratic on a long slash-free run, so it is never run."""
+    spans = []
+    idx = text.find("SKILL.md")
+    while idx != -1:
+        window_start = max(0, idx - 120)
+        match = _SKILL_MD_PATH.search(text[window_start:idx + len("SKILL.md")])
+        if match:
+            spans.append((window_start + match.start(), window_start + match.end()))
+        idx = text.find("SKILL.md", idx + 1)
+    return spans
+
+
+def _candidates(text: str) -> list[tuple[int, int, bool]]:
+    """Pass 1: every candidate span as (start, end, is_skill_md), sorted by
+    start. Pure per-match text inspection - no clause or sentence lookup - so
+    the list is COMPLETE before any boundary is computed from it."""
+    spans = [(start, end, True) for start, end in _find_skill_md_paths(text)]
+    for pattern in _PHASE_NAME_FORMS:
+        for match in pattern.finditer(text):
+            end = match.end()
+            wrap = match.group("w")
+            if wrap and text[end:end + 1] == _WRAP_PAIR.get(wrap, wrap):
+                end += 1  # consume a present-and-correct close-wrap character
+            suffix = _SKILL_SUFFIX.match(text[end:end + 16])
+            if suffix:
+                end += suffix.end()
+            spans.append((match.start(), end, False))
+    return sorted(spans)
+
+
+def _boundaries(
+    text: str, spans: list[tuple[int, int, bool]]
+) -> tuple[list[int], list[int], list[int]]:
+    """Pass 2's one-shot boundary build: clause starts, clause ends and
+    sentence starts for the whole field, from a scratch copy that masks the
+    punctuation inside pass 1's spans. Every later clause/sentence lookup is a
+    binary search into these sorted lists, never a fresh scan."""
+    scratch = list(text)
+    for start, end, _ in spans:
+        for index in range(start, end):
+            if scratch[index] in _MASKED_IN_SPAN:
+                scratch[index] = "x"
+    scratch = "".join(scratch)
+    clauses = [(m.start(), m.end()) for m in _CLAUSE_BOUNDARY.finditer(scratch)]
+    sentences = [m.start() for m in _SENTENCE_BOUNDARY.finditer(scratch)]
+    return [c[0] for c in clauses], [c[1] for c in clauses], sentences
+
+
+def _is_scoped(text: str) -> bool:
+    """Per-task scoping, this field only: exactly one task id with no range
+    wording beside it, OR exactly one path that is neither under `prds/` nor a
+    SKILL.md. Either one on its own narrows the dispatch to a single job."""
+    ids = [
+        match
+        for match in _TASK_ID.finditer(text)
+        if not _TASK_RANGE_LEAD.search(text[max(0, match.start() - 24):match.start()])
+        and not _TASK_RANGE_TAIL.match(text[match.end():match.end() + 24])
+    ]
+    paths = [
+        token
+        for token in (m.group(0) for m in _PATH_TOKEN.finditer(text))
+        if "/prds/" not in token and not _is_skill_md_basename(token)
+    ]
+    return len(ids) == 1 or len(paths) == 1
+
+
+def _strongly_anchored(
+    text: str, start: int, end: int, sentences: list[int], marked: set[int]
+) -> bool:
+    tail = text[end:end + 200]  # bounded: every anchor tail is a few words long
+    if _STRONG_ANCHOR_TAIL.match(tail) or _PRD_PATH_TAIL.match(tail):
+        return True
+    return bisect_left(sentences, start) in marked
+
+
+def _weakly_anchored(
+    text: str, start: int, end: int, clause_start: int, clause_end: int
+) -> bool:
+    if not _WEAK_ANCHOR_TAIL.match(text[end:clause_end]):
+        return False
+    for word in reversed(list(_WORD.finditer(text, clause_start, start))):
+        token = word.group(0).lower()
+        if token in _DETERMINERS:
+            continue  # skip past EVERY leading determiner, not just the adjacent one
+        return token not in _PREPOSITIONS
+    return False  # a label: no word before the name, or determiners only
+
+
+def _ordered_to_follow(text: str, end: int, sentences: list[int]) -> bool:
+    """A SKILL.md path counts when an order to follow it sits in the rest of
+    the sentence (or the next 200 characters, whichever ends first), with no
+    negation in the gap between that verb and its object."""
+    sentence_end = next((s for s in sentences if s >= end), len(text))
+    match = _FOLLOW.search(text[end:min(sentence_end, end + 200)])
+    return bool(match) and not _NEGATION.search(match.group(2))
+
+
+def _negated(text: str, clause_start: int, start: int) -> bool:
+    """True iff a negation sits at most _NEGATION_WORD_GAP words before the
+    name, inside its own clause. Walks BACKWARD from the name over at most
+    _NEGATION_WORD_GAP + 1 word tokens (the gap words plus the negation
+    itself), so the cost is O(1) per candidate."""
+    words = list(_WORD.finditer(text, clause_start, start))[-(_NEGATION_WORD_GAP + 1):]
+    window_start = words[0].start() if words else clause_start
+    return bool(_NEGATION.search(text[window_start:start]))
+
+
+def _quote(text: str, start: int) -> str:
+    return " ".join(text[max(0, start - 10):start + 20].split())
+
+
+def _field_delegation(text: str, per_task: bool) -> str | None:
+    spans = _candidates(text)
+    if not spans:
+        return None
+    clause_starts, clause_ends, sentences = _boundaries(text, spans)
+    marked = {
+        bisect_left(sentences, match.start())
+        for match in _WHOLE_RUN_MARKERS.finditer(text)
+    }
+    scoped = _is_scoped(text)
+    for start, end, is_skill_md in spans:
+        index = bisect_left(clause_starts, start)
+        clause_start = clause_ends[index - 1] if index else 0
+        clause_end = clause_starts[index] if index < len(clause_starts) else len(text)
+        if text[clause_end:clause_end + 1] == "?":
+            continue  # a question about the phase, not an order to run it
+        if is_skill_md:
+            if not _ordered_to_follow(text, end, sentences):
+                continue
+        else:
+            anchored = _strongly_anchored(text, start, end, sentences, marked) or (
+                not per_task
+                and _weakly_anchored(text, start, end, clause_start, clause_end)
+            )
+            if not anchored or scoped:
+                continue
+        if _negated(text, clause_start, start):
+            continue
+        return _quote(text, start)
+    return None
+
+
+def find_phase_delegation(tool_input: dict) -> str | None:
+    """The quoted span of the first counting phase mention in `prompt` or
+    `description` (prompt first), or None when this dispatch delegates no
+    phase. A phase name counts when it stands as the thing to run; the
+    reviewer and agoge exemptions, normalization and scoping all live here, so
+    the hook and any direct caller apply them identically.
+    """
+    if not isinstance(tool_input, dict):
+        return None
+    subagent_type = tool_input.get("subagent_type")
+    if isinstance(subagent_type, str) and (
+        subagent_type in _READ_ONLY_REVIEWERS or subagent_type.startswith(_AGOGE_PREFIX)
+    ):
+        return None
+    fields = []
+    for key in ("prompt", "description"):
+        value = tool_input.get(key)
+        fields.append(_normalize(value) if isinstance(value, str) else "")
+    prefix = _BARE_SLASH_PREFIX.search(fields[0])
+    if prefix:
+        return _quote(fields[0], prefix.start())
+    per_task = _is_per_task_persona(subagent_type)
+    for text in fields:
+        span = _field_delegation(text, per_task)
+        if span is not None:
+            return span
+    return None
+
+
 def is_phase_delegation(tool_input: dict) -> bool:
     """True iff this Agent dispatch instructs the subagent to run a phase
     skill (/autopilot:work, /autopilot:plan-tasks, /autopilot:design-solution,
-    or the Skill tool generally) rather than a single per-task job.
+    or a phase SKILL.md) rather than a single per-task job.
 
     Looks at tool_input["prompt"] and tool_input["description"] (both
     optional, default ""). A payload where tool_input is not a dict, or has
     neither key present as a non-empty string, returns False (fail open).
     """
-    if not isinstance(tool_input, dict):
-        return False
-    subagent_type = tool_input.get("subagent_type")
-    if isinstance(subagent_type, str) and subagent_type in _READ_ONLY_REVIEWERS:
-        return False
-    prompt = tool_input.get("prompt")
-    description = tool_input.get("description")
-    prompt = prompt if isinstance(prompt, str) else ""
-    description = description if isinstance(description, str) else ""
-    # Each field is normalized on its own, per the contract. Equivalent today
-    # (every step of _normalize is per-character and the joining newline has
-    # combining class 0), but normalizing the joined string would diverge
-    # silently the moment _normalize grows a step that is not per-character.
-    text = f"{_normalize(prompt)}\n{_normalize(description)}"
-    return any(
-        not _negated_before(text, match.start())
-        for pattern in _DELEGATION_PATTERNS
-        for match in pattern.finditer(text)
+    return find_phase_delegation(tool_input) is not None
+
+
+def _deny_message(subagent_type: str | None, span: str) -> str:
+    """The per-task personas get the rephrase-or-scope wording with the span
+    inline; everyone else gets the run-it-here wording plus `Matched:`."""
+    if _is_per_task_persona(subagent_type):
+        return (
+            "autopilot: this per-task prompt names a phase as the thing to run: "
+            f'"{span}". If it only mentions the phase, rephrase that sentence or '
+            "scope it to one task (task N). hooks/guard_phase_delegation.py "
+            "denied this Agent call."
+        )
+    return (
+        "autopilot: run the phase skill (plan-tasks / design-solution / work) "
+        "with the Skill tool in THIS session; dispatch Agent calls only for "
+        "per-task subagents (Ivan, Tess, Devon, reviewers). "
+        f'Matched: "{span}". hooks/guard_phase_delegation.py denied this '
+        "Agent call."
     )
 
 
@@ -237,18 +455,13 @@ def main() -> None:
         print("guard_phase_delegation: unparseable tool_input, allowing", file=sys.stderr)
         allow()
     try:
-        delegates = is_phase_delegation(tool_input)
+        span = find_phase_delegation(tool_input)
     except Exception:
         print("guard_phase_delegation: predicate raised, allowing", file=sys.stderr)
         allow()  # fail open, defensive - predicate is pure regex, should not raise
-    if not delegates:
+    if span is None:
         allow()
-    block(
-        "autopilot: run the phase skill (plan-tasks / design-solution / work) "
-        "with the Skill tool in THIS session; dispatch Agent calls only for "
-        "per-task subagents (Ivan, Tess, Devon, reviewers). "
-        "hooks/guard_phase_delegation.py denied this Agent call."
-    )
+    block(_deny_message(tool_input.get("subagent_type"), span))
 
 
 if __name__ == "__main__":

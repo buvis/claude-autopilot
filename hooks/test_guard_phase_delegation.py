@@ -370,7 +370,14 @@ def test_reviewer_dispatch_quoting_the_guard_is_allowed(subagent_type: str) -> N
 
 
 def test_worker_dispatch_is_still_checked() -> None:
-    tool_input = {"subagent_type": "autopilot:worker-sonnet", "prompt": "run the work phase"}
+    # A worker persona is per-task, so the weak anchor alone ("run the work
+    # phase", nothing after it) never fires for it - the structure suite pins
+    # that pair. The strong anchor still denies it, which is what "still
+    # checked" means for a worker.
+    tool_input = {
+        "subagent_type": "autopilot:worker-sonnet",
+        "prompt": "run the work phase for PRD 7",
+    }
     assert _guard_module().is_phase_delegation(tool_input) is True
 
 
