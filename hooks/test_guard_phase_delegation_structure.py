@@ -1,6 +1,8 @@
-"""Lookalike-text normalization in front of the phase-delegation guard:
-compatibility forms, invisible format characters, combining marks and the
-Unicode dash family are reduced to plain text before any matching.
+"""Structure of the phase-delegation guard: lookalike-text normalization in
+front of it (compatibility forms, invisible format characters, combining marks
+and the Unicode dash family reduced to plain text before any matching), then
+the structural object-position rule that decides a delegation without any verb
+list.
 
 Sibling of test_guard_phase_delegation.py (kept apart for the file size limit).
 Every lookalike code point is written as an escaped literal, never pasted: the
@@ -220,3 +222,267 @@ def test_normalize_leaves_whitespace_unchanged() -> None:
     """Nothing in the contract collapses whitespace: the newline between prompt
     and description, and every newline inside a prompt, must stay put."""
     assert _guard_module()._normalize("a\n\nb\tc  d") == "a\n\nb\tc  d"
+
+
+# --- Structural object-position rule (no verb list) -------------------------
+# A phase name counts when it stands as the thing to run: either a strong
+# anchor (`for`/`on` + PRD/task/number, `from task`, or a whole-run marker in
+# the same sentence) or a weak anchor (the name ends its clause, with a word
+# before it that is not a preposition). Nothing below depends on which verb
+# introduces the phrase.
+
+# (prompt, case id). Hoisted so each test function stays short.
+_PACKET_PHRASINGS = [
+    ("Run your work phase for PRD 00300 now.", "your"),
+    ("Run our work phase for PRD 00300.", "our"),
+    ("Run its work phase for PRD 00300.", "its"),
+    ("Run the next work phase for PRD 00300.", "the-next"),
+    ("Run all of the work phase for PRD 00300.", "all-of-the"),
+    (
+        "Kick off the work phase for PRD 00300 and finish every task.",
+        "kick-off",
+    ),
+    ("Begin the work phase for PRD 00300.", "begin"),
+    ("Proceed with the work phase for PRD 00300.", "proceed-with"),
+    ("Finish the work phase for PRD 00300.", "finish"),
+    ("Go through the work phase for PRD 00300.", "go-through"),
+    ("Carry out the work phase for PRD 00300.", "carry-out"),
+    ("Run the work-phase for PRD 00300.", "hyphenated-phase"),
+    ("Run the **work phase** for PRD 00300.", "emphasized-phase"),
+    ("Run “/autopilot:work” now.", "curly-double-quotes"),
+    ("Run «/autopilot:work» now.", "guillemets"),
+    ("Run 「/autopilot:work」 now.", "corner-brackets"),
+    (
+        "Please start the entire work phase for PRD 00300 now.",
+        "please-start-entire",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [prompt for prompt, _ in _PACKET_PHRASINGS],
+    ids=[case_id for _, case_id in _PACKET_PHRASINGS],
+)
+def test_packet_three_phrasings_are_denied(prompt: str) -> None:
+    """Every phrasing names the phase as the thing to run, anchored by "for
+    PRD 00300" (or a whole-run marker), so the verdict may not depend on the
+    introducing verb, the determiner, or the wrapper around the name."""
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "/autopilot:work docs/dev/project-management/prds/wip/00300.md",
+        "/autopilot:plan-tasks 00300 task 3 only",
+    ],
+    ids=["work-with-a-prd-path", "plan-tasks-with-one-task"],
+)
+def test_bare_slash_command_prompt_is_always_denied(prompt: str) -> None:
+    """A prompt whose FIRST token is the slash command hands the phase over
+    whatever scoping follows it, so neither a PRD path nor a single task id
+    rescues it."""
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Read /Users/bob/.claude/plugins/cache/buvis-plugins/autopilot/0.9.0"
+        "/skills/work/SKILL.md and follow it for every task.",
+        "Read ${CLAUDE_PLUGIN_ROOT}/skills/work/SKILL.md and execute its steps"
+        " for PRD 00300.",
+    ],
+    ids=["installed-cache-path", "plugin-root-placeholder"],
+)
+def test_skill_md_read_via_any_path_prefix_is_denied(prompt: str) -> None:
+    """The path prefix in front of `work/SKILL.md` is arbitrary: an absolute
+    cache path and a `${CLAUDE_PLUGIN_ROOT}` placeholder both reach the same
+    phase skill, and the follow-it instruction sits within 200 characters."""
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "This is not optional: run the work phase for PRD 00300.",
+        "Do not stop - run the work phase for PRD 00300.",
+        "Don't stop: run the work phase.",
+    ],
+    ids=["not-optional-colon", "do-not-stop-dash", "dont-stop-colon"],
+)
+def test_emphatic_negation_before_a_colon_or_dash_is_denied(prompt: str) -> None:
+    """The negation belongs to an earlier clause ("not optional", "do not
+    stop") and the colon or " - " closes that clause, so it cannot bind the
+    phase name that follows: these are emphatic orders, not prohibitions."""
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Start the work phase review of PRD 00300, then keep going through"
+        " every task until done.",
+        "Work phase for PRD 00300: start it now.",
+    ],
+    ids=["review-head-with-keep-going", "phase-first-then-order"],
+)
+def test_compound_noun_cover_with_a_whole_run_marker_is_denied(prompt: str) -> None:
+    """A compound-noun head ("work phase review") reads as a thing, not an
+    order - but a whole-run marker in the same sentence ("keep going", "every
+    task", "until done") or a strong "for PRD" anchor overrides that cover."""
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Run the work phase for PRD 7 from task 2 onward.",
+        "Run the work phase for PRD 7, tasks 1 and 2.",
+        "Run the work phase for docs/dev/project-management/prds/wip/00300.md.",
+        "Run the work phase for PRD 7; use only the repo tools.",
+    ],
+    ids=["task-range-onward", "two-task-ids", "prd-path", "free-only"],
+)
+def test_task_ranges_prd_paths_and_a_free_only_do_not_scope(prompt: str) -> None:
+    """Only exactly one distinct task id, or one distinct non-PRD file path,
+    narrows a dispatch. A range ("from task 2 onward"), two ids, a path under
+    `prds/`, and a bare "only" all leave the whole phase delegated."""
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        '"Run the work phase for PRD 7."',
+        'Insert the line "Invoke `/autopilot:work` skill."',
+    ],
+    ids=["whole-sentence-quoted", "quoted-phrase-as-an-edit-target"],
+)
+def test_quoted_text_is_still_checked(prompt: str) -> None:
+    """Quotes get no exemption outside the per-task personas: a general-purpose
+    dispatch can hand a phase over just as well inside quotation marks."""
+    tool_input = {"prompt": prompt, "subagent_type": "general-purpose"}
+    assert _guard_module().is_phase_delegation(tool_input) is True
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Complete the planning phase notes in"
+        " docs/dev/project-management/plans/00300.md; task 3 only.",
+        "Call the plan-tasks helper script with --dry-run",
+        "Do design-solution/references/x.md first",
+        "Do the work phase tests pass on this branch?",
+        "Do the work phase handoff test",
+        "Call the work phase helper",
+        "Start the design phase doc review",
+        "Launch the work phase timer test",
+        "Quote this line verbatim: ...every `task-add` call"
+        " `/autopilot:plan-tasks` made...",
+    ],
+    ids=[
+        "plan-notes-one-task",
+        "plan-tasks-helper-script",
+        "design-solution-reference-path",
+        "question-about-the-tests",
+        "handoff-test",
+        "phase-helper",
+        "doc-review",
+        "timer-test",
+        "quoted-skill-prose",
+    ],
+)
+def test_per_task_prompts_that_mention_a_phase_are_allowed(prompt: str) -> None:
+    """Real per-task work names phase jargon constantly: as a noun modifier
+    ("work phase tests"), inside a path, in a question, or quoted as prose to
+    edit. None of them puts the phase in object position of an order."""
+    tool_input = {"prompt": prompt, "subagent_type": "autopilot:ivan"}
+    assert _guard_module().is_phase_delegation(tool_input) is False
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Update hooks/guard.py so it can run the work phase.",
+        "For task 3, make the hook run the work phase.",
+    ],
+    ids=["one-file-scopes", "one-task-id-scopes"],
+)
+def test_one_named_task_or_file_scopes_a_phase_mention(prompt: str) -> None:
+    """Exactly one distinct task id, or one distinct path that is neither
+    under `prds/` nor a SKILL.md, narrows the dispatch to a single job even
+    though the phase name ends its clause."""
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is False
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Tasks complete in the work phase",
+        "In the work phase: do not skip tests",
+        "Decide what to do about the work phase",
+        "Work phase: complete",
+        "Did you run the work phase?",
+    ],
+    ids=[
+        "trailing-in-the",
+        "leading-in-the",
+        "about-the",
+        "phase-as-a-label",
+        "question",
+    ],
+)
+def test_prepositional_and_question_mentions_are_allowed(prompt: str) -> None:
+    """The weak anchor needs a non-preposition word before the phase name, so
+    "in the work phase" and "about the work phase" stay prose; a clause with
+    no word before the name is a label, and a clause ending in "?" is a
+    question, not an order."""
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is False
+
+
+@pytest.mark.parametrize(
+    ("prompt", "expected"),
+    [
+        (
+            'Insert one sentence before the line "Invoke `/autopilot:work`'
+            ' skill. It runs until all tasks complete."',
+            False,
+        ),
+        ('Run "/autopilot:work" for PRD 7.', True),
+    ],
+    ids=["quoted-skill-prose-as-an-edit-target", "strong-anchor-for-prd"],
+)
+def test_per_task_personas_count_only_the_strong_anchor(
+    prompt: str, expected: bool
+) -> None:
+    """A worker persona's prompt quotes skill prose as an edit target, so the
+    weak anchor never fires for it - even with "until all tasks complete" in
+    the quote. The strong "for PRD 7" anchor still denies."""
+    tool_input = {"prompt": prompt, "subagent_type": "autopilot:worker-opus"}
+    assert _guard_module().is_phase_delegation(tool_input) is expected
+
+
+@pytest.mark.parametrize(
+    ("prompt", "expected"),
+    [
+        ("Do not run the work phase for PRD 7.", False),
+        ("Never fail to report; do not run the work phase.", False),
+        ("Code review isn't only running the work phase", False),
+        ("Do not wait for me. Run the work phase for PRD 7.", True),
+        ("Do not, under any circumstances, run the work phase.", True),
+    ],
+    ids=[
+        "same-clause-negation",
+        "double-negation-scoped-to-an-earlier-clause",
+        "isnt-only-is-a-state",
+        "negation-in-an-earlier-sentence",
+        "negation-five-words-away-across-commas",
+    ],
+)
+def test_a_negation_binds_only_inside_its_clause(prompt: str, expected: bool) -> None:
+    """A negation allows the dispatch only from inside the same clause, within
+    four words of the phase name: an earlier sentence, or four commas and five
+    words of hedging, leaves the order standing."""
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is expected
