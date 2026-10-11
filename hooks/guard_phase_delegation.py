@@ -211,7 +211,11 @@ def is_phase_delegation(tool_input: dict) -> bool:
     description = tool_input.get("description")
     prompt = prompt if isinstance(prompt, str) else ""
     description = description if isinstance(description, str) else ""
-    text = _normalize(f"{prompt}\n{description}")
+    # Each field is normalized on its own, per the contract. Equivalent today
+    # (every step of _normalize is per-character and the joining newline has
+    # combining class 0), but normalizing the joined string would diverge
+    # silently the moment _normalize grows a step that is not per-character.
+    text = f"{_normalize(prompt)}\n{_normalize(description)}"
     return any(
         not _negated_before(text, match.start())
         for pattern in _DELEGATION_PATTERNS
