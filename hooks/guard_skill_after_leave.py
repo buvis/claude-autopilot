@@ -65,7 +65,7 @@ def main() -> None:
     if not guarded_skill(skill):
         allow()
     session = payload.get("session_id")
-    if not isinstance(session, str) or not session:
+    if not isinstance(session, str) or not session or "�" in session:
         allow()
     autopilot_dir = find_autopilot_dir(Path(str(payload.get("cwd") or os.getcwd())))
     if autopilot_dir is None:
