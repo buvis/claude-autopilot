@@ -52,6 +52,16 @@ class LayoutVocabularyTest(unittest.TestCase):
         exit_code, _, _ = _run(("stray.md",))
         self.assertEqual(exit_code, 2)
 
+    def test_blocks_repo_root_backlog_write_whose_path_holds_a_lone_surrogate(
+        self,
+    ) -> None:
+        file_path = str(_REPO_ROOT / "backlog" / "x\ud800.md")
+        payload = {"tool_name": "Write", "tool_input": {"file_path": file_path}}
+        exit_code, _, stderr = hook.run(payload)
+        self.assertEqual(exit_code, 2)
+        self.assertIn("looks like a PRD lifecycle path at repo root", stderr)
+        self.assertNotIn("policy hook degraded", stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
