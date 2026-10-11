@@ -108,6 +108,16 @@ def test_leave_row_without_an_autopilot_dir_writes_nothing(tmp_path: Path) -> No
     assert not (tmp_path / "dev").exists()
 
 
+def test_leave_row_with_a_replaced_byte_session_writes_nothing(tmp_path: Path) -> None:
+    # A session id carrying U+FFFD counts as missing: two ids differing only in
+    # an invalid byte must never collapse onto one marker.
+    repo = _repo(tmp_path)
+    payload = _bash_payload(repo, LEAVE_CMD) | {"session_id": "s1�"}
+    result = _run(NOTE, payload, loop=True)
+    assert result.returncode == 0
+    assert not _marker(repo).exists()
+
+
 # ── guard_skill_after_leave.py ───────────────────────────────────────────────
 
 
@@ -174,6 +184,19 @@ def test_no_marker_passes(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     result = _run(GUARD, _skill_payload(repo, "autopilot:run-autopilot"), loop=True)
     assert result.returncode == 0
+
+
+def test_skill_call_with_a_replaced_byte_session_passes_despite_a_matching_marker(
+    tmp_path: Path,
+) -> None:
+    # The marker names the very same U+FFFD-bearing string, yet a session id
+    # holding U+FFFD identifies nobody: the guard must not deny on it.
+    repo = _repo(tmp_path)
+    _leave(repo, session="s1�")
+    payload = _skill_payload(repo, "autopilot:run-autopilot", session="s1�")
+    result = _run(GUARD, payload, loop=True)
+    assert result.returncode == 0
+    assert result.stderr == ""
 
 
 def test_the_pair_end_to_end(tmp_path: Path) -> None:
