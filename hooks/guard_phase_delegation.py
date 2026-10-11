@@ -36,12 +36,25 @@ _IMPERATIVE_COLON = rf"({_COLON_VERBS})"
 # cannot drift.
 _WIDENED_VERBS = r"(start|do|perform|complete|launch|call)"
 _IMPERATIVE = rf"({_COLON_VERBS}|start|do|perform|complete|launch|call)"
-# Code points that split a word without showing, stripped before matching.
-# U+200B, U+200C, U+200D, U+2060, U+00AD.
-_INVISIBLE = dict.fromkeys((0x200B, 0x200C, 0x200D, 0x2060, 0x00AD))
-# Curly single quotes (U+2018, U+2019) read like the straight one around a
-# skill name.
-_CURLY_QUOTES = {0x2018: "'", 0x2019: "'"}
+# Unicode categories dropped outright by _normalize. Mn (combining marks) so a
+# decomposed accent cannot split a word ("work" with U+0301 after the "o"); Cf
+# (format characters) because they are invisible and do the same (U+200B,
+# U+200C, U+200D, U+2060, U+FEFF, U+2061, U+180E, and U+00AD the soft hyphen).
+# Nothing else: a Cyrillic "o" (U+043E) is a different letter, not a lookalike
+# form, and folding letters would be guesswork.
+# Every code point here is NAMED, never pasted: these characters are invisible
+# or combining, so a pasted one is unreadable in a comment and an editor or
+# formatter would silently destroy it.
+_DROPPED_CATEGORIES = frozenset({"Mn", "Cf"})
+# Characters NFKD leaves alone but that read as plain ASCII around a skill
+# name: the math minus (U+2212) in "/autopilot:plan<U+2212>tasks", which is
+# category Sm and so is missed by the Pd fold in _normalize; the curly single
+# quotes (U+2018, U+2019); and the Markdown emphasis asterisks in "Run the **work**
+# phase". The dash family itself is NOT listed here: folding the literal
+# U+2010-U+2015 range left 15 Pd code points outside it unfolded (U+301C wave
+# dash, U+05BE Hebrew maqaf and 13 more), a live bypass, so _normalize folds
+# the whole Pd category per character instead.
+_FOLDED = {0x2212: "-", 0x2018: "'", 0x2019: "'", 0x002A: None}
 _PHASE_JARGON = r"(work phase|plan(?:ning)? phase|design phase)"
 # (?P=bt) requires the SAME backtick, quote or nothing to close immediately after
 # the skill name - "`/autopilot:plan-tasks`" (tight close) matches; "invoke
@@ -157,6 +170,27 @@ def _negated_before(text: str, start: int, window: int = 20) -> bool:
     return bool(_NEGATION_RE.search(preceding))
 
 
+def _normalize(text: str) -> str:
+    """Reduce lookalike text to its plain form, so a dispatch cannot dodge the
+    patterns by spelling a skill name in compatibility or invisible characters.
+
+    NFKD folds the compatibility forms (U+FF57 fullwidth "w", U+2011
+    non-breaking hyphen) and splits precomposed accents apart, then one pass
+    drops every combining mark and format character (_DROPPED_CATEGORIES) and
+    folds every dash-punctuation (Pd) code point to "-", and the math minus,
+    curly quotes and emphasis asterisks fold to ASCII (_FOLDED). Whitespace is
+    untouched: the newline between prompt and description is a sentence
+    boundary for _negated_before.
+    """
+    decomposed = unicodedata.normalize("NFKD", text)
+    plain = "".join(
+        "-" if unicodedata.category(char) == "Pd" else char
+        for char in decomposed
+        if unicodedata.category(char) not in _DROPPED_CATEGORIES
+    )
+    return plain.translate(_FOLDED)
+
+
 def is_phase_delegation(tool_input: dict) -> bool:
     """True iff this Agent dispatch instructs the subagent to run a phase
     skill (/autopilot:work, /autopilot:plan-tasks, /autopilot:design-solution,
@@ -175,8 +209,7 @@ def is_phase_delegation(tool_input: dict) -> bool:
     description = tool_input.get("description")
     prompt = prompt if isinstance(prompt, str) else ""
     description = description if isinstance(description, str) else ""
-    text = f"{prompt}\n{description}"
-    text = unicodedata.normalize("NFKC", text.translate(_INVISIBLE)).translate(_CURLY_QUOTES)
+    text = _normalize(f"{prompt}\n{description}")
     return any(
         not _negated_before(text, match.start())
         for pattern in _DELEGATION_PATTERNS
