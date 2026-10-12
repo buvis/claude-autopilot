@@ -245,6 +245,38 @@ def test_refused_per_task_record_exits_one(tmp_path: Path, capsys) -> None:
     assert len(_guard_calls(log)) == 4, _guard_calls(log)
 
 
+def test_refused_agoge_or_reviewer_record_exits_one(tmp_path: Path, capsys) -> None:
+    # An `agoge` refusal and a reviewer refusal each fail the run on their own,
+    # exactly like a `per-task` one; only `other` refusals are tolerated.
+    cases = [
+        ("agoge", "agoge:run", "run the external check"),
+        ("reviewer", "autopilot:blake", "do the work"),
+    ]
+    for expected, subagent_type, description in cases:
+        guard, log = _stub_guard(tmp_path, f"guard_{expected}")
+        denied_id = f"toolu_{expected}_denied"
+        directory = _transcripts(
+            tmp_path,
+            [
+                (denied_id, _dispatch(description, subagent_type, deny=True)),
+                ("toolu_pertask_ok", _dispatch("task 7 build", "autopilot:ivan")),
+                ("toolu_other_ok", _dispatch("summarise the notes", "general-purpose")),
+            ],
+            name=f"transcripts_{expected}",
+        )
+        code = _main(directory, guard)
+        total, buckets, details = _report(capsys.readouterr().out)
+        assert code == 1, (expected, total, buckets, details)
+        assert total == 3, (expected, buckets)
+        assert sorted(buckets) == sorted(
+            [f"{expected} 1 refused 1", "other 1 refused 0", "per-task 1 refused 0"],
+        ), (expected, buckets)
+        assert details == [
+            f"{expected} {denied_id} {subagent_type} {description}",
+        ], (expected, details)
+        assert len(_guard_calls(log)) == 3, (expected, _guard_calls(log))
+
+
 def test_allowed_known_delegation_exits_one(tmp_path: Path, capsys) -> None:
     phase = _dispatch("run the build phase", "autopilot:ivan")
     guard, log = _stub_guard(tmp_path)
