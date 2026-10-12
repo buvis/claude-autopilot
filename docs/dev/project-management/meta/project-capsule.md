@@ -46,7 +46,7 @@ Generated: 2026-10-12
 
 ### Batch 202610111300
 - [ ] 00271-guard-v2-structural-delegation-check-v1 (in wip, design reused,
-  planned: 10 tasks, 5 done, resuming at task 6)
+  planned: 10 tasks, 8 done, resuming at task 9)
 - backlog behind it: 00276, 00277, 00278, 00279 (agoge 2026-10-10 walkthrough),
   plus 00282, 00283, 00284 (loop efficiency, from discovery 00281). 00280 moved
   to `hold/` by the 2026-10-12 backlog review.
@@ -56,12 +56,14 @@ Observations: 00271 carried over from batch 202610101000, which closed after
 Phase 1.5 reuses it. Tasks 1-5 have landed (task 1 lookalike-text
 normalization through d30b77a; task 2 replay fixture at 7a212a1; task 4
 lone-surrogate session id at 4d3fe03; task 5 the structural delegation
-predicate, shipped by sentence shape rather than verb lists, through 78f245e).
-`hooks/test_guard_phase_delegation_replay.py` stays RED on its 13
-`allow-toolu_*` params BY DESIGN until task 6's guard rewrite, so
-`dev/bin/release-checks` is RED too and must not be read as a regression.
-Work resumes at task 6 (the guard rewrite that turns those 13 green).
-`master` is at 1313c50. Each build session re-runs a FULL catchup here because
+predicate, shipped by sentence shape rather than verb lists, through 78f245e;
+task 6 the guard rewrite + exemption/deny-message pins at cdba587; task 7 the
+non-ascii-run normalization and its span-sort fix through c587171; task 8 the
+stdin hardening pins across all six stdin-reading hooks at 520559e).
+`dev/bin/release-checks` is GREEN-capable again as of task 6 — the 13
+`allow-toolu_*` replay params that were RED BY DESIGN now pass, so a red run
+today IS a real regression. Work resumes at task 9 (the replay CLI), then
+task 10 (CHANGELOG). `master` is at 8ca1cf7. Each build session re-runs a FULL catchup here because
 `batch.catchup_head_sha` is pinned at the PRD's start sha (b57e425) while the
 task commits move HEAD — the cache's HEAD condition can never hold across a
 task-boundary hand-off. A second `autopilot loop` runs concurrently in

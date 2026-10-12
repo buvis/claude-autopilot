@@ -3731,3 +3731,19 @@
 {"id":"97b50047","ended_at":1791830074,"elapsed_s":70,"outcome":"ok","detail":null}
 {"id":"c6b06193","ended_at":1791830149,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791830149,"phase":"build","prd":"00271-guard-v2-structural-delegation-check-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791830193,"phase":"build","prd":"00271-guard-v2-structural-delegation-check-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791830202,"phase":"build","prd":"00271-guard-v2-structural-delegation-check-v1.md"}
+{"id":"d15fffe6","kind":"tess","task":"9","queued_at":1791830385,"prompt_bytes":12675}
+{"id":"d15fffe6","ended_at":1791830595,"elapsed_s":210,"outcome":"ok","detail":null}
+{"id":"02f5a113","kind":"tess","task":"9","queued_at":1791830624,"prompt_bytes":8395}
+{"id":"02f5a113","ended_at":1791830691,"elapsed_s":67,"outcome":"ok","detail":null}
+{"id":"71542466","kind":"devon","task":"9","queued_at":1791830738,"prompt_bytes":3871}
+{"id":"71542466","ended_at":1791831086,"elapsed_s":348,"outcome":"ok","detail":"7 of 8 exploits passed; 9 weak points"}
+{"id":"c80f034d","kind":"tess","task":"9","queued_at":1791831115,"prompt_bytes":13167}
+{"id":"c80f034d","ended_at":1791831561,"elapsed_s":446,"outcome":"ok","detail":"all 9 weak points strengthened"}
+{"id":"743976ae","kind":"ivan","task":"9","queued_at":1791831614,"prompt_bytes":21847}
+{"id":"743976ae","ended_at":1791831884,"elapsed_s":270,"outcome":"ok","detail":null}
+{"id":"083e25f8","kind":"tess","task":"9","queued_at":1791831935,"prompt_bytes":9200}
+{"id":"083e25f8","ended_at":1791832023,"elapsed_s":88,"outcome":"ok","detail":"pinned agoge/reviewer refusal exit"}
+{"id":"76d2b21a","kind":"ivan","task":"9","queued_at":1791832048,"prompt_bytes":24271}
+{"id":"76d2b21a","ended_at":1791832105,"elapsed_s":57,"outcome":"ok","detail":null}
