@@ -311,7 +311,7 @@ def _boundaries(
     nothing."""
     pieces = []
     cursor = 0
-    for start, end, _ in sorted(spans):
+    for start, end, _ in spans:
         start = max(start, cursor)
         if end <= start:
             continue  # a span wholly inside the previous one: already masked
