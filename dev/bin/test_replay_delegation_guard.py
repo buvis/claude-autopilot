@@ -199,6 +199,10 @@ def test_buckets_follow_subagent_type_and_description() -> None:
         (_dispatch("Task B3 ships", "general-purpose"), "per-task"),
         (_dispatch("contest the matter", "general-purpose"), "other"),
         (_dispatch("multitask 4 things"), "other"),
+        # Only the singular `task N` shape names one task: a plural subject or
+        # a `#`-prefixed number is not one, so both stay `other`.
+        (_dispatch("tasks 4 things"), "other"),
+        (_dispatch("task #5"), "other"),
     ]
     assert [bucket(tool_input, EXEMPT) for tool_input, _ in cases] == [
         verdict for _, verdict in cases

@@ -46,7 +46,7 @@ BUCKET_ORDER = ("per-task", "reviewer", "agoge", "other")
 # A description that names one task or one per-task persona, read only when
 # `subagent_type` is absent or generic and so cannot answer by itself.
 _PER_TASK_DESCRIPTION = re.compile(
-    r"\btasks?\s+#?[A-Za-z]?\d+\b|\b(?:ivan|tess|devon)\b",
+    r"\btask\s+[A-Z]?\d+\b|\b(?:ivan|tess|devon)\b",
     re.IGNORECASE,
 )
 
