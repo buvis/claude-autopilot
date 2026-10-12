@@ -425,8 +425,10 @@ def test_prune_deletes_a_utf16_encoded_entry_even_when_its_pid_is_live_and_tagge
 
 def test_pid_tagged_requires_an_exact_pid_match(monkeypatch):
     def fake_exec_env(pid):
-        return {"_AUTOPILOT_LOOP": "4321"} if pid == 999 else None
+        return {"_AUTOPILOT_LOOP": "4321"} if pid == 1000 else None
     monkeypatch.setattr(loop_gates, "exec_env", fake_exec_env)
-    monkeypatch.setattr(loop_gates, "_child_pids", lambda pid: [])
+    monkeypatch.setattr(loop_gates, "_child_pids", lambda pid: ["1000"])
     assert loop_gates._pid_tagged(999, 4321) is True
     assert loop_gates._pid_tagged(999, 432) is False
+    assert loop_gates._pid_tagged(999, 321) is False
+    assert loop_gates._pid_tagged(999, 43210) is False
