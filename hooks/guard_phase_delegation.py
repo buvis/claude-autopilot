@@ -158,10 +158,9 @@ _PER_TASK_PERSONAS = frozenset({"autopilot:ivan", "autopilot:tess", "autopilot:d
 # and no captured `description` ever starts with a slash command. The trailing
 # lookahead is what makes it the whole token: `\b` alone also fires inside
 # "/autopilot:work-adjacent", where the first token merely BEGINS with a phase
-# command and names something else. An optional /subpath still counts, as it
-# does for _PHASE_SKILL.
+# command and names something else.
 _BARE_SLASH_PREFIX = re.compile(
-    r"^\s*/autopilot:(work|plan-tasks|design-solution)(?:/[\w.-]+)?(?![-\w])"
+    r"^\s*/autopilot:(work|plan-tasks|design-solution)(?![-\w])"
 )
 
 # Always-delegate form 2: a SKILL.md path. Scoping is skipped for this form,
