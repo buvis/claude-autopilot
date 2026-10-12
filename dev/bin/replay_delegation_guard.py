@@ -105,6 +105,10 @@ def _dedupe(dispatches: list[tuple[str, dict]]) -> list[tuple[dict, list[str]]]:
     return list(groups.values())
 
 
+class GuardError(RuntimeError):
+    """The guard subprocess exited with neither an allow (0) nor a deny (2)."""
+
+
 def _refused(guard: Path, tool_input: dict) -> bool:
     payload = json.dumps(
         {"session_id": "replay", "tool_name": "Agent", "tool_input": tool_input},
@@ -117,7 +121,9 @@ def _refused(guard: Path, tool_input: dict) -> bool:
         env={**os.environ, "_AUTOPILOT_LOOP": "1"},
         check=False,
     )
-    return result.returncode != 0
+    if result.returncode not in (0, 2):
+        raise GuardError(result.stderr)
+    return result.returncode == 2
 
 
 def _detail(name: str, tool_id: str, tool_input: dict) -> str:
@@ -148,7 +154,12 @@ def main(argv: list[str] | None = None) -> int:
     failed = False
     for tool_input, ids in groups:
         name = bucket(tool_input, _READ_ONLY_REVIEWERS)
-        refused = _refused(args.guard, tool_input)
+        try:
+            refused = _refused(args.guard, tool_input)
+        except GuardError as exc:
+            print(f"replay: guard execution error: {exc}", file=sys.stderr)
+            failed = True
+            continue
         counts[name][0] += 1
         if refused:
             counts[name][1] += 1

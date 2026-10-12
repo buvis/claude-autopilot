@@ -379,12 +379,28 @@ def test_missing_guard_cannot_report_an_allowed_run(tmp_path: Path, capsys) -> N
     )
     absent = tmp_path / "no_such_guard.py"
     assert not absent.exists()
-    try:
-        code: int | None = _main(directory, absent)
-    except OSError:
-        code = None
-    # Nothing can vouch for this dispatch, so the run must not come back clean.
-    assert code != 0, capsys.readouterr().out
+    code = _main(directory, absent)
+    # main's own --guard is_file check refuses to run at all.
+    assert code == 2, capsys.readouterr().out
+
+
+def test_guard_crash_is_execution_error_not_a_denial(tmp_path: Path, capsys) -> None:
+    """A guard exiting 1 (crash) must be reported as an error, never as a deny."""
+    crashing = tmp_path / "crashing_guard.py"
+    crashing.write_text(
+        "import sys\nsys.stderr.write('boom\\n')\nsys.exit(1)\n",
+        encoding="utf-8",
+    )
+    directory = _transcripts(
+        tmp_path,
+        [("toolu_pertask", _dispatch("task 7 build", "autopilot:ivan"))],
+    )
+    code = _main(directory, crashing)
+    out, err = capsys.readouterr()
+    assert code != 0
+    assert "guard execution error" in err, err
+    # The bucket counts must stay untouched by the crashed dispatch.
+    assert "per-task" not in out, out
 
 
 def test_missing_or_empty_transcript_dir_exits_two(tmp_path: Path) -> None:
