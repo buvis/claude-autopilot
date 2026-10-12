@@ -183,17 +183,10 @@ _TASK_ID = re.compile(r"\btasks?\s+#?([A-Z]?\d+)\b", re.IGNORECASE)
 # unbounded, so "from" + 40 spaces + "task 3" reads like "from task 3".
 _TASK_RANGE_LEAD = re.compile(r"\b(from|after|starting\s+at|starting\s+with)\s*$", re.IGNORECASE)
 _TASK_RANGE_TAIL = re.compile(r"\s*(onwards?|through|to|until|and\s+on|and\s+later|,\s*\d|and\s+\d|-\d|\.\.)", re.IGNORECASE)
-# Searched inside ONE bounded whitespace-delimited token by _find_path_tokens,
-# never run with `.finditer` over a field: the leading `\S*` rescans a long
-# slash-free run from every offset, which is quadratic.
-_PATH_TOKEN = re.compile(r"\S*/\S+\.\w+")
 # The PRD-lifecycle store, as a path SEGMENT: "prds/wip/00300.md" names the
 # store exactly as "docs/dev/project-management/prds/wip/00300.md" does, so a
 # leading-slash test ("/prds/" in token) misses the root-relative form.
 _PRD_STORE_PATH = re.compile(r"(?:^|/)prds/")
-# How far _find_path_tokens reads on each side of a '/', the bound
-# _find_skill_md_paths already uses. A longer token is read truncated.
-_PATH_WINDOW = 120
 
 # "not/never/don't ... hesitate|fail|only" is a double negation ("do not
 # hesitate to run ..."), so it does not count. The other contractions keep no
@@ -307,30 +300,43 @@ def _find_skill_md_paths(text: str) -> list[tuple[int, int]]:
 
 
 def _find_path_tokens(text: str) -> set[str]:
-    """Every distinct path-shaped token in `text`, O(n) total: one substring
-    scan for '/' (`str.find`, no backtracking), then one bounded regex match
-    per occurrence against the whitespace-delimited token around it. A
-    `.finditer` of _PATH_TOKEN over the whole field is worst-case quadratic on
-    a long slash-free run, so it is never run (see _find_skill_md_paths).
+    """Every distinct path-shaped token in `text`, O(n) total: one split into
+    whitespace-delimited tokens, then plain string checks per token - a '/' in
+    it, a '.' past that last '/', and a word character after that '.'. The
+    token is cut after the word run that '.' opens, so trailing punctuation
+    stays out of the path ("hooks/guard.py." at the end of a sentence is the
+    path "hooks/guard.py", and "skills/work/SKILL.md;" keeps its SKILL.md
+    basename), exactly where the regex this replaced ended its `\\w+`. The
+    RIGHTMOST such '.' wins, as that greedy regex's did: "a/b.tar.gz" is one
+    path, not "a/b.tar".
+
+    Nothing per slash, and every probe is an offset test (`rfind` for the '.',
+    _WORD_START matched AT a position) rather than a scan over a range: a
+    `.search` of `\\S*/\\S+\\.\\w+` per '/' over the token around it rescans
+    the token from every start offset, which is quadratic on a slash-bearing
+    blob (1.66 s/MB on one '/' in 64, against a 0.3 s/MB budget) and cubic on a
+    dense run of slashes (3520 s/MB, a hung hook), and a `.finditer` over the
+    whole field is worse still (see _find_skill_md_paths). The `rfind` walk
+    over the dots stays linear in the token because each call scans back only
+    to the next '.', and those ranges are disjoint.
 
     Distinct, so the same path written twice is one path: the token names one
-    file wherever it is written. That also folds the repeats this scan makes by
-    construction - a path is reached once per '/' it contains, and every slash
-    of a token shorter than _PATH_WINDOW sees the whole token.
+    file wherever it is written.
     """
     tokens = set()
-    idx = text.find("/")
-    while idx != -1:
-        head = text[max(0, idx - _PATH_WINDOW):idx]
-        if head and head[-1].isspace():
-            head = ""
-        elif head:
-            head = head.rsplit(None, 1)[-1]
-        tail = text[idx:idx + _PATH_WINDOW].split(None, 1)[0]
-        match = _PATH_TOKEN.search(head + tail)
-        if match:
-            tokens.add(match.group(0))
-        idx = text.find("/", idx + 1)
+    for token in text.split():
+        slash = token.rfind("/")
+        if slash == -1:
+            continue
+        dot = token.rfind(".")
+        while dot > slash + 1 and not _WORD_START.match(token, dot + 1):
+            dot = token.rfind(".", 0, dot)
+        if dot <= slash + 1:
+            continue
+        end = dot + 1
+        while _WORD_START.match(token, end):
+            end += 1
+        tokens.add(token[:end])
     return tokens
 
 
@@ -436,9 +442,11 @@ def _is_scoped(text: str, sentences: list[int]) -> bool:
     ONE SENTENCE, as the (sentence, id) pair it makes, because a bare number is
     a reference its sentence carries: forty sentences naming task 1 before a
     bare "Run the work phase now." describe a whole run, not one job, and
-    folding them field-wide would excuse that order. A path has no sentence to
-    fold by in any case - its own "." is a sentence boundary, so the two halves
-    of "a/b.py and a/b.py" sit in different ones.
+    folding them field-wide would excuse that order. So a repeat of the same id
+    in a DIFFERENT sentence does not scope, and such a dispatch stays denied on
+    purpose. A path has no sentence to fold by in any case - its own "." is a
+    sentence boundary, so the two halves of "a/b.py and a/b.py" sit in
+    different ones.
 
     Range wording beside one id disqualifies TASK-based scope outright, not
     just that id: "from task 3 onwards and task 5" names a run of tasks, so the

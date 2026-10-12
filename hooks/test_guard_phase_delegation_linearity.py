@@ -123,6 +123,35 @@ def test_rejects_a_long_unbroken_token_in_linear_time() -> None:
     )
 
 
+def _base64_blob(repetition: int) -> str:
+    # One '/' in 64 and no '.', the shape a pasted base64 payload has.
+    return (
+        "Run the work phase for PRD 7. " + ("A" * 63 + "/") * 1500 + f" #{repetition}"
+    )
+
+
+def _slash_run(repetition: int) -> str:
+    return "Run the work phase for PRD 7. " + "/" * 200000 + f" #{repetition}"
+
+
+@pytest.mark.parametrize(
+    "build",
+    [_base64_blob, _slash_run],
+    ids=["base64-blob", "dense-slash-run"],
+)
+def test_rejects_a_long_slash_bearing_token_in_linear_time(
+    build: Callable[[int], str],
+) -> None:
+    # A slash INSIDE the long token is what a scan of `\S*/\S+\.\w+` per '/'
+    # was quadratic on (1.66 s/MB on the blob) and cubic on (3520 s/MB on the
+    # slash run, a hung hook). The token checks have no per-slash cost.
+    rate = _best_seconds_per_mb(build)
+    print(f"slash-bearing s/MB={rate:.4f} over {len(build(0)) / MB:.2f} MB")
+
+    _assert_denied(build(0))
+    assert rate < BUDGET_S_PER_MB, f"{len(build(0))} chars cost {rate:.4f} s/MB"
+
+
 # 2. Many phase mentions inside a single clause must not make it super-linear
 #    either, and the whole prompt is in scope: the verdict below turns on an
 #    order that sits past offset 100000.
@@ -225,6 +254,17 @@ def test_allows_one_task_id_repeated() -> None:
 
 def test_two_distinct_task_ids_do_not_scope_and_stay_denied() -> None:
     _assert_denied("Run the work phase for task 3 and task 5")
+
+
+def test_a_task_id_repeated_in_another_sentence_does_not_scope() -> None:
+    # Ids fold by (sentence, id), not field-wide, on purpose: a bare number is
+    # a reference its own sentence carries, so a repeat in a LATER sentence
+    # does not narrow the dispatch to one job and the dispatch stays denied.
+    # Folding field-wide would make the padded prompt of
+    # test_guard_phase_delegation_structure.py::
+    # test_lookalike_far_inside_a_long_prompt_is_normalized_and_denied read as
+    # scoped and allowed, weakening the normalization rule that test pins.
+    _assert_denied("Run the work phase for task 3. Also do task 3.")
 
 
 # 8. Range wording beside ANY task id refuses task-based scope outright.
