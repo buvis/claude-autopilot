@@ -423,31 +423,10 @@ def test_prune_deletes_a_utf16_encoded_entry_even_when_its_pid_is_live_and_tagge
         shell.wait()
 
 
-def test_pid_tagged_matches_a_tag_ending_a_non_final_ps_line_not_a_longer_pid(
-    monkeypatch,
-):
-    # `$` without re.MULTILINE matches only end-of-string, so when the
-    # tagged pid's ps row isn't the LAST line, the current pattern misses
-    # it - a false "untagged" that lets prune sweep a live loop.
+def test_pid_tagged_requires_an_exact_pid_match(monkeypatch):
+    def fake_exec_env(pid):
+        return {"_AUTOPILOT_LOOP": "4321"} if pid == 999 else None
+    monkeypatch.setattr(loop_gates, "exec_env", fake_exec_env)
     monkeypatch.setattr(loop_gates, "_child_pids", lambda pid: [])
-    monkeypatch.setattr(
-        loop_gates.subprocess,
-        "run",
-        lambda *a, **k: subprocess.CompletedProcess(
-            args=[],
-            returncode=0,
-            stdout="bash -c something\n_AUTOPILOT_LOOP=4321\npython3 worker.py\n",
-        ),
-    )
     assert loop_gates._pid_tagged(999, 4321) is True
-
-    # A longer pid whose digits merely start with the tag pid's digits must
-    # still not match: looking for 432 must not match _AUTOPILOT_LOOP=4321.
-    monkeypatch.setattr(
-        loop_gates.subprocess,
-        "run",
-        lambda *a, **k: subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="_AUTOPILOT_LOOP=4321\n",
-        ),
-    )
     assert loop_gates._pid_tagged(999, 432) is False
