@@ -3771,3 +3771,25 @@
 {"id":"90f62d3d","ended_at":1791836078,"elapsed_s":null,"outcome":"ok","detail":"spans handoff; "}
 {"id":"73fedfe7","ended_at":1791836078,"elapsed_s":null,"outcome":"error","detail":"spans handoff; "}
 {"kind":"handoff","site":"review","edge":"leave","at":1791836140,"phase":"review","prd":"00271-guard-v2-structural-delegation-check-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1791836177,"phase":"review","prd":"00271-guard-v2-structural-delegation-check-v1.md"}
+{"id":"051a1db6","kind":"tess","task":"11","queued_at":1791836347,"prompt_bytes":25124}
+{"id":"051a1db6","ended_at":1791836593,"elapsed_s":246,"outcome":"ok","detail":null}
+{"id":"277ecd30","kind":"devon","task":"11","queued_at":1791836659,"prompt_bytes":4353}
+{"id":"277ecd30","ended_at":1791837045,"elapsed_s":386,"outcome":"ok","detail":null}
+{"id":"ddfe8264","kind":"tess","task":"11","queued_at":1791837083,"prompt_bytes":6075}
+{"id":"ddfe8264","ended_at":1791837533,"elapsed_s":450,"outcome":"ok","detail":null}
+{"id":"c58dbed7","kind":"ivan","task":"11","queued_at":1791837575,"prompt_bytes":18610}
+{"id":"c58dbed7","ended_at":1791838568,"elapsed_s":993,"outcome":"ok","detail":null}
+{"id":"d6c46e03","kind":"deslop","task":"11","queued_at":1791838672,"prompt_bytes":7074}
+{"id":"d6c46e03","ended_at":1791838942,"elapsed_s":270,"outcome":"ok","detail":null}
+{"id":"2fc2a7b4","kind":"pat","task":"11","queued_at":1791838999,"prompt_bytes":38808}
+{"id":"7c9f533d","kind":"ivan","task":"11","queued_at":1791839368,"prompt_bytes":8921}
+{"id":"7c9f533d","ended_at":1791839844,"elapsed_s":476,"outcome":"ok","detail":null}
+{"id":"21e36ca6","kind":"pat","task":"11","queued_at":1791839901,"prompt_bytes":11417}
+{"id":"a6d9196c","kind":"ivan","task":"11","queued_at":1791840033,"prompt_bytes":9038}
+{"id":"a6d9196c","ended_at":1791840350,"elapsed_s":317,"outcome":"ok","detail":null}
+{"id":"0750a355","kind":"pat","task":"11","queued_at":1791840398,"prompt_bytes":8443}
+{"id":"2fc2a7b4","ended_at":1791840534,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"21e36ca6","ended_at":1791840534,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"0750a355","ended_at":1791840534,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"kind":"handoff","site":"review","edge":"leave","at":1791840534,"phase":"review","prd":"00271-guard-v2-structural-delegation-check-v1.md"}
