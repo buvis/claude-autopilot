@@ -719,6 +719,32 @@ class ProcAliveTests(unittest.TestCase):
         self.assertFalse(dr._proc_alive(proc.pid))
 
 
+class DescendantsTests(unittest.TestCase):
+    """`_descendants` lists the comm names of a process's live tool-work
+    children, so the heartbeat can show what codex is doing."""
+
+    def test_descendants_lists_a_spawned_child(self) -> None:
+        import signal
+        import subprocess
+
+        # The trailing `& wait` forces bash to fork a real child for `sleep`
+        # and block in the parent rather than exec'ing `sleep` directly in
+        # place (a single-command `bash -c "sleep 60"` can replace its own
+        # image with no descendant to find). A new session makes bash the
+        # group leader, so killpg also reaches the forked `sleep`.
+        proc = subprocess.Popen(
+            ["bash", "-c", "sleep 60 & wait"],
+            start_new_session=True,
+        )
+        try:
+            names = dr._descendants(proc.pid)
+            self.assertIn("sleep", names)
+        finally:
+            with contextlib.suppress(Exception):
+                os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait()
+
+
 class CpuSecondsTests(unittest.TestCase):
     """`_cpu_seconds` is the working-vs-blocked discriminator: a real codex
     accrues CPU as it reasons, a hung one stays flat (the 1h44m-at-0-CPU
