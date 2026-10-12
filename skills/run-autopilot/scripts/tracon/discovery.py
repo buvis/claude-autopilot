@@ -11,7 +11,6 @@ import csv
 import datetime as dt
 import json
 import os
-import re
 import subprocess
 import sys
 import time
@@ -19,6 +18,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # tracon/discovery.py: scripts/tracon/ -> run-autopilot/
+from cli.procinfo import exec_env
 from . import model
 from .model import LoopState, MetricsRow
 
@@ -98,17 +99,13 @@ def _pid_tagged(pid: int, tag_pid: int) -> bool:
     that fork, so the tag shows up on the exec'd driver beneath it and
     never on the shell itself. Checking the shell alone swept live loops
     out of the registry, blinding tracon to them."""
-    pids = [str(pid), *_child_pids(pid)]
-    try:
-        out = subprocess.run(
-            ["ps", "ewww", "-p", ",".join(pids), "-o", "command="],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        ).stdout
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return re.search(rf"_AUTOPILOT_LOOP={tag_pid}( |$)", out, re.MULTILINE) is not None
+    pids = [pid, *(int(p) for p in _child_pids(pid))]
+    needle = str(tag_pid)
+    for p in pids:
+        env = exec_env(p)
+        if env is not None and env.get("_AUTOPILOT_LOOP") == needle:
+            return True
+    return False
 
 
 def read_registry(loops_dir: Path | None = None) -> list[Wrapper]:
