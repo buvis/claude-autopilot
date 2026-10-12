@@ -125,7 +125,7 @@
     },
     {
       "cycle": 1,
-      "issue": "R1: live replay exits 1 — the pinned deny id toolu_01Ku4TbcQoeik6ZLf5XkkAuD buckets per-task, so its correct refusal trips the contract's own per-task-refusal clause; PRD success metric 2 is unreachable as specified",
+      "issue": "R1: live replay exits 1 \u2014 the pinned deny id toolu_01Ku4TbcQoeik6ZLf5XkkAuD buckets per-task, so its correct refusal trips the contract's own per-task-refusal clause; PRD success metric 2 is unreachable as specified",
       "severity": "high",
       "action": "defer-to-batch-end",
       "reason": "settled deferral: contract conflict needing a design-doc change (batch deferred record type contract-conflict); re-raised by Alice, Blake and Bob in cycle 1",
@@ -266,6 +266,42 @@
       "file": "hooks/guard_phase_delegation.py:443",
       "reason": "rework cap reached with this finding unresolved",
       "prd": "00271-guard-v2-structural-delegation-check-v1.md"
+    },
+    {
+      "type": "settled-deferral",
+      "cycle": 1,
+      "issue": "Either-or hedge in test_wrapper_alive_script_requires_root_arg (pre-existing, outside this PRD hunks)",
+      "severity": "low",
+      "action": "deferred",
+      "reason": "pre-existing assertion outside this diff; separate test-maintenance item",
+      "prd": "00285-resolve-process-facts-without-ps-v1.md"
+    },
+    {
+      "type": "settled-deferral",
+      "cycle": 1,
+      "issue": "Linux /proc branches of exec_env and cpu_seconds, and the mach_timebase_info failure path, have no test",
+      "severity": "low",
+      "action": "deferred",
+      "reason": "the PRD Risks section explicitly accepts the untested Linux branch on this macOS-only host",
+      "prd": "00285-resolve-process-facts-without-ps-v1.md"
+    },
+    {
+      "type": "settled-deferral",
+      "cycle": 1,
+      "issue": "Four tests beyond the five the spec named were added to test_procinfo.py",
+      "severity": "low",
+      "action": "deferred",
+      "reason": "finder states there is no defect and no product scope creep; extra test coverage accepted",
+      "prd": "00285-resolve-process-facts-without-ps-v1.md"
+    },
+    {
+      "type": "settled-deferral",
+      "cycle": 1,
+      "issue": "Pre-existing size overruns: codex_review_run.main is 154 lines and test_discovery.py exceeds 800 lines",
+      "severity": "low",
+      "action": "deferred",
+      "reason": "pre-existing sizes confirmed by the mechanical-facts block; splitting them is a separate refactor PRD",
+      "prd": "00285-resolve-process-facts-without-ps-v1.md"
     }
   ]
 }

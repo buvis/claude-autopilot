@@ -1,0 +1,34 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Mechanical analysis identifies an either-or hedge in test_wrapper_alive_script_requires_root_arg - this existing assertion is outside the changed test hunk; tightening its expected outcome belongs in separate test maintenance.",
+    "file": "skills/run-autopilot/scripts/tracon/test_discovery.py:1645",
+    "reason": "Pre-existing assertion outside this PRD's changed hunks; Bob himself filed it as KNOWN and out of scope. Separate test-maintenance item, not this PRD's diff."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The Linux branches of `exec_env` and `cpu_seconds` (the `/proc/<pid>/stat` parse after `rindex(\")\")`) and the `mach_timebase_info` failure path have no test. The PRD accepts the Linux gap. A small monkeypatched `sys.platform` / `Path.read_text` test for the comm-with-parens case would pin the trickiest parse cheaply.",
+    "file": "skills/run-autopilot/cli/procinfo.py",
+    "reason": "The PRD's Risks section explicitly accepts the untested Linux branch on a macOS-only host; Alice and Blake both record that acceptance. Deferred as a known, specified gap."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Four tests beyond the five named in the spec were added to the new file: `test_exec_env_omits_the_tag_of_an_untagged_child`, `test_cpu_seconds_reads_the_target_pid_not_the_caller`, `test_child_names_is_empty_for_a_childless_process` and `test_child_names_lists_exactly_the_target_pids_children_by_real_name`. They are test-only, add coverage, and cause no product scope creep.",
+    "file": "skills/run-autopilot/cli/test_procinfo.py:80",
+    "reason": "The finder states there is no defect and no product scope creep: extra test coverage beyond the spec is accepted. Nothing to fix."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Existing function and file sizes exceed rubric limits: codex_review_run.main is 154 lines, and test_discovery.py extends past 800 lines - these pre-existing structures are outside this narrowly scoped process-facts replacement.",
+    "file": "skills/run-autopilot/scripts/codex_review_run.py:415",
+    "reason": "Pre-existing sizes the mechanical-facts block confirms (main at 154 lines); splitting them is a separate refactor PRD, not this PRD's surgical diff. Bob filed it as KNOWN."
+  }
+]
