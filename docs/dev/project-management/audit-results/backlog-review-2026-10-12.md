@@ -240,3 +240,15 @@ unique, no retired string left (`uv run pytest`, `hold stub`, `(held)`, `506 to 
 
 Left as is: 00277's verbatim reproduction block still quotes the report's "All 8 shapes" (it is
 the report's own text); 00278 at 204 lines (see Map).
+
+## Addendum 2026-10-12 21:55 (batch 202610111300 in flight)
+
+Every PRD above carries a "`release-checks` exits 0" criterion that cannot pass on this host:
+the loop has run inside run-agent's seatbelt since 2026-10-11 16:38, setuid `/bin/ps` fails to
+exec there, and the gate reads `PASS 3436 FAIL 9` in every sandboxed session (details in
+`loop-efficiency-2026-10-12.md`). The gate missed it because it ran outside the sandbox.
+Decision (user, 2026-10-12): keep the sandbox and fix the product. PRD 00285 (resolve process
+facts without ps) was written at 21:55 and placed in `wip/` next to 00271: every number below
+00276 is taken and `cli/selection.py` reads `wip/` before `backlog/`, so it runs right after
+00271 finalizes and before 00276. The loop was stopped at 21:52 (ctrl+c contract, state kept at
+phase review) and relaunches from state.
