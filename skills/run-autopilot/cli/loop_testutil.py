@@ -16,6 +16,7 @@ import pytest
 
 from cli import loop_act
 from cli.loop import Loop
+from cli.procinfo import exec_env
 from cli.runner import SpawnResult
 
 _CLOCK_START = 1_000_000.0
@@ -192,12 +193,8 @@ def _spawn_tagged_incumbent() -> subprocess.Popen:
     )
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
-        out = subprocess.run(
-            ["ps", "ewww", "-p", str(proc.pid), "-o", "command="],
-            capture_output=True,
-            text=True,
-        ).stdout
-        if f"_AUTOPILOT_LOOP={proc.pid}" in out:
+        env = exec_env(proc.pid)
+        if env is not None and env.get("_AUTOPILOT_LOOP") == str(proc.pid):
             return proc
         time.sleep(0.05)
-    raise AssertionError("tagged incumbent never appeared in ps")
+    raise AssertionError("tagged incumbent never appeared in exec_env")

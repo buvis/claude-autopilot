@@ -1,7 +1,8 @@
 """cli/loop_gates.py - the loop registry and the preflight gates of the loop
 driver, moved from `loop.py` by PRD 00192.
 
-Allowed imports: stdlib, `cli.state`, `cli.routing`, `cli.loop_decision`;
+Allowed imports: stdlib, `cli.state`, `cli.routing`, `cli.loop_decision`,
+`cli.procinfo`;
 never `cli.loop` or `cli.loop_act`.
 """
 
@@ -9,12 +10,12 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import subprocess
 from pathlib import Path
 
 from cli import state as state_mod
 from cli.loop_decision import _utcnow_iso, plugin_drift
+from cli.procinfo import exec_env
 from cli.routing import _load_json
 
 DEFAULT_LOOPS_DIR = Path.home() / ".claude" / "autopilot-loops"
@@ -55,17 +56,13 @@ def _pid_tagged(pid: int, tag_pid: int) -> bool:
     that fork, so the tag shows up on the exec'd driver beneath it and
     never on the shell itself. Checking the shell alone swept live loops
     out of the registry, blinding tracon to them."""
-    pids = [str(pid), *_child_pids(pid)]
-    try:
-        out = subprocess.run(
-            ["ps", "ewww", "-p", ",".join(pids), "-o", "command="],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        ).stdout
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return re.search(rf"_AUTOPILOT_LOOP={tag_pid}( |$)", out, re.MULTILINE) is not None
+    pids = [pid, *(int(p) for p in _child_pids(pid))]
+    needle = str(tag_pid)
+    for p in pids:
+        env = exec_env(p)
+        if env is not None and env.get("_AUTOPILOT_LOOP") == needle:
+            return True
+    return False
 
 
 def prune_registry(loops_dir: Path, own_pid: int) -> None:

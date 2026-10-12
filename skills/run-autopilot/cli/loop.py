@@ -39,7 +39,6 @@ from __future__ import annotations
 import datetime as _dt
 import json
 import os
-import re
 import signal as signal_mod
 import subprocess
 import sys
@@ -52,6 +51,7 @@ from cli import convergence, notify_out, pause, render_metrics, routing, runner,
 from cli.loop_act import PURGE_SCRIPT, ActMixin, run_agoge, run_purge, store_git
 from cli.loop_decision import DecisionMixin, died_next, fingerprint, last_result_field, pause_detail, plugin_drift
 from cli.loop_gates import DEFAULT_LOOPS_DIR, GatesMixin, live_wrapper_pid, prune_registry
+from cli.procinfo import exec_env
 from cli.routing import _load_json
 
 _SKILL_ROOT = Path(__file__).resolve().parents[1]
@@ -260,23 +260,12 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
         except (OSError, subprocess.SubprocessError):
             return
         pids = [token for token in out.split() if token.isdigit()]
-        if not pids:
-            return
-        try:
-            ps_out = subprocess.run(
-                ["ps", "ewww", "-p", ",".join(pids), "-o", "pid=,command="],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            ).stdout
-        except (OSError, subprocess.SubprocessError):
-            return
-        tag = re.compile(rf"_AUTOPILOT_LOOP={self.loop_pid}( |$)")
-        for line in ps_out.splitlines():
-            parts = line.strip().split(None, 1)
-            if len(parts) == 2 and parts[0].isdigit() and tag.search(parts[1]):
+        needle = str(self.loop_pid)
+        for pid_str in pids:
+            env = exec_env(int(pid_str))
+            if env is not None and env.get("_AUTOPILOT_LOOP") == needle:
                 try:
-                    os.kill(int(parts[0]), signal_mod.SIGHUP)
+                    os.kill(int(pid_str), signal_mod.SIGHUP)
                 except OSError:
                     pass
 
