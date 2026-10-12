@@ -4,7 +4,7 @@ commands, and unbounded whitespace in the suffix and task-range probes.
 
 Sibling of test_guard_phase_delegation.py (kept apart for the file size limit).
 Every case asserts on `find_phase_delegation`: None means the dispatch is
-allowed, a non-empty quoted span means it is denied. The two timing tests call
+allowed, a non-empty quoted span means it is denied. The timing tests call
 `is_phase_delegation` in-process, as test_guard_phase_delegation_dispatch.py
 does, and bound the same seconds-per-megabyte figure.
 
@@ -171,6 +171,34 @@ def test_rejects_many_phase_mentions_in_one_clause_in_linear_time() -> None:
     assert rate < BUDGET_S_PER_MB, f"{len(build(0))} chars cost {rate:.4f} s/MB"
 
 
+#    A whitespace run that the weak-anchor tail itself has to walk is the third
+#    shape: with no clause or sentence boundary between the phase name and the
+#    run, the tail is matched over the run, and two adjacent `\s*` groups there
+#    hand it back one space at a time (24.99 s/MB at 12500 spaces, 100.14 at
+#    50000, doubling with the run - quadratic).
+
+
+def _whitespace_tail(repetition: int) -> str:
+    # No '.', ',' or '\n' anywhere: the clause and the sentence both run to the
+    # end of the prompt, so the weak-anchor tail spans the whole space run.
+    # 50000 spaces is the largest run the report measured (105 s/MB, about 5 s
+    # of wall clock, the hook's whole timeout budget); a bigger run would take
+    # minutes to fail rather than seconds, for the same verdict.
+    return "Run the work phase" + " " * 50000 + f"word{repetition}"
+
+
+def test_scans_a_whitespace_run_behind_a_candidate_in_linear_time() -> None:
+    rate = _best_seconds_per_mb(_whitespace_tail)
+    print(
+        f"whitespace-tail s/MB={rate:.4f} over "
+        f"{len(_whitespace_tail(0)) / MB:.2f} MB"
+    )
+
+    assert rate < BUDGET_S_PER_MB, (
+        f"{len(_whitespace_tail(0))} chars cost {rate:.4f} s/MB"
+    )
+
+
 # 3. A negation in front of the verb, not in front of the path, still negates
 #    the order to follow a phase SKILL.md.
 
@@ -227,6 +255,13 @@ def test_allows_one_path_repeated() -> None:
 
 def test_two_distinct_paths_do_not_scope_and_stay_denied() -> None:
     _assert_denied("Run the work phase for PRD 00300. See a/b.py and c/d.py")
+
+
+def test_allows_a_path_whose_only_dot_sits_before_a_later_slash() -> None:
+    # The dot is in an earlier segment, not in the basename. It still makes
+    # "docs/v1.2" a path, so the dispatch names one file and is scoped: a token
+    # check that looked for the dot after the LAST slash only denied this.
+    _assert_allowed("Run the work phase for PRD 00300, see docs/v1.2/notes")
 
 
 # 6. A PRD-lifecycle store path never scopes a dispatch, however it is written.

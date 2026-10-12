@@ -141,8 +141,15 @@ _WHOLE_RUN_MARKERS = re.compile(
 # whitespace to the boundary. "$" honours endpos, so it still means "the clause
 # ends here". " skill" is already consumed by the phase-name step. A clause
 # ending in "?" never counts - checked by the caller.
+# The trailing `\s*` sits INSIDE the optional keyword group, so no two `\s*`
+# groups are adjacent: the same language (close-wrap, spaces, optional keyword,
+# spaces) but written so one run of whitespace can only be split one way. With
+# the two groups side by side, a clause holding no boundary between the name and
+# a long whitespace run made the pair hand the run back one space at a time,
+# which is quadratic (25 s/MB at 12500 spaces, 100 s/MB at 50000, against a
+# 0.3 s/MB budget).
 _WEAK_ANCHOR_TAIL = re.compile(
-    rf"{_WRAP_CLOSE}?\s*(?:now|again|first|immediately|please|in\s+full)?\s*$",
+    rf"{_WRAP_CLOSE}?\s*(?:(?:now|again|first|immediately|please|in\s+full)\s*)?$",
     re.IGNORECASE,
 )
 
@@ -302,13 +309,16 @@ def _find_skill_md_paths(text: str) -> list[tuple[int, int]]:
 def _find_path_tokens(text: str) -> set[str]:
     """Every distinct path-shaped token in `text`, O(n) total: one split into
     whitespace-delimited tokens, then plain string checks per token - a '/' in
-    it, a '.' past that last '/', and a word character after that '.'. The
-    token is cut after the word run that '.' opens, so trailing punctuation
+    it, a '.' at least two characters past its FIRST '/', and a word character
+    after that '.'. The first '/', not the last, is what the regex this
+    replaced took as the start of its `\\S+\\.\\w+`, so a dot in an earlier
+    segment still makes a path ("docs/v1.2/notes" is the path "docs/v1.2").
+    The token is cut after the word run that '.' opens, so trailing punctuation
     stays out of the path ("hooks/guard.py." at the end of a sentence is the
     path "hooks/guard.py", and "skills/work/SKILL.md;" keeps its SKILL.md
-    basename), exactly where the regex this replaced ended its `\\w+`. The
-    RIGHTMOST such '.' wins, as that greedy regex's did: "a/b.tar.gz" is one
-    path, not "a/b.tar".
+    basename), exactly where that regex ended its `\\w+`. The RIGHTMOST
+    qualifying '.' wins, as that greedy regex's did: "a/b.tar.gz" is one path,
+    not "a/b.tar".
 
     Nothing per slash, and every probe is an offset test (`rfind` for the '.',
     _WORD_START matched AT a position) rather than a scan over a range: a
@@ -325,7 +335,7 @@ def _find_path_tokens(text: str) -> set[str]:
     """
     tokens = set()
     for token in text.split():
-        slash = token.rfind("/")
+        slash = token.find("/")
         if slash == -1:
             continue
         dot = token.rfind(".")
