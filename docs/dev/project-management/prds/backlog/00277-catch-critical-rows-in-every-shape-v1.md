@@ -36,8 +36,9 @@ who trusts that every 🔴 row became a task.
 
 ### Success Metrics
 
-- Each of the 8 shapes from packet 4, and both indented-fence shapes from packet 5,
-  makes `review-close` refuse (exit 2) instead of applying with no task.
+- Each of the seven shapes from packet 4 (a 🔴 bullet with no token, `[2 / 2]`, `［2/2］`,
+  `(2/2)`, a blockquote table, a pipe-less table, an HTML `<table>`), and both indented-fence
+  shapes from packet 5, makes `review-close` refuse (exit 2) instead of applying with no task.
 - The 95 real past reviews walter replayed still pass `gate` exit for exit (a
   measured false-refusal count of 0, or each new refusal listed and accepted).
 - A refusal line is always one line.
@@ -47,7 +48,7 @@ who trusts that every 🔴 row became a task.
 ### Capability: The backstop reads by content
 
 #### Feature: Severity-content flag (packet 4)
-- **Description**: `_unread_token` also flags any unconsumed line that carries a severity emoji (🔴🟠🟡⚪) or a severity word (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`) next to a pipe, and any consensus-marker variant: spaced (`[2 / 2]`), full-width (`［2/2］`) or parenthesized (`(2/2)`).
+- **Description**: `_unread_token` also flags any unconsumed line that carries a severity emoji (🔴🟠🟡⚪) anywhere on the line, or a severity word (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`) with a `|` on either side of it (the word alone in prose does not count), or a consensus-marker variant: spaced (`[2 / 2]`), full-width (`［2/2］`) or parenthesized (`(2/2)`).
 - **Behavior**: the check runs on the unfenced text, after the existing token and pipe-row checks; the refusal message names the line number and text as today.
 
 #### Feature: CommonMark fences (packet 5)
@@ -72,7 +73,7 @@ CHANGELOG.md                                         # [Unreleased] Fixed lines
 skills/run-autopilot/cli/
 ├── gate.py                                          # _unread_token, _unfenced, fenced-header check
 ├── __main__.py                                      # _boundary_refusal_line
-├── test_gate_findings_shapes.py                     # tests: 8 shapes, indented fences, fenced header
+├── test_gate_findings_shapes.py                     # tests: seven shapes, indented fences, fenced header
 ├── test_gate_findings_real_fixtures.py              # replay guard over real reviews
 └── test_review_stage_paths.py                       # test: one-line refusal
 skills/review-work-completion/references/
@@ -82,6 +83,12 @@ skills/review-work-completion/references/
 ### Module: gate
 - **Responsibility**: read every findings row or refuse the file.
 - **Exports**: unchanged.
+- New symbols: `test_indented_fence_does_not_blank_rows`, `test_critical_row_in_unparsed_shape_is_malformed`, `test_fenced_findings_table_is_malformed`, `test_fenced_example_rows_without_header_still_pass`
+
+### Module: cli refusal line
+- **Responsibility**: print one refusal line whatever the field value holds.
+- **Exports**: `_boundary_refusal_line` (unchanged name).
+- New symbols: `test_refusal_line_stays_single_line_with_control_chars`
 
 ## Dependency Graph
 
@@ -96,16 +103,16 @@ skills/review-work-completion/references/
 
 ### Phase 0: Foundation
 **Tasks**:
-- [ ] gate: CommonMark fence rule in `_unfenced` (no deps) - Acceptance: in `test_gate_findings_shapes.py`, `indented_fence_does_not_blank_rows` (parametrized: tab, 4 spaces) passes and fails at base; the `4ed526e` tests still pass.
-- [ ] gate: severity-content and marker-variant flag in `_unread_token` (depends on: fence rule) - Acceptance: `critical_row_in_unparsed_shape_is_malformed`, parametrized over the 8 shapes of packet 4, passes and fails at base; `test_gate_findings_real_fixtures.py` passes with every real fixture, and any fixture that now refuses is listed in the task report rather than edited.
-- [ ] gate: a fenced block with the findings table header is malformed (depends on: fence rule) - Acceptance: `fenced_findings_table_is_malformed` (backtick and tilde) passes and fails at base; `fenced_example_rows_without_header_still_pass` passes.
-- [ ] cli: `repr()` in `_boundary_refusal_line` (no deps) - Acceptance: in `test_review_stage_paths.py`, `refusal_line_stays_single_line_with_control_chars` passes and fails at base.
+- [ ] gate: CommonMark fence rule in `_unfenced` (no deps) - Acceptance: in `test_gate_findings_shapes.py`, `test_indented_fence_does_not_blank_rows` (parametrized: tab, 4 spaces) passes and fails at base; the `4ed526e` tests still pass.
+- [ ] gate: severity-content and marker-variant flag in `_unread_token` (depends on: fence rule) - Acceptance: `test_critical_row_in_unparsed_shape_is_malformed`, parametrized over the seven shapes of packet 4 (a 🔴 bullet with no token, `[2 / 2]`, `［2/2］`, `(2/2)`, a blockquote table, a pipe-less table, an HTML `<table>`), passes and fails at base; `test_gate_findings_real_fixtures.py` passes with every real fixture, and any fixture that now refuses is listed in the task report rather than edited.
+- [ ] gate: a fenced block with the findings table header is malformed (depends on: fence rule) - Acceptance: `test_fenced_findings_table_is_malformed` (backtick and tilde) passes and fails at base; `test_fenced_example_rows_without_header_still_pass` passes.
+- [ ] cli: `repr()` in `_boundary_refusal_line` (no deps) - Acceptance: in `test_review_stage_paths.py`, `test_refusal_line_stays_single_line_with_control_chars` passes and fails at base.
 
 **Exit Criteria**: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_gate_findings_shapes.py skills/run-autopilot/cli/test_gate_findings_real_fixtures.py skills/run-autopilot/cli/test_review_stage_paths.py` exits 0.
 
 ### Phase 1: Integration
 **Tasks**:
-- [ ] prose: `output-formats.md:101` says never fence the findings table header (depends on: Phase 0) - Acceptance: `rg -n "header" skills/review-work-completion/references/output-formats.md` hits on that paragraph.
+- [ ] prose: `skills/review-work-completion/references/output-formats.md:101` says never fence the findings table header (depends on: Phase 0) - Acceptance: `rg -n "header" skills/review-work-completion/references/output-formats.md` hits on that paragraph.
 - [ ] CHANGELOG: `[Unreleased] ### Fixed` lines for the new shapes, indented fences, fenced tables and one-line refusals (depends on: all above) - Acceptance: `rg -n "indented" CHANGELOG.md` hits inside `[Unreleased]`.
 
 **Exit Criteria**: `bash dev/bin/release-checks` exits 0 with `FAIL 0` on its summary line.

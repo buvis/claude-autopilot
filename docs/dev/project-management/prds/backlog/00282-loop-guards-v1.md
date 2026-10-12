@@ -28,7 +28,7 @@ The operator running `autoclaude` overnight, unattended.
   `test_instant_exit_waits_when_usage_limit_detected` pass.
 - `test_idle_kill_before_cap_when_silent_and_no_open_tool_use` and
   `test_no_idle_kill_while_tool_use_open` pass.
-- `uv run pytest skills/run-autopilot` is green at the end of the last phase.
+- `bash dev/bin/release-checks` exits 0 with `FAIL 0` on its summary line at the end of the last phase.
 
 ## Functional Decomposition
 
@@ -54,7 +54,7 @@ Tell a session that did nothing, or went silent, apart from real progress.
 - **Description**: Kill a session silent for `_AUTOPILOT_SESSION_IDLE` seconds (default 1200) at any point after launch, not only past the wall cap.
 - **Inputs**: the tee'd log's mtime; `session_busy(log_path)`.
 - **Outputs**: `fired_reason: "idle"`, SIGTERM then SIGKILL after grace; the metrics row carries `killed_by: "idle"`.
-- **Behavior**: Before the cap, the watchdog polls every `poll_secs`. It fires `idle` when silence >= `idle_secs` and `session_busy` is False. `session_busy` scans the stream-json log and returns True when a `tool_use` id (in `assistant` message content) has no matching `tool_result` `tool_use_id` (in `user` message content), or when the last `system`/`background_tasks_changed` event has a non-empty `tasks` list. That event carries the full live task list and ends at `[]` (seen in a recorded review session, 2026-10-11). An exception inside `session_busy` counts as busy, so a parse fault never kills a session. The post-cap path (`_wait_past_cap`: idle or ceiling) is unchanged, so the cap still bounds a hung tool call. With `idle_secs == 0` or no activity path, behavior is exactly today's. The warning-window hand-off still fires at `cap - warn_secs`. The loop's decision table handles the killed session as it handles a post-cap idle kill today.
+- **Behavior**: Before the cap, the watchdog polls every `poll_secs`. It fires `idle` when silence >= `idle_secs` and `session_busy` is False. `session_busy` scans the stream-json log and returns True when a `tool_use` id (in `assistant` message content) has no matching `tool_result` `tool_use_id` (in `user` message content), or when the last `system`/`background_tasks_changed` event has a non-empty `tasks` list. That event carries the full live task list and ends at `[]` (seen in a recorded review session, 2026-10-11). An exception inside `session_busy` counts as busy, so a parse fault never kills a session. The post-cap path (`_wait_past_cap`: idle or ceiling) is unchanged, so the cap still bounds a hung tool call. With `idle_secs == 0` or no activity path, behavior is exactly today's. The warning-window hand-off still fires at `cap - warn_secs`. The loop's decision table handles the killed session as it handles a post-cap idle kill today: `continue` when the dead session touched state, else the no-progress path (died/retry). A kill is not forced onto the died path; this is a ratified deviation from discovery F4's wording (backlog review 2026-10-12).
 
 ### Capability: In-code entry
 Run Phase 0 in the loop, not in the session.
@@ -138,9 +138,9 @@ No dependencies - built first.
 **Goal**: Building blocks with their own tests.
 
 **Tasks**:
-- [ ] `_parse_marker` returns `site` (default `"wrapper_died"`); `_finish_park` with `site == "budget"` calls `do_stall(site="budget", extra_mutator=None)` and returns 0 (no `park_decision` systemic branch); add `"prd_budget_since"` to `PER_PRD_RESET_FIELDS` (no deps) - Acceptance: `uv run pytest skills/run-autopilot/cli/test_records_park.py -k "budget_site"` passes: a budget marker parks to hold/, the deferred record has `site: "budget"`, and `batch.parks_consecutive` is 0 after.
-- [ ] `session_busy(log_path)` in `cli/watchdog.py` per the Behavior above (no deps) - Acceptance: `uv run pytest skills/run-autopilot/cli/test_watchdog.py -k session_busy` passes on fixtures for: open tool_use, closed pair, non-empty then empty `background_tasks_changed`, unreadable file (False), malformed lines skipped.
-- [ ] `enter._write_prd` sets `prd_budget_since` (from the injected `now`) when absent or when the pre-write `state.prd` differs (no deps) - Acceptance: `uv run pytest skills/run-autopilot/cli/test_enter.py -k budget_since` passes: set on first entry, kept on same-PRD re-entry, refreshed on a different PRD.
+- [ ] `_parse_marker` returns `site` (default `"wrapper_died"`); `_finish_park` with `site == "budget"` calls `do_stall(site="budget", extra_mutator=None)` and returns 0 (no `park_decision` systemic branch); add `"prd_budget_since"` to `PER_PRD_RESET_FIELDS` (no deps) - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_records_park.py -k "budget_site"` passes: a budget marker parks to hold/, the deferred record has `site: "budget"`, and `batch.parks_consecutive` is 0 after.
+- [ ] `session_busy(log_path)` in `cli/watchdog.py` per the Behavior above (no deps) - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_watchdog.py -k session_busy` passes on fixtures for: open tool_use, closed pair, non-empty then empty `background_tasks_changed`, unreadable file (False), malformed lines skipped.
+- [ ] `enter._write_prd` sets `prd_budget_since` (from the injected `now`) when absent or when the pre-write `state.prd` differs (no deps) - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_enter.py -k budget_since` passes: set on first entry, kept on same-PRD re-entry, refreshed on a different PRD.
 
 **Exit Criteria**: the three filters above pass.
 
@@ -148,10 +148,10 @@ No dependencies - built first.
 **Goal**: The guards act in the loop.
 
 **Tasks**:
-- [ ] `budget_usd_for`, `_budget_bound`, the call in `_run_loop`, and `_act_park` writing `"site"` when `decision["park_site"]` is set (depends on: Phase 0) - Acceptance: `uv run pytest skills/run-autopilot/cli -k "test_budget_park_lands_prd_in_hold_and_next_prd_launches or test_budget_resets_after_resume_from_hold or test_budget_zero_disables"` passes. The first drives the loop with scripted sessions whose costs sum past $300 for one PRD. The second parks at $310, moves the PRD back to backlog/, and asserts the next session relaunches without a park.
-- [ ] Instant exit in `_decide` and the `then` dispatch in `_act_branch` (depends on: Phase 0) - Acceptance: `uv run pytest skills/run-autopilot/cli/test_loop_decision.py -k instant_exit` passes, including `test_instant_exit_signal_then_died_retry_without_limit` (3 s, $0: retry first, park second, `_died_retries` not reset by the touched state) and `test_instant_exit_waits_when_usage_limit_detected`.
-- [ ] `Watchdog` `busy_fn` and the pre-cap idle polling (`_wait_pre_cap`); `runner._run_session` passes `busy_fn` (depends on: Phase 0) - Acceptance: `uv run pytest skills/run-autopilot/cli/test_watchdog.py -k "test_idle_kill_before_cap_when_silent_and_no_open_tool_use or test_no_idle_kill_while_tool_use_open or test_idle_zero_keeps_cap_only"` passes, with small `idle_secs`/`cap_secs` against a real sleeping child.
-- [ ] `Loop._pre_enter`, `enter_fn`, `loop_entry`, the `_run_enter` replay, `brief._entry_lines` (depends on: Phase 0) - Acceptance: `uv run pytest skills/run-autopilot/cli -k "test_loop_entry_then_skill_entry_writes_one_resume_row or test_stale_loop_entry_is_dropped or test_pre_enter_failure_launches_without_entry or test_brief_entry_section"` passes. The first counts calls to a patched `enter_io.record_resume_row` across the loop's `_pre_enter` plus `__main__.main(["enter", ...])`: exactly 1. `uv run pytest skills/run-autopilot/cli/test_brief.py` stays green (golden unchanged).
+- [ ] `budget_usd_for`, `_budget_bound`, the call in `_run_loop`, and `_act_park` writing `"site"` when `decision["park_site"]` is set (depends on: Phase 0) - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli -k "test_budget_park_lands_prd_in_hold_and_next_prd_launches or test_budget_resets_after_resume_from_hold or test_budget_zero_disables"` passes. The first drives the loop with scripted sessions whose costs sum past $300 for one PRD. The second parks at $310, moves the PRD back to backlog/, and asserts the next session relaunches without a park.
+- [ ] Instant exit in `_decide` and the `then` dispatch in `_act_branch` (depends on: Phase 0) - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_loop_decision.py -k instant_exit` passes, including `test_instant_exit_signal_then_died_retry_without_limit` (3 s, $0: retry first, park second, `_died_retries` not reset by the touched state) and `test_instant_exit_waits_when_usage_limit_detected`.
+- [ ] `Watchdog` `busy_fn` and the pre-cap idle polling (`_wait_pre_cap`); `runner._run_session` passes `busy_fn` (depends on: Phase 0) - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_watchdog.py -k "test_idle_kill_before_cap_when_silent_and_no_open_tool_use or test_no_idle_kill_while_tool_use_open or test_idle_zero_keeps_cap_only"` passes, with small `idle_secs`/`cap_secs` against a real sleeping child.
+- [ ] `Loop._pre_enter`, `enter_fn`, `loop_entry`, the `_run_enter` replay, `brief._entry_lines` (depends on: Phase 0) - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli -k "test_loop_entry_then_skill_entry_writes_one_resume_row or test_stale_loop_entry_is_dropped or test_pre_enter_failure_launches_without_entry or test_brief_entry_section"` passes. The first counts calls to a patched `enter_io.record_resume_row` across the loop's `_pre_enter` plus `__main__.main(["enter", ...])`: exactly 1. `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_brief.py` stays green (golden unchanged).
 
 **Exit Criteria**: all Phase 1 filters pass.
 
@@ -159,9 +159,9 @@ No dependencies - built first.
 **Goal**: Docs match the code.
 
 **Tasks**:
-- [ ] `references/state-schema.md` rows for `loop_entry` and `prd_budget_since`; the `## Entry` sentence in `references/phase-build.md` § Enter in one call; the `_AUTOPILOT_PRD_BUDGET_USD` knob beside the other `_AUTOPILOT_*` knobs in the run-autopilot docs; CHANGELOG `[Unreleased]` Added entries for the budget, instant-exit and idle-from-launch guards (depends on: Phase 1) - Acceptance: `rg -n "prd_budget_since|loop_entry" skills/run-autopilot/references/state-schema.md` hits both; `rg -n "_AUTOPILOT_PRD_BUDGET_USD" skills/run-autopilot` hits code and docs; `uv run pytest skills/run-autopilot/cli/test_enter_prose.py skills/run-autopilot/cli/test_doc_contract.py` passes.
+- [ ] `references/state-schema.md` rows for `loop_entry` and `prd_budget_since`; the `## Entry` sentence in `references/phase-build.md` § Enter in one call; the `_AUTOPILOT_PRD_BUDGET_USD` knob beside the other `_AUTOPILOT_*` knobs in the run-autopilot docs; CHANGELOG `[Unreleased]` Added entries for the budget, instant-exit and idle-from-launch guards (depends on: Phase 1) - Acceptance: `rg -n "prd_budget_since|loop_entry" skills/run-autopilot/references/state-schema.md` hits both; `rg -n "_AUTOPILOT_PRD_BUDGET_USD" skills/run-autopilot` hits code and docs; `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_enter_prose.py skills/run-autopilot/cli/test_doc_contract.py` passes.
 
-**Exit Criteria**: `uv run pytest skills/run-autopilot` is green.
+**Exit Criteria**: `bash dev/bin/release-checks` exits 0 with `FAIL 0` on its summary line.
 
 ## Test Strategy
 
@@ -178,6 +178,7 @@ No dependencies - built first.
 - **`total_cost_usd` not cumulative**: the budget reads the last `result` event (`last_result_field`). The watched run showed 14 events at the same $18.58 before it rose, which fits a cumulative total. If it is not, the guard undercounts and parks late, never early.
 - **Idle kill on a quiet reviewer**: work held in a background task or an open tool call pauses the timer. Only true silence with nothing in flight is killed.
 - **Crash loop dodging the cap**: every row for the PRD counts, `died` and `instant_exit` included.
+- **Kill routing**: discovery F4 says a kill routes to died/retry; this PRD keeps today's decision table so a session that touched state resumes instead of re-running a half-done task. Ratified at the backlog review of 2026-10-12.
 - **Two writers at hand-off**: the loop's `enter()` runs strictly before launch and the session's call replays it. The one-resume-row test pins the order.
 - **Resume straight to wip/ by hand**: still a fresh budget, because the park cleared `prd_budget_since` through `PER_PRD_RESET_FIELDS`.
 - **Unknown cause of the 2-7 s sessions**: their logs were not kept. F3 routes them deterministically whatever the cause; the `instant_exit` rows give the next batch the data.

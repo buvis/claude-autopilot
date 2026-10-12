@@ -24,7 +24,7 @@ joins commands that do not run the same way:
   the code says `stale`.
 - **9 (MEDIUM):** `verification.normalize_command` strips one leading `bash `/`sh ` and
   one `./`, so `bash X`, `sh X`, `./X` and `X` share one record although they differ
-  in shell, exec bit and PATH lookup. CHANGELOG line 41 says only "different
+  in shell, exec bit and PATH lookup. CHANGELOG line 44 says only "different
   whitespace", and `skills/work/references/final-verification.md` documents the stored
   command as "as run" while it stores the stripped form.
 
@@ -53,14 +53,14 @@ Review sessions composing the `Tests:` line, and the operator reading it.
 
 #### Feature: Whitespace-only normalization (packet 9)
 - **Description**: `normalize_command` collapses whitespace only; it no longer strips `bash `/`sh ` or `./`. `_write_record` stores the raw command as run.
-- **Prose**: CHANGELOG line 41 and `final-verification.md`'s "as run" text match the new behaviour.
+- **Prose**: CHANGELOG line 44 and `final-verification.md`'s "as run" text match the new behaviour.
 
 ## Structural Decomposition
 
 ### Repository Structure
 
 ```
-CHANGELOG.md                                     # line 41 corrected; [Unreleased] Changed line
+CHANGELOG.md                                     # line 44 corrected; [Unreleased] Changed line
 dev/bin/
 └── release-checks                               # registers the new prose test
 skills/review-work-completion/
@@ -68,10 +68,22 @@ skills/review-work-completion/
 └── scripts/                                     # NEW prose test for the step 6 rule
 skills/run-autopilot/cli/
 ├── verification.py                              # normalize_command, _write_record
-└── test_verification.py                         # tests: shell spellings are distinct
+└── test_verification_dirty.py                   # tests: shell spellings are distinct
 skills/work/references/
 └── final-verification.md                        # stored command is the raw command
 ```
+
+### Module: verification
+- **Maps to capability**: Exact commands
+- **Responsibility**: normalize the gate command by whitespace only and store it as run.
+- **Exports**: `normalize_command` (whitespace-only), `_write_record` (raw command).
+- New symbols: `test_sh_and_bash_records_do_not_cross_reuse`, `test_dot_slash_and_bare_records_do_not_cross_reuse`
+
+### Module: review SKILL step 6
+- **Maps to capability**: One reuse rule
+- **Responsibility**: compose the `Tests:` line from `gate.tests_line`; a prose test pins the wording.
+- **Exports**: none (skill prose plus one test file).
+- New symbols: `test_tests_line_source_prose.py`, `test_step_6_composes_from_gate_tests_line`, `test_step_6_has_no_sha_counts_reuse_rule`
 
 ## Dependency Graph
 
@@ -86,14 +98,14 @@ skills/work/references/
 
 ### Phase 0: Foundation
 **Tasks**:
-- [ ] verification: whitespace-only `normalize_command`; raw command stored. Premise: PRD 00270's `test_reuse_matches_a_command_spelled_with_bash_dot_slash_and_extra_spaces` asserts the old stripping; re-check with `rg -n "bash_dot_slash" skills/run-autopilot/cli/test_verification.py`, and change only that test's expectation to `stale` for the `bash ./` spelling while keeping its extra-spaces case `reused`; report the change (no deps) - Acceptance: in `test_verification.py`, `sh_and_bash_records_do_not_cross_reuse` and `dot_slash_and_bare_records_do_not_cross_reuse` pass and fail at base; `test_reuse_is_stale_when_the_gate_command_differs` still passes.
+- [ ] verification: whitespace-only `normalize_command`; raw command stored. Premise: PRD 00270's `test_reuse_matches_a_command_spelled_with_bash_dot_slash_and_extra_spaces` in `test_verification_dirty.py` asserts the old stripping; re-check with `rg -n "bash_dot_slash" skills/run-autopilot/cli/test_verification_dirty.py`, and change only that test's expectation to `stale` for the `bash ./` spelling while keeping its extra-spaces case `reused`; report the change (no deps) - Acceptance: in `test_verification_dirty.py`, `test_sh_and_bash_records_do_not_cross_reuse` and `test_dot_slash_and_bare_records_do_not_cross_reuse` pass and fail at base; `test_verification.py::test_reuse_is_stale_when_the_gate_command_differs` still passes.
 - [ ] review SKILL step 6: compose from `gate.tests_line`, drop the sha/counts rule; add `skills/review-work-completion/scripts/test_tests_line_source_prose.py` and register it in `dev/bin/release-checks` (no deps) - Acceptance: `test_step_6_composes_from_gate_tests_line` and `test_step_6_has_no_sha_counts_reuse_rule` pass and fail at base.
 
-**Exit Criteria**: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_verification.py skills/review-work-completion/scripts/test_tests_line_source_prose.py` exits 0.
+**Exit Criteria**: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_verification.py skills/run-autopilot/cli/test_verification_dirty.py skills/review-work-completion/scripts/test_tests_line_source_prose.py` exits 0.
 
 ### Phase 1: Integration
 **Tasks**:
-- [ ] prose: `final-verification.md` stored command is "the command exactly as run, whitespace collapsed"; CHANGELOG line 41 corrected, plus an `[Unreleased] ### Changed` line that `bash X`/`sh X`/`./X`/`X` no longer share a record (depends on: Phase 0) - Acceptance: `rg -n "different whitespace" CHANGELOG.md` still hits only where it is true, and `rg -n "sh X|\./X" CHANGELOG.md` hits inside `[Unreleased]`.
+- [ ] prose: `final-verification.md` stored command is "the command exactly as run, whitespace collapsed"; CHANGELOG line 44 corrected, plus an `[Unreleased] ### Changed` line that `bash X`/`sh X`/`./X`/`X` no longer share a record (depends on: Phase 0) - Acceptance: `rg -n "different whitespace" CHANGELOG.md` still hits only where it is true, and `rg -n "sh X|\./X" CHANGELOG.md` hits inside `[Unreleased]`.
 
 **Exit Criteria**: `bash dev/bin/release-checks` exits 0 with `FAIL 0` on its summary line.
 

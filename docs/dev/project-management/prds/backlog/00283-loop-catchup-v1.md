@@ -22,7 +22,7 @@ The operator running `autoclaude` batches whose PRDs carry `catchup: force`.
 ### Success Metrics
 - `test_force_is_delta_when_all_commits_are_loop_commits` and `test_force_is_full_when_one_commit_is_not` pass.
 - `test_probe_records_unauthenticated_then_reuses_within_batch` and `test_new_batch_reprobes` pass (gh and engram).
-- `uv run pytest skills/run-autopilot` is green at the end of the last phase.
+- `bash dev/bin/release-checks` exits 0 with `FAIL 0` on its summary line at the end of the last phase.
 
 ## Functional Decomposition
 
@@ -51,7 +51,7 @@ Learn once per batch which catchup steps cannot work here.
 - **Description**: `autopilot catchup-probe` probes `gh` and `engram` once per batch inside the session and prints the steps to skip.
 - **Inputs**: `state.batch.id` (fallback `no-batch`), `state.catchup_probe`.
 - **Outputs**: `state.catchup_probe = {"batch_id": <id>, "gh": "ok"|"unauthenticated"|"absent", "engram": "ok"|"unregistered"|"absent", "checked_at": <ISO UTC>}`. Stdout gets one JSON line: `{"skip": [...]}`, where `skip` holds `"github-state"` when gh is not `ok` and `"engram"` when engram is not `ok`.
-- **Behavior**: When `catchup_probe.batch_id == batch.id`, it reuses the stored verdicts and runs neither binary (the `codex_probe` lazy-reset idiom, `skills/work/references/codex-implementor.md:40-80`). Otherwise it probes, in the project root. For `gh`: not on PATH gives `absent`; `gh auth status` exit 0 gives `ok`; any other exit gives `unauthenticated`. For `engram`: not on PATH gives `absent`; `engram status --scope repo` with stderr containing `not inside a registered repo` gives `unregistered`; any other result gives `ok` (a nonzero exit for stale rows still means registered). A probe timeout of 15 s counts as a failure. The probe runs in the session, not the loop, because the session's sandbox is where `gh` fails: `gh auth status` in a sandboxed shell fails on `~/.config/gh/hosts.yml` while the same call works outside it. In `references/phase-build.md` Phase 1, the full-catchup path runs `autopilot catchup-probe` first. It then invokes `/git-ferry:catchup` with each skipped step named: do not run `github-state.sh` or the gh commands, and do not run any `engram` command. It writes one gap line per skipped step in the capsule. The probe adds `catchup_probe` to the batch-scoped fields that `records.py` does not reset.
+- **Behavior**: When `catchup_probe.batch_id == batch.id`, it reuses the stored verdicts and runs neither binary (the `codex_probe` lazy-reset idiom, `skills/work/references/codex-implementor.md:40-80`). Otherwise it probes, in the project root. For `gh`: not on PATH gives `absent`; `gh auth status` exit 0 gives `ok`; any other exit gives `unauthenticated`. For `engram`: not on PATH gives `absent`; `engram status --scope repo` with stderr containing `not inside a registered repo` gives `unregistered`; any other result gives `ok` (a nonzero exit for stale rows still means registered). A probe timeout of 15 s gives `absent` for either binary, so the step is skipped. The probe runs in the session, not the loop, because the session's sandbox is where `gh` fails: `gh auth status` in a sandboxed shell fails on `~/.config/gh/hosts.yml` while the same call works outside it. In `references/phase-build.md` Phase 1, the full-catchup path runs `autopilot catchup-probe` first. It then invokes `/git-ferry:catchup` with each skipped step named: do not run `github-state.sh` or the gh commands, and do not run any `engram` command. It writes one gap line per skipped step in the capsule. The probe adds `catchup_probe` to the batch-scoped fields that `records.py` does not reset.
 
 ## Structural Decomposition
 
@@ -64,10 +64,12 @@ skills/run-autopilot/
 │   ├── enter.py           # Maps to: Force with loop-only commits
 │   ├── enter_io.py        # Maps to: Force with loop-only commits (git log)
 │   ├── catchup_probe.py   # Maps to: Catchup probe verb (new)
+│   ├── test_catchup_probe.py  # Maps to: Catchup probe verb (tests, new)
 │   └── __main__.py        # Maps to: Catchup probe verb (subcommand)
 └── references/
     ├── phase-build.md     # Maps to: Catchup probe verb (Phase 1 prose)
     └── state-schema.md    # catchup_probe row
+dev/bin/release-checks     # [checks] enter gains test_catchup_probe.py
 ```
 
 ### Module: loop committer
@@ -86,7 +88,7 @@ skills/run-autopilot/
 - **Maps to capability**: Batch-scoped catchup probes
 - **Responsibility**: Probe, cache per batch, print the skip list.
 - **Exports**: `probe(state_path, *, run=subprocess.run, which=shutil.which, now=...)` - returns the skip list and writes `catchup_probe` through `statectl.mutate`; `main` wiring as `catchup-probe --state <path>`.
-- New symbols: `catchup_probe.py`, `probe`, `catchup-probe`, `catchup_probe`, `state.catchup_probe`, `unauthenticated`, `test_probe_records_unauthenticated_then_reuses_within_batch`, `test_new_batch_reprobes`, `test_engram_unregistered_from_stderr`
+- New symbols: `catchup_probe.py`, `test_catchup_probe.py`, `probe`, `catchup-probe`, `catchup_probe`, `state.catchup_probe`, `unauthenticated`, `test_probe_records_unauthenticated_then_reuses_within_batch`, `test_new_batch_reprobes`, `test_engram_unregistered_from_stderr`
 
 ## Dependency Graph
 
@@ -108,8 +110,8 @@ No dependencies - built first.
 **Goal**: The committer stamp and the probe verb.
 
 **Tasks**:
-- [ ] `loop_committer` in `cli/loop.py`; `Loop._launch` sets `GIT_COMMITTER_NAME` in `self.env` and `os.environ` from `state.batch.id` (no deps) - Acceptance: `uv run pytest skills/run-autopilot/cli/test_loop.py -k committer` passes. The scripted spawn sees `GIT_COMMITTER_NAME == "autopilot-loop/<id>"` in its `env`; a commit made in a temp repo with that env shows it under `git log --format=%cn`.
-- [ ] `cli/catchup_probe.py` and the `catchup-probe` subcommand (no deps) - Acceptance: `uv run pytest skills/run-autopilot/cli/test_catchup_probe.py` passes, including `test_probe_records_unauthenticated_then_reuses_within_batch` (stub `gh` exits 1: the first call records `unauthenticated` and the second call in the same batch does not run `gh`), `test_new_batch_reprobes`, and the same three for engram (`test_engram_unregistered_from_stderr`).
+- [ ] `loop_committer` in `cli/loop.py`; `Loop._launch` sets `GIT_COMMITTER_NAME` in `self.env` and `os.environ` from `state.batch.id` (no deps) - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_loop.py -k committer` passes. The scripted spawn sees `GIT_COMMITTER_NAME == "autopilot-loop/<id>"` in its `env`; a commit made in a temp repo with that env shows it under `git log --format=%cn`.
+- [ ] `cli/catchup_probe.py`, the `catchup-probe` subcommand, and `cli/test_catchup_probe.py` registered in the `[checks] enter` block of `dev/bin/release-checks` (PRD 00278's pin fails on an unregistered test file) (no deps) - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_catchup_probe.py` passes, including `test_probe_records_unauthenticated_then_reuses_within_batch` (stub `gh` exits 1: the first call records `unauthenticated` and the second call in the same batch does not run `gh`), `test_new_batch_reprobes`, and the same three for engram (`test_engram_unregistered_from_stderr`); `rg -n "test_catchup_probe.py" dev/bin/release-checks` hits.
 
 **Exit Criteria**: both filters pass.
 
@@ -117,7 +119,7 @@ No dependencies - built first.
 **Goal**: `_catchup` returns delta after loop-only commits.
 
 **Tasks**:
-- [ ] `enter_io.commits_all_loop`, the `loop_only` keyword on `enter()`, and the force branch in `_catchup` (depends on: Phase 0) - Acceptance: `uv run pytest skills/run-autopilot/cli/test_enter_decisions.py -k "force"` passes, including `test_force_is_delta_when_all_commits_are_loop_commits`, `test_force_is_full_when_one_commit_is_not`, `test_force_is_full_on_git_failure`, and the existing force tests unchanged. Premise: the existing `force` tests in `test_enter_decisions.py` expect `full` for a first entry with no `catchup_head_sha`; re-check with `rg -n "force" skills/run-autopilot/cli/test_enter_decisions.py` before editing. If any expects `full` with a head sha whose range is loop-only, stop and report rather than rewriting it.
+- [ ] `enter_io.commits_all_loop`, the `loop_only` keyword on `enter()`, and the force branch in `_catchup` (depends on: Phase 0) - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_enter_decisions.py -k "force"` passes, including `test_force_is_delta_when_all_commits_are_loop_commits`, `test_force_is_full_when_one_commit_is_not`, `test_force_is_full_on_git_failure`, and `test_enter.py`'s force cases unchanged. Premise: the existing force cases live in `test_enter.py` (lines 605-620 today, e.g. `("force", None, _cache(), HEAD, "full")`) and expect `full` for a first entry; re-check with `rg -n "force" skills/run-autopilot/cli/test_enter.py` before editing. If any expects `full` with a head sha whose range is loop-only, stop and report rather than rewriting it.
 
 **Exit Criteria**: the filter passes.
 
@@ -125,9 +127,9 @@ No dependencies - built first.
 **Goal**: The session uses the probe and the docs match.
 
 **Tasks**:
-- [ ] `references/phase-build.md` Phase 1: condition 1 states the loop-commit rule for `force`, and the full-catchup path runs `autopilot catchup-probe` and passes the skip list to `/git-ferry:catchup` with the gap lines; `references/state-schema.md` gets a `catchup_probe` row; CHANGELOG `[Unreleased]` Changed and Added entries (depends on: Phase 1) - Acceptance: `rg -n "catchup-probe" skills/run-autopilot/references/phase-build.md` hits; `rg -n "catchup_probe" skills/run-autopilot/references/state-schema.md` hits; `uv run pytest skills/run-autopilot/cli/test_enter_prose.py skills/run-autopilot/cli/test_doc_contract.py` passes.
+- [ ] `references/phase-build.md` Phase 1: condition 1 states the loop-commit rule for `force`, and the full-catchup path runs `autopilot catchup-probe` and passes the skip list to `/git-ferry:catchup` with the gap lines; `references/state-schema.md` gets a `catchup_probe` row; CHANGELOG `[Unreleased]` Changed and Added entries (depends on: Phase 1) - Acceptance: `rg -n "catchup-probe" skills/run-autopilot/references/phase-build.md` hits; `rg -n "catchup_probe" skills/run-autopilot/references/state-schema.md` hits; `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_enter_prose.py skills/run-autopilot/cli/test_doc_contract.py` passes.
 
-**Exit Criteria**: `uv run pytest skills/run-autopilot` is green.
+**Exit Criteria**: `bash dev/bin/release-checks` exits 0 with `FAIL 0` on its summary line.
 
 ## Test Strategy
 

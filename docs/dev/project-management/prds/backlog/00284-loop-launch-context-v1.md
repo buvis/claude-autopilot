@@ -1,4 +1,5 @@
 ---
+design: skip
 default_model: sonnet
 model_tier_rationale: transcription - exact argv, default JSON, message format and fallback expression given; named tests; one live launch check
 ---
@@ -24,9 +25,9 @@ The operator running `autoclaude`, and every loop session.
 
 ### Success Metrics
 - `test_build_argv_strict_mcp_default_is_context7` and `test_mcp_config_override_and_inherit` pass.
-- `AUTOPILOT_LIVE=1 uv run pytest skills/run-autopilot/cli/test_launch_mcp_live.py` passes (Context7 only by default; the override changes the list).
+- `env AUTOPILOT_LIVE=1 uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_launch_mcp_live.py` passes (Context7 only by default; the override changes the list).
 - `test_brief_repo_root_falls_back_to_project_root` and `test_validator_names_every_missing_field` pass.
-- `uv run pytest skills/run-autopilot` is green at the end of the last phase.
+- `bash dev/bin/release-checks` exits 0 with `FAIL 0` on its summary line at the end of the last phase.
 
 ## Functional Decomposition
 
@@ -65,6 +66,7 @@ skills/run-autopilot/cli/
 ├── brief.py                  # Maps to: Repo root fallback
 ├── statectl.py               # Maps to: Repo root fallback (passes project_root)
 └── schema.py                 # Maps to: All missing fields in one rejection
+dev/bin/release-checks        # [checks] l3 gains test_launch_mcp_live.py
 ```
 
 ### Module: runner
@@ -109,9 +111,9 @@ No dependencies - built first.
 **Goal**: Three independent code changes.
 
 **Tasks**:
-- [ ] `DEFAULT_MCP_CONFIG`, `mcp_config_for`, the `mcp_config` keyword on `build_argv`, and `spawn` passing `mcp_config_for(env)` (no deps) - Acceptance: `uv run pytest skills/run-autopilot/cli/test_runner.py -k "mcp"` passes, including `test_build_argv_strict_mcp_default_is_context7` (the exact flag pair, before `--output-format`) and `test_mcp_config_override_and_inherit`. Existing `build_argv` tests stay green, because `mcp_config=None` keeps today's argv.
-- [ ] `render_brief(..., project_root=None)` and `write_brief` passing it (no deps) - Acceptance: `uv run pytest skills/run-autopilot/cli/test_brief.py -k "repo_root"` passes, including `test_brief_repo_root_falls_back_to_project_root` (a state without `repo_root` written through `write_brief` shows the project root, never `none`); the golden test is unchanged.
-- [ ] Collected message in `_validate_decision_entry` (no deps) - Acceptance: `uv run pytest skills/run-autopilot/cli/test_schema_decision_entries.py skills/run-autopilot/cli/test_schema_decision_scope.py` passes with `test_validator_names_every_missing_field` added. Premise: only `test_bare_entry_names_issue_before_the_other_missing_keys` asserts a message for an entry missing two or more fields. Re-check by running both files after the change: exactly that one test should fail before it is updated to `missing issue, action, reason, severity` and renamed `test_bare_entry_names_every_missing_key_in_rule_order`. If any other test fails, stop and report rather than editing it.
+- [ ] `DEFAULT_MCP_CONFIG`, `mcp_config_for`, the `mcp_config` keyword on `build_argv`, and `spawn` passing `mcp_config_for(env)` (no deps) - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_runner.py -k "mcp"` passes, including `test_build_argv_strict_mcp_default_is_context7` (the exact flag pair, before `--output-format`) and `test_mcp_config_override_and_inherit`. Existing `build_argv` tests stay green, because `mcp_config=None` keeps today's argv.
+- [ ] `render_brief(..., project_root=None)` and `write_brief` passing it (no deps) - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_brief.py -k "repo_root"` passes, including `test_brief_repo_root_falls_back_to_project_root` (a state without `repo_root` written through `write_brief` shows the project root, never `none`); the golden test is unchanged.
+- [ ] Collected message in `_validate_decision_entry` (no deps) - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_schema_decision_entries.py skills/run-autopilot/cli/test_schema_decision_scope.py` passes with `test_validator_names_every_missing_field` added. Premise: only `test_bare_entry_names_issue_before_the_other_missing_keys` asserts a message for an entry missing two or more fields. Re-check by running both files after the change: exactly that one test should fail before it is updated to `missing issue, action, reason, severity` and renamed `test_bare_entry_names_every_missing_key_in_rule_order`. If any other test fails, stop and report rather than editing it.
 
 **Exit Criteria**: the three filters pass.
 
@@ -119,7 +121,7 @@ No dependencies - built first.
 **Goal**: Prove the effect on a real launch, not just the flag.
 
 **Tasks**:
-- [ ] `cli/test_launch_mcp_live.py`: builds argv with `build_argv("haiku", "low", None, mcp_config=mcp_config_for(env), prompt="reply ok")` plus `--max-turns 1`, runs it, and parses the `system`/`init` event. The test is skipped unless `AUTOPILOT_LIVE=1`, so the default suite never spends money or needs the network (depends on: Phase 0) - Acceptance: `AUTOPILOT_LIVE=1 uv run pytest skills/run-autopilot/cli/test_launch_mcp_live.py` passes with 2 tests run and 0 skipped. With env unset, `mcp_servers` names are exactly `["context7"]`; with `_AUTOPILOT_MCP_CONFIG='{"mcpServers":{}}'` they are `[]`.
+- [ ] `cli/test_launch_mcp_live.py`: builds argv with `build_argv("haiku", "low", None, mcp_config=mcp_config_for(env), prompt="reply ok")` plus `--max-turns 1`, runs it with a child env built from `os.environ` without `_AUTOPILOT_LOOP` and with `CLAUDE_NESTED=1` and `_CLAUDE_NOTIFY_QUIET=1` (as `skills/use-sonnet/scripts/sonnet-run.sh` lines 16-33 do, so the nested session can never write the loop's signal file), and parses the `system`/`init` event. It asserts on the `mcp_servers` entries' `name` values only, never on `status`, so an unreachable endpoint cannot red it. The test is skipped unless `AUTOPILOT_LIVE=1`, so the default suite never spends money or needs the network; the file is registered in the `[checks] l3` block of `dev/bin/release-checks` (PRD 00278's pin fails on an unregistered test file; it skips there) (depends on: Phase 0) - Acceptance: `env AUTOPILOT_LIVE=1 uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_launch_mcp_live.py` passes with 2 tests run and 0 skipped. With env unset, `mcp_servers` names are exactly `["context7"]`; with `_AUTOPILOT_MCP_CONFIG='{"mcpServers":{}}'` they are `[]`; `rg -n "test_launch_mcp_live.py" dev/bin/release-checks` hits.
 
 **Exit Criteria**: the live check passes.
 
@@ -127,9 +129,9 @@ No dependencies - built first.
 **Goal**: Docs.
 
 **Tasks**:
-- [ ] Document `_AUTOPILOT_MCP_CONFIG` (default, `inherit`, override) beside the other `_AUTOPILOT_*` knobs in the run-autopilot docs and in `runner.py`'s module docstring launch line; add CHANGELOG `[Unreleased]` entries: Changed (loop sessions load only Context7) and Fixed (brief repo root, validator lists all missing fields) (depends on: Phase 1) - Acceptance: `rg -n "_AUTOPILOT_MCP_CONFIG" skills/run-autopilot` hits code and docs; `uv run pytest skills/run-autopilot/cli/test_doc_contract.py` passes.
+- [ ] Document `_AUTOPILOT_MCP_CONFIG` (default, `inherit`, override) beside the other `_AUTOPILOT_*` knobs in the run-autopilot docs and in `runner.py`'s module docstring launch line; add CHANGELOG `[Unreleased]` entries: Changed (loop sessions load only Context7) and Fixed (brief repo root, validator lists all missing fields) (depends on: Phase 1) - Acceptance: `rg -n "_AUTOPILOT_MCP_CONFIG" skills/run-autopilot` hits code and docs; `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_doc_contract.py` passes.
 
-**Exit Criteria**: `uv run pytest skills/run-autopilot` is green.
+**Exit Criteria**: `bash dev/bin/release-checks` exits 0 with `FAIL 0` on its summary line.
 
 ## Test Strategy
 
@@ -141,6 +143,6 @@ No dependencies - built first.
 
 ## Risks
 
-- **Context7 HTTP endpoint down**: the session starts without it, as when the connector is down today; `inherit` restores the old launch.
+- **Context7 HTTP endpoint down**: the session starts without it, as when the connector is down today; `inherit` restores the old launch. The live test asserts server names, not status, so an outage cannot red it.
 - **A repo needs another server**: set `_AUTOPILOT_MCP_CONFIG` for that repo.
 - **Boot-context saving not measured per batch**: the nice-to-have metrics field (first-turn context tokens) is deferred, so the effect shows only in session cost. See the discovery doc.
