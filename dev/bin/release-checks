@@ -327,6 +327,9 @@ run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/review-work-completion/scripts/test_skill_stages_via_review_stage.py \
   skills/work/scripts/test_gate_record_writer_prose.py
 
+echo "[checks] process facts"
+run_pytest uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_procinfo.py
+
 EXIT_CODE=0
 if [[ "$TOTAL_FAIL" -ne 0 || "$INFRA_FAIL" -ne 0 ]]; then
   EXIT_CODE=1
