@@ -3826,3 +3826,4 @@
 {"id":"1c881f7d","ended_at":1791845581,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"id":"466dcf2a","ended_at":1791845581,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791845581,"phase":"build","prd":"00285-resolve-process-facts-without-ps-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791845947,"phase":"build","prd":"00285-resolve-process-facts-without-ps-v1.md"}
