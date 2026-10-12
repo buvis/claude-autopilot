@@ -308,10 +308,17 @@ def _boundaries(
     for character: _MASK_TABLE maps exactly _MASKED_IN_SPAN to "x" and leaves
     every other character alone, and where two spans overlap the shared part is
     masked once - masking is per character, so masking it twice changed
-    nothing."""
+    nothing.
+
+    The slice walk consumes `spans` in start order, unlike the per-index loop
+    it replaced, which did not care: an out-of-order span would be clamped to
+    the cursor, hit the `end <= start` skip, and be left UNMASKED, putting a
+    clause boundary inside a quoted span with no error raised. `sorted` is what
+    keeps that unreachable (Timsort is O(n) on the already-sorted list
+    `_candidates` returns, against a 0.034 s stage)."""
     pieces = []
     cursor = 0
-    for start, end, _ in spans:
+    for start, end, _ in sorted(spans):
         start = max(start, cursor)
         if end <= start:
             continue  # a span wholly inside the previous one: already masked
