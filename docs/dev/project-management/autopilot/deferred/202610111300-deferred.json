@@ -46,6 +46,42 @@
       "severity": "LOW",
       "source": "pat task 8",
       "prd": "00271-guard-v2-structural-delegation-check-v1.md"
+    },
+    {
+      "type": "contract-conflict",
+      "severity": "HIGH",
+      "task": "9",
+      "question": "Task 9 requires the live replay to exit 0, but the design-doc exit rule makes that unreachable.",
+      "detail": "The contract says exit 1 when ANY per-task/agoge/reviewer record is refused, AND separately when a pinned deny id is allowed. The pinned deny id toolu_01Ku4TbcQoeik6ZLf5XkkAuD (general-purpose, \"Resume work phase for PRD 00242, task 1 onward\") buckets as per-task because its description matches \\btask\\s+1\\b, and it MUST be refused. So its correct refusal trips the first clause: exit 1 is forced no matter what the predicate does. Only three resolutions exist and the task forbids two of them (change buckets, change the deny list); the third is to exempt pinned-deny ids from the bucket-refusal clause, which cannot mask a regression (an ALLOWED pinned id still fails, a refused non-pinned per-task record still fails). Left unapplied: it is a design-doc change, not an implementor call. Verbatim contract kept, exit 1 recorded as evidence, same handling as task 7s unreachable fails-at-base criterion.",
+      "assumption": "Replay CLI shipped verbatim to contract; exit 1 reported as a finding rather than engineered away.",
+      "prd": "00271-guard-v2-structural-delegation-check-v1.md"
+    },
+    {
+      "type": "guard-false-positives",
+      "severity": "HIGH",
+      "task": "9",
+      "question": "The replay found six legitimate per-task dispatches the guard refuses, all because a phase name sits inside a QUOTED run.",
+      "detail": "Measured against 1172 deduped dispatches (800 per-task): 7 per-task refusals. One is the pinned deny id (correct). The other six, with the span the guard quoted: (1) toolu_015DM18ubZLJZbA65ozvuw8c, no subagent_type, span \"e-invokes `/autopilot:work`, w\" - narrative prose about what re-invokes the skill. (2) toolu_013NAWvgMnP4WatpZDVyiNAa, (3) toolu_01DAQSaS3uAph2VZnfn5NC9d, (4) toolu_019nCz3WRsAZSwdaHb9itXiT, general-purpose, spans \"d reports `design-solution: <p\", \".assertIn(\\\"design-solution: <p\", \"ine reads `design-solution: <p\" - a log-line FORMAT quoted as expected test output. (5) toolu_013ePUKbLDE7DLnbnGmgszzR, general-purpose, span \"parse and plan-tasks) looks fo\" - paren aside. (6) toolu_011UqbqFtUDPuSeCiLLgMvEg, autopilot:worker-opus, span \"`Run the work phase for PRD 0\" - this PRDs own trigger string quoted as test data, strong-anchored, and the one the session brief already records as costing a denied dispatch. Common shape: an open wrapper (backtick, double quote, paren) opens BEFORE the name and closes AFTER more text, so the name is a citation rather than the thing to run. The guard treats a wrapper as neutral: _candidates consumes a close only when it sits immediately after the name, so a longer quoted run leaves the bare name weakly anchored by the following punctuation. Five of the six also depend on per_task being false because the historical dispatch used general-purpose or no type. NOT fixed in task 9: a quoted-citation concept is a new anchoring rule in a predicate whose shape is pinned verbatim by the design doc and covered by 564 tests across three suites, so it is a design decision, not an implementor rewrite. Fixing all six would still not reach exit 0 (see the contract-conflict record), so no partial fix buys the stated goal either.",
+      "assumption": "Predicate left exactly as tasks 5 and 6 shipped it; the six spans recorded for the design-level call.",
+      "prd": "00271-guard-v2-structural-delegation-check-v1.md"
+    },
+    {
+      "type": "assumed-ambiguity",
+      "severity": "LOW",
+      "task": "10",
+      "question": "Task 10 contracts three verbatim CHANGELOG lines, but two of them were already in the file.",
+      "detail": "The PRD/design block tells task 10 to replace the one 00267 guard line with three verbatim lines. Tasks 3 and 4 had already landed lines two and three of that block, byte-identical, at CHANGELOG.md:17-18. Applying the contract literally left each of those two entries in the [Unreleased] / ### Fixed block TWICE (17/18 and 29/30). Both of the tasks acceptance criteria pass either way, so the criteria could not catch it; the implementor flagged it rather than de-duplicating on its own judgement, which was the right call. Resolved by the simplest safe assumption: keep the new phase-delegation-guard line, drop the two newly added duplicates, so each entry appears exactly once. The contract block itself was not edited. Verified after the fix: rg -c for the old wording exits 1, rg -c \"checks sentence shape instead of word lists\" prints 1, rg -c \"lone surrogate\" prints 1.",
+      "assumption": "One copy of each CHANGELOG entry; the contract block read as the intended END STATE of the guard line rather than as three unconditional insertions.",
+      "prd": "00271-guard-v2-structural-delegation-check-v1.md"
+    },
+    {
+      "type": "suite-red-pre-existing",
+      "severity": "MEDIUM",
+      "task": "7-step",
+      "question": "dev/bin/release-checks is RED on this host, and the failures are not this PRDs.",
+      "detail": "Final verification at db8beb0: PASS 3436 FAIL 9 SKIP 0, exit 1. All 9 reproduce identically at the PRD base b57e425 (verified in a throwaway git worktree, then removed), so none is a regression from tasks 1-10: 7 wave tests (test_wave_launch.py::test_lane_status_reports_running_while_the_pid_is_alive and ::test_lane_roots_are_distinct_registry_roots, test_wave_launch_status.py::test_status_reports_running_for_a_lane_whose_loop_is_still_alive, test_wave_launch_refusals.py::test_launch_refuses_a_checkout_a_live_loop_already_owns, test_wave_assemble.py::test_live_lane_refuses_assembly[l1/l2/l3]) plus the codex and gemini runner lane-marker shell tests. Common root cause: each resolves a live pids process NAME and gets the empty string under this sandbox (`own=<pid> cmd=  (want codex-run.sh)`), so the assertion compares against . No file any of the 9 covers is in this PRDs diff, which touches only hooks/, dev/bin/, CHANGELOG.md and the store. Consequence: the session briefs standing note that release-checks is GREEN-capable as of task 6 is STALE, and the next sessions brief must not repeat it, or a future build will read these 9 as its own regression and burn fix cycles on them. Backlog PRD 00278 (make-release-checks-tell-truth) is the natural home for the fix.",
+      "assumption": "Phase reported with the suite red and the 9 failures named and proven pre-existing, rather than reported green or chased through step-7 fix cycles.",
+      "prd": "00271-guard-v2-structural-delegation-check-v1.md"
     }
   ]
 }
