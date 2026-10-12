@@ -1,6 +1,7 @@
-"""Pins the two loop-blocker prose fixes landed by hand on 2026-09-20
+"""Pins the loop-blocker prose fixes landed by hand: 2026-09-20
 (inefficiencies note findings 15 and 16): Pat runs in the foreground, and
-Devon skips prose-pin tasks.
+Devon skips prose-pin tasks; 2026-10-12: the ambiguity check never ends a
+loop session's turn on a question.
 
 Same pattern as test_dispatch_prose.py: read each file once, assert on short,
 reword-resistant substrings, each with a failure message naming what drifted.
@@ -61,3 +62,22 @@ def test_devon_skips_prose_pin_tasks() -> None:
         "references/attempt-logging.md does not define the `devon` attempt "
         "field, so step 2.9 writes a stamp the schema never names."
     )
+
+
+def test_ambiguity_check_never_ends_the_turn_in_loop_mode() -> None:
+    # Step 2.5 told the orchestrator to "stop and ask the user" on an unclear
+    # task, contradicting the loop-mode rule in phase-build.md (PRD 00017). On
+    # 2026-10-12 (00271 task 9) a build session ended its turn on "that needs
+    # your call": no task-complete write, no handoff, two relaunches and a
+    # six-minute reconcile before work resumed.
+    step_2_5 = _section(_WORK_SKILL.read_text(), _WORK_SKILL, "### 2.5.", "### 2.7.")
+    for needle in (
+        "never end the turn",
+        "simplest safe assumption",
+        "autopilot defer",
+        "assumed-ambiguity",
+    ):
+        assert needle in step_2_5, (
+            f"{_WORK_SKILL}: step 2.5 lacks {needle!r}, so a loop session may "
+            "still stop on a question nobody answers."
+        )

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **work**: the ambiguity check no longer tells a loop session to stop and ask the user; in loop mode it records the simplest safe assumption with `autopilot defer` and continues, so a build session cannot end its turn on a question nobody answers
 - **hooks**: the phase-delegation guard normalizes lookalike text before matching, so a dispatch can no longer dodge it by spelling a skill name with an invisible, combining or exotic-dash code point
 - **hooks**: `enforce_prd_location` refuses a repo-root `backlog/` write whose path holds a lone surrogate instead of failing open
 - **hooks**: the leave-marker hooks ignore a session id that holds a replaced invalid byte (U+FFFD), so two sessions can no longer share one leave marker
