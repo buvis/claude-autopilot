@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **run-autopilot**: the loop registry, orphan sweep, tracon discovery and the codex heartbeat read process facts through sysctl, libproc and pgrep instead of setuid ps, so they work inside a seatbelt sandbox and the release gate no longer reads nine failures there
 - **work**: the ambiguity check no longer tells a loop session to stop and ask the user; in loop mode it records the simplest safe assumption with `autopilot defer` and continues, so a build session cannot end its turn on a question nobody answers
 - **hooks**: the phase-delegation guard scans every field in linear time, so a prompt carrying a long unbroken token or thousands of phase mentions in one clause no longer pushes the hook past its 5-second timeout; it also scopes on distinct paths and distinct task ids (one path or one id named twice still scopes), refuses a root-relative `prds/` store path as scope, refuses task-based scope when any id carries range wording, allows a SKILL.md mention whose follow verb is negated, counts a leading slash command only when it is the whole first token, and reads the ` skill` suffix and task-range wording across whitespace of any length
 - **hooks**: the phase-delegation guard normalizes lookalike text before matching, so a dispatch can no longer dodge it by spelling a skill name with an invisible, combining or exotic-dash code point
