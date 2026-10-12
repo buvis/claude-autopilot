@@ -174,6 +174,33 @@ class LayoutVocabularyTest(unittest.TestCase):
                 self.assertEqual(stdout, "")
                 self.assertNotIn("policy hook degraded", stderr)
 
+    def test_blocks_lone_surrogate_path_over_a_real_subprocess_pipe(self) -> None:
+        # Drives the real entry point as a subprocess (the in-process tests
+        # above only call hook.run() directly) with a strict-UTF-8 JSON
+        # payload. Green at base: no subprocess-encoding bug, just a gap in
+        # coverage (read_input decodes with errors="replace" already).
+        import json
+        import subprocess
+
+        rel = ("backlog", "x\ud800.md")
+        file_path = str(_REPO_ROOT.joinpath(*rel))
+        payload = json.dumps(
+            {"tool_name": "Write", "tool_input": {"file_path": file_path}},
+            ensure_ascii=True,
+        )
+        result = subprocess.run(
+            [sys.executable, str(_HOOKS_DIR / "enforce_prd_location.py")],
+            input=payload.encode("ascii"),
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 2)
+        named = "/".join(rel).encode("utf-8", "replace").decode("utf-8")
+        self.assertIn(
+            f"BLOCKED: `{named}` looks like a PRD lifecycle path at repo root",
+            result.stderr.decode("utf-8"),
+        )
+
     def test_allows_non_lifecycle_write_whose_path_holds_a_lone_surrogate(self) -> None:
         # Fail open elsewhere: an un-encodable path outside the lifecycle
         # layout is not a layout violation, so it must not be blocked.
