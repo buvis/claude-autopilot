@@ -41,38 +41,38 @@ def _params(cases: list[tuple]) -> list:
 # carrier phrase and re-normalized, so a lookup table keyed on these exact
 # strings cannot stand in for the rule.
 _LOOKALIKE_CASES = [
-    ("plan‑tasks", "plan-tasks", "non-breaking-hyphen"),
-    ("plan−tasks", "plan-tasks", "minus-sign"),
-    ("plan—tasks", "plan-tasks", "em-dash"),
-    ("plan‐tasks", "plan-tasks", "hyphen"),
-    ("plan–tasks", "plan-tasks", "en-dash"),
+    ("plan\u2011tasks", "plan-tasks", "non-breaking-hyphen"),
+    ("plan\u2212tasks", "plan-tasks", "minus-sign"),
+    ("plan\u2014tasks", "plan-tasks", "em-dash"),
+    ("plan\u2010tasks", "plan-tasks", "hyphen"),
+    ("plan\u2013tasks", "plan-tasks", "en-dash"),
     # Pd code points outside the U+2010-U+2015 block, neither folded by NFKD:
     # the contract names the whole Pd category, so folding a literal dash
     # range is not enough.
-    ("plan〜tasks", "plan-tasks", "wave-dash"),
-    ("plan־tasks", "plan-tasks", "hebrew-maqaf"),
-    ("plan֊tasks", "plan-tasks", "armenian-hyphen"),
-    ("plan⸺tasks", "plan-tasks", "two-em-dash"),
-    ("plan―tasks", "plan-tasks", "horizontal-bar"),
-    ("wo﻿rk", "work", "zero-width-no-break-space"),
-    ("wo⁡rk", "work", "function-application"),
-    ("wo᠎rk", "work", "mongolian-vowel-separator"),
-    ("wo​rk", "work", "zero-width-space"),
-    ("wo‌rk", "work", "zero-width-non-joiner"),
-    ("wo‍rk", "work", "zero-width-joiner"),
-    ("wo⁠rk", "work", "word-joiner"),
-    ("wo⁦rk", "work", "left-to-right-isolate"),
-    ("wo؜rk", "work", "arabic-letter-mark"),
-    ("wo­rk", "work", "soft-hyphen"),
-    ("wórk", "work", "precomposed-acute"),
-    ("wórk", "work", "decomposed-acute"),
-    ("wòrk", "work", "combining-grave"),
-    ("wọrk", "work", "combining-dot-below"),
-    ("wo͇rk", "work", "combining-equals-below"),
-    ("ｗork", "work", "fullwidth-letter"),
-    ("wｏrk", "work", "fullwidth-o"),
-    ("don‘t", "don't", "left-curly-quote"),
-    ("don’t", "don't", "right-curly-quote"),
+    ("plan\u301ctasks", "plan-tasks", "wave-dash"),
+    ("plan\u05betasks", "plan-tasks", "hebrew-maqaf"),
+    ("plan\u058atasks", "plan-tasks", "armenian-hyphen"),
+    ("plan\u2e3atasks", "plan-tasks", "two-em-dash"),
+    ("plan\u2015tasks", "plan-tasks", "horizontal-bar"),
+    ("wo\ufeffrk", "work", "zero-width-no-break-space"),
+    ("wo\u2061rk", "work", "function-application"),
+    ("wo\u180erk", "work", "mongolian-vowel-separator"),
+    ("wo\u200brk", "work", "zero-width-space"),
+    ("wo\u200crk", "work", "zero-width-non-joiner"),
+    ("wo\u200drk", "work", "zero-width-joiner"),
+    ("wo\u2060rk", "work", "word-joiner"),
+    ("wo\u2066rk", "work", "left-to-right-isolate"),
+    ("wo\u061crk", "work", "arabic-letter-mark"),
+    ("wo\u00adrk", "work", "soft-hyphen"),
+    ("w\u00f3rk", "work", "precomposed-acute"),
+    ("wo\u0301rk", "work", "decomposed-acute"),
+    ("wo\u0300rk", "work", "combining-grave"),
+    ("wo\u0323rk", "work", "combining-dot-below"),
+    ("wo\u0347rk", "work", "combining-equals-below"),
+    ("\uff57ork", "work", "fullwidth-letter"),
+    ("w\uff4frk", "work", "fullwidth-o"),
+    ("don\u2018t", "don't", "left-curly-quote"),
+    ("don\u2019t", "don't", "right-curly-quote"),
     ("**work**", "work", "emphasis-markers"),
     ("*work*", "work", "single-emphasis-markers"),
     ("**the work phase**", "the work phase", "emphasis-around-a-phrase"),
@@ -115,7 +115,7 @@ def test_normalize_drops_every_invisible_or_combining_code_point() -> None:
     marks = _STABLE["Cf"] + _STABLE["Mn"]
     # Controls: the sweep is real, and holds the families a hand table misses.
     assert len(marks) > 500
-    for control in ("⁦", "؜", "̀", "̣", "﻿"):
+    for control in ("\u2066", "\u061c", "\u0300", "\u0323", "\ufeff"):
         assert control in marks, hex(ord(control))
     normalize = _guard_module()._normalize
     survivors = [hex(ord(char)) for char in marks if normalize(f"wo{char}rk") != "work"]
@@ -127,7 +127,7 @@ def test_normalize_folds_every_dash_punctuation_code_point() -> None:
     skill name cannot hide behind the one dash nobody listed."""
     dashes = _STABLE["Pd"]
     assert len(dashes) > 15
-    for control in ("-", "―", "֊", "⸺", "〜"):
+    for control in ("-", "\u2015", "\u058a", "\u2e3a", "\u301c"):
         assert control in dashes, hex(ord(control))
     normalize = _guard_module()._normalize
     unfolded = [
@@ -140,7 +140,7 @@ def test_normalize_folds_every_dash_punctuation_code_point() -> None:
 
 @pytest.mark.parametrize(
     "letter",
-    ["а", "е", "р", "с", "о", "ο"],
+    ["\u0430", "\u0435", "\u0440", "\u0441", "\u043e", "\u03bf"],
     ids=[
         "cyrillic-a",
         "cyrillic-ie",
@@ -165,17 +165,17 @@ def test_normalize_leaves_plain_ascii_text_untouched() -> None:
 def test_normalize_keeps_text_outside_the_normalized_families() -> None:
     """Only the contract's families change: accents (Mn) are dropped and every
     asterisk goes, while other non-ASCII letters survive untouched."""
-    assert _guard_module()._normalize("Tomáš 2**8 *args 日本") == (
-        "Tomas 28 args 日本"
+    assert _guard_module()._normalize("Tom\u00e1\u0161 2**8 *args \u65e5\u672c") == (
+        "Tomas 28 args \u65e5\u672c"
     )
 
 
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
-        ("한글 run the work phase", "한글 run the work phase"),
-        ("한글", "한글"),
-        ("5 Å of travel", "5 A of travel"),
+        ("\ud55c\uae00 run the work phase", "\ud55c\uae00 run the work phase"),
+        ("\u1112\u1161\u11ab\u1100\u1173\u11af", "\ud55c\uae00"),
+        ("5 \u212b of travel", "5 A of travel"),
     ],
     ids=["hangul-syllables", "hangul-jamo", "angstrom-sign"],
 )
