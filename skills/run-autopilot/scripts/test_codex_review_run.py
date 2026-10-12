@@ -727,21 +727,29 @@ class DescendantsTests(unittest.TestCase):
         import signal
         import subprocess
 
-        # The trailing `& wait` forces bash to fork a real child for `sleep`
-        # and block in the parent rather than exec'ing `sleep` directly in
-        # place (a single-command `bash -c "sleep 60"` can replace its own
-        # image with no descendant to find). A new session makes bash the
-        # group leader, so killpg also reaches the forked `sleep`.
+        # Absolute path avoids a PATH `sleep` resolving to a coreutils
+        # symlink (e.g. `gsleep`) on some machines, which would change the
+        # reported name. The inner bash keeps a real grandchild in the tree.
         proc = subprocess.Popen(
-            ["bash", "-c", "sleep 60 & wait"],
+            ["bash", "-c", "bash -c '/bin/sleep 60 & wait' & wait"],
             start_new_session=True,
         )
         try:
             names = dr._descendants(proc.pid)
-            self.assertIn("sleep", names)
+            self.assertEqual(sorted(names), ["bash", "sleep"])
         finally:
             with contextlib.suppress(Exception):
                 os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait()
+
+    def test_descendants_of_a_childless_pid_is_empty(self) -> None:
+        import subprocess
+
+        proc = subprocess.Popen(["/bin/sleep", "60"])
+        try:
+            self.assertEqual(dr._descendants(proc.pid), [])
+        finally:
+            proc.kill()
             proc.wait()
 
 
