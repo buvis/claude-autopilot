@@ -7,6 +7,12 @@ Every case asserts on `find_phase_delegation`: None means the dispatch is
 allowed, a non-empty quoted span means it is denied. The two timing tests call
 `is_phase_delegation` in-process, as test_guard_phase_delegation_dispatch.py
 does, and bound the same seconds-per-megabyte figure.
+
+The last section holds controls that no single rule above owns but that all of
+them lean on: the denial span really quotes the input the guard read, the two
+entry points agree, an ordinary prompt is still allowed and a paraphrased order
+still denied, the verdict is deterministic, and the guard neither mutates its
+caller's dict nor stops guarding after a few hundred calls.
 """
 
 from __future__ import annotations
@@ -14,6 +20,7 @@ from __future__ import annotations
 import importlib
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -28,6 +35,9 @@ BUDGET_S_PER_MB = 0.3
 # absorbs the fixed per-call cost, which inflates the smallest size's rate. A
 # quadratic scan would multiply the rate by sixteen over a fourfold size step.
 LINEAR_GROWTH_SLACK = 3.0
+# A denial span is an excerpt of what the guard read, not a label. Anything
+# longer is prose the operator cannot locate in the dispatch they just wrote.
+SPAN_MAX_CHARS = 120
 
 
 def _guard_module():
@@ -35,15 +45,35 @@ def _guard_module():
     return importlib.import_module("guard_phase_delegation")
 
 
+def _find(tool_input: dict[str, str]) -> str | None:
+    # Input purity is checked on every case, not only in the dedicated test
+    # below: a guard that pops its caller's "prompt" key would otherwise stay
+    # invisible to a suite that never looks at the dict again.
+    before = dict(tool_input)
+    span = _guard_module().find_phase_delegation(tool_input)
+    assert tool_input == before, f"the guard mutated its input into {tool_input!r}"
+    return span
+
+
 def _assert_allowed(prompt: str) -> None:
-    span = _guard_module().find_phase_delegation({"prompt": prompt})
+    span = _find({"prompt": prompt})
     assert span is None, f"expected an allow, got the span {span!r}"
 
 
-def _assert_denied(prompt: str) -> None:
-    span = _guard_module().find_phase_delegation({"prompt": prompt})
+def _assert_denied_input(tool_input: dict[str, str], haystack: str) -> str:
+    span = _find(tool_input)
     assert isinstance(span, str), f"expected a quoted span, got {span!r}"
     assert span, "expected a non-empty quoted span"
+    # The span has to quote the text the guard read, so the operator can find
+    # the order it was denied for. A constant label passes truthiness alone.
+    quoted = span.strip().strip("'\"")
+    assert quoted in haystack, f"the span {span!r} is not an excerpt of the input"
+    assert len(span) <= SPAN_MAX_CHARS, f"the span runs {len(span)} chars"
+    return span
+
+
+def _assert_denied(prompt: str) -> str:
+    return _assert_denied_input({"prompt": prompt}, prompt)
 
 
 def _time_predicate(prompt: str) -> float:
@@ -53,27 +83,38 @@ def _time_predicate(prompt: str) -> float:
     return time.perf_counter() - start
 
 
-def _best_seconds_per_mb(prompt: str) -> float:
+def _best_seconds_per_mb(build: Callable[[int], str]) -> float:
     # Best of three, not a mean: the figure being bounded is the predicate's
-    # own cost, and a scheduler hiccup on one run is not that cost.
-    best = min(_time_predicate(prompt) for _ in range(3))
-    return best / (len(prompt) / MB)
+    # own cost, and a scheduler hiccup on one run is not that cost. Every
+    # repetition builds a FRESH prompt, so a per-prompt memo cannot turn the
+    # second and third runs into dict hits and hide the scan being timed.
+    rates = []
+    for repetition in range(3):
+        prompt = build(repetition)
+        rates.append(_time_predicate(prompt) / (len(prompt) / MB))
+    return min(rates)
 
 
 # 1. One very long unbroken token must not make the scan super-linear.
 
 
+def _unbroken_token_builder(size: int) -> Callable[[int], str]:
+    return lambda repetition: (
+        f"Run the work phase for PRD 7. {'a' * size} #{repetition}"
+    )
+
+
 def test_rejects_a_long_unbroken_token_in_linear_time() -> None:
     sizes = (20000, 40000, 80000)
-    prompts = {n: "Run the work phase for PRD 7. " + "a" * n for n in sizes}
-    rates = {n: _best_seconds_per_mb(p) for n, p in prompts.items()}
+    builders = {n: _unbroken_token_builder(n) for n in sizes}
+    rates = {n: _best_seconds_per_mb(b) for n, b in builders.items()}
 
     # Printed before the assertions so `pytest -s` shows the real numbers even
     # when one of them fails the budget.
     print("unbroken-token s/MB " + " ".join(f"{n}={rates[n]:.4f}" for n in sizes))
 
     for n in sizes:
-        _assert_denied(prompts[n])
+        _assert_denied(builders[n](0))
         assert rates[n] < BUDGET_S_PER_MB, f"{n} chars cost {rates[n]:.4f} s/MB"
 
     assert rates[80000] <= rates[20000] * LINEAR_GROWTH_SLACK, (
@@ -83,16 +124,22 @@ def test_rejects_a_long_unbroken_token_in_linear_time() -> None:
 
 
 # 2. Many phase mentions inside a single clause must not make it super-linear
-#    either. The budget is the rule here; no verdict is pinned.
+#    either, and the whole prompt is in scope: the verdict below turns on an
+#    order that sits past offset 100000.
 
 
 def test_rejects_many_phase_mentions_in_one_clause_in_linear_time() -> None:
-    prompt = "about the work phase and " * 160000
+    deep = "filler words here. " * 6000 + "Now run the work phase for PRD 00412."
+    assert deep.index("run the work phase") > 100000, "the probe lost its offset"
+    _assert_denied(deep)
 
-    rate = _best_seconds_per_mb(prompt)
-    print(f"one-clause mentions s/MB={rate:.4f} over {len(prompt) / MB:.2f} MB")
+    def build(repetition: int) -> str:
+        return "about the work phase and " * 160000 + f" #{repetition}"
 
-    assert rate < BUDGET_S_PER_MB, f"{len(prompt)} chars cost {rate:.4f} s/MB"
+    rate = _best_seconds_per_mb(build)
+    print(f"one-clause mentions s/MB={rate:.4f} over {len(build(0)) / MB:.2f} MB")
+
+    assert rate < BUDGET_S_PER_MB, f"{len(build(0))} chars cost {rate:.4f} s/MB"
 
 
 # 3. A negation in front of the verb, not in front of the path, still negates
@@ -219,3 +266,105 @@ def test_rejects_unbounded_whitespace_in_the_suffix_and_range_probes(
     prompt: str,
 ) -> None:
     _assert_denied(prompt)
+
+
+# 10. Controls. None of the rules above names these, and all of them assume
+#     them: an ordinary prompt passes, a reworded order does not, the two entry
+#     points answer alike, the answer is the same twice, and the guard keeps no
+#     state across calls.
+
+
+def test_allows_an_ordinary_prompt_that_orders_no_phase() -> None:
+    _assert_allowed("Review README.md and report typos")
+
+
+def test_rejects_a_phase_order_phrased_in_other_words() -> None:
+    _assert_denied("please go do the work phase for PRD 00412 end to end")
+
+
+def test_the_predicate_agrees_with_the_span_finder() -> None:
+    module = _guard_module()
+    for prompt, denied in (
+        ("Review README.md and report typos", False),
+        ("Run the work phase for PRD 00412", True),
+    ):
+        tool_input = {"prompt": prompt}
+        verdict = module.is_phase_delegation(tool_input)
+        span = module.find_phase_delegation(tool_input)
+        assert bool(verdict) == denied, f"{prompt!r} gave the verdict {verdict!r}"
+        assert bool(verdict) == (span is not None), (
+            f"is_phase_delegation said {verdict!r} while the span was {span!r}"
+        )
+
+
+def test_gives_the_same_verdict_on_a_repeated_call() -> None:
+    module = _guard_module()
+    prompts = [f"Run the work phase for PRD {400 + n:05d}" for n in range(4)]
+    prompts += [f"Please review notes_{n}.md and summarise it" for n in range(4)]
+    for prompt in prompts:
+        first = module.find_phase_delegation({"prompt": prompt})
+        second = module.find_phase_delegation({"prompt": prompt})
+        assert first == second, f"{prompt!r} gave {first!r}, then {second!r}"
+        verdict = module.is_phase_delegation({"prompt": prompt})
+        assert bool(verdict) == (first is not None), (
+            f"{prompt!r} gave the span {first!r} and the verdict {verdict!r}"
+        )
+
+
+def test_leaves_the_tool_input_it_was_handed_unchanged() -> None:
+    tool_input = {
+        "prompt": "Run the work phase for PRD 00412",
+        "description": "dispatch the phase",
+        "subagent_type": "general-purpose",
+    }
+    before = dict(tool_input)
+    module = _guard_module()
+    module.find_phase_delegation(tool_input)
+    assert tool_input == before, f"find mutated the input into {tool_input!r}"
+    module.is_phase_delegation(tool_input)
+    assert tool_input == before, f"the predicate mutated it into {tool_input!r}"
+
+
+def test_keeps_denying_after_six_hundred_calls() -> None:
+    module = _guard_module()
+    for n in range(600):
+        module.is_phase_delegation({"prompt": f"Review notes_{n}.md for typos"})
+    _assert_denied("Run the work phase for PRD 00412")
+
+
+# The environment must not hold an off switch for a guard: the names below are
+# the ones a "make it fast" or "turn it off" patch reaches for first.
+KILL_SWITCH_NAMES = (
+    "GUARD_PHASE_DELEGATION_OFF",
+    "AUTOPILOT_GUARDS_OFF",
+    "AUTOPILOT_SKIP_GUARDS",
+    "AUTOPILOT_FAST",
+)
+
+
+def test_keeps_denying_with_every_plausible_kill_switch_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _guard_module()
+    for name in KILL_SWITCH_NAMES:
+        monkeypatch.setenv(name, "1")
+    # Reloaded under the patched environment, so a switch read at import time
+    # counts as much as one read per call.
+    importlib.reload(module)
+    try:
+        _assert_denied("Run the work phase for PRD 00412")
+    finally:
+        monkeypatch.undo()
+        importlib.reload(module)
+
+
+def test_rejects_a_phase_order_carried_by_the_description() -> None:
+    description = "Run the work phase for PRD 00412"
+    _assert_denied_input(
+        {"description": description, "prompt": "Proceed as described"},
+        description,
+    )
+
+
+def test_allows_a_tool_input_that_carries_no_prompt() -> None:
+    assert _find({}) is None, "an empty tool input is not a phase order"
