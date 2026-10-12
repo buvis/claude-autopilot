@@ -82,6 +82,36 @@
       "detail": "Final verification at db8beb0: PASS 3436 FAIL 9 SKIP 0, exit 1. All 9 reproduce identically at the PRD base b57e425 (verified in a throwaway git worktree, then removed), so none is a regression from tasks 1-10: 7 wave tests (test_wave_launch.py::test_lane_status_reports_running_while_the_pid_is_alive and ::test_lane_roots_are_distinct_registry_roots, test_wave_launch_status.py::test_status_reports_running_for_a_lane_whose_loop_is_still_alive, test_wave_launch_refusals.py::test_launch_refuses_a_checkout_a_live_loop_already_owns, test_wave_assemble.py::test_live_lane_refuses_assembly[l1/l2/l3]) plus the codex and gemini runner lane-marker shell tests. Common root cause: each resolves a live pids process NAME and gets the empty string under this sandbox (`own=<pid> cmd=  (want codex-run.sh)`), so the assertion compares against . No file any of the 9 covers is in this PRDs diff, which touches only hooks/, dev/bin/, CHANGELOG.md and the store. Consequence: the session briefs standing note that release-checks is GREEN-capable as of task 6 is STALE, and the next sessions brief must not repeat it, or a future build will read these 9 as its own regression and burn fix cycles on them. Backlog PRD 00278 (make-release-checks-tell-truth) is the natural home for the fix.",
       "assumption": "Phase reported with the suite red and the 9 failures named and proven pre-existing, rather than reported green or chased through step-7 fix cycles.",
       "prd": "00271-guard-v2-structural-delegation-check-v1.md"
+    },
+    {
+      "type": "review-deferral",
+      "cycle": 1,
+      "issue": "_PHASE_BARE lookbehind carries an extra `:` the PRD anchor text does not (hooks/guard_phase_delegation.py:98)",
+      "severity": "low",
+      "consensus": "1/3",
+      "action": "deferred",
+      "reason": "Harmless deviation: the prefixed autopilot: form already covers the excluded case; removing the colon would re-admit lookalike bare anchors. Spec-text follow-up, not a code fix.",
+      "prd": "00271-guard-v2-structural-delegation-check-v1.md"
+    },
+    {
+      "type": "review-deferral",
+      "cycle": 1,
+      "issue": "_PRD_PATH_TAIL anchor is load-bearing for a PRD-required deny but is absent from the PRD anchor list (hooks/guard_phase_delegation.py:120)",
+      "severity": "low",
+      "consensus": "1/3",
+      "action": "deferred",
+      "reason": "The anchor is correct and required; the PRD anchor list is the stale side. Spec-text follow-up.",
+      "prd": "00271-guard-v2-structural-delegation-check-v1.md"
+    },
+    {
+      "type": "review-deferral",
+      "cycle": 1,
+      "issue": "Fail-first replay flags 6 touched test files as passing against the pre-change code (M2-M8): behavior-preserving allow-path and still-checked assertions plus the shared stdin sweep",
+      "severity": "medium",
+      "consensus": "1/3",
+      "action": "deferred",
+      "reason": "A test that pins preserved behavior passes at base by design; the lone-surrogate entry is a pytest parent/subtest reporting artifact Alice refuted against the extracted base hook. The one genuinely unpinned test is routed as a fix this cycle.",
+      "prd": "00271-guard-v2-structural-delegation-check-v1.md"
     }
   ]
 }

@@ -1,0 +1,50 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "Live replay `python3 dev/bin/replay_delegation_guard.py` exits 1, so PRD success metric 2 and the Phase 2 exit criterion (\"exits 0 on this machine\") are unmet. The exit is structurally unreachable because pinned deny `toolu_01Ku4TbcQoeik6ZLf5XkkAuD` (\"Resume work phase for PRD 00242, task 1 onward\") matches the per-task description regex (`task 1`).",
+    "file": "dev/bin/replay_delegation_guard.py:148",
+    "reason": "Already recorded as deferred during the build phase (batch 202610111300 deferred JSON, task 9): the acceptance criterion is provably unreachable as specified, and the only fix is a design-doc change exempting pinned deny ids from the per-task-refusal clause. Settled; not re-argued here."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "The recorded live replay still refuses six legitimate per-task dispatches. The deferred evidence identifies quoted citations, including a strongly anchored worker test string; blanket quote exemptions would contradict the explicit design.",
+    "file": "docs/dev/project-management/autopilot/deferred/202610111300-deferred.json:58",
+    "reason": "Already recorded as deferred during the build phase (task 9): a quoted-citation rule is a new anchoring concept in a contract-pinned predicate with 564 tests behind it, so it was deliberately not written. Settled; needs an operator design call, not a rework fix."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`_PHASE_BARE` has lookbehind `(?<![-/:\\w])`, but the PRD says `(?<![-/\\w])`. The extra `:` is harmless today because the `autopilot:` form covers the prefixed case, but it deviates from the spec.",
+    "file": "hooks/guard_phase_delegation.py:98",
+    "reason": "Blake confirms the deviation is harmless: the prefixed `autopilot:` form already covers the case the extra class member excludes. Removing `:` would re-admit `something:work phase` lookalikes as bare anchors and churn a contract-pinned predicate for no behavior gain. Deferred as a documentation-vs-code note."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`_PRD_PATH_TAIL` (a path under `prds/` anchors on its own) is not in the PRD's anchor list. It is needed to satisfy the required deny of a prds/wip path sentence, so I treat it as a justified small addition, not scope creep.",
+    "file": "hooks/guard_phase_delegation.py:120",
+    "reason": "The reviewer who raised it judged it justified in the same breath: the anchor is load-bearing for a deny the PRD itself requires. Keeping it is correct; the PRD's anchor list is the stale side. Deferred as a spec-text follow-up."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "7 touched test(s) pass against the pre-change code: test_allows_non_lifecycle_write_whose_path_holds_a_lone_surrogate, test_allows_ordinary_source_and_lifecycle_prd_paths, test_blocks_bash_command_naming_a_repo_root_lifecycle_dir, test_blocks_file_in_store_root, test_blocks_multiedit_whose_later_edit_leaves_the_store, test_blocks_repo_root_backlog_write_whose_path_holds_a_lone_surrogate +1 more",
+    "file": "hooks/test_enforce_prd_location.py",
+    "reason": "Refuted by evidence: Alice extracted the base hook into a scratch git repo and all 5 subtests of the lone-surrogate test fail there with `0 != 2`. The replay reports the parent test as passed because pytest reports a parent as passed while its subtests fail, so the `[MECH]` line is a replay artifact, not an unpinned test. The remaining entries are allow-path assertions that pass at base by design for a widening guard."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "Touched tests pass against the pre-change code across hooks/test_guard_phase_delegation.py, hooks/test_guard_phase_delegation_dispatch.py, hooks/test_guard_phase_delegation_narrowing.py, hooks/test_guard_phase_delegation_structure.py, hooks/test_guard_skill_after_leave.py and hooks/test_read_input.py (M3-M8).",
+    "file": "hooks/test_guard_phase_delegation_structure.py",
+    "reason": "These are behavior-preserving assertions: allow-path and still-checked cases whose whole purpose is that the widened guard does not change them, plus the shared stdin-robustness sweep. A test that pins preserved behavior passes against the pre-change code by design, which is exactly the case the replay block documents as not-necessarily-a-defect. The genuinely unpinned one (test_missing_guard_cannot_report_an_allowed_run) is routed as a fix this cycle instead."
+  }
+]
