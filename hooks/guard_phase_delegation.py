@@ -48,6 +48,9 @@ _DROPPED_CATEGORIES = frozenset({"Mn", "Cf"})
 # the whole Pd category per character instead, because a literal U+2010-U+2015
 # range leaves the other Pd code points (U+301C, U+05BE) unfolded.
 _FOLDED = {0x2212: "-", 0x2018: "'", 0x2019: "'", 0x002A: None}
+# The runs _normalize's per-character pass has to walk: everything outside
+# ASCII. The equivalence argument for skipping the ASCII runs is in _normalize.
+_NON_ASCII_RUN = re.compile(r"[^\x00-\x7f]+")
 
 # --- Phase-name recognition (a phase mention in object position) ------------
 # Wrapper characters around a skill-form or bare-form name: an optional
@@ -180,6 +183,7 @@ _NEGATION_WORD_GAP = 4  # words between the negation and the name, not character
 # span's internal ':', '/' and '.' are replaced by 'x'. Same length, same
 # offsets: the quoted span always slices the ORIGINAL text.
 _MASKED_IN_SPAN = ":/."
+_MASK_TABLE = str.maketrans(_MASKED_IN_SPAN, "x" * len(_MASKED_IN_SPAN))
 _CLAUSE_BOUNDARY = re.compile(r"[.;,:!?\n)]|\s-\s")
 _SENTENCE_BOUNDARY = re.compile(r"[.!?\n]")
 
@@ -198,6 +202,19 @@ _READ_ONLY_REVIEWERS = frozenset(
 )
 
 
+def _fold_run(match: re.Match[str]) -> str:
+    """_normalize's per-character pass, over one run of non-ASCII characters:
+    drop every combining mark and format character, fold every
+    dash-punctuation (Pd) code point to "-", keep everything else."""
+    kept = []
+    for char in match.group(0):
+        category = unicodedata.category(char)
+        if category in _DROPPED_CATEGORIES:
+            continue
+        kept.append("-" if category == "Pd" else char)
+    return "".join(kept)
+
+
 def _normalize(text: str) -> str:
     """Reduce lookalike text to its plain form, so a dispatch cannot dodge the
     patterns by spelling a skill name in compatibility or invisible characters.
@@ -210,14 +227,23 @@ def _normalize(text: str) -> str:
     source text. Finally the math minus, curly quotes and emphasis asterisks
     fold to ASCII (_FOLDED). Whitespace is untouched: a newline inside a field
     is a clause and sentence boundary.
+
+    That per-character pass runs on the non-ASCII runs ONLY (_NON_ASCII_RUN),
+    which is the same result for EVERY input, not a sampling or a cutoff: on an
+    ASCII character the loop is the identity, because no ASCII code point is
+    category Mn or Cf (so nothing is dropped) and the single ASCII code point
+    in category Pd is U+002D, the hyphen-minus, which the Pd fold maps to
+    itself. The stages around it still see the whole string: NFKD and NFKC stay
+    full-string calls (both are the identity on ASCII, so skipping the loop on
+    an ASCII run cannot change what they recompose), and the _FOLDED translate
+    stays a full-string call because one of its keys, U+002A, the asterisk, IS
+    ASCII. So the cost follows a field's non-ASCII content, not its length: a
+    field with no non-ASCII character costs two C-level normalization scans,
+    one C-level regex scan and one translate, instead of a Python iteration per
+    character.
     """
-    kept = []
-    for char in unicodedata.normalize("NFKD", text):
-        category = unicodedata.category(char)
-        if category in _DROPPED_CATEGORIES:
-            continue
-        kept.append("-" if category == "Pd" else char)
-    return unicodedata.normalize("NFKC", "".join(kept)).translate(_FOLDED)
+    folded = _NON_ASCII_RUN.sub(_fold_run, unicodedata.normalize("NFKD", text))
+    return unicodedata.normalize("NFKC", folded).translate(_FOLDED)
 
 
 def _is_per_task_persona(subagent_type: str | None) -> bool:
@@ -274,13 +300,26 @@ def _boundaries(
     """Pass 2's one-shot boundary build: clause starts, clause ends and
     sentence starts for the whole field, from a scratch copy that masks the
     punctuation inside pass 1's spans. Every later clause/sentence lookup is a
-    binary search into these sorted lists, never a fresh scan."""
-    scratch = list(text)
-    for start, end, _ in spans:
-        for index in range(start, end):
-            if scratch[index] in _MASKED_IN_SPAN:
-                scratch[index] = "x"
-    scratch = "".join(scratch)
+    binary search into these sorted lists, never a fresh scan.
+
+    The scratch copy is built from slices (_MASK_TABLE over each span, the text
+    between spans left alone) rather than from a character list, so the field is
+    never expanded into a list of one-character strings. Same scratch, character
+    for character: _MASK_TABLE maps exactly _MASKED_IN_SPAN to "x" and leaves
+    every other character alone, and where two spans overlap the shared part is
+    masked once - masking is per character, so masking it twice changed
+    nothing."""
+    pieces = []
+    cursor = 0
+    for start, end, _ in sorted(spans):
+        start = max(start, cursor)
+        if end <= start:
+            continue  # a span wholly inside the previous one: already masked
+        pieces.append(text[cursor:start])
+        pieces.append(text[start:end].translate(_MASK_TABLE))
+        cursor = end
+    pieces.append(text[cursor:])
+    scratch = "".join(pieces)
     clauses = [(m.start(), m.end()) for m in _CLAUSE_BOUNDARY.finditer(scratch)]
     sentences = [m.start() for m in _SENTENCE_BOUNDARY.finditer(scratch)]
     return [c[0] for c in clauses], [c[1] for c in clauses], sentences
