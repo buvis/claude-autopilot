@@ -3,9 +3,10 @@
 two deny messages - the per-task personas' "rephrase that sentence" wording and
 everyone else's "Skill tool in THIS session" wording.
 
-One shared PROMPT is reused across all four tests on purpose: holding the
-prompt constant makes `subagent_type` the only variable, so a verdict or a
-message that changes can only come from the dispatch rule under test.
+One shared PROMPT is reused across the per-`subagent_type` tests on purpose:
+holding the prompt constant makes `subagent_type` the only variable, so a
+verdict or a message that changes can only come from the dispatch rule under
+test. The cases that vary the prompt instead keep `subagent_type` constant.
 
 The guard runs as a subprocess with a stdin payload, exactly as the harness
 invokes it - the same shape as `test_guard_phase_delegation_replay.py`.
@@ -122,6 +123,69 @@ def test_other_refusals_keep_the_skill_tool_text_and_quote_the_match(
     assert "with the Skill tool in THIS session" in result.stderr
     assert f'Matched: "{SPAN}"' in result.stderr
     assert REASON in result.stderr
+
+
+def test_a_dispatch_naming_no_phase_is_allowed() -> None:
+    # The only ALLOW case driven by the prompt rather than by an exemption:
+    # without it, denying every Agent call would satisfy this module.
+    result = _run(
+        _agent_payload(
+            {
+                "prompt": "Review the ledger writer and report what you find.",
+                "subagent_type": "general-purpose",
+            },
+        ),
+    )
+    assert result.returncode == 0, result.stderr
+    assert REASON not in result.stderr
+
+
+def test_a_phase_mention_past_the_first_64_characters_is_denied() -> None:
+    # The mention starts at offset 120, so an implementation that samples only
+    # the head of each field allows this.
+    result = _run(
+        _agent_payload(
+            {"prompt": "Hi there. " * 12 + PROMPT, "subagent_type": "general-purpose"},
+        ),
+    )
+    assert result.returncode == 2, result.stderr
+    assert REASON in result.stderr
+
+
+def test_a_phase_mention_at_the_end_of_a_large_prompt_is_denied() -> None:
+    # ~295 KB of filler ahead of the mention: an implementation that gives up
+    # on long fields hands out a bypass to anyone who pads the prompt.
+    result = _run(
+        _agent_payload(
+            {"prompt": "Hold on. " * 32768 + PROMPT, "subagent_type": "general-purpose"},
+        ),
+    )
+    assert result.returncode == 2, result.stderr
+    assert REASON in result.stderr
+
+
+def test_the_quoted_span_tracks_the_match_not_the_start_of_the_prompt() -> None:
+    # The mention sits mid-prompt, past the point where the quoting window can
+    # clamp to offset 0, so the span has to follow the match to be right.
+    result = _run(
+        _agent_payload(
+            {
+                "prompt": "Nothing to see here. " * 8 + PROMPT,
+                "subagent_type": "general-purpose",
+            },
+        ),
+    )
+    assert result.returncode == 2, result.stderr
+    span = result.stderr.split('Matched: "', 1)[1].split('"', 1)[0]
+    assert "work phase" in span, span
+    assert "Nothing to see" not in span, span
+
+
+def test_an_unlisted_agoge_persona_is_exempt_by_its_prefix() -> None:
+    # The exemption is a prefix rule, not a roster: an agoge persona added
+    # after this guard was written must not start being denied.
+    result = _dispatch("agoge:zelda")
+    assert result.returncode == 0, result.stderr
 
 
 def _best_seconds_per_mb(prompt: str) -> float:
