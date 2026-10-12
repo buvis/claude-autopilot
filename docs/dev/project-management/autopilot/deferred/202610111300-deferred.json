@@ -1,0 +1,51 @@
+{
+  "batch_id": "202610111300",
+  "items": [
+    {
+      "type": "contract-pinned-weakness",
+      "task": "7",
+      "finding": "The timing test takes the best of three runs over the SAME 1 MB string, so an implementation that memoizes on the payload makes runs 2 and 3 free and reports 0.0000 s/MB while its real first-call cost is unchanged. An adversarial validator proved this with two variants, one of them keyed on a colliding fingerprint that actually loses detection. The test shape (two 1 MB prompts, best of three) is pinned verbatim by the PRD and the design doc, so it was NOT changed. A human should decide whether to re-spec the test to time a fresh input per repetition.",
+      "severity": "MEDIUM",
+      "prd": "00271-guard-v2-structural-delegation-check-v1.md"
+    },
+    {
+      "type": "flaky-bound",
+      "task": "7",
+      "finding": "The 0.3 s/MB bound sits inside the noise band of a wall-clock measurement on this machine. Measured on byte-identical code at HEAD: 0.46/0.34 (orchestrator), 0.36/0.30 and 0.43/0.36 (test author), then 0.33/0.28 and 0.17/0.13 (adversarial validator, verdict flipped from fail to pass). A 2.5x swing on the same code. As a regression pin the test will fail innocently under load and pass guiltily when idle. The PRD Risks section anticipates this and says a flake means the bound, not the code, needs review - which is a human decision, so the bound was left at the contracted 0.3.",
+      "severity": "MEDIUM",
+      "prd": "00271-guard-v2-structural-delegation-check-v1.md"
+    },
+    {
+      "type": "per-task-review-low",
+      "task": "7",
+      "finding": "The non-ASCII path of _normalize keeps its per-character unicodedata.category loop (_fold_run), now behind an extra regex pass, so the measured speedup applies to pure-ASCII prompts only. A prompt padded with combining marks or fullwidth text should get none of it, and nothing bounds that case: the contracted timing test uses two pure-ASCII strings. Pat (per-task review) could not measure it. Suggested fix: a second timing test over a 1 MB non-ASCII string at the same bound, and if it fails, a str.translate table for the dropped and Pd categories rather than a looser bound.",
+      "severity": "LOW",
+      "source": "pat task 7",
+      "prd": "00271-guard-v2-structural-delegation-check-v1.md"
+    },
+    {
+      "type": "per-task-review-low",
+      "task": "7",
+      "finding": "Neither rewrite in task 7 has a committed regression test. The 5.58M-case _normalize equivalence check and the 50,000-case _boundaries check ran in-process during the task and are not in the repo, so nothing stops a later edit from breaking the ASCII-run equivalence argument, and no committed test exercises overlapping spans against the shipped _boundaries. Suggested fix: a small seeded randomized test comparing both functions against inlined copies of the previous implementations, covering mixed ASCII/non-ASCII with combining marks, Pd dashes and fullwidth forms, plus overlapping and nested spans.",
+      "severity": "LOW",
+      "source": "pat task 7",
+      "prd": "00271-guard-v2-structural-delegation-check-v1.md"
+    },
+    {
+      "type": "per-task-review-low",
+      "task": "7",
+      "finding": "The large-prompt verdict test only proves there is no length cutoff up to about 295 KB, and the timing test never asserts a verdict, so a size-based early return anywhere between roughly 300 KB and 16 MB would pass every test while the acceptance criterion claims none was introduced. Pat confirmed the other four strengthening tests do bind the exploits they name. Suggested fix: extend the large-prompt test past the contract scale, or add a case with 2 MB or more of filler before the mention, asserting exit 2.",
+      "severity": "LOW",
+      "source": "pat task 7",
+      "prd": "00271-guard-v2-structural-delegation-check-v1.md"
+    },
+    {
+      "type": "per-task-review-low",
+      "task": "8",
+      "finding": "Pat raised seven LOW findings on hooks/test_read_input.py, none CRITICAL/HIGH/MEDIUM, so per the step-5.7 ladder they were noted and not fixed in-task. Three are claims in the new module that are factually overstated and worth correcting: (1) the U+FFFD case comment says tool_name=Skill makes the hooks actually engage, but guard_phase_delegation acts on Agent, guard_push_on_critical on Bash and enforce_prd_location on file writes, so a Skill payload short-circuits most of them and those matrix cells add little beyond the empty-stdin cases - fix the claim or give each hook a payload it acts on; (2) the harness passes the REAL Path.home() as HOME while the comment says the tmp_path cwd stops a hook reaching the real repo, so a hook writing under ~ would still hit the real home - set HOME to the tmp cwd; (3) REPLACEMENT is written as a literal U+FFFD character rather than the escape \\ufffd, which is invisible-prone in source. Two more: the splice test asserts only returncode==2 without checking it is the SAME deny the clean payload produces, so any other exit-2 path would pass; and the module docstring repeats itself. Pat also DISMISSED the slop pass claim that the fixture self-check assert is tautological, with a correct argument: it guards fixture drift, because if the spliced word ever left the fixture the replace would be a no-op and the returncode assertion would pass vacuously.",
+      "severity": "LOW",
+      "source": "pat task 8",
+      "prd": "00271-guard-v2-structural-delegation-check-v1.md"
+    }
+  ]
+}

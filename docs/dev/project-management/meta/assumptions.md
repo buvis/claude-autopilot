@@ -80,3 +80,97 @@ Orchestrator:
   full. Recorded because it means no model read the fixture's 252 KB end to
   end - its correctness rests on the mechanical re-harvest comparison, not on
   reading.
+
+## 6: Exempt agoge personas and quote the match in a per-type deny message
+
+Ivan:
+
+- Took the quoted span literal from the guard's actual stderr (28 characters,
+  `_quote`'s start-10/start+20 window) rather than the dispatch's "first 30
+  characters" description, since the task said to derive it by running the
+  guard.
+- Each case sends only `prompt` and no `description` key, since every case is
+  defined by the one shared prompt and `description` was not mentioned.
+- Parametrize ids left to pytest's automatic naming; the missing-`subagent_type`
+  case reports as `subagent_type3`. No `ids=` was requested.
+- Appended the new module as the last entry of the `[checks] hook registration`
+  block, after `_replay.py`, matching the siblings' order of addition.
+- Added the module to no other gate block, and did not touch `CHANGELOG.md`
+  (test-only change, which the changelog rule exempts).
+
+Orchestrator:
+
+- Task 6's production code had already landed with task 5. Rather than re-do
+  it, the orchestrator probed all eight dispatch cases against the tree, found
+  every verdict and message already exact, and scoped the task to the pin
+  module plus the registration line, with `hooks/guard_phase_delegation.py`
+  kept out of Ivan's write allowlist. If that probe was wrong, the pins would
+  have failed; they passed first try.
+- Devon was skipped: a test-only task runs no Tess dispatch, so there were no
+  fresh tests for him to attack.
+- The shared test prompt had to be moved into
+  `docs/dev/tmp/task6-shared-prompt.txt` because the installed delegation
+  guard denied the orchestrator's own Ivan dispatch for quoting it as data - a
+  live false positive of exactly the shape this PRD addresses.
+
+## 7: Bound the guard's cost per megabyte of prompt
+
+Test author (initial):
+
+- Printed-figure precision is `:.4f`; the recipe pinned the line shape but not
+  the precision.
+- Imported the predicate in its own isort block and relied on pytest's
+  implicit `sys.path` entry for the test's own directory.
+- Put the two timing helpers at module level, matching the file's existing
+  helper style, rather than nesting them in the test.
+- Read "assert each is under 0.3" as a strict `<` against a named constant,
+  crafted checked first.
+
+Test author (strengthening round):
+
+- Chose "Review the ledger writer and report what you find." as the
+  no-phase-mention prompt, and `general-purpose` as the persona for the three
+  prompt-varying cases; the brief fixed neither.
+- Read "hundreds of KB" as about 295 KB (`"Hold on. " * 32768`).
+- Extracted the quoted span out of the already-pinned `Matched: "..."` wording
+  rather than asserting a literal, so the case cannot pass on a clamp.
+- Reworded the module docstring's "all four tests" phrase, which had become
+  untrue; flagged in case docstrings count as frozen.
+
+Implementor:
+
+- Kept `_fold_run`'s loop body byte-identical to the old loop rather than
+  rewriting it, so the equivalence criterion is "each surrounding stage is the
+  identity on ASCII".
+- Treated the one-process alternating base-vs-patched comparison as the
+  authoritative before/after, because the machine's load average sat between
+  4.9 and 6.5 throughout and two separately timed pytest runs would not have
+  been comparable.
+- Rejected two faster routes on safety grounds, both recorded: a literal
+  substring prefilter before each phase-name pattern (not
+  equivalence-preserving, because `re.IGNORECASE` does full Unicode case
+  folding where `str.lower` does not, so U+017F and U+212A could become false
+  negatives - the silent-allow failure mode), and merging the clause and
+  sentence boundary passes (`\s-\s` can consume a newline the sentence scan
+  must report).
+- Counted importing the test module and calling its timing function with a
+  swapped predicate as running the test rather than reading it, so he never
+  saw the acceptance criteria or the string construction.
+
+Orchestrator:
+
+- The red-check came back GREEN, so the task's premise ("fails at base") does
+  not hold on an idle machine. Resolved by the simplest safe assumption:
+  implement the optimization anyway, because the task's stated goal is
+  headroom against the 5 s hook timeout, and leave the contracted 0.3 bound
+  untouched with the variance deferred for a human decision. Not implementing
+  would have left the task's own test one load spike away from red.
+- Restored the `sorted(spans)` call the slop-pruning pass had removed, after
+  the per-task reviewer independently derived the concrete failure (an
+  out-of-order span is clamped to the cursor, hits the `end <= start` skip and
+  is left UNMASKED, with no error, on a fail-open hook). This also re-aligns
+  the shipped bytes with the implementor's 50,000-case equivalence proof,
+  which was run with the sort in place.
+- Devon's prompt pointed at file paths rather than inlining the test module,
+  because inlining it would have put this PRD's own trigger strings into a
+  dispatch prompt and tripped the installed guard again.

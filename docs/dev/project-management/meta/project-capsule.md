@@ -1,6 +1,6 @@
 # Project Capsule: claude-autopilot
 
-Generated: 2026-10-11
+Generated: 2026-10-12
 
 ## Key Invariants
 
@@ -46,27 +46,28 @@ Generated: 2026-10-11
 
 ### Batch 202610111300
 - [ ] 00271-guard-v2-structural-delegation-check-v1 (in wip, design reused,
-  planned: 10 tasks, 2 done, resuming at task 3)
-- backlog behind it: 00276, 00277, 00278, 00279, 00280 (agoge 2026-10-10 walkthrough)
+  planned: 10 tasks, 5 done, resuming at task 6)
+- backlog behind it: 00276, 00277, 00278, 00279 (agoge 2026-10-10 walkthrough),
+  plus 00282, 00283, 00284 (loop efficiency, from discovery 00281). 00280 moved
+  to `hold/` by the 2026-10-12 backlog review.
 
 Observations: 00271 carried over from batch 202610101000, which closed after
 00269 and 00270. Design doc exists and its `## Review log` gate passes, so
-Phase 1.5 reuses it. Task 1 (lookalike-text normalization in the delegation
-guard) landed in 5 commits through d30b77a;
-task 2 ("Freeze the real-dispatch replay fixture") landed in 7a212a1, leaving
-`hooks/test_guard_phase_delegation_replay.py` RED on its 13 `allow-toolu_*`
-params BY DESIGN until task 6's guard rewrite; `dev/bin/release-checks` is
-therefore RED too and must not be read as a regression. Work resumes at task 3
-(lone-surrogate fix in `enforce_prd_location`). `master` is at 640ad95. Each
-build session re-runs a FULL catchup here because `batch.catchup_head_sha`
-is pinned at the PRD's start sha (b57e425) while the task commits move HEAD —
-the cache's HEAD condition can never hold across a task-boundary hand-off.
-`gh` is unauthenticated on this host, so GitHub State below is stale (no
-issue/PR/CI refresh this session). A second `autopilot loop` runs
-concurrently in `buvis/agent-skills` (pid 23587) — different repo, no
-checkout collision, but it shares this account's usage window, so avoid
-parallel subagent fan-outs. Untracked discovery doc `00281-loop-efficiency.md`
-is present but not yet a PRD.
+Phase 1.5 reuses it. Tasks 1-5 have landed (task 1 lookalike-text
+normalization through d30b77a; task 2 replay fixture at 7a212a1; task 4
+lone-surrogate session id at 4d3fe03; task 5 the structural delegation
+predicate, shipped by sentence shape rather than verb lists, through 78f245e).
+`hooks/test_guard_phase_delegation_replay.py` stays RED on its 13
+`allow-toolu_*` params BY DESIGN until task 6's guard rewrite, so
+`dev/bin/release-checks` is RED too and must not be read as a regression.
+Work resumes at task 6 (the guard rewrite that turns those 13 green).
+`master` is at 1313c50. Each build session re-runs a FULL catchup here because
+`batch.catchup_head_sha` is pinned at the PRD's start sha (b57e425) while the
+task commits move HEAD — the cache's HEAD condition can never hold across a
+task-boundary hand-off. A second `autopilot loop` runs concurrently in
+`buvis/agent-skills` — different repo, no checkout collision, but it shares
+this account's usage window, so avoid parallel subagent fan-outs. Discovery
+doc `00281-loop-efficiency.md` is now committed and spawned PRDs 00282-00284.
 
 ### Batch 202610101000
 - [x] 00269-sweep-every-findings-token-v1 (2 cycles)
@@ -477,6 +478,9 @@ Staleness (`engram status --scope portfolio`, exit 1): memory 192 (23 stale,
 1 dead), prd 7660 (0 stale, 5297 dead), code 51037 (109 stale, 805 dead,
 4432 skipped), transcripts 17713 (17604 dead), findings 12938 (clean).
 
+Not refreshed at 2026-10-12 (task-6 resume catchup) either, for the same two
+reasons; the hits above still stand.
+
 Not refreshed at 2026-10-11T12:49Z (task-2 resume catchup): engram was left
 alone this session because its index is readonly on this host (above) and the
 topic is unchanged; the hits above are the ones to use.
@@ -484,22 +488,18 @@ topic is unchanged; the hits above are the ones to use.
 ## GitHub State
 
 - 0 open issues, 0 open PRs.
-- Only `origin`/`origin/master` active (pushed 2026-09-13, no stale branches).
-- No tagged GitHub releases; CHANGELOG.md tracks versions instead (latest
-  released: 0.5.2; the installed cache runs 0.5.2 for new sessions while the
-  live loop pid 96616 is still the 0.5.1 driver).
+- Only `origin`/`origin/master` active (pushed 2026-10-12, no stale branches).
+- No tagged GitHub releases; CHANGELOG.md tracks versions instead.
 - No workflow runs found (no CI configured, or none has run).
-- STALE as of 2026-10-11: `gh` is unauthenticated on this host
-  (`github-state.sh` exits 1), so none of the above was refreshed this
-  session.
+- Refreshed 2026-10-12: `gh` is authenticated again on this host (account
+  `tbouska`, `~/.config/gh-agent`), so the above is live, not stale.
 
 ## Project Health
 
 CI: none configured/observed. Batch 202610111300 is open with 0 drained;
-00271 in wip, 5 PRDs behind it in backlog, plus the hold triage stubs from
-batch 202610101000 (00272-00275). `master` at 3c10a59, tree clean (a loupe
-end-of-turn reflow of `hooks/guard_phase_delegation.py` was reverted at this
-session's start, per memory `project-loupe-reflows-edited-py-files-at-turn-end`).
+00271 in wip at task 6 of 10, 7 PRDs behind it in backlog, plus 00280 and the
+hold triage stubs from batch 202610101000 (00272-00275). `master` at 1313c50,
+tree clean.
 Standing debt:
 `cli/__main__.py` and `test_state.py` exceed the 800-line cap (deliberately
 excluded by 00192).
