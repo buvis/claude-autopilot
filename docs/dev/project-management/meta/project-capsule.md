@@ -45,32 +45,23 @@ Generated: 2026-10-12
 ## Active Work
 
 ### Batch 202610111300
-- [ ] 00271-guard-v2-structural-delegation-check-v1 (in wip, design reused,
-  planned: 10 tasks, 8 done, task 9 mid-flight, resuming at task 9)
+- [x] 00271-guard-v2-structural-delegation-check-v1 (2 cycles)
+- [ ] 00285-resolve-process-facts-without-ps-v1 (in wip)
 - backlog behind it: 00276, 00277, 00278, 00279 (agoge 2026-10-10 walkthrough),
-  plus 00282, 00283, 00284 (loop efficiency, from discovery 00281). 00280 moved
-  to `hold/` by the 2026-10-12 backlog review.
+  plus 00282, 00283, 00284 (loop efficiency, from discovery 00281).
+- held: 00280 (2026-10-12 backlog review) plus 7 triage stubs minted at
+  00271's close — 00286-00292 (`dev/bin/release-checks` is still RED on this
+  host for pre-existing sandbox reasons unrelated to any held item).
 
-Observations: 00271 carried over from batch 202610101000, which closed after
-00269 and 00270. Design doc exists and its `## Review log` gate passes, so
-Phase 1.5 reuses it. Tasks 1-5 have landed (task 1 lookalike-text
-normalization through d30b77a; task 2 replay fixture at 7a212a1; task 4
-lone-surrogate session id at 4d3fe03; task 5 the structural delegation
-predicate, shipped by sentence shape rather than verb lists, through 78f245e;
-task 6 the guard rewrite + exemption/deny-message pins at cdba587; task 7 the
-non-ascii-run normalization and its span-sort fix through c587171; task 8 the
-stdin hardening pins across all six stdin-reading hooks at 520559e).
-`dev/bin/release-checks` is GREEN-capable again as of task 6 — the 13
-`allow-toolu_*` replay params that were RED BY DESIGN now pass, so a red run
-today IS a real regression. Task 9 (the replay CLI) has commits on master
-already (2f64979 contract pins, 43b4b9e strengthen round, 3afda46 refused-
-dispatch pins, df25eee the CLI itself) while `state.tasks[9].status` still
-reads `in_progress` — the task-boundary commit landed but the state write for
-its completion did not, so work resumes at task 9 and must reconcile rather
-than re-implement. Then task 10 (CHANGELOG). `master` is at 0ad5693. Each build session re-runs a FULL catchup here because
-`batch.catchup_head_sha` is pinned at the PRD's start sha (b57e425) while the
-task commits move HEAD — the cache's HEAD condition can never hold across a
-task-boundary hand-off. A second `autopilot loop` runs concurrently in
+Observations: 00271 closed converged-with-deferrals at the cycle-2 rework
+cap (10 unresolved cap-overflow findings + 6 cycle-1 deferrals, 16 total,
+reconciled into the batch deferred JSON and minted into 7 hold stubs —
+00286-00292). `dev/bin/release-checks` is RED on this host for pre-existing
+reasons (PASS 3484 FAIL 9, all 9 wave/lane-marker pid-name sandbox artifacts
+reproduced at base, not 00271's fault) — the earlier "GREEN-capable as of
+task 6" note is stale, do not repeat it. Carl (Gemini) stayed unavailable all
+of 00271's review cycles (gemini-run exit 1 twice, copilot auth) — exit 1, so
+no batch latch. A second `autopilot loop` runs concurrently in
 `buvis/agent-skills` — different repo, no checkout collision, but it shares
 this account's usage window, so avoid parallel subagent fan-outs. Discovery
 doc `00281-loop-efficiency.md` is now committed and spawned PRDs 00282-00284.

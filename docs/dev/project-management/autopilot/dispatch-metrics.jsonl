@@ -3810,3 +3810,5 @@
 {"id":"553ff726","ended_at":1791843168,"elapsed_s":88,"outcome":"ok","detail":"retry"}
 {"id":"01b49ce6","ended_at":1791843171,"elapsed_s":282,"outcome":"error","detail":"retry: exit 1"}
 {"kind":"handoff","site":"review","edge":"leave","at":1791843434,"phase":"done","prd":"00271-guard-v2-structural-delegation-check-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1791843468,"phase":"done","prd":"00271-guard-v2-structural-delegation-check-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1791843680,"phase":"build","prd":"00285-resolve-process-facts-without-ps-v1.md"}
