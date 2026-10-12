@@ -16,12 +16,20 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
 
+from guard_phase_delegation import is_phase_delegation
+
 HOOKS = Path(__file__).resolve().parent
 GUARD = HOOKS / "guard_phase_delegation.py"
+
+MB = 1048576
+# Seconds per megabyte the predicate may cost. The harness kills a hook at 5 s,
+# so this bound keeps the timeout out of reach until roughly 16 MB of prompt.
+BUDGET_S_PER_MB = 0.3
 
 PROMPT = "Run the work phase for PRD 00300."
 # The span the guard quotes back for PROMPT, read from its stderr - a literal,
@@ -114,3 +122,33 @@ def test_other_refusals_keep_the_skill_tool_text_and_quote_the_match(
     assert "with the Skill tool in THIS session" in result.stderr
     assert f'Matched: "{SPAN}"' in result.stderr
     assert REASON in result.stderr
+
+
+def _best_seconds_per_mb(prompt: str) -> float:
+    # Best of three, not a mean: the figure being bounded is the predicate's
+    # own cost, and a scheduler hiccup on one run is not that cost.
+    best = min(_time_predicate(prompt) for _ in range(3))
+    return best / (len(prompt) / MB)
+
+
+def _time_predicate(prompt: str) -> float:
+    start = time.perf_counter()
+    is_phase_delegation({"prompt": prompt})
+    return time.perf_counter() - start
+
+
+def test_guard_time_per_mb_stays_under_the_baseline() -> None:
+    # Called in-process, unlike the dispatch tests above: a subprocess's
+    # interpreter start-up would swamp the measurement.
+    crafted = "Read work/SKILL.md " + "not " * 262144
+    prose = "run the the the " * 65536
+
+    crafted_rate = _best_seconds_per_mb(crafted)
+    prose_rate = _best_seconds_per_mb(prose)
+
+    # Printed before the assertions so `pytest -s` shows the real numbers even
+    # when one of them fails the budget.
+    print(f"guard s/MB crafted={crafted_rate:.4f} prose={prose_rate:.4f}")
+
+    assert crafted_rate < BUDGET_S_PER_MB
+    assert prose_rate < BUDGET_S_PER_MB
