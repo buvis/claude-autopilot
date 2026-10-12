@@ -1,6 +1,6 @@
 # Project Capsule: claude-autopilot
 
-Generated: 2026-10-12
+Generated: 2026-10-13
 
 ## Key Invariants
 
