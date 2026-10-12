@@ -10,7 +10,11 @@ model_tier_rationale: exact predicates and shapes given (committer string, probe
 ### Problem Statement
 Every PRD carrying `catchup: force` re-runs full catchup (`/git-ferry:catchup`,
 about 50K tokens and 60-95 s), even when the only commits since the last full
-catchup are the loop's own. Inside each full catchup two steps always fail in
+catchup are the loop's own. A `catchup: run` PRD pays the same at every
+task-boundary resume: `_catchup` in `skills/run-autopilot/cli/enter.py` returns
+`delta` only while `catchup_head_sha` equals HEAD, and every task commit and loop
+record commit moves HEAD (batch 202610111300: a full catchup in each of 00271's
+six build sessions). Inside each full catchup two steps always fail in
 loop sessions: `gh` (GitHub state) and `engram` (repo not registered). Each
 failure costs extra calls, because the catchup skill says to read a failed
 script and run its commands by hand. Source: discovery
@@ -20,7 +24,7 @@ script and run its commands by hand. Source: discovery
 The operator running `autoclaude` batches whose PRDs carry `catchup: force`.
 
 ### Success Metrics
-- `test_force_is_delta_when_all_commits_are_loop_commits` and `test_force_is_full_when_one_commit_is_not` pass.
+- `test_force_is_delta_when_all_commits_are_loop_commits`, `test_force_is_full_when_one_commit_is_not`, `test_resume_is_delta_when_head_moved_by_loop_commits_only` and `test_resume_is_full_when_head_moved_by_a_foreign_commit` pass.
 - `test_probe_records_unauthenticated_then_reuses_within_batch` and `test_new_batch_reprobes` pass (gh and engram).
 - `bash dev/bin/release-checks` exits 0 with `FAIL 0` on its summary line at the end of the last phase.
 
@@ -39,10 +43,10 @@ Mark every commit a loop session or the loop itself makes.
 Choose full or delta catchup in code.
 
 #### Feature: Force with loop-only commits (F5)
-- **Description**: `catchup: force` gives full catchup unless every commit since `batch.catchup_head_sha` has committer name `autopilot-loop/<batch.id>`; then delta.
+- **Description**: `catchup: force` gives full catchup unless every commit since `batch.catchup_head_sha` has committer name `autopilot-loop/<batch.id>`; then delta. A resume in either mode whose HEAD moved only by such commits gets delta too.
 - **Inputs**: `state.catchup_mode`, `state.tasks`, `state.batch.catchup_head_sha`, `state.batch.id`, the project root.
 - **Outputs**: `_catchup` returns `"delta"` or `"full"`.
-- **Behavior**: In `enter._catchup`, the `mode == "force"` first-entry branch (tasks empty) now returns `delta` when `catchup_head_sha` is present and `loop_only(root, sha, f"autopilot-loop/{batch_id}")` is True. Otherwise it returns `full`. Freshness (`catchup_completed_at`) is not consulted for force, per discovery Q4. `loop_only` runs `git -C <root> log --format=%cn <sha>..HEAD`. It returns True when every line equals the name, including an empty range. It returns False on any git failure or an unknown sha, so a fault means full catchup. The `run` mode and the tasks-present `force` path are unchanged.
+- **Behavior**: In `enter._catchup`, the `mode == "force"` first-entry branch (tasks empty) now returns `delta` when `catchup_head_sha` is present and `loop_only(root, sha, f"autopilot-loop/{batch_id}")` is True. Otherwise it returns `full`. Freshness (`catchup_completed_at`) is not consulted for force, per discovery Q4. `loop_only` runs `git -C <root> log --format=%cn <sha>..HEAD`. It returns True when every line equals the name, including an empty range. It returns False on any git failure or an unknown sha, so a fault means full catchup. In the shared tail of `_catchup` (freshness first, then HEAD) a stale `catchup_completed_at` still returns `full`; a `catchup_head_sha` that differs from HEAD returns `full` only when `loop_only(root, sha, name)` is False, so a resume whose only new commits are the loop's own gets `delta` in `run` mode and in the tasks-present `force` path alike. Existing `test_enter.py` moved-HEAD cases keep expecting `full`: their fake root makes the default `loop_only` fail, and a fault means full.
 
 ### Capability: Batch-scoped catchup probes
 Learn once per batch which catchup steps cannot work here.
@@ -80,9 +84,9 @@ dev/bin/release-checks     # [checks] enter gains test_catchup_probe.py
 
 ### Module: enter catchup
 - **Maps to capability**: Catchup decision
-- **Responsibility**: The force branch of `_catchup`.
+- **Responsibility**: The force branch and the moved-HEAD check of `_catchup`.
 - **Exports**: `enter_io.commits_all_loop(root, sha, name)`, injected into `enter()` as the new keyword `loop_only` (default `enter_io.commits_all_loop`), like `git_head`.
-- New symbols: `commits_all_loop`, `loop_only`, `enter_io.commits_all_loop`, `test_force_is_delta_when_all_commits_are_loop_commits`, `test_force_is_full_when_one_commit_is_not`, `test_force_is_full_on_git_failure`
+- New symbols: `commits_all_loop`, `loop_only`, `enter_io.commits_all_loop`, `test_force_is_delta_when_all_commits_are_loop_commits`, `test_force_is_full_when_one_commit_is_not`, `test_force_is_full_on_git_failure`, `test_resume_is_delta_when_head_moved_by_loop_commits_only`, `test_resume_is_full_when_head_moved_by_a_foreign_commit`
 
 ### Module: catchup_probe
 - **Maps to capability**: Batch-scoped catchup probes
@@ -119,7 +123,7 @@ No dependencies - built first.
 **Goal**: `_catchup` returns delta after loop-only commits.
 
 **Tasks**:
-- [ ] `enter_io.commits_all_loop`, the `loop_only` keyword on `enter()`, and the force branch in `_catchup` (depends on: Phase 0) - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_enter_decisions.py -k "force"` passes, including `test_force_is_delta_when_all_commits_are_loop_commits`, `test_force_is_full_when_one_commit_is_not`, `test_force_is_full_on_git_failure`, and `test_enter.py`'s force cases unchanged. Premise: the existing force cases live in `test_enter.py` (lines 605-620 today, e.g. `("force", None, _cache(), HEAD, "full")`) and expect `full` for a first entry; re-check with `rg -n "force" skills/run-autopilot/cli/test_enter.py` before editing. If any expects `full` with a head sha whose range is loop-only, stop and report rather than rewriting it.
+- [ ] `enter_io.commits_all_loop`, the `loop_only` keyword on `enter()`, the force branch and the moved-HEAD check in `_catchup` (depends on: Phase 0) - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_enter_decisions.py -k "force or head_moved"` passes, including `test_force_is_delta_when_all_commits_are_loop_commits`, `test_force_is_full_when_one_commit_is_not`, `test_force_is_full_on_git_failure`, `test_resume_is_delta_when_head_moved_by_loop_commits_only` (mode `run`, tasks present, fresh `catchup_completed_at`, two loop commits past the sha), `test_resume_is_full_when_head_moved_by_a_foreign_commit`, and `test_enter.py`'s force and moved-HEAD cases unchanged. Premise: the existing force cases live in `test_enter.py` (lines 605-620 today, e.g. `("force", None, _cache(), HEAD, "full")`) and expect `full` for a first entry; re-check with `rg -n "force" skills/run-autopilot/cli/test_enter.py` before editing. If any expects `full` with a head sha whose range is loop-only, stop and report rather than rewriting it.
 
 **Exit Criteria**: the filter passes.
 
@@ -127,7 +131,7 @@ No dependencies - built first.
 **Goal**: The session uses the probe and the docs match.
 
 **Tasks**:
-- [ ] `references/phase-build.md` Phase 1: condition 1 states the loop-commit rule for `force`, and the full-catchup path runs `autopilot catchup-probe` and passes the skip list to `/git-ferry:catchup` with the gap lines; `references/state-schema.md` gets a `catchup_probe` row; CHANGELOG `[Unreleased]` Changed and Added entries (depends on: Phase 1) - Acceptance: `rg -n "catchup-probe" skills/run-autopilot/references/phase-build.md` hits; `rg -n "catchup_probe" skills/run-autopilot/references/state-schema.md` hits; `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_enter_prose.py skills/run-autopilot/cli/test_doc_contract.py` passes.
+- [ ] `references/phase-build.md` Phase 1: condition 1 states the loop-commit rule for `force`, the HEAD condition states it for a resume in either mode, and the full-catchup path runs `autopilot catchup-probe` and passes the skip list to `/git-ferry:catchup` with the gap lines; `references/state-schema.md` gets a `catchup_probe` row; CHANGELOG `[Unreleased]` Changed and Added entries (depends on: Phase 1) - Acceptance: `rg -n "catchup-probe" skills/run-autopilot/references/phase-build.md` hits; `rg -n "catchup_probe" skills/run-autopilot/references/state-schema.md` hits; `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_enter_prose.py skills/run-autopilot/cli/test_doc_contract.py` passes.
 
 **Exit Criteria**: `bash dev/bin/release-checks` exits 0 with `FAIL 0` on its summary line.
 
@@ -138,6 +142,8 @@ No dependencies - built first.
 - **Edge case**: one of those commits made with the default committer → Expected: `full`.
 - **Edge case**: same commits but `batch.id` B2 → Expected: `full` (another batch's loop).
 - **Error case**: `catchup_head_sha` not in the repo → Expected: `full`.
+- **Happy path**: `catchup_mode: run`, tasks present, `catchup_completed_at` one hour old, HEAD two loop commits past `catchup_head_sha` → Expected: `delta`.
+- **Edge case**: the same with one of the two commits by the default committer → Expected: `full`.
 - **Happy path**: probe with stub `gh` exit 0 and stub `engram` exit 0 → Expected: `{"skip": []}`, verdicts `ok`.
 - **Edge case**: `gh` not on PATH → Expected: `absent`, `github-state` in skip.
 
