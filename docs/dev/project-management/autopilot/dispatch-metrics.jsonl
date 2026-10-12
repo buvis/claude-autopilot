@@ -3802,3 +3802,11 @@
 {"id":"0720a8d0","ended_at":1791841382,"elapsed_s":148,"outcome":"ok","detail":null}
 {"id":"c3784ebc","ended_at":1791841382,"elapsed_s":20,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"review","edge":"leave","at":1791841987,"phase":"review","prd":"00271-guard-v2-structural-delegation-check-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1791842013,"phase":"review","prd":"00271-guard-v2-structural-delegation-check-v1.md"}
+{"id":"cfe56a5b","kind":"bob","task":"review-00271c2","queued_at":1791842889,"prompt_bytes":24696}
+{"id":"01b49ce6","kind":"carl","task":"review-00271c2","queued_at":1791842889,"prompt_bytes":21707}
+{"id":"553ff726","kind":"bob","task":"review-00271c2","queued_at":1791843080,"prompt_bytes":301974}
+{"id":"cfe56a5b","ended_at":1791843164,"elapsed_s":275,"outcome":"error","detail":"lack-of-input"}
+{"id":"553ff726","ended_at":1791843168,"elapsed_s":88,"outcome":"ok","detail":"retry"}
+{"id":"01b49ce6","ended_at":1791843171,"elapsed_s":282,"outcome":"error","detail":"retry: exit 1"}
+{"kind":"handoff","site":"review","edge":"leave","at":1791843434,"phase":"done","prd":"00271-guard-v2-structural-delegation-check-v1.md"}

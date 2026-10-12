@@ -46,5 +46,85 @@
     "issue": "Touched tests pass against the pre-change code across hooks/test_guard_phase_delegation.py, hooks/test_guard_phase_delegation_dispatch.py, hooks/test_guard_phase_delegation_narrowing.py, hooks/test_guard_phase_delegation_structure.py, hooks/test_guard_skill_after_leave.py and hooks/test_read_input.py (M3-M8).",
     "file": "hooks/test_guard_phase_delegation_structure.py",
     "reason": "These are behavior-preserving assertions: allow-path and still-checked cases whose whole purpose is that the widened guard does not change them, plus the shared stdin-robustness sweep. A test that pins preserved behavior passes against the pre-change code by design, which is exactly the case the replay block documents as not-necessarily-a-defect. The genuinely unpinned one (test_missing_guard_cannot_report_an_allowed_run) is routed as a fix this cycle instead."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "Quadratic work is still present for SKILL.md candidates, so prior R2 is only partly resolved and the PRD rule \"every regex runs in linear time\" is still unmet. `_ordered_to_follow` finds the sentence end with `next((s for s in sentences if s >= end), len(text))`, which walks the sentence list from index 0 for each SKILL.md candidate. 680 KB of repeated `work/SKILL.md.` sentences takes 5.7 s, past the 5 s hook timeout, so the hook fails open. Replace the `next(...)` with `bisect_left(sentences, end)` and add a many-SKILL.md-mentions linearity case.",
+    "file": "hooks/guard_phase_delegation.py:511",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "The rework for prior R12 introduced a false-allow: the SKILL.md follow phrase is negated by any negation word in the five words before the verb, even across a clause boundary. `_ordered_to_follow` calls `_negated(text, end, match.start())`, so the floor is the path end, not the verb's clause start. `Read skills/work/SKILL.md, do not stop, then follow it for every task.` is allowed. Use `max(end, start of the verb's clause)` as the floor.",
+    "file": "hooks/guard_phase_delegation.py:515",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "Prior R4 is not resolved. CHANGELOG.md line 18 still restates the normalization beside the new guard line at line 30, and the new line 17 claims the guard \"scans every field in linear time\", which is false while R1 stands. The PRD asked for exactly three replacement lines and no other CHANGELOG edit.",
+    "file": "CHANGELOG.md:17",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "The new SKILL.md negation test covers only the same-clause case, so nothing catches the cross-clause false-allow (R2) and nothing pins a many-SKILL.md-mentions linearity case.",
+    "file": "hooks/test_guard_phase_delegation_linearity.py:206",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "`test_blocks_lone_surrogate_path_over_a_real_subprocess_pipe` is green at base by its own comment, so it cannot pin the targeted encoding failure prior R9 asked for. Drop it or relabel it as coverage and record that no strict-UTF-8 subprocess case can fail at base, because `read_input` decodes with `errors=\"replace\"`.",
+    "file": "hooks/test_enforce_prd_location.py:177",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "`(?![-\\w])` does not enforce a whole first token: `/autopilot:work/helper task 3 only` still triggers unconditional denial. Require whitespace or end-of-input after the command and add slash- and dot-suffixed token tests.",
+    "file": "hooks/guard_phase_delegation.py:170",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Scope: the diff carries unrelated changes (the `skills/work/SKILL.md` ambiguity-check rewrite and its test, the `**work**` CHANGELOG line, the 00283 PRD edit, the new 00285 PRD). They come from the loop-efficiency audit, not this PRD, and look operator-intended.",
+    "file": "skills/work/SKILL.md:216",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The redundant normalization CHANGELOG entry remains beside the structural guard documentation (the same defect as R3, Bob's wording). Remove the duplicate entry while retaining the required verbatim description.",
+    "file": "CHANGELOG.md:18",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "Task scoping keys ids by (sentence index, id) instead of distinct ids, so the same id repeated in a second sentence counts as two and does not scope. `Fix task 3. The hook must run the work phase for PRD 7. Report when task 3 passes.` is refused, and ordinary per-task prompts repeat their task number. The PRD says \"exactly one distinct task id\". Deduplicate ids alone.",
+    "file": "hooks/guard_phase_delegation.py:474",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "Range-lead matching still truncates to 24 characters after trimming trailing whitespace, missing whitespace inside `starting ... at/with`: `Run the work phase for PRD 7, starting` + 40 spaces + `at task 3` incorrectly gains task scope. Recognize the range words without a character cap.",
+    "file": "hooks/guard_phase_delegation.py:443",
+    "reason": "rework cap reached with this finding unresolved"
   }
 ]
