@@ -3827,3 +3827,13 @@
 {"id":"466dcf2a","ended_at":1791845581,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791845581,"phase":"build","prd":"00285-resolve-process-facts-without-ps-v1.md"}
 {"kind":"handoff","site":"build","edge":"resume","at":1791845947,"phase":"build","prd":"00285-resolve-process-facts-without-ps-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791845981,"phase":"build","prd":"00285-resolve-process-facts-without-ps-v1.md"}
+{"id":"0a3cf994","kind":"pat","task":"2","queued_at":1791846502,"prompt_bytes":13386}
+{"id":"0726748c","kind":"pat","task":"3","queued_at":1791846740,"prompt_bytes":8923}
+{"id":"ba3950f5","kind":"pat","task":"5","queued_at":1791846990,"prompt_bytes":7691}
+{"id":"aa672c33","kind":"pat","task":"4","queued_at":1791847477,"prompt_bytes":10712}
+{"id":"0a3cf994","ended_at":1791847885,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"0726748c","ended_at":1791847885,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"ba3950f5","ended_at":1791847885,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"aa672c33","ended_at":1791847885,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791847885,"phase":"review","prd":"00285-resolve-process-facts-without-ps-v1.md"}
