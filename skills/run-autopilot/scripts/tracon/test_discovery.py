@@ -1196,34 +1196,15 @@ def test_live_wrapper_pid_none_when_pid_dead_or_unregistered(
     assert discovery.live_wrapper_pid(tmp_path, loops_dir=loops_dir) is None
 
 
-def test_pid_tagged_matches_a_tag_ending_a_non_final_ps_line_not_a_longer_pid(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # `$` without re.MULTILINE matches only end-of-string, so when the
-    # tagged pid's ps row isn't the LAST line, the current pattern misses
-    # it - a false "untagged" that lets prune sweep a live loop.
-    monkeypatch.setattr(discovery, "_child_pids", lambda pid: [])
-    monkeypatch.setattr(
-        discovery.subprocess,
-        "run",
-        lambda *a, **k: subprocess.CompletedProcess(
-            args=[],
-            returncode=0,
-            stdout="bash -c something\n_AUTOPILOT_LOOP=4321\npython3 worker.py\n",
-        ),
-    )
+def test_pid_tagged_requires_an_exact_pid_match(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_exec_env(pid):
+        return {"_AUTOPILOT_LOOP": "4321"} if pid == 1000 else None
+    monkeypatch.setattr(discovery, "exec_env", fake_exec_env)
+    monkeypatch.setattr(discovery, "_child_pids", lambda pid: ["1000"])
     assert discovery._pid_tagged(999, 4321) is True
-
-    # A longer pid whose digits merely start with the tag pid's digits must
-    # still not match: looking for 432 must not match _AUTOPILOT_LOOP=4321.
-    monkeypatch.setattr(
-        discovery.subprocess,
-        "run",
-        lambda *a, **k: subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="_AUTOPILOT_LOOP=4321\n",
-        ),
-    )
     assert discovery._pid_tagged(999, 432) is False
+    assert discovery._pid_tagged(999, 321) is False
+    assert discovery._pid_tagged(999, 43210) is False
 
 
 # --- pause-requested: pending marker must be visible -------------------------
