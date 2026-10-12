@@ -74,7 +74,7 @@ if [ -n "${STUB_LANES_DIR:-}" ]; then
     ls "$STUB_LANES_DIR" > "${STUB_LANES_SNAPSHOT_DIR:?}/.list" 2>/dev/null
     cp "$STUB_LANES_DIR"/* "${STUB_LANES_SNAPSHOT_DIR:?}/" 2>/dev/null
     for _p in $(ls "$STUB_LANES_DIR" 2>/dev/null); do
-        ps -o command= -p "$_p" > "${STUB_LANES_SNAPSHOT_DIR:?}/.cmd.$_p" 2>/dev/null
+        pgrep -alf . | while read -r _pid _cmd; do [ "$_pid" = "$_p" ] && printf '%s\n' "$_cmd"; done > "${STUB_LANES_SNAPSHOT_DIR:?}/.cmd.$_p" 2>/dev/null
     done
 fi
 
