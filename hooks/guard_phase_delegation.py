@@ -24,6 +24,8 @@ import re
 import sys
 import unicodedata
 from bisect import bisect_left
+from collections.abc import Iterator
+from itertools import islice
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -71,9 +73,13 @@ _WRAP_PAIR = {
     "「": "」", "(": ")", "[": "]",
 }
 
-# A "word" for the nearest-preceding-word and clause-end lookups, once wrap
-# characters are stripped: \w plus internal apostrophe/hyphen.
-_WORD = re.compile(r"[\w][\w'-]*")
+# A "word" for the nearest-preceding-word and negation-gap lookups, once wrap
+# characters are stripped: \w plus internal apostrophe/hyphen. The class is
+# split in two because _words_before walks it BACKWARD one character at a
+# time, matching at an offset of the field instead of scanning a range of it:
+# _WORD_CHAR is what a word is made of, _WORD_START what it may begin with.
+_WORD_CHAR = re.compile(r"[\w'-]")
+_WORD_START = re.compile(r"\w")
 
 # Conceptual form: work|plan|planning|design + phase, with [-_ ] joiner.
 # "plan phase" and "planning phase" both count, "plan-tasks phase" does not.
@@ -103,8 +109,10 @@ _PHASE_BARE = re.compile(
 # "autopilot:work" match identically past the slash.
 _PHASE_NAME_FORMS = (_PHASE_CONCEPT, _PHASE_SKILL, _PHASE_BARE)
 # Optional " skill" suffix, probed as its own step on the text right after the
-# (already wrap-close-extended) match end.
-_SKILL_SUFFIX = re.compile(r"^\s+skill\b", re.IGNORECASE)
+# (already wrap-close-extended) match end. Matched at an offset, never on a
+# fixed-width slice: the whitespace before "skill" is unbounded, so a probe
+# over the next 16 characters reads a run of spaces and nothing else.
+_SKILL_SUFFIX = re.compile(r"\s+skill\b", re.IGNORECASE)
 
 # Strong anchor: matched against the text starting right after the phase-name
 # match's end (post wrap-close extension and post optional-" skill"). PRD
@@ -125,13 +133,16 @@ _WHOLE_RUN_MARKERS = re.compile(
     r"|\buntil\s+(?:done|complete|finished)\b|\bend\s+to\s+end\b|\bonwards?\b",
     re.IGNORECASE,
 )
-# Weak anchor: the phase name ends its CLAUSE. Matched against the text from
-# the name's end to the clause boundary: optional close-wrap character, then
+# Weak anchor: the phase name ends its CLAUSE. Matched from the name's end
+# with the clause boundary as the regex's endpos (never on a slice of the
+# field: slicing costs the clause length per candidate, and a clause with no
+# boundary in it is the whole field): optional close-wrap character, then
 # optionally one of now|again|first|immediately|please|in full, then only
-# whitespace to the boundary. " skill" is already consumed by the phase-name
-# step. A clause ending in "?" never counts - checked by the caller.
+# whitespace to the boundary. "$" honours endpos, so it still means "the clause
+# ends here". " skill" is already consumed by the phase-name step. A clause
+# ending in "?" never counts - checked by the caller.
 _WEAK_ANCHOR_TAIL = re.compile(
-    rf"^{_WRAP_CLOSE}?\s*(?:now|again|first|immediately|please|in\s+full)?\s*$",
+    rf"{_WRAP_CLOSE}?\s*(?:now|again|first|immediately|please|in\s+full)?\s*$",
     re.IGNORECASE,
 )
 
@@ -142,10 +153,16 @@ _PREPOSITIONS = frozenset({"in","about","of","during","before","after","from","w
 # prose as an edit target all day long.
 _PER_TASK_PERSONAS = frozenset({"autopilot:ivan", "autopilot:tess", "autopilot:devon"})
 
-# Always-delegate form 1: the first token of the prompt is a bare slash
+# Always-delegate form 1: the first token of the prompt IS a bare slash
 # command. Checked on `prompt` only - the PRD's own wording names that field,
-# and no captured `description` ever starts with a slash command.
-_BARE_SLASH_PREFIX = re.compile(r"^\s*/autopilot:(work|plan-tasks|design-solution)\b")
+# and no captured `description` ever starts with a slash command. The trailing
+# lookahead is what makes it the whole token: `\b` alone also fires inside
+# "/autopilot:work-adjacent", where the first token merely BEGINS with a phase
+# command and names something else. An optional /subpath still counts, as it
+# does for _PHASE_SKILL.
+_BARE_SLASH_PREFIX = re.compile(
+    r"^\s*/autopilot:(work|plan-tasks|design-solution)(?:/[\w.-]+)?(?![-\w])"
+)
 
 # Always-delegate form 2: a SKILL.md path. Scoping is skipped for this form,
 # negation is not.
@@ -161,9 +178,23 @@ _FOLLOW = re.compile(
 )
 
 _TASK_ID = re.compile(r"\btasks?\s+#?([A-Z]?\d+)\b", re.IGNORECASE)
+# The lead is looked for in the 24 characters before the id's whitespace run,
+# not before the id itself, and the tail is matched at the id's end instead of
+# on a 24-character slice: the whitespace between the range word and the id is
+# unbounded, so "from" + 40 spaces + "task 3" reads like "from task 3".
 _TASK_RANGE_LEAD = re.compile(r"\b(from|after|starting\s+at|starting\s+with)\s*$", re.IGNORECASE)
-_TASK_RANGE_TAIL = re.compile(r"^\s*(onwards?|through|to|until|and\s+on|and\s+later|,\s*\d|and\s+\d|-\d|\.\.)", re.IGNORECASE)
+_TASK_RANGE_TAIL = re.compile(r"\s*(onwards?|through|to|until|and\s+on|and\s+later|,\s*\d|and\s+\d|-\d|\.\.)", re.IGNORECASE)
+# Searched inside ONE bounded whitespace-delimited token by _find_path_tokens,
+# never run with `.finditer` over a field: the leading `\S*` rescans a long
+# slash-free run from every offset, which is quadratic.
 _PATH_TOKEN = re.compile(r"\S*/\S+\.\w+")
+# The PRD-lifecycle store, as a path SEGMENT: "prds/wip/00300.md" names the
+# store exactly as "docs/dev/project-management/prds/wip/00300.md" does, so a
+# leading-slash test ("/prds/" in token) misses the root-relative form.
+_PRD_STORE_PATH = re.compile(r"(?:^|/)prds/")
+# How far _find_path_tokens reads on each side of a '/', the bound
+# _find_skill_md_paths already uses. A longer token is read truncated.
+_PATH_WINDOW = 120
 
 # "not/never/don't ... hesitate|fail|only" is a double negation ("do not
 # hesitate to run ..."), so it does not count. The other contractions keep no
@@ -276,6 +307,68 @@ def _find_skill_md_paths(text: str) -> list[tuple[int, int]]:
     return spans
 
 
+def _find_path_tokens(text: str) -> set[str]:
+    """Every distinct path-shaped token in `text`, O(n) total: one substring
+    scan for '/' (`str.find`, no backtracking), then one bounded regex match
+    per occurrence against the whitespace-delimited token around it. A
+    `.finditer` of _PATH_TOKEN over the whole field is worst-case quadratic on
+    a long slash-free run, so it is never run (see _find_skill_md_paths).
+
+    Distinct, so the same path written twice is one path: the token names one
+    file wherever it is written. That also folds the repeats this scan makes by
+    construction - a path is reached once per '/' it contains, and every slash
+    of a token shorter than _PATH_WINDOW sees the whole token.
+    """
+    tokens = set()
+    idx = text.find("/")
+    while idx != -1:
+        head = text[max(0, idx - _PATH_WINDOW):idx]
+        if head and head[-1].isspace():
+            head = ""
+        elif head:
+            head = head.rsplit(None, 1)[-1]
+        tail = text[idx:idx + _PATH_WINDOW].split(None, 1)[0]
+        match = _PATH_TOKEN.search(head + tail)
+        if match:
+            tokens.add(match.group(0))
+        idx = text.find("/", idx + 1)
+    return tokens
+
+
+def _nonspace_end(text: str, idx: int) -> int:
+    """`idx` moved back over the whitespace run ending just before it, so a
+    lookback window can start at the previous WORD however much whitespace sits
+    between. The walk costs that one run, and the runs before two distinct task
+    ids are disjoint, so the total stays linear in the field."""
+    while idx and text[idx - 1].isspace():
+        idx -= 1
+    return idx
+
+
+def _words_before(text: str, floor: int, start: int) -> Iterator[tuple[int, int]]:
+    """Word spans ending at or before `start` and never reaching below `floor`,
+    NEAREST FIRST and lazily, so a caller that wants the last few words pays
+    for those words only. A forward `finditer` from `floor` paid the whole
+    distance from `floor` instead - the whole field whenever the clause holds no
+    boundary, which is quadratic over a field with many candidates.
+
+    A word is a maximal run of _WORD_CHAR with its leading non-\\w characters
+    dropped, which is exactly what `[\\w][\\w'-]*` matches going forward.
+    """
+    idx = start
+    while idx > floor:
+        while idx > floor and not _WORD_CHAR.match(text, idx - 1):
+            idx -= 1
+        end = idx
+        while idx > floor and _WORD_CHAR.match(text, idx - 1):
+            idx -= 1
+        word_start = idx
+        while word_start < end and not _WORD_START.match(text, word_start):
+            word_start += 1
+        if word_start < end:
+            yield word_start, end
+
+
 def _candidates(text: str) -> list[tuple[int, int, bool]]:
     """Pass 1: every candidate span as (start, end, is_skill_md), sorted by
     start. Pure per-match text inspection - no clause or sentence lookup - so
@@ -287,9 +380,9 @@ def _candidates(text: str) -> list[tuple[int, int, bool]]:
             wrap = match.group("w")
             if wrap and text[end:end + 1] == _WRAP_PAIR.get(wrap, wrap):
                 end += 1
-            suffix = _SKILL_SUFFIX.match(text[end:end + 16])
+            suffix = _SKILL_SUFFIX.match(text, end)
             if suffix:
-                end += suffix.end()
+                end = suffix.end()
             spans.append((match.start(), end, False))
     return sorted(spans)
 
@@ -332,22 +425,42 @@ def _boundaries(
     return [c[0] for c in clauses], [c[1] for c in clauses], sentences
 
 
-def _is_scoped(text: str) -> bool:
-    """Per-task scoping, this field only: exactly one task id with no range
-    wording beside it, OR exactly one path that is neither under `prds/` nor a
-    SKILL.md. Either one on its own narrows the dispatch to a single job."""
-    ids = [
-        match
-        for match in _TASK_ID.finditer(text)
-        if not _TASK_RANGE_LEAD.search(text[max(0, match.start() - 24):match.start()])
-        and not _TASK_RANGE_TAIL.match(text[match.end():match.end() + 24])
-    ]
-    paths = [
+def _is_scoped(text: str, sentences: list[int]) -> bool:
+    """Per-task scoping, this field only: exactly one task id, with no range
+    wording beside ANY id in the field, OR exactly one path that is neither
+    under `prds/` nor a SKILL.md. Either one on its own narrows the dispatch to
+    a single job.
+
+    Naming the same thing twice still names one thing: "for task 3, yes task 3"
+    and "see a/b.py and a/b.py" each name a single job. A path folds by its
+    token, which names one file wherever it is written. An id folds only inside
+    ONE SENTENCE, as the (sentence, id) pair it makes, because a bare number is
+    a reference its sentence carries: forty sentences naming task 1 before a
+    bare "Run the work phase now." describe a whole run, not one job, and
+    folding them field-wide would excuse that order. A path has no sentence to
+    fold by in any case - its own "." is a sentence boundary, so the two halves
+    of "a/b.py and a/b.py" sit in different ones.
+
+    Range wording beside one id disqualifies TASK-based scope outright, not
+    just that id: "from task 3 onwards and task 5" names a run of tasks, so the
+    surviving unranged id is not the single job the dispatch is about.
+    """
+    ids = set()
+    ranged = False
+    for match in _TASK_ID.finditer(text):
+        head = _nonspace_end(text, match.start())
+        if _TASK_RANGE_LEAD.search(text[max(0, head - 24):head]) or (
+            _TASK_RANGE_TAIL.match(text, match.end())
+        ):
+            ranged = True
+        else:
+            ids.add((bisect_left(sentences, match.start()), match.group(1).lower()))
+    paths = {
         token
-        for token in (m.group(0) for m in _PATH_TOKEN.finditer(text))
-        if "/prds/" not in token and not _is_skill_md_basename(token)
-    ]
-    return len(ids) == 1 or len(paths) == 1
+        for token in _find_path_tokens(text)
+        if not _PRD_STORE_PATH.search(token) and not _is_skill_md_basename(token)
+    }
+    return (not ranged and len(ids) == 1) or len(paths) == 1
 
 
 def _strongly_anchored(
@@ -362,10 +475,10 @@ def _strongly_anchored(
 def _weakly_anchored(
     text: str, start: int, end: int, clause_start: int, clause_end: int
 ) -> bool:
-    if not _WEAK_ANCHOR_TAIL.match(text[end:clause_end]):
+    if not _WEAK_ANCHOR_TAIL.match(text, end, clause_end):
         return False
-    for word in reversed(list(_WORD.finditer(text, clause_start, start))):
-        token = word.group(0).lower()
+    for word_start, word_end in _words_before(text, clause_start, start):
+        token = text[word_start:word_end].lower()
         if token in _DETERMINERS:
             continue  # skip past EVERY leading determiner, not just the adjacent one
         return token not in _PREPOSITIONS
@@ -375,19 +488,25 @@ def _weakly_anchored(
 def _ordered_to_follow(text: str, end: int, sentences: list[int]) -> bool:
     """A SKILL.md path counts when an order to follow it sits in the rest of
     the sentence (or the next 200 characters, whichever ends first), with no
-    negation in the gap between that verb and its object."""
+    negation in the gap between that verb and its object, and none in the few
+    words before the verb either: "you must never follow it" negates the order
+    from in front of the verb, where the gap cannot see it."""
     sentence_end = next((s for s in sentences if s >= end), len(text))
-    match = _FOLLOW.search(text[end:min(sentence_end, end + 200)])
-    return bool(match) and not _NEGATION.search(match.group(2))
+    match = _FOLLOW.search(text, end, min(sentence_end, end + 200))
+    if not match or _NEGATION.search(match.group(2)):
+        return False
+    return not _negated(text, end, match.start())
 
 
 def _negated(text: str, clause_start: int, start: int) -> bool:
     """True iff a negation sits at most _NEGATION_WORD_GAP words before the
-    name, inside its own clause. Walks BACKWARD from the name over at most
-    _NEGATION_WORD_GAP + 1 word tokens (the gap words plus the negation
-    itself), so the cost is O(1) per candidate."""
-    words = list(_WORD.finditer(text, clause_start, start))[-(_NEGATION_WORD_GAP + 1):]
-    window_start = words[0].start() if words else clause_start
+    name, inside its own clause. Takes at most _NEGATION_WORD_GAP + 1 word
+    tokens (the gap words plus the negation itself) from _words_before, which
+    walks BACKWARD from the name, so the cost is O(1) per candidate."""
+    words = list(
+        islice(_words_before(text, clause_start, start), _NEGATION_WORD_GAP + 1)
+    )
+    window_start = words[-1][0] if words else clause_start
     return bool(_NEGATION.search(text[window_start:start]))
 
 
@@ -404,7 +523,7 @@ def _field_delegation(text: str, per_task: bool) -> str | None:
         bisect_left(sentences, match.start())
         for match in _WHOLE_RUN_MARKERS.finditer(text)
     }
-    scoped = _is_scoped(text)
+    scoped = _is_scoped(text, sentences)
     for start, end, is_skill_md in spans:
         index = bisect_left(clause_starts, start)
         clause_start = clause_ends[index - 1] if index else 0
