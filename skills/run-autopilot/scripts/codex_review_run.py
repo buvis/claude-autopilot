@@ -47,6 +47,9 @@ import threading
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # codex_review_run.py: scripts/ -> run-autopilot/
+from cli.procinfo import child_names, cpu_seconds
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _walk_up import find_autopilot_dir
 
@@ -257,33 +260,16 @@ def _descendants(root_pid: int) -> list[str]:
     hung — during a pure model turn codex spawns nothing. Best-effort: any
     `ps` failure yields an empty list, rendered as "no tool subprocs".
     """
-    try:
-        out = subprocess.run(
-            ["ps", "-eo", "pid=,ppid=,comm="],
-            capture_output=True, text=True, timeout=5,
-        ).stdout
-    except (OSError, subprocess.SubprocessError):
-        return []
-    children: dict[int, list[tuple[int, str]]] = {}
-    for line in out.splitlines():
-        parts = line.split(None, 2)
-        if len(parts) < 3:
-            continue
-        try:
-            pid, ppid = int(parts[0]), int(parts[1])
-        except ValueError:
-            continue
-        children.setdefault(ppid, []).append((pid, parts[2]))
     found: list[str] = []
-    stack = [root_pid]
     seen: set[int] = set()
+    stack = [root_pid]
     while stack:
         cur = stack.pop()
-        for pid, comm in children.get(cur, []):
+        for pid, name in child_names(cur):
             if pid in seen:
                 continue
             seen.add(pid)
-            found.append(Path(comm.split()[0]).name if comm.split() else comm)
+            found.append(name)
             stack.append(pid)
     return found
 
@@ -318,30 +304,7 @@ def _cpu_seconds(pid: int) -> float | None:
     failure yields None, which the caller treats as 'unknown', never a hang
     claim. Parses ps TIME format `[[dd-]hh:]mm:ss[.ss]`.
     """
-    try:
-        out = subprocess.run(
-            ["ps", "-o", "time=", "-p", str(pid)],
-            capture_output=True, text=True, timeout=5,
-        ).stdout.strip()
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if not out:
-        return None
-    days = 0
-    if "-" in out:
-        day_str, out = out.split("-", 1)
-        try:
-            days = int(day_str)
-        except ValueError:
-            return None
-    try:
-        nums = [float(p) for p in out.split(":")]
-    except ValueError:
-        return None
-    secs = 0.0
-    for n in nums:
-        secs = secs * 60 + n
-    return days * 86400 + secs
+    return cpu_seconds(pid)
 
 
 class _Progress:
