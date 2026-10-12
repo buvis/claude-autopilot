@@ -3747,3 +3747,4 @@
 {"id":"083e25f8","ended_at":1791832023,"elapsed_s":88,"outcome":"ok","detail":"pinned agoge/reviewer refusal exit"}
 {"id":"76d2b21a","kind":"ivan","task":"9","queued_at":1791832048,"prompt_bytes":24271}
 {"id":"76d2b21a","ended_at":1791832105,"elapsed_s":57,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"build","edge":"resume","at":1791832332,"phase":"build","prd":"00271-guard-v2-structural-delegation-check-v1.md"}
