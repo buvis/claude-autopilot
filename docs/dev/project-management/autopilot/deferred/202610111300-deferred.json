@@ -302,6 +302,216 @@
       "action": "deferred",
       "reason": "pre-existing sizes confirmed by the mechanical-facts block; splitting them is a separate refactor PRD",
       "prd": "00285-resolve-process-facts-without-ps-v1.md"
+    },
+    {
+      "issue": "Absolute symlink targets and symlink chains remain outside reuse detection; the design explicitly accepts these limitations for this change.",
+      "severity": "\u26aa",
+      "file": "skills/run-autopilot/cli/verification.py:143",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "prd": "00276-make-the-gate-record-trustworthy-v1.md",
+      "cycle": 2
+    },
+    {
+      "issue": "Existing unchanged functions exceed 50 lines, and `__main__.py` exceeds 800 lines according to the supplied mechanical facts; restructuring unrelated CLI code is outside this review's scope.",
+      "severity": "\u26aa",
+      "file": "skills/run-autopilot/cli/__main__.py:1404",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "prd": "00276-make-the-gate-record-trustworthy-v1.md",
+      "cycle": 2
+    },
+    {
+      "issue": "6 touched test(s) pass against the pre-change code: test_verify_accepts_a_store_like_path_outside_the_repo, test_verify_writes_an_absolute_out_of_repo_log_where_asked, test_verify_untracked_log_outside_the_store_still_works, test_verify_exits_2_when_the_log_cannot_be_opened, test_verify_exits_0_when_the_same_green_result_is_recorded, test_verify_exits_1_when_the_gate_timed_out_with_exit_0",
+      "severity": "\ud83d\udfe1",
+      "file": "skills/run-autopilot/cli/test_cli_review_verbs.py",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "prd": "00276-make-the-gate-record-trustworthy-v1.md",
+      "cycle": 2
+    },
+    {
+      "issue": "10 touched test(s) pass against the pre-change code: test_run_gate_drains_stderr_without_deadlock, test_run_gate_unparseable_output_records_nothing, test_run_gate_keeps_tail_so_a_late_summary_line_still_parses, test_run_gate_streams_and_keeps_tail, test_run_gate_uses_last_summary_line_not_first, test_run_gate_closes_the_child_pipes_before_returning +4 more",
+      "severity": "\ud83d\udfe1",
+      "file": "skills/run-autopilot/cli/test_verification.py",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "prd": "00276-make-the-gate-record-trustworthy-v1.md",
+      "cycle": 2
+    },
+    {
+      "issue": "35 touched test(s) pass against the pre-change code: test_reuse_when_only_store_paths_changed, test_stale_when_code_changed, test_reuse_verdict_fails_closed_on_git_error, test_reuse_verdict_rejects_non_ancestor_sha, test_reuse_verdict_rejects_dirty_tree, test_rename_out_of_store_is_not_clean +29 more",
+      "severity": "\ud83d\udfe1",
+      "file": "skills/run-autopilot/cli/test_verification_dirty.py",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "prd": "00276-make-the-gate-record-trustworthy-v1.md",
+      "cycle": 2
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R1",
+      "issue": "The tracked-`--log` refusal was removed, but the design doc and tasks 5 and 7 still require it; `autopilot verify --log src/app.py` now truncates and overwrites tracked product code before any check. The PRD feature text names only the store check, so the PRD and the design doc conflict and cycle 1's R9 ruling settled it by dropping the safer behaviour. Restore the refusal, or record the conflict in the PRD and design doc so the contracts agree.",
+      "severity": "high",
+      "consensus": "2/3",
+      "file": "skills/run-autopilot/cli/__main__.py:947",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00276-make-the-gate-record-trustworthy-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R2",
+      "issue": "Two docs omit a path that exits 1 (pre-spawn dirty refusal, sha mismatch, lock-wait expiry, a `--log` refused by `run_gate`): both define exit 1 as \"timed out or non-zero gate exit\", so a reader cannot tell a dirty-tree refusal from a red suite.",
+      "severity": "medium",
+      "consensus": "2/3",
+      "file": "skills/work/references/final-verification.md:162",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00276-make-the-gate-record-trustworthy-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R3",
+      "issue": "Removing the tracked-log refusal reintroduces destructive writes: `verify --log src/app.py` truncates committed source before spawning the gate, and the changed tests explicitly require that overwrite. Restore both refusals and byte-preservation tests, including nested repo roots.",
+      "severity": "high",
+      "consensus": "1/3",
+      "file": "skills/run-autopilot/cli/verification.py:540",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00276-make-the-gate-record-trustworthy-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R4",
+      "issue": "`_acquire_lock` catches every `OSError` as \"lock busy\"; only `BlockingIOError` means that for `LOCK_EX | LOCK_NB`, so a persistent `ENOLCK`/`EBADF` is polled for the whole timeout and then reported as a timed-out gate.",
+      "severity": "medium",
+      "consensus": "1/3",
+      "file": "skills/run-autopilot/cli/verification.py:533",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00276-make-the-gate-record-trustworthy-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R5",
+      "issue": "The `os.killpg` `ProcessLookupError` guard added for cycle-1 R14 has no test; make `os.killpg` raise it in the existing sink-error test and assert the original sink `OSError` still propagates and the child is reaped.",
+      "severity": "medium",
+      "consensus": "1/3",
+      "file": "skills/run-autopilot/cli/test_verification_log_sink.py:120",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00276-make-the-gate-record-trustworthy-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R6",
+      "issue": "`_run_locked_gate` exceeds the 50-line limit once the kill-and-reap block was added; `_reap` already does `killpg`, `wait` and both pipe closes, so the sink-error `except` should call a shared helper carrying the `ProcessLookupError` guard.",
+      "severity": "medium",
+      "consensus": "1/3",
+      "file": "skills/run-autopilot/cli/verification.py:557",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00276-make-the-gate-record-trustworthy-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R7",
+      "issue": "`_hidden_flag_edits` no longer looks at edits (it returns every flagged path) yet still runs `ls-files -v -s` and unpacks `mode`, `blob` and `stage`; rename it and parse plain `ls-files -v -z` output as the design contract specifies.",
+      "severity": "medium",
+      "consensus": "1/3",
+      "file": "skills/run-autopilot/cli/verification.py:206",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00276-make-the-gate-record-trustworthy-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R8",
+      "issue": "Cycle-1 R7 is only half fixed: `_store_roots` is reused, but `_dirty_store_paths` and `_dirty_outside_store_paths` still duplicate the same `git status --porcelain=1 -z` call and record parse with the filter flipped.",
+      "severity": "medium",
+      "consensus": "1/3",
+      "file": "skills/run-autopilot/cli/verification.py:127",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00276-make-the-gate-record-trustworthy-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R9",
+      "issue": "`_acquire_lock` conceals permanent locking failures as contention until they surface as misleading timeout results; retry only contention errors, propagate the rest, and test that a non-contention error propagates immediately.",
+      "severity": "medium",
+      "consensus": "1/3",
+      "file": "skills/run-autopilot/cli/verification.py:533",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00276-make-the-gate-record-trustworthy-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R10",
+      "issue": "The hidden-flag scan retains machinery from the deleted hashing implementation (toplevel lookup, staged metadata, three unused fields); the design specifies a single `git ls-files -v -z --full-name` call parsing only tag and path.",
+      "severity": "medium",
+      "consensus": "1/3",
+      "file": "skills/run-autopilot/cli/verification.py:206",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00276-make-the-gate-record-trustworthy-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R11",
+      "issue": "The rework pushes `_run_locked_gate` to 52 lines and `run_gate` to 53 per the mechanical facts; both are changed functions, outside the settled exemption for unchanged oversized functions.",
+      "severity": "medium",
+      "consensus": "1/3",
+      "file": "skills/run-autopilot/cli/verification.py:557",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00276-make-the-gate-record-trustworthy-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R12",
+      "issue": "`_run_verify` resolves `log_path`, then `_refuse_verify_log` calls `.resolve()` again on the already-resolved path; drop the second call.",
+      "severity": "low",
+      "consensus": "1/3",
+      "file": "skills/run-autopilot/cli/__main__.py:957",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00276-make-the-gate-record-trustworthy-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R13",
+      "issue": "`run_gate` excludes its own log only when the log is untracked, where the PRD says to pass `log_path` as an extra excluded path; safer than the PRD and documented, but a recorded deviation.",
+      "severity": "low",
+      "consensus": "1/3",
+      "file": "skills/run-autopilot/cli/verification.py:276",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00276-make-the-gate-record-trustworthy-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R14",
+      "issue": "`verify --log <tracked product file>` is not refused: `_run_locked_gate` opens it \"wb\" and truncates it before the gate runs. The record is correctly refused as dirty, but the file's content is lost (same defect family as R1/R3).",
+      "severity": "low",
+      "consensus": "1/3",
+      "file": "skills/run-autopilot/cli/verification.py:574",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00276-make-the-gate-record-trustworthy-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R15",
+      "issue": "Extras beyond the PRD, all inside packets 16 and 2: `_store_symlink_targets_changed` handles a directory alias to the repo root and checks uncommitted store edits. The CHANGELOG records them.",
+      "severity": "low",
+      "consensus": "1/3",
+      "file": "skills/run-autopilot/cli/verification.py:144",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00276-make-the-gate-record-trustworthy-v1.md"
     }
   ]
 }

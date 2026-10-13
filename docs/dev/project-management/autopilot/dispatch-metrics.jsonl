@@ -3976,3 +3976,5 @@
 {"id":"6e50c6af","ended_at":1791866973,"elapsed_s":192,"outcome":"error","detail":"lack-of-input"}
 {"id":"0db6c044","ended_at":1791866980,"elapsed_s":73,"outcome":"ok","detail":"retry"}
 {"kind":"handoff","site":"review","edge":"leave","at":1791867432,"phase":"done","prd":"00276-make-the-gate-record-trustworthy-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1791867471,"phase":"done","prd":"00276-make-the-gate-record-trustworthy-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1791867584,"phase":"build","prd":"00276-make-the-gate-record-trustworthy-v1.md"}

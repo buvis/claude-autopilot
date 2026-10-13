@@ -47,13 +47,14 @@ Generated: 2026-10-13
 ### Batch 202610111300
 - [x] 00271-guard-v2-structural-delegation-check-v1 (2 cycles)
 - [x] 00285-resolve-process-facts-without-ps-v1 (1 cycle)
-- [ ] 00276-make-the-gate-record-trustworthy-v1 (in progress, entering build gate)
+- [x] 00276-make-the-gate-record-trustworthy-v1 (2 cycles)
 - backlog: 00277, 00278, 00279 (agoge 2026-10-10 walkthrough),
   plus 00282, 00283, 00284 (loop efficiency, from discovery 00281).
 - held: 00280 (2026-10-12 backlog review) plus 9 triage stubs minted at
-  00271's close — 00286-00292 — and 2 more minted at 00285's close —
-  00293-00294 (`dev/bin/release-checks` is still RED on this host for
-  pre-existing sandbox reasons unrelated to any held item).
+  00271's close — 00286-00292 — 2 more minted at 00285's close —
+  00293-00294 — and 2 more minted at 00276's close — 00295-00296
+  (`dev/bin/release-checks` is still RED on this host for pre-existing
+  sandbox reasons unrelated to any held item).
 
 Observations: 00271 closed converged-with-deferrals at the cycle-2 rework
 cap (10 unresolved cap-overflow findings + 6 cycle-1 deferrals, 16 total,
@@ -67,6 +68,14 @@ no batch latch. A second `autopilot loop` runs concurrently in
 `buvis/agent-skills` — different repo, no checkout collision, but it shares
 this account's usage window, so avoid parallel subagent fan-outs. Discovery
 doc `00281-loop-efficiency.md` is now committed and spawned PRDs 00282-00284.
+00276 also closed converged-with-deferrals at the cycle-2 rework cap: 5
+cycle-1/cycle-2 deferrals + 15 cycle-2 cap-overflow findings, 20 total,
+reconciled into the batch deferred JSON and minted into 2 hold stubs —
+00295-00296 (the one surviving HIGH, R1/R3: the tracked-`--log` refusal was
+removed per cycle-1 R9, but the design doc and PRD tasks 5/7 still require
+it — `autopilot verify --log <tracked file>` truncates committed product
+code before the gate runs). Carl stayed unavailable both of 00276's review
+dispatches (copilot auth, exit 1 — no batch latch).
 
 ### Batch 202610101000
 - [x] 00269-sweep-every-findings-token-v1 (2 cycles)
