@@ -1,0 +1,347 @@
+"""Tests for the per-PRD dollar budget of the loop driver.
+
+Contract under test: after each session whose decision would relaunch,
+the loop sums `cost_usd` over `loop-metrics.jsonl` rows for `state.prd`
+whose `ts_start >= state.prd_budget_since`, adds this session's
+`total_cost_usd`, and turns the decision into `park` with
+`park_site: "budget"` when the total exceeds `_AUTOPILOT_PRD_BUDGET_USD`
+(default 300, `0` disables). `_act_park` then writes `"site": "budget"`
+into `park-requested`; a non-budget park keeps the marker without a site.
+
+The sessions are scripted on the shared fake clock. The ones that cross a
+PRD boundary run the real Phase 0 (`cli.enter.enter`), so the park marker
+the loop writes is consumed by the same code a live session runs, and
+`prd_budget_since` is stamped by it on the fake clock.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from datetime import datetime, timezone
+from pathlib import Path
+
+import pytest
+
+from cli import enter as enter_mod
+from cli import loop_testutil
+from cli.loop import Loop
+from cli.loop_testutil import (
+    _BEFORE_CLOCK,
+    FakeClock,
+    make_loop,
+    metrics_rows,
+    noop_step,
+    terminal_step,
+    write_log,
+    write_state,
+)
+
+# The autouse fixture registers by being a module attribute.
+_no_real_drain_side_effects = loop_testutil._no_real_drain_side_effects
+
+PRD_A = "00010-alpha-v1.md"
+PRD_B = "00020-beta-v1.md"
+BATCH = "202610130000"
+# Prose-only body with design skipped: Phase 0 reads it as the full lane.
+PRD_TEXT = "---\ndesign: skip\n---\n\n# Prose only\n\nNo paths here.\n"
+
+
+def _iso(epoch: float) -> str:
+    return datetime.fromtimestamp(epoch, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _prds(ap_dir: Path) -> Path:
+    return ap_dir.parent / "prds"
+
+
+def _put(ap_dir: Path, folder: str, name: str) -> None:
+    path = _prds(ap_dir) / folder / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(PRD_TEXT, encoding="utf-8")
+
+
+def _has(ap_dir: Path, folder: str, name: str) -> bool:
+    return (_prds(ap_dir) / folder / name).exists()
+
+
+def _open_batch() -> dict:
+    return {"id": BATCH, "completed_prds": [], "parks_consecutive": 0}
+
+
+def _cost_log(ap_dir: Path, cost: float) -> None:
+    write_log(
+        ap_dir,
+        {"type": "result", "total_cost_usd": cost, "usage": {"output_tokens": 10}},
+    )
+
+
+def _work_step(prd: str, cost: float, tasks_completed: int):
+    """A healthy build session on `prd`: moves the progress fingerprint,
+    queues another build, spends `cost`. prd_budget_since is left as is."""
+
+    def step(ap_dir: Path) -> None:
+        state = json.loads((ap_dir / "state.json").read_text())
+        state.update(prd=prd, next_phase="build", tasks_completed=tasks_completed)
+        (ap_dir / "state.json").write_text(json.dumps(state))
+        _cost_log(ap_dir, cost)
+
+    return step
+
+
+def _entry_step(clock: FakeClock, cost: float, seen: dict, *, prd_arg=None, before=None):
+    """A session that runs the real Phase 0 first (park marker consumption,
+    selection, prd_budget_since stamp on the fake clock), then does one
+    build step's worth of work and spends `cost`."""
+
+    def step(ap_dir: Path) -> None:
+        if before is not None:
+            before(ap_dir)
+        marker = ap_dir / "park-requested"
+        seen["marker"] = json.loads(marker.read_text()) if marker.exists() else None
+        out = enter_mod.enter(
+            ap_dir / "state.json",
+            prds_dir=_prds(ap_dir),
+            autopilot_dir=ap_dir,
+            prd_arg=prd_arg,
+            in_loop=True,
+            now=lambda: _iso(clock.now),
+            git_head=lambda root: None,
+            record_resume_row=lambda prd, site, autopilot_dir: None,
+        )
+        assert out["stop"] is None, out
+        seen["enter"] = out
+        state = json.loads((ap_dir / "state.json").read_text())
+        seen["budget_since"] = state.get("prd_budget_since")
+        state.update(next_phase="build", tasks_completed=1)
+        (ap_dir / "state.json").write_text(json.dumps(state))
+        _cost_log(ap_dir, cost)
+
+    return step
+
+
+def _capture_decisions(monkeypatch) -> list[dict]:
+    """Every decision the loop acts on, as handed to the act branch."""
+    seen: list[dict] = []
+    original = Loop._act_branch
+
+    def spy(self, decision, ap_dir):
+        seen.append(dict(decision))
+        return original(self, decision, ap_dir)
+
+    monkeypatch.setattr(Loop, "_act_branch", spy)
+    return seen
+
+
+def _launched_prds(lp) -> list[str]:
+    return re.findall(r"· prd (\S+) ·", lp._test["out"].getvalue())
+
+
+def _deferred_items(ap_dir: Path) -> list[dict]:
+    path = ap_dir / "deferred" / f"{BATCH}-deferred.json"
+    return json.loads(path.read_text(encoding="utf-8"))["items"]
+
+
+# ── acceptance ───────────────────────────────────────────────────────────────
+
+
+def test_budget_park_lands_prd_in_hold_and_next_prd_launches(tmp_path, monkeypatch):
+    clock = FakeClock()
+    entry: dict = {}
+    steps = [
+        _work_step(PRD_A, 200.0, tasks_completed=1),  # A at $200: under $300
+        _work_step(PRD_A, 150.0, tasks_completed=2),  # A at $350: over, park
+        _entry_step(clock, 5.0, entry),  # Phase 0 parks A, selects B
+        terminal_step(prd=PRD_B, batch=BATCH),
+    ]
+    decisions = _capture_decisions(monkeypatch)
+    lp = make_loop(tmp_path, steps, clock=clock)
+    ap = lp._test["ap_dir"]
+    _put(ap, "wip", PRD_A)
+    _put(ap, "backlog", PRD_B)
+    write_state(
+        ap,
+        prd=PRD_A,
+        phase="build",
+        next_phase="build",
+        tasks_completed=0,
+        prd_budget_since=_iso(_BEFORE_CLOCK),
+        batch=_open_batch(),
+    )
+
+    assert lp.run() == 0
+
+    # The crossing session's decision is a budget park with the contract detail.
+    assert [d["signal"] for d in decisions] == ["continue", "park", "continue", "done"]
+    assert decisions[0].get("park_site") != "budget"
+    park = decisions[1]
+    assert park["park_site"] == "budget"
+    assert park["prd"] == PRD_A
+    assert park["detail"] == f"budget: $350.00 > $300; parking {PRD_A}"
+
+    # The marker the loop handed to the next session names the budget site.
+    assert entry["marker"] == {
+        "prd": PRD_A,
+        "reason": f"budget: $350.00 > $300; parking {PRD_A}",
+        "site": "budget",
+    }
+
+    # Phase 0 consumed it: A sits in hold/ with a budget stall record, B runs.
+    assert entry["enter"]["parked"] == PRD_A
+    assert entry["enter"]["prd"] == PRD_B
+    assert _has(ap, "hold", PRD_A)
+    assert not _has(ap, "wip", PRD_A)
+    assert not (ap / "park-requested").exists()
+    stalls = [i for i in _deferred_items(ap) if i.get("prd") == PRD_A]
+    assert len(stalls) == 1
+    assert stalls[0]["site"] == "budget"
+
+    rows = metrics_rows(ap)
+    assert [(r["prd"], r["signal"]) for r in rows] == [
+        (PRD_A, "continue"),
+        (PRD_A, "park"),
+        (PRD_B, "continue"),
+        (PRD_B, "done"),
+    ]
+    # The session after the park was launched on A's state; the one after
+    # that launches on B: a different PRD's session follows the budget park.
+    assert _launched_prds(lp) == [PRD_A, PRD_A, PRD_A, PRD_B]
+
+
+def test_budget_resets_after_resume_from_hold(tmp_path, monkeypatch):
+    clock = FakeClock()
+    park_entry: dict = {}
+    resume_entry: dict = {}
+
+    def resume_a_from_hold(ap_dir: Path) -> None:
+        # The operator resumes A after a while: hold/ -> backlog/.
+        clock.now += 600
+        (_prds(ap_dir) / "hold" / PRD_A).rename(_prds(ap_dir) / "backlog" / PRD_A)
+
+    steps = [
+        _work_step(PRD_A, 310.0, tasks_completed=1),  # A at $310: park
+        _entry_step(clock, 5.0, park_entry),  # Phase 0 parks A, selects B
+        _entry_step(clock, 50.0, resume_entry, prd_arg=PRD_A, before=resume_a_from_hold),
+        terminal_step(prd=PRD_A, batch=BATCH),
+    ]
+    decisions = _capture_decisions(monkeypatch)
+    lp = make_loop(tmp_path, steps, clock=clock)
+    ap = lp._test["ap_dir"]
+    _put(ap, "wip", PRD_A)
+    _put(ap, "backlog", PRD_B)
+    write_state(
+        ap,
+        prd=PRD_A,
+        phase="build",
+        next_phase="build",
+        tasks_completed=0,
+        prd_budget_since=_iso(_BEFORE_CLOCK),
+        batch=_open_batch(),
+    )
+
+    assert lp.run() == 0
+
+    # First window: $310 parks A.
+    assert decisions[0]["signal"] == "park"
+    assert decisions[0]["park_site"] == "budget"
+    assert decisions[0]["detail"] == f"budget: $310.00 > $300; parking {PRD_A}"
+    assert park_entry["enter"]["parked"] == PRD_A
+
+    # Resume: Phase 0 re-entered A and stamped a fresh window after the
+    # $310 session started.
+    assert resume_entry["enter"]["prd"] == PRD_A
+    rows = metrics_rows(ap)
+    first_a_row = rows[0]
+    assert (first_a_row["prd"], first_a_row["cost_usd"]) == (PRD_A, 310.0)
+    since = datetime.strptime(resume_entry["budget_since"], "%Y-%m-%dT%H:%M:%SZ")
+    since_epoch = since.replace(tzinfo=timezone.utc).timestamp()
+    assert since_epoch > first_a_row["ts_start"]
+
+    # The $50 session continues: the old $310 is outside the new window
+    # (counted lifetime, A would sit at $360 and park again).
+    assert sum(r.get("cost_usd", 0) for r in rows if r["prd"] == PRD_A) > 300
+    resumed = decisions[2]
+    assert resumed["prd"] == PRD_A
+    assert resumed["signal"] == "continue"
+    assert resumed.get("park_site") != "budget"
+    assert [(r["prd"], r["signal"]) for r in rows] == [
+        (PRD_A, "park"),
+        (PRD_B, "continue"),
+        (PRD_A, "continue"),
+        (PRD_A, "done"),
+    ]
+    assert not (ap / "park-requested").exists()
+    assert _has(ap, "wip", PRD_A)
+    assert not _has(ap, "hold", PRD_A)
+
+
+def test_budget_zero_disables(tmp_path, monkeypatch):
+    def seeded_loop(root: Path, env: dict | None):
+        steps = [
+            _work_step(PRD_A, 1000.0, tasks_completed=1),
+            _work_step(PRD_A, 1000.0, tasks_completed=2),
+            terminal_step(prd=PRD_A, batch=BATCH),
+        ]
+        lp = make_loop(root, steps, env=env)
+        write_state(
+            lp._test["ap_dir"],
+            prd=PRD_A,
+            phase="build",
+            next_phase="build",
+            tasks_completed=0,
+            prd_budget_since=_iso(_BEFORE_CLOCK),
+            batch=_open_batch(),
+        )
+        return lp
+
+    decisions = _capture_decisions(monkeypatch)
+    lp = seeded_loop(tmp_path / "disabled", {"_AUTOPILOT_PRD_BUDGET_USD": "0"})
+
+    assert lp.run() == 0
+
+    ap = lp._test["ap_dir"]
+    assert [d["signal"] for d in decisions] == ["continue", "continue", "done"]
+    assert all(d.get("park_site") != "budget" for d in decisions)
+    assert not (ap / "park-requested").exists()
+    assert [r["signal"] for r in metrics_rows(ap)] == ["continue", "continue", "done"]
+    assert sum(r.get("cost_usd", 0) for r in metrics_rows(ap)) > 2000
+
+    # Control: the same sessions under the default budget park on the first.
+    decisions.clear()
+    control = seeded_loop(tmp_path / "control", None)
+    assert control.run() == 0
+    assert decisions[0]["signal"] == "park"
+    assert decisions[0]["park_site"] == "budget"
+
+
+# ── contract details ─────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("env", "expected"),
+    [
+        ({}, 300),
+        ({"_AUTOPILOT_PRD_BUDGET_USD": "0"}, 0),
+        ({"_AUTOPILOT_PRD_BUDGET_USD": "450.5"}, 450.5),
+        ({"_AUTOPILOT_PRD_BUDGET_USD": "lots"}, 300),
+    ],
+    ids=["default", "zero-disables", "float", "unparseable-keeps-default"],
+)
+def test_budget_usd_for_reads_the_env_knob(env, expected):
+    from cli.loop_decision import budget_usd_for
+
+    assert budget_usd_for(env) == expected
+
+
+def test_non_budget_park_marker_carries_no_site(tmp_path):
+    # A died-ladder park (retry 1/1, then park) keeps today's marker shape,
+    # which records._parse_marker reads as wrapper_died.
+    lp = make_loop(tmp_path, [noop_step, noop_step, noop_step, noop_step])
+    ap = lp._test["ap_dir"]
+    write_state(ap, prd=PRD_A, next_phase="build", batch={"id": BATCH})
+
+    lp.run()
+
+    marker = json.loads((ap / "park-requested").read_text())
+    assert set(marker) == {"prd", "reason"}
+    assert marker["prd"] == PRD_A
