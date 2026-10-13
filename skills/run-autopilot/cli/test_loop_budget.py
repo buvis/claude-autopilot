@@ -339,6 +339,54 @@ def test_budget_usd_for_reads_the_env_knob(env, expected):
     assert budget_usd_for(env) == expected
 
 
+def test_prd_spend_since_missing_ledger_is_silently_zero(tmp_path, capsys):
+    # Review finding 10 (PRD 00282, task 9): no loop-metrics.jsonl yet (a
+    # brand-new budget window) is the ordinary case - no warning.
+    from cli.loop_decision import prd_spend_since
+
+    assert prd_spend_since(tmp_path / "loop-metrics.jsonl", PRD_A, 0.0) == 0.0
+    assert capsys.readouterr().err == ""
+
+
+def test_prd_spend_since_reports_other_read_failures_on_stderr(tmp_path, capsys):
+    # Review finding 10: a ledger that exists but cannot be read (here, a
+    # directory where a file is expected) must not silently read as $0 -
+    # that previously masked a broken budget check behind an always-false
+    # "under budget" result. The failure is reported, not swallowed.
+    from cli.loop_decision import prd_spend_since
+
+    broken = tmp_path / "loop-metrics.jsonl"
+    broken.mkdir()
+
+    assert prd_spend_since(broken, PRD_A, 0.0) == 0.0
+    assert "loop-metrics read failed" in capsys.readouterr().err
+
+
+def test_prd_spend_since_delegates_row_loading_to_render_metrics_load_rows(tmp_path):
+    # Review finding 11 (PRD 00282, task 9): row loading is cli.render_
+    # metrics.load_rows, not a parallel reader - so a malformed line and an
+    # `event` row (PRD 00094's review_converged rows) are skipped the same
+    # way render_metrics itself skips them, while the PRD/timestamp/numeric
+    # filters still apply.
+    from cli.loop_decision import prd_spend_since
+
+    path = tmp_path / "loop-metrics.jsonl"
+    path.write_text(
+        "\n".join(
+            [
+                json.dumps({"prd": PRD_A, "ts_start": 10, "cost_usd": 100.0}),
+                "{not json at all",
+                json.dumps({"event": "review_converged", "prd": PRD_A, "cost_usd": 999.0}),
+                json.dumps({"prd": PRD_B, "ts_start": 10, "cost_usd": 500.0}),
+                json.dumps({"prd": PRD_A, "ts_start": 20, "cost_usd": 50.0}),
+            ],
+        )
+        + "\n",
+    )
+
+    assert prd_spend_since(path, PRD_A, 0.0) == 150.0
+
+
 def test_non_budget_park_marker_carries_no_site(tmp_path):
     # A died-ladder park (retry 1/1, then park) keeps today's marker shape,
     # which records._parse_marker reads as wrapper_died.
@@ -489,22 +537,45 @@ def test_budget_bound_leaves_non_relaunch_decisions_alone(tmp_path, signal, deta
     assert decision == before
 
 
-def test_budget_bound_never_parks_a_scheduled_limit_wait(tmp_path):
-    # A continue decision carrying limit_wait (usage-limit wait or window
-    # yield) must sleep, not park - parking here drops the sleep and
-    # relaunches straight into the still-live limit.
+def test_budget_bound_sleeps_out_a_scheduled_limit_wait_then_parks(tmp_path):
+    # Review finding 3 (PRD 00282, task 9): a continue decision carrying
+    # limit_wait is not exempt from the budget bound - exempting it let a
+    # PRD run up unlimited spend for as long as it kept hitting usage
+    # limits. The scheduled sleep still runs first (a relaunch into the
+    # still-live limit would halt on an unconsumed park marker), then the
+    # decision becomes a budget park.
     lp, ap = _bound_loop(tmp_path)
     _seed_state(ap, prd=PRD_A, prd_budget_since=_SINCE)
     _seed_metrics(ap, _row(PRD_A, _SINCE_EPOCH + 1, 900.0))
     _cost_log(ap, 900.0)
     decision = _decision(PRD_A)
     decision["limit_wait"] = 600
-    before = dict(decision)
 
     lp._budget_bound(decision, ap)
 
-    assert decision.get("park_site") != "budget"
-    assert decision == before
+    assert lp._test["sleeps"] == [600]
+    assert decision["signal"] == "park"
+    assert decision["park_site"] == "budget"
+    assert decision["detail"] == f"budget: $1800.00 > $300; parking {PRD_A}"
+
+
+def test_budget_bound_reads_through_an_instant_exit_signal_to_then(tmp_path):
+    # Review finding 4 (PRD 00282, task 9): _budget_bound must not skip an
+    # instant_exit decision whose `then` is "continue" - that signal masked
+    # every budget-exceeding session short enough (or free enough) to be
+    # presented as instant_exit.
+    lp, ap = _bound_loop(tmp_path)
+    _seed_state(ap, prd=PRD_A, prd_budget_since=_SINCE)
+    _seed_metrics(ap, _row(PRD_A, _SINCE_EPOCH + 1, 900.0))
+    _cost_log(ap, 900.0)
+    decision = _decision(PRD_A, signal="instant_exit")
+    decision["then"] = "continue"
+
+    lp._budget_bound(decision, ap)
+
+    assert decision["signal"] == "park"
+    assert decision["park_site"] == "budget"
+    assert decision["detail"] == f"budget: $1800.00 > $300; parking {PRD_A}"
 
 
 def test_budget_bound_total_equal_to_budget_does_not_park(tmp_path):
@@ -583,6 +654,24 @@ def test_budget_bound_honours_a_custom_budget(tmp_path):
     assert over["signal"] == "park"
     assert over["park_site"] == "budget"
     assert over["detail"] == f"budget: $460.00 > $450.5; parking {PRD_A}"
+
+
+def test_budget_bound_invalid_budget_since_falls_back_to_epoch_zero(tmp_path):
+    # Review finding 9 (PRD 00282, task 9): a present but unparseable
+    # prd_budget_since must not disable the budget check the way an
+    # absent one does - it falls back to epoch zero, counting every row
+    # for the PRD, same as a never-reset budget window.
+    lp, ap = _bound_loop(tmp_path)
+    _seed_state(ap, prd=PRD_A, prd_budget_since="not-a-timestamp")
+    _seed_metrics(ap, _row(PRD_A, 0, 150.0))
+    _cost_log(ap, 150.01)
+    decision = _decision(PRD_A)
+
+    lp._budget_bound(decision, ap)
+
+    assert decision["signal"] == "park"
+    assert decision["park_site"] == "budget"
+    assert decision["detail"] == f"budget: $300.01 > $300; parking {PRD_A}"
 
 
 @pytest.mark.parametrize(

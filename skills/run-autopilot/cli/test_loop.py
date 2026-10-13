@@ -212,7 +212,7 @@ def test_one_metrics_line_per_session(tmp_path):
         (ap_dir / "state.json").write_text(
             json.dumps({"prd": "p.md", "next_phase": "review", "batch": {"id": "b"}}),
         )
-        write_log(ap_dir, {"type": "result"})
+        write_log(ap_dir, {"type": "result", "total_cost_usd": 0.01})
 
     lp = make_loop(tmp_path, [review_step, terminal_step()])
     write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b"})
@@ -293,11 +293,13 @@ def test_session_row_lane_is_null_without_state_fields(tmp_path):
 
 
 def _state_step(**state):
-    """A session that writes ``state`` and a bare result log."""
+    """A session that writes ``state`` and a billed result log (a real
+    session always carries a cost; unbilled would read as instant_exit
+    and route through the died ladder instead of this state)."""
 
     def step(ap_dir: Path) -> None:
         (ap_dir / "state.json").write_text(json.dumps(state))
-        write_log(ap_dir, {"type": "result"})
+        write_log(ap_dir, {"type": "result", "total_cost_usd": 0.01})
 
     return step
 

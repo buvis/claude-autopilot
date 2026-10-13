@@ -71,7 +71,7 @@ def _progress_step(prd: str, hand_off: str = "plan"):
         (ap_dir / "state.json").write_text(
             json.dumps({"prd": prd, "next_phase": hand_off, "batch": {"id": "b-1"}}),
         )
-        write_log(ap_dir, {"type": "result"})
+        write_log(ap_dir, {"type": "result", "total_cost_usd": 0.01})
 
     return step
 

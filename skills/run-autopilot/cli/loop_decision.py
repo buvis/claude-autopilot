@@ -1,8 +1,8 @@
 """cli/loop_decision.py - the decision table and pure ports of the loop
 driver (PRD 00192).
 
-Allowed imports: stdlib, `cli.pause`, `cli.usage_limit`, `cli.routing`;
-never `cli.loop`, `cli.loop_gates` or `cli.loop_act`.
+Allowed imports: stdlib, `cli.pause`, `cli.usage_limit`, `cli.routing`,
+`cli.render_metrics`; never `cli.loop`, `cli.loop_gates` or `cli.loop_act`.
 """
 
 from __future__ import annotations
@@ -11,9 +11,10 @@ import datetime as _dt
 import json
 import math
 import re
+import sys
 from pathlib import Path
 
-from cli import pause, usage_limit
+from cli import pause, render_metrics, usage_limit
 from cli.routing import _load_json
 
 _CONNECTION_FAIL = re.compile(
@@ -174,22 +175,31 @@ def _is_number(value) -> bool:
 
 def prd_spend_since(metrics_path: Path, prd: str, since: float) -> float:
     """Sum of `cost_usd` over metrics rows for `prd` with `ts_start >=
-    since`. Malformed lines and rows missing either field count as 0."""
-    total = 0.0
+    since`. Malformed lines and rows missing either field count as 0.
+    Row loading delegates to `render_metrics.load_rows` (finding 11, PRD
+    00282), which also drops review-converged event rows. A missing
+    ledger (no sessions recorded for this budget window yet) silently
+    counts as 0 - the ordinary case - but any other read failure is
+    reported on stderr rather than swallowed the same way (finding 10):
+    a disabled budget check must be visible, not read as "$0 spent"."""
+    if not metrics_path.exists():
+        return 0.0
     try:
-        with open(metrics_path, "rb") as fh:
-            for raw in fh:
-                try:
-                    row = json.loads(raw)
-                except ValueError:
-                    continue
-                if not isinstance(row, dict) or row.get("prd") != prd:
-                    continue
-                ts, cost = row.get("ts_start"), row.get("cost_usd")
-                if _is_number(ts) and _is_number(cost) and ts >= since:
-                    total += cost
-    except OSError:
-        pass
+        metrics_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        print(
+            f"autopilot: loop-metrics read failed for budget check "
+            f"({metrics_path}): {exc}",
+            file=sys.stderr,
+        )
+        return 0.0
+    total = 0.0
+    for row in render_metrics.load_rows(metrics_path):
+        if row.get("prd") != prd:
+            continue
+        ts, cost = row.get("ts_start"), row.get("cost_usd")
+        if _is_number(ts) and _is_number(cost) and ts >= since:
+            total += cost
     return total
 
 
@@ -239,31 +249,39 @@ class DecisionMixin:
         mtime = _mtime(state_path)
         if mtime is not None and mtime >= int(ts_start):
             state_touched = True
-        if state_touched:
+        # The instant-exit check runs before the state_touched counter
+        # reset (review finding 1, PRD 00282): a sub-30s, $0 session that
+        # nonetheless rewrote state.json must not reset _net_retries /
+        # _died_retries, or the died ladder (retry once, then park) never
+        # gets to decide and the loop continues on it forever.
+        instant = self._is_instant_exit(ap_dir, ts_start)
+        if state_touched and not instant:
             self._net_retries = 0
             self._died_retries = 0
         decision["state_touched"] = state_touched
 
         state = _load_json(state_path) if decision["signal"] == "" else None
         if isinstance(state, dict):
-            self._decide_from_state(decision, state, state_touched)
+            self._decide_from_state(decision, state, state_touched and not instant)
 
         if decision["signal"] == "continue":
             self._limit_wait_for(ap_dir, decision)
         elif decision["signal"] == "":
             self._decide_no_progress(decision, ap_dir, state_path, ts_start)
-        self._apply_instant_exit(decision, ap_dir, ts_start)
+        self._apply_instant_exit(decision, instant)
         return decision
 
-    def _apply_instant_exit(self, decision: dict, ap_dir: Path, ts_start: float) -> None:
-        """A sub-30s session billed $0 (or nothing) is presented as
-        `instant_exit`; `then` keeps the signal the table already chose."""
-        if decision["signal"] in ("paused", "done", "state_write_failed"):
-            return
+    def _is_instant_exit(self, ap_dir: Path, ts_start: float) -> bool:
+        """Sub-30s and unbilled (or no session log at all)."""
         wall = self._clock() - ts_start
         cost = last_result_field(ap_dir / "last-session.log", "total_cost_usd")
         billed = _is_number(cost) and cost > 0
-        if wall >= _INSTANT_EXIT_SECS or billed:
+        return wall < _INSTANT_EXIT_SECS and not billed
+
+    def _apply_instant_exit(self, decision: dict, instant: bool) -> None:
+        """A sub-30s session billed $0 (or nothing) is presented as
+        `instant_exit`; `then` keeps the signal the table already chose."""
+        if not instant or decision["signal"] in ("paused", "done", "state_write_failed"):
             return
         decision["then"] = decision["signal"] or "continue"
         decision["signal"] = "instant_exit"
@@ -500,27 +518,38 @@ class DecisionMixin:
     def _budget_bound(self, decision: dict, ap_dir: Path) -> None:
         """Per-PRD dollar budget: a relaunch whose PRD has spent more than
         `_AUTOPILOT_PRD_BUDGET_USD` since `state.prd_budget_since` (metrics
-        rows plus this session's cost) parks with `park_site: budget`."""
-        if decision["signal"] != "continue" or not decision.get("prd"):
-            return
-        if decision.get("limit_wait") is not None:
-            # A scheduled usage-limit wait must run; parking here would
-            # drop the sleep and relaunch straight into the still-live
-            # limit, which then halts the loop (unconsumed park marker).
+        rows plus this session's cost) parks with `park_site: budget`.
+        Reads through an instant_exit presentation to `then` (finding 4,
+        PRD 00282) so a short or free session is budget-checked the same
+        as any other continue. A scheduled usage-limit wait is no longer
+        exempt (finding 3): it still must run - parking first would drop
+        the sleep and relaunch straight into the still-live limit, which
+        then halts the loop (unconsumed park marker) - so the sleep runs
+        before the decision is turned into a park."""
+        effective = decision["then"] if decision["signal"] == "instant_exit" else decision["signal"]
+        if effective != "continue" or not decision.get("prd"):
             return
         budget = budget_usd_for(self.env)
         if budget == 0:
             return
         state = _load_json(ap_dir / "state.json")
-        since = _iso_epoch(state.get("prd_budget_since")) if isinstance(state, dict) else None
-        if since is None:
+        if not isinstance(state, dict) or "prd_budget_since" not in state:
             return
+        stamp = state.get("prd_budget_since")
+        # Present but unparseable falls back to epoch zero - every row for
+        # the PRD counts - rather than disabling the check the way an
+        # absent stamp does (finding 9, PRD 00282).
+        since = _iso_epoch(stamp)
+        if since is None:
+            since = 0.0
         prd = decision["prd"]
         total = prd_spend_since(ap_dir / "loop-metrics.jsonl", prd, since)
         session = last_result_field(ap_dir / "last-session.log", "total_cost_usd")
         if _is_number(session):
             total += session
         if total > budget:
+            if decision.get("limit_wait") is not None:
+                self._sleep(decision["limit_wait"])
             decision["signal"] = "park"
             decision["park_site"] = "budget"
             decision["detail"] = f"budget: ${total:.2f} > ${budget:g}; parking {prd}"
