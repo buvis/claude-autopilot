@@ -528,7 +528,7 @@ topic is unchanged; the hits above are the ones to use.
 ## Project Health
 
 CI: none configured/observed (0 open issues, 0 open PRs, no workflow runs —
-refreshed 2026-10-13T18:xx). Batch 202610111300 is open with 6 drained
+refreshed 2026-10-13). Batch 202610111300 is open with 6 drained
 (00271, 00285, 00276, 00278, 00279, 00282); 00283 now selected into wip,
 entering planning. `master` at 714227e, tree clean. `release-checks` stays RED
 on this host for pre-existing sandbox reasons (setuid `ps` unreachable under
