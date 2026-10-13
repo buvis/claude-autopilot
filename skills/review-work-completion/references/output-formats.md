@@ -100,6 +100,8 @@ re-worded without `autopilot gate --findings` refusing the batch.
 
 A [m/n] token or a pipe-table row anywhere outside the Consolidated Findings table makes gate --findings and review-close refuse the file (exit 2); quote an example row inside a code fence.
 
+The header row itself (`| Ref | Consensus | Severity | Issue | File | Found By |`, or any ordering naming Severity, Issue and File) must never be fenced, even inside a worked example - only example data rows may be quoted that way; a fenced header makes gate --findings and review-close refuse the file (exit 2) too.
+
 ## Issue Documentation Format
 
 ```
