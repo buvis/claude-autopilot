@@ -534,7 +534,7 @@ def test_run_gate_dirtied_during_the_run_writes_no_record(repo: Path) -> None:
     # prints its summary line. The post-reap check must still catch it.
     command = "echo dirty > src/dirty.py; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
 
-    result = verification.run_gate(command, repo, "abc", 1)
+    result = verification.run_gate(command, repo, _git(repo, "rev-parse", "HEAD"), 1)
 
     assert result["passed"] == 1
     assert result["recorded"] is False
@@ -550,7 +550,7 @@ def test_run_gate_tolerates_dirty_store_paths(repo: Path) -> None:
     result = verification.run_gate(
         "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
         repo,
-        "abc",
+        _git(repo, "rev-parse", "HEAD"),
         1,
     )
 
@@ -587,7 +587,9 @@ def test_gate_runs_in_a_repo_that_does_not_ignore_docs_dev_tmp(
         "--untracked-files=all",
     )
 
-    result = verification.run_gate("echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'", repo, "abc", 1)
+    result = verification.run_gate(
+        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'", repo, _git(repo, "rev-parse", "HEAD"), 1
+    )
 
     assert result["passed"] == 1
     assert result["recorded"] is True
@@ -652,7 +654,7 @@ def test_gate_below_the_toplevel_excuses_its_own_docs_dev_tmp(
     result = verification.run_gate(
         "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
         root,
-        "abc",
+        _git(repo, "rev-parse", "HEAD"),
         1,
     )
 
@@ -676,7 +678,7 @@ def test_own_log_outside_tmp_is_not_dirt(
     result = verification.run_gate(
         "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
         repo,
-        "abc",
+        _git(repo, "rev-parse", "HEAD"),
         1,
         log_path=log_path,
     )
@@ -698,7 +700,7 @@ def test_own_log_outside_tmp_is_not_dirt(
     refused = verification.run_gate(
         "mkdir -p sub; echo stray > sub/my-own.log; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
         repo,
-        "abc",
+        _git(repo, "rev-parse", "HEAD"),
         1,
         log_path=log_path,
     )
@@ -721,7 +723,7 @@ def test_own_log_exclusion_does_not_excuse_a_sibling_sharing_its_name_as_prefix(
     refused = verification.run_gate(
         "echo stray > my-own.log.bak; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
         repo,
-        "abc",
+        _git(repo, "rev-parse", "HEAD"),
         1,
         log_path=log_path,
     )

@@ -68,7 +68,7 @@ def _assert_dirty_paths_agree_with_dirty(result: dict) -> None:
 def test_dirty_result_lists_the_dirty_paths(repo: Path) -> None:
     # Every result carries dirty_paths: [] when clean, the sorted offending
     # paths when a pre-spawn or post-reap check refuses the record.
-    clean = verification.run_gate(SUMMARY, repo, "abc", 1)
+    clean = verification.run_gate(SUMMARY, repo, _git(repo, "rev-parse", "HEAD"), 1)
     assert clean["recorded"] is True
     assert clean["dirty_paths"] == []
     _assert_dirty_paths_agree_with_dirty(clean)
@@ -83,14 +83,18 @@ def test_dirty_result_lists_the_dirty_paths(repo: Path) -> None:
 
     (repo / "src" / "untracked.py").unlink()
     (repo / "a-stray.txt").unlink()
-    post = verification.run_gate(f"echo dirty > src/dirty.py; {SUMMARY}", repo, "abc", 1)
+    post = verification.run_gate(
+        f"echo dirty > src/dirty.py; {SUMMARY}", repo, _git(repo, "rev-parse", "HEAD"), 1
+    )
     assert post["passed"] == 1
     assert post["dirty"] is True
     assert post["dirty_paths"] == ["src/dirty.py"]
     _assert_dirty_paths_agree_with_dirty(post)
 
     (repo / "src" / "dirty.py").unlink()
-    timed_out = verification.run_gate("sleep 5", repo, "abc", 1, timeout=0.2)
+    timed_out = verification.run_gate(
+        "sleep 5", repo, _git(repo, "rev-parse", "HEAD"), 1, timeout=0.2
+    )
     assert timed_out["timed_out"] is True
     assert timed_out["dirty_paths"] == []
     _assert_dirty_paths_agree_with_dirty(timed_out)
@@ -135,7 +139,7 @@ def test_post_reap_dirty_paths_list_every_path_the_run_dirtied(repo: Path) -> No
         f"echo c > src/three.py; {SUMMARY}"
     )
 
-    post = verification.run_gate(command, repo, "abc", 1)
+    post = verification.run_gate(command, repo, _git(repo, "rev-parse", "HEAD"), 1)
 
     assert post["passed"] == 1
     assert post["dirty"] is True
@@ -169,7 +173,9 @@ def test_dirty_paths_excuse_the_gates_own_untracked_log(
     log_path = repo / "logs" / "gate.log"
     assert not log_path.exists()
 
-    clean = verification.run_gate(SUMMARY, repo, "abc", 1, log_path=log_path)
+    clean = verification.run_gate(
+        SUMMARY, repo, _git(repo, "rev-parse", "HEAD"), 1, log_path=log_path
+    )
 
     assert log_path.exists()
     assert _git(repo, "ls-files", "--", "logs/gate.log") == ""
@@ -182,7 +188,7 @@ def test_dirty_paths_excuse_the_gates_own_untracked_log(
     dirty = verification.run_gate(
         f"echo dirty > src/dirty.py; {SUMMARY}",
         repo,
-        "abc",
+        _git(repo, "rev-parse", "HEAD"),
         1,
         log_path=log_path,
     )

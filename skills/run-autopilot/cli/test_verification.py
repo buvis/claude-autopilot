@@ -100,7 +100,7 @@ def test_run_gate_drains_stderr_without_deadlock(repo: Path) -> None:
         "head -c 2000000 /dev/zero | tr '\\0' 'e' 1>&2; "
         "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
     )
-    result = verification.run_gate(command, repo, "abc", None, timeout=10)
+    result = verification.run_gate(command, repo, _git(repo, "rev-parse", "HEAD"), None, timeout=10)
 
     assert result["passed"] == 1
     assert result["timed_out"] is False
@@ -173,7 +173,7 @@ def test_run_gate_prints_one_summary_line(repo: Path) -> None:
         "noise PASS x\\n"
         "PASS 12 FAIL 0 SKIP 3 EXIT 0\\n'"
     )
-    result = verification.run_gate(command, repo, "abc123", 2)
+    result = verification.run_gate(command, repo, _git(repo, "rev-parse", "HEAD"), 2)
 
     assert result == {
         "passed": 12,
@@ -184,6 +184,7 @@ def test_run_gate_prints_one_summary_line(repo: Path) -> None:
         "timed_out": False,
         "recorded": True,
         "dirty": False,
+        "dirty_paths": [],
     }
 
 
@@ -191,7 +192,7 @@ def test_run_gate_unparseable_output_records_nothing(repo: Path) -> None:
     result = verification.run_gate(
         "echo 'pass 1 fail 0 skip 0 exit 0'; exit 3",
         repo,
-        "abc",
+        _git(repo, "rev-parse", "HEAD"),
         1,
     )
 
@@ -206,7 +207,7 @@ def test_run_gate_unparseable_output_records_nothing(repo: Path) -> None:
     near_miss = verification.run_gate(
         "echo 'PASSED 3 of 4 in 5 s 6'",
         repo,
-        "abc",
+        _git(repo, "rev-parse", "HEAD"),
         1,
     )
     assert near_miss["passed"] is None
@@ -224,7 +225,7 @@ def test_run_gate_keeps_tail_so_a_late_summary_line_still_parses(
     # head) of output exceeding GATE_OUTPUT_CAP must still find it, and the
     # bytes beyond the cap really are dropped.
     command = "printf '%0100d\\n' 0; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
-    result = verification.run_gate(command, repo, "abc", None)
+    result = verification.run_gate(command, repo, _git(repo, "rev-parse", "HEAD"), None)
 
     assert result["passed"] == 1
     assert result["failed"] == 0
@@ -242,7 +243,7 @@ def test_run_gate_streams_and_keeps_tail(repo: Path, monkeypatch) -> None:
     # drain is byte-bounded as it reads, not only truncated after a full
     # buffered capture: what it hands back never exceeds the cap.
     command = "head -c 2000000 /dev/zero | tr '\\0' 'x'; echo; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
-    result = verification.run_gate(command, repo, "abc", None, timeout=30)
+    result = verification.run_gate(command, repo, _git(repo, "rev-parse", "HEAD"), None, timeout=30)
 
     assert result["passed"] == 1
     assert result["raw_line"] == "PASS 1 FAIL 0 SKIP 0 EXIT 0"
@@ -252,7 +253,7 @@ def test_run_gate_streams_and_keeps_tail(repo: Path, monkeypatch) -> None:
 
 def test_run_gate_uses_last_summary_line_not_first(repo: Path) -> None:
     command = "echo 'PASS 1 FAIL 1 SKIP 0 EXIT 1'; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
-    result = verification.run_gate(command, repo, "abc", None)
+    result = verification.run_gate(command, repo, _git(repo, "rev-parse", "HEAD"), None)
 
     assert result["raw_line"] == "PASS 1 FAIL 0 SKIP 0 EXIT 0"
     assert result["failed"] == 0
@@ -265,7 +266,7 @@ def test_run_gate_times_out_and_writes_nothing(repo: Path) -> None:
     result = verification.run_gate(
         "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'; sleep 30; echo done",
         repo,
-        "abc",
+        _git(repo, "rev-parse", "HEAD"),
         1,
         timeout=6,
     )
@@ -280,6 +281,7 @@ def test_run_gate_times_out_and_writes_nothing(repo: Path) -> None:
         "timed_out": True,
         "recorded": False,
         "dirty": False,
+        "dirty_paths": [],
     }
     # The deadline tracks the `timeout` argument: waiting out the given 6s
     # (not some constant deadline of its own) and then returning promptly.
@@ -297,7 +299,7 @@ def test_run_gate_times_out_when_the_child_closes_both_pipes_and_lingers(
     result = verification.run_gate(
         "exec 1>&-; exec 2>&-; sleep 30",
         repo,
-        "abc",
+        _git(repo, "rev-parse", "HEAD"),
         1,
         timeout=1,
     )
@@ -312,6 +314,7 @@ def test_run_gate_times_out_when_the_child_closes_both_pipes_and_lingers(
         "timed_out": True,
         "recorded": False,
         "dirty": False,
+        "dirty_paths": [],
     }
     # A 1s timeout returns in about 1s: paired with the 6s case above, no
     # single hardcoded deadline can satisfy both bounds.
@@ -394,7 +397,7 @@ def test_run_gate_closes_the_child_pipes_before_returning(
     result = verification.run_gate(
         "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
         repo,
-        "abc",
+        _git(repo, "rev-parse", "HEAD"),
         1,
     )
 
@@ -416,12 +419,13 @@ def test_run_gate_closes_the_child_pipes_before_returning(
 
 def test_run_gate_writes_last_verification_json_on_fresh_run(repo: Path) -> None:
     command = "echo 'PASS 7 FAIL 2 SKIP 1 EXIT 1'; exit 1"
-    result = verification.run_gate(command, repo, "deadbeef", 4)
+    head = _git(repo, "rev-parse", "HEAD")
+    result = verification.run_gate(command, repo, head, 4)
 
     assert result["exit"] == 1
     written = json.loads((repo / RECORD_REL).read_text())
     assert written == {
-        "sha": "deadbeef",
+        "sha": head,
         "cycle": 4,
         "commands": [{"command": command, "exit": 1}],
         "passed": 7,
@@ -436,7 +440,7 @@ def test_run_gate_reports_the_process_exit_not_the_printed_one(
     # The command lies about its own status: the gate reports what the
     # process actually exited with.
     command = "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'; exit 2"
-    result = verification.run_gate(command, repo, "cafe", 1)
+    result = verification.run_gate(command, repo, _git(repo, "rev-parse", "HEAD"), 1)
 
     assert result["exit"] == 2
     assert result["passed"] == 1
@@ -505,7 +509,7 @@ def test_run_gate_streams_stdout_and_stderr_to_the_log(
     log_path = tmp_path_factory.mktemp("log") / "gate.log"
     command = "echo 'out line'; echo 'err line' 1>&2; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
 
-    result = verification.run_gate(command, repo, "abc", 1, log_path=log_path)
+    result = verification.run_gate(command, repo, _git(repo, "rev-parse", "HEAD"), 1, log_path=log_path)
 
     assert result["passed"] == 1
     logged = log_path.read_bytes()
@@ -521,12 +525,13 @@ def test_run_gate_writes_the_normalized_command(repo: Path) -> None:
     _git(repo, "commit", "--no-verify", "-q", "-m", "add gate script")
     command = "bash  ./gate.sh   --quick"
 
-    result = verification.run_gate(command, repo, "f00d", 2)
+    head = _git(repo, "rev-parse", "HEAD")
+    result = verification.run_gate(command, repo, head, 2)
 
     assert result["passed"] == 3
     written = json.loads((repo / RECORD_REL).read_text())
     assert written == {
-        "sha": "f00d",
+        "sha": head,
         "cycle": 2,
         "commands": [{"command": "gate.sh --quick", "exit": 0}],
         "passed": 3,

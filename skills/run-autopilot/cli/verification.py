@@ -12,6 +12,7 @@ Unrelated to `cli/gate.py`'s `run_gate` (a review-file shape check).
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import re
@@ -30,6 +31,7 @@ GATE_OUTPUT_CAP = 2_000_000  # bytes of combined stdout+stderr kept
 
 STORE_PREFIX = "docs/dev/project-management/"
 RECORD_REL = Path(STORE_PREFIX) / "autopilot" / "last-verification.json"
+GATE_LOCK_REL = Path("docs/dev/tmp") / "gate.lock"
 SUMMARY_RE = re.compile(r"PASS (\d+) FAIL (\d+) SKIP (\d+) EXIT (\d+)")
 _FULL_SHA_RE = re.compile(r"[0-9a-f]{40}")
 _STALE: tuple[str, dict] = ("stale", {})
@@ -463,20 +465,37 @@ def run_gate(
     record only when both checks are clean AND a summary line parsed. A
     dirty-tree refusal (`_dirty_result()`) is never recorded. When
     `log_path` is given, every byte of stdout and stderr is streamed to it,
-    in read order, in addition to the bounded in-memory parse tail;
-    `run_gate` opens `log_path` itself (creating parent directories first)
-    before its pre-spawn dirty check, and a failure to open it raises the
-    bare OSError rather than being caught here.
+    in read order, in addition to the bounded in-memory parse tail.
+
+    Everything below runs under an exclusive flock on `cwd / GATE_LOCK_REL`
+    (blocking, no timeout of its own), released in the closing `finally`.
+    Under the lock: the pre-spawn dirty check; then a re-check that
+    `git rev-parse HEAD` still equals `sha` (a mismatch or git failure
+    returns `_dirty_result([])`, the gate never runs); then `run_gate`
+    opens `log_path` itself (creating parent directories first) and
+    deletes any existing record before spawning the child, so a run that
+    fails, times out or dirties the tree leaves no older record behind. A
+    failure to open the log or delete the record raises the bare OSError
+    rather than being caught here. Neither refusal opens the log or
+    deletes the record.
     """
+    lock_path = cwd / GATE_LOCK_REL
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_fd = os.open(lock_path, os.O_RDWR | os.O_CREAT)
     log_file = None
-    if log_path is not None:
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        log_file = open(log_path, "wb", buffering=0)
     try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
         extra_excluded = _untracked_log_exclusion(cwd, log_path)
         dirty, dirty_paths = _dirty_check(cwd, extra_excluded)
         if dirty:
             return _dirty_result(dirty_paths)
+        head = _git(cwd, "rev-parse", "HEAD")
+        if head.returncode != 0 or head.stdout.strip() != sha:
+            return _dirty_result([])
+        if log_path is not None:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_file = open(log_path, "wb", buffering=0)
+        (cwd / RECORD_REL).unlink(missing_ok=True)
         proc = subprocess.Popen(
             command,
             shell=True,
@@ -495,3 +514,5 @@ def run_gate(
     finally:
         if log_file is not None:
             log_file.close()
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        os.close(lock_fd)

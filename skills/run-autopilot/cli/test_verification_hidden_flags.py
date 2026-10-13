@@ -63,8 +63,8 @@ HIDDEN_FLAGS = pytest.mark.parametrize(
 )
 
 
-def _run_passing_gate(cwd: Path) -> dict:
-    return verification.run_gate("echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'", cwd, "abc", 1)
+def _run_passing_gate(cwd: Path, sha: str = "abc") -> dict:
+    return verification.run_gate("echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'", cwd, sha, 1)
 
 
 def _assert_refused(repo: Path, result: dict) -> None:
@@ -91,7 +91,7 @@ def _assert_hidden_flag_only_dirties_outside_the_store(
     allowed = verification.run_gate(
         "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
         repo,
-        "abc",
+        _git(repo, "rev-parse", "HEAD"),
         1,
     )
     assert allowed["passed"] == 1
@@ -139,7 +139,7 @@ def test_hidden_flag_alone_without_an_edit_is_not_dirt(repo: Path, flag: str) ->
     _git(repo, "update-index", flag, "--", "src/app.py")
     assert (repo / "src" / "app.py").read_text() == "print(1)\n"
 
-    result = _run_passing_gate(repo)
+    result = _run_passing_gate(repo, _git(repo, "rev-parse", "HEAD"))
 
     assert result["passed"] == 1
     assert result["recorded"] is True
