@@ -516,14 +516,31 @@ def test_a_live_h2_after_the_section_ends_it(tmp_path: Path) -> None:
     assert code == 2
 
 
-def test_a_fenced_example_row_and_heading_are_not_findings(tmp_path: Path) -> None:
-    """A worked example inside a fence - a findings heading, a table, a bullet
-    row - is quoted, under a reviewer heading and inside the section alike."""
+def test_a_fenced_real_header_and_row_is_malformed(tmp_path: Path) -> None:
+    """A fence under a reviewer heading that wraps the real findings-table
+    header plus a data row is the hiding bug this check closes: fencing a
+    worked example must never be a way to smuggle a real table past the
+    parser, so this is malformed, not a quoted example."""
+    from cli import gate
+
     example = (
         "```\n## Consolidated Findings\n\n"
         f"{TABLE_HEADER_REF_6}{_ref_row('R9', CRIT, 'example only', 'src/x.py:1')}\n"
         "```"
     )
+    text = _review_text(_REF_TABLE, alice=example)
+    tag, detail, code = _verdict_and_exit(text, _COVERED, tmp_path)
+    assert tag == "malformed"
+    assert detail == gate._FENCED_HEADER_DETAIL
+    assert code == 2
+
+
+def test_a_fenced_example_bullet_and_row_without_header_are_not_findings(
+    tmp_path: Path,
+) -> None:
+    """A worked example inside a fence - a bullet row, a data row - with no
+    findings-table header line in its body is still quoted, under a reviewer
+    heading and inside the section alike."""
     # A fence closes only on a run of its own character at least as long as
     # the opener, so the shorter ~~~ line inside it keeps quoting.
     in_section = (
@@ -533,7 +550,31 @@ def test_a_fenced_example_row_and_heading_are_not_findings(tmp_path: Path) -> No
         f"{_ref_row('R8', MED, 'example row', 'src/y.py:3')}\n"
         "~~~~~\n"
     )
-    text = _review_text(f"{_REF_TABLE}\n{in_section}", alice=example)
+    text = _review_text(f"{_REF_TABLE}\n{in_section}")
+    assert _verdict_and_exit(text, _COVERED, tmp_path) == ("ok", None, 0)
+
+
+def test_fenced_findings_table_is_malformed(tmp_path: Path) -> None:
+    """A fence anywhere in the text whose body is a full findings table
+    (header + rows) is malformed for both fence characters - the header row
+    must never be fenced, even to show an example."""
+    from cli import gate
+
+    table = f"{TABLE_HEADER_REF_6}{_R1_ROW}\n{_R2_ROW}\n"
+    for fence in ("```", "~~~"):
+        text = _review_text(f"{_REF_TABLE}\n{fence}\n{table}{fence}\n")
+        tag, detail, code = _verdict_and_exit(text, _COVERED, tmp_path)
+        assert tag == "malformed"
+        assert detail == gate._FENCED_HEADER_DETAIL
+        assert code == 2
+
+
+def test_fenced_example_rows_without_header_still_pass(tmp_path: Path) -> None:
+    """A fence whose body has data-row-shaped lines but no line naming
+    Severity, Issue and File still quotes nothing: the existing ok/0
+    behavior holds."""
+    rows = f"{_ref_row('R9', CRIT, 'example only', 'src/x.py:1')}\n"
+    text = _review_text(f"{_REF_TABLE}\n```\n{rows}```\n")
     assert _verdict_and_exit(text, _COVERED, tmp_path) == ("ok", None, 0)
 
 
