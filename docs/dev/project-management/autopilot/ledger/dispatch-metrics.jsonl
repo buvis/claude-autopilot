@@ -4177,3 +4177,36 @@
 {"id":"ca7cc484","ended_at":1791919095,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"id":"c494f93c","ended_at":1791919095,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791919095,"phase":"build","prd":"00283-loop-catchup-v1.md"}
+{"id":"e3ee7135","kind":"tess","task":"2","queued_at":1791919177,"prompt_bytes":91260}
+{"id":"5ab946dc","kind":"tess","task":"2","queued_at":1791919194,"prompt_bytes":38143}
+{"id":"07d7586a","kind":"devon","task":"2","queued_at":1791919363,"prompt_bytes":4003}
+{"id":"07d7586a","ended_at":1791919447,"elapsed_s":84,"outcome":"ok","detail":null}
+{"id":"5f3c4349","kind":"tess","task":"2","queued_at":1791919466,"prompt_bytes":4223}
+{"id":"059680ca","kind":"ivan","task":"2","queued_at":1791919548,"prompt_bytes":20383}
+{"id":"c5c19846","kind":"deslop","task":"2","queued_at":1791919743,"prompt_bytes":5322}
+{"id":"c5c19846","ended_at":1791919777,"elapsed_s":34,"outcome":"ok","detail":null}
+{"id":"d7dae14b","kind":"pat","task":"2","queued_at":1791919798,"prompt_bytes":31830}
+{"id":"6cad3406","kind":"tess","task":"3","queued_at":1791919907,"prompt_bytes":57566}
+{"id":"9f2d3cc8","kind":"tess","task":"3","queued_at":1791919913,"prompt_bytes":42394}
+{"id":"afda661c","kind":"devon","task":"3","queued_at":1791920317,"prompt_bytes":4778}
+{"id":"afda661c","ended_at":1791920853,"elapsed_s":536,"outcome":"ok","detail":null}
+{"id":"1bb55c61","kind":"tess","task":"3","queued_at":1791920882,"prompt_bytes":6389}
+{"id":"1c9e0ae5","kind":"ivan","task":"3","queued_at":1791921053,"prompt_bytes":48361}
+{"id":"f2b83810","kind":"deslop","task":"3","queued_at":1791921208,"prompt_bytes":5272}
+{"id":"f2b83810","ended_at":1791921242,"elapsed_s":34,"outcome":"ok","detail":null}
+{"id":"57184c72","kind":"pat","task":"3","queued_at":1791921257,"prompt_bytes":30471}
+{"id":"e3e86a15","kind":"ivan","task":"3","queued_at":1791921330,"prompt_bytes":5027}
+{"id":"0e75fd58","kind":"pat","task":"3","queued_at":1791921376,"prompt_bytes":3104}
+{"id":"e3ee7135","ended_at":1791921505,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"5ab946dc","ended_at":1791921505,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"5f3c4349","ended_at":1791921505,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"059680ca","ended_at":1791921505,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"d7dae14b","ended_at":1791921505,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"6cad3406","ended_at":1791921505,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"9f2d3cc8","ended_at":1791921505,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"1bb55c61","ended_at":1791921505,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"1c9e0ae5","ended_at":1791921505,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"57184c72","ended_at":1791921505,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"e3e86a15","ended_at":1791921505,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"0e75fd58","ended_at":1791921505,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791921505,"phase":"build","prd":"00283-loop-catchup-v1.md"}

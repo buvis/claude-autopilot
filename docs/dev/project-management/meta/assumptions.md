@@ -34,3 +34,19 @@ Ivan (implementor):
 - State is read with `state.load(state_path)` (returns `(data, version)`), following `__main__._load_state_or_exit`.
 - The state schema accepts a top-level `catchup_probe` key; the tests pass, so `mutate`'s validation accepts it.
 - The probes run outside the `mutate` lock, so a 15s timeout does not hold the state lock.
+
+## 3: _catchup returns delta after loop-only commits
+
+Tess (test author):
+
+- `custody.project_root(autopilot_dir)` resolves to `env.root`, as the existing `calls == [(env.root, base, LOOP)]` assertion already assumes.
+- The resume path calls `loop_only` exactly once, positionally as `(root, sha, name)`, when HEAD has moved and the cache is fresh. This follows the existing force-test convention.
+- In the batch-id test, `catchup_head_sha` stays at `base` for the fake-loop_only run, so that run must also give "delta" when the fake returns True.
+- Point 2's "2-commit all-foreign range" is covered by the point-1 (name-blind) strengthening test, not by a separate one.
+
+Ivan (implementor):
+
+- First-entry force with no str `catchup_head_sha` resolves to "full" (no test covers a missing sha on this path).
+- The loop committer comes from `batch["id"]`, which `_batch_report` guarantees is a str by step 11 (superseded by the per-task review's fix: now `batch.get("id")`, defensive for direct unit-level callers of `_catchup`).
+- The range is `base..HEAD` of the project root's current HEAD, not the sha returned by the injected `git_head`.
+- `%cn` (committer name without mailmap) is the right field, not `%cN` (which would apply mailmap and could rewrite names).
