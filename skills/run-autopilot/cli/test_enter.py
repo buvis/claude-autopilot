@@ -24,6 +24,7 @@ from cli.enter_harness import (
     EARLY,
     EXPECTED_STOPS,
     HEAD,
+    NOW,
     OTHER,
     PRD,
     Env,
@@ -768,6 +769,72 @@ def test_batch_is_null_on_every_stop_before_step_nine(
     assert out["stop"] == stop
     assert out["batch"] is None
     assert env.rows == []
+
+
+# -- prd_budget_since (step 10) ------------------------------------------------
+
+LATER = "2026-10-01T00:00:00Z"
+OLD_STAMP = "2020-01-01T00:00:00Z"
+
+
+def test_budget_since_is_set_to_now_on_first_entry(env: Env) -> None:
+    env.write_state(_open_state())
+    env.put("wip")
+
+    out = env.run(now=lambda: LATER)
+
+    assert (out["stop"], out["prd"]) == (None, PRD)
+    assert env.read_state()["prd_budget_since"] == LATER
+
+
+def test_budget_since_is_kept_when_the_same_prd_is_entered_again(env: Env) -> None:
+    env.write_state(_open_state())
+    env.put("wip")
+    env.run()
+    assert env.read_state()["prd_budget_since"] == NOW
+
+    out = env.run(now=lambda: LATER)
+
+    assert (out["stop"], out["prd"]) == (None, PRD)
+    assert env.read_state()["prd_budget_since"] == NOW
+
+
+def test_budget_since_already_in_state_survives_same_prd_reentry(env: Env) -> None:
+    env.write_state(_open_state(prd=PRD, prd_budget_since=OLD_STAMP))
+    env.put("wip")
+
+    out = env.run(prd_arg=PRD, now=lambda: LATER)
+
+    assert (out["stop"], out["prd"]) == (None, PRD)
+    assert env.read_state()["prd_budget_since"] == OLD_STAMP
+
+
+@pytest.mark.parametrize(
+    "previous", [{"prd": OTHER}, {}], ids=["other-prd", "prd-absent"]
+)
+def test_budget_since_is_refreshed_when_the_previous_prd_differs(
+    env: Env, previous: dict
+) -> None:
+    env.write_state(_open_state(prd_budget_since=OLD_STAMP, **previous))
+    env.put("wip")
+
+    out = env.run(prd_arg=PRD, now=lambda: LATER)
+
+    assert (out["stop"], out["prd"]) == (None, PRD)
+    assert env.read_state()["prd_budget_since"] == LATER
+
+
+def test_budget_since_is_refreshed_on_a_switch_to_another_prd(env: Env) -> None:
+    env.write_state(_open_state())
+    env.put("wip")
+    env.put("wip", OTHER)
+    env.run(prd_arg=PRD)
+    assert env.read_state()["prd_budget_since"] == NOW
+
+    out = env.run(prd_arg=OTHER, now=lambda: LATER)
+
+    assert (out["stop"], out["prd"]) == (None, OTHER)
+    assert env.read_state()["prd_budget_since"] == LATER
 
 
 # The `enter` CLI verb's own tests live in `test_enter_cli.py`: the subprocess
