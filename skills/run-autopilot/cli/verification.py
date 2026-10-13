@@ -15,6 +15,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import posixpath
 import re
 import selectors
 import signal
@@ -101,12 +102,70 @@ def _ancestor_and_clean(repo_root: Path, sha: str, head_sha: str) -> bool:
     paths = [p for p in diff.stdout.split("\0") if p]
     if not all(path.startswith(store) for path in paths):
         return False
+    if _store_symlink_targets_changed(repo_root, paths):
+        return False
+    if _store_symlink_targets_changed(repo_root, _dirty_store_paths(repo_root)):
+        return False
     return not _dirty_outside_store(repo_root)
 
 
 class _GitProbeFailed(OSError):
     """A git call in the dirt probe exited non-zero (non-git cwd and the
     like); an OSError so `_dirty_outside_store` counts it as dirty."""
+
+
+def _store_roots(repo_root: Path) -> tuple[str, ...]:
+    """Toplevel-relative store roots: `git rev-parse --show-prefix` joined
+    with each of STORE_PREFIXES. Raises `_GitProbeFailed` on a git failure."""
+    prefix = _git(repo_root, "rev-parse", "--show-prefix")
+    if prefix.returncode != 0:
+        raise _GitProbeFailed("git rev-parse --show-prefix failed")
+    return tuple(prefix.stdout.strip() + root for root in STORE_PREFIXES)
+
+
+def _dirty_store_paths(repo_root: Path) -> list[str]:
+    """Toplevel-relative paths of every porcelain status record path that
+    lies under the store roots (the inverse of `_dirty_outside_store_paths`);
+    a rename/copy contributes each of its paths that is in the store.
+    Raises `_GitProbeFailed` on a git failure."""
+    store = _store_roots(repo_root)
+    status = _git(repo_root, "status", "--porcelain=1", "-z", "--untracked-files=all")
+    if status.returncode != 0:
+        raise _GitProbeFailed("git status failed")
+    return [
+        p
+        for new, old in _iter_porcelain_z_records(status.stdout)
+        for p in (new, old)
+        if p and _dirty_path_is_in_store(p, None, store)
+    ]
+
+
+def _store_symlink_targets_changed(repo_root: Path, store_paths: list[str]) -> bool:
+    """True iff a tracked symlink outside the store, its blob target resolved
+    against the link's own directory, names one of `store_paths` (all
+    toplevel-relative) or a directory above one. Absolute targets and
+    symlink chains are taken at face value. Raises `_GitProbeFailed` on a
+    git failure."""
+    if not store_paths:
+        return False
+    store = _store_roots(repo_root)
+    listing = _git(repo_root, "ls-files", "-s", "-z", "--full-name")
+    if listing.returncode != 0:
+        raise _GitProbeFailed("git ls-files failed")
+    for entry in listing.stdout.split("\0"):
+        if not entry:
+            continue
+        meta, link = entry.split("\t", 1)
+        mode, blob, _stage = meta.split()
+        if mode != "120000" or link.startswith(store):
+            continue
+        raw = _git(repo_root, "cat-file", "-p", blob)
+        if raw.returncode != 0:
+            raise _GitProbeFailed("git cat-file failed")
+        target = posixpath.normpath(posixpath.join(posixpath.dirname(link), raw.stdout))
+        if any(p == target or p.startswith(target + "/") for p in store_paths):
+            return True
+    return False
 
 
 def _dirty_outside_store_paths(
