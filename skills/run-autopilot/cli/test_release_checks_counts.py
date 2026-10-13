@@ -317,13 +317,14 @@ def test_release_refuses_while_a_held_prd_blocks_it(tmp_path: Path) -> None:
 
 
 def _dir_is_bare_target(parent: str, text: str) -> bool:
-    """True when `parent` appears in `text` as a whole pytest argument - the
-    directory name is not immediately followed by '/' (a longer file path
-    under it), so a directory occurring only as a prefix of named files
-    doesn't falsely count as its own target."""
-    return any(
-        m.end() >= len(text) or text[m.end()] != "/"
-        for m in re.finditer(re.escape(parent), text)
+    """True when `parent` appears in `text` as a whole word (not part of a
+    longer path or name, before or after), and never for the repo root
+    ("." or ""), which would match any dot in the script."""
+    if parent in (".", ""):
+        return False
+    return (
+        re.search(r"(?<![\w/.-])" + re.escape(parent) + r"(?![\w/.-])", text)
+        is not None
     )
 
 
@@ -344,3 +345,23 @@ def test_every_tracked_test_file_is_gated() -> None:
         f"{_RELEASE_CHECKS}: does not name {missing} "
         "(add a [checks] block or UNGATED with a reason)"
     )
+
+
+def test_a_directory_matching_only_part_of_a_longer_token_is_not_a_gated_target() -> (
+    None
+):
+    """A directory counts as a pytest target only when its path stands alone,
+    not when it merely prefixes a longer word elsewhere in the script."""
+    body = (
+        'echo "[checks] skills/foo/scripts-lane"\n'
+        "run_pytest python -m pytest -q skills/bar/scripts\n"
+    )
+    assert not _dir_is_bare_target("skills/foo/scripts", body)
+    assert _dir_is_bare_target("skills/bar/scripts", body)
+
+
+def test_the_repo_root_is_never_a_gated_target() -> None:
+    """A repo-root test file has parent ".", which would otherwise match any
+    dot in the script and silently pass the gate pin for an ungated file."""
+    assert not _dir_is_bare_target(".", 'echo "[checks] x"\nrun_pytest a.b\n')
+    assert not _dir_is_bare_target("", 'echo "[checks] x"\n')
