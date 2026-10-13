@@ -19,7 +19,7 @@ import pytest
 
 from cli import __main__ as cli_main
 from cli import enter as enter_mod
-from cli import enter_io, loop_gates, state, statectl
+from cli import enter_io, loop_gates, schema, state, statectl
 from cli.loop_gates import live_wrapper_pid, prune_registry
 from cli import loop_testutil
 from cli.loop_testutil import (
@@ -642,6 +642,72 @@ def test_pre_enter_failure_launches_without_entry(tmp_path):
     assert _pre_enter_lines(lp) == [
         "autoclaude: pre-launch enter failed: state file is not valid JSON",
     ]
+
+
+@pytest.mark.parametrize(
+    "raiser",
+    [
+        lambda *a, **k: (_ for _ in ()).throw(state.StateExistsError("exists")),
+        lambda *a, **k: (_ for _ in ()).throw(OSError("disk full")),
+        lambda *a, **k: (_ for _ in ()).throw(schema.SchemaError("bad schema")),
+    ],
+    ids=["state_exists_error", "os_error", "schema_error"],
+)
+def test_pre_enter_never_halts_the_loop_on_a_wider_enter_failure(tmp_path, raiser):
+    # Review finding 7/8 (PRD 00282): the CLI's own enter gate also catches
+    # StateExistsError, and an OSError or SchemaError out of enter() (a
+    # permission error reading state.json, a corrupt schema write) must not
+    # crash the unattended loop either - spec intent is "never halts the
+    # loop".
+    lp = make_loop(tmp_path, [], enter_fn=raiser)
+    ap = lp._test["ap_dir"]
+    _build_tree(ap)
+
+    lp._pre_enter(ap)  # must not raise
+
+    assert "loop_entry" not in _read_state(ap)
+
+
+def test_pre_enter_failure_invalidates_a_stale_same_prd_entry(tmp_path):
+    # Review finding 2 (PRD 00282, task 10): an earlier session's loop_entry
+    # for this same PRD must not survive a pre-entry failure, or a later
+    # child replays its stale catchup/design/stop result instead of running
+    # enter() for real.
+    stale = {"stop": None, "detail": "", "prd": _PRD, "catchup": "delta", "design": "reuse"}
+    lp = make_loop(tmp_path, [], enter_fn=_raise_state_error)
+    ap = lp._test["ap_dir"]
+    _build_tree(ap, loop_entry={"entered_by": "loop", "prd": _PRD, "result": stale})
+
+    lp._pre_enter(ap)
+
+    assert "loop_entry" not in _read_state(ap)
+
+
+def test_pre_enter_write_failure_invalidates_a_stale_same_prd_entry(
+    tmp_path, monkeypatch
+):
+    # Same as above, for the statectl.mutate write-failure branch: a real
+    # enter() succeeds but the new loop_entry cannot be written, so the
+    # earlier same-PRD entry must still be invalidated, not left to replay.
+    stale = {"stop": None, "detail": "", "prd": _PRD, "catchup": "delta", "design": "reuse"}
+    lp = make_loop(tmp_path, [], enter_fn=_entered)
+    ap = lp._test["ap_dir"]
+    _build_tree(ap, loop_entry={"entered_by": "loop", "prd": _PRD, "result": stale})
+
+    real_mutate = statectl.mutate
+    calls = {"n": 0}
+
+    def flaky(path, apply):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OSError("disk full")
+        return real_mutate(path, apply)
+
+    monkeypatch.setattr(statectl, "mutate", flaky)
+
+    lp._pre_enter(ap)
+
+    assert "loop_entry" not in _read_state(ap)
 
 
 def test_pre_enter_state_write_failure_leaves_no_entry(tmp_path, monkeypatch):

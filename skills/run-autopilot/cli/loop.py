@@ -584,7 +584,16 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
         """enter() plus the `loop_entry` write and the brief re-render.
         enter()'s warnings go to the loop's stderr. A StateError or a failed
         state write is one stderr line and no loop_entry: the session then
-        enters itself, as before."""
+        enters itself, as before. Either failure also invalidates an
+        earlier same-PRD loop_entry still on disk (review finding 2, PRD
+        00282): without that, a later child replays the stale catchup/
+        design/stop result from a prior successful launch instead of
+        running enter() for real. The catch is wider than enter()'s
+        documented StateError (review findings 7/8, PRD 00282): the CLI's
+        own entry gate also catches StateExistsError, and an OSError or
+        SchemaError (a permission error under `state.load`, a corrupt
+        schema write) must not halt the unattended loop either - the
+        module's spec intent is "never halts the loop"."""
         try:
             result = self._enter_fn(
                 state_path,
@@ -593,8 +602,9 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
                 prd_arg=None,
                 in_loop=True,
             )
-        except state.StateError as err:
+        except (state.StateError, state.StateExistsError, OSError, schema.SchemaError) as err:
             print(f"autoclaude: pre-launch enter failed: {err}", file=self.err)
+            self._invalidate_loop_entry(state_path)
             return
         for line in result.pop("warnings", []):
             print(line, file=self.err)
@@ -603,11 +613,23 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
             statectl.mutate(state_path, lambda data: data.update(loop_entry=entry))
         except (OSError, state.StateError, schema.SchemaError) as err:
             print(f"autoclaude: pre-launch enter: loop_entry write failed: {err}", file=self.err)
+            self._invalidate_loop_entry(state_path)
             return
         try:
             statectl.write_brief(state_path, ap_dir / runner.BRIEF_NAME)
         except state.StateError as err:
             print(f"autoclaude: pre-launch enter: brief write failed: {err}", file=self.err)
+
+    def _invalidate_loop_entry(self, state_path: Path) -> None:
+        """Drop any `loop_entry` left by an earlier successful pre-entry,
+        so a failed one never leaves a stale same-PRD entry for a later
+        child to replay. Best-effort: a second write failure here is no
+        worse than the one already reported for the launch that triggered
+        it, so it stays silent."""
+        try:
+            statectl.mutate(state_path, lambda data: data.pop("loop_entry", None))
+        except (OSError, state.StateError, schema.SchemaError):
+            pass
 
     def _launch_phase(self, ap_dir: Path) -> tuple[float, str, routing.Route]:
         """Run the pre-launch enter, then read state, route it, announce
