@@ -191,6 +191,7 @@ run_pytest uv run --no-project --with pytest --with pytest-xdist python -m pytes
   skills/run-autopilot/cli/test_loop_budget.py \
   skills/run-autopilot/cli/test_brief.py \
   skills/run-autopilot/cli/test_runner.py \
+  skills/run-autopilot/cli/test_launch_mcp_live.py \
   skills/run-autopilot/cli/test_watchdog.py \
   skills/run-autopilot/cli/test_handoff_request.py
 

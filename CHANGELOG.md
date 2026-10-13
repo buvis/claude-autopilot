@@ -21,9 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: the CLI now needs Python 3.11 or newer (it uses datetime.UTC); 3.10 is no longer supported
 - **run-autopilot**: `normalize_command` only collapses whitespace now - it no longer strips a leading `bash `/`sh ` or `./`, so `bash X`, `sh X`, `./X` and `X` each get their own verification record instead of sharing one; an existing `last-verification.json` record written under the old stripping normalizer goes stale once after this ships, forcing one unavoidable rerun (about 220 seconds) the first time it is checked post-upgrade - expected, not a regression
 - **run-autopilot**: `catchup: force` and a resume in either mode now read delta after loop-only commits since `catchup_head_sha`, not only on an unmoved HEAD
+- **run-autopilot**: a loop session's launch loads only the Context7 MCP server by default instead of every claude.ai connector on the account (`_AUTOPILOT_MCP_CONFIG=inherit` restores the old unscoped launch)
 
 ### Fixed
 
+- **run-autopilot**: the session brief's `repo root` line falls back to the project root instead of printing `none` when `state.repo_root` is unset
+- **run-autopilot**: the `autonomous_decisions` validator now names every missing field in one rejection instead of one field per rejected call
 - **run-autopilot**: `autopilot catchup-probe` now takes `--state` as optional and resolves the state path by walking up from cwd when it is omitted, so the documented bare invocation probes instead of failing on a missing required flag
 - **run-autopilot**: the review gate now catches four more ways a critical row hid from the findings cross-check - a severity-content or marker-variant flag on a wordless/bracket/fullwidth row, a tab- or 4-space-indented fence that CommonMark reads as a code block rather than a fence, a closed fence that hides the real findings-table header behind a worked example, and an unescaped `\n`/ANSI control character in the boundary-refusal line that could forge extra log output
 - **run-autopilot**: the loop registry, orphan sweep, tracon discovery and the codex heartbeat read process facts through sysctl, libproc and pgrep instead of setuid ps, so they work inside a seatbelt sandbox and the release gate no longer reads nine failures there

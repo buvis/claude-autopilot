@@ -4,7 +4,8 @@ Ports the wrapper's headless launch pipeline (PRD 00014 semantics):
 
     WARDEN_UNATTENDED=1 CLAUDE_UNATTENDED=1 CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 \
       claude -p --permission-mode auto --model M --effort E \
-      [--fallback-model F] --output-format stream-json --verbose "/autopilot:run-autopilot" \
+      [--fallback-model F] --strict-mcp-config --mcp-config <DEFAULT_MCP_CONFIG or _AUTOPILOT_MCP_CONFIG> \
+      --output-format stream-json --verbose "/autopilot:run-autopilot" \
       </dev/null 2>&1 | tee last-session.log | _autopilot_present
 
 One session = one -p turn = one process that exits at turn end; the
@@ -27,6 +28,11 @@ the wall-clock cap stays the backstop.
 
 The runner binary is an injected extension point: a routed non-claude
 runner needs no spawn-layer redesign.
+
+`_AUTOPILOT_MCP_CONFIG` scopes which MCP servers the launch loads: unset
+gives `DEFAULT_MCP_CONFIG` (Context7 only), `inherit` drops the
+`--strict-mcp-config --mcp-config` pair entirely (today's unscoped
+launch), and any other value is passed verbatim to `--mcp-config`.
 """
 
 from __future__ import annotations

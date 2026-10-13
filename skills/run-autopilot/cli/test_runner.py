@@ -224,14 +224,18 @@ def test_prompt_names_the_brief_when_present(tmp_path):
         "/autopilot:run-autopilot Read docs/dev/project-management/autopilot/session-brief.md first."
         + CLI_SUFFIX
     )
-    assert argv[:-1] == build_argv("m", "low", "claude-sonnet-5[1m]")[1:-1]
+    assert argv[:-1] == build_argv(
+        "m", "low", "claude-sonnet-5[1m]", mcp_config=mcp_config_for({})
+    )[1:-1]
 
 
 def test_prompt_without_a_brief_still_names_the_cli(tmp_path):
     ap = _ap_dir(tmp_path)
     argv = _launch_argv(tmp_path, ap)
     assert argv[-1] == "/autopilot:run-autopilot" + CLI_SUFFIX
-    assert argv[:-1] == build_argv("m", "low", "claude-sonnet-5[1m]")[1:-1]
+    assert argv[:-1] == build_argv(
+        "m", "low", "claude-sonnet-5[1m]", mcp_config=mcp_config_for({})
+    )[1:-1]
 
 
 def test_a_brief_that_is_a_directory_does_not_count(tmp_path):
