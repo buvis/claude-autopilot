@@ -429,31 +429,38 @@ def test_reuse_matches_a_command_spelled_with_bash_dot_slash_and_extra_spaces(
     head = _git(repo, "rev-parse", "HEAD")
     record = _record(head)  # recorded from "dev/bin/release-checks"
 
-    for spelled in (
-        "bash  ./dev/bin/release-checks",
-        "sh ./dev/bin/release-checks",
-        "  ./dev/bin/release-checks ",
-    ):
+    # Whitespace-only normalization: shell/"./" spellings are now distinct.
+    for spelled in ("bash  ./dev/bin/release-checks", "sh ./dev/bin/release-checks"):
         verdict = verification.reuse_verdict(record, repo, head, gate_command=spelled)
-        assert verdict == ("reused", record), spelled
+        assert verdict == ("stale", {}), spelled
 
-    # The match runs both ways: a record spelled loosely matches a plain gate.
-    loose = _record(head)
-    loose["commands"] = [{"command": "bash   ./dev/bin/release-checks", "exit": 0}]
-    assert verification.reuse_verdict(loose, repo, head, gate_command=GATE) == (
-        "reused",
-        loose,
+    # Extra/different whitespace alone still collapses and still matches,
+    # both ways: record spelled loosely vs. gate spelled loosely.
+    spaced = verification.reuse_verdict(
+        record, repo, head, gate_command="  dev/bin/release-checks "
     )
+    assert spaced == ("reused", record)
+    loose = _record(head)
+    loose["commands"] = [{"command": "dev/bin/release-checks  ", "exit": 0}]
+    assert verification.reuse_verdict(loose, repo, head, gate_command=GATE) == ("reused", loose)
 
     # Normalizing never makes a different command match.
-    for other in (
-        "bash bash ./dev/bin/release-checks",
-        "dev/bin/release-checks --fast",
-    ):
-        assert verification.reuse_verdict(record, repo, head, gate_command=other) == (
-            "stale",
-            {},
-        ), other
+    for other in ("bash bash ./dev/bin/release-checks", "dev/bin/release-checks --fast"):
+        assert verification.reuse_verdict(record, repo, head, gate_command=other) == ("stale", {}), other
+
+
+def test_sh_and_bash_and_dot_slash_records_do_not_cross_reuse(repo: Path) -> None:
+    head = _git(repo, "rev-parse", "HEAD")
+    sh_record = _record(head)
+    sh_record["commands"] = [{"command": "sh shdep.sh", "exit": 0}]
+    assert verification.reuse_verdict(sh_record, repo, head, gate_command="bash shdep.sh") == ("stale", {})
+
+    dot_record = _record(head)
+    dot_record["commands"] = [{"command": "bash ./gate.sh", "exit": 0}]
+    for spelled in ("./gate.sh", "gate.sh"):
+        assert verification.reuse_verdict(
+            dot_record, repo, head, gate_command=spelled
+        ) == ("stale", {}), spelled
 
 
 def test_merge_resolution_change_outside_the_store_is_stale(repo: Path) -> None:
