@@ -82,6 +82,39 @@ def test_stall_and_pause_reasons_render_as_compact_json():
     ) in text
 
 
+def test_brief_entry_section():
+    # PRD 00282 F2: a loop that already ran Phase 0 hands the session its
+    # answer in `## Entry`, right after `## Where`; without `loop_entry`
+    # the section is absent (the golden above pins that byte for byte).
+    state = _state()
+    state["loop_entry"] = {
+        "entered_by": "loop",
+        "prd": "00042-add-the-session-brief-v1.md",
+        "result": {
+            "prd": "00042-add-the-session-brief-v1.md",
+            "catchup": "delta",
+            "design": "reuse",
+            "stop": None,
+        },
+    }
+    text = render_brief(state, NOW)
+    entry = (
+        "\n## Entry\n"
+        "- prd: 00042-add-the-session-brief-v1.md\n"
+        "- catchup: delta\n"
+        "- design: reuse\n"
+        "- stop: none\n"
+        "\n## Contract card\n"
+    )
+    assert entry in text
+    assert text.index("## Where") < text.index("## Entry")
+    without = _state()
+    assert "## Entry" not in render_brief(without, NOW)
+    # A loop_entry without a result dict renders nothing, not a crash.
+    without["loop_entry"] = {"entered_by": "loop", "prd": None, "result": "junk"}
+    assert "## Entry" not in render_brief(without, NOW)
+
+
 def test_read_next_table_covers_every_phase():
     assert set(READ_NEXT) == {"build", "review", "done", "paused"}
     for phase, entries in READ_NEXT.items():

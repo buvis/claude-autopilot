@@ -121,6 +121,25 @@ def _where(state: dict) -> list[str]:
     ]
 
 
+def _entry_lines(state: dict) -> list[str]:
+    """`## Entry` (PRD 00282): prd, catchup, design and stop from the
+    Phase 0 result the loop ran before launch (`loop_entry.result`). Only
+    when that result is a dict; otherwise nothing, not even the header, so
+    a brief without `loop_entry` is unchanged byte for byte."""
+    entry = state.get("loop_entry")
+    result = entry.get("result") if isinstance(entry, dict) else None
+    if not isinstance(result, dict):
+        return []
+    return [
+        "",
+        "## Entry",
+        f"- prd: {_text(result.get('prd'))}",
+        f"- catchup: {_text(result.get('catchup'))}",
+        f"- design: {_text(result.get('design'))}",
+        f"- stop: {_text(result.get('stop'))}",
+    ]
+
+
 def _read_next(next_phase) -> list[str]:
     # A next_phase the table does not know (a legacy `blind`/`doubt`, a typo)
     # renders `- none` exactly like a missing one: the header already shows
@@ -133,8 +152,8 @@ def _read_next(next_phase) -> list[str]:
 
 def render_brief(state: dict, now: str) -> str:
     """The brief for `state` as written at `now` (an ISO UTC stamp), in the
-    documented shape: header, Where, Contract card, Read next, Do not
-    re-read. `state` is whatever `state.json` parsed to; every field it
+    documented shape: header, Where, Entry (only after a loop pre-launch
+    enter), Contract card, Read next, Do not re-read. `state` is whatever `state.json` parsed to; every field it
     lacks renders as `none`."""
     card = state.get("contract_card")
     lines = [
@@ -142,6 +161,7 @@ def render_brief(state: dict, now: str) -> str:
         f"{_text(state.get('next_phase'))})",
         "",
         *_where(state),
+        *_entry_lines(state),
         "",
         "## Contract card",
         card if isinstance(card, str) and card.strip() else "(none yet)",

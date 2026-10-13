@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from cli import loop_act
+from cli import loop_act, state
 from cli.loop import Loop
 from cli.procinfo import exec_env
 from cli.runner import SpawnResult
@@ -109,6 +109,13 @@ def noop_step(ap_dir: Path) -> None:  # session dies: touches nothing
     pass
 
 
+def unscripted_enter(*args, **kwargs) -> dict:
+    """make_loop's default enter_fn. The loop's pre-launch enter degrades to
+    "the session enters itself", so each scripted step sees the tree it was
+    written against. A test that exercises Phase 0 passes its own enter_fn."""
+    raise state.StateError("loop harness: pre-launch enter not scripted")
+
+
 def make_loop(tmp_path: Path, steps, env: dict | None = None, **kwargs):
     repo = tmp_path / "repo"
     ap_dir = repo / "docs" / "dev" / "project-management" / "autopilot"
@@ -134,6 +141,7 @@ def make_loop(tmp_path: Path, steps, env: dict | None = None, **kwargs):
         pressure_fn=kwargs.pop("pressure_fn", lambda: 1),
         probe_fn=kwargs.pop("probe_fn", lambda: True),
         detect_limit_fn=kwargs.pop("detect_limit_fn", lambda path: None),
+        enter_fn=kwargs.pop("enter_fn", unscripted_enter),
         clock=clock,
         out=out,
         err=err,

@@ -14,7 +14,9 @@ Subcommands:
     enter     --state --prd --prds
         enter.enter(): the Phase 0 step chain. Prints its one-line JSON
         result (the `stop` key names the halt, when there is one); the
-        frontmatter warnings go to stderr, never onto that line.
+        frontmatter warnings go to stderr, never onto that line. A
+        state.loop_entry for the current PRD (the loop already ran Phase 0)
+        is printed instead and deleted; any other loop_entry is dropped.
     stall     --state --prd --site --detail --prds
         records.do_stall(); autopilot_dir is always the state file's own
         parent directory (no flag).
@@ -364,11 +366,46 @@ def _add_enter(subparsers) -> None:
     p.add_argument("--prds")
 
 
+def _replay_loop_entry(state_path: Path, prd_arg: str | None) -> int | None:
+    """The `loop_entry` the loop left when it ran Phase 0 before launch (PRD
+    00282). Any loop_entry is deleted; one for the current state.prd, with no
+    --prd asked, is printed as this verb's line and returns 0, so enter()
+    never runs twice for one selection (one resume row, one park). None means
+    enter() runs as today: no loop_entry, a stale one, or an unreadable state
+    (enter() reports that itself)."""
+    try:
+        current, _ = state.load(state_path)
+    except state.StateError:
+        return None
+    loop_entry = current.get("loop_entry")
+    if not isinstance(loop_entry, dict):
+        return None
+    try:
+        statectl.mutate(state_path, lambda data: data.pop("loop_entry", None))
+    except (OSError, state.StateError, schema.SchemaError) as err:
+        print(f"autopilot: enter failed: loop_entry delete: {err}", file=sys.stderr)
+        return 2
+    result = loop_entry.get("result")
+    if (
+        prd_arg is not None
+        or loop_entry.get("prd") != current.get("prd")
+        or not isinstance(result, dict)
+    ):
+        return None
+    print(json.dumps(result, sort_keys=True))
+    if result.get("detail"):
+        print(f"autopilot: {result['detail']}", file=sys.stderr)
+    return 0
+
+
 def _run_enter(args: argparse.Namespace) -> int:
     state_path = _resolve_state_path(args.state)
     refuse = _schema_version_preflight(state_path)
     if refuse is not None:
         return refuse
+    replayed = _replay_loop_entry(state_path, args.prd)
+    if replayed is not None:
+        return replayed
     autopilot_dir = state_path.parent
     prds_dir = Path(_resolve_prds_path(args.prds, autopilot_dir))
     try:

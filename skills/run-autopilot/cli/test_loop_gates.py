@@ -15,7 +15,11 @@ import sys
 import time
 from pathlib import Path
 
-from cli import loop_gates
+import pytest
+
+from cli import __main__ as cli_main
+from cli import enter as enter_mod
+from cli import enter_io, loop_gates, state, statectl
 from cli.loop_gates import live_wrapper_pid, prune_registry
 from cli import loop_testutil
 from cli.loop_testutil import (
@@ -432,3 +436,202 @@ def test_pid_tagged_requires_an_exact_pid_match(monkeypatch):
     assert loop_gates._pid_tagged(999, 432) is False
     assert loop_gates._pid_tagged(999, 321) is False
     assert loop_gates._pid_tagged(999, 43210) is False
+
+
+# ── pre-launch enter (PRD 00282 F2): Loop._pre_enter + the enter replay ──────
+
+_PRD = "00010-alpha-v1.md"
+_OTHER = "00020-beta-v1.md"
+# Prose-only body with design skipped: Phase 0 reads it as the full lane.
+_PRD_TEXT = "---\ndesign: skip\n---\n\n# Prose only\n\nNo paths here.\n"
+
+
+def _build_tree(ap: Path, **overrides) -> None:
+    """A wip PRD and an open batch whose next session is a build."""
+    wip = ap.parent / "prds" / "wip"
+    wip.mkdir(parents=True, exist_ok=True)
+    (wip / _PRD).write_text(_PRD_TEXT, encoding="utf-8")
+    fields = {
+        "prd": _PRD,
+        "phase": "build",
+        "next_phase": "build",
+        "batch": {"id": "b-1", "completed_prds": [], "parks_consecutive": 0},
+    }
+    fields.update(overrides)
+    write_state(ap, **fields)
+
+
+def _read_state(ap: Path) -> dict:
+    return json.loads((ap / "state.json").read_text(encoding="utf-8"))
+
+
+def _count_resume_rows(monkeypatch) -> list:
+    """Every handoff row the real enter() writes. enter() binds
+    record_resume_row as a keyword default at import time, so patching the
+    enter_io attribute alone would miss its calls: patch both, and keep git
+    out of the tmp tree the same way."""
+    rows: list = []
+
+    def record(prd, site, autopilot_dir):
+        rows.append((prd, site))
+
+    monkeypatch.setattr(enter_io, "record_resume_row", record)
+    monkeypatch.setitem(enter_mod.enter.__kwdefaults__, "record_resume_row", record)
+    monkeypatch.setitem(enter_mod.enter.__kwdefaults__, "git_head", lambda root: None)
+    monkeypatch.delenv("_AUTOPILOT_LANES", raising=False)
+    monkeypatch.delenv("_AUTOPILOT_LOOP", raising=False)
+    return rows
+
+
+def _entered(*args, **kwargs) -> dict:
+    return {
+        "stop": None,
+        "detail": "",
+        "prd": _PRD,
+        "catchup": "full",
+        "design": "skip",
+        "warnings": ["frontmatter: lane reset"],
+    }
+
+
+def _raise_state_error(*args, **kwargs) -> dict:
+    raise state.StateError("state file is not valid JSON")
+
+
+def _pre_enter_lines(lp) -> list[str]:
+    return [
+        line
+        for line in lp._test["err"].getvalue().splitlines()
+        if "pre-launch enter" in line
+    ]
+
+
+def test_loop_entry_then_skill_entry_writes_one_resume_row(tmp_path, monkeypatch, capsys):
+    rows = _count_resume_rows(monkeypatch)
+    lp = make_loop(tmp_path, [], enter_fn=enter_mod.enter)
+    ap = lp._test["ap_dir"]
+    _build_tree(ap)
+
+    lp._pre_enter(ap)
+
+    entry = _read_state(ap)["loop_entry"]
+    assert entry["entered_by"] == "loop"
+    assert entry["prd"] == _PRD
+    assert "warnings" not in entry["result"]
+    brief = (ap / "session-brief.md").read_text(encoding="utf-8")
+    assert f"## Entry\n- prd: {_PRD}\n" in brief
+
+    # The session's own `autopilot enter` replays the loop's line.
+    assert cli_main.main(["enter", "--state", str(ap / "state.json")]) == 0
+    assert json.loads(capsys.readouterr().out) == entry["result"]
+    assert "loop_entry" not in _read_state(ap)
+    assert rows == [(_PRD, "build")]
+
+
+def test_stale_loop_entry_is_dropped(tmp_path, monkeypatch, capsys):
+    rows = _count_resume_rows(monkeypatch)
+    ap = tmp_path / "docs" / "dev" / "project-management" / "autopilot"
+    ap.mkdir(parents=True)
+    stale = {"stop": None, "detail": "", "prd": _OTHER, "catchup": "delta", "design": "reuse"}
+    _build_tree(ap, loop_entry={"entered_by": "loop", "prd": _OTHER, "result": stale})
+
+    assert cli_main.main(["enter", "--state", str(ap / "state.json")]) == 0
+
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["prd"] == _PRD
+    assert printed["catchup"] == "full"
+    assert "loop_entry" not in _read_state(ap)
+    assert rows == [(_PRD, "build")]
+
+
+def test_pre_enter_failure_launches_without_entry(tmp_path):
+    seen: dict = {}
+
+    def step(ap_dir: Path) -> None:
+        seen["state"] = _read_state(ap_dir)
+        terminal_step()(ap_dir)
+
+    lp = make_loop(tmp_path, [step], enter_fn=_raise_state_error)
+    ap = lp._test["ap_dir"]
+    _build_tree(ap)
+
+    assert lp.run() == 0
+
+    assert len(lp._test["spawn"].launches) == 1
+    assert "loop_entry" not in seen["state"]
+    assert _pre_enter_lines(lp) == [
+        "autoclaude: pre-launch enter failed: state file is not valid JSON",
+    ]
+
+
+def test_pre_enter_state_write_failure_leaves_no_entry(tmp_path, monkeypatch):
+    def refuse(path, apply):
+        raise OSError("disk full")
+
+    lp = make_loop(tmp_path, [], enter_fn=_entered)
+    ap = lp._test["ap_dir"]
+    _build_tree(ap)
+    monkeypatch.setattr(statectl, "mutate", refuse)
+
+    lp._pre_enter(ap)
+
+    assert "loop_entry" not in _read_state(ap)
+    assert not (ap / "session-brief.md").exists()
+    assert _pre_enter_lines(lp) == [
+        "autoclaude: pre-launch enter: loop_entry write failed: disk full",
+    ]
+    # enter's warnings still reach the loop's stderr, never its stdout.
+    assert "frontmatter: lane reset" in lp._test["err"].getvalue()
+    assert "frontmatter: lane reset" not in lp._test["out"].getvalue()
+
+
+@pytest.mark.parametrize(
+    ("next_phase", "marker", "called"),
+    [
+        ("build", False, True),
+        ("review", True, True),
+        ("review", False, False),
+        ("done", False, False),
+    ],
+)
+def test_pre_enter_runs_only_for_a_build_or_a_park_marker(
+    tmp_path, next_phase, marker, called
+):
+    calls: list = []
+
+    def enter_fn(*args, **kwargs):
+        calls.append((args, kwargs))
+        return _entered()
+
+    lp = make_loop(tmp_path, [], enter_fn=enter_fn)
+    ap = lp._test["ap_dir"]
+    write_state(ap, prd=_PRD, next_phase=next_phase)
+    if marker:
+        (ap / "park-requested").write_text(json.dumps({"prd": _PRD, "reason": "died"}))
+
+    lp._pre_enter(ap)
+
+    expected = (
+        (ap / "state.json",),
+        {
+            "prds_dir": ap.parent / "prds",
+            "autopilot_dir": ap,
+            "prd_arg": None,
+            "in_loop": True,
+        },
+    )
+    assert calls == ([expected] if called else [])
+
+
+def test_pre_enter_write_is_not_session_progress(tmp_path):
+    # The loop's own loop_entry write must not read as the session touching
+    # state.json, or a session that dies at once would dodge the
+    # no-progress ladder and relaunch forever.
+    lp = make_loop(tmp_path, [], enter_fn=_entered)
+    ap = lp._test["ap_dir"]
+    _build_tree(ap)
+
+    lp._pre_enter(ap)
+
+    assert "loop_entry" in _read_state(ap)
+    assert lp._decide(ap, lp._test["clock"]())["state_touched"] is False

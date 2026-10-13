@@ -47,7 +47,10 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from cli import convergence, notify_out, pause, render_metrics, routing, runner, store_tree, usage_limit, wave_slots
+from cli import (
+    convergence, enter, notify_out, pause, render_metrics, routing, runner, schema, state,
+    statectl, store_tree, usage_limit, wave_slots,
+)
 from cli.loop_act import PURGE_SCRIPT, ActMixin, run_agoge, run_purge, store_git
 from cli.loop_decision import DecisionMixin, died_next, fingerprint, last_result_field, pause_detail, plugin_drift
 from cli.loop_gates import DEFAULT_LOOPS_DIR, GatesMixin, live_wrapper_pid, prune_registry
@@ -191,6 +194,7 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
         pressure_fn=_read_memory_pressure,
         probe_fn=_probe_api,
         detect_limit_fn=usage_limit.detect_from_log,
+        enter_fn=enter.enter,
         clock=time.time,
         out=None,
         err=None,
@@ -204,6 +208,7 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
         self._pressure = pressure_fn
         self._probe = probe_fn
         self._detect_limit = detect_limit_fn
+        self._enter_fn = enter_fn
         self._clock = clock
         self.out = out if out is not None else sys.stdout
         self.err = err if err is not None else sys.stderr
@@ -549,12 +554,68 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
         )
         return self._launch(plan, ap_dir, phase)
 
+    def _pre_enter(self, ap_dir: Path) -> None:
+        """PRD 00282 F2: run Phase 0 (`enter()`) in-process before a build
+        launch, or whenever a `park-requested` marker waits, and store the
+        result as `state.loop_entry` for the session's `autopilot enter` to
+        replay. The local is `current`, never `state`, which would shadow
+        the module `_record_entry`'s except clauses name."""
+        state_path = ap_dir / "state.json"
+        current = _load_json(state_path)
+        next_phase = current.get("next_phase") if isinstance(current, dict) else None
+        if next_phase != "build" and not (ap_dir / "park-requested").is_file():
+            return
+        try:
+            self._record_entry(state_path, ap_dir)
+        finally:
+            # The loop's own writes are not the session's progress: `_decide`
+            # reads any mtime at or past the launch second as state_touched,
+            # so a session that died at once would dodge the no-progress
+            # ladder. One second before the clock keeps it untouched.
+            stamp = self._clock() - 1
+            try:
+                os.utime(state_path, (stamp, stamp))
+            except FileNotFoundError:
+                pass
+            except OSError as err:
+                print(f"autoclaude: pre-launch enter: state.json backdate failed: {err}", file=self.err)
+
+    def _record_entry(self, state_path: Path, ap_dir: Path) -> None:
+        """enter() plus the `loop_entry` write and the brief re-render.
+        enter()'s warnings go to the loop's stderr. A StateError or a failed
+        state write is one stderr line and no loop_entry: the session then
+        enters itself, as before."""
+        try:
+            result = self._enter_fn(
+                state_path,
+                prds_dir=ap_dir.parent / "prds",
+                autopilot_dir=ap_dir,
+                prd_arg=None,
+                in_loop=True,
+            )
+        except state.StateError as err:
+            print(f"autoclaude: pre-launch enter failed: {err}", file=self.err)
+            return
+        for line in result.pop("warnings", []):
+            print(line, file=self.err)
+        entry = {"entered_by": "loop", "prd": result.get("prd"), "result": result}
+        try:
+            statectl.mutate(state_path, lambda data: data.update(loop_entry=entry))
+        except (OSError, state.StateError, schema.SchemaError) as err:
+            print(f"autoclaude: pre-launch enter: loop_entry write failed: {err}", file=self.err)
+            return
+        try:
+            statectl.write_brief(state_path, ap_dir / runner.BRIEF_NAME)
+        except state.StateError as err:
+            print(f"autoclaude: pre-launch enter: brief write failed: {err}", file=self.err)
+
     def _launch_phase(self, ap_dir: Path) -> tuple[float, str, routing.Route]:
-        """Read state, route it, announce it, spawn it. Returns the
-        start clock, the phase launched and the route, all three needed
-        by the metrics line the caller appends. The start clock is read
-        once the session actually launches, excluding any review-slot
-        wait."""
+        """Run the pre-launch enter, then read state, route it, announce
+        it, spawn it. Returns the start clock, the phase launched and the
+        route, all three needed by the metrics line the caller appends.
+        The start clock is read once the session actually launches,
+        excluding any review-slot wait."""
+        self._pre_enter(ap_dir)
         state = _load_json(ap_dir / "state.json")
         phase_launched = ""
         prd_launched = ""
