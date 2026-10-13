@@ -43,7 +43,7 @@ Makes autonomous decisions backed by research (dependencies, recurring issues, A
 - Scripts (own dir, model-invoked as a CLI): `scripts/statectl.py` — the sole
   `state.json` mutator (`get`/`set`/`append`/`del`; atomic, advisory-locked,
   one rotating `.bak`)
-- CLIs: `claude` (headless `-p`), `python3`, `git`, `awk`
+- CLIs: `claude` (headless `-p`), `python3` (>= 3.11), `git`, `awk`
 - Optional: `tracon` (`scripts/tracon/`; the default `autoclaude` front-end since PRD 00062, `_AUTOPILOT_TRACON=0` or no tty/`uv` falls back to `render_stream.py`) - dashboard only, absence changes nothing
 
 ## Execution Model

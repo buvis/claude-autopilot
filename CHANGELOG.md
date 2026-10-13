@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **run-autopilot**: `autopilot verify` is the way to run the full suite - it runs the gate, streams the log and writes the verification record itself, so no session hand-writes `last-verification.json`
 
+### Changed
+
+- **run-autopilot**: the CLI now needs Python 3.11 or newer (it uses datetime.UTC); 3.10 is no longer supported
+
 ### Fixed
 
 - **run-autopilot**: the review gate now catches four more ways a critical row hid from the findings cross-check - a severity-content or marker-variant flag on a wordless/bracket/fullwidth row, a tab- or 4-space-indented fence that CommonMark reads as a code block rather than a fence, a closed fence that hides the real findings-table header behind a worked example, and an unescaped `\n`/ANSI control character in the boundary-refusal line that could forge extra log output
