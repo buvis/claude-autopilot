@@ -4090,3 +4090,13 @@
 {"id":"77c6a7d3","ended_at":1791888792,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"id":"ed89319a","ended_at":1791888792,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791888792,"phase":"build","prd":"00279-run-one-exact-reuse-rule-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791888819,"phase":"build","prd":"00279-run-one-exact-reuse-rule-v1.md"}
+{"id":"e18aa813","kind":"tess","task":"2","queued_at":1791888917,"prompt_bytes":16318}
+{"id":"f3e13af7","kind":"ivan","task":"2","queued_at":1791889082,"prompt_bytes":28290}
+{"id":"fba53da8","kind":"pat","task":"2","queued_at":1791889296,"prompt_bytes":19097}
+{"id":"11711a8c","kind":"ivan","task":"3","queued_at":1791889538,"prompt_bytes":29872}
+{"id":"e18aa813","ended_at":1791890760,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"f3e13af7","ended_at":1791890760,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"fba53da8","ended_at":1791890760,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"11711a8c","ended_at":1791890760,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791890760,"phase":"review","prd":"00279-run-one-exact-reuse-rule-v1.md"}
