@@ -138,6 +138,33 @@ _REF_CELL_RE = re.compile(r"^R\d+$", re.IGNORECASE)
 _CONSENSUS_CELL_RE = re.compile(r"^\[\d+/\d+\]$")
 # Any `[m/n]` anywhere on a line: the token every findings row carries.
 _CONSENSUS_TOKEN_RE = re.compile(r"\[\d+/\d+\]")
+# A line that already looks like structured tabular data: a pipe anywhere, or
+# an HTML <table>/<td> tag anywhere. Deliberately no bare bullet/blockquote
+# marker: a reviewer's plain "- 🟡 Name: free-text comment" bullet stays unread.
+_ROW_SHAPE_RE = re.compile(r"\||<t(?:able|d)\b", re.IGNORECASE)
+_SEVERITY_EMOJI_ANY_RE = re.compile("[\U0001f534\U0001f7e0\U0001f7e1⚪]")
+# A severity word anywhere on the line; only ever consulted beside
+# _LEADING_RATIO_RE, so ordinary prose naming a severity is never flagged.
+_SEVERITY_WORD_ANY_RE = re.compile(r"\b(CRITICAL|HIGH|MEDIUM|LOW)\b", re.IGNORECASE)
+_SEVERITY_WORD_CELL_RE = re.compile(
+    r"\|\s*(CRITICAL|HIGH|MEDIUM|LOW)\s*\|", re.IGNORECASE
+)
+# A consensus-marker variant leading the line, after any bullet or blockquote
+# markers: spaced or asymmetric brackets, fullwidth or lenticular brackets, or
+# parentheses, open and close matched independently. Anchored so a count in
+# prose ("(1092/1092)") or a heading ("### Full Consensus (3/3)") stays unread.
+_CONSENSUS_VARIANT_RE = re.compile(
+    r"^[ \t]{0,3}(?:[-*+>][ \t]*)*[\[(［【]\s*\d+\s*/\s*\d+\s*[\])］】]"
+)
+# A severity emoji followed by its severity word ("🔴 CRITICAL"): a reviewer's
+# "[BLAKE] 🟡 issue | File: x" lens bullet names no word and stays unread.
+_SEVERITY_EMOJI_WORD_RE = re.compile(
+    "[\U0001f534\U0001f7e0\U0001f7e1⚪]\\s*(CRITICAL|HIGH|MEDIUM|LOW)\\b",
+    re.IGNORECASE,
+)
+# A bare m/n leading the line (up to 3 spaces/tabs of indent): the pipe-less
+# table's only structural signal, read only beside a severity signal.
+_LEADING_RATIO_RE = re.compile(r"^[ \t]{0,3}\d+\s*/\s*\d+\b")
 # A fence opener or closer, read off the RAW line: at most 3 leading spaces
 # (CommonMark's ceiling; a tab or a 4th space makes an indented code block, not
 # a fence), then the run. Trailing text (```markdown) is allowed.
@@ -578,7 +605,20 @@ def _unread_token(live: str) -> str | None:
     for i, line in enumerate(lines):
         if i in consumed:
             continue
-        if _CONSENSUS_TOKEN_RE.search(line) or _CANDIDATE_ROW_RE.match(line):
+        if (
+            _CONSENSUS_TOKEN_RE.search(line)
+            or _CANDIDATE_ROW_RE.match(line)
+            or _CONSENSUS_VARIANT_RE.search(line)
+            or _SEVERITY_WORD_CELL_RE.search(line)
+            or (_ROW_SHAPE_RE.search(line) and _SEVERITY_EMOJI_WORD_RE.search(line))
+            or (
+                _LEADING_RATIO_RE.match(line)
+                and (
+                    _SEVERITY_EMOJI_ANY_RE.search(line)
+                    or _SEVERITY_WORD_ANY_RE.search(line)
+                )
+            )
+        ):
             return (
                 f"line {i + 1}: a [m/n] token or table row the findings parser "
                 f"did not read: {line.strip()[:120]}"
