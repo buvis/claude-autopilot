@@ -4049,3 +4049,12 @@
 {"id":"516b1876","ended_at":1791878295,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791878295,"phase":"build","prd":"00277-catch-critical-rows-in-every-shape-v1.md"}
 {"kind":"handoff","site":"build","edge":"resume","at":1791878326,"phase":"build","prd":"00278-make-release-checks-tell-truth-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791881816,"phase":"build","prd":"00278-make-release-checks-tell-truth-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791881834,"phase":"build","prd":"00278-make-release-checks-tell-truth-v1.md"}
+{"id":"ff6be3af","kind":"deslop","task":"9","queued_at":1791882551,"prompt_bytes":12928}
+{"id":"ff6be3af","ended_at":1791882596,"elapsed_s":45,"outcome":"ok","detail":null}
+{"id":"9dbc218d","kind":"pat","task":"9","queued_at":1791882647,"prompt_bytes":20600}
+{"id":"c4922fd6","kind":"ivan","task":"9","queued_at":1791882752,"prompt_bytes":43186}
+{"id":"9dbc218d","ended_at":1791883545,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"c4922fd6","ended_at":1791883545,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791883545,"phase":"review","prd":"00278-make-release-checks-tell-truth-v1.md"}

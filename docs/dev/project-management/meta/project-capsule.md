@@ -48,7 +48,10 @@ Generated: 2026-10-13
 - [x] 00271-guard-v2-structural-delegation-check-v1 (2 cycles)
 - [x] 00285-resolve-process-facts-without-ps-v1 (1 cycle)
 - [x] 00276-make-the-gate-record-trustworthy-v1 (2 cycles)
-- [ ] 00278-make-release-checks-tell-truth-v1 (in progress, entering design)
+- [ ] 00278-make-release-checks-tell-truth-v1 (in progress, build task 9/9
+      pending after a mid-task rotation; HEAD 301ada7, tree dirty with task-9
+      edits in `cli/gate.py`, `cli/test_release_checks_counts.py` and the two
+      `hooks/test_guard_phase_delegation*.py` files)
 - backlog: 00279 (agoge 2026-10-10 walkthrough),
   plus 00282, 00283, 00284 (loop efficiency, from discovery 00281).
 - held: 00277-catch-critical-rows-in-every-shape-v1 (stalled on a
@@ -507,10 +510,12 @@ topic is unchanged; the hits above are the ones to use.
 
 ## Project Health
 
-CI: none configured/observed. Batch 202610111300 is open with 0 drained;
-00271 in wip at task 6 of 10, 7 PRDs behind it in backlog, plus 00280 and the
-hold triage stubs from batch 202610101000 (00272-00275). `master` at 1313c50,
-tree clean.
+CI: none configured/observed (0 open issues, 0 open PRs, no workflow runs —
+refreshed 2026-10-13T08:57Z). Batch 202610111300 is open with 3 drained
+(00271, 00285, 00276); 00278 in wip at task 9 of 9. `master` at 301ada7, tree
+dirty with the in-flight task-9 edits. `release-checks` stays RED on this host
+for pre-existing sandbox reasons (setuid `ps` unreachable under the agent
+seatbelt).
 Standing debt:
 `cli/__main__.py` and `test_state.py` exceed the 800-line cap (deliberately
 excluded by 00192).

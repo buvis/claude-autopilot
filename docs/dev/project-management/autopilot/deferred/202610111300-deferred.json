@@ -519,6 +519,14 @@
       "detail": "PRD packet 4 'severity emoji anywhere' cannot ship: measured 29/79 real reviews flip to malformed (11/79 if gated on a pipe, 55/114 files if scoped to the findings section, 0 only with today's emoji+pipe+word rule), including this batch's own 00265/00269/00270/00271/00276 reviews, so review-close would refuse the next cycle's review file; four options and all measurements in docs/dev/project-management/reviews/00277-catch-critical-rows-in-every-shape-v1-blocking-escalation.md; cycle-1 tests committed red on purpose (34744e6, 7a386b5), tasks 8/9/10 unstarted and depend on the decision",
       "op_id": "fd175b48d492",
       "prd": "00277-catch-critical-rows-in-every-shape-v1.md"
+    },
+    {
+      "type": "pre-existing-failure",
+      "severity": "high",
+      "issue": "dev/bin/release-checks exits 1 with FAIL 67 at 0d525d4; all 67 failures are in skills/run-autopilot/cli/test_gate_findings_unread_shapes.py, which was already gated before PRD 00278 and fails identically at task base 6c91048 (67 failed, 38 passed). That file was authored by PRD 00277 task 7, and 00277 is parked in hold/ on a blocking escalation, so its tests pin gate.py behavior that was never implemented.",
+      "impact": "PRD 00278 task 9 acceptance criterion \"bash dev/bin/release-checks exits 0 with FAIL 0\" is unmet, and the repo gate stays RED, so no release can pass release-checks until 00277 is finished or its tests are retired.",
+      "recommendation": "Un-park 00277 (mv prds/hold/00277-... prds/backlog/) and finish it, or explicitly retire test_gate_findings_unread_shapes.py. Out of scope for 00278, whose task 9 owns only dev/bin/release-checks and test_release_checks_counts.py.",
+      "prd": "00278-make-release-checks-tell-truth-v1.md"
     }
   ]
 }
