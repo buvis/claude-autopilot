@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import math
 import re
 from pathlib import Path
 
@@ -140,12 +141,16 @@ _BUDGET_DEFAULT_USD = 300.0
 
 
 def budget_usd_for(env: dict) -> float:
-    """`_AUTOPILOT_PRD_BUDGET_USD`: the per-PRD dollar budget. Absent or
-    unparseable keeps the default; `0` disables the bound."""
+    """`_AUTOPILOT_PRD_BUDGET_USD`: the per-PRD dollar budget. Absent,
+    unparseable, negative, or non-finite (nan/inf) keeps the default;
+    `0` disables the bound."""
     try:
-        return float(env.get("_AUTOPILOT_PRD_BUDGET_USD", _BUDGET_DEFAULT_USD))
+        value = float(env.get("_AUTOPILOT_PRD_BUDGET_USD", _BUDGET_DEFAULT_USD))
     except ValueError:
         return _BUDGET_DEFAULT_USD
+    if value < 0 or not math.isfinite(value):
+        return _BUDGET_DEFAULT_USD
+    return value
 
 
 def _iso_epoch(stamp) -> float | None:
@@ -481,6 +486,11 @@ class DecisionMixin:
         `_AUTOPILOT_PRD_BUDGET_USD` since `state.prd_budget_since` (metrics
         rows plus this session's cost) parks with `park_site: budget`."""
         if decision["signal"] != "continue" or not decision.get("prd"):
+            return
+        if decision.get("limit_wait") is not None:
+            # A scheduled usage-limit wait must run; parking here would
+            # drop the sleep and relaunch straight into the still-live
+            # limit, which then halts the loop (unconsumed park marker).
             return
         budget = budget_usd_for(self.env)
         if budget == 0:
