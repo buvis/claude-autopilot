@@ -333,6 +333,14 @@ class ActMixin:
         """The decision signal's branch. An exit code halts the loop
         (teardown already done); None means another iteration."""
         branch = decision["signal"]
+        if branch == "instant_exit":
+            print(
+                f"\nautoclaude: instant exit ({decision['detail']}); "
+                f"then {decision['then']}.",
+                file=self.out,
+            )
+            decision = {**decision, "signal": decision["then"]}
+            branch = decision["signal"]
         if branch == "state_write_failed":
             return self._halt(
                 "\nautoclaude: state-write-failed marker present — halting "

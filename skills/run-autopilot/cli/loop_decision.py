@@ -22,6 +22,8 @@ _CONNECTION_FAIL = re.compile(
     re.IGNORECASE,
 )
 
+_INSTANT_EXIT_SECS = 30
+
 
 # ── small pure ports ─────────────────────────────────────────────────────────
 
@@ -250,7 +252,21 @@ class DecisionMixin:
             self._limit_wait_for(ap_dir, decision)
         elif decision["signal"] == "":
             self._decide_no_progress(decision, ap_dir, state_path, ts_start)
+        self._apply_instant_exit(decision, ap_dir, ts_start)
         return decision
+
+    def _apply_instant_exit(self, decision: dict, ap_dir: Path, ts_start: float) -> None:
+        """A sub-30s session billed $0 (or nothing) is presented as
+        `instant_exit`; `then` keeps the signal the table already chose."""
+        if decision["signal"] in ("paused", "done", "state_write_failed"):
+            return
+        wall = self._clock() - ts_start
+        cost = last_result_field(ap_dir / "last-session.log", "total_cost_usd")
+        billed = _is_number(cost) and cost > 0
+        if wall >= _INSTANT_EXIT_SECS or billed:
+            return
+        decision["then"] = decision["signal"] or "continue"
+        decision["signal"] = "instant_exit"
 
     def _decide_from_state(
         self, decision: dict, state: dict, state_touched: bool
