@@ -304,6 +304,7 @@ echo "[checks] review verbs"
 run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_verification.py \
   skills/run-autopilot/cli/test_verification_dirty.py \
+  skills/run-autopilot/cli/test_verification_dirty_symlink.py \
   skills/run-autopilot/cli/test_verification_hidden_flags.py \
   skills/run-autopilot/cli/test_verification_dirty_paths.py \
   skills/run-autopilot/cli/test_verification_log_sink.py \

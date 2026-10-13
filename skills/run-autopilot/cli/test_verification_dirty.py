@@ -352,6 +352,30 @@ def test_store_only_change_below_toplevel_is_reused(repo: Path) -> None:
     ) == ("stale", {})
 
 
+def test_store_edit_behind_a_product_symlink_is_stale(repo: Path) -> None:
+    # A tracked symlink outside the store, its target relative to its own
+    # directory, aliases a store file: a store-only diff is a product change.
+    _commit(repo, f"{STORE}/settings.json", "{}\n")
+    _commit(repo, f"{STORE}/notes/n.md", "n\n")
+    (repo / "src" / "settings.json").symlink_to(f"../{STORE}/settings.json")
+    _git(repo, "add", "--", "src/settings.json")
+    _git(repo, "commit", "--no-verify", "-q", "-m", "link settings")
+    record = _record(_git(repo, "rev-parse", "HEAD"))
+
+    # A store change no symlink reaches stays reusable.
+    other = _commit(repo, f"{STORE}/notes/n.md", "edited\n")
+    assert verification.reuse_verdict(record, repo, other, gate_command=GATE) == (
+        "reused",
+        record,
+    )
+
+    head = _commit(repo, f"{STORE}/settings.json", '{"debug": true}\n')
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == (
+        "stale",
+        {},
+    )
+
+
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [

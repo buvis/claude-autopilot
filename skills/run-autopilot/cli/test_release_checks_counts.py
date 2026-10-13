@@ -180,6 +180,7 @@ _REVIEW_VERB_TEST_FILES = (
     "skills/run-autopilot/cli/test_gate_findings_real_fixtures.py",
     "skills/run-autopilot/cli/test_verification.py",
     "skills/run-autopilot/cli/test_verification_dirty.py",
+    "skills/run-autopilot/cli/test_verification_dirty_symlink.py",
     "skills/run-autopilot/cli/test_verification_hidden_flags.py",
     "skills/run-autopilot/cli/test_verification_dirty_paths.py",
     "skills/run-autopilot/cli/test_verification_log_sink.py",
