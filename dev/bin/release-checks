@@ -294,6 +294,7 @@ run_pytest uv run --no-project --with pytest python -m pytest -q \
 echo "[checks] enter"
 run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_enter.py \
+  skills/run-autopilot/cli/test_enter_budget.py \
   skills/run-autopilot/cli/test_enter_prose.py \
   skills/run-autopilot/cli/test_enter_guards.py \
   skills/run-autopilot/cli/test_enter_decisions.py \
