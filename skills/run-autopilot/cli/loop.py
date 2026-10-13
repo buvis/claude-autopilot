@@ -415,9 +415,10 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
         the clock reading taken once the slot is held (or immediately, when
         there is none to wait for), so the metrics ts_start excludes the
         queue wait."""
-        state = _load_json(ap_dir / "state.json")
-        batch_id = (state.get("batch") or {}).get("id") if isinstance(state, dict) else None
+        current = _load_json(ap_dir / "state.json")
+        batch_id = (current.get("batch") or {}).get("id") if isinstance(current, dict) else None
         self.env["GIT_COMMITTER_NAME"] = enter_io.loop_committer(batch_id)
+        # ponytail: process-wide env, the loop process commits nothing else
         os.environ["GIT_COMMITTER_NAME"] = self.env["GIT_COMMITTER_NAME"]
 
         slots_dir = self.env.get("_AUTOPILOT_REVIEW_SLOTS_DIR", "")

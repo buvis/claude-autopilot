@@ -153,3 +153,4 @@ No dependencies - built first.
 - **Committer name visible in history**: `git log --format=fuller` and GitHub's "committed by" line show `autopilot-loop/<id>`. The user accepted this (2026-10-12).
 - **Session ignores the skip instruction**: the cost falls back to today's, never worse. The probe still stops the repeat probing.
 - **Probe verdict goes stale mid-batch** (someone runs `gh auth login`): the next batch re-probes. Fixing gh mid-batch needs `statectl del catchup_probe`.
+- **First-session commits land as `autopilot-loop/no-batch`**: `Loop._launch` can run before `state.json` has a `batch.id` (the very first session of a batch), so its commits carry that committer name. `_catchup`'s loop-only check only recognizes `autopilot-loop/<batch.id>`, so it does not recognize `no-batch` as this batch's own commit and the next entry reads a full catchup once per batch. Bounded (one extra full catchup) and fails safe (never a wrong skip); not worth special-casing.
