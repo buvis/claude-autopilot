@@ -38,5 +38,133 @@
     "issue": "35 touched test(s) pass against the pre-change code: test_reuse_when_only_store_paths_changed, test_stale_when_code_changed, test_reuse_verdict_fails_closed_on_git_error, test_reuse_verdict_rejects_non_ancestor_sha, test_reuse_verdict_rejects_dirty_tree, test_rename_out_of_store_is_not_clean +29 more",
     "file": "skills/run-autopilot/cli/test_verification_dirty.py",
     "reason": "Same reason: this file's 35 touched tests are the existing reuse/dirt regression suite, preserved by this change and therefore passing at base. The PRD requires test_store_edit_behind_a_product_symlink_is_stale to fail at base, and that one does."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "The tracked-`--log` refusal was removed, but the design doc and tasks 5 and 7 still require it; `autopilot verify --log src/app.py` now truncates and overwrites tracked product code before any check. The PRD feature text names only the store check, so the PRD and the design doc conflict and cycle 1's R9 ruling settled it by dropping the safer behaviour. Restore the refusal, or record the conflict in the PRD and design doc so the contracts agree.",
+    "file": "skills/run-autopilot/cli/__main__.py:947",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "Two docs omit a path that exits 1 (pre-spawn dirty refusal, sha mismatch, lock-wait expiry, a `--log` refused by `run_gate`): both define exit 1 as \"timed out or non-zero gate exit\", so a reader cannot tell a dirty-tree refusal from a red suite.",
+    "file": "skills/work/references/final-verification.md:162",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "Removing the tracked-log refusal reintroduces destructive writes: `verify --log src/app.py` truncates committed source before spawning the gate, and the changed tests explicitly require that overwrite. Restore both refusals and byte-preservation tests, including nested repo roots.",
+    "file": "skills/run-autopilot/cli/verification.py:540",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "`_acquire_lock` catches every `OSError` as \"lock busy\"; only `BlockingIOError` means that for `LOCK_EX | LOCK_NB`, so a persistent `ENOLCK`/`EBADF` is polled for the whole timeout and then reported as a timed-out gate.",
+    "file": "skills/run-autopilot/cli/verification.py:533",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "The `os.killpg` `ProcessLookupError` guard added for cycle-1 R14 has no test; make `os.killpg` raise it in the existing sink-error test and assert the original sink `OSError` still propagates and the child is reaped.",
+    "file": "skills/run-autopilot/cli/test_verification_log_sink.py:120",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "`_run_locked_gate` exceeds the 50-line limit once the kill-and-reap block was added; `_reap` already does `killpg`, `wait` and both pipe closes, so the sink-error `except` should call a shared helper carrying the `ProcessLookupError` guard.",
+    "file": "skills/run-autopilot/cli/verification.py:557",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "`_hidden_flag_edits` no longer looks at edits (it returns every flagged path) yet still runs `ls-files -v -s` and unpacks `mode`, `blob` and `stage`; rename it and parse plain `ls-files -v -z` output as the design contract specifies.",
+    "file": "skills/run-autopilot/cli/verification.py:206",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "Cycle-1 R7 is only half fixed: `_store_roots` is reused, but `_dirty_store_paths` and `_dirty_outside_store_paths` still duplicate the same `git status --porcelain=1 -z` call and record parse with the filter flipped.",
+    "file": "skills/run-autopilot/cli/verification.py:127",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "`_acquire_lock` conceals permanent locking failures as contention until they surface as misleading timeout results; retry only contention errors, propagate the rest, and test that a non-contention error propagates immediately.",
+    "file": "skills/run-autopilot/cli/verification.py:533",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "The hidden-flag scan retains machinery from the deleted hashing implementation (toplevel lookup, staged metadata, three unused fields); the design specifies a single `git ls-files -v -z --full-name` call parsing only tag and path.",
+    "file": "skills/run-autopilot/cli/verification.py:206",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "The rework pushes `_run_locked_gate` to 52 lines and `run_gate` to 53 per the mechanical facts; both are changed functions, outside the settled exemption for unchanged oversized functions.",
+    "file": "skills/run-autopilot/cli/verification.py:557",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`_run_verify` resolves `log_path`, then `_refuse_verify_log` calls `.resolve()` again on the already-resolved path; drop the second call.",
+    "file": "skills/run-autopilot/cli/__main__.py:957",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`run_gate` excludes its own log only when the log is untracked, where the PRD says to pass `log_path` as an extra excluded path; safer than the PRD and documented, but a recorded deviation.",
+    "file": "skills/run-autopilot/cli/verification.py:276",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`verify --log <tracked product file>` is not refused: `_run_locked_gate` opens it \"wb\" and truncates it before the gate runs. The record is correctly refused as dirty, but the file's content is lost (same defect family as R1/R3).",
+    "file": "skills/run-autopilot/cli/verification.py:574",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Extras beyond the PRD, all inside packets 16 and 2: `_store_symlink_targets_changed` handles a directory alias to the repo root and checks uncommitted store edits. The CHANGELOG records them.",
+    "file": "skills/run-autopilot/cli/verification.py:144",
+    "reason": "rework cap reached with this finding unresolved"
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "Mid-run dirt now returns 3 instead of the required 1. This fixes the previous false success but still violates task 7's explicit mapping: exit 3 requires a green, non-dirty, non-timed-out result. Restore `not result[\"dirty\"]` on the success branch, assert exit 1 in the mid-run-dirt test, and correct the changed CLI documentation and changelog.",
+    "file": "skills/run-autopilot/cli/__main__.py:1007",
+    "reason": "Contradicts the PRD: task 7 reads \"exit 3 when green but unrecorded\" and the success metric is \"verify exits non-zero whenever it wrote no record\"; exit 3 satisfies both, and cycle 1's R1 was fixed to this shape by three-lens consensus."
   }
 ]
