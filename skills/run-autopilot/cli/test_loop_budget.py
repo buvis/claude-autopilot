@@ -324,8 +324,14 @@ def test_budget_zero_disables(tmp_path, monkeypatch):
         ({"_AUTOPILOT_PRD_BUDGET_USD": "0"}, 0),
         ({"_AUTOPILOT_PRD_BUDGET_USD": "450.5"}, 450.5),
         ({"_AUTOPILOT_PRD_BUDGET_USD": "lots"}, 300),
+        ({"_AUTOPILOT_PRD_BUDGET_USD": "nan"}, 300),
+        ({"_AUTOPILOT_PRD_BUDGET_USD": "inf"}, 300),
+        ({"_AUTOPILOT_PRD_BUDGET_USD": "-50"}, 300),
     ],
-    ids=["default", "zero-disables", "float", "unparseable-keeps-default"],
+    ids=[
+        "default", "zero-disables", "float", "unparseable-keeps-default",
+        "nan-keeps-default", "inf-keeps-default", "negative-keeps-default",
+    ],
 )
 def test_budget_usd_for_reads_the_env_knob(env, expected):
     from cli.loop_decision import budget_usd_for
@@ -475,6 +481,24 @@ def test_budget_bound_leaves_non_relaunch_decisions_alone(tmp_path, signal, deta
     _seed_metrics(ap, _row(PRD_A, _SINCE_EPOCH + 1, 900.0))
     _cost_log(ap, 900.0)
     decision = _decision(PRD_A, signal=signal, detail=detail)
+    before = dict(decision)
+
+    lp._budget_bound(decision, ap)
+
+    assert decision.get("park_site") != "budget"
+    assert decision == before
+
+
+def test_budget_bound_never_parks_a_scheduled_limit_wait(tmp_path):
+    # A continue decision carrying limit_wait (usage-limit wait or window
+    # yield) must sleep, not park - parking here drops the sleep and
+    # relaunches straight into the still-live limit.
+    lp, ap = _bound_loop(tmp_path)
+    _seed_state(ap, prd=PRD_A, prd_budget_since=_SINCE)
+    _seed_metrics(ap, _row(PRD_A, _SINCE_EPOCH + 1, 900.0))
+    _cost_log(ap, 900.0)
+    decision = _decision(PRD_A)
+    decision["limit_wait"] = 600
     before = dict(decision)
 
     lp._budget_bound(decision, ap)
