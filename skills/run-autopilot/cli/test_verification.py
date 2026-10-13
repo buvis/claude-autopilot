@@ -550,80 +550,140 @@ def _release_gate_lock(fd: int) -> None:
     os.close(fd)
 
 
+def _gate_lock_is_free(repo: Path) -> bool:
+    """True iff the gate lock can be taken at once (LOCK_NB), i.e. no
+    run_gate call still holds it."""
+    path = repo / GATE_LOCK_REL
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_RDWR | os.O_CREAT)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        return True
+    except BlockingIOError:
+        return False
+    finally:
+        os.close(fd)
+
+
+def _wait_for(predicate, timeout: float = 10.0) -> None:
+    deadline = time.monotonic() + timeout
+    while not predicate():
+        assert time.monotonic() < deadline, "condition never came true"
+        time.sleep(0.05)
+
+
+def _probed(repo: Path, probe: Path, command: str) -> str:
+    """`command`, prefixed by a line appended to `probe` saying whether the
+    record file existed when the gate's child started."""
+    return (
+        f"if test -e '{repo / RECORD_REL}'; then echo PRESENT; "
+        f"else echo absent; fi >> '{probe}'; {command}"
+    )
+
+
+# A sha refusal: dirty-shaped, with no path at fault, nothing recorded.
+SHA_REFUSAL = {
+    "passed": None,
+    "failed": None,
+    "skipped": None,
+    "exit": None,
+    "raw_line": None,
+    "timed_out": False,
+    "recorded": False,
+    "dirty": True,
+    "dirty_paths": [],
+}
+
+
 def _start_gate(
-    command: str, repo: Path, sha: str, **kwargs
+    command: str, repo: Path, sha: str, cycle: int = 1, **kwargs
 ) -> tuple[threading.Thread, dict]:
     out: dict = {}
 
     def _run() -> None:
-        out["result"] = verification.run_gate(command, repo, sha, 1, **kwargs)
+        out["result"] = verification.run_gate(command, repo, sha, cycle, **kwargs)
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
     return thread, out
 
 
-def test_failed_run_leaves_no_older_green_record(repo: Path) -> None:
-    head = _git(repo, "rev-parse", "HEAD")
+def test_failed_run_leaves_no_older_green_record(
+    repo: Path, tmp_path_factory
+) -> None:
+    parent = _git(repo, "rev-parse", "HEAD")
     record = repo / RECORD_REL
-    assert verification.run_gate(SUMMARY, repo, head, 1)["recorded"] is True
+    probe = tmp_path_factory.mktemp("probe") / "probe.txt"
+    assert verification.run_gate(SUMMARY, repo, parent, 1)["recorded"] is True
     green = record.read_bytes()
 
     # A dirty-tree refusal never ran the gate, so it must not cost the record.
     (repo / "stray.txt").write_text("stray\n")
-    refused = verification.run_gate(SUMMARY, repo, head, 2)
+    refused = verification.run_gate(SUMMARY, repo, parent, 2)
     assert refused["dirty"] is True
     assert refused["recorded"] is False
     assert record.read_bytes() == green
     (repo / "stray.txt").unlink()
 
-    # A run that fails without a summary line must not leave the older green
-    # record certifying HEAD.
-    failed = verification.run_gate("echo boom; exit 1", repo, head, 3)
+    # HEAD moves to a child commit while the parent's green record stays on
+    # disk: a run at the child that fails without a summary line must not
+    # leave that record behind, whatever sha the record itself names.
+    head = _commit(repo, "src/next.py", "print(3)\n")
+    failed = verification.run_gate(_probed(repo, probe, "echo boom; exit 1"), repo, head, 3)
     assert failed["exit"] == 1
     assert failed["recorded"] is False
     assert not record.exists()
 
     # Same for a run killed at its deadline...
     assert verification.run_gate(SUMMARY, repo, head, 4)["recorded"] is True
-    timed_out = verification.run_gate("sleep 5", repo, head, 5, timeout=0.2)
+    timed_out = verification.run_gate(_probed(repo, probe, "sleep 5"), repo, head, 5, timeout=1)
     assert timed_out["timed_out"] is True
     assert not record.exists()
 
     # ...and for a run that dirtied the tree after the pre-spawn check passed.
     assert verification.run_gate(SUMMARY, repo, head, 6)["recorded"] is True
-    dirtied = verification.run_gate(f"echo d > src/d.py; {SUMMARY}", repo, head, 7)
+    dirty_cmd = _probed(repo, probe, f"echo d > src/d.py; {SUMMARY}")
+    dirtied = verification.run_gate(dirty_cmd, repo, head, 7)
     assert dirtied["dirty"] is True
     assert dirtied["recorded"] is False
     assert not record.exists()
+
+    # The record was already gone WHILE each child ran, not only afterwards.
+    assert probe.read_text().split() == ["absent", "absent", "absent"]
 
 
 def test_concurrent_runs_serialize_on_the_gate_lock(
     repo: Path, tmp_path_factory
 ) -> None:
     head = _git(repo, "rev-parse", "HEAD")
+    record = repo / RECORD_REL
     marks = tmp_path_factory.mktemp("marks") / "marks.txt"
 
-    def _command(n: int) -> str:
+    def _command(n: int, hold: int) -> str:
         return (
-            f"echo start-{n} >> '{marks}'; sleep 0.5; "
+            f"echo start-{n} >> '{marks}'; sleep {hold}; "
+            f"if test -e '{record}'; then echo present-{n} >> '{marks}'; fi; "
             f"echo end-{n} >> '{marks}'; {SUMMARY}"
         )
 
-    first, first_out = _start_gate(_command(1), repo, head)
-    second, second_out = _start_gate(_command(2), repo, head)
-    first.join(timeout=20)
-    second.join(timeout=20)
+    # The first run holds the lock for 5s, longer than any wait-then-go-ahead
+    # fallback; the second only starts once the first's child is running.
+    first, first_out = _start_gate(_command(1, 5), repo, head, cycle=1)
+    _wait_for(marks.exists)
+    second, second_out = _start_gate(_command(2, 1), repo, head, cycle=2)
+    first.join(timeout=30)
+    second.join(timeout=30)
 
     assert not first.is_alive() and not second.is_alive()
-    # One run finishes before the other starts: no interleaved markers.
-    assert marks.read_text().split() in (
-        ["start-1", "end-1", "start-2", "end-2"],
-        ["start-2", "end-2", "start-1", "end-1"],
-    )
+    # No interleaving, and no "present-2": the first run's record write landed
+    # before the second run took the lock and invalidated it, never during
+    # the second run's child.
+    assert marks.read_text().split() == ["start-1", "end-1", "start-2", "end-2"]
     assert first_out["result"]["recorded"] is True
     assert second_out["result"]["recorded"] is True
-    assert json.loads((repo / RECORD_REL).read_text())["sha"] == head
+    written = json.loads(record.read_text())
+    assert (written["sha"], written["cycle"]) == (head, 2)
 
 
 def test_held_gate_lock_blocks_before_the_log_open_and_record_delete(
@@ -639,7 +699,8 @@ def test_held_gate_lock_blocks_before_the_log_open_and_record_delete(
     fd = _hold_gate_lock(repo)
     try:
         thread, out = _start_gate(SUMMARY, repo, head, log_path=log_path)
-        thread.join(timeout=1.0)
+        # 5s: longer than any plausible wait-then-run-anyway fallback.
+        thread.join(timeout=5.0)
         # Still waiting, and nothing the lock protects has been touched yet.
         assert thread.is_alive()
         assert log_path.read_bytes() == b"previous run\n"
@@ -654,12 +715,14 @@ def test_held_gate_lock_blocks_before_the_log_open_and_record_delete(
     assert b"previous run" not in log_path.read_bytes()
 
 
+@pytest.mark.parametrize("move", ["advance", "rewind"])
 def test_run_gate_refuses_a_sha_that_head_moved_past_while_waiting_for_the_lock(
-    repo: Path, tmp_path_factory
+    repo: Path, tmp_path_factory, move: str
 ) -> None:
     # The caller captures HEAD before run_gate takes the lock; HEAD then
-    # advances while run_gate waits on the lock held by another run.
-    captured = _git(repo, "rev-parse", "HEAD")
+    # moves (forward to a new commit, or back to the parent) while run_gate
+    # waits on the lock held by another run.
+    captured = _commit(repo, "src/second.py", "print(2)\n")
     record = repo / RECORD_REL
     assert verification.run_gate(SUMMARY, repo, captured, 1)["recorded"] is True
     green = record.read_bytes()
@@ -670,25 +733,43 @@ def test_run_gate_refuses_a_sha_that_head_moved_past_while_waiting_for_the_lock(
         thread, out = _start_gate(f"echo ran > '{ran}'; {SUMMARY}", repo, captured)
         thread.join(timeout=1.0)
         assert thread.is_alive()
-        advanced = _commit(repo, "src/later.py", "print(2)\n")
+        if move == "advance":
+            _commit(repo, "src/later.py", "print(3)\n")
+        else:
+            _git(repo, "reset", "--hard", "-q", "HEAD~1")
+        moved = _git(repo, "rev-parse", "HEAD")
     finally:
         _release_gate_lock(fd)
     thread.join(timeout=10)
 
     assert not thread.is_alive()
-    assert advanced != captured
+    assert moved != captured
     # Dirty-refusal shape with no path at fault; the gate never ran and the
     # older record (never invalidated on a refusal) is untouched.
-    assert out["result"] == {
-        "passed": None,
-        "failed": None,
-        "skipped": None,
-        "exit": None,
-        "raw_line": None,
-        "timed_out": False,
-        "recorded": False,
-        "dirty": True,
-        "dirty_paths": [],
-    }
+    assert out["result"] == SHA_REFUSAL
     assert not ran.exists()
     assert record.read_bytes() == green
+    # The refusal released the lock on its way out.
+    assert _gate_lock_is_free(repo)
+
+
+def test_run_gate_refuses_a_sha_argument_that_is_already_behind_head(
+    repo: Path, tmp_path_factory
+) -> None:
+    # No lock contention and nothing moves during the call: the sha argument
+    # alone is stale against HEAD when run_gate starts.
+    stale = _git(repo, "rev-parse", "HEAD")
+    head = _commit(repo, "src/later.py", "print(2)\n")
+    record = repo / RECORD_REL
+    assert verification.run_gate(SUMMARY, repo, head, 1)["recorded"] is True
+    green = record.read_bytes()
+    ran = tmp_path_factory.mktemp("ran") / "ran.txt"
+
+    result = verification.run_gate(f"echo ran > '{ran}'; {SUMMARY}", repo, stale, 2)
+
+    assert result == SHA_REFUSAL
+    assert not ran.exists()
+    assert record.read_bytes() == green
+    # The lock is free at once, and the next call at the real HEAD runs.
+    assert _gate_lock_is_free(repo)
+    assert verification.run_gate(SUMMARY, repo, head, 3)["recorded"] is True
