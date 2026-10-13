@@ -16,6 +16,7 @@ style limit.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 _SCRIPTS = Path(__file__).resolve().parent
@@ -161,7 +162,18 @@ def test_the_review_writes_the_queue_it_alone_can_fill() -> None:
     )
 
 
-def test_the_tests_line_reuse_is_gated_on_the_sha_and_says_which_path_ran() -> None:
+def _tests_line_slice() -> str:
+    # The step-6 paragraph that composes the `Tests:` line, and nothing else:
+    # every token below also occurs elsewhere in the skill, so a whole-file
+    # search passes even when this paragraph loses the rule it is meant to pin.
+    review = _REVIEW_SKILL.read_text()
+    step_6 = review.split("### 6. ", 1)[1].split("\n### ", 1)[0]
+    after = step_6.split("**Compose the `Tests:` line.**", 1)[1]
+    next_block = re.search(r"\n\*\*[^*\n]+\.\*\*", after)
+    return after[: next_block.start()] if next_block else after
+
+
+def test_step_6_copies_the_gate_line_and_keeps_its_provenance() -> None:
     # Both halves matter. Without the single reuse decision the review could
     # report counts from a different tree; without the provenance suffix a
     # reused count is indistinguishable from a fresh run, which is the failure
@@ -170,22 +182,26 @@ def test_the_tests_line_reuse_is_gated_on_the_sha_and_says_which_path_ran() -> N
     # `gate.tests_line`, which `review-stage`'s `reuse_verdict` call (step 3)
     # already decided via the sha/ancestor check. Pin that handoff instead of
     # the retired step-6 condition.
-    review = _REVIEW_SKILL.read_text()
+    slice_ = _tests_line_slice()
 
-    assert "gate.tests_line" in review or "## Test gate" in review, (
+    assert "gate.tests_line" in slice_, (
         "review-work-completion/SKILL.md step 6 no longer names gate.tests_line "
-        "/ the ## Test gate section as the source of the Tests: line."
+        "as the source of the Tests: line."
     )
-    assert "never re-derive reuse from `sha`/counts here" in review, (
+    assert "## Test gate" in slice_, (
+        "review-work-completion/SKILL.md step 6 no longer names the ## Test gate "
+        "section the gate line is read from."
+    )
+    assert "never re-derive reuse from `sha`/counts here" in slice_, (
         "review-work-completion/SKILL.md step 6 re-derives its own sha/counts "
         "reuse rule again - that decision belongs solely to review-stage's "
         "reuse_verdict call (step 3)."
     )
-    assert "suite run this cycle" in review, (
+    assert "suite run this cycle" in slice_, (
         "review-work-completion/SKILL.md lost the provenance suffix naming a "
         "fresh run. A copied count must never read as reused, and vice versa."
     )
-    assert "takes **no** suffix" in review, (
+    assert "takes **no** suffix" in slice_, (
         "review-work-completion/SKILL.md no longer excludes the docs-only form "
         "from the provenance suffix. `cli/gate.py` TESTS_RE admits a suffix "
         "after the counts but none after 'none (docs-only)', so suffixing that "
