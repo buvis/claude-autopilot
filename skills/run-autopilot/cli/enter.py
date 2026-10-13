@@ -9,7 +9,8 @@ report, the prd/frontmatter write plus handoff row, the lane check, and the
 catchup and design decisions - in that order - and returns one dict whose
 `stop` names the first step that halted (None when all passed). Every side
 effect runs through the module that already owns it; only the clock,
-`git rev-parse HEAD`, and the cross-pack handoff row are injected.
+`git rev-parse HEAD`, the loop-only commit check, and the cross-pack handoff
+row are injected.
 """
 
 from __future__ import annotations
@@ -286,8 +287,11 @@ def _fresh(stamp: object, now_iso: str) -> bool:
 def _catchup(
     current: dict, state_path: Path, autopilot_dir: Path,
     now: Callable[[], str], git_head: Callable[[Path], str | None],
+    loop_only: Callable[[Path, str, str], bool],
 ) -> str:
-    """Step 11: skip, delta (batch cache fresh and HEAD unmoved), or full."""
+    """Step 11: skip, delta (batch cache fresh and HEAD unmoved or moved by
+    this batch's loop commits only; a first-entry force needs only the
+    loop-only range), or full."""
     mode = current.get("catchup_mode")
     if mode in ("skip", "skipped"):
         if mode == "skip":
@@ -298,14 +302,22 @@ def _catchup(
         return "skip"
     batch = current["batch"]
     tasks = current.get("tasks")
+    root = custody.project_root(autopilot_dir)
+    base = batch.get("catchup_head_sha")
+
+    def _loop_moved() -> bool:
+        return isinstance(base, str) and loop_only(
+            root, base, enter_io.loop_committer(batch["id"]),
+        )
+
     if mode == "force" and not (isinstance(tasks, list) and tasks):
-        return "full"
+        return "delta" if _loop_moved() else "full"
     if "catchup_completed_at" not in batch or not _fresh(batch["catchup_completed_at"], now()):
         return "full"
-    head = git_head(custody.project_root(autopilot_dir))
-    if head is None or batch.get("catchup_head_sha") != head:
+    head = git_head(root)
+    if head is None:
         return "full"
-    return "delta"
+    return "delta" if base == head or _loop_moved() else "full"
 
 
 def _design(out: dict, current: dict, autopilot_dir: Path) -> None:
@@ -338,6 +350,7 @@ def enter(
     now: Callable[[], str] = _utc_now,
     git_head: Callable[[Path], str | None] = enter_io.git_head_sha,
     record_resume_row: Callable[[str, str, Path], None] = enter_io.record_resume_row,
+    loop_only: Callable[[Path, str, str], bool] = enter_io.commits_all_loop,
 ) -> dict:
     """Run the Phase 0 step chain in documented order; return the one JSON
     line as a dict, plus the frontmatter write's `warnings` for the caller to
@@ -372,7 +385,7 @@ def enter(
         return _stop(out, "lane", f"lane: {fields['lane']} ({fields['lane_reason']})")
     current, _ = state.load(state_path)
     try:
-        out["catchup"] = _catchup(current, state_path, autopilot_dir, now, git_head)
+        out["catchup"] = _catchup(current, state_path, autopilot_dir, now, git_head, loop_only)
     except _WriteFailed as err:
         return _stop(out, "state_write_failed", str(err))
     _design(out, current, autopilot_dir)

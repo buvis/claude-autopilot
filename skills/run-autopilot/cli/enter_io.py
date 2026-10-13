@@ -9,6 +9,7 @@ handoff-row dispatch, and the design-gate's review-log predicate.
     record_resume_row(prd, site, autopilot_dir) -> None
     review_log_has_dispatch_line(text) -> bool
     loop_committer(batch_id) -> str
+    commits_all_loop(repo_root, base, committer) -> bool
 """
 
 from __future__ import annotations
@@ -65,6 +66,23 @@ def loop_committer(batch_id: str | None) -> str:
     """The GIT_COMMITTER_NAME stamped on loop-driven commits: the batch
     id, or 'no-batch' when the loop has none."""
     return f"autopilot-loop/{batch_id or 'no-batch'}"
+
+
+def commits_all_loop(repo_root: Path, base: str, committer: str) -> bool:
+    """True when every commit in `base..HEAD` (merges and side commits too)
+    has exactly `committer` as its committer name; an empty range is True.
+    Any git failure or a name that is not valid UTF-8 is False."""
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(repo_root), "log", "--format=%cn", f"{base}..HEAD"],
+            capture_output=True, timeout=10,
+        )
+        if proc.returncode != 0:
+            return False
+        names = proc.stdout.decode("utf-8").splitlines()
+    except (OSError, subprocess.SubprocessError, UnicodeDecodeError):
+        return False
+    return all(name == committer for name in names)
 
 
 def review_log_has_dispatch_line(text: str) -> bool:
