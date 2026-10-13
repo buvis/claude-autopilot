@@ -202,7 +202,11 @@ def test_instant_exit_signal_then_died_retry_without_limit(tmp_path):
     assert "parking 00044-x-v1.md (died after 1 retries" in out
     assert json.loads((ap / "park-requested").read_text())["prd"] == "00044-x-v1.md"
     assert lp._died_retries == 1
-    assert [row["signal"] for row in metrics_rows(ap)][:2] == ["instant_exit"] * 2
+    rows = metrics_rows(ap)[:2]
+    assert [row["signal"] for row in rows] == ["instant_exit"] * 2
+    # Review finding 5 (PRD 00282): `then` is pinned too, not just `signal` -
+    # the retry row continues, the row that exhausts the ladder parks.
+    assert [row["then"] for row in rows] == ["continue", "park"]
 
 
 def test_instant_exit_waits_when_usage_limit_detected(tmp_path):
@@ -219,7 +223,9 @@ def test_instant_exit_waits_when_usage_limit_detected(tmp_path):
     assert "usage limit hit; waiting" in out
     assert any(secs >= 500 for secs in lp._test["sleeps"])
     assert _notified(lp, "Usage limit")
-    assert metrics_rows(lp._test["ap_dir"])[0]["signal"] == "instant_exit"
+    row = metrics_rows(lp._test["ap_dir"])[0]
+    assert row["signal"] == "instant_exit"
+    assert row["then"] == "continue"  # review finding 5, PRD 00282
     assert len(lp._test["spawn"].launches) == 2
 
 
@@ -241,7 +247,9 @@ def test_instant_exit_with_touched_state_still_runs_the_died_ladder(tmp_path):
     assert second in out
     assert json.loads((ap / "park-requested").read_text())["prd"] == "p.md"
     assert lp._died_retries == 1
-    assert [row["signal"] for row in metrics_rows(ap)][:2] == ["instant_exit"] * 2
+    rows = metrics_rows(ap)[:2]
+    assert [row["signal"] for row in rows] == ["instant_exit"] * 2
+    assert [row["then"] for row in rows] == ["continue", "park"]  # finding 5, PRD 00282
 
 
 @pytest.mark.parametrize(
@@ -271,7 +279,12 @@ def test_instant_exit_flags_only_sub_30s_unbilled_sessions(tmp_path, session, wa
     out = lp._test["out"].getvalue()
     assert ("instant exit" in out) is expect_instant
     assert (_RETRY in out) is expect_instant
-    assert metrics_rows(lp._test["ap_dir"])[0]["signal"] == signal
+    row = metrics_rows(lp._test["ap_dir"])[0]
+    assert row["signal"] == signal
+    # Review finding 5 (PRD 00282): `then` is pinned too, not just `signal`.
+    assert ("then" in row) is expect_instant
+    if expect_instant:
+        assert row["then"] == "continue"
     assert len(lp._test["spawn"].launches) == runs
 
 

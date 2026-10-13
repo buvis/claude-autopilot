@@ -135,6 +135,8 @@ def _decision_fields(decision: dict) -> dict:
         fields["stood_down_condition"] = decision.get("stood_down_condition", "unknown")
     if decision["signal"] == "continue" and decision.get("limit_wait") is not None:
         fields["limit_wait"] = decision["limit_wait"]
+    if "then" in decision:
+        fields["then"] = decision["then"]
     return fields
 
 
