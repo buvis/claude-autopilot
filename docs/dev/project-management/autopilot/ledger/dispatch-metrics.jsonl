@@ -4231,3 +4231,4 @@
 {"id":"b57ce978","ended_at":1791927498,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"id":"d8775204","ended_at":1791927498,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"kind":"handoff","site":"review","edge":"leave","at":1791927498,"phase":"review","prd":"00283-loop-catchup-v1.md"}
+{"kind":"handoff","site":"review","edge":"leave","at":1791928626,"phase":"review","prd":"00283-loop-catchup-v1.md"}
