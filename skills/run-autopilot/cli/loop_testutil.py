@@ -66,7 +66,7 @@ class ScriptedSpawn:
         **kwargs,
     ) -> SpawnResult:
         self.launches.append(
-            {"model": model, "effort": effort, "cap_secs": cap_secs},
+            {"model": model, "effort": effort, "cap_secs": cap_secs, "env": dict(env)},
         )
         self.clock.now += 1  # a session takes wall time
         if not self.steps:
