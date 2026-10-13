@@ -4245,3 +4245,9 @@
 {"kind":"handoff","site":"build","edge":"resume","at":1791932370,"phase":"build","prd":"00283-loop-catchup-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1791932377,"phase":"done","prd":"00283-loop-catchup-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1791932457,"phase":"build","prd":"00283-loop-catchup-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791932473,"phase":"build","prd":"00284-loop-launch-context-v1.md"}
+{"id":"bc4031fd","kind":"fast-track:tess","task":"00284-loop-launch-context-v1-c1","queued_at":1791932578,"prompt_bytes":114178}
+{"id":"bc4031fd","ended_at":1791932883,"elapsed_s":305,"outcome":"ok","detail":null}
+{"id":"5428bea5","kind":"fast-track:ivan","task":"00284-loop-launch-context-v1-c1","queued_at":1791932907,"prompt_bytes":56621}
+{"id":"5428bea5","ended_at":1791933334,"elapsed_s":427,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"build","edge":"leave","at":1791933406,"phase":"build","prd":"00284-loop-launch-context-v1.md"}

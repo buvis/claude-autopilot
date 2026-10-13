@@ -967,6 +967,13 @@
       "issue": "Small edits outside the specs file list: an unused NOW import was removed from test_enter.py, imports in test_loop_review_once.py were reordered, and a shared helper was added to enter_harness.py. The force and moved-HEAD cases in test_enter.py are unchanged.",
       "file": "skills/run-autopilot/cli/test_loop_review_once.py:53",
       "reason": "deferred by review-close"
+    },
+    {
+      "type": "stall",
+      "site": "fast_track_blocked",
+      "detail": "fast-track/00284-loop-launch-context-v1-c1: stopped: gate 3 (test_schema_decision_scope.py: 5 tests assert the single-missing-field message 'autonomous_decisions entry missing issue', contradicting the card's required collected-message behavior in test_schema_decision_entries.py; card's own premise check caught this and said stop rather than edit)",
+      "op_id": "2131ae1a319d",
+      "prd": "00284-loop-launch-context-v1.md"
     }
   ]
 }
