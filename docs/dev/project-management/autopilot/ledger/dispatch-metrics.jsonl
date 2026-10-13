@@ -3978,3 +3978,17 @@
 {"kind":"handoff","site":"review","edge":"leave","at":1791867432,"phase":"done","prd":"00276-make-the-gate-record-trustworthy-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1791867471,"phase":"done","prd":"00276-make-the-gate-record-trustworthy-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1791867584,"phase":"build","prd":"00276-make-the-gate-record-trustworthy-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791867607,"phase":"build","prd":"00277-catch-critical-rows-in-every-shape-v1.md"}
+{"id":"9532820e","kind":"tess","task":"1","queued_at":1791868984,"prompt_bytes":75551}
+{"id":"cf9f3ef8","kind":"tess","task":"1","queued_at":1791869014,"prompt_bytes":40042}
+{"id":"29801da7","kind":"devon","task":"1","queued_at":1791869117,"prompt_bytes":4316}
+{"id":"29801da7","ended_at":1791869237,"elapsed_s":120,"outcome":"ok","detail":null}
+{"id":"0154fd3f","kind":"ivan","task":"1","queued_at":1791869386,"prompt_bytes":74093}
+{"id":"e9dfdcec","kind":"ivan","task":"1","queued_at":1791869440,"prompt_bytes":44720}
+{"id":"59fbc1fd","kind":"pat","task":"1","queued_at":1791869564,"prompt_bytes":12610}
+{"id":"9532820e","ended_at":1791869684,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"cf9f3ef8","ended_at":1791869684,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"0154fd3f","ended_at":1791869684,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"e9dfdcec","ended_at":1791869684,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"59fbc1fd","ended_at":1791869684,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791869684,"phase":"build","prd":"00277-catch-critical-rows-in-every-shape-v1.md"}

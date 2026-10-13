@@ -48,7 +48,8 @@ Generated: 2026-10-13
 - [x] 00271-guard-v2-structural-delegation-check-v1 (2 cycles)
 - [x] 00285-resolve-process-facts-without-ps-v1 (1 cycle)
 - [x] 00276-make-the-gate-record-trustworthy-v1 (2 cycles)
-- backlog: 00277, 00278, 00279 (agoge 2026-10-10 walkthrough),
+- [ ] 00277-catch-critical-rows-in-every-shape-v1 (in progress, entering design)
+- backlog: 00278, 00279 (agoge 2026-10-10 walkthrough),
   plus 00282, 00283, 00284 (loop efficiency, from discovery 00281).
 - held: 00280 (2026-10-12 backlog review) plus 9 triage stubs minted at
   00271's close — 00286-00292 — 2 more minted at 00285's close —
