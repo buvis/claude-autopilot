@@ -21,6 +21,10 @@ import subprocess
 import time
 from pathlib import Path
 
+# Dirty paths under these roots never refuse a record: the store, plus the
+# agents' scratch dir, which a repo need not gitignore.
+from cli.store_tree import STORE_PREFIXES
+
 GATE_TIMEOUT_S = 1800
 GATE_OUTPUT_CAP = 2_000_000  # bytes of combined stdout+stderr kept
 
@@ -44,7 +48,7 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess:
 def _dirty_path_is_in_store(
     new_path: str,
     old_path: str | None,
-    store: str,
+    store: str | tuple[str, ...],
 ) -> bool:
     """A porcelain -z status record's store check: the path field
     (and the second, source path field when the record is a rename/copy)
@@ -98,27 +102,70 @@ def _ancestor_and_clean(repo_root: Path, sha: str, head_sha: str) -> bool:
     return not _dirty_outside_store(repo_root)
 
 
-def _dirty_outside_store(repo_root: Path) -> bool:
-    """True iff the working tree has any change outside STORE_PREFIX, or the
-    git calls themselves fail (non-git cwd, any OSError/non-zero exit counts
-    as dirty - fail toward refusing the record). Runs
-    `git rev-parse --show-prefix` + `git status --porcelain=1 -z
-    --untracked-files=all` and reuses `_iter_porcelain_z_records` and
-    `_dirty_path_is_in_store`, exactly as `_ancestor_and_clean` already does."""
+class _GitProbeFailed(OSError):
+    """A git call in the dirt probe exited non-zero (non-git cwd and the
+    like); an OSError so `_dirty_outside_store` counts it as dirty."""
+
+
+def _dirty_outside_store_paths(
+    repo_root: Path,
+    extra_excluded: tuple[str, ...] = (),
+) -> list[str]:
+    """Sorted, deduplicated paths of every porcelain status record outside
+    the store roots, [] when clean. Store roots are
+    `{prefix + p for p in STORE_PREFIXES} | set(extra_excluded)`, where
+    `prefix` is `git rev-parse --show-prefix`; `extra_excluded` holds
+    TOPLEVEL-relative POSIX paths, used as given (not re-joined with
+    prefix). Runs `git status --porcelain=1 -z --untracked-files=all` and
+    reuses `_iter_porcelain_z_records` and `_dirty_path_is_in_store`; a
+    rename/copy record contributes both of its paths. Catches nothing: a
+    failing git call raises `_GitProbeFailed` (an OSError), never `[]`."""
+    prefix = _git(repo_root, "rev-parse", "--show-prefix")
+    if prefix.returncode != 0:
+        raise _GitProbeFailed("git rev-parse --show-prefix failed")
+    roots = {prefix.stdout.strip() + root for root in STORE_PREFIXES}
+    store = tuple(roots | set(extra_excluded))
+    status = _git(repo_root, "status", "--porcelain=1", "-z", "--untracked-files=all")
+    if status.returncode != 0:
+        raise _GitProbeFailed("git status failed")
+    offending = set()
+    for new, old in _iter_porcelain_z_records(status.stdout):
+        if not _dirty_path_is_in_store(new, old, store):
+            offending.update(p for p in (new, old) if p)
+    return sorted(offending)
+
+
+def _dirty_outside_store(
+    repo_root: Path,
+    extra_excluded: tuple[str, ...] = (),
+) -> bool:
+    """True iff the working tree has any change outside the store roots
+    (see `_dirty_outside_store_paths`), or the git calls themselves fail
+    (non-git cwd, any OSError/non-zero exit counts as dirty - fail toward
+    refusing the record)."""
     try:
-        prefix = _git(repo_root, "rev-parse", "--show-prefix")
-        if prefix.returncode != 0:
-            return True
-        store = prefix.stdout.strip() + STORE_PREFIX
-        status = _git(
-            repo_root, "status", "--porcelain=1", "-z", "--untracked-files=all"
-        )
-        if status.returncode != 0:
-            return True
-        records = _iter_porcelain_z_records(status.stdout)
-        return not all(_dirty_path_is_in_store(new, old, store) for new, old in records)
+        return bool(_dirty_outside_store_paths(repo_root, extra_excluded))
     except OSError:
         return True
+
+
+def _untracked_log_exclusion(cwd: Path, log_path: Path | None) -> tuple[str, ...]:
+    """`(toplevel-relative POSIX path of log_path,)` when the log resolves
+    inside cwd's git toplevel and is NOT tracked there; `()` otherwise
+    (no log, log outside the toplevel, log tracked, or any git failure).
+    A tracked log is never excused: its edits stay dirt."""
+    if log_path is None:
+        return ()
+    try:
+        top = _git(cwd, "rev-parse", "--show-toplevel")
+        if top.returncode != 0:
+            return ()
+        toplevel = Path(top.stdout.strip())
+        rel = log_path.resolve().relative_to(toplevel.resolve()).as_posix()
+        tracked = _git(toplevel, "ls-files", "--error-unmatch", "--", rel)
+    except (OSError, ValueError):
+        return ()
+    return () if tracked.returncode == 0 else (rel,)
 
 
 def _record_shape_ok(record: dict, gate_command: str) -> bool:
@@ -348,7 +395,8 @@ def run_gate(
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_file = open(log_path, "wb", buffering=0)
     try:
-        if _dirty_outside_store(cwd):
+        extra_excluded = _untracked_log_exclusion(cwd, log_path)
+        if _dirty_outside_store(cwd, extra_excluded):
             return _dirty_result()
         proc = subprocess.Popen(
             command,
@@ -363,7 +411,7 @@ def run_gate(
         if not _reap(proc, deadline, done):
             return _timed_out_result()
         raw_line, found = _parse_summary(stdout_buf)
-        dirty = _dirty_outside_store(cwd)
+        dirty = _dirty_outside_store(cwd, extra_excluded)
         result = {
             "passed": int(found.group(1)) if found else None,
             "failed": int(found.group(2)) if found else None,
