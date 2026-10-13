@@ -56,3 +56,20 @@ Ivan (implementor):
 - Used `git ls-files -s -z --full-name` so symlink paths come out toplevel-relative, matching the status/diff paths, including when `repo_root` sits below the toplevel.
 - A symlink resolving to `"."` (e.g. a one-level-deep `x -> ..`) is not specially handled -- `p.startswith("./")` never matches, so this edge case silently fails to alias (flagged by Pat's review as bordering the recorded single-hop gap, not fixed in this task).
 - Orchestrator verified Pat's one MEDIUM finding (a git failure in the new helpers could escape `reuse_verdict` as an uncaught exception) against the code and found it FALSE: `reuse_verdict` already wraps its `_ancestor_and_clean` call in `try/except OSError`, and `_GitProbeFailed` (raised by all three new helpers) is an `OSError` subclass. Discarded, not fixed.
+
+## 7: cli: verify refuses a store-resolving or tracked --log, joins relative --log against --repo-root, exits 3 when green but unrecorded, prints dirty_paths
+
+Tess (test author):
+
+- The exit-3 test patches `cli.verification.run_gate` with a hand-built result (keys: exit, timed_out, dirty, dirty_paths, recorded, passed), because no black-box trigger for a green/clean/unrecorded run was found without reading `verification.py` (blind-lens rule).
+- "Resolves" means the path lands in the store after `..` is collapsed and the arg is joined to `--repo-root`; symlinks were not tested in the initial pass (added after Devon's exploit).
+- Refused runs print nothing on stdout (`captured.out == ""`), and stderr carries the original `--log` argument text (not the resolved path).
+- `dirty_paths` entries are repo-relative POSIX paths, matched by substring in the first pass, then by exact list equality after strengthening.
+- After Devon's exploits: all 7 weak points were strengthened (untracked-log-is-not-automatically-refused, force-added tracked file under docs/dev/tmp, symlink into the store, store check scoped to `<repo>/docs/dev/project-management` not any path containing that name, an absolute out-of-repo log is never redirected, the exit-3 hand-built result uses the full real `run_gate` key set with a mirror exit-0 case, and a `timed_out=True` green-shaped result must exit 1). None were marked in-contract.
+
+Ivan (implementor):
+
+- The dirty case exits 1 unconditionally ("not dirty" required for exit 0/3), which also silently fixes a pre-existing docstring/code mismatch (the docstring already said dirty means exit 1; the old code returned 0 for a dirty-but-green run). Not flagged as a separate finding since it is exactly what the task's own contract specifies.
+- Extracted `_refuse_verify_log` (one fix dispatch) to bring `_run_verify` under the 50-line style cap; no behavior change.
+- Pat's review (LOW) noted the `return 3 if not result["recorded"] and not result["dirty"] else 0` line could make the dirty exclusion more explicit; left as-is since the surrounding `if result["exit"] == 0 and not result["timed_out"]:` already guards entry and a real dirty+exit-0 result cannot reach that line given `run_gate`'s own `_record_gate`/`_dirty_result` shapes -- not fixed in this task, Pat flagged it as defensive-only.
+- Pat's second LOW (duplicated record-seeding setup across three new tests) was not fixed -- a test-file behavior-preserving refactor out of scope for this task's contract.
