@@ -4048,3 +4048,4 @@
 {"id":"c025fa48","ended_at":1791878000,"elapsed_s":568,"outcome":"ok","detail":null}
 {"id":"516b1876","ended_at":1791878295,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791878295,"phase":"build","prd":"00277-catch-critical-rows-in-every-shape-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791878326,"phase":"build","prd":"00278-make-release-checks-tell-truth-v1.md"}
