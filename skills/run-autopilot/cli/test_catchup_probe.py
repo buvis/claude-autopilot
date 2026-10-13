@@ -156,6 +156,66 @@ class GhVerdictTests(ProbeTestCase):
                 self.assertEqual(kwargs.get("timeout"), 15)
                 self.assertEqual(Path(kwargs["cwd"]).resolve(), self.root.resolve())
 
+    def test_a_batch_id_that_only_shares_a_prefix_is_a_new_batch(self) -> None:
+        for recorded_id, current_id in (("B1", "B10"), ("B", "B1")):
+            with self.subTest(f"{recorded_id} -> {current_id}"):
+                self._write_state(
+                    {
+                        "batch": {"id": current_id},
+                        "catchup_probe": {
+                            "batch_id": recorded_id,
+                            "gh": "unauthenticated",
+                            "engram": "unregistered",
+                            "checked_at": FIRST_NOW,
+                        },
+                    },
+                )
+                run = FakeRun({"gh": (0, ""), "engram": (0, "")})
+
+                out = self._probe(run, now=LATER_NOW)
+
+                self.assertEqual(out, {"skip": []})
+                self.assertEqual(sorted(run.binaries()), ["engram", "gh"])
+                self.assertEqual(
+                    self._read_state()["catchup_probe"],
+                    {
+                        "batch_id": current_id,
+                        "gh": "ok",
+                        "engram": "ok",
+                        "checked_at": LATER_NOW,
+                    },
+                )
+
+    def test_recorded_gh_absent_is_reused_within_batch(self) -> None:
+        recorded = {
+            "batch_id": "B1",
+            "gh": "absent",
+            "engram": "ok",
+            "checked_at": FIRST_NOW,
+        }
+        self._write_state({"batch": {"id": "B1"}, "catchup_probe": recorded})
+        run = FakeRun({"gh": (0, ""), "engram": (0, "")})
+
+        out = self._probe(run, now=LATER_NOW)
+
+        self.assertEqual(out, {"skip": ["github-state"]})
+        self.assertEqual(run.calls, [])
+        self.assertEqual(self._read_state()["catchup_probe"], recorded)
+
+    def test_probes_run_in_the_parent_of_a_non_standard_autopilot_dir(self) -> None:
+        autopilot_dir = self.root / "autopilot"
+        autopilot_dir.mkdir()
+        self.state_path = autopilot_dir / "state.json"
+        self._write_state({"batch": {"id": "B1"}})
+        run = FakeRun({"gh": (0, ""), "engram": (0, "")})
+
+        self._probe(run)
+
+        self.assertEqual(sorted(run.binaries()), ["engram", "gh"])
+        for argv, kwargs in run.calls:
+            with self.subTest(argv[0]):
+                self.assertEqual(Path(kwargs["cwd"]).resolve(), self.root.resolve())
+
     def test_gh_is_absent_without_running_it_when_which_finds_no_gh(self) -> None:
         self._write_state({"batch": {"id": "B1"}})
         run = FakeRun({"gh": (0, ""), "engram": (0, "")})
@@ -213,6 +273,22 @@ class EngramVerdictTests(ProbeTestCase):
         self.assertEqual(second_run.calls, [])
         self.assertEqual(self._read_state()["catchup_probe"], recorded)
 
+    def test_recorded_engram_absent_is_reused_within_batch(self) -> None:
+        recorded = {
+            "batch_id": "B1",
+            "gh": "ok",
+            "engram": "absent",
+            "checked_at": FIRST_NOW,
+        }
+        self._write_state({"batch": {"id": "B1"}, "catchup_probe": recorded})
+        run = FakeRun({"gh": (0, ""), "engram": (0, "")})
+
+        out = self._probe(run, now=LATER_NOW)
+
+        self.assertEqual(out, {"skip": ["engram"]})
+        self.assertEqual(run.calls, [])
+        self.assertEqual(self._read_state()["catchup_probe"], recorded)
+
     def test_engram_new_batch_reprobes(self) -> None:
         self._write_state(
             {
@@ -245,6 +321,20 @@ class EngramVerdictTests(ProbeTestCase):
         self.assertEqual(out, {"skip": []})
         self.assertEqual(self._read_state()["catchup_probe"]["engram"], "ok")
 
+    def test_engram_verdict_reads_the_stderr_marker_not_the_exit_code(self) -> None:
+        for label, outcome, verdict, skip in (
+            ("exit 1 without the marker", (1, "2 stale rows\n"), "ok", []),
+            ("marker on exit 2", (2, UNREGISTERED), "unregistered", ["engram"]),
+        ):
+            with self.subTest(label):
+                self._write_state({"batch": {"id": f"B-{label}"}})
+                run = FakeRun({"gh": (0, ""), "engram": outcome})
+
+                out = self._probe(run)
+
+                self.assertEqual(out, {"skip": skip})
+                self.assertEqual(self._read_state()["catchup_probe"]["engram"], verdict)
+
     def test_engram_is_absent_without_running_it_when_which_finds_no_engram(
         self,
     ) -> None:
@@ -261,6 +351,7 @@ class EngramVerdictTests(ProbeTestCase):
         for label, failure in (
             ("timeout", subprocess.TimeoutExpired(ENGRAM_ARGV, 15)),
             ("vanished binary", FileNotFoundError(2, "No such file", "engram")),
+            ("not executable", PermissionError(13, "Permission denied", "engram")),
         ):
             with self.subTest(label):
                 self._write_state({"batch": {"id": f"B-{label}"}})
@@ -302,6 +393,35 @@ class BatchScopeTests(ProbeTestCase):
                 again = FakeRun({"gh": (0, ""), "engram": (0, "")})
                 self.assertEqual(self._probe(again), {"skip": ["github-state"]})
                 self.assertEqual(again.calls, [])
+
+    def test_a_state_without_a_batch_id_does_not_reuse_a_real_batch_record(
+        self,
+    ) -> None:
+        self._write_state(
+            {
+                "catchup_probe": {
+                    "batch_id": "B1",
+                    "gh": "unauthenticated",
+                    "engram": "unregistered",
+                    "checked_at": FIRST_NOW,
+                },
+            },
+        )
+        run = FakeRun({"gh": (0, ""), "engram": (0, "")})
+
+        out = self._probe(run, now=LATER_NOW)
+
+        self.assertEqual(out, {"skip": []})
+        self.assertEqual(sorted(run.binaries()), ["engram", "gh"])
+        self.assertEqual(
+            self._read_state()["catchup_probe"],
+            {
+                "batch_id": "no-batch",
+                "gh": "ok",
+                "engram": "ok",
+                "checked_at": LATER_NOW,
+            },
+        )
 
 
 if __name__ == "__main__":
