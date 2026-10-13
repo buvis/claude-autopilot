@@ -38,5 +38,13 @@
     "issue": "`skills/work/SKILL.md` is 492 lines and the leave-row test passes, but I could not confirm the moved text landed in a reference file.",
     "file": "skills/work/SKILL.md",
     "reason": "An unverified-by-the-reviewer note, not a defect: the file is under its line limit and every test the reviewer ran passes (197 passed across the five files). Nothing to fix."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`test_the_fast_track_lane_whole_directory_target_is_a_gated_target` passes at base. It pins the existing `skills/fast-track/scripts` target in the real script rather than new logic, so this is acceptable as a regression pin. It will go red if someone renames that target, which is the intent. No change needed.",
+    "file": "skills/run-autopilot/cli/test_release_checks_counts.py:398",
+    "reason": "The reviewer who raised it states no change is needed: the test is a deliberate regression pin on an existing gate target, and passing at base is the expected shape for such a pin. The mech-check replay line states the same computed fact and is folded here."
   }
 ]

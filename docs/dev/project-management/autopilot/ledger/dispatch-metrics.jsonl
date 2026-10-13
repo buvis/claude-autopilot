@@ -4069,3 +4069,9 @@
 {"id":"9faea90f","ended_at":1791884611,"elapsed_s":667,"outcome":"error","detail":null}
 {"kind":"handoff","site":"review","edge":"leave","at":1791884641,"phase":"review","prd":"00278-make-release-checks-tell-truth-v1.md"}
 {"kind":"handoff","site":"review","edge":"leave","at":1791885719,"phase":"review","prd":"00278-make-release-checks-tell-truth-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1791885781,"phase":"review","prd":"00278-make-release-checks-tell-truth-v1.md"}
+{"id":"58f68457","kind":"bob","task":"review-00278-c2","queued_at":1791886169,"prompt_bytes":18637}
+{"id":"db2dc4d5","kind":"carl","task":"review-00278-c2","queued_at":1791886169,"prompt_bytes":15646}
+{"id":"58f68457","ended_at":1791886654,"elapsed_s":485,"outcome":"ok","detail":"retry"}
+{"id":"db2dc4d5","ended_at":1791886658,"elapsed_s":489,"outcome":"error","detail":"retry: exit 1"}
+{"kind":"handoff","site":"review","edge":"leave","at":1791886864,"phase":"done","prd":"00278-make-release-checks-tell-truth-v1.md"}
