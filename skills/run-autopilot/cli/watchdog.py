@@ -69,16 +69,23 @@ def _scan_busy(lines: list[str]) -> bool:
             continue
         kind = event.get("type")
         if kind == "system" and event.get("subtype") == "background_tasks_changed":
-            live_tasks = bool(event["tasks"])
+            live_tasks = bool(event.get("tasks"))
         elif kind in ("assistant", "user"):
-            content = event["message"]["content"]
-            if isinstance(content, str):
-                continue  # plain-text message: no tool blocks
+            # Read tolerantly: one odd-shaped event in a growing log must
+            # not latch busy for the rest of the session (it would raise
+            # into session_busy's outer except Exception -> True forever).
+            content = (event.get("message") or {}).get("content")
+            if not isinstance(content, list):
+                continue
             for block in content:
-                if kind == "assistant" and block.get("type") == "tool_use":
-                    open_ids.add(block["id"])
-                elif kind == "user" and block.get("type") == "tool_result":
-                    open_ids.discard(block["tool_use_id"])
+                if not isinstance(block, dict):
+                    continue
+                tool_id = block.get("id")
+                result_id = block.get("tool_use_id")
+                if kind == "assistant" and block.get("type") == "tool_use" and isinstance(tool_id, str):
+                    open_ids.add(tool_id)
+                elif kind == "user" and block.get("type") == "tool_result" and isinstance(result_id, str):
+                    open_ids.discard(result_id)
     return bool(open_ids) or live_tasks
 
 
