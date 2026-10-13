@@ -3852,3 +3852,43 @@
 {"kind":"handoff","site":"done","edge":"leave","at":1791852648,"phase":"build","prd":"00285-resolve-process-facts-without-ps-v1.md"}
 {"kind":"handoff","site":"build","edge":"resume","at":1791852778,"phase":"build","prd":"00276-make-the-gate-record-trustworthy-v1.md"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791854346,"phase":"build","prd":"00276-make-the-gate-record-trustworthy-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791854389,"phase":"build","prd":"00276-make-the-gate-record-trustworthy-v1.md"}
+{"id":"299106f2","kind":"tess","task":"1","queued_at":1791854474,"prompt_bytes":48914}
+{"id":"299106f2","ended_at":1791854541,"elapsed_s":67,"outcome":"ok","detail":null}
+{"id":"bc404ca8","kind":"devon","task":"1","queued_at":1791854580,"prompt_bytes":3112}
+{"id":"bc404ca8","ended_at":1791854790,"elapsed_s":210,"outcome":"ok","detail":null}
+{"id":"5520cae5","kind":"tess","task":"1","queued_at":1791854819,"prompt_bytes":3481}
+{"id":"5520cae5","ended_at":1791854906,"elapsed_s":87,"outcome":"ok","detail":null}
+{"id":"5194e263","kind":"ivan","task":"1","queued_at":1791854953,"prompt_bytes":35365}
+{"id":"5194e263","ended_at":1791855150,"elapsed_s":197,"outcome":"ok","detail":null}
+{"id":"0ff43005","kind":"ivan","task":"1","queued_at":1791855221,"prompt_bytes":10849}
+{"id":"0ff43005","ended_at":1791855267,"elapsed_s":46,"outcome":"ok","detail":null}
+{"id":"69fc392e","kind":"pat","task":"1","queued_at":1791855307,"prompt_bytes":38086}
+{"id":"722bcfc8","kind":"pat","task":"1","queued_at":1791855478,"prompt_bytes":5923}
+{"id":"b2156827","kind":"tess","task":"2","queued_at":1791855560,"prompt_bytes":57362}
+{"id":"2934d019","kind":"tess","task":"2","queued_at":1791855569,"prompt_bytes":50574}
+{"id":"efe1865a","kind":"tess","task":"2","queued_at":1791855613,"prompt_bytes":27281}
+{"id":"6fa444f5","kind":"devon","task":"2","queued_at":1791855687,"prompt_bytes":3215}
+{"id":"6fa444f5","ended_at":1791855892,"elapsed_s":205,"outcome":"ok","detail":null}
+{"id":"2c6ac38c","kind":"tess","task":"2","queued_at":1791855929,"prompt_bytes":4471}
+{"id":"2c6ac38c","ended_at":1791856025,"elapsed_s":96,"outcome":"ok","detail":null}
+{"id":"690a7b90","kind":"ivan","task":"2","queued_at":1791856319,"prompt_bytes":17003}
+{"id":"690a7b90","ended_at":1791856414,"elapsed_s":95,"outcome":"ok","detail":null}
+{"id":"fbc5c86c","kind":"pat","task":"2","queued_at":1791856455,"prompt_bytes":8213}
+{"id":"7f9c1e17","kind":"tess","task":"3","queued_at":1791856560,"prompt_bytes":28090}
+{"id":"1ea8db3a","kind":"devon","task":"3","queued_at":1791856631,"prompt_bytes":1769}
+{"id":"1ea8db3a","ended_at":1791856746,"elapsed_s":115,"outcome":"ok","detail":null}
+{"id":"6fcb42c7","kind":"tess","task":"3","queued_at":1791856772,"prompt_bytes":4093}
+{"id":"6fcb42c7","ended_at":1791856932,"elapsed_s":160,"outcome":"ok","detail":null}
+{"id":"a2b567a8","kind":"ivan","task":"3","queued_at":1791856979,"prompt_bytes":16968}
+{"id":"a2b567a8","ended_at":1791857108,"elapsed_s":129,"outcome":"ok","detail":null}
+{"id":"fc5e7adf","kind":"pat","task":"3","queued_at":1791857169,"prompt_bytes":9539}
+{"id":"69fc392e","ended_at":1791857275,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"722bcfc8","ended_at":1791857275,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"b2156827","ended_at":1791857275,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"2934d019","ended_at":1791857275,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"efe1865a","ended_at":1791857275,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"fbc5c86c","ended_at":1791857275,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"7f9c1e17","ended_at":1791857275,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"fc5e7adf","ended_at":1791857275,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791857275,"phase":"build","prd":"00276-make-the-gate-record-trustworthy-v1.md"}
