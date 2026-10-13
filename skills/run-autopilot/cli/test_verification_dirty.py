@@ -355,21 +355,24 @@ def test_store_only_change_below_toplevel_is_reused(repo: Path) -> None:
 def test_store_edit_behind_a_product_symlink_is_stale(repo: Path) -> None:
     # A tracked symlink outside the store, its target relative to its own
     # directory, aliases a store file: a store-only diff is a product change.
-    _commit(repo, f"{STORE}/settings.json", "{}\n")
-    _commit(repo, f"{STORE}/notes/n.md", "n\n")
-    (repo / "src" / "settings.json").symlink_to(f"../{STORE}/settings.json")
-    _git(repo, "add", "--", "src/settings.json")
-    _git(repo, "commit", "--no-verify", "-q", "-m", "link settings")
+    # The link's name (cfg) differs from its target's basename (x.toml).
+    _commit(repo, f"{STORE}/x.toml", "a = 1\n")
+    _commit(repo, f"{STORE}/notes/cfg", "n\n")
+    (repo / "src" / "cfg").symlink_to(f"../{STORE}/x.toml")
+    _git(repo, "add", "--", "src/cfg")
+    _git(repo, "commit", "--no-verify", "-q", "-m", "link cfg")
     record = _record(_git(repo, "rev-parse", "HEAD"))
 
-    # A store change no symlink reaches stays reusable.
-    other = _commit(repo, f"{STORE}/notes/n.md", "edited\n")
+    # Store changes no symlink reaches stay reusable, even one sharing the
+    # link's name or a settings-like name.
+    _commit(repo, f"{STORE}/notes/cfg", "edited\n")
+    other = _commit(repo, f"{STORE}/settings.json", "{}\n")
     assert verification.reuse_verdict(record, repo, other, gate_command=GATE) == (
         "reused",
         record,
     )
 
-    head = _commit(repo, f"{STORE}/settings.json", '{"debug": true}\n')
+    head = _commit(repo, f"{STORE}/x.toml", "a = 2\n")
     assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == (
         "stale",
         {},
