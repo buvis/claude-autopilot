@@ -3992,3 +3992,33 @@
 {"id":"e9dfdcec","ended_at":1791869684,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"id":"59fbc1fd","ended_at":1791869684,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791869684,"phase":"build","prd":"00277-catch-critical-rows-in-every-shape-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791869708,"phase":"build","prd":"00277-catch-critical-rows-in-every-shape-v1.md"}
+{"id":"5de499cb","kind":"tess","task":"2","queued_at":1791869842,"prompt_bytes":121046}
+{"id":"b83c6fbe","kind":"tess","task":"2","queued_at":1791869855,"prompt_bytes":85858}
+{"id":"61f8635e","kind":"tess","task":"2","queued_at":1791869880,"prompt_bytes":17195}
+{"id":"d4eb380c","kind":"devon","task":"2","queued_at":1791870147,"prompt_bytes":8049}
+{"id":"d4eb380c","ended_at":1791870345,"elapsed_s":198,"outcome":"ok","detail":null}
+{"id":"5a1d875b","kind":"tess","task":"2","queued_at":1791870369,"prompt_bytes":18586}
+{"id":"0f49981f","kind":"ivan","task":"2","queued_at":1791870779,"prompt_bytes":61004}
+{"id":"755ff778","kind":"ivan","task":"2","queued_at":1791870785,"prompt_bytes":50837}
+{"id":"1646eb24","kind":"ivan","task":"2","queued_at":1791870844,"prompt_bytes":18947}
+{"id":"cb8d1ace","kind":"ivan","task":"2","queued_at":1791871198,"prompt_bytes":15258}
+{"id":"c878b36b","kind":"ivan","task":"2","queued_at":1791871368,"prompt_bytes":4656}
+{"id":"f5b3d232","kind":"pat","task":"2","queued_at":1791871691,"prompt_bytes":63661}
+{"id":"b5e055ee","kind":"ivan","task":"2","queued_at":1791871766,"prompt_bytes":8253}
+{"id":"09ab6175","kind":"ivan","task":"2","queued_at":1791871869,"prompt_bytes":4679}
+{"id":"d747b067","kind":"pat","task":"2","queued_at":1791871943,"prompt_bytes":8779}
+{"id":"5de499cb","ended_at":1791872046,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"b83c6fbe","ended_at":1791872046,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"61f8635e","ended_at":1791872046,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"5a1d875b","ended_at":1791872046,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"0f49981f","ended_at":1791872046,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"755ff778","ended_at":1791872046,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"1646eb24","ended_at":1791872046,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"cb8d1ace","ended_at":1791872046,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"c878b36b","ended_at":1791872046,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"f5b3d232","ended_at":1791872046,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"b5e055ee","ended_at":1791872046,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"09ab6175","ended_at":1791872046,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"d747b067","ended_at":1791872046,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791872046,"phase":"build","prd":"00277-catch-critical-rows-in-every-shape-v1.md"}
