@@ -3848,3 +3848,5 @@
 {"id":"7c17a48d","ended_at":1791848382,"elapsed_s":46,"outcome":"ok","detail":"retry"}
 {"kind":"handoff","site":"review","edge":"leave","at":1791848858,"phase":"review","prd":"00285-resolve-process-facts-without-ps-v1.md"}
 {"kind":"handoff","site":"review","edge":"leave","at":1791852535,"phase":"done","prd":"00285-resolve-process-facts-without-ps-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1791852574,"phase":"done","prd":"00285-resolve-process-facts-without-ps-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1791852648,"phase":"build","prd":"00285-resolve-process-facts-without-ps-v1.md"}

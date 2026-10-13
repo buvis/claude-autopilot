@@ -46,12 +46,13 @@ Generated: 2026-10-13
 
 ### Batch 202610111300
 - [x] 00271-guard-v2-structural-delegation-check-v1 (2 cycles)
-- [ ] 00285-resolve-process-facts-without-ps-v1 (in wip)
-- backlog behind it: 00276, 00277, 00278, 00279 (agoge 2026-10-10 walkthrough),
+- [x] 00285-resolve-process-facts-without-ps-v1 (1 cycle)
+- backlog: 00276, 00277, 00278, 00279 (agoge 2026-10-10 walkthrough),
   plus 00282, 00283, 00284 (loop efficiency, from discovery 00281).
-- held: 00280 (2026-10-12 backlog review) plus 7 triage stubs minted at
-  00271's close — 00286-00292 (`dev/bin/release-checks` is still RED on this
-  host for pre-existing sandbox reasons unrelated to any held item).
+- held: 00280 (2026-10-12 backlog review) plus 9 triage stubs minted at
+  00271's close — 00286-00292 — and 2 more minted at 00285's close —
+  00293-00294 (`dev/bin/release-checks` is still RED on this host for
+  pre-existing sandbox reasons unrelated to any held item).
 
 Observations: 00271 closed converged-with-deferrals at the cycle-2 rework
 cap (10 unresolved cap-overflow findings + 6 cycle-1 deferrals, 16 total,
