@@ -28,12 +28,58 @@ why the cap fires.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
 import threading
 import time
 from typing import Callable
+
+
+def session_busy(log_path: str) -> bool:
+    """Whether the stream-json session log at `log_path` shows work in flight.
+
+    Busy when a `tool_use` has no matching `tool_result` yet, OR when the
+    last `background_tasks_changed` event still lists tasks. A missing or
+    unreadable log is idle; a line that is not JSON (or not a JSON object)
+    is skipped; any other fault while scanning counts as busy, so a scan
+    error never gets a working session killed.
+    """
+    try:
+        with open(log_path, encoding="utf-8", errors="replace") as fh:
+            lines = fh.readlines()
+    except OSError:
+        return False
+    try:
+        return _scan_busy(lines)
+    except Exception:
+        return True
+
+
+def _scan_busy(lines: list[str]) -> bool:
+    open_ids: set[str] = set()
+    live_tasks = False
+    for line in lines:
+        try:
+            event = json.loads(line)
+        except ValueError:  # json.JSONDecodeError: malformed line
+            continue
+        if not isinstance(event, dict):
+            continue
+        kind = event.get("type")
+        if kind == "system" and event.get("subtype") == "background_tasks_changed":
+            live_tasks = bool(event["tasks"])
+        elif kind in ("assistant", "user"):
+            content = event["message"]["content"]
+            if isinstance(content, str):
+                continue  # plain-text message: no tool blocks
+            for block in content:
+                if kind == "assistant" and block.get("type") == "tool_use":
+                    open_ids.add(block["id"])
+                elif kind == "user" and block.get("type") == "tool_result":
+                    open_ids.discard(block["tool_use_id"])
+    return bool(open_ids) or live_tasks
 
 
 class Watchdog:
