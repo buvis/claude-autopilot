@@ -92,8 +92,8 @@ def _child_pids(pid: int) -> list[str]:
 
 def _pid_tagged(pid: int, tag_pid: int) -> bool:
     """The recycled-pid guard: a live pid counts as a loop only when its
-    ps env - or a direct child's - carries its own _AUTOPILOT_LOOP=<pid>
-    tag. Children count because ps reports the EXEC-time environment: the
+    exec_env - or a direct child's - carries its own _AUTOPILOT_LOOP=<pid>
+    tag. Children count because exec_env reads the EXEC-time environment: the
     tracon front-end forks the loop shell (whose pid the registry stores,
     since killpg needs the group leader) and exports the tag only after
     that fork, so the tag shows up on the exec'd driver beneath it and

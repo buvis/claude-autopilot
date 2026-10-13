@@ -47,3 +47,5 @@ Ivan (implementor):
 
 - The new `sys.path.insert` line goes immediately before the existing `_walk_up` import, ahead of every other local import.
 - Kept both `_descendants`/`_cpu_seconds` docstrings verbatim per the "keep if still accurate" instruction; their ps-specific wording is now stale and flagged for a follow-up, not fixed in this task.
+
+Undocumented departure (recorded late, during the task 7 tail sweep): task 2's rewrite of `test_loop_gates.py` added two extra asserts and routed the `_AUTOPILOT_LOOP` tag through a child pid rather than the parent directly, which is stronger than the original contract — this was not recorded in this ledger when it happened.

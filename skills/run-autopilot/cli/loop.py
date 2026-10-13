@@ -246,8 +246,9 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
 
     def _cleanup_orphans(self) -> None:
         """HUP orphaned (PPID=1) processes tagged with our marker, so
-        shells propagate the signal to their children. One ps over all
-        candidates (the bash loop ran ps per pid; launchd parents
+        shells propagate the signal to their children. One pgrep call
+        lists all PPID=1 candidates, then exec_env checks each pid's tag
+        directly (the bash loop ran ps per pid; launchd parents
         hundreds of user processes, so per-pid probing is seconds of
         work per session)."""
         try:

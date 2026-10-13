@@ -72,6 +72,22 @@ def exec_env(pid: int) -> dict[str, str] | None:
     return None
 
 
+_timebase_cache: tuple[int, int] | None = None
+
+
+def _mach_timebase() -> tuple[int, int] | None:
+    """(numer, denom) of mach_timebase_info, read once and cached."""
+    global _timebase_cache
+    if _timebase_cache is not None:
+        return _timebase_cache
+    libc = ctypes.CDLL(ctypes.util.find_library("c"))
+    timebase = (ctypes.c_uint32 * 2)(0, 0)  # struct mach_timebase_info {numer, denom}
+    if libc.mach_timebase_info(ctypes.byref(timebase)) != 0 or timebase[1] == 0:
+        return None
+    _timebase_cache = (timebase[0], timebase[1])
+    return _timebase_cache
+
+
 def _darwin_cpu_seconds(pid: int) -> float | None:
     libproc = ctypes.CDLL(ctypes.util.find_library("proc"))
     buf = ctypes.create_string_buffer(TASKINFO_SIZE)
@@ -82,11 +98,10 @@ def _darwin_cpu_seconds(pid: int) -> float | None:
         return None
     user = int.from_bytes(buf.raw[16:24], sys.byteorder)
     system = int.from_bytes(buf.raw[24:32], sys.byteorder)
-    libc = ctypes.CDLL(ctypes.util.find_library("c"))
-    timebase = (ctypes.c_uint32 * 2)(0, 0)  # struct mach_timebase_info {numer, denom}
-    if libc.mach_timebase_info(ctypes.byref(timebase)) != 0 or timebase[1] == 0:
+    timebase = _mach_timebase()
+    if timebase is None:
         return None
-    numer, denom = timebase[0], timebase[1]
+    numer, denom = timebase
     return (user + system) * numer / denom / 1e9
 
 

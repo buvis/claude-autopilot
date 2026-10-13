@@ -139,6 +139,16 @@ def test_cpu_seconds_is_none_for_a_reaped_pid():
     assert cpu_seconds(_reaped_pid()) is None
 
 
+def test_exec_env_is_none_for_a_negative_pid():
+    # A real syscall failure (EINVAL), not a mocked one: no process table
+    # lookup can ever resolve a negative pid.
+    assert exec_env(-1) is None
+
+
+def test_cpu_seconds_is_none_for_a_negative_pid():
+    assert cpu_seconds(-1) is None
+
+
 def test_child_names_lists_a_spawned_child():
     # Absolute path: a PATH-first coreutils `sleep` is named "gsleep".
     proc = subprocess.Popen(["/bin/sleep", "60"])
@@ -160,6 +170,20 @@ def test_child_names_is_empty_for_a_childless_process():
     finally:
         proc.kill()
         proc.wait()
+
+
+def test_child_names_is_empty_when_pgrep_is_missing(monkeypatch, tmp_path):
+    # A real OSError, not a mocked one: PATH holds no `pgrep` binary at all.
+    monkeypatch.setenv("PATH", str(tmp_path))
+    assert child_names(os.getpid()) == []
+
+
+def test_child_names_is_empty_on_subprocess_timeout(monkeypatch):
+    def _raise_timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=["pgrep"], timeout=10)
+
+    monkeypatch.setattr(subprocess, "run", _raise_timeout)
+    assert child_names(os.getpid()) == []
 
 
 def test_child_names_lists_exactly_the_target_pids_children_by_real_name():

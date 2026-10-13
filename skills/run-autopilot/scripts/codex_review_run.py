@@ -64,7 +64,7 @@ IDLE_BANNER_SECS = 600
 # Minimum CPU-seconds a live codex must accrue between two heartbeats to count
 # as "making progress". A reasoning/streaming codex easily clears this in 60s;
 # one blocked on a dead socket accrues exactly 0 (the 1h44m-at-0-CPU hang).
-# The epsilon only filters ps's hundredths-of-a-second rounding noise.
+# The epsilon only filters cpu_seconds's sub-second rounding noise.
 CPU_PROGRESS_EPSILON = 0.05
 
 # codex emits a usage-limit / quota message as a normal event and still
@@ -258,7 +258,7 @@ def _descendants(root_pid: int) -> list[str]:
     Used by the heartbeat to show what tool work codex is doing (a
     `cargo`/`rustc`/`git` child churning). Absence of children does NOT mean
     hung — during a pure model turn codex spawns nothing. Best-effort: any
-    `ps` failure yields an empty list, rendered as "no tool subprocs".
+    `child_names` failure yields an empty list, rendered as "no tool subprocs".
     """
     found: list[str] = []
     seen: set[int] = set()
@@ -300,9 +300,11 @@ def _cpu_seconds(pid: int) -> float | None:
 
     Lets the heartbeat tell a working-but-quiet codex (CPU climbing as it
     reasons/streams) from a BLOCKED one (CPU flat — stuck on a dead socket,
-    the 1h44m-at-0-CPU hang this guards against). Best-effort: any ps/parse
-    failure yields None, which the caller treats as 'unknown', never a hang
-    claim. Parses ps TIME format `[[dd-]hh:]mm:ss[.ss]`.
+    the 1h44m-at-0-CPU hang this guards against). Best-effort: delegates to
+    `cli.procinfo.cpu_seconds`, which reads the kernel directly (sysctl +
+    proc_pidinfo on Darwin, `/proc/<pid>/stat` on Linux) and returns None on
+    any syscall/parse failure, which the caller treats as 'unknown', never a
+    hang claim.
     """
     return cpu_seconds(pid)
 
@@ -396,8 +398,8 @@ def _heartbeat_loop(
         alive = _proc_alive(codex_pid)
         kids = _descendants(codex_pid)
         cpu = _cpu_seconds(codex_pid)
-        # Unknown CPU (ps failed) gets the benefit of the doubt — never claim a
-        # hang we cannot measure.
+        # Unknown CPU (cpu_seconds failed) gets the benefit of the doubt —
+        # never claim a hang we cannot measure.
         advancing = (cpu is None or prev_cpu is None
                      or (cpu - prev_cpu) > CPU_PROGRESS_EPSILON)
         if cpu is not None:

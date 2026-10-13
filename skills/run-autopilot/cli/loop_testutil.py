@@ -169,8 +169,8 @@ def _notified(lp, fragment: str) -> bool:
 @pytest.fixture(autouse=True)
 def _no_real_drain_side_effects(monkeypatch):
     """The drained branch shells to purge/agoge, and the orphan sweep
-    shells to pgrep/ps on the REAL process table - keep loop runs
-    hermetic and fast. Direct tests use the saved originals."""
+    shells to pgrep and reads the REAL process table via exec_env - keep
+    loop runs hermetic and fast. Direct tests use the saved originals."""
     monkeypatch.setattr(loop_act, "run_purge", lambda repo: None)
     monkeypatch.setattr(
         loop_act,
@@ -181,7 +181,7 @@ def _no_real_drain_side_effects(monkeypatch):
 
 
 def _spawn_tagged_incumbent() -> subprocess.Popen:
-    """A live process whose ps env carries its own _AUTOPILOT_LOOP=<pid>
+    """A live process whose exec_env carries its own _AUTOPILOT_LOOP=<pid>
     tag: exec keeps the shell's pid, so $$ IS the final pid."""
     proc = subprocess.Popen(
         [
