@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **run-autopilot**: `autopilot verify` is the way to run the full suite - it runs the gate, streams the log and writes the verification record itself, so no session hand-writes `last-verification.json`
+- **run-autopilot**: the loop parks a PRD whose session metrics ledger spend since `prd_budget_since` exceeds `_AUTOPILOT_PRD_BUDGET_USD` (default 300, `0` disables), instead of burning sessions on a runaway PRD unattended
+- **run-autopilot**: a session that exits instantly with no progress and no usage-limit signal is now its own loop decision (`instant_exit`), distinct from a died/no-progress relaunch
+- **run-autopilot**: the watchdog can now kill a session silent for `_AUTOPILOT_SESSION_IDLE` seconds at any point after launch, not only past the wall-clock cap, as long as nothing is in flight (`session_busy`)
+- **run-autopilot**: the loop now runs Phase 0 (`autopilot enter`) in-process before launching a build session or consuming a `park-requested` marker, and stores the result as `state.loop_entry` for the launched session to replay (one resume row per selection); the session brief gains a `## Entry` section when this ran
 
 ### Changed
 

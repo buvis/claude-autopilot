@@ -21,6 +21,11 @@ When `stop` is null every step passed: print the PRD banner and go straight to
 Phase 1, using the `catchup` and `design` decisions the call returned,
 without re-running any of the Phase 0 steps below by hand.
 
+When the session brief has an `## Entry` section (PRD 00282: the loop already
+ran Phase 0 before launch), take `prd`, `catchup`, and `design` from it
+instead — running `autopilot enter` anyway replays the same stored line
+rather than re-running Phase 0.
+
 When `stop` is set, follow the table below: it maps each `stop` value to the
 existing section that owns that halt.
 
