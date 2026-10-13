@@ -4120,3 +4120,5 @@
 {"kind":"handoff","site":"done","edge":"leave","at":1791893133,"phase":"build","prd":"00279-run-one-exact-reuse-rule-v1.md"}
 {"kind":"handoff","site":"build","edge":"resume","at":1791893152,"phase":"build","prd":"00282-loop-guards-v1.md"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791894758,"phase":"build","prd":"00282-loop-guards-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791894788,"phase":"build","prd":"00282-loop-guards-v1.md"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791898039,"phase":"build","prd":"00282-loop-guards-v1.md"}
