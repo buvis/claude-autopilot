@@ -533,7 +533,7 @@ def test_run_gate_writes_the_normalized_command(repo: Path) -> None:
     assert written == {
         "sha": head,
         "cycle": 2,
-        "commands": [{"command": "gate.sh --quick", "exit": 0}],
+        "commands": [{"command": "bash ./gate.sh --quick", "exit": 0}],
         "passed": 3,
         "failed": 0,
         "skipped": 0,
