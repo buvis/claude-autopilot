@@ -125,7 +125,15 @@ def _entry_lines(state: dict) -> list[str]:
     """`## Entry` (PRD 00282): prd, catchup, design and stop from the
     Phase 0 result the loop ran before launch (`loop_entry.result`). Only
     when that result is a dict; otherwise nothing, not even the header, so
-    a brief without `loop_entry` is unchanged byte for byte."""
+    a brief without `loop_entry` is unchanged byte for byte.
+
+    Known limitation (review finding 13, PRD 00282): a session that reads
+    this section instead of running `autopilot enter` never deletes
+    `loop_entry` (only the enter replay does), so a stale `## Entry`
+    renders in future briefs for the same PRD until the next Phase 0 run
+    clears or overwrites it. Low priority - not fixed here: restricting
+    this to the build phase would also hide it for the legitimate
+    park-marker-in-review case `_pre_enter` runs Phase 0 for."""
     entry = state.get("loop_entry")
     result = entry.get("result") if isinstance(entry, dict) else None
     if not isinstance(result, dict):
