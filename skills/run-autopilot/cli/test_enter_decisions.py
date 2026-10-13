@@ -675,6 +675,51 @@ def test_force_is_delta_check_is_not_cached_per_root(env: Env) -> None:
     assert enter_io.commits_all_loop(env.root, base, "a human") is False
 
 
+@pytest.mark.parametrize("mode", [None, "force"], ids=["run", "force-with-tasks"])
+def test_an_empty_catchup_head_sha_is_full_without_consulting_loop_only(
+    env: Env, mode: str | None
+) -> None:
+    # "" is a str, so a type-only guard would let it through and the range
+    # f"..HEAD" reads as vacuously all-loop; the guard must check truthiness too.
+    env.write_state(_open_state(batch=_cache(catchup_head_sha=""), tasks=TASKS))
+    env.put("wip", PRD, _prd_text(**({"catchup": mode} if mode else {})))
+    env.head = "c" * 40
+    calls: list[tuple] = []
+
+    out = env.run(loop_only=lambda *a: calls.append(a) or True)
+
+    assert (out["stop"], out["catchup"]) == (None, "full")
+    assert calls == []
+
+
+def test_force_with_no_batch_id_checks_the_no_batch_committer(tmp_path: Path) -> None:
+    # A batch missing "id" never reaches _catchup through enter() (step 9's
+    # _batch_report halts first on a non-str id), so this calls the function
+    # directly - the defensive `batch.get("id")` guard is unit-level only.
+    root = tmp_path / "root"
+    autopilot_dir = root / "autopilot"
+    autopilot_dir.mkdir(parents=True)
+    base, _ = _loop_repo(root, LOOP)
+    calls: list[tuple] = []
+    current = {
+        "catchup_mode": "force",
+        "batch": {"catchup_head_sha": base},
+        "tasks": None,
+    }
+
+    result = enter._catchup(
+        current,
+        autopilot_dir / "state.json",
+        autopilot_dir,
+        now=lambda: NOW,
+        git_head=lambda r: None,
+        loop_only=lambda *a: calls.append(a) or True,
+    )
+
+    assert result == "delta"
+    assert calls == [(root, base, enter_io.loop_committer(None))]
+
+
 # -- step 11: the real `git rev-parse HEAD` read -------------------------------
 
 
