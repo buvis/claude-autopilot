@@ -723,6 +723,92 @@ class BudgetSiteParkTests(_ParkTestCase):
         self.assertIsNone(kwargs.get("extra_mutator"))
         self.assertEqual(kwargs["prd"], self.PRD)
 
+    def test_budget_site_routes_on_marker_site_not_on_reason_text(self) -> None:
+        # The reason carries no "budget" substring: routing must key on the
+        # marker's site field. parks_consecutive=1 makes a wrapper_died
+        # misroute visible (exit 5, counter 2, site "wrapper_died").
+        reason = "token ceiling hit"
+        self._put_in_wip()
+        self._write_budget_marker(reason=reason)
+        self._write_state(self._sample_state(batch={
+            "id": "202607300000", "completed_prds": [], "parks_consecutive": 1,
+        }))
+
+        rc = self._do_park()
+
+        self.assertEqual(rc, 0)
+        self.assertTrue(self._in_hold())
+        self.assertFalse(self._marker_exists())
+
+        items = self._deferred_items()
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["site"], "budget")
+        self.assertIn(reason, items[0]["detail"])
+
+        final = self._state()
+        self.assertEqual(final["batch"]["parks_consecutive"], 0)
+        self.assertNotIn("pause_reason", final)
+
+    def test_budget_site_do_stall_failure_propagates_and_keeps_the_marker(self) -> None:
+        self._put_in_wip()
+        self._write_budget_marker()
+        self._write_state(self._sample_state(batch={
+            "id": "202607300000", "completed_prds": [], "parks_consecutive": 0,
+        }))
+
+        with mock.patch.object(records, "do_stall", return_value=4) as stub:
+            rc = self._do_park()
+
+        self.assertEqual(rc, 4, "a nonzero do_stall rc must propagate unchanged")
+        self.assertEqual(stub.call_count, 1)
+        self.assertEqual(stub.call_args.kwargs["site"], "budget")
+        self.assertTrue(self._marker_exists(), "a failed park must not delete the marker")
+        self.assertTrue(self._in_wip())
+        self.assertEqual(self._deferred_items(), [])
+
+
+class ResumeInFlightBudgetParkTests(_ParkTestCase):
+    """Budget twin of ResumeInFlightParkTests: a budget park crashed after
+    stamping its stall_op, PRD still in wip/, marker still present. The
+    resume must land the park exactly once, not reconcile it and then park
+    it again."""
+
+    def test_budget_site_resumes_a_park_left_mid_wip_exactly_once(self) -> None:
+        self._put_in_wip()
+        self._write_raw_marker(json.dumps({
+            "prd": self.PRD, "reason": "prd budget exhausted", "site": "budget",
+        }))
+        state = self._sample_state(batch={
+            "id": "202607300000", "completed_prds": [], "parks_consecutive": 0,
+        })
+        state["stall_op"] = {
+            "op_id": "op-resume-budget-1",
+            "prd": self.PRD,
+            "site": "budget",
+            "detail": "prd budget exhausted",
+        }
+        self._write_state(state)
+
+        rc = self._do_park()
+
+        self.assertEqual(rc, 0)
+        self.assertFalse(self._marker_exists())
+        self.assertFalse(self._in_wip())
+        self.assertTrue(self._in_hold())
+
+        items = self._deferred_items()
+        self.assertEqual(len(items), 1, "the resumed budget park must record exactly once")
+        self.assertEqual(
+            items[0]["op_id"], "op-resume-budget-1",
+            "resuming an in-flight intent must reuse its op_id, not mint a new one",
+        )
+        self.assertEqual(items[0]["site"], "budget")
+
+        final = self._state()
+        self.assertNotIn("stall_op", final)
+        self.assertEqual(final["cycle"], 1)
+        self.assertEqual(final["batch"]["parks_consecutive"], 0)
+
 
 class BudgetSiteParseMarkerTests(_ParkTestCase):
     def test_budget_site_parse_marker_returns_the_marker_site(self) -> None:
