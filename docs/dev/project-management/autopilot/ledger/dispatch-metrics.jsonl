@@ -4024,3 +4024,15 @@
 {"kind":"handoff","site":"build","edge":"leave","at":1791872046,"phase":"build","prd":"00277-catch-critical-rows-in-every-shape-v1.md"}
 {"kind":"handoff","site":"build","edge":"resume","at":1791872070,"phase":"build","prd":"00277-catch-critical-rows-in-every-shape-v1.md"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791872718,"phase":"review","prd":"00277-catch-critical-rows-in-every-shape-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1791872799,"phase":"review","prd":"00277-catch-critical-rows-in-every-shape-v1.md"}
+{"id":"00df81aa","kind":"bob","task":"review-20261013-0630","queued_at":1791873098,"prompt_bytes":9564}
+{"id":"6f4a7a07","kind":"carl","task":"review-20261013-0630","queued_at":1791873098,"prompt_bytes":6563}
+{"id":"64a2e920","kind":"carl","task":"review-20261013-0630","queued_at":1791873258,"prompt_bytes":6563}
+{"id":"00df81aa","ended_at":1791875000,"elapsed_s":1902,"outcome":"ok","detail":null}
+{"id":"6f4a7a07","ended_at":1791875004,"elapsed_s":1906,"outcome":"error","detail":"exit 1"}
+{"id":"64a2e920","ended_at":1791875008,"elapsed_s":1750,"outcome":"error","detail":"retry: killed at background time limit"}
+{"id":"6fefed13","kind":"bob","task":"review-20261013-0630","queued_at":1791875047,"prompt_bytes":218907}
+{"id":"6fefed13","ended_at":1791875140,"elapsed_s":93,"outcome":"ok","detail":"retry"}
+{"id":"6fefed13","ended_at":1791875359,"elapsed_s":312,"outcome":"ok","detail":null}
+{"id":"64a2e920","ended_at":1791875359,"elapsed_s":2101,"outcome":"error","detail":null}
+{"kind":"handoff","site":"review","edge":"leave","at":1791875413,"phase":"review","prd":"00277-catch-critical-rows-in-every-shape-v1.md"}
