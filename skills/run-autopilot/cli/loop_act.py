@@ -329,18 +329,22 @@ class ActMixin:
                 file=self.out,
             )
 
+    def _unwrap_instant_exit(self, decision: dict) -> dict:
+        """Prints the instant-exit line and swaps in the real `then`
+        signal, so the branch chain below dispatches on it unmodified."""
+        print(
+            f"\nautoclaude: instant exit ({decision['detail']}); "
+            f"then {decision['then']}.",
+            file=self.out,
+        )
+        return {**decision, "signal": decision["then"]}
+
     def _act_branch(self, decision: dict, ap_dir: Path) -> int | None:
         """The decision signal's branch. An exit code halts the loop
         (teardown already done); None means another iteration."""
+        if decision["signal"] == "instant_exit":
+            decision = self._unwrap_instant_exit(decision)
         branch = decision["signal"]
-        if branch == "instant_exit":
-            print(
-                f"\nautoclaude: instant exit ({decision['detail']}); "
-                f"then {decision['then']}.",
-                file=self.out,
-            )
-            decision = {**decision, "signal": decision["then"]}
-            branch = decision["signal"]
         if branch == "state_write_failed":
             return self._halt(
                 "\nautoclaude: state-write-failed marker present — halting "
