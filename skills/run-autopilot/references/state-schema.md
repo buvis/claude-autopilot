@@ -517,6 +517,11 @@ Governs which model launches a `build` (or empty, first-launch) phase session. S
 
 **Lanes (PRD 00205).** A solo-lane session (`references/lane-solo.md`) is a `build` session like any other: it runs at the session model this routing picks (`session_model`, default sonnet, or a promotion signal). `default_model` is inert in solo, which dispatches no implementor; `session_model: opus` is the author's tool for a solo PRD that needs the larger model.
 
+## Two more CLI verbs
+
+`autopilot group-rework <state.json>` — regroup rework tasks by file (see Phase 6 rework grouping).
+`autopilot review-stage <state.json> <review-file>` — stage a finished review file for the decision gate.
+
 **Target resolution.** The routed PRD is the lowest `00XXX-` basename in `<prds_dir>/wip/`, else the lowest in `<prds_dir>/backlog/` (`_autopilot_build_target`). This is never `state.prd`: between PRDs, `state.prd` still names the PRD that just finished. When neither `wip/` nor `backlog/` holds a PRD, there is no target and routing returns the Sonnet default outright.
 
 **The five signals.** Any one promotes the build session to Opus. Which of
