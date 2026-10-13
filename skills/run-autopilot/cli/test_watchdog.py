@@ -363,6 +363,41 @@ def test_zero_idle_with_an_activity_path_still_fires_at_the_cap(tmp_path):
     assert proc.returncode == -signal.SIGTERM
 
 
+def test_warn_callback_fires_before_the_cap_with_idle_polling_and_busy_fn_on(
+    tmp_path,
+):
+    # Review finding 5 (PRD 00282, task 9): production (cli.runner.
+    # _run_session) always passes warn_secs/on_warn AND idle_secs/
+    # activity_path/busy_fn together - no prior test combined them. A busy
+    # session (busy_fn always True) must still get its hand-off warning at
+    # cap - warn_secs, then still get capped, with idle polling active.
+    activity = tmp_path / "activity"
+    activity.touch()
+    stop = threading.Event()
+    toucher = _keep_touching(str(activity), stop)
+    proc = _spawn_sleeper(300)
+    seen: list[int] = []
+    dog = Watchdog(
+        proc,
+        cap_secs=0.8,
+        grace_secs=5,
+        warn_secs=0.4,
+        on_warn=lambda: seen.append(1),
+        idle_secs=0.2,
+        activity_path=str(activity),
+        poll_secs=0.05,
+        busy_fn=lambda: True,
+    ).start()
+    proc.wait(timeout=10)
+    dog.cancel()
+    stop.set()
+    toucher.join(timeout=1)
+    assert seen == [1]
+    assert dog.warned is True
+    assert dog.fired is True
+    assert proc.returncode == -signal.SIGTERM
+
+
 def test_unreadable_activity_path_counts_as_silent(tmp_path):
     missing = tmp_path / "never-created"
     proc = _spawn_sleeper(300)
@@ -697,6 +732,24 @@ def test_session_busy_malformed_lines_do_not_hide_live_background_tasks(tmp_path
         [_init_event(), "{oops", _bg_tasks("bg1"), "not json"],
     )
     assert session_busy(log) is True
+
+
+def test_session_busy_non_dict_message_does_not_latch_busy(tmp_path):
+    # Review finding 12 (PRD 00282, task 9): a truthy non-dict `message`
+    # (e.g. a bare string) must not raise AttributeError out of _scan_busy
+    # - that fault is caught by session_busy's outer `except Exception` and
+    # reads as busy for the REST of the session, which is exactly the
+    # latch the module docstring says this tolerant read avoids.
+    log = _write_log(
+        tmp_path / "log.jsonl",
+        [
+            _init_event(),
+            {"type": "assistant", "message": "not a dict"},
+            _tool_use("toolu_1"),
+            _tool_result("toolu_1"),
+        ],
+    )
+    assert session_busy(log) is False
 
 
 def test_session_busy_internal_fault_counts_as_busy(tmp_path, monkeypatch):

@@ -241,6 +241,31 @@ def build_argv(
     return argv
 
 
+def _spawn_watchdog(
+    proc: subprocess.Popen,
+    log_path: Path,
+    cap_secs: float,
+    grace_secs: float,
+    warn_secs: float,
+    idle_secs: float,
+) -> Watchdog:
+    """The cap watchdog for one session: the hand-off warning marker beside
+    the log, and idle detection against the tee'd log (mtime for silence,
+    `session_busy` for whether anything is in flight)."""
+    autopilot_dir = log_path.parent
+    return Watchdog(
+        proc,
+        cap_secs=cap_secs,
+        grace_secs=grace_secs,
+        warn_secs=warn_secs,
+        on_warn=lambda: request_wrapper_handoff(autopilot_dir),
+        idle_secs=idle_secs,
+        activity_path=str(log_path),
+        poll_secs=_IDLE_POLL_SECS,
+        busy_fn=lambda: session_busy(str(log_path)),
+    ).start()
+
+
 def _run_session(
     argv: list[str],
     log_path: Path,
@@ -253,14 +278,8 @@ def _run_session(
     idle_secs: float = 0,
 ) -> tuple[int, bool, str | None]:
     """Launch the child, tee its stdout to log_path, and stream it to
-    presenter until the process exits (on its own or capped). Within
-    `warn_secs` of the cap the watchdog writes the hand-off marker beside
-    the log, so a session at a task boundary leaves before the cap. Past
-    the cap, `idle_secs` of no growth in the tee'd log (used as the
-    watchdog's activity signal) is tolerated before it fires; before the
-    cap, the same silence fires only while `session_busy` sees nothing in
-    flight."""
-    autopilot_dir = log_path.parent
+    presenter until the process exits (on its own or capped). See
+    _spawn_watchdog for the cap/warn/idle contract."""
     with open(log_path, "wb") as log:
         proc = subprocess.Popen(
             argv,
@@ -271,17 +290,7 @@ def _run_session(
         )
         if proc_slot is not None:
             proc_slot[0] = proc
-        dog = Watchdog(
-            proc,
-            cap_secs=cap_secs,
-            grace_secs=grace_secs,
-            warn_secs=warn_secs,
-            on_warn=lambda: request_wrapper_handoff(autopilot_dir),
-            idle_secs=idle_secs,
-            activity_path=str(log_path),
-            poll_secs=_IDLE_POLL_SECS,
-            busy_fn=lambda: session_busy(str(log_path)),
-        ).start()
+        dog = _spawn_watchdog(proc, log_path, cap_secs, grace_secs, warn_secs, idle_secs)
         assert proc.stdout is not None
         try:
             for line in proc.stdout:

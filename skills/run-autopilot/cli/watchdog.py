@@ -74,7 +74,8 @@ def _scan_busy(lines: list[str]) -> bool:
             # Read tolerantly: one odd-shaped event in a growing log must
             # not latch busy for the rest of the session (it would raise
             # into session_busy's outer except Exception -> True forever).
-            content = (event.get("message") or {}).get("content")
+            message = event.get("message")
+            content = message.get("content") if isinstance(message, dict) else None
             if not isinstance(content, list):
                 continue
             for block in content:

@@ -15,6 +15,7 @@ import sys
 import time
 from pathlib import Path
 
+from cli import runner
 from cli.runner import (
     BRIEF_SUFFIX,
     CLI_MAIN,
@@ -447,6 +448,36 @@ def test_spawn_caps_a_hung_session(tmp_path, capsys):
     assert result.returncode != 0
     assert "started" in result.log_path.read_text()
     assert "wall-clock cap" in capsys.readouterr().err
+
+
+def test_spawn_idle_guard_reads_busy_fn_from_the_teed_log(tmp_path, monkeypatch):
+    # Review finding 5 (PRD 00282, task 9): production always wires
+    # busy_fn=lambda: session_busy(log_path) into the Watchdog alongside
+    # warn_secs/on_warn - this confirms that wiring actually reads the
+    # real tee'd log, not a stub: an open tool_use in it keeps a silent
+    # session alive instead of being idle-killed.
+    monkeypatch.setattr(runner, "_IDLE_POLL_SECS", 0.05)
+    stub = _stub_runner(
+        tmp_path,
+        "import json, time\n"
+        "print(json.dumps({'type': 'assistant', 'message': {'content': "
+        "[{'type': 'tool_use', 'id': 'toolu_1', 'name': 'Bash', "
+        "'input': {'command': 'sleep'}}]}}), flush=True)\n"
+        "time.sleep(0.5)\n",
+    )
+    ap = _ap_dir(tmp_path)
+    result = spawn(
+        "m",
+        "low",
+        cap_secs=5,
+        autopilot_dir=ap,
+        env={"_AUTOPILOT_SESSION_IDLE": "0.1"},
+        runner_bin=stub,
+        grace_secs=1,
+        presenter=_Collector(),
+    )
+    assert result.cap_fired is False
+    assert result.cap_reason is None
 
 
 def test_make_presenter_discards_in_tracon_child_mode(capsys):
