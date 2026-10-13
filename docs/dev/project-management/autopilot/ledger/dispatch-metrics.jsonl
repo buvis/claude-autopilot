@@ -4077,3 +4077,16 @@
 {"kind":"handoff","site":"review","edge":"leave","at":1791886864,"phase":"done","prd":"00278-make-release-checks-tell-truth-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1791886913,"phase":"done","prd":"00278-make-release-checks-tell-truth-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1791887186,"phase":"build","prd":"00278-make-release-checks-tell-truth-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791887208,"phase":"build","prd":"00279-run-one-exact-reuse-rule-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791887785,"phase":"build","prd":"00279-run-one-exact-reuse-rule-v1.md"}
+{"id":"73c059d4","kind":"tess","task":"1","queued_at":1791887978,"prompt_bytes":60802}
+{"id":"9c341be5","kind":"tess","task":"1","queued_at":1791887999,"prompt_bytes":37138}
+{"id":"241e4725","kind":"ivan","task":"1","queued_at":1791888193,"prompt_bytes":34716}
+{"id":"77c6a7d3","kind":"ivan","task":"1","queued_at":1791888439,"prompt_bytes":34588}
+{"id":"ed89319a","kind":"pat","task":"1","queued_at":1791888658,"prompt_bytes":12375}
+{"id":"73c059d4","ended_at":1791888792,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"9c341be5","ended_at":1791888792,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"241e4725","ended_at":1791888792,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"77c6a7d3","ended_at":1791888792,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"ed89319a","ended_at":1791888792,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791888792,"phase":"build","prd":"00279-run-one-exact-reuse-rule-v1.md"}

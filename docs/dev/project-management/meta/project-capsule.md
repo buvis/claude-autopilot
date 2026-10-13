@@ -49,8 +49,8 @@ Generated: 2026-10-13
 - [x] 00285-resolve-process-facts-without-ps-v1 (1 cycle)
 - [x] 00276-make-the-gate-record-trustworthy-v1 (2 cycles)
 - [x] 00278-make-release-checks-tell-truth-v1 (2 cycles)
-- backlog: 00279-run-one-exact-reuse-rule-v1,
-  plus 00282, 00283, 00284 (loop efficiency, from discovery 00281).
+- [ ] 00279-run-one-exact-reuse-rule-v1 (in progress, selected, entering catchup/design)
+- backlog: 00282, 00283, 00284 (loop efficiency, from discovery 00281).
 - held: 00277-catch-critical-rows-in-every-shape-v1 (stalled on a
   blocking-escalation design question, see commit 4debc71) and 00280
   (2026-10-12 backlog review), plus 16 triage stubs minted across
