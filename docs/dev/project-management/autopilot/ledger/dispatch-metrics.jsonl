@@ -4142,3 +4142,5 @@
 {"id":"b711bce6","ended_at":1791900025,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"id":"7d3e4142","ended_at":1791900025,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791900025,"phase":"build","prd":"00282-loop-guards-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791900049,"phase":"build","prd":"00282-loop-guards-v1.md"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791902539,"phase":"review","prd":"00282-loop-guards-v1.md"}
