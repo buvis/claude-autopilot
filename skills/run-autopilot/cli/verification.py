@@ -134,7 +134,41 @@ def _dirty_outside_store_paths(
         excused = all(p in extra_excluded for p in (new, old) if p)
         if not excused and not _dirty_path_is_in_store(new, old, store):
             offending.update(p for p in (new, old) if p)
+    offending.update(_hidden_flag_edits(repo_root, store))
     return sorted(offending)
+
+
+def _hidden_flag_edits(repo_root: Path, store: tuple[str, ...]) -> list[str]:
+    """Toplevel-relative paths outside `store` whose index entry carries the
+    skip-worktree or assume-unchanged flag (which hide edits from `git
+    status`) and whose work-tree content differs from the index blob, or is
+    gone. Raises `_GitProbeFailed` when a git call fails."""
+    top = _git(repo_root, "rev-parse", "--show-toplevel")
+    if top.returncode != 0:
+        raise _GitProbeFailed("git rev-parse --show-toplevel failed")
+    toplevel = Path(top.stdout.strip())
+    listing = _git(toplevel, "ls-files", "-v", "-s", "-z")
+    if listing.returncode != 0:
+        raise _GitProbeFailed("git ls-files failed")
+    flagged = {}
+    for entry in listing.stdout.split("\0"):
+        if not entry:
+            continue
+        meta, path = entry.split("\t", 1)
+        tag, _mode, blob, _stage = meta.split()
+        # "S" is skip-worktree; a lowercase tag is assume-unchanged.
+        if (tag == "S" or tag.islower()) and not path.startswith(store):
+            flagged[path] = blob
+    edited = [p for p in flagged if not (toplevel / p).exists()]
+    present = [p for p in flagged if p not in edited]
+    if present:
+        hashed = _git(toplevel, "hash-object", "--", *present)
+        if hashed.returncode != 0:
+            raise _GitProbeFailed("git hash-object failed")
+        for path, blob in zip(present, hashed.stdout.split()):
+            if blob != flagged[path]:
+                edited.append(path)
+    return edited
 
 
 def _dirty_outside_store(
