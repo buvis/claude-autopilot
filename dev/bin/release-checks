@@ -336,6 +336,141 @@ run_pytest uv run --no-project --with pytest python -m pytest -q \
 echo "[checks] process facts"
 run_pytest uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_procinfo.py
 
+echo "[checks] plan-tasks scripts"
+run_pytest uv run --no-project --with pytest python -m pytest -q \
+  skills/plan-tasks/scripts/_classify_tier_test_support.py \
+  skills/plan-tasks/scripts/test_classify_tier_cli.py \
+  skills/plan-tasks/scripts/test_classify_tier_default_floor.py \
+  skills/plan-tasks/scripts/test_classify_tier_mechanical.py \
+  skills/plan-tasks/scripts/test_classify_tier_risk_flags.py \
+  skills/plan-tasks/scripts/test_classify_tier_sonnet_paths.py \
+  skills/plan-tasks/scripts/test_plan_tasks_prose.py
+
+echo "[checks] review-work-completion scripts"
+run_pytest uv run --no-project --with pytest python -m pytest -q \
+  skills/review-work-completion/scripts/test_await_reviewer_outputs.py \
+  skills/review-work-completion/scripts/test_check_review_file.py \
+  skills/review-work-completion/scripts/test_codex_resume_contract.py \
+  skills/review-work-completion/scripts/test_compute_mech_facts.py \
+  skills/review-work-completion/scripts/test_detect_tautological_tests.py \
+  skills/review-work-completion/scripts/test_replay_tests_against_base.py
+
+echo "[checks] run-autopilot cli remainder"
+run_pytest uv run --no-project --with pytest python -m pytest -q \
+  skills/run-autopilot/cli/test_check_plan_cli.py \
+  skills/run-autopilot/cli/test_cli.py \
+  skills/run-autopilot/cli/test_cli_default_paths.py \
+  skills/run-autopilot/cli/test_cli_init.py \
+  skills/run-autopilot/cli/test_cli_schema_version.py \
+  skills/run-autopilot/cli/test_convergence.py \
+  skills/run-autopilot/cli/test_doc_contract.py \
+  skills/run-autopilot/cli/test_eligibility.py \
+  skills/run-autopilot/cli/test_frontmatter.py \
+  skills/run-autopilot/cli/test_handoff.py \
+  skills/run-autopilot/cli/test_lifecycle_cli.py \
+  skills/run-autopilot/cli/test_loop.py \
+  skills/run-autopilot/cli/test_loop_act.py \
+  skills/run-autopilot/cli/test_loop_exports.py \
+  skills/run-autopilot/cli/test_loop_gates.py \
+  skills/run-autopilot/cli/test_loop_review_once.py \
+  skills/run-autopilot/cli/test_migration_map.py \
+  skills/run-autopilot/cli/test_notify_out.py \
+  skills/run-autopilot/cli/test_qwen_exclusion_report.py \
+  skills/run-autopilot/cli/test_records.py \
+  skills/run-autopilot/cli/test_records_failure_paths.py \
+  skills/run-autopilot/cli/test_records_import_hygiene.py \
+  skills/run-autopilot/cli/test_records_park.py \
+  skills/run-autopilot/cli/test_records_stall.py \
+  skills/run-autopilot/cli/test_render_attempt_ledger.py \
+  skills/run-autopilot/cli/test_render_autonomous_blank_rows.py \
+  skills/run-autopilot/cli/test_render_batch_summary_nonzero_binding.py \
+  skills/run-autopilot/cli/test_render_cli.py \
+  skills/run-autopilot/cli/test_render_deferrals.py \
+  skills/run-autopilot/cli/test_render_replace_section.py \
+  skills/run-autopilot/cli/test_render_run_conditions.py \
+  skills/run-autopilot/cli/test_render_skips.py \
+  skills/run-autopilot/cli/test_resume.py \
+  skills/run-autopilot/cli/test_routing_rework.py \
+  skills/run-autopilot/cli/test_schema.py \
+  skills/run-autopilot/cli/test_schema_completed_prds.py \
+  skills/run-autopilot/cli/test_schema_decision_entries.py \
+  skills/run-autopilot/cli/test_schema_decision_scope.py \
+  skills/run-autopilot/cli/test_schema_skips.py \
+  skills/run-autopilot/cli/test_schema_task_entries.py \
+  skills/run-autopilot/cli/test_selection.py \
+  skills/run-autopilot/cli/test_shared_lift.py \
+  skills/run-autopilot/cli/test_state.py \
+  skills/run-autopilot/cli/test_transitions.py
+
+echo "[checks] run-autopilot scripts remainder"
+run_pytest uv run --no-project --with pytest python -m pytest -q \
+  skills/run-autopilot/scripts/test_autopilot_lifecycle.py \
+  skills/run-autopilot/scripts/test_autopilot_phase2_stall.py \
+  skills/run-autopilot/scripts/test_autopilot_resume.py \
+  skills/run-autopilot/scripts/test_cap_hook_halt_guarantee.py \
+  skills/run-autopilot/scripts/test_codex_review_run.py \
+  skills/run-autopilot/scripts/test_detect_usage_limit.py \
+  skills/run-autopilot/scripts/test_fablectl.py \
+  skills/run-autopilot/scripts/test_golden_contracts.py \
+  skills/run-autopilot/scripts/test_render_stream.py \
+  skills/run-autopilot/scripts/test_review_coverage_hook.py \
+  skills/run-autopilot/scripts/test_review_prompt_contracts.py \
+  skills/run-autopilot/scripts/test_shims.py \
+  skills/run-autopilot/scripts/test_statectl.py \
+  skills/run-autopilot/scripts/test_statectl_complete_prd.py \
+  skills/run-autopilot/scripts/test_statectl_ledger.py \
+  skills/run-autopilot/scripts/test_statectl_new_task_verbs.py \
+  skills/run-autopilot/scripts/test_statectl_task_verbs.py \
+  skills/run-autopilot/scripts/test_tune_routing.py \
+  skills/run-autopilot/scripts/test_validate_state_json_hook.py \
+  skills/run-autopilot/scripts/test_walk_up.py
+
+echo "[checks] tracon"
+run_pytest uv run --no-project --with pytest --with rich python -m pytest -q \
+  skills/run-autopilot/scripts/tracon/test_discovery.py \
+  skills/run-autopilot/scripts/tracon/test_model.py \
+  skills/run-autopilot/scripts/tracon/test_panels.py \
+  skills/run-autopilot/scripts/tracon/test_screens.py \
+  skills/run-autopilot/scripts/tracon/test_stream.py
+
+echo "[checks] use-codex scripts"
+run_pytest uv run --no-project --with pytest python -m pytest -q \
+  skills/use-codex/scripts/test_codex_hook_doctor.py \
+  skills/use-codex/scripts/test_codex_hook_doctor_extra.py \
+  skills/use-codex/scripts/test_codex_hook_doctor_parse_errors.py \
+  skills/use-codex/scripts/test_codex_hook_doctor_repair.py \
+  skills/use-codex/scripts/test_codex_hook_doctor_repair_cycle.py
+
+echo "[checks] work scripts remainder"
+run_pytest uv run --no-project --with pytest python -m pytest -q \
+  skills/work/scripts/test_check_build_overhead.py \
+  skills/work/scripts/test_check_memory_pressure.py \
+  skills/work/scripts/test_check_qwen_output.py \
+  skills/work/scripts/test_check_reflow.py \
+  skills/work/scripts/test_check_split_hygiene.py \
+  skills/work/scripts/test_check_style_limits.py \
+  skills/work/scripts/test_check_style_limits_prd00136.py \
+  skills/work/scripts/test_command_budget_prose.py \
+  skills/work/scripts/test_diagnose_task.py \
+  skills/work/scripts/test_dispatch_prose.py \
+  skills/work/scripts/test_dispatch_telemetry_prose.py \
+  skills/work/scripts/test_parse_review.py \
+  skills/work/scripts/test_qwen_trust.py \
+  skills/work/scripts/test_qwen_trust_prose.py \
+  skills/work/scripts/test_record_dispatch_append_row.py \
+  skills/work/scripts/test_record_dispatch_handoff.py \
+  skills/work/scripts/test_record_dispatch_open_ids.py \
+  skills/work/scripts/test_record_dispatch_read_failures.py \
+  skills/work/scripts/test_record_dispatch_start.py \
+  skills/work/scripts/test_render_prompt.py \
+  skills/work/scripts/test_render_prompt_dispatch.py \
+  skills/work/scripts/test_style_gate_prose.py \
+  skills/work/scripts/test_task_boundary_handoff_prose.py \
+  skills/work/scripts/test_verify_queue_prose.py \
+  skills/work/scripts/test_work_routing.py \
+  skills/work/scripts/test_work_routing_attempt_outcome.py \
+  skills/work/scripts/test_work_routing_ladder_fence.py
+
 EXIT_CODE=0
 if [[ "$TOTAL_FAIL" -ne 0 || "$INFRA_FAIL" -ne 0 ]]; then
   EXIT_CODE=1

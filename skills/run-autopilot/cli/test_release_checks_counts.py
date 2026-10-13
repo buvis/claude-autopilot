@@ -10,6 +10,7 @@ longer aborts the whole run.
 from __future__ import annotations
 
 import ast
+import re
 import subprocess
 from collections.abc import Iterable
 from fnmatch import fnmatch
@@ -17,6 +18,21 @@ from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parents[3]
 _RELEASE_CHECKS = Path(__file__).resolve().parents[3] / "dev" / "bin" / "release-checks"
+
+UNGATED = (
+    "hooks/test_guard_phase_delegation_scratch_replay.py",  # reads gitignored scratch input (docs/dev/tmp/dispatch-*.txt); not reproducible in a clean clone
+)
+
+
+def _tracked_test_files() -> list[str]:
+    out = subprocess.run(
+        ["git", "ls-files", "*test_*.py"],
+        cwd=_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return out.stdout.splitlines()
 
 
 def _run_helpers(body: str) -> str:
@@ -298,3 +314,33 @@ def test_release_refuses_while_a_held_prd_blocks_it(tmp_path: Path) -> None:
         assert str(prd_dir / filename) in result.stderr, (lifecycle_dir, result.stderr)
 
         (prd_dir / filename).unlink()
+
+
+def _dir_is_bare_target(parent: str, text: str) -> bool:
+    """True when `parent` appears in `text` as a whole pytest argument - the
+    directory name is not immediately followed by '/' (a longer file path
+    under it), so a directory occurring only as a prefix of named files
+    doesn't falsely count as its own target."""
+    return any(
+        m.end() >= len(text) or text[m.end()] != "/"
+        for m in re.finditer(re.escape(parent), text)
+    )
+
+
+def test_every_tracked_test_file_is_gated() -> None:
+    """Every tracked test_*.py must be named in dev/bin/release-checks (by
+    its own path or by a whole directory pytest target that collects it),
+    or listed in UNGATED with a reason - a release gate that silently
+    excludes files is not the full suite (PRD 00278)."""
+    text = _RELEASE_CHECKS.read_text()
+    missing = [
+        path
+        for path in _tracked_test_files()
+        if path not in text
+        and path not in UNGATED
+        and not _dir_is_bare_target(str(Path(path).parent), text)
+    ]
+    assert missing == [], (
+        f"{_RELEASE_CHECKS}: does not name {missing} "
+        "(add a [checks] block or UNGATED with a reason)"
+    )
