@@ -177,6 +177,7 @@ _REVIEW_VERB_TEST_FILES = (
     "skills/run-autopilot/cli/test_gate_findings_table.py",
     "skills/run-autopilot/cli/test_gate_findings_classification.py",
     "skills/run-autopilot/cli/test_gate_findings_shapes.py",
+    "skills/run-autopilot/cli/test_gate_findings_unread_shapes.py",
     "skills/run-autopilot/cli/test_gate_findings_real_fixtures.py",
     "skills/run-autopilot/cli/test_verification.py",
     "skills/run-autopilot/cli/test_verification_dirty.py",
