@@ -1,0 +1,42 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "The gate does not reach `FAIL 0`. Phase 1 acceptance and exit criterion, \"`bash dev/bin/release-checks` exits 0 with `FAIL 0`\", is unmet",
+    "file": "skills/run-autopilot/cli/test_gate_findings_unread_shapes.py",
+    "reason": "Already deferred for this PRD as a pre-existing-failure record in the batch deferred JSON: all 67 failures are in test_gate_findings_unread_shapes.py, authored by PRD 00277 (parked in hold/ on a blocking escalation) and reproducing identically at the task base. Out of scope for 00278; the gate correctly stays RED until 00277 is finished or its tests are retired."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "The required FAIL 0 acceptance remains unmet: 67 failures reproduce identically at base and belong to parked PRD 00277. Resolving that PRD's unfinished behavior is outside this change's scope; retain the documented deferral.",
+    "file": "skills/run-autopilot/cli/test_gate_findings_unread_shapes.py",
+    "reason": "Same settled deferral as the Blake row above; Bob himself asks for the documented deferral to be retained."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "The task 9 acceptance criterion (`bash dev/bin/release-checks` exits 0 with `FAIL 0`) is unmet. The gate shows 67 failures, all in `test_gate_findings_unread_shapes.py`, a PRD 00277 file that was already gated and is parked in hold. The deferred-findings record documents this and it is out of scope here. It still means the PRD's exit criterion is not met, and the gate stays RED for any release until 00277 is finished or its tests are retired.",
+    "file": "docs/dev/project-management/autopilot/deferred/202610111300-deferred.json:522",
+    "reason": "Same settled deferral; Alice's row explicitly cites the existing deferred record."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The new refusal guard in `dev/bin/release` matches the open PRD 00278 itself, because it contains the phrase \"release is blocked\" and sits in `wip/`. No real release can run until the PRD reaches `done/`. The design doc records this and the test uses an isolated fixture, so no change is needed. Keep it in mind at release time.",
+    "file": "dev/bin/release:16",
+    "reason": "Transient by design and recorded in the design doc: the self-match ends when this PRD moves to done/ at finalize. The reviewer states no change is needed."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`skills/work/SKILL.md` is 492 lines and the leave-row test passes, but I could not confirm the moved text landed in a reference file.",
+    "file": "skills/work/SKILL.md",
+    "reason": "An unverified-by-the-reviewer note, not a defect: the file is under its line limit and every test the reviewer ran passes (197 passed across the five files). Nothing to fix."
+  }
+]
