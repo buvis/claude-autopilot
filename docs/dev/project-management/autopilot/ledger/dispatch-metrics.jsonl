@@ -3953,3 +3953,15 @@
 {"id":"4896069d","ended_at":1791863032,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"id":"1aab4325","ended_at":1791863032,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791863032,"phase":"review","prd":"00276-make-the-gate-record-trustworthy-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1791863080,"phase":"review","prd":"00276-make-the-gate-record-trustworthy-v1.md"}
+{"id":"f9404c10","kind":"bob","task":"review-00276c1-202610131","queued_at":1791863145,"prompt_bytes":9580}
+{"id":"0cbd3600","kind":"carl","task":"review-00276c1-202610131","queued_at":1791863145,"prompt_bytes":6571}
+{"id":"f42a1316","kind":"carl","task":"review-00276c1-202610131","queued_at":1791863204,"prompt_bytes":6571}
+{"id":"0cbd3600","ended_at":1791863230,"elapsed_s":85,"outcome":"error","detail":"exit 1"}
+{"id":"f42a1316","ended_at":1791863234,"elapsed_s":30,"outcome":"error","detail":"retry: exit 1"}
+{"id":"dad506e1","kind":"bob","task":"review-00276c1-202610131","queued_at":1791863296,"prompt_bytes":313338}
+{"id":"f9404c10","ended_at":1791863449,"elapsed_s":304,"outcome":"error","detail":"lack-of-input"}
+{"id":"dad506e1","ended_at":1791863454,"elapsed_s":158,"outcome":"ok","detail":"retry"}
+{"id":"f9404c10, dad506e1 (retry)","ended_at":1791863817,"elapsed_s":null,"outcome":"ok","detail":null}
+{"id":"0cbd3600, f42a1316 (retry)","ended_at":1791863817,"elapsed_s":null,"outcome":"error","detail":null}
+{"kind":"handoff","site":"review","edge":"leave","at":1791863902,"phase":"review","prd":"00276-make-the-gate-record-trustworthy-v1.md"}

@@ -1,0 +1,42 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Absolute symlink targets and symlink chains remain outside reuse detection; the design explicitly accepts these limitations for this change.",
+    "file": "skills/run-autopilot/cli/verification.py",
+    "reason": "The design doc scopes packet 16 to relative, single-hop symlink aliases and names absolute targets and chains as accepted out-of-scope limitations. Bob raised it in his KNOWN bucket, not as a defect. Widening the scope here would be new work, not a fix."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Existing unchanged functions exceed 50 lines, and `__main__.py` exceeds 800 lines according to the supplied mechanical facts; restructuring unrelated CLI code is outside this review's scope.",
+    "file": "skills/run-autopilot/cli/__main__.py",
+    "reason": "Pre-existing: `__main__.py` was already 1803 lines before this diff, which adds about 25. The surgical-changes rule forbids refactoring adjacent code that works. A split belongs in its own PRD, like 00192 did for loop.py."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "6 touched test(s) pass against the pre-change code: test_verify_accepts_a_store_like_path_outside_the_repo, test_verify_writes_an_absolute_out_of_repo_log_where_asked, test_verify_untracked_log_outside_the_store_still_works, test_verify_exits_2_when_the_log_cannot_be_opened, test_verify_exits_0_when_the_same_green_result_is_recorded, test_verify_exits_1_when_the_gate_timed_out_with_exit_0",
+    "file": "skills/run-autopilot/cli/test_cli_review_verbs.py",
+    "reason": "Fail-first replay states a computed fact, not a defect. These six are behavior-preserving regression guards for paths this PRD did not change, so passing at base is correct. Alice reviewed the same block and judged it lists only behavior-preserving guards. The PRD's own fail-at-base acceptance criteria name different tests, and those do fail at base."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "10 touched test(s) pass against the pre-change code: test_run_gate_drains_stderr_without_deadlock, test_run_gate_unparseable_output_records_nothing, test_run_gate_keeps_tail_so_a_late_summary_line_still_parses, test_run_gate_streams_and_keeps_tail, test_run_gate_uses_last_summary_line_not_first, test_run_gate_closes_the_child_pipes_before_returning +4 more",
+    "file": "skills/run-autopilot/cli/test_verification.py",
+    "reason": "Same reason as the test_cli_review_verbs.py replay row: these pin pre-existing run_gate streaming and parsing behavior that this PRD preserves, so they pass at base by design. The PRD's named new tests (test_failed_run_leaves_no_older_green_record, test_concurrent_runs_serialize_on_the_gate_lock) are the ones required to fail at base."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "35 touched test(s) pass against the pre-change code: test_reuse_when_only_store_paths_changed, test_stale_when_code_changed, test_reuse_verdict_fails_closed_on_git_error, test_reuse_verdict_rejects_non_ancestor_sha, test_reuse_verdict_rejects_dirty_tree, test_rename_out_of_store_is_not_clean +29 more",
+    "file": "skills/run-autopilot/cli/test_verification_dirty.py",
+    "reason": "Same reason: this file's 35 touched tests are the existing reuse/dirt regression suite, preserved by this change and therefore passing at base. The PRD requires test_store_edit_behind_a_product_symlink_is_stale to fail at base, and that one does."
+  }
+]
