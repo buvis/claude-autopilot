@@ -95,18 +95,19 @@ def test_every_denied_fixture_is_denied() -> None:
         assert "with the Skill tool in THIS session" in result.stderr, name
 
 
-def test_allow_corpus_ignores_scratch_dispatch_files() -> None:
-    # A scratch dispatch-*.txt under docs/dev/tmp/ must never change the
-    # committed allow corpus - the live record must match a clean clone's.
-    before = _allow_corpus()
-    scratch = HOOKS.parent / "docs" / "dev" / "tmp" / "dispatch-zzz-scratch-test.txt"
-    scratch.parent.mkdir(parents=True, exist_ok=True)
+def test_allow_corpus_ignores_scratch_dispatch_files(tmp_path: Path) -> None:
+    # A scratch dispatch-*.txt must never change the committed allow corpus -
+    # the live record must match a clean clone's. Pinned against the literal
+    # committed fixtures glob (not `_allow_corpus()` compared to itself) so a
+    # reverted implementation that folds scratch files back into the corpus
+    # fails here. The scratch file lives in an isolated tmp_path, never the
+    # live docs/dev/tmp, so this never risks real scratch content or races
+    # with a concurrent test run.
+    committed = sorted((FIXTURES / "allowed").glob("*.txt"))
+    assert _allow_corpus() == committed
+    scratch = tmp_path / "dispatch-zzz-scratch-test.txt"
     scratch.write_text("scratch subagent\nRun the work phase for PRD 00300 now.\n", encoding="utf-8")
-    try:
-        assert _allow_corpus() == before
-    finally:
-        scratch.unlink()
-    assert _allow_corpus() == before
+    assert _allow_corpus() == committed
 
 
 @pytest.mark.parametrize("prompt_file", _allow_corpus(), ids=lambda p: p.name)
