@@ -198,7 +198,7 @@ def normalize_command(command: object) -> str:
     text = " ".join(command.split())
     for shell in ("bash ", "sh "):
         if text.startswith(shell):
-            text = text[len(shell):]
+            text = text[len(shell) :]
             break
     return text.removeprefix("./")
 
@@ -367,6 +367,35 @@ def _parse_summary(stdout_buf: bytes) -> tuple[str | None, re.Match | None]:
     return raw_line, found
 
 
+def _record_gate(
+    command: str,
+    cwd: Path,
+    sha: str,
+    cycle: int | None,
+    returncode: int,
+    stdout_buf: bytes,
+    extra_excluded: tuple[str, ...],
+) -> dict:
+    """The post-reap half of `run_gate`: parse the summary, re-check the tree,
+    and write the record only when a summary parsed and the tree is clean."""
+    raw_line, found = _parse_summary(stdout_buf)
+    dirty = _dirty_outside_store(cwd, extra_excluded)
+    result = {
+        "passed": int(found.group(1)) if found else None,
+        "failed": int(found.group(2)) if found else None,
+        "skipped": int(found.group(3)) if found else None,
+        "exit": returncode,
+        "raw_line": raw_line,
+        "timed_out": False,
+        "recorded": False,
+        "dirty": dirty,
+    }
+    if found and not dirty:
+        _write_record(cwd, command, sha, cycle, result)
+        result["recorded"] = True
+    return result
+
+
 def run_gate(
     command: str,
     cwd: Path,
@@ -410,22 +439,9 @@ def run_gate(
         stdout_buf, done = _drain_bounded(proc, GATE_OUTPUT_CAP, deadline, log_file)
         if not _reap(proc, deadline, done):
             return _timed_out_result()
-        raw_line, found = _parse_summary(stdout_buf)
-        dirty = _dirty_outside_store(cwd, extra_excluded)
-        result = {
-            "passed": int(found.group(1)) if found else None,
-            "failed": int(found.group(2)) if found else None,
-            "skipped": int(found.group(3)) if found else None,
-            "exit": proc.returncode,
-            "raw_line": raw_line,
-            "timed_out": False,
-            "recorded": False,
-            "dirty": dirty,
-        }
-        if found and not dirty:
-            _write_record(cwd, command, sha, cycle, result)
-            result["recorded"] = True
-        return result
+        return _record_gate(
+            command, cwd, sha, cycle, proc.returncode, stdout_buf, extra_excluded
+        )
     finally:
         if log_file is not None:
             log_file.close()
