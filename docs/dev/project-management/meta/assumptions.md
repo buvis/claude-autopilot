@@ -15,3 +15,22 @@ Ivan (implementor):
 
 - The batch id to stamp is read from `state.json`'s `batch.id` field at launch time (matches the field already used elsewhere in `loop.py`, e.g. `_append_convergence`), since no other source of "current batch id" is given in the listed files.
 - `self.env["GIT_COMMITTER_NAME"]` is mutated in place on the shared env dict (rather than building a per-call copy) since `_launch` already passes `env=self.env` directly to `spawn_fn`, and the existing code mutates `self.env` the same way for `_AUTOPILOT_LOOP`.
+
+## 2: Add catchup-probe subcommand: batch-scoped gh/engram probes
+
+Tess (test author):
+
+- The unregistered stderr marker is matched as a substring of a longer stderr line, as "stderr containing" says.
+- `cwd` may be passed as a `str` or a `Path`; the test compares resolved Paths.
+- `catchup_probe` stays a sibling of `batch` at the top level of `state.json`, read back as `state["catchup_probe"]`.
+- On a reused probe in the same batch, the stored `catchup_probe` is left unchanged (no write), per "Writes ... unless the batch's existing probe already covers this batch.id".
+- A minimal temp `state.json` such as `{"batch": {"id": "B1"}}` is accepted by `statectl.mutate`, and `{}` is too, for the no-batch case.
+- `PermissionError` and `FileNotFoundError` both count as the "non-timeout OSError" case.
+
+Ivan (implementor):
+
+- `project_root` is imported from `cli.custody`.
+- The engram marker is the substring `"not inside a registered repo"`, taken from the tests' `UNREGISTERED` stderr.
+- State is read with `state.load(state_path)` (returns `(data, version)`), following `__main__._load_state_or_exit`.
+- The state schema accepts a top-level `catchup_probe` key; the tests pass, so `mutate`'s validation accepts it.
+- The probes run outside the `mutate` lock, so a 15s timeout does not hold the state lock.

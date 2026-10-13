@@ -17,12 +17,15 @@ import pytest
 from cli import enter, enter_io, frontmatter, notify_out
 from cli.enter_harness import (
     KEYS,
+    LOOP,
     NOW,
     OTHER,
     PRD,
+    STALE,
     Env,
     _arrange,
     _cache,
+    _loop_repo,
     _open_state,
     _prd_text,
     run_cli,
@@ -478,6 +481,94 @@ def test_a_stamp_that_is_not_a_past_utc_instant_degrades_to_full_catchup(
     # not parse is not a stamp - none of the three may pass for a fresh cache.
     env.write_state(_open_state(batch=_cache(catchup_completed_at=completed_at)))
     env.put("wip")
+
+    out = env.run()
+
+    assert (out["stop"], out["catchup"]) == (None, "full")
+
+
+# Loop-only commits past `catchup_head_sha` keep the cache: real git repos at
+# env.root, committer `autopilot-loop/<batch id>`, author always someone else.
+TASKS = [{"id": "t1", "name": "a", "status": "pending"}]
+
+
+def test_force_is_delta_when_all_commits_are_loop_commits(env: Env) -> None:
+    base, head = _loop_repo(env.root, LOOP, LOOP)
+    # stale on purpose: a first-entry `force` never consults freshness
+    batch = _cache(catchup_head_sha=base, catchup_completed_at=STALE)
+    env.write_state(_open_state(batch=batch))
+    env.put("wip", PRD, _prd_text(catchup="force"))
+
+    out = env.run()
+
+    assert (out["stop"], out["catchup"]) == (None, "delta")
+    assert enter_io.commits_all_loop(env.root, base, LOOP) is True
+    assert enter_io.commits_all_loop(env.root, head, "anyone") is True, "empty range"
+    calls: list[tuple] = []
+    out = env.run(loop_only=lambda *a: calls.append(a) or False)
+    assert calls == [(env.root, base, LOOP)]
+    assert out["catchup"] == "full", "the decision must follow loop_only's answer"
+
+
+@pytest.mark.parametrize(
+    "foreign", ["a human", "autopilot-loop/202609280000", "autopilot-loop/no-batch"]
+)
+def test_force_is_full_when_one_commit_is_not(env: Env, foreign: str) -> None:
+    base, _ = _loop_repo(env.root, LOOP, foreign, LOOP)
+    env.write_state(_open_state(batch=_cache(catchup_head_sha=base)))
+    env.put("wip", PRD, _prd_text(catchup="force"))
+
+    out = env.run()
+
+    assert (out["stop"], out["catchup"]) == (None, "full")
+    assert enter_io.commits_all_loop(env.root, base, LOOP) is False
+
+
+@pytest.mark.parametrize("repo", ["not-a-repo", "unknown-sha", "undecodable-committer"])
+def test_force_is_full_on_git_failure(env: Env, repo: str) -> None:
+    sha = "d" * 40
+    if repo == "unknown-sha":
+        _loop_repo(env.root, LOOP)
+    elif repo == "undecodable-committer":
+        sha, _ = _loop_repo(env.root, LOOP.encode() + b"\xff")
+    env.write_state(_open_state(batch=_cache(catchup_head_sha=sha)))
+    env.put("wip", PRD, _prd_text(catchup="force"))
+
+    out = env.run()
+
+    assert (out["stop"], out["catchup"]) == (None, "full")
+    assert enter_io.commits_all_loop(env.root, sha, LOOP) is False
+    # a lossy decode would turn the \xff into U+FFFD and match this name
+    assert enter_io.commits_all_loop(env.root, sha, LOOP + "�") is False
+
+
+@pytest.mark.parametrize("mode", [None, "force"], ids=["run", "force-with-tasks"])
+def test_resume_is_delta_when_head_moved_by_loop_commits_only(
+    env: Env, mode: str | None
+) -> None:
+    base, head = _loop_repo(env.root, LOOP, LOOP)
+    env.put("wip", PRD, _prd_text(**({"catchup": mode} if mode else {})))
+    for batch, seen, expected in (
+        (_cache(catchup_head_sha=base), head, "delta"),
+        (_cache(catchup_head_sha=base, catchup_completed_at=STALE), head, "full"),
+        (_cache(catchup_head_sha=base), None, "full"),
+    ):
+        env.write_state(_open_state(batch=batch, tasks=TASKS))
+        env.head = seen
+
+        out = env.run()
+
+        assert (out["stop"], out["catchup"]) == (None, expected), (batch, seen)
+
+
+@pytest.mark.parametrize("mode", [None, "force"], ids=["run", "force-with-tasks"])
+def test_resume_is_full_when_head_moved_by_a_foreign_commit(
+    env: Env, mode: str | None
+) -> None:
+    base, head = _loop_repo(env.root, LOOP, "a human")
+    env.write_state(_open_state(batch=_cache(catchup_head_sha=base), tasks=TASKS))
+    env.put("wip", PRD, _prd_text(**({"catchup": mode} if mode else {})))
+    env.head = head
 
     out = env.run()
 

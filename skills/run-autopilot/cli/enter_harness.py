@@ -108,6 +108,52 @@ def _cache(**overrides) -> dict:
     return batch
 
 
+LOOP = f"autopilot-loop/{BATCH_ID}"
+STALE = "2026-09-29T07:00:00Z"
+
+
+def _loop_repo(root: Path, *committers: str | bytes) -> tuple[str, str]:
+    """`git init` at `root`, one base commit, then one empty commit per
+    committer name. The author is always someone else, so only the committer
+    can mark a loop commit. A bytes name is written as a hand-built commit
+    object, because `git commit` re-encodes a non-UTF-8 ident as Latin-1.
+    Returns (base sha, HEAD sha)."""
+
+    def git(*args: str, committer: str = "a human", stdin: bytes = b"") -> str:
+        env = {
+            **os.environ,
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_AUTHOR_NAME": "an author",
+            "GIT_AUTHOR_EMAIL": "author@example.com",
+            "GIT_COMMITTER_NAME": committer,
+            "GIT_COMMITTER_EMAIL": "committer@example.com",
+        }
+        proc = subprocess.run(
+            ["git", "-C", str(root), *args],
+            env=env, input=stdin, capture_output=True, check=True, timeout=30,
+        )
+        return proc.stdout.decode("ascii").strip()
+
+    git("init", "-q", "-b", "master")
+    git("commit", "-q", "--allow-empty", "-m", "base")
+    base = git("rev-parse", "HEAD")
+    for i, name in enumerate(committers):
+        if isinstance(name, str):
+            git("commit", "-q", "--allow-empty", "-m", f"c{i}", committer=name)
+            continue
+        tree, parent = git("rev-parse", "HEAD^{tree}"), git("rev-parse", "HEAD")
+        obj = (
+            f"tree {tree}\nparent {parent}\n"
+            "author an author <author@example.com> 0 +0000\ncommitter ".encode()
+            + name
+            + b" <committer@example.com> 0 +0000\n\nc\n"
+        )
+        sha = git("hash-object", "-t", "commit", "-w", "--stdin", stdin=obj)
+        git("update-ref", "HEAD", sha)
+    return base, git("rev-parse", "HEAD")
+
+
 def _custody_entry() -> dict:
     return {
         "prd": "00004-feature-x.md",
