@@ -24,7 +24,6 @@ from cli.enter_harness import (
     EARLY,
     EXPECTED_STOPS,
     HEAD,
-    NOW,
     OTHER,
     PRD,
     Env,
