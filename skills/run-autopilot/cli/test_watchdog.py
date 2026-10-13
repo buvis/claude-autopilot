@@ -381,6 +381,110 @@ def test_unreadable_activity_path_counts_as_silent(tmp_path):
     assert proc.returncode == -signal.SIGTERM
 
 
+# Idle watchdog from launch: before the cap, a session whose log has been
+# silent for idle_secs is killed as "idle" unless busy_fn reports a tool call
+# or background task still open.
+
+
+def _stale_activity(tmp_path) -> str:
+    activity = tmp_path / "activity"
+    activity.touch()
+    stale_since = time.time() - 5
+    os.utime(str(activity), (stale_since, stale_since))
+    return str(activity)
+
+
+def test_idle_kill_before_cap_when_silent_and_no_open_tool_use(tmp_path, capsys):
+    calls: list[int] = []
+
+    def idle() -> bool:
+        calls.append(1)
+        return False
+
+    proc = _spawn_sleeper(300)
+    start = time.monotonic()
+    dog = Watchdog(
+        proc,
+        cap_secs=5.0,
+        grace_secs=0.3,
+        idle_secs=0.2,
+        activity_path=_stale_activity(tmp_path),
+        poll_secs=0.05,
+        busy_fn=idle,
+    ).start()
+    proc.wait(timeout=10)
+    elapsed = time.monotonic() - start
+    dog.cancel()
+    assert dog.fired is True
+    assert dog.fired_reason == "idle"
+    assert proc.returncode == -signal.SIGTERM
+    assert calls
+    assert elapsed < 2.0  # well before the 5s cap
+    err = capsys.readouterr().err
+    assert "before the 5s wall-clock cap; SIGTERM (idle)." in err
+
+
+def test_no_idle_kill_while_tool_use_open(tmp_path, capsys):
+    calls: list[int] = []
+
+    def busy() -> bool:
+        calls.append(1)
+        return True
+
+    proc = _spawn_sleeper(300)
+    start = time.monotonic()
+    dog = Watchdog(
+        proc,
+        cap_secs=1.0,
+        grace_secs=0.3,
+        idle_secs=0.1,
+        activity_path=_stale_activity(tmp_path),
+        poll_secs=0.05,
+        busy_fn=busy,
+    ).start()
+    # Silent for far longer than idle_secs, yet still alive short of the cap.
+    with pytest.raises(subprocess.TimeoutExpired):
+        proc.wait(timeout=0.7)
+    proc.wait(timeout=10)
+    elapsed = time.monotonic() - start
+    dog.cancel()
+    assert calls
+    assert elapsed >= 1.0
+    # Past the cap the unchanged post-cap guard takes over.
+    assert dog.fired is True
+    err = capsys.readouterr().err
+    assert "before the" not in err
+    assert "past the 1s wall-clock cap; SIGTERM (idle)." in err
+
+
+def test_idle_zero_keeps_cap_only(tmp_path):
+    calls: list[int] = []
+
+    def idle() -> bool:
+        calls.append(1)
+        return False
+
+    proc = _spawn_sleeper(300)
+    start = time.monotonic()
+    dog = Watchdog(
+        proc,
+        cap_secs=0.5,
+        grace_secs=5,
+        idle_secs=0.0,
+        activity_path=_stale_activity(tmp_path),
+        poll_secs=0.05,
+        busy_fn=idle,
+    ).start()
+    proc.wait(timeout=10)
+    elapsed = time.monotonic() - start
+    dog.cancel()
+    assert dog.fired is True
+    assert dog.fired_reason == "cap"
+    assert proc.returncode == -signal.SIGTERM
+    assert elapsed >= 0.5
+    assert calls == []
+
+
 # session_busy: a session is busy while a tool_use has no tool_result yet, or
 # while the last background_tasks_changed event still lists live tasks.
 

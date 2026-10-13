@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cli.handoff_request import request_wrapper_handoff
-from cli.watchdog import Watchdog
+from cli.watchdog import Watchdog, session_busy
 
 _SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
 RENDER_STREAM = _SCRIPTS_DIR / "render_stream.py"
@@ -257,7 +257,9 @@ def _run_session(
     `warn_secs` of the cap the watchdog writes the hand-off marker beside
     the log, so a session at a task boundary leaves before the cap. Past
     the cap, `idle_secs` of no growth in the tee'd log (used as the
-    watchdog's activity signal) is tolerated before it fires."""
+    watchdog's activity signal) is tolerated before it fires; before the
+    cap, the same silence fires only while `session_busy` sees nothing in
+    flight."""
     autopilot_dir = log_path.parent
     with open(log_path, "wb") as log:
         proc = subprocess.Popen(
@@ -278,6 +280,7 @@ def _run_session(
             idle_secs=idle_secs,
             activity_path=str(log_path),
             poll_secs=_IDLE_POLL_SECS,
+            busy_fn=lambda: session_busy(str(log_path)),
         ).start()
         assert proc.stdout is not None
         try:

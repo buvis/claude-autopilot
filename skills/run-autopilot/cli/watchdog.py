@@ -103,7 +103,9 @@ class Watchdog:
     When `activity_path` is given, a session still running past the cap
     is not signaled immediately: it is left alone as long as the path's
     mtime keeps advancing, up to `idle_secs` of silence or twice the cap
-    (the ceiling), whichever comes first.
+    (the ceiling), whichever comes first. With `busy_fn` also given, the
+    same `idle_secs` of silence fires "idle" before the cap too, but only
+    while `busy_fn()` returns False (no tool call or background task open).
     """
 
     def __init__(
@@ -116,6 +118,7 @@ class Watchdog:
         idle_secs: float = 0.0,
         activity_path: str | None = None,
         poll_secs: float = 60.0,
+        busy_fn: Callable[[], bool] | None = None,
     ) -> None:
         self._proc = proc
         self._cap = cap_secs
@@ -125,6 +128,7 @@ class Watchdog:
         self._idle = idle_secs
         self._activity_path = activity_path
         self._poll = poll_secs
+        self._busy_fn = busy_fn
         self._cancelled = threading.Event()
         self._thread = threading.Thread(target=self._watch, daemon=True)
         self.fired = False
@@ -145,11 +149,8 @@ class Watchdog:
     def _watch(self) -> None:
         remaining = self._cap
         if self._on_warn is not None and 0 < self._warn < self._cap:
-            try:
-                self._proc.wait(timeout=self._cap - self._warn)
-                return  # exited before the warning window: never signaled
-            except subprocess.TimeoutExpired:
-                pass
+            if self._wait_under_cap(self._cap - self._warn):
+                return  # exited before the warning window, or fired idle
             if self._cancelled.is_set():
                 return
             self.warned = True
@@ -163,11 +164,8 @@ class Watchdog:
             except Exception as err:  # the cap must still fire
                 print(f"\nautoclaude: cap warning failed: {err}", file=sys.stderr)
             remaining = self._warn
-        try:
-            self._proc.wait(timeout=remaining)
-            return  # exited under the cap: never signaled
-        except subprocess.TimeoutExpired:
-            pass
+        if self._wait_under_cap(remaining):
+            return  # exited under the cap (never signaled), or fired idle
         if self._cancelled.is_set():
             return
 
@@ -177,6 +175,50 @@ class Watchdog:
         self.fired_reason = reason
         self.fired = True
         self._terminate_and_escalate()
+
+    def _wait_under_cap(self, timeout: float) -> bool:
+        """Wait up to `timeout` for the child, short of the cap. True when
+        the watchdog must stop here: the child exited, the watchdog was
+        cancelled mid-poll, or the pre-cap idle guard fired. False when the
+        timeout elapsed.
+
+        Without idle detection (no activity path, `idle_secs` <= 0, or no
+        `busy_fn`) this is one plain wait, exactly as before. With it, the
+        wait is sliced into `poll_secs` polls, and a session silent for
+        `idle_secs` whose `busy_fn` reports nothing in flight fires "idle".
+        """
+        activity_path = self._activity_path
+        busy_fn = self._busy_fn
+        if activity_path is None or self._idle <= 0 or busy_fn is None:
+            try:
+                self._proc.wait(timeout=timeout)
+                return True
+            except subprocess.TimeoutExpired:
+                return False
+        deadline = time.monotonic() + timeout
+        while True:
+            left = deadline - time.monotonic()
+            if left <= 0:
+                return False
+            try:
+                self._proc.wait(timeout=min(self._poll, left))
+                return True
+            except subprocess.TimeoutExpired:
+                pass
+            if self._cancelled.is_set():
+                return True
+            mtime = self._activity_mtime(activity_path)
+            silence = time.time() - mtime if mtime is not None else float("inf")
+            if silence >= self._idle and busy_fn() is False:
+                print(
+                    f"\nautoclaude: session silent for {silence:g}s with nothing in "
+                    f"flight, before the {self._cap:g}s wall-clock cap; SIGTERM (idle).",
+                    file=sys.stderr,
+                )
+                self.fired_reason = "idle"
+                self.fired = True
+                self._terminate_and_escalate()
+                return True
 
     def _determine_fire_reason(self) -> str | None:
         """Which reason (if any) the cap fires under, printing its message.
