@@ -306,8 +306,8 @@ def _catchup(
     base = batch.get("catchup_head_sha")
 
     def _loop_moved() -> bool:
-        return isinstance(base, str) and loop_only(
-            root, base, enter_io.loop_committer(batch["id"]),
+        return isinstance(base, str) and bool(base) and loop_only(
+            root, base, enter_io.loop_committer(batch.get("id")),
         )
 
     if mode == "force" and not (isinstance(tasks, list) and tasks):
