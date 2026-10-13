@@ -1798,11 +1798,11 @@ def _run_record_store(args: argparse.Namespace) -> int:
 
 
 def _add_catchup_probe(subparsers) -> None:
-    subparsers.add_parser("catchup-probe").add_argument("--state", required=True)
+    subparsers.add_parser("catchup-probe").add_argument("--state")
 
 
 def _run_catchup_probe(args: argparse.Namespace) -> int:
-    print(json.dumps(catchup_probe.probe(Path(args.state))))
+    print(json.dumps(catchup_probe.probe(_resolve_state_path(args.state))))
     return 0
 
 

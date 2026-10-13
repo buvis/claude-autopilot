@@ -116,6 +116,23 @@ def unscripted_enter(*args, **kwargs) -> dict:
     raise state.StateError("loop harness: pre-launch enter not scripted")
 
 
+def _restoring_committer_name(entry):
+    """Loop._launch writes GIT_COMMITTER_NAME into the process env on purpose;
+    undo it when the harness-driven run returns so later tests don't inherit it."""
+
+    def wrapped(*args, **kwargs):
+        before = os.environ.get("GIT_COMMITTER_NAME")
+        try:
+            return entry(*args, **kwargs)
+        finally:
+            if before is None:
+                os.environ.pop("GIT_COMMITTER_NAME", None)
+            else:
+                os.environ["GIT_COMMITTER_NAME"] = before
+
+    return wrapped
+
+
 def make_loop(tmp_path: Path, steps, env: dict | None = None, **kwargs):
     repo = tmp_path / "repo"
     ap_dir = repo / "docs" / "dev" / "project-management" / "autopilot"
@@ -147,6 +164,8 @@ def make_loop(tmp_path: Path, steps, env: dict | None = None, **kwargs):
         err=err,
         **kwargs,
     )
+    for entry in ("run", "run_once"):
+        setattr(lp, entry, _restoring_committer_name(getattr(lp, entry)))
     lp._test = {
         "ap_dir": ap_dir,
         "spawn": spawn,

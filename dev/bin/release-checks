@@ -298,6 +298,7 @@ run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_enter_prose.py \
   skills/run-autopilot/cli/test_enter_guards.py \
   skills/run-autopilot/cli/test_enter_decisions.py \
+  skills/run-autopilot/cli/test_enter_loop_only.py \
   skills/run-autopilot/cli/test_enter_cli.py \
   skills/run-autopilot/cli/test_catchup_probe.py
 

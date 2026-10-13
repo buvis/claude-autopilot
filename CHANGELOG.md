@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **run-autopilot**: `autopilot catchup-probe` now takes `--state` as optional and resolves the state path by walking up from cwd when it is omitted, so the documented bare invocation probes instead of failing on a missing required flag
 - **run-autopilot**: the review gate now catches four more ways a critical row hid from the findings cross-check - a severity-content or marker-variant flag on a wordless/bracket/fullwidth row, a tab- or 4-space-indented fence that CommonMark reads as a code block rather than a fence, a closed fence that hides the real findings-table header behind a worked example, and an unescaped `\n`/ANSI control character in the boundary-refusal line that could forge extra log output
 - **run-autopilot**: the loop registry, orphan sweep, tracon discovery and the codex heartbeat read process facts through sysctl, libproc and pgrep instead of setuid ps, so they work inside a seatbelt sandbox and the release gate no longer reads nine failures there
 - **work**: the ambiguity check no longer tells a loop session to stop and ask the user; in loop mode it records the simplest safe assumption with `autopilot defer` and continues, so a build session cannot end its turn on a question nobody answers
