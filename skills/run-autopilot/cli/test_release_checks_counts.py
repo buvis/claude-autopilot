@@ -256,3 +256,45 @@ def test_every_review_verb_test_file_is_listed() -> None:
         f"{_GLOB_DIR}: {sorted(on_disk - listed)} not in _REVIEW_VERB_TEST_FILES; "
         f"_REVIEW_VERB_TEST_FILES: {sorted(listed - on_disk)} not on disk"
     )
+
+
+def test_release_refuses_while_a_held_prd_blocks_it(tmp_path: Path) -> None:
+    """dev/bin/release derives REPO_ROOT purely from $0's own location
+    (REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"), so the only fixture
+    that works is a real copy of the script at <fixture>/dev/bin/release,
+    with a stub claude-plugins sibling at <fixture's parent>/claude-plugins.
+    """
+    fixture_root = tmp_path / "repo"
+    bin_dir = fixture_root / "dev" / "bin"
+    bin_dir.mkdir(parents=True)
+    release_src = (_ROOT / "dev" / "bin" / "release").read_text(encoding="utf-8")
+    release_copy = bin_dir / "release"
+    release_copy.write_text(release_src, encoding="utf-8")
+    release_copy.chmod(0o755)
+
+    plugins_dir = tmp_path / "claude-plugins" / "scripts"
+    plugins_dir.mkdir(parents=True)
+    sentinel = tmp_path / "release-plugin-ran"
+    stub = plugins_dir / "release-plugin"
+    stub.write_text(f"#!/usr/bin/env bash\ntouch {sentinel}\n", encoding="utf-8")
+    stub.chmod(0o755)
+
+    for lifecycle_dir, filename in (("hold", "0001-x.md"), ("wip", "0002-y.md")):
+        prd_dir = fixture_root / "docs" / "dev" / "project-management" / "prds" / lifecycle_dir
+        prd_dir.mkdir(parents=True, exist_ok=True)
+        (prd_dir / filename).write_text(
+            "---\n---\n# A PRD\n\nThe next release is blocked on this PRD.\n",
+            encoding="utf-8",
+        )
+
+        result = subprocess.run(
+            [str(release_copy)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 1, (lifecycle_dir, result.stdout, result.stderr)
+        assert not sentinel.exists(), lifecycle_dir
+        assert str(prd_dir / filename) in result.stderr, (lifecycle_dir, result.stderr)
+
+        (prd_dir / filename).unlink()

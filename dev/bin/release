@@ -13,6 +13,13 @@ if [ ! -x "$RELEASE" ]; then
   exit 1
 fi
 
+BLOCKED="$(grep -rl "release is blocked" "$REPO_ROOT/docs/dev/project-management/prds/hold" "$REPO_ROOT/docs/dev/project-management/prds/wip" 2>/dev/null || true)"
+if [ -n "$BLOCKED" ]; then
+  echo "Error: release blocked by:" >&2
+  echo "$BLOCKED" >&2
+  exit 1
+fi
+
 echo "[release] pulling latest claude-plugins (shared script + marketplace)"
 git -C "$CENTRAL_REPO" pull --ff-only
 
