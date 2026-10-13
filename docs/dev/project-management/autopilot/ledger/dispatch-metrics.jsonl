@@ -4226,3 +4226,8 @@
 {"id":"34bf5cab","ended_at":1791927040,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"id":"23f970de","ended_at":1791927040,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"kind":"handoff","site":"review","edge":"leave","at":1791927040,"phase":"review","prd":"00283-loop-catchup-v1.md"}
+{"id":"b57ce978","kind":"pat","task":"5","queued_at":1791927260,"prompt_bytes":58109}
+{"id":"d8775204","kind":"pat","task":"5","queued_at":1791927384,"prompt_bytes":3202}
+{"id":"b57ce978","ended_at":1791927498,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"d8775204","ended_at":1791927498,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"kind":"handoff","site":"review","edge":"leave","at":1791927498,"phase":"review","prd":"00283-loop-catchup-v1.md"}
