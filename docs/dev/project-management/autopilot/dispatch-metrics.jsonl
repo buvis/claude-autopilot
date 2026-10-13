@@ -4210,3 +4210,5 @@
 {"id":"e3e86a15","ended_at":1791921505,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"id":"0e75fd58","ended_at":1791921505,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791921505,"phase":"build","prd":"00283-loop-catchup-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791921524,"phase":"build","prd":"00283-loop-catchup-v1.md"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791922716,"phase":"review","prd":"00283-loop-catchup-v1.md"}
