@@ -29,24 +29,11 @@ import pytest
 HOOKS = Path(__file__).resolve().parent
 GUARD = HOOKS / "guard_phase_delegation.py"
 FIXTURES = HOOKS / "fixtures" / "phase_delegation"
-CORPUS = HOOKS.parent / "docs" / "dev" / "tmp"
 REASON = "hooks/guard_phase_delegation.py denied this Agent call."
 
 
-def _self_referential(p: Path) -> bool:
-    # This PRD's own dispatch prompts (Tess, Devon, Ivan, their retries)
-    # quote the denied phrases verbatim ("guard_phase_delegation") to
-    # specify the hook's contract - not a real delegation attempt, so they
-    # are excluded rather than counted as false positives. Content-only
-    # check: every file this ever excluded (dispatch-tess-1[.txt/-strengthen],
-    # dispatch-ivan-1, dispatch-tess-3, dispatch-ivan-3) names the module
-    # literally, so no hard-coded filename list is needed.
-    return "guard_phase_delegation" in p.read_text(encoding="utf-8")
-
-
 def _allow_corpus() -> list[Path]:
-    real = sorted(p for p in CORPUS.glob("dispatch-*.txt") if not _self_referential(p))
-    return real or sorted((FIXTURES / "allowed").glob("*.txt"))
+    return sorted((FIXTURES / "allowed").glob("*.txt"))
 
 
 def _denied() -> list[Path]:
@@ -106,6 +93,20 @@ def test_every_denied_fixture_is_denied() -> None:
     for name, result in results.items():
         assert REASON in result.stderr, name
         assert "with the Skill tool in THIS session" in result.stderr, name
+
+
+def test_allow_corpus_ignores_scratch_dispatch_files() -> None:
+    # A scratch dispatch-*.txt under docs/dev/tmp/ must never change the
+    # committed allow corpus - the live record must match a clean clone's.
+    before = _allow_corpus()
+    scratch = HOOKS.parent / "docs" / "dev" / "tmp" / "dispatch-zzz-scratch-test.txt"
+    scratch.parent.mkdir(parents=True, exist_ok=True)
+    scratch.write_text("scratch subagent\nRun the work phase for PRD 00300 now.\n", encoding="utf-8")
+    try:
+        assert _allow_corpus() == before
+    finally:
+        scratch.unlink()
+    assert _allow_corpus() == before
 
 
 @pytest.mark.parametrize("prompt_file", _allow_corpus(), ids=lambda p: p.name)
