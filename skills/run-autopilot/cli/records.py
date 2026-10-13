@@ -97,6 +97,11 @@ PER_PRD_RESET_FIELDS = (
     # not re-derived at Phase 0 like its lane siblings below.
     "lane_escalated",
     "prd_budget_since",
+    # PRD 00282: ephemeral loop-to-session handoff, normally consumed (and
+    # deleted) by the launched session's `autopilot enter` within the same
+    # PRD selection - this is defense-in-depth against a crash between the
+    # loop's write and that consume.
+    "loop_entry",
 )
 
 # NOT reset here, deliberately:
