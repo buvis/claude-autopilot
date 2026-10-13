@@ -142,18 +142,15 @@ _BUDGET_DEFAULT_USD = 300.0
 def budget_usd_for(env: dict) -> float:
     """`_AUTOPILOT_PRD_BUDGET_USD`: the per-PRD dollar budget. Absent or
     unparseable keeps the default; `0` disables the bound."""
-    raw = env.get("_AUTOPILOT_PRD_BUDGET_USD")
-    if raw is None:
-        return _BUDGET_DEFAULT_USD
     try:
-        return float(raw)
-    except (TypeError, ValueError):
+        return float(env.get("_AUTOPILOT_PRD_BUDGET_USD", _BUDGET_DEFAULT_USD))
+    except ValueError:
         return _BUDGET_DEFAULT_USD
 
 
 def _iso_epoch(stamp) -> float | None:
     """An ISO UTC stamp (`2026-09-29T12:00:00Z`) as epoch seconds, or None."""
-    if not isinstance(stamp, str) or not stamp:
+    if not isinstance(stamp, str):
         return None
     try:
         parsed = _dt.datetime.fromisoformat(stamp.replace("Z", "+00:00"))
@@ -185,7 +182,7 @@ def prd_spend_since(metrics_path: Path, prd: str, since: float) -> float:
                 if _is_number(ts) and _is_number(cost) and ts >= since:
                     total += cost
     except OSError:
-        return total
+        pass
     return total
 
 
