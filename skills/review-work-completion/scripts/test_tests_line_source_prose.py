@@ -42,7 +42,7 @@ def test_step_6_falls_back_to_autopilot_verify_for_non_counts_lines() -> None:
 REUSE_RULE_PATTERNS = [
     r"sha\b.{0,40}(==|equals|matches).{0,40}HEAD",
     r"sha\b.{0,40}\bis\b.{0,40}\bHEAD\b",
-    r"\bHEAD\b.{0,40}(==|equals|matches|is).{0,40}sha\b",
+    r"\bHEAD\b.{0,40}(==|equals|matches|\bis\b).{0,40}sha\b",
     r"counts?\b.{0,40}non-?null",
     r"non-?null.{0,40}counts?\b",
     r"three counts",
