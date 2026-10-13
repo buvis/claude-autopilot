@@ -167,8 +167,14 @@ def _tests_line_slice() -> str:
     # every token below also occurs elsewhere in the skill, so a whole-file
     # search passes even when this paragraph loses the rule it is meant to pin.
     review = _REVIEW_SKILL.read_text()
+    assert "### 6. " in review, "review-work-completion/SKILL.md lost its step 6 heading"
     step_6 = review.split("### 6. ", 1)[1].split("\n### ", 1)[0]
-    after = step_6.split("**Compose the `Tests:` line.**", 1)[1]
+    anchor = "**Compose the `Tests:` line.**"
+    assert anchor in step_6, (
+        "review-work-completion/SKILL.md step 6 no longer has the "
+        "'Compose the Tests: line.' paragraph this pin reads."
+    )
+    after = step_6.split(anchor, 1)[1]
     next_block = re.search(r"\n\*\*[^*\n]+\.\*\*", after)
     return after[: next_block.start()] if next_block else after
 
