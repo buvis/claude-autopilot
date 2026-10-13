@@ -138,8 +138,10 @@ _REF_CELL_RE = re.compile(r"^R\d+$", re.IGNORECASE)
 _CONSENSUS_CELL_RE = re.compile(r"^\[\d+/\d+\]$")
 # Any `[m/n]` anywhere on a line: the token every findings row carries.
 _CONSENSUS_TOKEN_RE = re.compile(r"\[\d+/\d+\]")
-# A fence opener; its info string (```markdown) is allowed.
-_FENCE_RE = re.compile(r"^(`{3,}|~{3,})")
+# A fence opener or closer, read off the RAW line: at most 3 leading spaces
+# (CommonMark's ceiling; a tab or a 4th space makes an indented code block, not
+# a fence), then the run. Trailing text (```markdown) is allowed.
+_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 # `| Consensus | Severity | Issue | File | Task | Found By |`
 _TABLE_HEADER_RE = re.compile(r"^\|(.+)\|\s*$", re.MULTILINE)
 # The three columns a findings table must name; a header missing any of them
@@ -517,9 +519,10 @@ def _unbacked_verdict(
 def _unfenced(text: str) -> str:
     """`text` with every line of a CLOSED fence blanked, opener and closer
     included, so a quoted example is no heading and no row while line numbers
-    hold. The stripped line decides: a fence closes only on a line whose
-    stripped text starts with a run of its own character at least as long as
-    the opener; one that never closes quotes nothing - and stops the scan
+    hold. The raw line decides, through `_FENCE_RE`: a fence opens or closes
+    only on a line indented at most 3 spaces, and closes only on a run of its
+    own character at least as long as the opener's (trailing text allowed);
+    one that never closes quotes nothing - and stops the scan
     right there, so a later run of the fence character further down (which
     would otherwise read as its own, separate fence) cannot blank content
     that is really just unclosed-fence text."""
@@ -527,12 +530,13 @@ def _unfenced(text: str) -> str:
     live = list(lines)
     i = 0
     while i < len(lines):
-        opener = _FENCE_RE.match(lines[i].strip())
+        opener = _FENCE_RE.match(lines[i])
         if opener is not None:
             run = opener.group(1)
             closed = False
             for j in range(i + 1, len(lines)):
-                if lines[j].strip().startswith(run):
+                closer = _FENCE_RE.match(lines[j])
+                if closer is not None and closer.group(1).startswith(run):
                     live[i : j + 1] = [""] * (j + 1 - i)
                     i = j
                     closed = True
