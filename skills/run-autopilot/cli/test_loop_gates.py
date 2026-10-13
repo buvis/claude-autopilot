@@ -544,6 +544,86 @@ def test_stale_loop_entry_is_dropped(tmp_path, monkeypatch, capsys):
     assert rows == [(_PRD, "build")]
 
 
+def test_manual_prd_arg_skips_the_replay_even_with_a_matching_entry(
+    tmp_path, monkeypatch, capsys
+):
+    # Review finding 6 (PRD 00282, task 9): a manual `autopilot enter --prd
+    # X` must run enter() for real even when a loop_entry for the CURRENT
+    # prd waits to be replayed - args.prd is not None is the explicit-
+    # selection signal that overrides the loop's own pre-run, matching
+    # _replay_loop_entry's `prd_arg is not None` gate.
+    rows = _count_resume_rows(monkeypatch)
+    ap = tmp_path / "docs" / "dev" / "project-management" / "autopilot"
+    ap.mkdir(parents=True)
+    matching = {
+        "stop": None,
+        "detail": "",
+        "prd": _PRD,
+        "catchup": "full",
+        "design": "skip",
+    }
+    _build_tree(ap, loop_entry={"entered_by": "loop", "prd": _PRD, "result": matching})
+
+    assert cli_main.main(["enter", "--state", str(ap / "state.json"), "--prd", _PRD]) == 0
+
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["prd"] == _PRD
+    assert "loop_entry" not in _read_state(ap)
+    # enter() ran for real (not the replayed line): it recorded its own
+    # resume row, which a pure replay never does.
+    assert rows == [(_PRD, "build")]
+
+
+def test_loop_entry_delete_failure_halts_enter(tmp_path, monkeypatch, capsys):
+    # Review finding 6: a failed loop_entry delete (statectl.mutate
+    # raising) must surface as exit 2, not fall through to enter() over an
+    # entry it could not clear.
+    ap = tmp_path / "docs" / "dev" / "project-management" / "autopilot"
+    ap.mkdir(parents=True)
+    stale = {
+        "stop": None,
+        "detail": "",
+        "prd": _PRD,
+        "catchup": "delta",
+        "design": "reuse",
+    }
+    _build_tree(ap, loop_entry={"entered_by": "loop", "prd": _PRD, "result": stale})
+
+    def refuse(path, apply):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(statectl, "mutate", refuse)
+
+    assert cli_main.main(["enter", "--state", str(ap / "state.json")]) == 2
+    assert "enter failed: loop_entry delete: disk full" in capsys.readouterr().err
+
+
+def test_pre_enter_utime_failure_is_reported(tmp_path, monkeypatch):
+    # Review finding 6: the loop_entry write succeeding but the post-write
+    # backdate (os.utime) failing for a reason other than a vanished file
+    # (FileNotFoundError, already handled) must surface on stderr instead
+    # of disappearing - a touched-but-unbackdated state.json would dodge
+    # the no-progress ladder on a session that dies at once.
+    lp = make_loop(tmp_path, [], enter_fn=_entered)
+    ap = lp._test["ap_dir"]
+    _build_tree(ap)
+    real_utime = os.utime
+
+    def fail_utime(path, times):
+        if Path(path) == ap / "state.json":
+            raise PermissionError("utime denied")
+        real_utime(path, times)
+
+    monkeypatch.setattr(os, "utime", fail_utime)
+
+    lp._pre_enter(ap)
+
+    assert "loop_entry" in _read_state(ap)
+    assert _pre_enter_lines(lp) == [
+        "autoclaude: pre-launch enter: state.json backdate failed: utime denied",
+    ]
+
+
 def test_pre_enter_failure_launches_without_entry(tmp_path):
     seen: dict = {}
 
