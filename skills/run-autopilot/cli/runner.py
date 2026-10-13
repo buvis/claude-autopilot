@@ -110,9 +110,10 @@ def warn_secs_for(env: dict) -> int:
 
 def idle_secs_for(env: dict) -> int:
     """`_AUTOPILOT_SESSION_IDLE`: how many seconds of silence (no growth in
-    the tee'd log) past the wall-clock cap the watchdog tolerates before
-    firing. 0 restores kill-at-cap; an unset or non-integer value keeps
-    the default."""
+    the tee'd log) the watchdog tolerates before firing, at any point after
+    launch (not only past the wall-clock cap) as long as nothing is in
+    flight. 0 restores kill-at-cap-only; an unset or non-integer value
+    keeps the default."""
     raw = env.get("_AUTOPILOT_SESSION_IDLE")
     if raw is None:
         return DEFAULT_IDLE_SECS
