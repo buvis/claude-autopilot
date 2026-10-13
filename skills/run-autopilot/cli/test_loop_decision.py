@@ -501,7 +501,10 @@ def test_yield_at_warning_kill_switch_short_circuits_before_reading_the_log(
         loop_decision.usage_limit, "detect_warning_from_log", must_not_read
     )
     result, decision = _yield_probe(
-        tmp_path, monkeypatch, oldest=1, env={"_AUTOPILOT_NO_YIELD": "1"}
+        tmp_path,
+        monkeypatch,
+        oldest=1,
+        env={"_AUTOPILOT_NO_YIELD": "1"},
     )
     assert result is False
     assert decision["limit_wait"] is None
@@ -528,9 +531,7 @@ def test_beyond_cap_warning_line_names_the_loop_it_did_not_yield_to(
     ap = lp._test["ap_dir"]
     write_log(ap, _warning_event(int(clock.now) + 600))
     monkeypatch.setattr(lp, "_oldest_live_loop_pid", lambda: 1)
-    lp._yield_at_warning(
-        {"signal": "continue", "limit_wait": None}, ap / "last-session.log"
-    )
+    lp._yield_at_warning({"signal": "continue", "limit_wait": None}, ap / "last-session.log")
     err = lp._test["err"].getvalue()
     assert "beyond _AUTOPILOT_LIMIT_WAIT_MAX; not yielding the window to loop 1" in err
 
