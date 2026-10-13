@@ -69,3 +69,20 @@ Ivan (implementor):
 - This session's own cost is read from `last-session.log` (not from `loop-metrics.jsonl`) because `_budget_bound` runs before `_append_metrics` writes this session's row.
 - A negative budget value is used as given at first; a later review round changed this to a nan/inf/negative-rejects-to-default guard.
 - (Review round) the bound now no-ops when `decision.get("limit_wait")` is set, so a budget crossing never drops a scheduled usage-limit sleep (the HIGH finding: parking there risks relaunching straight into a still-live limit and halting the loop on an unconsumed park marker).
+
+## 5: loop: instant-exit signal and then-dispatch
+
+Tess (test author):
+
+- `ts_start` is read at session launch, before `ScriptedSpawn`'s own +1s, so a scripted step's wall advance plus that 1s is the session's effective wall time (a 29s step is exactly the 30s boundary).
+- The metrics row for an instant-exit session records `signal: "instant_exit"`; the contract does not pin whether `then`/`limit_wait` also ride along on that row, so neither is asserted.
+- The no-progress path's "live usage-limit rejection event" is exercised through the harness's injected `detect_limit_fn` (the real `usage_limit.detect_from_log`), not the harness's default stub, which always returns `None`.
+- (Devon's weak point 6, "stand-down") no test fixture for a stand-down marker was in the listed files, so this case was covered via the `paused` outcome (a state with `pause_reason` set) instead - both are already-decided, never-relabeled signals per the contract.
+- Line-length target used while trimming the file toward the 800-line cap is 88 (ruff's default; no ruff config exists in the repo).
+
+Ivan (implementor):
+
+- "Billed" is `isinstance(cost, (int, float)) and not isinstance(cost, bool) and cost > 0`, matching the existing `_is_number` helper already used elsewhere in the module.
+- `ts_start` is the loop clock value at session launch, as the contract states; this could not be verified directly since `cli/loop.py` (the caller) was outside the task's file allowlist, but the `wall_exactly_30s`/`wall_29s` boundary cases passing is consistent with it.
+
+Orchestrator note (not an implementor assumption, kept for the record): Devon broke the first draft of the tests with 7 confirmed weak points (threshold edges, a missing `state_touched` check, first-vs-last result event, missing done/paused/died exclusions, no-result-event sessions); Tess's strengthen pass fixed all 7 and marked 2 points in-contract (the `continue`-side of `state_touched`, and the metrics `limit_wait` field, which is out of this task's file scope). The strengthened test file sits at 820 lines against the 800-line cap; this is recorded as a sanctioned `style_gate: failed` rather than split, because splitting would orphan tests from the task's own pinned acceptance command (`pytest test_loop_decision.py -k instant_exit`).
