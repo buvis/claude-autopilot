@@ -35,7 +35,8 @@ Exposes:
     do_park(state_path, *, prds_dir, autopilot_dir) -> int
         The Phase 0 park-request handler as one callable: consumes
         `<autopilot_dir>/park-requested`, reconciles any pending stall_op
-        first, then parks via `do_stall(site="wrapper_died", ...)`. Never
+        first, then parks via `do_stall(site=<marker's site, "wrapper_died"
+        or "budget">, ...)`. Never
         writes state itself - every effect rides through do_stall's
         transactions. See test_records_park.py's module docstring for the
         full marker/stall_op match matrix and exit-code contract.
@@ -577,10 +578,15 @@ def _parse_marker(marker_path: Path) -> str | dict | None:
         return "malformed"
     if not isinstance(raw, dict) or not raw.get("prd"):
         return "malformed"
+    # Any site other than "budget" takes the wrapper_died path - normalize
+    # an unknown/absent value instead of passing it through raw, or a park
+    # marker's site could collide with an unrelated pending stall_op site
+    # (cap_critical, design_gate) and skip the resume reconcile.
+    site = raw.get("site")
     return {
         "prd": raw["prd"],
         "reason": raw.get("reason", ""),
-        "site": raw.get("site", "wrapper_died"),
+        "site": site if site == "budget" else "wrapper_died",
     }
 
 
