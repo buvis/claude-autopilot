@@ -187,6 +187,8 @@ run_pytest uv run --no-project --with pytest --with pytest-xdist python -m pytes
   skills/run-autopilot/cli/test_pause.py \
   skills/run-autopilot/cli/test_usage_limit.py \
   skills/run-autopilot/cli/test_loop_decision.py \
+  skills/run-autopilot/cli/test_loop_decision_table.py \
+  skills/run-autopilot/cli/test_loop_budget.py \
   skills/run-autopilot/cli/test_brief.py \
   skills/run-autopilot/cli/test_runner.py \
   skills/run-autopilot/cli/test_watchdog.py \
@@ -383,6 +385,7 @@ run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_records_failure_paths.py \
   skills/run-autopilot/cli/test_records_import_hygiene.py \
   skills/run-autopilot/cli/test_records_park.py \
+  skills/run-autopilot/cli/test_records_park_wrapper_died.py \
   skills/run-autopilot/cli/test_records_stall.py \
   skills/run-autopilot/cli/test_render_attempt_ledger.py \
   skills/run-autopilot/cli/test_render_autonomous_blank_rows.py \
