@@ -4036,3 +4036,15 @@
 {"id":"6fefed13","ended_at":1791875359,"elapsed_s":312,"outcome":"ok","detail":null}
 {"id":"64a2e920","ended_at":1791875359,"elapsed_s":2101,"outcome":"error","detail":null}
 {"kind":"handoff","site":"review","edge":"leave","at":1791875413,"phase":"review","prd":"00277-catch-critical-rows-in-every-shape-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1791875477,"phase":"review","prd":"00277-catch-critical-rows-in-every-shape-v1.md"}
+{"id":"516b1876","kind":"tess","task":"7","queued_at":1791875649,"prompt_bytes":53933}
+{"id":"872a2fac","kind":"tess","task":"7","queued_at":1791875758,"prompt_bytes":13111}
+{"id":"872a2fac","ended_at":1791876141,"elapsed_s":383,"outcome":"ok","detail":null}
+{"id":"8a99fb45","kind":"devon","task":"7","queued_at":1791876195,"prompt_bytes":4076}
+{"id":"8a99fb45","ended_at":1791876842,"elapsed_s":647,"outcome":"ok","detail":null}
+{"id":"0f196030","kind":"tess","task":"7","queued_at":1791876878,"prompt_bytes":6666}
+{"id":"0f196030","ended_at":1791877377,"elapsed_s":499,"outcome":"ok","detail":null}
+{"id":"c025fa48","kind":"ivan","task":"7","queued_at":1791877432,"prompt_bytes":30942}
+{"id":"c025fa48","ended_at":1791878000,"elapsed_s":568,"outcome":"ok","detail":null}
+{"id":"516b1876","ended_at":1791878295,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791878295,"phase":"build","prd":"00277-catch-critical-rows-in-every-shape-v1.md"}
