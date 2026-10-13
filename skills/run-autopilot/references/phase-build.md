@@ -287,7 +287,7 @@ The capsule (`docs/dev/project-management/meta/project-capsule.md`) is the persi
 
 `state.batch.catchup_completed_at` (ISO 8601) and `state.batch.catchup_head_sha` (current branch HEAD when last full catchup completed) record the cache.
 
-**First-entry `force` rule (checked before the conditions below).** PRD frontmatter `catchup: force` overrides the cache at the PRD's first entry only, and ONLY when `state.tasks` is still empty or absent (a `state.tasks` that is not a list reads as absent). On that first entry, conditions 1-3 do not apply, condition 2's freshness check included: the result is delta iff a `batch.catchup_head_sha` is recorded AND every commit since it has committer `autopilot-loop/<batch.id>` (loop-only commits), full otherwise (including no recorded SHA, or a git failure).
+**First-entry `force` rule (checked before the conditions below).** PRD frontmatter `catchup: force` overrides the cache at the PRD's first entry only, and ONLY when `state.tasks` is still empty or absent. A `state.tasks` that is not a list reads as absent (full catchup, the safe side). On that first entry, conditions 1-3 do not apply, condition 2's freshness check included: the result is delta iff a `batch.catchup_head_sha` is recorded AND every commit since it has committer `autopilot-loop/<batch.id>` (loop-only commits), full otherwise (including no recorded SHA, or a git failure).
 
 **Skip the full catchup and run a delta refresh** when ALL of the following hold:
 
