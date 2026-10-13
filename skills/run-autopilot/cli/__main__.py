@@ -73,14 +73,18 @@ Subcommands:
         verification.run_gate() (PRD 00270): resolves HEAD via `git
         rev-parse HEAD` in repo_root (default cwd) before anything else -
         failure exits 2 with no JSON line. Default log path
-        docs/dev/tmp/gate-<sha[:7]>.log (relative to repo_root). Prints one
-        JSON line: the run_gate() result dict plus "sha" and "log". Exit 0
-        only when the gate ran and exited 0 (not dirty, not timed out);
-        exit 1 when it never produced a pass (dirty tree OR timed out -
-        same exit code, distinguishable via the printed "dirty"/"timed_out"
-        keys) or exited non-zero; exit 2 when HEAD cannot be resolved or
-        the log file cannot be opened for writing (still prints one JSON
-        line with "error" first).
+        docs/dev/tmp/gate-<sha[:7]>.log (relative to repo_root); a relative
+        --log also joins repo_root. Prints one JSON line: the run_gate()
+        result dict plus "sha" and "log". Exit 0 only when the gate ran and
+        exited 0 (not dirty, not timed out); exit 3 when it exited 0 on a
+        clean tree but wrote no record; exit 1 when it never produced a pass
+        (dirty tree OR timed out - same exit code, distinguishable via the
+        printed "dirty"/"timed_out" keys) or exited non-zero; exit 2 when
+        HEAD cannot be resolved, when --log (symlinks resolved) lands inside
+        <repo_root>/docs/dev/project-management or on a git-tracked file
+        (stderr only, no JSON line, checked in that order), or when the log
+        file cannot be opened for writing (still prints one JSON line with
+        "error" first).
     review-stage --cycle-id --gate-command [--state] [--since] [--repo-root]
                  [--replay-cmd] [--roster] [--tasks-json --prd [--design-doc]]
         review_stage.stage() (PRD 00249): stages one review cycle's input
@@ -965,10 +969,24 @@ def _run_verify(args: argparse.Namespace) -> int:
         return 2
     head = proc.stdout.strip()
     log_path = (
-        args.log
+        repo_root / args.log
         if args.log is not None
         else repo_root / "docs/dev/tmp" / f"gate-{head[:7]}.log"
     )
+    if args.log is not None:
+        store = (repo_root / "docs/dev/project-management").resolve()
+        if log_path.resolve().is_relative_to(store):
+            print(
+                f"autopilot: verify: --log {args.log} resolves inside the store",
+                file=sys.stderr,
+            )
+            return 2
+        if verification._tracked_log_path(repo_root, log_path) is not None:
+            print(
+                f"autopilot: verify: --log {args.log} resolves to a tracked file",
+                file=sys.stderr,
+            )
+            return 2
     try:
         result = verification.run_gate(
             args.gate_command,
@@ -982,7 +1000,7 @@ def _run_verify(args: argparse.Namespace) -> int:
         return 2
     print(json.dumps({**result, "sha": head, "log": str(log_path)}))
     if result["exit"] == 0 and not result["timed_out"]:
-        return 0
+        return 3 if not result["recorded"] and not result["dirty"] else 0
     return 1
 
 
