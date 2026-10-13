@@ -128,7 +128,7 @@ certified.
 {
   "sha": "<git rev-parse HEAD at the time of the run>",
   "cycle": <state.cycle, or null when no review cycle is in flight>,
-  "commands": [{"command": "<as run>", "exit": <code>}],
+  "commands": [{"command": "<whitespace-collapsed, as run>", "exit": <code>}],
   "passed": <int>, "failed": <int>, "skipped": <int>
 }
 ```
