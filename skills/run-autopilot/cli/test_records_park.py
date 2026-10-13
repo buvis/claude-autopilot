@@ -629,5 +629,130 @@ class Exit2Tests(_ParkTestCase):
         self.assertFalse(self._in_hold())
 
 
+class BudgetSiteParkTests(_ParkTestCase):
+    """A park-requested marker carrying "site": "budget" parks through
+    do_stall(site="budget", extra_mutator=None): exit 0 always, no
+    parks_consecutive increment, never the systemic-halt branch."""
+
+    BUDGET_REASON = "prd budget exhausted"
+
+    def _write_budget_marker(self, reason: str | None = None) -> None:
+        self._write_raw_marker(json.dumps({
+            "prd": self.PRD,
+            "reason": reason if reason is not None else self.BUDGET_REASON,
+            "site": "budget",
+        }))
+
+    def test_budget_site_park_moves_prd_to_hold_and_records_budget_stall(self) -> None:
+        self._put_in_wip()
+        self._write_budget_marker()
+        self._write_state(self._sample_state(batch={
+            "id": "202607300000", "completed_prds": [], "parks_consecutive": 0,
+        }))
+
+        rc = self._do_park()
+
+        self.assertEqual(rc, 0)
+        self.assertFalse(self._in_wip())
+        self.assertTrue(self._in_hold())
+        self.assertFalse(self._marker_exists(), "marker is deleted after a successful park")
+
+        items = self._deferred_items()
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["type"], "stall")
+        self.assertEqual(items[0]["site"], "budget")
+        self.assertEqual(items[0]["prd"], self.PRD)
+        self.assertIn(self.BUDGET_REASON, items[0]["detail"])
+
+        final = self._state()
+        self.assertNotIn("stall_op", final)
+        self.assertNotIn("tasks", final, "reset_prd_fields must have run")
+        self.assertEqual(final["cycle"], 1)
+
+    def test_budget_site_park_leaves_parks_consecutive_at_zero(self) -> None:
+        # Contrast: NormalParkTests' wrapper_died park from 0 ends at 1.
+        self._put_in_wip()
+        self._write_budget_marker()
+        self._write_state(self._sample_state(batch={
+            "id": "202607300000", "completed_prds": [], "parks_consecutive": 0,
+        }))
+
+        self.assertEqual(self._do_park(), 0)
+
+        self.assertEqual(self._state()["batch"]["parks_consecutive"], 0)
+
+    def test_budget_site_park_after_a_wrapper_park_never_halts_and_resets_counter(self) -> None:
+        # parks_consecutive=1 would trip the systemic halt (exit 5) for a
+        # wrapper_died marker (SystemicHaltTests); a budget park must not.
+        self._put_in_wip()
+        self._write_budget_marker()
+        self._write_state(self._sample_state(batch={
+            "id": "202607300000", "completed_prds": [], "parks_consecutive": 1,
+        }))
+
+        rc = self._do_park()
+
+        self.assertEqual(rc, 0)
+        self.assertTrue(self._in_hold())
+        self.assertFalse(self._marker_exists())
+
+        final = self._state()
+        self.assertEqual(final["batch"]["parks_consecutive"], 0)
+        self.assertNotEqual(final.get("phase"), "paused")
+        self.assertNotEqual(final.get("next_phase"), "paused")
+        self.assertNotIn("pause_reason", final)
+
+        items = self._deferred_items()
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["site"], "budget")
+
+    def test_budget_site_park_calls_do_stall_with_budget_site_and_no_mutator(self) -> None:
+        self._put_in_wip()
+        self._write_budget_marker()
+        self._write_state(self._sample_state(batch={
+            "id": "202607300000", "completed_prds": [], "parks_consecutive": 1,
+        }))
+
+        with mock.patch.object(records, "do_stall", wraps=records.do_stall) as spy:
+            rc = self._do_park()
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(spy.call_count, 1)
+        kwargs = spy.call_args.kwargs
+        self.assertEqual(kwargs["site"], "budget")
+        self.assertIsNone(kwargs.get("extra_mutator"))
+        self.assertEqual(kwargs["prd"], self.PRD)
+
+
+class BudgetSiteParseMarkerTests(_ParkTestCase):
+    def test_budget_site_parse_marker_returns_the_marker_site(self) -> None:
+        self._write_raw_marker(json.dumps({
+            "prd": self.PRD, "reason": "prd budget exhausted", "site": "budget",
+        }))
+
+        self.assertEqual(
+            records._parse_marker(self.marker_path),
+            {"prd": self.PRD, "reason": "prd budget exhausted", "site": "budget"},
+        )
+
+    def test_budget_site_parse_marker_defaults_site_to_wrapper_died(self) -> None:
+        self._write_marker(reason="wrapper died mid-session")
+
+        self.assertEqual(
+            records._parse_marker(self.marker_path),
+            {"prd": self.PRD, "reason": "wrapper died mid-session", "site": "wrapper_died"},
+        )
+
+
+class BudgetSiteResetFieldTests(unittest.TestCase):
+    def test_budget_site_prd_budget_since_is_a_per_prd_reset_field(self) -> None:
+        self.assertIn("prd_budget_since", records.PER_PRD_RESET_FIELDS)
+
+    def test_budget_site_reset_drops_prd_budget_since(self) -> None:
+        reset = records.reset_prd_fields({"prd_budget_since": "2026-10-13T00:00:00Z", "batch": {}})
+
+        self.assertNotIn("prd_budget_since", reset)
+
+
 if __name__ == "__main__":
     unittest.main()
