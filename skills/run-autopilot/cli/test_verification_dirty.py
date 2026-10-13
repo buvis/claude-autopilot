@@ -748,3 +748,40 @@ def test_own_log_does_not_skip_the_pre_spawn_dirty_check(
         "dirty": True,
     }
     assert not (repo / RECORD_REL).exists()
+
+
+def _assert_hidden_flag_only_dirties_outside_the_store(repo: Path, flag: str) -> None:
+    # Control: the flag on a tracked store file, edited under it, is no dirt.
+    store_file = f"{STORE}/autopilot/state.json"
+    _commit(repo, store_file, "{}\n")
+    _git(repo, "update-index", flag, "--", store_file)
+    (repo / store_file).write_text('{"edited": true}\n')
+    allowed = verification.run_gate(
+        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'", repo, "abc", 1
+    )
+    assert allowed["passed"] == 1
+    assert allowed["recorded"] is True
+    assert allowed["dirty"] is False
+    assert (repo / RECORD_REL).exists()
+
+    # The same flag on a tracked product file hides its edit from plain
+    # status, yet must still refuse the record.
+    (repo / RECORD_REL).unlink()
+    _git(repo, "update-index", flag, "--", "src/app.py")
+    (repo / "src" / "app.py").write_text("print('hidden edit')\n")
+    status = _git(repo, "status", "--porcelain=1", "--untracked-files=all")
+    assert "src/app.py" not in status
+    refused = verification.run_gate(
+        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'", repo, "abc", 1
+    )
+    assert refused["recorded"] is False
+    assert refused["dirty"] is True
+    assert not (repo / RECORD_REL).exists()
+
+
+def test_skip_worktree_edit_blocks_record(repo: Path) -> None:
+    _assert_hidden_flag_only_dirties_outside_the_store(repo, "--skip-worktree")
+
+
+def test_assume_unchanged_edit_blocks_record(repo: Path) -> None:
+    _assert_hidden_flag_only_dirties_outside_the_store(repo, "--assume-unchanged")
