@@ -132,6 +132,33 @@ class GhVerdictTests(ProbeTestCase):
             {"batch_id": "B2", "gh": "ok", "engram": "ok", "checked_at": LATER_NOW},
         )
 
+    def test_malformed_recorded_shape_reprobes_instead_of_raising(self) -> None:
+        self._write_state(
+            {
+                "batch": {"id": "B1"},
+                "catchup_probe": {"batch_id": "B1", "gh": "ok"},  # missing "engram"
+            },
+        )
+        run = FakeRun({"gh": (0, ""), "engram": (0, "")})
+
+        out = self._probe(run)
+
+        self.assertEqual(out, {"skip": []})
+        self.assertEqual(sorted(run.binaries()), ["engram", "gh"])
+        self.assertEqual(
+            self._read_state()["catchup_probe"],
+            {"batch_id": "B1", "gh": "ok", "engram": "ok", "checked_at": FIRST_NOW},
+        )
+
+    def test_non_dict_recorded_value_reprobes_instead_of_raising(self) -> None:
+        self._write_state({"batch": {"id": "B1"}, "catchup_probe": "not-a-dict"})
+        run = FakeRun({"gh": (0, ""), "engram": (0, "")})
+
+        out = self._probe(run)
+
+        self.assertEqual(out, {"skip": []})
+        self.assertEqual(sorted(run.binaries()), ["engram", "gh"])
+
     def test_both_ok_skips_nothing_and_runs_each_probe_with_a_15s_timeout_in_the_repo_root(
         self,
     ) -> None:

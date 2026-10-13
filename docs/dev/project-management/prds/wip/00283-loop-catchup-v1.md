@@ -114,7 +114,7 @@ No dependencies - built first.
 **Goal**: The committer stamp and the probe verb.
 
 **Tasks**:
-- [ ] `loop_committer` in `cli/loop.py`; `Loop._launch` sets `GIT_COMMITTER_NAME` in `self.env` and `os.environ` from `state.batch.id` (no deps) - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_loop.py -k committer` passes. The scripted spawn sees `GIT_COMMITTER_NAME == "autopilot-loop/<id>"` in its `env`; a commit made in a temp repo with that env shows it under `git log --format=%cn`.
+- [ ] `loop_committer` in `cli/loop.py`; `Loop._launch` sets `GIT_COMMITTER_NAME` in `self.env` and `os.environ` from `state.batch.id` (no deps) - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_loop_committer.py` passes. The scripted spawn sees `GIT_COMMITTER_NAME == "autopilot-loop/<id>"` in its `env`; a commit made in a temp repo with that env shows it under `git log --format=%cn`.
 - [ ] `cli/catchup_probe.py`, the `catchup-probe` subcommand, and `cli/test_catchup_probe.py` registered in the `[checks] enter` block of `dev/bin/release-checks` (PRD 00278's pin fails on an unregistered test file) (no deps) - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_catchup_probe.py` passes, including `test_probe_records_unauthenticated_then_reuses_within_batch` (stub `gh` exits 1: the first call records `unauthenticated` and the second call in the same batch does not run `gh`), `test_new_batch_reprobes`, and the same three for engram (`test_engram_unregistered_from_stderr`); `rg -n "test_catchup_probe.py" dev/bin/release-checks` hits.
 
 **Exit Criteria**: both filters pass.

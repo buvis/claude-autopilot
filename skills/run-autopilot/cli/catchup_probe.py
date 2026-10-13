@@ -8,8 +8,6 @@ the catch-up sections to skip.
 
 from __future__ import annotations
 
-import argparse
-import json
 import shutil
 import subprocess
 from collections.abc import Callable
@@ -56,10 +54,21 @@ def probe(
     which: Callable = shutil.which,
     now: Callable[[], str] = _utc_now,
 ) -> dict:
+    """Probe `gh` and `engram` once per `batch.id`, write the verdict to
+    `state.catchup_probe`, and return `{"skip": [...]}` naming which
+    catch-up sections to omit this batch. Reuses the stored record when its
+    `batch_id` matches and it has the expected shape; a malformed stored
+    record (not a dict, or missing `gh`/`engram`) is treated as absent and
+    re-probed rather than raised."""
     data, _version = state.load(state_path)
     batch_id = (data.get("batch") or {}).get("id") or _NO_BATCH
     recorded = data.get("catchup_probe")
-    if recorded and recorded.get("batch_id") == batch_id:
+    if (
+        isinstance(recorded, dict)
+        and recorded.get("batch_id") == batch_id
+        and "gh" in recorded
+        and "engram" in recorded
+    ):
         return {"skip": _skips(recorded)}
 
     cwd = custody.project_root(state_path.parent)
@@ -77,11 +86,3 @@ def probe(
     }
     statectl.mutate(state_path, lambda d: d.update(catchup_probe=record))
     return {"skip": _skips(record)}
-
-
-def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(prog="catchup-probe")
-    parser.add_argument("--state", required=True, type=Path)
-    args = parser.parse_args(argv)
-    print(json.dumps(probe(args.state)))
-    return 0

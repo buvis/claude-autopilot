@@ -440,7 +440,7 @@ greps tried: `rg -n "COMMITTER|GIT_AUTHOR" skills/run-autopilot/cli/*.py`
 
 ## Test strategy outline
 
-- **`test_loop.py -k committer`**: `ScriptedSpawn` fixture asserts
+- **`test_loop_committer.py`**: `ScriptedSpawn` fixture asserts
   `env["GIT_COMMITTER_NAME"] == f"autopilot-loop/{batch_id}"` when a
   `state.json` with `batch.id` is present before `_launch`; a fallback case
   with no `batch` key (or no `state.json`) asserts `"autopilot-loop/no-batch"`.
