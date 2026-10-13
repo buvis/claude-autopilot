@@ -3931,3 +3931,25 @@
 {"id":"65adc316","ended_at":1791861381,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"id":"482e50bc","ended_at":1791861381,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791861381,"phase":"build","prd":"00276-make-the-gate-record-trustworthy-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791861409,"phase":"build","prd":"00276-make-the-gate-record-trustworthy-v1.md"}
+{"id":"2a98ce55","kind":"tess","task":"7","queued_at":1791861529,"prompt_bytes":117109}
+{"id":"8195d9f4","kind":"tess","task":"7","queued_at":1791861555,"prompt_bytes":27740}
+{"id":"8195d9f4","ended_at":1791861732,"elapsed_s":177,"outcome":"ok","detail":null}
+{"id":"90fdea10","kind":"devon","task":"7","queued_at":1791861835,"prompt_bytes":6731}
+{"id":"90fdea10","ended_at":1791861995,"elapsed_s":160,"outcome":"ok","detail":null}
+{"id":"3558e403","kind":"tess","task":"7","queued_at":1791862025,"prompt_bytes":4464}
+{"id":"3558e403","ended_at":1791862113,"elapsed_s":88,"outcome":"ok","detail":null}
+{"id":"dd01e05c","kind":"ivan","task":"7","queued_at":1791862183,"prompt_bytes":29777}
+{"id":"dd01e05c","ended_at":1791862244,"elapsed_s":61,"outcome":"ok","detail":null}
+{"id":"862ff9c1","kind":"ivan","task":"7","queued_at":1791862316,"prompt_bytes":5619}
+{"id":"862ff9c1","ended_at":1791862350,"elapsed_s":34,"outcome":"ok","detail":null}
+{"id":"4896069d","kind":"pat","task":"7","queued_at":1791862407,"prompt_bytes":25421}
+{"id":"58063d6f","kind":"ivan","task":"8","queued_at":1791862528,"prompt_bytes":16154}
+{"id":"58063d6f","ended_at":1791862560,"elapsed_s":32,"outcome":"ok","detail":null}
+{"id":"1aab4325","kind":"ivan","task":"9","queued_at":1791862623,"prompt_bytes":81336}
+{"id":"82d05a28","kind":"ivan","task":"9","queued_at":1791862652,"prompt_bytes":6696}
+{"id":"82d05a28","ended_at":1791862683,"elapsed_s":31,"outcome":"ok","detail":null}
+{"id":"2a98ce55","ended_at":1791863032,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"4896069d","ended_at":1791863032,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"1aab4325","ended_at":1791863032,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791863032,"phase":"review","prd":"00276-make-the-gate-record-trustworthy-v1.md"}
