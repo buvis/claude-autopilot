@@ -175,6 +175,11 @@ Subcommands:
         store_tree.ensure_store_gitignore() on the state file's grandparent
         (the store dir). Prints the .gitignore path only when it wrote one;
         state.json is never read, so a from-empty batch can call it first.
+    catchup-probe --state
+        catchup_probe.probe(): batch-scoped gh/engram health probe. Prints
+        {"skip": [...]} naming which catch-up sections ("github-state",
+        "engram") to omit this run; caches the verdicts in state.catchup_probe
+        keyed on batch.id, reusing them for the rest of the batch.
 
 --state, when omitted, resolves by walking up from cwd via
 _walk_up.find_autopilot_dir() to <dir>/state.json. park's --autopilot-dir,
@@ -227,6 +232,7 @@ _SKILL_ROOT = _CLI_DIR.parent
 sys.path.insert(0, str(_SKILL_ROOT))
 
 from cli import (
+    catchup_probe,
     custody,
     enter,
     frontmatter,
@@ -1791,6 +1797,15 @@ def _run_record_store(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add_catchup_probe(subparsers) -> None:
+    subparsers.add_parser("catchup-probe").add_argument("--state", required=True)
+
+
+def _run_catchup_probe(args: argparse.Namespace) -> int:
+    print(json.dumps(catchup_probe.probe(Path(args.state))))
+    return 0
+
+
 def _add_ensure_store(subparsers) -> None:
     subparsers.add_parser("ensure-store").add_argument("--state")
 
@@ -1841,6 +1856,7 @@ _SUBCOMMANDS: dict[str, tuple] = {
     "dirty": (_add_dirty, _run_dirty),
     "record-store": (_add_record_store, _run_record_store),
     "ensure-store": (_add_ensure_store, _run_ensure_store),
+    "catchup-probe": (_add_catchup_probe, _run_catchup_probe),
     "wave": (wave_cli.add, _run_wave),
 }
 
