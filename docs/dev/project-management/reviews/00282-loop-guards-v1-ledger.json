@@ -1,0 +1,42 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "67 further failures in test_gate_findings_unread_shapes.py (e.g. `_is_unread_line` on an emoji-bullet row) come from code this diff does not touch. I did not check them against the base commit, so they are probably pre-existing. They are part of the \"82 failed\" suite total (14 loop tests, the release-checks test, and these 67)",
+    "file": "skills/run-autopilot/cli/test_gate_findings_unread_shapes.py",
+    "reason": "pre-existing failures in code this diff does not touch; out of scope for this PRD"
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Small extras beyond the spec: `budget_usd_for` also rejects negative, nan and inf values (loop_decision.py:145); `_parse_marker` normalizes any non-\"budget\" site to \"wrapper_died\" (records.py:586); `loop_entry` is added to `PER_PRD_RESET_FIELDS` (records.py:104); `_replay_loop_entry` also drops and does not replay when `--prd` is given (__main__.py:390). All are defensible and documented. They are not in the PRD.",
+    "file": "skills/run-autopilot/cli/records.py",
+    "reason": "sanctioned extras beyond the spec, documented in the assumptions ledger"
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The idle watchdog treats a missing log as infinite silence (skills/run-autopilot/cli/watchdog.py:211). `session_busy` on a missing log returns False, so a session whose log is absent would be killed at the first poll. The log is created before launch (skills/run-autopilot/cli/runner.py:264), so this is not reachable in practice.",
+    "file": "skills/run-autopilot/cli/watchdog.py",
+    "reason": "not reachable in practice (the log is created before launch)"
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "1 touched test(s) pass against the pre-change code: test_budget_since_already_in_state_survives_same_prd_reentry",
+    "file": "skills/run-autopilot/cli/test_enter.py",
+    "reason": "compatibility assertion; passing against the pre-change code is by design"
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "1 touched test(s) pass against the pre-change code: test_non_budget_park_marker_carries_no_site",
+    "file": "skills/run-autopilot/cli/test_loop_budget.py",
+    "reason": "compatibility assertion; passing against the pre-change code is by design"
+  }
+]

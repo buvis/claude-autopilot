@@ -1,0 +1,9 @@
+[
+  {
+    "cycle": 1,
+    "finding": "The completion gate remains red: 82 tests failed, and the supplied assumptions identify instant-exit regressions in existing loop tests. Resolve introduced failures, then run `bash dev/bin/release-checks`; completion requires exit 0 and `FAIL 0`.",
+    "file": null,
+    "command": "bash dev/bin/release-checks",
+    "source": "bob"
+  }
+]
