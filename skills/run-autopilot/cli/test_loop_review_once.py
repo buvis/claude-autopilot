@@ -15,7 +15,6 @@ import json
 import pytest
 
 from cli.loop import Loop
-from cli.routing import OPUS, SONNET
 from cli.loop_testutil import (
     _spawn_tagged_incumbent,
     make_loop,
@@ -23,6 +22,7 @@ from cli.loop_testutil import (
     write_log,
     write_state,
 )
+from cli.routing import OPUS, SONNET
 
 
 @pytest.fixture(autouse=True)
@@ -53,9 +53,12 @@ def test_review_once_spawns_the_review_route_once_and_exits_zero(tmp_path):
     write_state(lp._test["ap_dir"], prd="p.md", next_phase="review", batch={"id": "b"})
 
     assert lp.run_once() == 0
-    assert lp._test["spawn"].launches == [
-        {"model": OPUS, "effort": "low", "cap_secs": 10800},
-    ]
+    launches = lp._test["spawn"].launches
+    assert len(launches) == 1
+    assert launches[0]["model"] == OPUS
+    assert launches[0]["effort"] == "low"
+    assert launches[0]["cap_secs"] == 10800
+    assert launches[0]["env"]["GIT_COMMITTER_NAME"] == "autopilot-loop/b"
     out = lp._test["out"].getvalue()
     assert "signal continue" in out
     assert "next phase 'build'" in out
@@ -66,9 +69,12 @@ def test_review_once_finalize_routes_sonnet_low(tmp_path):
     write_state(lp._test["ap_dir"], prd="p.md", next_phase="done", batch={"id": "b"})
 
     assert lp.run_once() == 0
-    assert lp._test["spawn"].launches == [
-        {"model": SONNET, "effort": "low", "cap_secs": 7200},
-    ]
+    launches = lp._test["spawn"].launches
+    assert len(launches) == 1
+    assert launches[0]["model"] == SONNET
+    assert launches[0]["effort"] == "low"
+    assert launches[0]["cap_secs"] == 7200
+    assert launches[0]["env"]["GIT_COMMITTER_NAME"] == "autopilot-loop/b"
 
 
 def test_review_once_refuses_a_build_phase_without_spawning(tmp_path):

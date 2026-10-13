@@ -377,6 +377,7 @@ run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_lifecycle_cli.py \
   skills/run-autopilot/cli/test_loop.py \
   skills/run-autopilot/cli/test_loop_act.py \
+  skills/run-autopilot/cli/test_loop_committer.py \
   skills/run-autopilot/cli/test_loop_exports.py \
   skills/run-autopilot/cli/test_loop_gates.py \
   skills/run-autopilot/cli/test_loop_review_once.py \
