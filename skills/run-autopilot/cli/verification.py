@@ -216,6 +216,24 @@ def _untracked_log_exclusion(cwd: Path, log_path: Path | None) -> tuple[str, ...
     return () if tracked.returncode == 0 else (rel,)
 
 
+def _tracked_log_path(cwd: Path, log_path: Path | None) -> str | None:
+    """The toplevel-relative POSIX path of `log_path`, symlinks resolved,
+    when it lies inside cwd's git toplevel AND is tracked there; None
+    otherwise. `run_gate` refuses such a log before opening it."""
+    if log_path is None:
+        return None
+    top = _git(cwd, "rev-parse", "--show-toplevel")
+    if top.returncode != 0:
+        return None
+    toplevel = Path(top.stdout.strip())
+    try:
+        rel = log_path.resolve().relative_to(toplevel.resolve()).as_posix()
+    except ValueError:
+        return None
+    tracked = _git(toplevel, "ls-files", "--error-unmatch", "--", rel)
+    return rel if tracked.returncode == 0 else None
+
+
 def _record_shape_ok(record: dict, gate_command: str) -> bool:
     """True iff the record has a full sha, all counts, and a green run of
     exactly `gate_command`."""
@@ -451,9 +469,13 @@ def _lock_and_check(
     lock_fd: int, cwd: Path, sha: str, log_path: Path | None
 ) -> tuple[tuple[str, ...], dict | None]:
     """The locked preamble of `run_gate`: take the flock on `lock_fd`, then
-    refuse when the tree is dirty or HEAD no longer equals `sha`. Returns the
+    refuse when `log_path` is tracked, the tree is dirty or HEAD no longer
+    equals `sha`. Returns the
     log exclusion and the `_dirty_result` refusal, or None to proceed."""
     fcntl.flock(lock_fd, fcntl.LOCK_EX)
+    tracked_log = _tracked_log_path(cwd, log_path)
+    if tracked_log is not None:
+        return (), _dirty_result([tracked_log])
     extra_excluded = _untracked_log_exclusion(cwd, log_path)
     dirty, dirty_paths = _dirty_check(cwd, extra_excluded)
     if dirty:
@@ -491,7 +513,15 @@ def _run_locked_gate(
             start_new_session=True,
         )
         deadline = time.monotonic() + timeout
-        stdout_buf, done = _drain_bounded(proc, GATE_OUTPUT_CAP, deadline, log_file)
+        try:
+            stdout_buf, done = _drain_bounded(proc, GATE_OUTPUT_CAP, deadline, log_file)
+        except OSError:
+            # A log-sink write error: kill and reap the gate, then re-raise.
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait()
+            proc.stdout.close()
+            proc.stderr.close()
+            raise
         if not _reap(proc, deadline, done):
             return _timed_out_result()
         return _record_gate(
