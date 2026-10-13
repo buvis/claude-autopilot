@@ -113,24 +113,26 @@ def _dirty_outside_store_paths(
 ) -> list[str]:
     """Sorted, deduplicated paths of every porcelain status record outside
     the store roots, [] when clean. Store roots are
-    `{prefix + p for p in STORE_PREFIXES} | set(extra_excluded)`, where
+    `{prefix + p for p in STORE_PREFIXES}` (prefix match), where
     `prefix` is `git rev-parse --show-prefix`; `extra_excluded` holds
-    TOPLEVEL-relative POSIX paths, used as given (not re-joined with
-    prefix). Runs `git status --porcelain=1 -z --untracked-files=all` and
-    reuses `_iter_porcelain_z_records` and `_dirty_path_is_in_store`; a
+    TOPLEVEL-relative POSIX file paths, used as given (not re-joined with
+    prefix) and matched exactly, never as prefixes. Runs
+    `git status --porcelain=1 -z --untracked-files=all` and reuses `_iter_porcelain_z_records` and `_dirty_path_is_in_store`; a
     rename/copy record contributes both of its paths. Catches nothing: a
     failing git call raises `_GitProbeFailed` (an OSError), never `[]`."""
     prefix = _git(repo_root, "rev-parse", "--show-prefix")
     if prefix.returncode != 0:
         raise _GitProbeFailed("git rev-parse --show-prefix failed")
-    roots = {prefix.stdout.strip() + root for root in STORE_PREFIXES}
-    store = tuple(roots | set(extra_excluded))
+    store = tuple(prefix.stdout.strip() + root for root in STORE_PREFIXES)
     status = _git(repo_root, "status", "--porcelain=1", "-z", "--untracked-files=all")
     if status.returncode != 0:
         raise _GitProbeFailed("git status failed")
     offending = set()
     for new, old in _iter_porcelain_z_records(status.stdout):
-        if not _dirty_path_is_in_store(new, old, store):
+        # extra_excluded holds exact file paths: match by equality, never
+        # by prefix, so "my-own.log.bak" is not excused by "my-own.log".
+        excused = all(p in extra_excluded for p in (new, old) if p)
+        if not excused and not _dirty_path_is_in_store(new, old, store):
             offending.update(p for p in (new, old) if p)
     return sorted(offending)
 

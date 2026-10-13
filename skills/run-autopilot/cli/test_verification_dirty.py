@@ -695,6 +695,30 @@ def test_own_log_outside_tmp_is_not_dirt(
     assert not (repo / RECORD_REL).exists()
 
 
+def test_own_log_exclusion_does_not_excuse_a_sibling_sharing_its_name_as_prefix(
+    repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The log is excused by exact path, not as a prefix: an untracked
+    # sibling whose name starts with the log's name still refuses the record.
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    log_path = repo / "my-own.log"
+
+    refused = verification.run_gate(
+        "echo stray > my-own.log.bak; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
+        repo,
+        "abc",
+        1,
+        log_path=log_path,
+    )
+
+    assert refused["passed"] == 1
+    assert refused["recorded"] is False
+    assert refused["dirty"] is True
+    assert not (repo / RECORD_REL).exists()
+
+
 def test_own_log_does_not_skip_the_pre_spawn_dirty_check(
     repo: Path,
     monkeypatch: pytest.MonkeyPatch,
