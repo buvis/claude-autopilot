@@ -170,7 +170,31 @@ _TAIL_SWEEP_EXEMPT_PHRASE = (
 # it refuses; a file whose tag flips is named here, never fixed by editing it.
 _REPO_ROOT = CLI_DIR.parents[2]
 _BASELINE_PATH = FIXTURES / "gate_replay_baseline.json"
-_ACCEPTED_FLIPS: dict[str, str] = {}
+# PRD 00282 task D1 (#11): `_is_unread_line` widened to flag a bullet- or
+# ordinal-led line carrying a bare severity emoji anywhere on it (a reviewer's
+# free-text finding note or discard rationale, with no pipe, word or token to
+# back it). Every one of these real review files carries such a line outside
+# the one structured findings table - a follow-up task list, a discard note,
+# an availability summary mentioning a count - and now correctly refuses.
+_ACCEPTED_FLIPS: dict[str, str] = {
+    "docs/dev/project-management/reviews/00171-route-sonnet-prompt-through-stdin-v1-review-1.md": "malformed",
+    "docs/dev/project-management/reviews/00187-keep-cap-out-criticals-off-master-and-home-deferred-highs-v1-review-2.md": "malformed",
+    "docs/dev/project-management/reviews/00188-record-convergence-cap-and-roster-per-prd-v1-review-2.md": "malformed",
+    "docs/dev/project-management/reviews/00189-stall-to-split-on-plan-expansion-v1-review-2.md": "malformed",
+    "docs/dev/project-management/reviews/00192-split-loop-py-and-its-tests-under-the-cap-v1-review-1.md": "malformed",
+    "docs/dev/project-management/reviews/00207-route-rework-resume-sessions-on-task-tier-v1-review-01.md": "malformed",
+    "docs/dev/project-management/reviews/00208-hand-off-between-the-rework-design-and-the-first-fix-v1-review-01.md": "malformed",
+    "docs/dev/project-management/reviews/00218-leave-sessions-at-task-boundaries-and-run-one-devon-round-v1-review-2.md": "malformed",
+    "docs/dev/project-management/reviews/00223-enter-the-build-gate-in-one-cli-call-v1-review-2.md": "malformed",
+    "docs/dev/project-management/reviews/00232-keep-subagent-test-runs-narrow-v1-review-1.md": "malformed",
+    "docs/dev/project-management/reviews/00244-tidy-the-enter-verb-and-the-review-diff-plumbing-v1-review-1.md": "malformed",
+    "docs/dev/project-management/reviews/00256-finish-the-review-verbs-before-release-v1-review-1.md": "malformed",
+    "docs/dev/project-management/reviews/00256-finish-the-review-verbs-before-release-v1-review-2.md": "malformed",
+    "docs/dev/project-management/reviews/00265-close-the-critical-row-escapes-v1-review-2.md": "malformed",
+    "docs/dev/project-management/reviews/00267-widen-the-phase-delegation-guard-v1-review-1.md": "malformed",
+    "docs/dev/project-management/reviews/00271-guard-v2-structural-delegation-check-v1-review-2.md": "malformed",
+    "docs/dev/project-management/reviews/00276-make-the-gate-record-trustworthy-v1-review-2.md": "malformed",
+}
 
 
 def _replay_verdict(path: Path) -> dict:

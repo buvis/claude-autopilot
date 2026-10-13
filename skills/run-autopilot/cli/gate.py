@@ -171,7 +171,14 @@ _SEVERITY_WORD_CELL_RE = re.compile(
 # Indent is unbounded, like _CANDIDATE_ROW_RE. Anchored so a count in prose
 # ("(1092/1092)") or a heading ("### Full Consensus (3/3)") stays unread.
 _CONSENSUS_VARIANT_RE = re.compile(
-    r"^[ \t]*(?:(?:[-*+>]|\d+[.)])[ \t]*)*(?:\*{0,2}|_{0,2})"
+    r"^[ \t]*(?:(?:[-*+>]|\d+[.)]|R\d+)[ \t]*)*(?:\*{0,2}|_{0,2})"
+    r"[\[(［【]\s*\d+\s*/\s*\d+\s*[\])］】]",
+    re.IGNORECASE,
+)
+# The same marker variant, unanchored: read only beside _ROW_SHAPE_RE, so a
+# line that is already structurally tabular (a pipe or an HTML <table>/<td>
+# tag) needs no anchor for the marker to count, mid-line and all.
+_CONSENSUS_VARIANT_ANY_RE = re.compile(
     r"[\[(［【]\s*\d+\s*/\s*\d+\s*[\])］】]",
 )
 # A severity emoji followed by its severity word ("🔴 CRITICAL"): a reviewer's
@@ -187,6 +194,12 @@ _FOUND_BY = "Found by:"
 # A bare m/n leading the line (up to 3 spaces/tabs of indent): the pipe-less
 # table's only structural signal, read only beside a severity signal.
 _LEADING_RATIO_RE = re.compile(r"^[ \t]{0,3}\d+\s*/\s*\d+\b")
+# A bullet, blockquote or ordinal ("1." / "1)") lead, after any indent: the
+# shape a reviewer's finding-like note always has, so a bare severity emoji
+# only counts beside this lead and never mid-sentence in ordinary prose (a
+# "Severity split: 0 🔴 Critical, ..." summary line names every emoji and is
+# not a finding).
+_BULLET_LEAD_RE = re.compile(r"^[ \t]*(?:[-*+>]|\d+[.)])")
 # A fence opener or closer, read off the RAW line: at most 3 leading spaces
 # (CommonMark's ceiling; a tab or a 4th space makes an indented code block, not
 # a fence), then the run. Trailing text (```markdown) is allowed.
@@ -418,9 +431,11 @@ def _is_unread_line(line: str) -> bool:
     """Whether `line` carries a [m/n] token or a finding-shaped row that,
     left unconsumed by the findings parser, must be flagged as unread."""
     return bool(
-        _CONSENSUS_TOKEN_RE.search(line)
+        (_BULLET_LEAD_RE.match(line) and _SEVERITY_EMOJI_ANY_RE.search(line))
+        or _CONSENSUS_TOKEN_RE.search(line)
         or _CANDIDATE_ROW_RE.match(line)
         or _CONSENSUS_VARIANT_RE.search(line)
+        or (_ROW_SHAPE_RE.search(line) and _CONSENSUS_VARIANT_ANY_RE.search(line))
         or _SEVERITY_WORD_CELL_RE.search(line)
         or (_ROW_SHAPE_RE.search(line) and _SEVERITY_EMOJI_WORD_RE.search(line))
         or (
@@ -497,7 +512,7 @@ def _fenced_findings_header(text: str) -> bool:
                     and len(closer.group(1)) >= len(run)
                 ):
                     body = lines[i + 1 : j]
-                    if any(_table_header(bl) is not None for bl in body):
+                    if any(_table_header(bl.strip()) is not None for bl in body):
                         return True
                     i = j
                     break
