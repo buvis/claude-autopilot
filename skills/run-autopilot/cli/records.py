@@ -637,11 +637,10 @@ def _park_marker_present(
     autopilot_dir,
     delete_marker,
 ):
-    """do_park's valid-marker path: reconcile any stall_op that isn't
-    simply the same park (same site as the marker) resuming, then confirm the PRD is
-    still in wip/. Returns (prd, reason, wip_filenames, None) to continue
-    into _finish_park, or (None, None, None, exit_code) to return
-    immediately."""
+    """do_park's valid-marker path: reconcile any stall_op that isn't the
+    same park (same site as the marker) resuming, then confirm wip/
+    placement. Returns (prd, reason, wip_filenames, None) to continue, or
+    (None, None, None, exit_code) to return immediately."""
     prd = marker["prd"]
     reason = marker["reason"]
     wip_filenames = [p.name for p in (prds_dir / "wip").glob("*.md")]
@@ -660,6 +659,45 @@ def _park_marker_present(
     return prd, reason, wip_filenames, None
 
 
+def _finish_park_budget(state_path, prds_dir, autopilot_dir, delete_marker, prd, reason) -> int:
+    """Budget-site branch: not a wrapper death, no parks_consecutive bump, never the systemic halt."""
+    rc = do_stall(
+        state_path, prd=prd, site="budget", detail=reason,
+        prds_dir=prds_dir, autopilot_dir=autopilot_dir, extra_mutator=None,
+    )
+    if rc != 0:
+        return rc
+    delete_marker()
+    print(f"autopilot: parked {prd} (budget)")
+    return 0
+
+
+def _finish_park_wrapper_died(
+    state_path, prds_dir, autopilot_dir, delete_marker, marker, prd, reason,
+    wip_filenames, parks_consecutive,
+) -> int:
+    """Wrapper_died branch: decide (park_decision), do_stall, delete marker, report."""
+    decision = resume.park_decision(marker, wip_filenames, parks_consecutive)
+    if decision.endswith("systemic halt"):
+        pause_detail = f"{parks_consecutive + 1} consecutive PRDs parked via wrapper_died; batch halted"
+        extra = _park_mutator(pause_detail=pause_detail)
+        exit_code = 5
+    else:
+        extra = _park_mutator()
+        exit_code = 0
+
+    rc = do_stall(
+        state_path, prd=prd, site="wrapper_died", detail=reason,
+        prds_dir=prds_dir, autopilot_dir=autopilot_dir, extra_mutator=extra,
+    )
+    if rc != 0:
+        return rc
+    delete_marker()
+    suffix = " (systemic halt)" if exit_code == 5 else ""
+    print(f"autopilot: parked {prd}{suffix}")
+    return exit_code
+
+
 def _finish_park(
     state_path,
     prds_dir,
@@ -670,10 +708,7 @@ def _finish_park(
     reason,
     wip_filenames,
 ) -> int:
-    """do_park's tail once the marker's PRD is confirmed present in wip/:
-    consult parks_consecutive, decide (park_decision), run do_stall, delete
-    the marker, and report. Returns the exit code (0 parked | 5 parked AND
-    systemic halt | 2 state error | 4/9 propagated from do_stall)."""
+    """do_park's tail: routes to the budget or wrapper_died branch."""
     try:
         consult_state, _version = state.load(state_path)
     except state.StateError:
@@ -685,47 +720,12 @@ def _finish_park(
         reason = f"{reason}; lane={consult_state['lane_effective']}"
 
     if marker["site"] == "budget":
-        # A budget park is not a wrapper death: no parks_consecutive
-        # increment, never the systemic halt (do_stall zeroes the counter).
-        rc = do_stall(
-            state_path,
-            prd=prd,
-            site="budget",
-            detail=reason,
-            prds_dir=prds_dir,
-            autopilot_dir=autopilot_dir,
-            extra_mutator=None,
-        )
-        if rc != 0:
-            return rc
-        delete_marker()
-        print(f"autopilot: parked {prd} (budget)")
-        return 0
+        return _finish_park_budget(state_path, prds_dir, autopilot_dir, delete_marker, prd, reason)
 
-    decision =resume.park_decision(marker, wip_filenames, parks_consecutive)
-    if decision.endswith("systemic halt"):
-        pause_detail = f"{parks_consecutive + 1} consecutive PRDs parked via wrapper_died; batch halted"
-        extra = _park_mutator(pause_detail=pause_detail)
-        exit_code = 5
-    else:
-        extra = _park_mutator()
-        exit_code = 0
-
-    rc = do_stall(
-        state_path,
-        prd=prd,
-        site="wrapper_died",
-        detail=reason,
-        prds_dir=prds_dir,
-        autopilot_dir=autopilot_dir,
-        extra_mutator=extra,
+    return _finish_park_wrapper_died(
+        state_path, prds_dir, autopilot_dir, delete_marker, marker, prd, reason,
+        wip_filenames, parks_consecutive,
     )
-    if rc != 0:
-        return rc
-    delete_marker()
-    suffix = " (systemic halt)" if exit_code == 5 else ""
-    print(f"autopilot: parked {prd}{suffix}")
-    return exit_code
 
 
 def do_park(
