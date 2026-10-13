@@ -757,3 +757,31 @@ def test_own_log_does_not_skip_the_pre_spawn_dirty_check(
         "dirty": True,
     }
     assert not (repo / RECORD_REL).exists()
+
+
+def test_dirty_result_lists_the_dirty_paths(repo: Path) -> None:
+    # Every result carries dirty_paths: [] when clean, the sorted offending
+    # paths when a pre-spawn or post-reap check refuses the record.
+    summary = "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
+    clean = verification.run_gate(summary, repo, "abc", 1)
+    assert clean["recorded"] is True
+    assert clean["dirty_paths"] == []
+
+    (repo / "src" / "untracked.py").write_text("print('new')\n")
+    (repo / "a-stray.txt").write_text("stray\n")
+    pre = verification.run_gate(summary, repo, "abc", 1)
+    assert pre["dirty"] is True
+    assert pre["passed"] is None
+    assert pre["dirty_paths"] == ["a-stray.txt", "src/untracked.py"]
+
+    (repo / "src" / "untracked.py").unlink()
+    (repo / "a-stray.txt").unlink()
+    post = verification.run_gate(f"echo dirty > src/dirty.py; {summary}", repo, "abc", 1)
+    assert post["passed"] == 1
+    assert post["dirty"] is True
+    assert post["dirty_paths"] == ["src/dirty.py"]
+
+    (repo / "src" / "dirty.py").unlink()
+    timed_out = verification.run_gate("sleep 5", repo, "abc", 1, timeout=0.2)
+    assert timed_out["timed_out"] is True
+    assert timed_out["dirty_paths"] == []
