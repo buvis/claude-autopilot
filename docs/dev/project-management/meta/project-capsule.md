@@ -50,7 +50,7 @@ Generated: 2026-10-13
 - [x] 00276-make-the-gate-record-trustworthy-v1 (2 cycles)
 - [x] 00278-make-release-checks-tell-truth-v1 (2 cycles)
 - [x] 00279-run-one-exact-reuse-rule-v1 (1 cycle)
-- [ ] 00282-loop-guards-v1 (backlog)
+- [ ] 00282-loop-guards-v1 (in progress, entering design)
 - [ ] 00283-loop-catchup-v1 (backlog)
 - [ ] 00284-loop-launch-context-v1 (backlog)
 
