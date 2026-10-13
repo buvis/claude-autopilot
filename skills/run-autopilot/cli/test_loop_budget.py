@@ -345,3 +345,244 @@ def test_non_budget_park_marker_carries_no_site(tmp_path):
     marker = json.loads((ap / "park-requested").read_text())
     assert set(marker) == {"prd", "reason"}
     assert marker["prd"] == PRD_A
+
+
+# ── _budget_bound, called directly ───────────────────────────────────────────
+#
+# These skip the session dance: a Loop built by make_loop (never run), a
+# hand-seeded state.json, loop-metrics.jsonl and last-session.log, and a
+# hand-built decision shaped like the one _decide returns.
+
+_SINCE = _iso(_BEFORE_CLOCK)
+_SINCE_EPOCH = int(_BEFORE_CLOCK)
+
+
+def _bound_loop(tmp_path: Path, env: dict | None = None):
+    lp = make_loop(tmp_path, [noop_step], env=env)
+    return lp, lp._test["ap_dir"]
+
+
+def _decision(prd: str, signal: str = "continue", detail: str = "") -> dict:
+    """The dict _decide returns after _decide_from_state on a touched state."""
+    return {
+        "signal": signal,
+        "detail": detail,
+        "next": "build",
+        "phase_end": "build",
+        "prd": prd,
+        "batch": BATCH,
+        "limit_wait": None,
+        "lane": None,
+        "lane_effective": None,
+        "state_touched": True,
+    }
+
+
+def _row(prd: str, ts_start: int, cost, signal: str = "continue") -> dict:
+    """A row in the shape Loop._append_metrics writes (_metrics_line)."""
+    return {
+        "ts_start": ts_start,
+        "ts_end": ts_start + 60,
+        "wall_secs": 60,
+        "prd": prd,
+        "batch": BATCH,
+        "phase_launched": "build",
+        "phase_end": "build",
+        "signal": signal,
+        "model": "opus",
+        "effort": "high",
+        "lane": None,
+        "lane_effective": None,
+        "cost_usd": cost,
+    }
+
+
+def _seed_metrics(ap_dir: Path, *lines) -> None:
+    """Write loop-metrics.jsonl verbatim: dicts are JSON-encoded, strings
+    are written as-is (for malformed lines)."""
+    encoded = [
+        line if isinstance(line, str) else json.dumps(line, separators=(",", ":"))
+        for line in lines
+    ]
+    (ap_dir / "loop-metrics.jsonl").write_text("\n".join(encoded) + "\n", encoding="utf-8")
+
+
+def _seed_state(ap_dir: Path, **fields) -> None:
+    write_state(ap_dir, next_phase="build", batch=_open_batch(), **fields)
+
+
+def test_budget_bound_sums_only_same_prd_rows_inside_the_window(tmp_path):
+    lp, ap = _bound_loop(tmp_path)
+    _seed_state(ap, prd=PRD_A, prd_budget_since=_SINCE)
+    _seed_metrics(
+        ap,
+        # Before the window: a big same-PRD spend that must not count.
+        _row(PRD_A, _SINCE_EPOCH - 1, 500.0),
+        # Exactly at the window start: counts (>=, not >).
+        _row(PRD_A, _SINCE_EPOCH, 120.25),
+        # Another PRD's spend, however large, never counts.
+        _row(PRD_B, _SINCE_EPOCH + 10, 9999.0),
+        # A died session still spent money: counts.
+        _row(PRD_A, _SINCE_EPOCH + 20, 100.5, signal="died"),
+        _row(PRD_A, _SINCE_EPOCH + 30, 50.0),
+    )
+    _cost_log(ap, 40.0)  # this session's own cost
+    decision = _decision(PRD_A)
+
+    lp._budget_bound(decision, ap)
+
+    # 120.25 + 100.5 + 50 + 40 = 310.75. Dropping the boundary row (190.5)
+    # or the died row (210.25) stays under $300; counting the pre-window
+    # row (810.75) or PRD_B (10309.75) names a different total.
+    assert decision["signal"] == "park"
+    assert decision["park_site"] == "budget"
+    assert decision["detail"] == f"budget: $310.75 > $300; parking {PRD_A}"
+
+
+def test_budget_bound_window_rows_alone_stay_under_budget(tmp_path):
+    # Same window as above minus the in-window rows that tip it: the
+    # excluded rows (pre-window, other PRD) alone must not park.
+    lp, ap = _bound_loop(tmp_path)
+    _seed_state(ap, prd=PRD_A, prd_budget_since=_SINCE)
+    _seed_metrics(
+        ap,
+        _row(PRD_A, _SINCE_EPOCH - 1, 500.0),
+        _row(PRD_B, _SINCE_EPOCH + 10, 9999.0),
+        _row(PRD_A, _SINCE_EPOCH, 120.25),
+    )
+    _cost_log(ap, 40.0)
+    decision = _decision(PRD_A)
+    before = dict(decision)
+
+    lp._budget_bound(decision, ap)
+
+    assert decision == before
+
+
+@pytest.mark.parametrize(
+    ("signal", "detail"),
+    [
+        ("paused", "operator pause"),
+        ("done", ""),
+        ("died", "session made no progress (state.json untouched)"),
+        ("park", f"no progress across 5 sessions; parking {PRD_A}"),
+    ],
+    ids=["paused", "done", "died", "fingerprint-park"],
+)
+def test_budget_bound_leaves_non_relaunch_decisions_alone(tmp_path, signal, detail):
+    lp, ap = _bound_loop(tmp_path)
+    _seed_state(ap, prd=PRD_A, prd_budget_since=_SINCE)
+    _seed_metrics(ap, _row(PRD_A, _SINCE_EPOCH + 1, 900.0))
+    _cost_log(ap, 900.0)
+    decision = _decision(PRD_A, signal=signal, detail=detail)
+    before = dict(decision)
+
+    lp._budget_bound(decision, ap)
+
+    assert decision.get("park_site") != "budget"
+    assert decision == before
+
+
+def test_budget_bound_total_equal_to_budget_does_not_park(tmp_path):
+    lp, ap = _bound_loop(tmp_path)
+    _seed_state(ap, prd=PRD_A, prd_budget_since=_SINCE)
+    _seed_metrics(ap, _row(PRD_A, _SINCE_EPOCH + 1, 150.0))
+    _cost_log(ap, 150.0)
+    decision = _decision(PRD_A)
+    before = dict(decision)
+
+    lp._budget_bound(decision, ap)
+
+    assert decision == before  # $300.00 is not > $300
+
+    # Control: one cent over parks.
+    _cost_log(ap, 150.01)
+    over = _decision(PRD_A)
+    lp._budget_bound(over, ap)
+    assert over["signal"] == "park"
+    assert over["park_site"] == "budget"
+    assert over["detail"] == f"budget: $300.01 > $300; parking {PRD_A}"
+
+
+def test_budget_bound_skips_malformed_and_partial_metrics_rows(tmp_path):
+    lp, ap = _bound_loop(tmp_path)
+    _seed_state(ap, prd=PRD_A, prd_budget_since=_SINCE)
+    no_cost = _row(PRD_A, _SINCE_EPOCH + 2, None)
+    del no_cost["cost_usd"]
+    no_ts = _row(PRD_A, _SINCE_EPOCH + 4, 1000.0)
+    del no_ts["ts_start"]
+    _seed_metrics(
+        ap,
+        _row(PRD_A, _SINCE_EPOCH + 1, 140.0),
+        no_cost,
+        _row(PRD_A, _SINCE_EPOCH + 3, None),  # cost_usd: null
+        "{not json at all",
+        no_ts,
+        "",
+        _row(PRD_A, _SINCE_EPOCH + 5, 140.0),
+    )
+    _cost_log(ap, 10.0)
+    decision = _decision(PRD_A)
+    before = dict(decision)
+
+    lp._budget_bound(decision, ap)  # must not raise
+
+    # 140 + 140 + 10 = 290: the no-ts_start $1000 row is not counted.
+    assert decision == before
+
+    # The valid rows around the junk still count: +$30 this session parks
+    # at exactly 140 + 140 + 30.
+    _cost_log(ap, 30.0)
+    over = _decision(PRD_A)
+    lp._budget_bound(over, ap)
+    assert over["signal"] == "park"
+    assert over["park_site"] == "budget"
+    assert over["detail"] == f"budget: $310.00 > $300; parking {PRD_A}"
+
+
+def test_budget_bound_honours_a_custom_budget(tmp_path):
+    lp, ap = _bound_loop(tmp_path, env={"_AUTOPILOT_PRD_BUDGET_USD": "450.5"})
+    _seed_state(ap, prd=PRD_A, prd_budget_since=_SINCE)
+
+    # $400: over the $300 default, under the custom $450.5.
+    _seed_metrics(ap, _row(PRD_A, _SINCE_EPOCH + 1, 300.0))
+    _cost_log(ap, 100.0)
+    under = _decision(PRD_A)
+    before = dict(under)
+    lp._budget_bound(under, ap)
+    assert under == before
+
+    # $460: over the custom budget.
+    _seed_metrics(ap, _row(PRD_A, _SINCE_EPOCH + 1, 360.0))
+    over = _decision(PRD_A)
+    lp._budget_bound(over, ap)
+    assert over["signal"] == "park"
+    assert over["park_site"] == "budget"
+    assert over["detail"] == f"budget: $460.00 > $450.5; parking {PRD_A}"
+
+
+@pytest.mark.parametrize(
+    ("state_fields", "decision_prd"),
+    [
+        ({"prd_budget_since": _SINCE}, ""),
+        ({"prd": PRD_A}, PRD_A),
+    ],
+    ids=["no-prd", "no-budget-since"],
+)
+def test_budget_bound_needs_both_prd_and_budget_since(tmp_path, state_fields, decision_prd):
+    lp, ap = _bound_loop(tmp_path)
+    _seed_state(ap, **state_fields)
+    _seed_metrics(
+        ap,
+        _row(PRD_A, _SINCE_EPOCH + 1, 5000.0),
+        # An empty-prd row must not match an empty decision prd.
+        _row("", _SINCE_EPOCH + 2, 5000.0),
+    )
+    _cost_log(ap, 5000.0)
+    decision = _decision(decision_prd)
+    before = dict(decision)
+
+    lp._budget_bound(decision, ap)
+
+    assert decision.get("park_site") != "budget"
+    assert decision == before
