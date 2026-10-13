@@ -1034,8 +1034,8 @@ def _boundary_refusal_line(
 ) -> str:
     """The one-line refusal for a field that escaped its required boundary."""
     return (
-        f"autopilot: review-stage: `{field}` '{raw}' resolves to"
-        f" {resolved}, outside {boundary_desc} ({state_path})"
+        f"autopilot: review-stage: `{field}` {raw!r} resolves to"
+        f" {str(resolved)!r}, outside {boundary_desc!r} ({str(state_path)!r})"
     )
 
 
