@@ -51,7 +51,7 @@ Generated: 2026-10-13
 - [x] 00278-make-release-checks-tell-truth-v1 (2 cycles)
 - [x] 00279-run-one-exact-reuse-rule-v1 (1 cycle)
 - [x] 00282-loop-guards-v1 (2 cycles)
-- [ ] 00283-loop-catchup-v1 (backlog)
+- [ ] 00283-loop-catchup-v1 (in progress, entering planning)
 - [ ] 00284-loop-launch-context-v1 (backlog)
 
 Observations: held: 00277-catch-critical-rows-in-every-shape-v1 (stalled on a
@@ -528,11 +528,11 @@ topic is unchanged; the hits above are the ones to use.
 ## Project Health
 
 CI: none configured/observed (0 open issues, 0 open PRs, no workflow runs —
-refreshed 2026-10-13T08:57Z). Batch 202610111300 is open with 3 drained
-(00271, 00285, 00276); 00278 in wip at task 9 of 9. `master` at 301ada7, tree
-dirty with the in-flight task-9 edits. `release-checks` stays RED on this host
-for pre-existing sandbox reasons (setuid `ps` unreachable under the agent
-seatbelt).
+refreshed 2026-10-13T18:xx). Batch 202610111300 is open with 6 drained
+(00271, 00285, 00276, 00278, 00279, 00282); 00283 now selected into wip,
+entering planning. `master` at 714227e, tree clean. `release-checks` stays RED
+on this host for pre-existing sandbox reasons (setuid `ps` unreachable under
+the agent seatbelt).
 Standing debt:
 `cli/__main__.py` and `test_state.py` exceed the 800-line cap (deliberately
 excluded by 00192).

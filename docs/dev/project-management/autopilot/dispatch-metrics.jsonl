@@ -4165,3 +4165,15 @@
 {"kind":"handoff","site":"review","edge":"leave","at":1791917069,"phase":"done","prd":"00282-loop-guards-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1791917124,"phase":"done","prd":"00282-loop-guards-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1791917203,"phase":"build","prd":"00282-loop-guards-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791917232,"phase":"build","prd":"00283-loop-catchup-v1.md"}
+{"id":"ba556210","kind":"tess","task":"1","queued_at":1791918590,"prompt_bytes":43969}
+{"id":"0b906ade","kind":"tess","task":"1","queued_at":1791918594,"prompt_bytes":43969}
+{"id":"ba556210","ended_at":1791918711,"elapsed_s":121,"outcome":"ok","detail":null}
+{"id":"9b24527f","kind":"ivan","task":"1","queued_at":1791918753,"prompt_bytes":12910}
+{"id":"ca7cc484","kind":"pat","task":"1","queued_at":1791918897,"prompt_bytes":13590}
+{"id":"c494f93c","kind":"ivan","task":"1","queued_at":1791918946,"prompt_bytes":10906}
+{"id":"0b906ade","ended_at":1791919095,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"9b24527f","ended_at":1791919095,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"ca7cc484","ended_at":1791919095,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"c494f93c","ended_at":1791919095,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791919095,"phase":"build","prd":"00283-loop-catchup-v1.md"}
