@@ -517,6 +517,21 @@ def test_session_busy_only_the_last_background_tasks_event_counts(tmp_path):
     assert session_busy(log) is False
 
 
+def test_session_busy_open_tool_use_stays_busy_when_background_tasks_drained(tmp_path):
+    # The two busy signals are OR-ed: an empty last background-tasks event
+    # must not override an open tool_use.
+    log = _write_log(
+        tmp_path / "log.jsonl",
+        [
+            _init_event(),
+            _bg_tasks("bg1"),
+            _bg_tasks(),
+            _tool_use("toolu_1"),
+        ],
+    )
+    assert session_busy(log) is True
+
+
 def test_session_busy_missing_log_file_is_idle(tmp_path):
     assert session_busy(str(tmp_path / "never-created.jsonl")) is False
 
