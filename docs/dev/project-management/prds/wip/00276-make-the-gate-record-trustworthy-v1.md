@@ -98,11 +98,20 @@ skills/run-autopilot/cli/
 ├── verification.py                            # dirt prefixes, ls-files -v, invalidate, flock, symlink reuse
 ├── store_tree.py                              # read only: STORE_PREFIXES
 ├── test_verification.py                       # tests: invalidate, flock, log-sink error
-├── test_verification_dirty.py                 # tests: scratch, hidden flags, dirty_paths, symlink reuse
+├── test_verification_dirty.py                 # tests: scratch, dirty_paths, symlink reuse
 └── test_cli_review_verbs.py                   # tests: verify log refusal, relative log, exit 3
 skills/work/references/
 └── final-verification.md                      # exit 3, log rule
 ```
+
+Shipped layout note (review cycle 1, R17): the test suite above split further
+than this table names, each file staying under the 800-line style cap --
+`test_verification_dirty.py` lost its hidden-flag tests to
+`test_verification_hidden_flags.py`, its dirty_paths tests to
+`test_verification_dirty_paths.py`, and its symlink-reuse tests to
+`test_verification_dirty_symlink.py`; `test_verification.py` lost its
+log-sink tests to `test_verification_log_sink.py`. Test names match this
+table's intent; only the file each lives in differs.
 
 ### Module: verification
 - **Responsibility**: decide dirt, run the gate once under a lock, write or invalidate the only record, decide reuse.
