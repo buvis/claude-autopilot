@@ -125,6 +125,9 @@ echo "[checks] record_dispatch"
 run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/work/scripts/test_record_dispatch.py
 
+# hooks/test_guard_phase_delegation_scratch_replay.py is intentionally UNGATED
+# (see UNGATED in skills/run-autopilot/cli/test_release_checks_counts.py): it
+# reads gitignored scratch input and is not reproducible in a clean clone.
 echo "[checks] hook registration"
 run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/scripts/test_review_coverage_hook_registration.py \
@@ -133,7 +136,6 @@ run_pytest uv run --no-project --with pytest python -m pytest -q \
   hooks/test_guard_skill_after_leave.py \
   hooks/test_guard_stop_on_live_lanes.py \
   hooks/test_guard_phase_delegation.py \
-  hooks/test_guard_phase_delegation_scratch_replay.py \
   hooks/test_guard_phase_delegation_narrowing.py \
   hooks/test_guard_phase_delegation_structure.py \
   hooks/test_guard_phase_delegation_normalize.py \
