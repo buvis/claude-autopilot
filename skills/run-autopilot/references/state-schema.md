@@ -517,11 +517,6 @@ Governs which model launches a `build` (or empty, first-launch) phase session. S
 
 **Lanes (PRD 00205).** A solo-lane session (`references/lane-solo.md`) is a `build` session like any other: it runs at the session model this routing picks (`session_model`, default sonnet, or a promotion signal). `default_model` is inert in solo, which dispatches no implementor; `session_model: opus` is the author's tool for a solo PRD that needs the larger model.
 
-## Two more CLI verbs
-
-`autopilot group-rework <state.json>` — regroup rework tasks by file (see Phase 6 rework grouping).
-`autopilot review-stage <state.json> <review-file>` — stage a finished review file for the decision gate.
-
 **Target resolution.** The routed PRD is the lowest `00XXX-` basename in `<prds_dir>/wip/`, else the lowest in `<prds_dir>/backlog/` (`_autopilot_build_target`). This is never `state.prd`: between PRDs, `state.prd` still names the PRD that just finished. When neither `wip/` nor `backlog/` holds a PRD, there is no target and routing returns the Sonnet default outright.
 
 **The five signals.** Any one promotes the build session to Opus. Which of
@@ -541,6 +536,11 @@ promoting on the next relaunch by construction.
 **The `state.prd == target` guard.** Signals 2, 3a, and 4 fire only when `state.prd` equals the resolved target - all three live inside one combined check gated on that equality. Signals 1, 3b, and 5 carry no such guard. This is what stops the PRD that just finished (still named by `state.prd`) from promoting the next PRD's build session on its own leftover replan count, live stall, or cap-rotation history - while a rescue-ledger entry or a durable deferred-log stall recorded under the new target's own filename still promotes it.
 
 **Signals 4 and 5 are not PRD-specified.** PRD 00076's Phase 0 acceptance criterion names four promotion signals: the frontmatter model key (then `default_model: opus`, since PRD 00200 `session_model: opus`), `replan_count > 0`, a prior stall for this PRD, and a repeat build session for the same PRD. `cap_rotations` (signal 4) and the rescue-ledger key (signal 5) are additions the shipped code carries beyond that set. Both appear in the design doc's signal table, and both are awaiting user ratification: document them here as shipped behavior, not as PRD-mandated. (The fourth PRD-named signal, repeat build session, is the one 00111 retired above.)
+
+## Two more CLI verbs
+
+- `autopilot group-rework <state.json>` — regroup rework tasks by file (see Phase 6 rework grouping).
+- `autopilot review-stage <state.json> <review-file>` — stage a finished review file for the decision gate.
 
 ## Skip Logic
 
