@@ -4212,3 +4212,17 @@
 {"kind":"handoff","site":"build","edge":"leave","at":1791921505,"phase":"build","prd":"00283-loop-catchup-v1.md"}
 {"kind":"handoff","site":"build","edge":"resume","at":1791921524,"phase":"build","prd":"00283-loop-catchup-v1.md"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791922716,"phase":"review","prd":"00283-loop-catchup-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1791922749,"phase":"review","prd":"00283-loop-catchup-v1.md"}
+{"id":"47785db0","kind":"bob","task":"review-00283-c1-20261013","queued_at":1791923098,"prompt_bytes":9580}
+{"id":"7fe00b1c","kind":"carl","task":"review-00283-c1-20261013","queued_at":1791923098,"prompt_bytes":6571}
+{"id":"5de35aca","kind":"bob","task":"review-00283-c1-20261013","queued_at":1791923219,"prompt_bytes":220392}
+{"id":"47785db0","ended_at":1791926324,"elapsed_s":3226,"outcome":"error","detail":"lack-of-input"}
+{"id":"5de35aca","ended_at":1791926327,"elapsed_s":3108,"outcome":"ok","detail":"retry"}
+{"id":"7fe00b1c","ended_at":1791926331,"elapsed_s":3233,"outcome":"error","detail":"retry: stalled past watcher budget (copilot auth failure, native gemini no output)"}
+{"id":"34bf5cab","kind":"tess","task":"5","queued_at":1791926657,"prompt_bytes":26329}
+{"id":"23f970de","kind":"ivan","task":"5","queued_at":1791926793,"prompt_bytes":47996}
+{"id":"de705f14","kind":"deslop","task":"5","queued_at":1791926986,"prompt_bytes":7138}
+{"id":"de705f14","ended_at":1791927005,"elapsed_s":19,"outcome":"ok","detail":null}
+{"id":"34bf5cab","ended_at":1791927040,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"23f970de","ended_at":1791927040,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"kind":"handoff","site":"review","edge":"leave","at":1791927040,"phase":"review","prd":"00283-loop-catchup-v1.md"}
