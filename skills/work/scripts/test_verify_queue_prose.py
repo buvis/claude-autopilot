@@ -162,24 +162,28 @@ def test_the_review_writes_the_queue_it_alone_can_fill() -> None:
 
 
 def test_the_tests_line_reuse_is_gated_on_the_sha_and_says_which_path_ran() -> None:
-    # Both halves matter. Without the sha gate the review reports counts from a
-    # different tree; without the provenance suffix a reused count is
-    # indistinguishable from a fresh run, which is the failure that makes the
-    # whole reuse untrustworthy.
+    # Both halves matter. Without the single reuse decision the review could
+    # report counts from a different tree; without the provenance suffix a
+    # reused count is indistinguishable from a fresh run, which is the failure
+    # that makes the whole reuse untrustworthy. Since PRD 00279, step 6 no
+    # longer re-derives the sha/counts reuse decision itself - it copies
+    # `gate.tests_line`, which `review-stage`'s `reuse_verdict` call (step 3)
+    # already decided via the sha/ancestor check. Pin that handoff instead of
+    # the retired step-6 condition.
     review = _REVIEW_SKILL.read_text()
 
-    assert "run no suite" in review, (
-        "review-work-completion/SKILL.md lost the instruction to skip the suite "
-        "on a matching record - the duplicate run PRD 00164 removed is back."
+    assert "gate.tests_line" in review or "## Test gate" in review, (
+        "review-work-completion/SKILL.md step 6 no longer names gate.tests_line "
+        "/ the ## Test gate section as the source of the Tests: line."
     )
-    assert "`sha` equals this cycle's reviewed HEAD" in review, (
-        "review-work-completion/SKILL.md no longer gates the reuse on an exact "
-        "sha match, so a record from an earlier HEAD could report green over "
-        "changed code."
+    assert "never re-derive reuse from `sha`/counts here" in review, (
+        "review-work-completion/SKILL.md step 6 re-derives its own sha/counts "
+        "reuse rule again - that decision belongs solely to review-stage's "
+        "reuse_verdict call (step 3)."
     )
-    assert "reused from last-verification.json" in review, (
-        "review-work-completion/SKILL.md lost the provenance suffix naming the "
-        "reused record. A reused count must never read as a fresh run."
+    assert "suite run this cycle" in review, (
+        "review-work-completion/SKILL.md lost the provenance suffix naming a "
+        "fresh run. A copied count must never read as reused, and vice versa."
     )
     assert "takes **no** suffix" in review, (
         "review-work-completion/SKILL.md no longer excludes the docs-only form "
@@ -429,7 +433,7 @@ def test_a_docs_only_diff_is_decided_before_the_record_is_read() -> None:
         "before the record read, so a docs-only review reports suite counts."
     )
     docs_only = review.index("Check docs-only first")
-    record_read = review.index("read `docs/dev/project-management/autopilot/last-verification.json` first")
+    record_read = review.index("read the `## Test gate` section")
     assert docs_only < record_read, (
         "review-work-completion/SKILL.md reads the verification record before "
         "deciding docs-only, so a prose-only review silently replaces "
