@@ -945,6 +945,25 @@ def _add_verify(subparsers) -> None:
     p.add_argument("--log", type=Path, default=None)
 
 
+def _refuse_verify_log(log: Path, repo_root: Path, log_path: Path) -> bool:
+    """True (refusal printed) when --log resolves inside the store or to a
+    tracked file."""
+    store = (repo_root / "docs/dev/project-management").resolve()
+    if log_path.resolve().is_relative_to(store):
+        print(
+            f"autopilot: verify: --log {log} resolves inside the store",
+            file=sys.stderr,
+        )
+        return True
+    if verification._tracked_log_path(repo_root, log_path) is not None:
+        print(
+            f"autopilot: verify: --log {log} resolves to a tracked file",
+            file=sys.stderr,
+        )
+        return True
+    return False
+
+
 def _run_verify(args: argparse.Namespace) -> int:
     repo_root = args.repo_root if args.repo_root is not None else Path.cwd()
     try:
@@ -973,20 +992,8 @@ def _run_verify(args: argparse.Namespace) -> int:
         if args.log is not None
         else repo_root / "docs/dev/tmp" / f"gate-{head[:7]}.log"
     )
-    if args.log is not None:
-        store = (repo_root / "docs/dev/project-management").resolve()
-        if log_path.resolve().is_relative_to(store):
-            print(
-                f"autopilot: verify: --log {args.log} resolves inside the store",
-                file=sys.stderr,
-            )
-            return 2
-        if verification._tracked_log_path(repo_root, log_path) is not None:
-            print(
-                f"autopilot: verify: --log {args.log} resolves to a tracked file",
-                file=sys.stderr,
-            )
-            return 2
+    if args.log is not None and _refuse_verify_log(args.log, repo_root, log_path):
+        return 2
     try:
         result = verification.run_gate(
             args.gate_command,
