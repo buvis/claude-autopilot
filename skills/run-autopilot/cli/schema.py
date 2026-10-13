@@ -259,15 +259,19 @@ def _validate_decision_entry(entry: Any) -> None:
             if not _has_prose(entry, key):
                 raise SchemaError(f"autonomous_decisions entry missing {key}")
         return
-    for primary, alternative in _DECISION_PROSE_PAIRS:
-        if not _has_prose(entry, primary) and not _has_prose(entry, alternative):
-            raise SchemaError(f"autonomous_decisions entry missing {primary}")
+    missing = [
+        primary
+        for primary, alternative in _DECISION_PROSE_PAIRS
+        if not _has_prose(entry, primary) and not _has_prose(entry, alternative)
+    ]
     cycle = entry.get("cycle")
     if isinstance(cycle, bool) or not isinstance(cycle, int):
-        raise SchemaError("autonomous_decisions entry missing cycle")
+        missing.append("cycle")
     severity = entry.get("severity")
     if not isinstance(severity, str) or severity not in DECISION_SEVERITIES:
-        raise SchemaError("autonomous_decisions entry missing severity")
+        missing.append("severity")
+    if missing:
+        raise SchemaError("autonomous_decisions entry missing " + ", ".join(missing))
 
 
 def _same_value(left: Any, right: Any) -> bool:

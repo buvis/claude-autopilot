@@ -102,11 +102,14 @@ def _lane_line(state: dict) -> str:
     )
 
 
-def _where(state: dict) -> list[str]:
+def _where(state: dict, project_root: str | None) -> list[str]:
     rotations = state.get("cap_rotations")
+    repo_root = state.get("repo_root")
+    if not (isinstance(repo_root, str) and repo_root):
+        repo_root = project_root
     return [
         "## Where",
-        f"- repo root: {_text(state.get('repo_root'))}",
+        f"- repo root: {_text(repo_root)}",
         _batch_line(state.get("batch")),
         f"- prd: {_text(state.get('prd'))}",
         f"- phase: {_text(state.get('phase'))}, next_phase: "
@@ -158,17 +161,18 @@ def _read_next(next_phase) -> list[str]:
     return ["## Read next", *[f"- `{path}` - {reason}" for path, reason in entries]]
 
 
-def render_brief(state: dict, now: str) -> str:
+def render_brief(state: dict, now: str, project_root: str | None = None) -> str:
     """The brief for `state` as written at `now` (an ISO UTC stamp), in the
     documented shape: header, Where, Entry (only after a loop pre-launch
     enter), Contract card, Read next, Do not re-read. `state` is whatever `state.json` parsed to; every field it
-    lacks renders as `none`."""
+    lacks renders as `none`. `project_root`, when given, is the repo root
+    fallback for states written before `repo_root` existed (PRD 00281 F13)."""
     card = state.get("contract_card")
     lines = [
         f"# Session brief (written {now} at {_text(state.get('phase'))} -> "
         f"{_text(state.get('next_phase'))})",
         "",
-        *_where(state),
+        *_where(state, project_root),
         *_entry_lines(state),
         "",
         "## Contract card",

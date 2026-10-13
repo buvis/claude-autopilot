@@ -31,6 +31,7 @@ runner needs no spawn-layer redesign.
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import subprocess
@@ -63,6 +64,10 @@ HOST_MARKERS = (
     "COPILOT_CLI_BINARY_VERSION",
 )
 
+DEFAULT_MCP_CONFIG = {
+    "mcpServers": {"context7": {"type": "http", "url": "https://mcp.context7.com/mcp"}}
+}
+
 DEFAULT_PROMPT = "/autopilot:run-autopilot"
 DEFAULT_GRACE_SECS = 60
 DEFAULT_WARN_SECS = 900
@@ -93,6 +98,18 @@ def prompt_for(autopilot_dir: Path, prompt: str = DEFAULT_PROMPT) -> str:
     brief = BRIEF_SUFFIX if (autopilot_dir / BRIEF_NAME).is_file() else ""
     cli = CLI_SUFFIX if prompt.startswith(DEFAULT_PROMPT) else ""
     return prompt + brief + cli
+
+
+def mcp_config_for(env: dict) -> str | None:
+    """`_AUTOPILOT_MCP_CONFIG`: a per-repo override, `"inherit"` to restore
+    every claude.ai connector (today's launch), or unset for the Context7-only
+    default (PRD 00281 F7/F9)."""
+    raw = env.get("_AUTOPILOT_MCP_CONFIG")
+    if raw is None:
+        return json.dumps(DEFAULT_MCP_CONFIG)
+    if raw == "inherit":
+        return None
+    return raw
 
 
 def warn_secs_for(env: dict) -> int:
@@ -222,10 +239,13 @@ def build_argv(
     fallback_model: str | None,
     runner_bin: str = "claude",
     prompt: str = DEFAULT_PROMPT,
+    mcp_config: str | None = None,
 ) -> list[str]:
     """The launch line. --fallback-model rides out primary-model
     brownouts (a ConnectionRefused relaunch storm killed a batch
-    silently, 2026-07); skipped when it equals the launch model."""
+    silently, 2026-07); skipped when it equals the launch model.
+    `mcp_config`, when set, scopes the launch to it via
+    --strict-mcp-config (PRD 00281 F7/F9); None keeps today's argv."""
     argv = [
         runner_bin,
         "-p",
@@ -238,6 +258,8 @@ def build_argv(
     ]
     if fallback_model and fallback_model != model:
         argv += ["--fallback-model", fallback_model]
+    if mcp_config is not None:
+        argv += ["--strict-mcp-config", "--mcp-config", mcp_config]
     argv += ["--output-format", "stream-json", "--verbose", prompt]
     return argv
 
@@ -347,6 +369,7 @@ def spawn(
         fallback,
         runner_bin=runner_bin,
         prompt=prompt_for(autopilot_dir, prompt),
+        mcp_config=mcp_config_for(env),
     )
     log_path = autopilot_dir / "last-session.log"
     if presenter is None:
