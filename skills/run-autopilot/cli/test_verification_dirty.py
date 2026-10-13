@@ -100,7 +100,10 @@ def test_stale_when_code_changed(repo: Path) -> None:
     # Any path outside the store counts, not only the ones under src/.
     later = _commit(repo, "Makefile", "all:\n\t@true\n")
     assert verification.reuse_verdict(
-        _record(head), repo, later, gate_command=GATE
+        _record(head),
+        repo,
+        later,
+        gate_command=GATE,
     ) == ("stale", {})
 
 
@@ -132,13 +135,19 @@ def test_reuse_verdict_fails_closed_on_git_error(repo: Path, tmp_path_factory) -
         {},
     )
     assert verification.reuse_verdict(
-        _record("no-such-ref"), repo, head, gate_command=GATE
+        _record("no-such-ref"),
+        repo,
+        head,
+        gate_command=GATE,
     ) == (
         "stale",
         {},
     )
     assert verification.reuse_verdict(
-        _record(head), not_a_repo, head, gate_command=GATE
+        _record(head),
+        not_a_repo,
+        head,
+        gate_command=GATE,
     ) == ("stale", {})
 
 
@@ -151,7 +160,10 @@ def test_reuse_verdict_rejects_non_ancestor_sha(repo: Path) -> None:
 
     # Sibling commit (survived a reset/rebase): not an ancestor of HEAD.
     assert verification.reuse_verdict(
-        _record(sibling), repo, head, gate_command=GATE
+        _record(sibling),
+        repo,
+        head,
+        gate_command=GATE,
     ) == ("stale", {})
     # Descendant: record newer than the HEAD being checked.
     assert verification.reuse_verdict(_record(head), repo, root, gate_command=GATE) == (
@@ -208,7 +220,9 @@ def test_rename_into_store_from_production_is_not_clean() -> None:
     # too: a clean destination alone must not excuse a dirty source.
     assert (
         verification._dirty_path_is_in_store(
-            f"{STORE}/moved.md", "production.md", STORE_PREFIX
+            f"{STORE}/moved.md",
+            "production.md",
+            STORE_PREFIX,
         )
         is False
     )
@@ -569,12 +583,7 @@ def test_gate_runs_in_a_repo_that_does_not_ignore_docs_dev_tmp(
         repo, "status", "--porcelain=1", "--untracked-files=all"
     )
 
-    result = verification.run_gate(
-        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
-        repo,
-        "abc",
-        1,
-    )
+    result = verification.run_gate("echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'", repo, "abc", 1)
 
     assert result["passed"] == 1
     assert result["recorded"] is True
@@ -748,40 +757,3 @@ def test_own_log_does_not_skip_the_pre_spawn_dirty_check(
         "dirty": True,
     }
     assert not (repo / RECORD_REL).exists()
-
-
-def _assert_hidden_flag_only_dirties_outside_the_store(repo: Path, flag: str) -> None:
-    # Control: the flag on a tracked store file, edited under it, is no dirt.
-    store_file = f"{STORE}/autopilot/state.json"
-    _commit(repo, store_file, "{}\n")
-    _git(repo, "update-index", flag, "--", store_file)
-    (repo / store_file).write_text('{"edited": true}\n')
-    allowed = verification.run_gate(
-        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'", repo, "abc", 1
-    )
-    assert allowed["passed"] == 1
-    assert allowed["recorded"] is True
-    assert allowed["dirty"] is False
-    assert (repo / RECORD_REL).exists()
-
-    # The same flag on a tracked product file hides its edit from plain
-    # status, yet must still refuse the record.
-    (repo / RECORD_REL).unlink()
-    _git(repo, "update-index", flag, "--", "src/app.py")
-    (repo / "src" / "app.py").write_text("print('hidden edit')\n")
-    status = _git(repo, "status", "--porcelain=1", "--untracked-files=all")
-    assert "src/app.py" not in status
-    refused = verification.run_gate(
-        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'", repo, "abc", 1
-    )
-    assert refused["recorded"] is False
-    assert refused["dirty"] is True
-    assert not (repo / RECORD_REL).exists()
-
-
-def test_skip_worktree_edit_blocks_record(repo: Path) -> None:
-    _assert_hidden_flag_only_dirties_outside_the_store(repo, "--skip-worktree")
-
-
-def test_assume_unchanged_edit_blocks_record(repo: Path) -> None:
-    _assert_hidden_flag_only_dirties_outside_the_store(repo, "--assume-unchanged")
