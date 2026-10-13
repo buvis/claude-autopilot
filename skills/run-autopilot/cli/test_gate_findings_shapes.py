@@ -582,14 +582,57 @@ def test_a_closer_with_trailing_text_still_closes_the_fence(tmp_path: Path) -> N
     assert _verdict_and_exit(text, _COVERED, tmp_path) == ("ok", None, 0)
 
 
-@pytest.mark.parametrize("indent", ["\t", "    "], ids=["tab", "4 spaces"])
-def test_indented_fence_does_not_blank_rows(indent: str, tmp_path: Path) -> None:
-    """CommonMark reads a tab or 4+ spaces before a fence marker as a code
-    block, not a fence: neither the opener nor the closer counts, so the row
-    between them is live and refused like a row never fenced at all."""
-    text = _review_text(alice=f"{indent}```\n{_ALICE_ROW}\n{indent}```")
+# (opener, closer) lines whose fence marker sits at column 4 or more, so
+# CommonMark reads them as an indented code block, not a fence.
+_DEEP_FENCES = [
+    pytest.param("\t```", "\t```", id="tab"),
+    pytest.param("    ```", "    ```", id="4 spaces"),
+    pytest.param("     ```", "     ```", id="5 spaces"),
+    pytest.param("        ```", "        ```", id="8 spaces"),
+    pytest.param("\t\t```", "\t\t```", id="two tabs"),
+    pytest.param("    ```python", "    ```", id="info string"),
+    pytest.param("\t~~~", "\t~~~", id="tab tilde"),
+    pytest.param("    ~~~", "    ~~~", id="4 spaces tilde"),
+    pytest.param("    ````", "    ````", id="4 spaces 4 backticks"),
+    pytest.param("\t~~~~", "\t~~~~", id="tab 4 tildes"),
+    pytest.param("  \t```", "  \t```", id="2 spaces then tab"),
+    pytest.param(" \t```", " \t```", id="1 space then tab"),
+    # The opener counts, the closer does not: the fence never closes.
+    pytest.param("```", "    ```", id="unindented opener 4-space closer"),
+]
+
+# Bodies whose row must stay live: the fence's indent decides, not the row.
+_DEEP_FENCE_BODIES = [
+    pytest.param(_ALICE_ROW, id="alice bullet"),
+    pytest.param(
+        f"- [2/3] {MED} stale cache | src/f.py:8 | Found by: bob",
+        id="bob bullet",
+    ),
+    pytest.param(_ref_row("R9", CRIT, "quoted table row", "src/g.py:4"), id="ref row"),
+]
+
+
+@pytest.mark.parametrize("body", _DEEP_FENCE_BODIES)
+@pytest.mark.parametrize(("opener", "closer"), _DEEP_FENCES)
+def test_indented_fence_does_not_blank_rows(
+    opener: str,
+    closer: str,
+    body: str,
+    tmp_path: Path,
+) -> None:
+    """CommonMark reads a fence marker at column 4 or more (a tab, 4+ spaces,
+    or spaces then a tab reaching the tab stop) as a code block, not a fence:
+    such a line neither opens nor closes, so the row between is live and
+    refused like a row never fenced at all."""
+    from cli import gate
+
+    text = _review_text(alice=f"{opener}\n{body}\n{closer}")
     verdict = _verdict_and_exit(text, _COVERED, tmp_path)
-    assert verdict == ("malformed", _unread_detail(text, _ALICE_ROW), 2)
+    assert verdict == ("malformed", _unread_detail(text, body), 2)
+    # Control at the boundary: the same fence lines indented 3 spaces are a
+    # real fence, and quote the same row.
+    shallow = _review_text(alice=f"   {opener.lstrip()}\n{body}\n   {closer.lstrip()}")
+    assert gate.findings_verdict(shallow, _COVERED) == ("ok", None)
 
 
 def test_a_row_above_the_table_header_is_unreadable(tmp_path: Path) -> None:
