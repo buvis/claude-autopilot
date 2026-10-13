@@ -224,7 +224,7 @@ class DuplicateAppendedDecisionEntriesTest(unittest.TestCase):
             schema.validate_changed(before, after)
         self.assertEqual(
             str(ctx.exception),
-            "autonomous_decisions entry missing issue",
+            "autonomous_decisions entry missing issue, action, reason, severity",
         )
 
     def test_a_second_copy_of_a_valid_entry_is_accepted(self) -> None:
@@ -295,13 +295,13 @@ class DuplicateAppendedDecisionEntriesTest(unittest.TestCase):
         missing_reason = _valid_decision()
         del missing_reason["reason"]
         invalid_values = (
-            ({"cycle": 1}, "issue"),
+            ({"cycle": 1}, "issue, action, reason, severity"),
             (missing_action, "action"),
             (missing_reason, "reason"),
         )
-        for value, key in invalid_values:
+        for value, message in invalid_values:
             for existing, total in ((0, 3), (1, 3), (2, 5)):
-                with self.subTest(missing=key, existing=existing, total=total):
+                with self.subTest(missing=message, existing=existing, total=total):
                     before = valid_state()
                     before["autonomous_decisions"] = [
                         dict(value) for _ in range(existing)
@@ -312,7 +312,7 @@ class DuplicateAppendedDecisionEntriesTest(unittest.TestCase):
                         schema.validate_changed(before, after)
                     self.assertEqual(
                         str(ctx.exception),
-                        f"autonomous_decisions entry missing {key}",
+                        f"autonomous_decisions entry missing {message}",
                     )
 
     def test_a_duplicate_added_before_the_end_of_the_list_is_judged(self) -> None:
@@ -508,7 +508,10 @@ class StatectlRejectionCliTest(unittest.TestCase):
         self.assertEqual(proc.returncode, 1, proc.stderr)
         self.assertEqual(
             proc.stderr.splitlines(),
-            ["rejected: autonomous_decisions entry missing issue"],
+            [
+                "rejected: autonomous_decisions entry missing "
+                "issue, action, reason, severity"
+            ],
         )
         # The raise happens before state.transaction writes, so a rejected
         # append leaves the file byte-identical -- not merely re-serialized.
