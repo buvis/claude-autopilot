@@ -75,16 +75,17 @@ Subcommands:
         failure exits 2 with no JSON line. Default log path
         docs/dev/tmp/gate-<sha[:7]>.log (relative to repo_root); a relative
         --log also joins repo_root. Prints one JSON line: the run_gate()
-        result dict plus "sha" and "log". Exit 0 only when the gate ran and
-        exited 0 (not dirty, not timed out); exit 3 when it exited 0 on a
-        clean tree but wrote no record; exit 1 when it never produced a pass
-        (dirty tree OR timed out - same exit code, distinguishable via the
-        printed "dirty"/"timed_out" keys) or exited non-zero; exit 2 when
-        HEAD cannot be resolved, when --log (symlinks resolved) lands inside
-        <repo_root>/docs/dev/project-management or on a git-tracked file
-        (stderr only, no JSON line, checked in that order), or when the log
-        file cannot be opened for writing (still prints one JSON line with
-        "error" first).
+        result dict plus "sha" and "log". Exit 0 only when the gate ran,
+        exited 0, and the record was written; exit 3 when it exited 0 and
+        did not time out, but no record was written for any reason
+        (dirty tree, mid-run or otherwise, or no parseable summary line);
+        exit 1 when it timed out or exited non-zero (distinguishable via
+        the printed "dirty"/"timed_out" keys); exit 2 when HEAD cannot be
+        resolved, when --log (symlinks resolved) lands inside
+        <repo_root>/docs/dev/project-management (stderr only, no JSON
+        line), or when the log file cannot be opened for writing (still
+        prints one JSON line with "error" first). A --log path outside the
+        store is never refused on its own account, tracked or not.
     review-stage --cycle-id --gate-command [--state] [--since] [--repo-root]
                  [--replay-cmd] [--roster] [--tasks-json --prd [--design-doc]]
         review_stage.stage() (PRD 00249): stages one review cycle's input
@@ -946,18 +947,14 @@ def _add_verify(subparsers) -> None:
 
 
 def _refuse_verify_log(log: Path, repo_root: Path, log_path: Path) -> bool:
-    """True (refusal printed) when --log resolves inside the store or to a
-    tracked file."""
+    """True (refusal printed) when --log resolves inside the store. A
+    tracked-but-not-in-the-store destination is not this CLI's business;
+    `run_gate` treats it like any other log path (its own post-run dirty
+    check still never excuses an edit to a tracked file)."""
     store = (repo_root / "docs/dev/project-management").resolve()
     if log_path.resolve().is_relative_to(store):
         print(
             f"autopilot: verify: --log {log} resolves inside the store",
-            file=sys.stderr,
-        )
-        return True
-    if verification._tracked_log_path(repo_root, log_path) is not None:
-        print(
-            f"autopilot: verify: --log {log} resolves to a tracked file",
             file=sys.stderr,
         )
         return True
@@ -991,8 +988,9 @@ def _run_verify(args: argparse.Namespace) -> int:
         repo_root / args.log
         if args.log is not None
         else repo_root / "docs/dev/tmp" / f"gate-{head[:7]}.log"
-    )
-    if args.log is not None and _refuse_verify_log(args.log, repo_root, log_path):
+    ).resolve()
+    log_display = args.log if args.log is not None else log_path
+    if _refuse_verify_log(log_display, repo_root, log_path):
         return 2
     try:
         result = verification.run_gate(
@@ -1007,7 +1005,7 @@ def _run_verify(args: argparse.Namespace) -> int:
         return 2
     print(json.dumps({**result, "sha": head, "log": str(log_path)}))
     if result["exit"] == 0 and not result["timed_out"]:
-        return 3 if not result["recorded"] and not result["dirty"] else 0
+        return 0 if result["recorded"] else 3
     return 1
 
 

@@ -160,14 +160,17 @@ second run of the same suite.
   refuses it.
 
 Read the verb's exit code as one of three outcomes, not as "non-zero = red
-suite": exit 0 means green and recorded; exit 1 means dirty, timed out, or a
-non-zero gate exit; exit 3 means green and not dirty or timed out, but the gate
-printed no parseable summary line, so no record was written — the suite did
-not fail, so it does not enter § Handling failures below.
+suite": exit 0 means green and recorded; exit 1 means timed out or a non-zero
+gate exit; exit 3 means the gate exited 0 and did not time out, but no record
+was written (the tree went dirty mid-run, or the gate printed no parseable
+summary line) — the suite did not fail, so it does not enter § Handling
+failures below.
 
-A `--log` path that resolves inside the store, or to a tracked file, is
-refused with exit 2 before anything is opened: no log file, no lock, no change
-to the record.
+A `--log` path that resolves inside the store is refused with exit 2 before
+anything is opened: no log file, no lock, no change to the record. A log
+outside the store is never refused on this account alone, tracked or not —
+writing through a tracked file is itself an edit, so a tracked destination
+still blocks the record (exit 3), just not before the gate runs.
 
 The printed JSON result carries `dirty_paths`, the list of outside-store paths
 that made a run dirty. Read it to see what to clean or ignore before re-running.

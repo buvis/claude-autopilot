@@ -410,9 +410,12 @@ def test_verify_writes_no_record_on_a_dirty_tree(
 def test_verify_dirtied_during_the_run_still_reports_the_process_exit(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # Dirtying the tree mid-run only suppresses the record; it does not
-    # change what the gate command itself exited with, and the verb's
-    # own exit code tracks the process exit, not `recorded`/`dirty`.
+    # Dirtying the tree mid-run suppresses the record and must also change
+    # the verb's exit code: exit 0 now means "green and recorded", and a
+    # dirty, unrecorded run is never that, whatever the gate command itself
+    # exited with. It still ran and the gate itself exited 0 with no
+    # timeout, so this is the same "green but unrecorded" case as any other
+    # unrecorded run: exit 3, not the generic process-failure exit 1.
     command = "echo dirty > src/dirty.py; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
 
     code = main(
@@ -425,7 +428,7 @@ def test_verify_dirtied_during_the_run_still_reports_the_process_exit(
         ]
     )
 
-    assert code == 0
+    assert code == 3
     printed = json.loads(capsys.readouterr().out)
     assert printed["recorded"] is False
     assert printed["dirty"] is True
@@ -523,9 +526,11 @@ def test_verify_rejects_a_relative_log_that_resolves_inside_the_store(
     assert not (repo / RECORD_REL).exists()
 
 
-def test_verify_store_check_runs_before_the_tracked_check(
+def test_verify_rejects_a_store_resolving_log_even_when_also_tracked(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    # The store check is the only CLI-level refusal: a log that resolves
+    # inside the store is rejected whether or not it happens to be tracked.
     notes = repo / "docs/dev/project-management/notes.md"
     notes.parent.mkdir(parents=True)
     notes.write_text("keep me\n")
@@ -535,25 +540,28 @@ def test_verify_store_check_runs_before_the_tracked_check(
     code = main(_verify_argv(repo, "--log", str(notes)))
 
     assert code == 2
-    err = capsys.readouterr().err
-    assert "resolves inside the store" in err
-    assert "resolves to a tracked file" not in err
+    assert "resolves inside the store" in capsys.readouterr().err
     assert notes.read_text() == "keep me\n"
 
 
-def test_verify_rejects_a_log_that_resolves_to_a_tracked_file(
+def test_verify_a_tracked_log_outside_the_store_is_not_refused_but_cannot_record(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    # A tracked destination outside the store is not refused up front (that
+    # extra guard was scope creep beyond the spec's store-only check) -- the
+    # gate runs, but writing through a tracked file is itself an edit, so
+    # the post-run dirty check still blocks the record: exit 3, same as any
+    # other green-but-unrecorded run.
     tracked = repo / "src" / "app.py"
     before = tracked.read_bytes()
 
     code = main(_verify_argv(repo, "--log", str(tracked)))
 
-    assert code == 2
-    captured = capsys.readouterr()
-    assert f"--log {tracked} resolves to a tracked file" in captured.err
-    assert captured.out == ""
-    assert tracked.read_bytes() == before
+    assert code == 3
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["recorded"] is False
+    assert printed["dirty"] is True
+    assert tracked.read_bytes() != before
     assert not (repo / RECORD_REL).exists()
 
 
@@ -572,11 +580,13 @@ def test_verify_accepts_an_untracked_log_outside_docs_dev_tmp(
     assert b"out" in log.read_bytes()
 
 
-def test_verify_rejects_a_force_added_log_under_docs_dev_tmp(
+def test_verify_a_force_added_tracked_log_under_docs_dev_tmp_still_records(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # docs/dev/tmp is gitignored, but a force-added file there is tracked:
-    # the refusal must come from asking git, not from the path's location.
+    # docs/dev/tmp is gitignored, but a force-added file there is tracked.
+    # It is also one of the store prefixes (scratch is never dirt, tracked
+    # or not), and outside docs/dev/project-management, so neither the CLI
+    # store check nor the dirty check touches it: the gate records.
     forced = repo / "docs/dev/tmp/forced.log"
     forced.parent.mkdir(parents=True)
     forced.write_text("keep me\n")
@@ -585,12 +595,11 @@ def test_verify_rejects_a_force_added_log_under_docs_dev_tmp(
 
     code = main(_verify_argv(repo, "--log", str(forced)))
 
-    assert code == 2
-    captured = capsys.readouterr()
-    assert f"--log {forced} resolves to a tracked file" in captured.err
-    assert captured.out == ""
-    assert forced.read_text() == "keep me\n"
-    assert not (repo / RECORD_REL).exists()
+    assert code == 0
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["recorded"] is True
+    assert printed["dirty"] is False
+    assert forced.read_text() != "keep me\n"
 
 
 def test_verify_rejects_a_symlinked_log_that_points_at_the_record(
