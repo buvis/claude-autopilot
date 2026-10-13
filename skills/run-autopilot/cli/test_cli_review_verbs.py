@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from cli import review_close, review_stage
+from cli import review_close, review_stage, verification
 from cli.__main__ import _SUBCOMMANDS, main
 
 PRD = "00249-x-v1.md"
@@ -475,3 +475,176 @@ def test_verify_exits_2_when_head_resolution_raises_oserror(
     )
 
     assert code == 2
+
+
+GREEN = "echo 'out'; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
+RECORD_REL = "docs/dev/project-management/autopilot/last-verification.json"
+
+
+def _verify_argv(repo: Path, *extra: str) -> list[str]:
+    return ["verify", "--gate-command", GREEN, "--repo-root", str(repo), *extra]
+
+
+def test_rejects_log_path_resolving_to_record(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(_verify_argv(repo)) == 0
+    record = repo / RECORD_REL
+    before = record.read_bytes()
+    capsys.readouterr()
+
+    code = main(_verify_argv(repo, "--log", str(record)))
+
+    assert code == 2
+    captured = capsys.readouterr()
+    assert f"--log {record} resolves inside the store" in captured.err
+    assert captured.out == ""
+    assert record.read_bytes() == before
+
+
+def test_verify_rejects_a_relative_log_that_resolves_inside_the_store(
+    repo: Path,
+    tmp_path_factory: pytest.TempPathFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # `..` climbs out of the gitignored tmp dir into the store; the check
+    # must judge where the path lands, joined to --repo-root, not its text.
+    scratch = tmp_path_factory.mktemp("elsewhere")
+    monkeypatch.chdir(scratch)
+    arg = "docs/dev/tmp/../project-management/somewhere.log"
+
+    code = main(_verify_argv(repo, "--log", arg))
+
+    assert code == 2
+    assert f"--log {arg} resolves inside the store" in capsys.readouterr().err
+    assert not (repo / "docs/dev/project-management/somewhere.log").exists()
+    assert not (scratch / "docs/dev/project-management/somewhere.log").exists()
+    assert not (repo / RECORD_REL).exists()
+
+
+def test_verify_store_check_runs_before_the_tracked_check(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    notes = repo / "docs/dev/project-management/notes.md"
+    notes.parent.mkdir(parents=True)
+    notes.write_text("keep me\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "--no-verify", "-q", "-m", "notes")
+
+    code = main(_verify_argv(repo, "--log", str(notes)))
+
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "resolves inside the store" in err
+    assert "resolves to a tracked file" not in err
+    assert notes.read_text() == "keep me\n"
+
+
+def test_verify_rejects_a_log_that_resolves_to_a_tracked_file(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    tracked = repo / "src" / "app.py"
+    before = tracked.read_bytes()
+
+    code = main(_verify_argv(repo, "--log", str(tracked)))
+
+    assert code == 2
+    captured = capsys.readouterr()
+    assert f"--log {tracked} resolves to a tracked file" in captured.err
+    assert captured.out == ""
+    assert tracked.read_bytes() == before
+    assert not (repo / RECORD_REL).exists()
+
+
+def test_relative_log_resolves_against_repo_root(
+    repo: Path,
+    tmp_path_factory: pytest.TempPathFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    scratch = tmp_path_factory.mktemp("elsewhere")
+    monkeypatch.chdir(scratch)
+    rel = "docs/dev/tmp/custom/out.log"
+
+    code = main(_verify_argv(repo, "--log", rel))
+
+    assert code == 0
+    printed = json.loads(capsys.readouterr().out)
+    assert Path(printed["log"]).resolve() == (repo / rel).resolve()
+    assert b"out" in (repo / rel).read_bytes()
+    assert not (scratch / rel).exists()
+
+
+def test_verify_untracked_log_outside_the_store_still_works(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    log = repo / "docs/dev/tmp/custom.log"
+
+    code = main(_verify_argv(repo, "--log", str(log)))
+
+    assert code == 0
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["recorded"] is True
+    assert Path(printed["log"]).resolve() == log.resolve()
+    assert b"out" in log.read_bytes()
+    assert (repo / RECORD_REL).exists()
+
+
+def test_verify_exits_2_when_the_log_cannot_be_opened(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The log's parent is a plain file, so opening the log raises OSError:
+    # the verb prints {sha, log, error} and exits 2, writing no record.
+    blocker = repo / "docs/dev/tmp/blocker"
+    blocker.parent.mkdir(parents=True)
+    blocker.write_text("not a dir\n")
+    log = blocker / "gate.log"
+
+    code = main(_verify_argv(repo, "--log", str(log)))
+
+    assert code == 2
+    printed = json.loads(capsys.readouterr().out)
+    assert set(printed) == {"sha", "log", "error"}
+    assert Path(printed["log"]).resolve() == log.resolve()
+    assert printed["error"]
+    assert not (repo / RECORD_REL).exists()
+
+
+def test_verify_exits_3_when_green_but_unrecorded(
+    repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # No black-box trigger for a green, clean, unrecorded run is known
+    # without reading run_gate, so the result is hand-built (the task
+    # brief allows this for this one test).
+    result = {
+        "exit": 0,
+        "timed_out": False,
+        "dirty": False,
+        "dirty_paths": [],
+        "recorded": False,
+        "passed": 1,
+    }
+    monkeypatch.setattr(verification, "run_gate", lambda *a, **kw: dict(result))
+
+    code = main(_verify_argv(repo))
+
+    assert code == 3
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["recorded"] is False
+    assert printed["exit"] == 0
+    assert printed["dirty_paths"] == []
+
+
+def test_verify_prints_the_dirty_paths(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (repo / "src" / "app.py").write_text("print('dirty')\n")
+
+    code = main(_verify_argv(repo))
+
+    assert code == 1
+    printed = json.loads(capsys.readouterr().out)
+    assert any("src/app.py" in str(p) for p in printed["dirty_paths"])
