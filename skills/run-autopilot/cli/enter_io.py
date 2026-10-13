@@ -8,6 +8,7 @@ handoff-row dispatch, and the design-gate's review-log predicate.
     git_head_sha(repo_root) -> str | None
     record_resume_row(prd, site, autopilot_dir) -> None
     review_log_has_dispatch_line(text) -> bool
+    loop_committer(batch_id) -> str
 """
 
 from __future__ import annotations
@@ -58,6 +59,12 @@ def record_resume_row(prd: str, site: str, autopilot_dir: Path) -> None:
             f"autopilot: enter: resume row exited {proc.returncode}: {proc.stderr.strip()}",
             file=sys.stderr,
         )
+
+
+def loop_committer(batch_id: str | None) -> str:
+    """The GIT_COMMITTER_NAME stamped on loop-driven commits: the batch
+    id, or 'no-batch' when the loop has none."""
+    return f"autopilot-loop/{batch_id or 'no-batch'}"
 
 
 def review_log_has_dispatch_line(text: str) -> bool:

@@ -48,8 +48,8 @@ import urllib.request
 from pathlib import Path
 
 from cli import (
-    convergence, enter, notify_out, pause, render_metrics, routing, runner, schema, state,
-    statectl, store_tree, usage_limit, wave_slots,
+    convergence, enter, enter_io, notify_out, pause, render_metrics, routing, runner, schema,
+    state, statectl, store_tree, usage_limit, wave_slots,
 )
 from cli.loop_act import PURGE_SCRIPT, ActMixin, run_agoge, run_purge, store_git
 from cli.loop_decision import (
@@ -415,6 +415,10 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
         the clock reading taken once the slot is held (or immediately, when
         there is none to wait for), so the metrics ts_start excludes the
         queue wait."""
+        state = _load_json(ap_dir / "state.json")
+        batch_id = (state.get("batch") or {}).get("id") if isinstance(state, dict) else None
+        self.env["GIT_COMMITTER_NAME"] = enter_io.loop_committer(batch_id)
+
         slots_dir = self.env.get("_AUTOPILOT_REVIEW_SLOTS_DIR", "")
         slot = None
         if phase == "review" and slots_dir:
