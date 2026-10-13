@@ -181,6 +181,7 @@ _REVIEW_VERB_TEST_FILES = (
     "skills/run-autopilot/cli/test_verification.py",
     "skills/run-autopilot/cli/test_verification_dirty.py",
     "skills/run-autopilot/cli/test_verification_hidden_flags.py",
+    "skills/run-autopilot/cli/test_verification_dirty_paths.py",
     "skills/run-autopilot/cli/test_state_no_change.py",
     "skills/run-autopilot/cli/test_cli_review_verbs.py",
     "skills/run-autopilot/cli/test_release_checks_counts.py",
