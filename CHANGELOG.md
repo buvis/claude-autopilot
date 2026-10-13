@@ -47,6 +47,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: gate commands match after normalizing, so the same suite command spelled with different whitespace reuses its record instead of rerunning
 - **run-autopilot**: a racing `review-close` keeps `state.json.bak` - an already-applied batch returns no-change rather than overwriting the backup
 - **review-work-completion**: Blake no longer reruns the suite; his prompt carries this cycle's `## Test gate` block
+- **run-autopilot**: the gate runs and writes its verification record in a repo that does not gitignore `docs/dev/tmp/`, instead of silently never running with no record and no error
+- **run-autopilot**: `autopilot verify` refuses (exit 2) a `--log` that points at the verification record or any other git-tracked file before opening anything, so the gate's own output can no longer overwrite or forge that file
+- **run-autopilot**: edits to a file marked skip-worktree or assume-unchanged now count as dirty, so a non-clean tree can no longer be recorded as clean
+- **run-autopilot**: `autopilot verify` exits 3 when the gate runs green but writes no record (for example, no parseable summary line), distinct from a real success (0) and a dirty, red or timed-out run (1)
+- **run-autopilot**: two concurrent `autopilot verify` runs no longer race the record and log file - the gate takes a lock, so only one run writes the record at a time
+- **run-autopilot**: gate reuse is refused when a tracked product symlink that aliases a path inside the store has a changed target, committed or uncommitted, so a store-only edit can no longer evade staleness detection
 
 ## [0.9.0] - 2026-10-05
 
