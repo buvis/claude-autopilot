@@ -111,6 +111,28 @@ def test_path_refusal_names_the_field_the_raw_value_and_the_resolved_path(
     assert str(resolved) in err
 
 
+def test_refusal_line_stays_single_line_with_control_chars(
+    env: dict,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """A `\\n` or a raw ANSI escape in the attacker-controlled `prd` field
+    must not forge extra output lines: `repr()` renders both as literal
+    escaped text, never as a line break or an unescaped ESC byte."""
+    raw = "../out\x1b[31mside\nFORGED: ok\x1b[0m.md"
+    state_path = _state_file(env, prd=raw)
+
+    code, calls = _cli_stage(env, monkeypatch, state_path)
+    err = capsys.readouterr().err
+
+    assert code == 2
+    assert calls == []
+    lines = [line for line in err.splitlines() if line]
+    assert len(lines) == 1
+    assert repr(raw) in err
+    assert "\x1b" not in err
+
+
 def test_stage_refuses_a_design_doc_outside_the_repo(
     env: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
