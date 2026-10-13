@@ -642,6 +642,14 @@
       "consensus": "1/3",
       "reason": "rework cap reached with this finding unresolved",
       "prd": "00278-make-release-checks-tell-truth-v1.md"
+    },
+    {
+      "type": "pre-existing-failure",
+      "issue": "dev/bin/release-checks reports 67 failures at HEAD aea2279; all 67 are in skills/run-autopilot/cli/test_gate_findings_unread_shapes.py (67 failed, 38 passed in isolation), which tests cli/gate.py _is_unread_line and is untouched by PRD 00279. The repo gate therefore cannot reach FAIL 0 until that pre-existing red file is fixed.",
+      "severity": "high",
+      "consensus": "1/3",
+      "reason": "verified pre-existing and outside PRD 00279 scope; needs its own PRD",
+      "prd": "00279-run-one-exact-reuse-rule-v1.md"
     }
   ]
 }

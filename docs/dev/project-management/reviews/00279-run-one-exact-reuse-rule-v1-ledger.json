@@ -1,0 +1,74 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "The supplied release gate reports 67 failures, so the required `FAIL 0` exit criterion is unmet; attribution to this change is unproven. Resolve the reported failures and verify with `bash dev/bin/release-checks`.",
+    "file": "dev/bin/release-checks:355",
+    "reason": "Verified pre-existing and out of this PRD's scope: a targeted run of skills/run-autopilot/cli/test_gate_findings_unread_shapes.py at HEAD aea2279 gives exactly 67 failed, 38 passed, accounting for every failure in the gate line. That file is not in `git diff --name-only d17dde6..HEAD`, and the module it exercises (skills/run-autopilot/cli/gate.py, _is_unread_line) is untouched by this PRD. Recorded as a deferred batch-end item (type pre-existing-failure) rather than reworked here."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "The recorded Test gate line reads \"6301 passed, 67 failed, 32 skipped\". The touched files pass for me. I could not attribute the 67 failures or show they predate this diff. Name them before the review calls the work green.",
+    "file": "N/A",
+    "reason": "Attribution done at the decision gate: all 67 failures are test_gate_findings_unread_shapes.py (67 failed, 38 passed in isolation), untouched by this diff and exercising cli/gate.py which this PRD does not change. Same deferral as the HIGH above."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "Existing functions exceed the 50-line limit, including `_run_locked_gate` at 52 lines and `run_gate` at 53. Their bodies are unchanged; refactoring them is outside this normalization/prose change.",
+    "file": "skills/run-autopilot/cli/verification.py:551",
+    "reason": "Pre-existing and raised by Bob in his own KNOWN bucket as out of scope. Both bodies are untouched by this diff; refactoring them is a separate change."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Out-of-scope formatter churn in this diff: quote-style flips in test_verify_queue_prose.py and a `run_gate(...)` argument reflow in test_verification_dirty.py. Neither traces to the PRD, so revert them.",
+    "file": "skills/run-autopilot/cli/test_verification_dirty.py:627",
+    "reason": "Cosmetic-only committed formatter output with no behavioral effect; reverting committed reflow now would churn the diff again for zero gain. The uncommitted half (R17) was reverted at the decision gate instead."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Step 6 runs `autopilot verify` in more cases than the PRD says. The PRD says only when `gate.tests_line` is absent. The prose also runs it when the section holds a non-counts line (`counts unavailable`, `dirty`, `failed to run`).",
+    "file": "skills/review-work-completion/SKILL.md:402",
+    "reason": "Blake calls it defensible himself: a `## Test gate` section holding `dirty` or `counts unavailable` yields no counts, so the fallback has to fire there or step 6 would write a non-counts Tests: line. Strictly narrowing to absent-only would be a regression."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "`_write_record` stores `normalize_command(command)`, which is the whitespace-collapsed command, not the raw command the PRD's module text names.",
+    "file": "skills/run-autopilot/cli/verification.py:379",
+    "reason": "Blake identifies the PRD as self-contradictory here and the behavior as harmless (reuse normalizes both sides). The implementation matches the PRD's prose wording and final-verification.md:131; no behavior to change."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The working tree carries uncommitted formatter-only quote reflow in `skills/work/scripts/test_verify_queue_prose.py` and `skills/run-autopilot/cli/test_verification_dirty.py`. It is unrelated to the PRD and has no behavioral effect. Revert or commit it separately.",
+    "file": "skills/work/scripts/test_verify_queue_prose.py:274",
+    "reason": "Fixed at the decision gate, not swept: `git checkout --` reverted both files, and `git status --porcelain` then showed no modified source file."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "Added tests push this file beyond the 800-line limit: the supplied mechanical facts place the final function through line 805. Move the command-normalization tests into a focused test module and register it.",
+    "file": "skills/run-autopilot/cli/test_verification_dirty.py:776",
+    "reason": "Contradicts computed facts: the file is 799 lines (`rg -c ''`), under the 800-line limit `check_style_limits.py` enforces (`file_limit: int = 800`), and the style gate over this task's diff exits 0. There is no violation to fix, so the split would be churn."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "4 touched test(s) pass against the pre-change code, including test_normalize_command_collapses_whitespace_only: the new whitespace-only tests do not pin this change at base.",
+    "file": "skills/run-autopilot/cli/test_verification_dirty.py",
+    "reason": "Refuted by measurement: the current test file run against the base tree (worktree at d17dde6, old stripping normalize_command) gives `6 failed, 9 passed` for `-k normalize_command` - the six `bash `/`sh `/`./` parameter cases fail at base, so the test function does pin the change. The mech replay reports per-function, and a partially-failing parametrized function is not a passing one."
+  }
+]

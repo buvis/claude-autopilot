@@ -4100,3 +4100,19 @@
 {"id":"fba53da8","ended_at":1791890760,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"id":"11711a8c","ended_at":1791890760,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791890760,"phase":"review","prd":"00279-run-one-exact-reuse-rule-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1791890796,"phase":"review","prd":"00279-run-one-exact-reuse-rule-v1.md"}
+{"id":"635b22e2","kind":"bob","task":"review-00279-c1","queued_at":1791891167,"prompt_bytes":9544}
+{"id":"e3f50135","kind":"carl","task":"review-00279-c1","queued_at":1791891167,"prompt_bytes":6553}
+{"id":"635b22e2","ended_at":1791891361,"elapsed_s":194,"outcome":"ok","detail":null}
+{"id":"e3f50135","ended_at":1791891365,"elapsed_s":198,"outcome":"error","detail":"retry: exit 1"}
+{"id":"dfb83e8d","kind":"bob","task":"review-00279-c1","queued_at":1791891404,"prompt_bytes":137610}
+{"id":"dfb83e8d","ended_at":1791891447,"elapsed_s":43,"outcome":"ok","detail":"retry"}
+{"id":"b6ada5f7","kind":"ivan","task":"4","queued_at":1791891825,"prompt_bytes":40674}
+{"id":"b6ada5f7","ended_at":1791891868,"elapsed_s":43,"outcome":"ok","detail":null}
+{"id":"b5a6fdeb","kind":"ivan","task":"5","queued_at":1791891954,"prompt_bytes":39886}
+{"id":"8bf5ac0c","kind":"pat","task":"5","queued_at":1791892055,"prompt_bytes":7272}
+{"id":"b5a6fdeb","ended_at":1791892096,"elapsed_s":142,"outcome":"ok","detail":null}
+{"id":"8bf5ac0c","ended_at":1791892100,"elapsed_s":45,"outcome":"ok","detail":null}
+{"id":"b5e5ae3d","kind":"pat","task":"7","queued_at":1791892187,"prompt_bytes":8030}
+{"id":"b5e5ae3d","ended_at":1791892238,"elapsed_s":51,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"review","edge":"leave","at":1791893006,"phase":"done","prd":"00279-run-one-exact-reuse-rule-v1.md"}
