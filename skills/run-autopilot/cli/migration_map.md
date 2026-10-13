@@ -22,14 +22,14 @@ Disposition legend:
 
 | behavior_id | source | disposition | test_id |
 |---|---|---|---|
-| park-consume-marker | references/phase-build.md § Handle park request | ported | test_records_park.py::test_normal_park_moves_prd_records_stall_and_resets_state |
+| park-consume-marker | references/phase-build.md § Handle park request | ported | test_records_park_wrapper_died.py::test_normal_park_moves_prd_records_stall_and_resets_state |
 | park-classify-decision | references/phase-build.md § Handle park request | ported | test_autopilot_resume.py::ParkDecisionTests |
-| park-skip-malformed | references/phase-build.md § Handle park request | ported | test_records_park.py::test_unparseable_json_marker_is_deleted_and_ignored |
-| park-skip-stale | references/phase-build.md § Handle park request | ported | test_records_park.py::test_marker_prd_not_in_wip_and_no_stall_op_is_deleted_as_stale |
-| park-execute-stall | references/phase-build.md § Handle park request | ported | test_records_park.py::test_normal_park_moves_prd_records_stall_and_resets_state |
-| park-increment-parks-consecutive | references/phase-build.md § Handle park request | ported | test_records_park.py::test_normal_park_lands_the_increment_and_the_reset_in_the_same_commit |
-| park-delete-marker-last | references/phase-build.md § Handle park request | ported | test_records_park.py::test_after_commit_before_marker_delete_leaves_marker_and_recovers_as_stale_on_retry |
-| park-systemic-halt | references/phase-build.md § Handle park request | ported | test_records_park.py::test_second_consecutive_park_triggers_systemic_halt |
+| park-skip-malformed | references/phase-build.md § Handle park request | ported | test_records_park_wrapper_died.py::test_unparseable_json_marker_is_deleted_and_ignored |
+| park-skip-stale | references/phase-build.md § Handle park request | ported | test_records_park_wrapper_died.py::test_marker_prd_not_in_wip_and_no_stall_op_is_deleted_as_stale |
+| park-execute-stall | references/phase-build.md § Handle park request | ported | test_records_park_wrapper_died.py::test_normal_park_moves_prd_records_stall_and_resets_state |
+| park-increment-parks-consecutive | references/phase-build.md § Handle park request | ported | test_records_park_wrapper_died.py::test_normal_park_lands_the_increment_and_the_reset_in_the_same_commit |
+| park-delete-marker-last | references/phase-build.md § Handle park request | ported | test_records_park_wrapper_died.py::test_after_commit_before_marker_delete_leaves_marker_and_recovers_as_stale_on_retry |
+| park-systemic-halt | references/phase-build.md § Handle park request | ported | test_records_park_wrapper_died.py::test_second_consecutive_park_triggers_systemic_halt |
 | stall-verified-move-to-hold | references/recovery.md § Loop-mode stall procedure | ported | test_records_stall.py::test_stall_creates_hold_dir_moves_prd_and_appends_one_deferred_record |
 | stall-deferred-json-record | references/recovery.md § Loop-mode stall procedure | ported | test_records_stall.py::test_stall_creates_hold_dir_moves_prd_and_appends_one_deferred_record |
 | stall-per-prd-reset | references/recovery.md § Loop-mode stall procedure | ported | test_records_stall.py::test_stall_creates_hold_dir_moves_prd_and_appends_one_deferred_record |
