@@ -820,45 +820,188 @@ def test_no_section_no_tokens_and_no_findings_keeps_the_exit_1_shape_gap(
     assert _verdict_and_exit(GOOD_FILE, verify, tmp_path) == ("malformed", one, 2)
 
 
-# PRD 00277: a red row needs no `[m/n]` token and no leading pipe to be a row.
-# Each line pairs a severity marker with a consensus-style marker or a column
-# layout, in a shape the bullet and pipe-row readers never read.
-_UNPARSED_CRITICAL_ROWS = {
-    "emoji bullet, no token": (
-        f"- {CRIT} CRITICAL: crash on empty input | src/a.py:3 | Found by: alice"
-    ),
-    "spaced brackets": f"- [2 / 2] {CRIT} crash on empty input | src/a.py:3",
-    "fullwidth brackets": f"- ［2/2］ {CRIT} crash on empty input | src/a.py:3",
-    "parentheses": f"- (2/2) {CRIT} crash on empty input | src/a.py:3",
-    "blockquoted table row": "> | CRITICAL | src/a.py:12 | crash on empty input |",
-    "pipe-less table": (
-        f"2/2    {CRIT} CRITICAL    crash on empty input    src/a.py:3    alice"
-    ),
-    "html table": (
-        f"<table><tr><td>{CRIT} CRITICAL</td><td>src/a.py:5</td>"
-        "<td>crash on empty input</td></tr></table>"
-    ),
+# PRD 00277: a severity row needs no `[m/n]` token and no leading pipe to be a
+# row. Each shape pairs a severity marker with a consensus-style marker or a
+# column layout, in a shape the bullet and pipe-row readers never read.
+def _unparsed_rows(mn: str, sev: str, word: str, issue: str, file: str) -> dict:
+    """The seven unparsed shapes, built from one row's facts; `file` may be
+    empty, the way a reviewer leaves the cell blank."""
+    m, n = mn.split("/")
+    tail = f"{issue} | {file}" if file else issue
+    return {
+        "emoji bullet, no token": f"- {sev} {word}: {tail} | Found by: alice",
+        "spaced brackets": f"- [{m} / {n}] {sev} {tail}",
+        "fullwidth brackets": f"- ［{mn}］ {sev} {tail}",
+        "parentheses": f"- ({mn}) {sev} {tail}",
+        "blockquoted table row": f"> | {word} | {file} | {issue} |",
+        "pipe-less table": f"{mn}    {sev} {word}    {issue}    {file}    alice",
+        "html table": (
+            f"<table><tr><td>{sev} {word}</td><td>{file}</td>"
+            f"<td>{issue}</td></tr></table>"
+        ),
+    }
+
+
+# One row per consensus token, each with its own severity, issue text and file
+# (a non-src path, a non-Python file, no file at all): no shared fixture text,
+# path shape or severity stands in for the shape itself.
+_ROW_FACTS = (
+    (CRIT, "CRITICAL", "stale cache survives restart", "skills/x.py:3"),
+    (HIGH, "HIGH", "retry loop never backs off", "lib/a.ts:9"),
+    (MED, "MEDIUM", "token leaks into the log", ""),
+)
+_ROW_VARIANTS = [
+    (token.strip("[]"), *facts) for token, facts in zip(_CONSENSUS_TOKENS, _ROW_FACTS)
+]
+_SHAPE_NAMES = tuple(_unparsed_rows(*_ROW_VARIANTS[0]))
+_REVIEWER_BODIES = {
+    "Alice": "- finding one",
+    "Blake": "No spec drift found.",
+    "Bob": "D1: pass",
 }
+_FINDINGS_SECTION = "Consolidated Findings"
+
+
+def _placed(row: str, where: str) -> str:
+    """The review with `row` as the body of `## {where}`; in the findings
+    section it sits below the covered ref table, after a blank line."""
+    if where == _FINDINGS_SECTION:
+        return _review_text(f"{_REF_TABLE}\n{row}\n")
+    return _review_text().replace(_REVIEWER_BODIES[where], row)
+
+
+@pytest.mark.parametrize("where", [*_REVIEWER_BODIES, _FINDINGS_SECTION])
+@pytest.mark.parametrize(
+    "variant",
+    _ROW_VARIANTS,
+    ids=[f"{v[0]} {v[2]}" for v in _ROW_VARIANTS],
+)
+@pytest.mark.parametrize("shape", _SHAPE_NAMES)
+def test_critical_row_in_unparsed_shape_is_malformed(
+    shape: str,
+    variant: tuple,
+    where: str,
+    tmp_path: Path,
+) -> None:
+    """Under any reviewer heading or inside the findings section beside the
+    covered ref table: a severity row no reader parses is refused, named by its
+    own line, exit 2 - with an empty batch and with the batch that covers every
+    row the parser did read."""
+    row = _unparsed_rows(*variant)[shape]
+    text = _placed(row, where)
+    assert row in text.splitlines()
+    for findings in ([], _COVERED):
+        verdict = _verdict_and_exit(text, findings, tmp_path)
+        assert verdict == ("malformed", _unread_detail(text, row), 2)
+
+
+def _near_variants() -> dict:
+    """Each shape indented 1-3 spaces and tab-separated, plus spellings that
+    no fixture prefix matches."""
+    base = _unparsed_rows(*_ROW_VARIANTS[0])
+    rows = {
+        f"{name}, {k}-space indent": " " * k + row
+        for name, row in base.items()
+        for k in (1, 2, 3)
+    }
+    for name, row in base.items():
+        tabbed = row.replace("    ", "\t").replace(" | ", "\t|\t")
+        rows[f"{name}, tab-separated"] = tabbed.replace("><", ">\t<")
+    return rows | {
+        "asymmetric spaced brackets": f"- [2/ 2] {CRIT} stale cache | skills/x.py:3",
+        "lenticular brackets": f"- 【2/2】 {HIGH} retry loop stalls | lib/a.ts:9",
+        "upper-case html tags": f"<TABLE><TR><TD>{HIGH} HIGH</TD><TD>lib/a.ts:9</TD>",
+        "nested blockquote": "> > | CRITICAL | lib/a.ts:9 | retry loop never backs off |",
+        "dash after the severity": f"- {CRIT} CRITICAL - token leaks | lib/a.ts:9",
+        "low severity emoji": "- ⚪ LOW: typo in the help text | docs/x.md:2",
+    }
+
+
+_NEAR_VARIANTS = _near_variants()
+
+
+@pytest.mark.parametrize("row", list(_NEAR_VARIANTS.values()), ids=list(_NEAR_VARIANTS))
+def test_a_near_variant_of_an_unparsed_shape_is_malformed(
+    row: str,
+    tmp_path: Path,
+) -> None:
+    """Spacing, indent, tabs, bracket pair and tag case do not hide a row."""
+    text = _review_text(alice=row)
+    verdict = _verdict_and_exit(text, _COVERED, tmp_path)
+    assert verdict == ("malformed", _unread_detail(text, row), 2)
+
+
+@pytest.mark.parametrize("word", ["Critical", "critical", "High", "medium", "LOW"])
+@pytest.mark.parametrize(
+    "template",
+    ["> | {} | lib/a.ts:9 | retry loop never backs off |", "Row 3: | {} | lib/a.ts:9 |"],
+    ids=["blockquoted", "text before the pipes"],
+)
+def test_a_pipe_bounded_severity_word_in_any_case_is_malformed(
+    template: str,
+    word: str,
+    tmp_path: Path,
+) -> None:
+    """A severity word between pipes, with no emoji, is a row whatever its case:
+    the table reader itself reads `Critical` and `critical` as one severity."""
+    row = template.format(word)
+    text = _review_text(alice=row)
+    verdict = _verdict_and_exit(text, _COVERED, tmp_path)
+    assert verdict == ("malformed", _unread_detail(text, row), 2)
 
 
 @pytest.mark.parametrize(
     "row",
-    list(_UNPARSED_CRITICAL_ROWS.values()),
-    ids=list(_UNPARSED_CRITICAL_ROWS),
+    [
+        "- [2 / 2] stale cache survives restart | skills/x.py:3",
+        "- ［2/2］ stale cache survives restart | skills/x.py:3",
+        "- (2/2) stale cache survives restart | skills/x.py:3",
+    ],
+    ids=["spaced brackets", "fullwidth brackets", "parentheses"],
 )
-def test_critical_row_in_unparsed_shape_is_malformed(row: str, tmp_path: Path) -> None:
-    """Under `## Alice`, beside the covered ref table: a red row no reader
-    parses is refused, named by its own line, exit 2 - with an empty batch and
-    with the batch that covers every row the parser did read."""
+def test_a_consensus_marker_variant_without_a_severity_is_malformed(
+    row: str,
+    tmp_path: Path,
+) -> None:
+    """The marker variant is a consensus token on its own: no severity needed."""
+    text = _review_text(alice=row)
+    verdict = _verdict_and_exit(text, _COVERED, tmp_path)
+    assert verdict == ("malformed", _unread_detail(text, row), 2)
+
+
+_NOT_FINDINGS = {
+    "heading and prose": "### Critical path\n\nTwo critical issues were found and fixed.",
+    "prose bullet naming a file": "- Two CRITICAL issues fixed in src/a.py:3",
+    "prose bullet, lower case": "- fixed the high-severity crash in lib/a.ts:9",
+    "severity-free bullet": "- stale cache survives restart | skills/x.py:3 | alice",
+    "severity-free blockquote": "> | note | skills/x.py:3 | stale cache survives |",
+    "severity-free pipe-less": "2/2    note    stale cache    skills/x.py:3    alice",
+    "severity-free html": "<table><tr><td>note</td><td>skills/x.py:3</td></tr></table>",
+}
+
+
+@pytest.mark.parametrize("prose", list(_NOT_FINDINGS.values()), ids=list(_NOT_FINDINGS))
+def test_a_line_with_no_severity_signal_is_not_a_row(prose: str) -> None:
+    """Prose naming a severity word or a file, and a row shape carrying no
+    severity and no marker variant, are not findings: the covered batch passes."""
     from cli import gate
 
-    text = _review_text(alice=row)
-    for findings in ([], _COVERED):
-        verdict = _verdict_and_exit(text, findings, tmp_path)
-        assert verdict == ("malformed", _unread_detail(text, row), 2)
-    # Control: prose and a heading that only mention a severity are no row.
-    prose = "### Critical path\n\nTwo critical issues were found and fixed."
     assert gate.findings_verdict(_review_text(alice=prose), _COVERED) == ("ok", None)
+
+
+@pytest.mark.parametrize("shape", _SHAPE_NAMES)
+def test_an_unparsed_row_above_a_stray_token_is_the_line_named(shape: str) -> None:
+    """The refusal names the FIRST unread line: an unparsed severity row above
+    a stray `- [1/3]` bullet, not the bullet a token-only pass would hit."""
+    from cli import gate
+
+    row = _unparsed_rows(*_ROW_VARIANTS[1])[shape]
+    stray = f"- [1/3] {MED} second stray | src/f.py:9 | Found by: bob"
+    text = _review_text(alice=row).replace("D1: pass", f"D1: pass\n{stray}")
+    lines = text.splitlines()
+    assert lines.index(row) < lines.index(stray)
+    verdict = gate.findings_verdict(text, _COVERED)
+    assert verdict == ("malformed", _unread_detail(text, row))
 
 
 if __name__ == "__main__":
