@@ -11,6 +11,7 @@ nothing else.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import signal
@@ -19,7 +20,9 @@ import sys
 import threading
 import time
 
-from cli.watchdog import Watchdog
+import pytest
+
+from cli.watchdog import Watchdog, session_busy
 
 
 def _spawn_sleeper(secs: float = 300) -> subprocess.Popen:
@@ -376,3 +379,218 @@ def test_unreadable_activity_path_counts_as_silent(tmp_path):
     assert dog.fired is True
     assert dog.fired_reason == "idle"
     assert proc.returncode == -signal.SIGTERM
+
+
+# session_busy: a session is busy while a tool_use has no tool_result yet, or
+# while the last background_tasks_changed event still lists live tasks.
+
+
+def _init_event() -> dict:
+    return {"type": "system", "subtype": "init", "session_id": "s1"}
+
+
+def _assistant_text(text: str) -> dict:
+    return {"type": "assistant", "message": {"content": [{"type": "text", "text": text}]}}
+
+
+def _tool_use(*ids: str) -> dict:
+    return {
+        "type": "assistant",
+        "message": {
+            "content": [
+                {"type": "tool_use", "id": i, "name": "Bash", "input": {"command": "ls"}}
+                for i in ids
+            ]
+        },
+    }
+
+
+def _tool_result(*ids: str) -> dict:
+    return {
+        "type": "user",
+        "message": {
+            "content": [
+                {"type": "tool_result", "tool_use_id": i, "content": "ok"} for i in ids
+            ]
+        },
+    }
+
+
+def _bg_tasks(*task_ids: str) -> dict:
+    return {
+        "type": "system",
+        "subtype": "background_tasks_changed",
+        "tasks": [{"id": t, "status": "running"} for t in task_ids],
+    }
+
+
+def _write_log(path, lines: list) -> str:
+    rows = [line if isinstance(line, str) else json.dumps(line) for line in lines]
+    path.write_text("".join(row + "\n" for row in rows))
+    return str(path)
+
+
+def test_session_busy_open_tool_use_without_result_is_busy(tmp_path):
+    log = _write_log(
+        tmp_path / "log.jsonl",
+        [_init_event(), _assistant_text("running it"), _tool_use("toolu_1")],
+    )
+    assert session_busy(log) is True
+
+
+def test_session_busy_closed_tool_pair_without_background_tasks_is_idle(tmp_path):
+    log = _write_log(
+        tmp_path / "log.jsonl",
+        [
+            _init_event(),
+            _tool_use("toolu_1"),
+            _tool_result("toolu_1"),
+            _assistant_text("done"),
+        ],
+    )
+    assert session_busy(log) is False
+
+
+def test_session_busy_result_for_a_different_id_leaves_the_tool_use_open(tmp_path):
+    log = _write_log(
+        tmp_path / "log.jsonl",
+        [_init_event(), _tool_use("toolu_1"), _tool_result("toolu_other")],
+    )
+    assert session_busy(log) is True
+
+
+def test_session_busy_one_unanswered_tool_use_among_several_is_busy(tmp_path):
+    log = _write_log(
+        tmp_path / "log.jsonl",
+        [
+            _init_event(),
+            _tool_use("toolu_1", "toolu_2"),
+            _tool_result("toolu_1"),
+            _tool_use("toolu_3"),
+            _tool_result("toolu_3"),
+        ],
+    )
+    assert session_busy(log) is True
+
+
+def test_session_busy_all_parallel_tool_uses_answered_is_idle(tmp_path):
+    log = _write_log(
+        tmp_path / "log.jsonl",
+        [
+            _init_event(),
+            _tool_use("toolu_1", "toolu_2"),
+            _tool_result("toolu_2", "toolu_1"),
+        ],
+    )
+    assert session_busy(log) is False
+
+
+def test_session_busy_live_background_tasks_in_last_event_is_busy(tmp_path):
+    log = _write_log(
+        tmp_path / "log.jsonl",
+        [
+            _init_event(),
+            _tool_use("toolu_1"),
+            _tool_result("toolu_1"),
+            # An earlier empty list must not mask the later live one.
+            _bg_tasks(),
+            _bg_tasks("bg1"),
+            _assistant_text("waiting on the background job"),
+        ],
+    )
+    assert session_busy(log) is True
+
+
+def test_session_busy_only_the_last_background_tasks_event_counts(tmp_path):
+    log = _write_log(
+        tmp_path / "log.jsonl",
+        [
+            _init_event(),
+            _bg_tasks("bg1", "bg2"),
+            _tool_use("toolu_1"),
+            _tool_result("toolu_1"),
+            _bg_tasks("bg2"),
+            _bg_tasks(),
+            _assistant_text("all done"),
+        ],
+    )
+    assert session_busy(log) is False
+
+
+def test_session_busy_missing_log_file_is_idle(tmp_path):
+    assert session_busy(str(tmp_path / "never-created.jsonl")) is False
+
+
+@pytest.mark.skipif(
+    hasattr(os, "geteuid") and os.geteuid() == 0, reason="root reads mode-000 files"
+)
+def test_session_busy_unreadable_log_file_is_idle(tmp_path):
+    path = tmp_path / "log.jsonl"
+    # Content that would read as busy if the file could be read.
+    log = _write_log(path, [_init_event(), _tool_use("toolu_1")])
+    os.chmod(log, 0)
+    try:
+        assert session_busy(log) is False
+    finally:
+        os.chmod(log, 0o600)
+
+
+def test_session_busy_malformed_lines_are_skipped_in_a_closed_log(tmp_path):
+    log = _write_log(
+        tmp_path / "log.jsonl",
+        [
+            "not json at all",
+            _init_event(),
+            '{"type": "assistant", "message": {"content": [',
+            _tool_use("toolu_1"),
+            "[1, 2, 3]",
+            '"just a string"',
+            "42",
+            "null",
+            "",
+            _tool_result("toolu_1"),
+            "}{",
+        ],
+    )
+    assert session_busy(log) is False
+
+
+def test_session_busy_scanning_continues_past_malformed_lines(tmp_path):
+    # Garbage before and after must not stop the scan or hide the open call.
+    log = _write_log(
+        tmp_path / "log.jsonl",
+        [
+            "garbage line",
+            "[1, 2, 3]",
+            _init_event(),
+            "{broken",
+            _tool_use("toolu_1"),
+            "null",
+            "trailing garbage",
+        ],
+    )
+    assert session_busy(log) is True
+
+
+def test_session_busy_malformed_lines_do_not_hide_live_background_tasks(tmp_path):
+    log = _write_log(
+        tmp_path / "log.jsonl",
+        [_init_event(), "{oops", _bg_tasks("bg1"), "not json"],
+    )
+    assert session_busy(log) is True
+
+
+def test_session_busy_internal_fault_counts_as_busy(tmp_path, monkeypatch):
+    # A closed, readable log that would be idle; a fault while scanning it
+    # (not a missing file, not a malformed line) must keep the session alive.
+    log = _write_log(
+        tmp_path / "log.jsonl",
+        [_init_event(), _tool_use("toolu_1"), _tool_result("toolu_1")],
+    )
+    assert session_busy(log) is False
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("parser fault")
+
+    monkeypatch.setattr(json, "loads", boom)
+    assert session_busy(log) is True
