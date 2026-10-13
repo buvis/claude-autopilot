@@ -241,15 +241,24 @@ def _batch_report(out: dict, state_path: Path) -> bool:
 def _write_prd(
     out: dict, state_path: Path, prds_dir: Path, autopilot_dir: Path,
     record_resume_row: Callable[[str, str, Path], None],
+    now: Callable[[], str],
 ) -> dict | None:
-    """Step 10 writes: state.prd, the frontmatter fields, the handoff row.
+    """Step 10 writes: state.prd, prd_budget_since, the frontmatter fields, the
+    handoff row. prd_budget_since is stamped when absent or when the pre-write
+    state.prd differs from the PRD entered now; otherwise it is kept.
     Returns the fields, or None after a state_write_failed stop. The write's
     warnings AND its reset lines travel on in `out["warnings"]`, halt or not -
     a frontmatter value that overwrote one state already held is a diagnostic a
     session entering here would otherwise never see."""
     prd = out["prd"]
+
+    def _enter_prd(data: dict) -> None:
+        if "prd_budget_since" not in data or data.get("prd") != prd:
+            data["prd_budget_since"] = now()
+        data["prd"] = prd
+
     try:
-        statectl.mutate(state_path, lambda data: data.update(prd=prd))
+        statectl.mutate(state_path, _enter_prd)
         fields, warnings, resets = frontmatter.apply(
             prds_dir / "wip" / prd, state_path,
         )
@@ -355,7 +364,7 @@ def enter(
         return out
     if _batch_report(out, state_path):
         return out
-    fields = _write_prd(out, state_path, prds_dir, autopilot_dir, record_resume_row)
+    fields = _write_prd(out, state_path, prds_dir, autopilot_dir, record_resume_row, now)
     if fields is None:
         return out
     out["lane_effective"] = fields["lane_effective"]
