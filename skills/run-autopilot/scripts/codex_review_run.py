@@ -45,9 +45,10 @@ import subprocess
 import sys
 import threading
 import time
+from collections import deque
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # codex_review_run.py: scripts/ -> run-autopilot/
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/ -> run-autopilot/
 from cli.procinfo import child_names, cpu_seconds
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -262,15 +263,15 @@ def _descendants(root_pid: int) -> list[str]:
     """
     found: list[str] = []
     seen: set[int] = set()
-    stack = [root_pid]
-    while stack:
-        cur = stack.pop()
+    queue: deque[int] = deque([root_pid])
+    while queue:
+        cur = queue.popleft()
         for pid, name in child_names(cur):
             if pid in seen:
                 continue
             seen.add(pid)
             found.append(name)
-            stack.append(pid)
+            queue.append(pid)
     return found
 
 

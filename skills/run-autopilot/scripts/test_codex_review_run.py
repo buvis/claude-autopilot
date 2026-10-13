@@ -726,6 +726,7 @@ class DescendantsTests(unittest.TestCase):
     def test_descendants_lists_a_spawned_child(self) -> None:
         import signal
         import subprocess
+        import time
 
         # Absolute path avoids a PATH `sleep` resolving to a coreutils
         # symlink (e.g. `gsleep`) on some machines, which would change the
@@ -735,22 +736,28 @@ class DescendantsTests(unittest.TestCase):
             start_new_session=True,
         )
         try:
-            names = dr._descendants(proc.pid)
-            self.assertEqual(sorted(names), ["bash", "sleep"])
+            # Poll: the grandchild (sleep) may not have forked yet the
+            # instant Popen returns, which made this test flaky.
+            expected = ["bash", "sleep"]
+            deadline = time.monotonic() + 10
+            names = sorted(dr._descendants(proc.pid))
+            while time.monotonic() < deadline and names != expected:
+                time.sleep(0.05)
+                names = sorted(dr._descendants(proc.pid))
+            self.assertEqual(names, expected)
         finally:
             with contextlib.suppress(Exception):
                 os.killpg(proc.pid, signal.SIGKILL)
             proc.wait()
 
-    def test_descendants_of_a_childless_pid_is_empty(self) -> None:
-        import subprocess
+    def test_descendants_of_a_childless_pid_is_empty_via_child_names(self) -> None:
+        """Pins the empty result to a successful, empty `child_names` call
+        (not an incidental side effect of a failure path)."""
+        import unittest.mock as mock
 
-        proc = subprocess.Popen(["/bin/sleep", "60"])
-        try:
-            self.assertEqual(dr._descendants(proc.pid), [])
-        finally:
-            proc.kill()
-            proc.wait()
+        with mock.patch.object(dr, "child_names", return_value=[]) as mocked:
+            self.assertEqual(dr._descendants(12345), [])
+        mocked.assert_called_once_with(12345)
 
 
 class CpuSecondsTests(unittest.TestCase):
