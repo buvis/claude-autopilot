@@ -4116,3 +4116,5 @@
 {"id":"b5e5ae3d","kind":"pat","task":"7","queued_at":1791892187,"prompt_bytes":8030}
 {"id":"b5e5ae3d","ended_at":1791892238,"elapsed_s":51,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"review","edge":"leave","at":1791893006,"phase":"done","prd":"00279-run-one-exact-reuse-rule-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1791893052,"phase":"done","prd":"00279-run-one-exact-reuse-rule-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1791893133,"phase":"build","prd":"00279-run-one-exact-reuse-rule-v1.md"}

@@ -650,6 +650,15 @@
       "consensus": "1/3",
       "reason": "verified pre-existing and outside PRD 00279 scope; needs its own PRD",
       "prd": "00279-run-one-exact-reuse-rule-v1.md"
+    },
+    {
+      "type": "deferred_decision",
+      "cycle": 1,
+      "issue": "dev/bin/release-checks reports 67 pre-existing failures at HEAD aea2279, all in skills/run-autopilot/cli/test_gate_findings_unread_shapes.py (cli/gate.py _is_unread_line), untouched by PRD 00279",
+      "severity": "high",
+      "action": "deferred to batch end",
+      "reason": "verified pre-existing and outside PRD 00279 scope; the gate cannot reach FAIL 0 until that red file gets its own PRD",
+      "prd": "00279-run-one-exact-reuse-rule-v1.md"
     }
   ]
 }

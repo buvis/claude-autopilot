@@ -49,14 +49,18 @@ Generated: 2026-10-13
 - [x] 00285-resolve-process-facts-without-ps-v1 (1 cycle)
 - [x] 00276-make-the-gate-record-trustworthy-v1 (2 cycles)
 - [x] 00278-make-release-checks-tell-truth-v1 (2 cycles)
-- [ ] 00279-run-one-exact-reuse-rule-v1 (in progress, selected, entering catchup/design)
-- backlog: 00282, 00283, 00284 (loop efficiency, from discovery 00281).
-- held: 00277-catch-critical-rows-in-every-shape-v1 (stalled on a
+- [x] 00279-run-one-exact-reuse-rule-v1 (1 cycle)
+- [ ] 00282-loop-guards-v1 (backlog)
+- [ ] 00283-loop-catchup-v1 (backlog)
+- [ ] 00284-loop-launch-context-v1 (backlog)
+
+Observations: held: 00277-catch-critical-rows-in-every-shape-v1 (stalled on a
   blocking-escalation design question, see commit 4debc71) and 00280
-  (2026-10-12 backlog review), plus 16 triage stubs minted across
-  00271/00285/00276/00278's closes — 00286-00301 (`dev/bin/release-checks`
+  (2026-10-12 backlog review), plus 18 triage stubs minted across
+  00271/00285/00276/00278/00279's closes — 00286-00303 (`dev/bin/release-checks`
   is still RED on this host for pre-existing sandbox reasons unrelated to
-  any held item).
+  any held item; 00279's close confirmed the 67 failures live only in
+  test_gate_findings_unread_shapes.py, untouched by any closed PRD).
 
 Observations: 00271 closed converged-with-deferrals at the cycle-2 rework
 cap (10 unresolved cap-overflow findings + 6 cycle-1 deferrals, 16 total,
