@@ -308,16 +308,10 @@ def _record_shape_ok(record: dict, gate_command: str) -> bool:
 
 
 def normalize_command(command: object) -> str:
-    """Collapses whitespace, then strips one leading `bash `/`sh ` and one
-    leading `./`. A non-str maps to ""."""
+    """Collapses whitespace only (str.split semantics). A non-str maps to ""."""
     if not isinstance(command, str):
         return ""
-    text = " ".join(command.split())
-    for shell in ("bash ", "sh "):
-        if text.startswith(shell):
-            text = text[len(shell):]
-            break
-    return text.removeprefix("./")
+    return " ".join(command.split())
 
 
 def reuse_verdict(
