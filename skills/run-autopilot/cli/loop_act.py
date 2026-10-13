@@ -232,10 +232,11 @@ class ActMixin:
         if marker.is_file():
             return self._park_marker_pending(marker)
         self._park_relaunches = 0
+        payload = {"prd": decision["prd"], "reason": decision["detail"]}
+        if decision.get("park_site"):
+            payload["site"] = decision["park_site"]
         try:
-            marker.write_text(
-                json.dumps({"prd": decision["prd"], "reason": decision["detail"]}),
-            )
+            marker.write_text(json.dumps(payload))
             written = marker.stat().st_size > 0
         except OSError:
             written = False

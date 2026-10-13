@@ -585,6 +585,7 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
 
             decision = self._decide(ap_dir, ts_start)
             self._fingerprint_bound(decision, ap_dir / "state.json")
+            self._budget_bound(decision, ap_dir)
             ts_end = self._clock()
             self._append_metrics(
                 ap_dir,

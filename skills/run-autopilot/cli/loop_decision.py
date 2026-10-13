@@ -136,6 +136,59 @@ def last_result_field(log_path: Path, field: str, error_only: bool = False):
     return value
 
 
+_BUDGET_DEFAULT_USD = 300.0
+
+
+def budget_usd_for(env: dict) -> float:
+    """`_AUTOPILOT_PRD_BUDGET_USD`: the per-PRD dollar budget. Absent or
+    unparseable keeps the default; `0` disables the bound."""
+    raw = env.get("_AUTOPILOT_PRD_BUDGET_USD")
+    if raw is None:
+        return _BUDGET_DEFAULT_USD
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return _BUDGET_DEFAULT_USD
+
+
+def _iso_epoch(stamp) -> float | None:
+    """An ISO UTC stamp (`2026-09-29T12:00:00Z`) as epoch seconds, or None."""
+    if not isinstance(stamp, str) or not stamp:
+        return None
+    try:
+        parsed = _dt.datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=_dt.timezone.utc)
+    return parsed.timestamp()
+
+
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def prd_spend_since(metrics_path: Path, prd: str, since: float) -> float:
+    """Sum of `cost_usd` over metrics rows for `prd` with `ts_start >=
+    since`. Malformed lines and rows missing either field count as 0."""
+    total = 0.0
+    try:
+        with open(metrics_path, "rb") as fh:
+            for raw in fh:
+                try:
+                    row = json.loads(raw)
+                except ValueError:
+                    continue
+                if not isinstance(row, dict) or row.get("prd") != prd:
+                    continue
+                ts, cost = row.get("ts_start"), row.get("cost_usd")
+                if _is_number(ts) and _is_number(cost) and ts >= since:
+                    total += cost
+    except OSError:
+        return total
+    return total
+
+
 def _mtime(path: Path) -> int | None:
     try:
         return int(path.stat().st_mtime)
@@ -150,7 +203,7 @@ def _utcnow_iso() -> str:
 class DecisionMixin:
     """Loop's decision table: _decide, _decide_from_state, _decide_no_progress,
     _limit_wait_for, _yield_at_warning, _decide_limit_wait,
-    _decide_network_outage, _decide_died, _fingerprint_bound. Reads self._int,
+    _decide_network_outage, _decide_died, _fingerprint_bound, _budget_bound. Reads self._int,
     self._clock, self._sleep, self._probe, self._detect_limit, self.env,
     self.err, self.loop_pid, the counters self._net_retries,
     self._died_retries, self._fp_prev, self._fp_repeats - all set by
@@ -425,3 +478,26 @@ class DecisionMixin:
         else:
             self._fp_repeats = 0
             self._fp_prev = ""
+
+    def _budget_bound(self, decision: dict, ap_dir: Path) -> None:
+        """Per-PRD dollar budget: a relaunch whose PRD has spent more than
+        `_AUTOPILOT_PRD_BUDGET_USD` since `state.prd_budget_since` (metrics
+        rows plus this session's cost) parks with `park_site: budget`."""
+        if decision["signal"] != "continue" or not decision.get("prd"):
+            return
+        budget = budget_usd_for(self.env)
+        if budget == 0:
+            return
+        state = _load_json(ap_dir / "state.json")
+        since = _iso_epoch(state.get("prd_budget_since")) if isinstance(state, dict) else None
+        if since is None:
+            return
+        prd = decision["prd"]
+        total = prd_spend_since(ap_dir / "loop-metrics.jsonl", prd, since)
+        session = last_result_field(ap_dir / "last-session.log", "total_cost_usd")
+        if _is_number(session):
+            total += session
+        if total > budget:
+            decision["signal"] = "park"
+            decision["park_site"] = "budget"
+            decision["detail"] = f"budget: ${total:.2f} > ${budget:g}; parking {prd}"
