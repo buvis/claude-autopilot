@@ -837,5 +837,26 @@ def test_budget_since_is_refreshed_on_a_switch_to_another_prd(env: Env) -> None:
     assert env.read_state()["prd_budget_since"] == LATER
 
 
+def test_budget_since_is_set_when_absent_on_same_prd_reentry(env: Env) -> None:
+    env.write_state(_open_state(prd=PRD))
+    env.put("wip")
+
+    out = env.run(prd_arg=PRD, now=lambda: LATER)
+
+    assert out["stop"] is None
+    assert out["prd"] == PRD
+    assert env.read_state()["prd_budget_since"] == LATER
+
+
+def test_budget_since_is_set_before_the_lane_stop(env: Env) -> None:
+    env.write_state(_open_state())
+    env.put("wip", PRD, _prd_text(lane="solo"))
+
+    out = env.run(now=lambda: LATER)
+
+    assert (out["stop"], out["prd"]) == ("lane", PRD)
+    assert env.read_state()["prd_budget_since"] == LATER
+
+
 # The `enter` CLI verb's own tests live in `test_enter_cli.py`: the subprocess
 # lane was split out of this file when it passed the 800-line limit.
