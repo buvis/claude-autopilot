@@ -4122,3 +4122,23 @@
 {"kind":"handoff","site":"build","edge":"leave","at":1791894758,"phase":"build","prd":"00282-loop-guards-v1.md"}
 {"kind":"handoff","site":"build","edge":"resume","at":1791894788,"phase":"build","prd":"00282-loop-guards-v1.md"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791898039,"phase":"build","prd":"00282-loop-guards-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791898057,"phase":"build","prd":"00282-loop-guards-v1.md"}
+{"id":"56022d4f","kind":"tess","task":"5","queued_at":1791898172,"prompt_bytes":72154}
+{"id":"e6c95245","kind":"tess","task":"5","queued_at":1791898191,"prompt_bytes":69695}
+{"id":"5942ecbe","kind":"tess","task":"5","queued_at":1791898233,"prompt_bytes":46959}
+{"id":"0512f4af","kind":"devon","task":"5","queued_at":1791898502,"prompt_bytes":41637}
+{"id":"9d6c16a6","kind":"tess","task":"5","queued_at":1791898741,"prompt_bytes":13132}
+{"id":"e21182f2","kind":"tess","task":"5","queued_at":1791898971,"prompt_bytes":10263}
+{"id":"21f2cc06","kind":"ivan","task":"5","queued_at":1791899552,"prompt_bytes":80320}
+{"id":"b711bce6","kind":"ivan","task":"5","queued_at":1791899570,"prompt_bytes":39124}
+{"id":"7d3e4142","kind":"pat","task":"5","queued_at":1791899813,"prompt_bytes":20441}
+{"id":"56022d4f","ended_at":1791900025,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"e6c95245","ended_at":1791900025,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"5942ecbe","ended_at":1791900025,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"0512f4af","ended_at":1791900025,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"9d6c16a6","ended_at":1791900025,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"e21182f2","ended_at":1791900025,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"21f2cc06","ended_at":1791900025,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"b711bce6","ended_at":1791900025,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"7d3e4142","ended_at":1791900025,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791900025,"phase":"build","prd":"00282-loop-guards-v1.md"}
