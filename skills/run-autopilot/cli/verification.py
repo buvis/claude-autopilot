@@ -447,6 +447,61 @@ def _record_gate(
     return result
 
 
+def _lock_and_check(
+    lock_fd: int, cwd: Path, sha: str, log_path: Path | None
+) -> tuple[tuple[str, ...], dict | None]:
+    """The locked preamble of `run_gate`: take the flock on `lock_fd`, then
+    refuse when the tree is dirty or HEAD no longer equals `sha`. Returns the
+    log exclusion and the `_dirty_result` refusal, or None to proceed."""
+    fcntl.flock(lock_fd, fcntl.LOCK_EX)
+    extra_excluded = _untracked_log_exclusion(cwd, log_path)
+    dirty, dirty_paths = _dirty_check(cwd, extra_excluded)
+    if dirty:
+        return extra_excluded, _dirty_result(dirty_paths)
+    head = _git(cwd, "rev-parse", "HEAD")
+    if head.returncode != 0 or head.stdout.strip() != sha:
+        return extra_excluded, _dirty_result([])
+    return extra_excluded, None
+
+
+def _run_locked_gate(
+    command: str,
+    cwd: Path,
+    sha: str,
+    cycle: int | None,
+    timeout: float,
+    log_path: Path | None,
+    extra_excluded: tuple[str, ...],
+) -> dict:
+    """The spawn half of `run_gate`, called with the flock held: open the log,
+    delete any record, spawn, drain, reap and record. Closes the log in its
+    own `finally`, before `run_gate`'s `finally` releases the lock."""
+    log_file = None
+    try:
+        if log_path is not None:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_file = open(log_path, "wb", buffering=0)
+        (cwd / RECORD_REL).unlink(missing_ok=True)
+        proc = subprocess.Popen(
+            command,
+            shell=True,
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+        deadline = time.monotonic() + timeout
+        stdout_buf, done = _drain_bounded(proc, GATE_OUTPUT_CAP, deadline, log_file)
+        if not _reap(proc, deadline, done):
+            return _timed_out_result()
+        return _record_gate(
+            command, cwd, sha, cycle, proc.returncode, stdout_buf, extra_excluded
+        )
+    finally:
+        if log_file is not None:
+            log_file.close()
+
+
 def run_gate(
     command: str,
     cwd: Path,
@@ -482,37 +537,13 @@ def run_gate(
     lock_path = cwd / GATE_LOCK_REL
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_fd = os.open(lock_path, os.O_RDWR | os.O_CREAT)
-    log_file = None
     try:
-        fcntl.flock(lock_fd, fcntl.LOCK_EX)
-        extra_excluded = _untracked_log_exclusion(cwd, log_path)
-        dirty, dirty_paths = _dirty_check(cwd, extra_excluded)
-        if dirty:
-            return _dirty_result(dirty_paths)
-        head = _git(cwd, "rev-parse", "HEAD")
-        if head.returncode != 0 or head.stdout.strip() != sha:
-            return _dirty_result([])
-        if log_path is not None:
-            log_path.parent.mkdir(parents=True, exist_ok=True)
-            log_file = open(log_path, "wb", buffering=0)
-        (cwd / RECORD_REL).unlink(missing_ok=True)
-        proc = subprocess.Popen(
-            command,
-            shell=True,
-            cwd=cwd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            start_new_session=True,
-        )
-        deadline = time.monotonic() + timeout
-        stdout_buf, done = _drain_bounded(proc, GATE_OUTPUT_CAP, deadline, log_file)
-        if not _reap(proc, deadline, done):
-            return _timed_out_result()
-        return _record_gate(
-            command, cwd, sha, cycle, proc.returncode, stdout_buf, extra_excluded
+        extra_excluded, refusal = _lock_and_check(lock_fd, cwd, sha, log_path)
+        if refusal is not None:
+            return refusal
+        return _run_locked_gate(
+            command, cwd, sha, cycle, timeout, log_path, extra_excluded
         )
     finally:
-        if log_file is not None:
-            log_file.close()
         fcntl.flock(lock_fd, fcntl.LOCK_UN)
         os.close(lock_fd)
