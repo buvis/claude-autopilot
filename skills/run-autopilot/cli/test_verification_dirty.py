@@ -75,10 +75,16 @@ def test_reuse_when_only_store_paths_changed(repo: Path) -> None:
     head = _commit(repo, f"{STORE}/reviews/r1.md", "review\n")
     record = _record(base)
 
-    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("reused", record)
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == (
+        "reused",
+        record,
+    )
     # An empty diff (record at HEAD itself) is vacuously store-only.
     same = _record(head)
-    assert verification.reuse_verdict(same, repo, head, gate_command=GATE) == ("reused", same)
+    assert verification.reuse_verdict(same, repo, head, gate_command=GATE) == (
+        "reused",
+        same,
+    )
 
 
 def test_stale_when_code_changed(repo: Path) -> None:
@@ -86,30 +92,54 @@ def test_stale_when_code_changed(repo: Path) -> None:
     _commit(repo, f"{STORE}/autopilot/state.json", "{}\n")
     head = _commit(repo, "src/app.py", "print(2)\n")
 
-    assert verification.reuse_verdict(_record(base), repo, head, gate_command=GATE) == ("stale", {})
+    assert verification.reuse_verdict(_record(base), repo, head, gate_command=GATE) == (
+        "stale",
+        {},
+    )
 
     # Any path outside the store counts, not only the ones under src/.
     later = _commit(repo, "Makefile", "all:\n\t@true\n")
-    assert verification.reuse_verdict(_record(head), repo, later, gate_command=GATE) == ("stale", {})
+    assert verification.reuse_verdict(
+        _record(head), repo, later, gate_command=GATE
+    ) == ("stale", {})
 
 
 def test_reuse_verdict_fails_closed_on_git_error(repo: Path, tmp_path_factory) -> None:
     head = _git(repo, "rev-parse", "HEAD")
     not_a_repo = tmp_path_factory.mktemp("plain")
 
-    assert verification.reuse_verdict(None, repo, head, gate_command=GATE) == ("stale", {})
-    assert verification.reuse_verdict(_record(""), repo, head, gate_command=GATE) == ("stale", {})
-    no_sha = _record(head)
-    del no_sha["sha"]
-    assert verification.reuse_verdict(no_sha, repo, head, gate_command=GATE) == ("stale", {})
-    assert verification.reuse_verdict(_record(123), repo, head, gate_command=GATE) == ("stale", {})
-    unknown = _record("0123456789abcdef0123456789abcdef01234567")
-    assert verification.reuse_verdict(unknown, repo, head, gate_command=GATE) == ("stale", {})
-    assert verification.reuse_verdict(_record("no-such-ref"), repo, head, gate_command=GATE) == (
+    assert verification.reuse_verdict(None, repo, head, gate_command=GATE) == (
         "stale",
         {},
     )
-    assert verification.reuse_verdict(_record(head), not_a_repo, head, gate_command=GATE) == ("stale", {})
+    assert verification.reuse_verdict(_record(""), repo, head, gate_command=GATE) == (
+        "stale",
+        {},
+    )
+    no_sha = _record(head)
+    del no_sha["sha"]
+    assert verification.reuse_verdict(no_sha, repo, head, gate_command=GATE) == (
+        "stale",
+        {},
+    )
+    assert verification.reuse_verdict(_record(123), repo, head, gate_command=GATE) == (
+        "stale",
+        {},
+    )
+    unknown = _record("0123456789abcdef0123456789abcdef01234567")
+    assert verification.reuse_verdict(unknown, repo, head, gate_command=GATE) == (
+        "stale",
+        {},
+    )
+    assert verification.reuse_verdict(
+        _record("no-such-ref"), repo, head, gate_command=GATE
+    ) == (
+        "stale",
+        {},
+    )
+    assert verification.reuse_verdict(
+        _record(head), not_a_repo, head, gate_command=GATE
+    ) == ("stale", {})
 
 
 def test_reuse_verdict_rejects_non_ancestor_sha(repo: Path) -> None:
@@ -120,22 +150,36 @@ def test_reuse_verdict_rejects_non_ancestor_sha(repo: Path) -> None:
     head = _commit(repo, f"{STORE}/notes/main.md", "main\n")
 
     # Sibling commit (survived a reset/rebase): not an ancestor of HEAD.
-    assert verification.reuse_verdict(_record(sibling), repo, head, gate_command=GATE) == ("stale", {})
+    assert verification.reuse_verdict(
+        _record(sibling), repo, head, gate_command=GATE
+    ) == ("stale", {})
     # Descendant: record newer than the HEAD being checked.
-    assert verification.reuse_verdict(_record(head), repo, root, gate_command=GATE) == ("stale", {})
+    assert verification.reuse_verdict(_record(head), repo, root, gate_command=GATE) == (
+        "stale",
+        {},
+    )
 
 
 def test_reuse_verdict_rejects_dirty_tree(repo: Path) -> None:
     head = _git(repo, "rev-parse", "HEAD")
     record = _record(head)
-    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("reused", record)
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == (
+        "reused",
+        record,
+    )
 
     (repo / "src" / "app.py").write_text("print('dirty')\n")
-    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("stale", {})
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == (
+        "stale",
+        {},
+    )
 
     _git(repo, "checkout", "--", "src/app.py")
     (repo / "src" / "new.py").write_text("untracked\n")
-    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("stale", {})
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == (
+        "stale",
+        {},
+    )
 
 
 def test_rename_out_of_store_is_not_clean(repo: Path) -> None:
@@ -146,18 +190,26 @@ def test_rename_out_of_store_is_not_clean(repo: Path) -> None:
     _git(repo, "commit", "--no-verify", "-q", "-m", "add store note")
     head = _git(repo, "rev-parse", "HEAD")
     record = _record(head)
-    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("reused", record)
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == (
+        "reused",
+        record,
+    )
 
     # Destination at the repo root, outside the store and outside src/.
     _git(repo, "mv", f"{STORE}/notes/old.md", "moved.md")
-    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("stale", {})
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == (
+        "stale",
+        {},
+    )
 
 
 def test_rename_into_store_from_production_is_not_clean() -> None:
     # A rename into the store from outside it is judged by both endpoints
     # too: a clean destination alone must not excuse a dirty source.
     assert (
-        verification._dirty_path_is_in_store(f"{STORE}/moved.md", "production.md", STORE_PREFIX)
+        verification._dirty_path_is_in_store(
+            f"{STORE}/moved.md", "production.md", STORE_PREFIX
+        )
         is False
     )
 
@@ -170,7 +222,10 @@ def test_copy_record_checks_both_paths() -> None:
     assert verification._iter_porcelain_z_records(raw) == [
         (f"{STORE}/dst.md", "src.md"),
     ]
-    assert verification._dirty_path_is_in_store(f"{STORE}/dst.md", "src.md", STORE_PREFIX) is False
+    assert (
+        verification._dirty_path_is_in_store(f"{STORE}/dst.md", "src.md", STORE_PREFIX)
+        is False
+    )
 
 
 def test_blank_status_column_does_not_desync_fields() -> None:
@@ -194,27 +249,42 @@ def test_reuse_verdict_ignores_dirty_paths_under_the_store(repo: Path) -> None:
     _git(repo, "commit", "--no-verify", "-q", "-m", "add store file")
     head = _git(repo, "rev-parse", "HEAD")
     record = _record(head)
-    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("reused", record)
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == (
+        "reused",
+        record,
+    )
 
     # Dirty a tracked store file and add an untracked one: both ignored.
     tracked.write_text('{"dirty": true}\n')
     (store_dir / "dispatch-metrics.jsonl").write_text("{}\n")
-    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("reused", record)
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == (
+        "reused",
+        record,
+    )
 
     # A store path that merely contains "src/" in its name is still store.
     nested = store_dir.parent / "notes" / "src"
     nested.mkdir(parents=True)
     (nested / "x.md").write_text("note\n")
-    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("reused", record)
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == (
+        "reused",
+        record,
+    )
 
     # A non-store path dirty at the same time still makes the record stale.
     (repo / "src" / "app.py").write_text("print('dirty')\n")
-    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("stale", {})
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == (
+        "stale",
+        {},
+    )
 
     # ... and so does one that lives outside src/ entirely.
     _git(repo, "checkout", "--", "src/app.py")
     (repo / "pyproject.toml").write_text("[project]\n")
-    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("stale", {})
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == (
+        "stale",
+        {},
+    )
 
 
 def test_committed_rename_into_the_store_is_stale(repo: Path) -> None:
@@ -225,7 +295,10 @@ def test_committed_rename_into_the_store_is_stale(repo: Path) -> None:
     head = _git(repo, "rev-parse", "HEAD")
 
     verdict = verification.reuse_verdict(
-        _record(base), repo, head, gate_command="dev/bin/release-checks"
+        _record(base),
+        repo,
+        head,
+        gate_command="dev/bin/release-checks",
     )
 
     assert verdict == ("stale", {})
@@ -258,7 +331,10 @@ def test_store_only_change_below_toplevel_is_reused(repo: Path) -> None:
     # Product code below the toplevel still makes it stale.
     code_head = _commit(repo, "sub/src/app.py", "print(2)\n")
     assert verification.reuse_verdict(
-        record, root, code_head, gate_command=command
+        record,
+        root,
+        code_head,
+        gate_command=command,
     ) == ("stale", {})
 
 
@@ -286,14 +362,21 @@ def test_store_only_change_below_toplevel_is_reused(repo: Path) -> None:
     ],
 )
 def test_normalize_command_collapses_space_then_strips_one_shell_and_one_dot_slash(
-    raw: str, expected: str
+    raw: str,
+    expected: str,
 ) -> None:
     assert verification.normalize_command(raw) == expected
 
 
 @pytest.mark.parametrize(
     "value",
-    [None, 123, ["dev/bin/release-checks"], b"dev/bin/release-checks", {"command": "x"}],
+    [
+        None,
+        123,
+        ["dev/bin/release-checks"],
+        b"dev/bin/release-checks",
+        {"command": "x"},
+    ],
 )
 def test_normalize_command_maps_non_str_to_empty_string(value: object) -> None:
     assert verification.normalize_command(value) == ""
@@ -316,10 +399,16 @@ def test_reuse_matches_a_command_spelled_with_bash_dot_slash_and_extra_spaces(
     # The match runs both ways: a record spelled loosely matches a plain gate.
     loose = _record(head)
     loose["commands"] = [{"command": "bash   ./dev/bin/release-checks", "exit": 0}]
-    assert verification.reuse_verdict(loose, repo, head, gate_command=GATE) == ("reused", loose)
+    assert verification.reuse_verdict(loose, repo, head, gate_command=GATE) == (
+        "reused",
+        loose,
+    )
 
     # Normalizing never makes a different command match.
-    for other in ("bash bash ./dev/bin/release-checks", "dev/bin/release-checks --fast"):
+    for other in (
+        "bash bash ./dev/bin/release-checks",
+        "dev/bin/release-checks --fast",
+    ):
         assert verification.reuse_verdict(record, repo, head, gate_command=other) == (
             "stale",
             {},
@@ -354,17 +443,25 @@ def test_merge_resolution_change_outside_the_store_is_stale(repo: Path) -> None:
     )
 
 
-def test_untracked_product_file_is_stale_when_status_hides_untracked(repo: Path) -> None:
+def test_untracked_product_file_is_stale_when_status_hides_untracked(
+    repo: Path,
+) -> None:
     # With status.showUntrackedFiles=no, a plain `git status --porcelain=1`
     # hides an untracked file entirely; reuse_verdict must still catch it by
     # requesting --untracked-files=all explicitly.
     _git(repo, "config", "status.showUntrackedFiles", "no")
     head = _git(repo, "rev-parse", "HEAD")
     record = _record(head)
-    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("reused", record)
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == (
+        "reused",
+        record,
+    )
 
     (repo / "src" / "untracked.py").write_text("print('new')\n")
-    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("stale", {})
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == (
+        "stale",
+        {},
+    )
 
 
 def test_an_untracked_store_dir_stays_reused(repo: Path) -> None:
@@ -388,14 +485,20 @@ def test_store_only_commit_with_non_ascii_filename_is_reused(repo: Path) -> None
     base = _git(repo, "rev-parse", "HEAD")
     head = _commit(repo, f"{STORE}/notes/café.md", "note\n")
     record = _record(base)
-    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == ("reused", record)
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == (
+        "reused",
+        record,
+    )
 
 
 def test_run_gate_on_a_dirty_tree_writes_no_record(repo: Path) -> None:
     (repo / "src" / "app.py").write_text("print('dirty')\n")
 
     result = verification.run_gate(
-        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'", repo, "abc", 1
+        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
+        repo,
+        "abc",
+        1,
     )
 
     assert result == {
@@ -430,7 +533,10 @@ def test_run_gate_tolerates_dirty_store_paths(repo: Path) -> None:
     (store_dir / "state.json").write_text("{}\n")
 
     result = verification.run_gate(
-        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'", repo, "abc", 1
+        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
+        repo,
+        "abc",
+        1,
     )
 
     assert result["passed"] == 1
@@ -440,7 +546,8 @@ def test_run_gate_tolerates_dirty_store_paths(repo: Path) -> None:
 
 
 def test_gate_runs_in_a_repo_that_does_not_ignore_docs_dev_tmp(
-    repo: Path, monkeypatch: pytest.MonkeyPatch
+    repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # No .gitignore anywhere and no user/system git config, so nothing hides
     # docs/dev/tmp/: it is store by definition (STORE_PREFIXES), not dirt.
@@ -451,9 +558,22 @@ def test_gate_runs_in_a_repo_that_does_not_ignore_docs_dev_tmp(
     prompt.parent.mkdir(parents=True)
     prompt.write_text("prompt\n")
     _git(repo, "add", "--", "docs/dev/tmp/alice-prompt-1.md")
+    # Any name and any depth under docs/dev/tmp/, staged or left untracked.
+    (repo / "docs" / "dev" / "tmp" / "bob-notes.txt").write_text("notes\n")
+    nested = repo / "docs" / "dev" / "tmp" / "sub" / "x"
+    nested.parent.mkdir(parents=True)
+    nested.write_text("nested\n")
+    _git(repo, "add", "--", "docs/dev/tmp/bob-notes.txt", "docs/dev/tmp/sub/x")
+    (repo / "docs" / "dev" / "tmp" / "untracked.md").write_text("untracked\n")
+    assert "?? docs/dev/tmp/untracked.md" in _git(
+        repo, "status", "--porcelain=1", "--untracked-files=all"
+    )
 
     result = verification.run_gate(
-        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'", repo, "abc", 1
+        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
+        repo,
+        "abc",
+        1,
     )
 
     assert result["passed"] == 1
@@ -467,15 +587,71 @@ def test_gate_runs_in_a_repo_that_does_not_ignore_docs_dev_tmp(
     (repo / "docs" / "dev" / "tmp-notes.md").write_text("notes\n")
     _git(repo, "add", "--", "docs/dev/tmp-notes.md")
     refused = verification.run_gate(
-        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'", repo, "abc", 1
+        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
+        repo,
+        "abc",
+        1,
     )
     assert refused["recorded"] is False
     assert refused["dirty"] is True
     assert not (repo / RECORD_REL).exists()
 
 
+def test_gate_refuses_a_rename_from_product_code_into_docs_dev_tmp(
+    repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A rename is judged by both endpoints: a tmp destination does not
+    # excuse the product source it was moved out of.
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    (repo / "docs" / "dev" / "tmp").mkdir(parents=True)
+    _git(repo, "mv", "src/app.py", "docs/dev/tmp/app.py")
+
+    result = verification.run_gate(
+        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
+        repo,
+        "abc",
+        1,
+    )
+
+    assert result["recorded"] is False
+    assert result["dirty"] is True
+    assert not (repo / RECORD_REL).exists()
+
+
+def test_gate_below_the_toplevel_excuses_its_own_docs_dev_tmp(
+    repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # cwd is a subdirectory of the git toplevel (like $HOME/.claude under
+    # $HOME): git paths are toplevel-relative, the tmp prefix is not.
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    _commit(repo, "sub/src/app.py", "print(1)\n")
+    root = repo / "sub"
+    tmp = root / "docs" / "dev" / "tmp"
+    tmp.mkdir(parents=True)
+    (tmp / "alice-prompt-1.md").write_text("prompt\n")
+    _git(repo, "add", "--", "sub/docs/dev/tmp/alice-prompt-1.md")
+    (tmp / "untracked.md").write_text("untracked\n")
+
+    result = verification.run_gate(
+        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
+        root,
+        "abc",
+        1,
+    )
+
+    assert result["passed"] == 1
+    assert result["recorded"] is True
+    assert result["dirty"] is False
+    assert (root / RECORD_REL).exists()
+
+
 def test_own_log_outside_tmp_is_not_dirt(
-    repo: Path, monkeypatch: pytest.MonkeyPatch
+    repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # A user-level ignore rule (a global `*.log`) must not be what hides the
     # log, so git config outside the repo is switched off.
@@ -485,7 +661,11 @@ def test_own_log_outside_tmp_is_not_dirt(
     assert not log_path.exists()
 
     result = verification.run_gate(
-        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'", repo, "abc", 1, log_path=log_path
+        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
+        repo,
+        "abc",
+        1,
+        log_path=log_path,
     )
 
     assert result["passed"] == 1
@@ -495,16 +675,52 @@ def test_own_log_outside_tmp_is_not_dirt(
     assert "PASS 1 FAIL 0 SKIP 0 EXIT 0" in log_path.read_text()
     assert _git(repo, "ls-files", "--", "my-own.log") == ""
 
-    # Only the gate's own log is excused: another untracked file outside the
-    # store, written by the same run, still refuses the record.
+    # Only the gate's own log, by exact path, is excused: another untracked
+    # file outside the store with the same basename, written by the same
+    # run, still refuses the record. Run 1's log is removed first so the
+    # refusal comes from the post-run check (the gate ran: passed == 1),
+    # not from leftover pre-spawn dirt.
     (repo / RECORD_REL).unlink()
+    log_path.unlink()
     refused = verification.run_gate(
-        "echo stray > stray.log; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
+        "mkdir -p sub; echo stray > sub/my-own.log; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
         repo,
         "abc",
         1,
         log_path=log_path,
     )
+    assert refused["passed"] == 1
     assert refused["recorded"] is False
     assert refused["dirty"] is True
+    assert not (repo / RECORD_REL).exists()
+
+
+def test_own_log_does_not_skip_the_pre_spawn_dirty_check(
+    repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Passing log_path excuses the log alone: a tree already dirty before
+    # the call is still refused before the command spawns.
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    (repo / "stray.txt").write_text("stray\n")
+
+    result = verification.run_gate(
+        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
+        repo,
+        "abc",
+        1,
+        log_path=repo / "my-own.log",
+    )
+
+    assert result == {
+        "passed": None,
+        "failed": None,
+        "skipped": None,
+        "exit": None,
+        "raw_line": None,
+        "timed_out": False,
+        "recorded": False,
+        "dirty": True,
+    }
     assert not (repo / RECORD_REL).exists()
