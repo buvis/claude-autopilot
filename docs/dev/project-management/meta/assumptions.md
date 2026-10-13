@@ -47,6 +47,12 @@ Tess (test author):
 Ivan (implementor):
 
 - First-entry force with no str `catchup_head_sha` resolves to "full" (no test covers a missing sha on this path).
+
+## 9: [D2] Tail sweep: prose
+
+Ivan (implementor):
+
+- The first-entry `force` rule is stated as its own paragraph ahead of the "ALL" list rather than as a renumbered list item.
 - The loop committer comes from `batch["id"]`, which `_batch_report` guarantees is a str by step 11 (superseded by the per-task review's fix: now `batch.get("id")`, defensive for direct unit-level callers of `_catchup`).
 - The range is `base..HEAD` of the project root's current HEAD, not the sha returned by the injected `git_head`.
 - `%cn` (committer name without mailmap) is the right field, not `%cN` (which would apply mailmap and could rewrite names).
