@@ -50,17 +50,25 @@ Generated: 2026-10-13
 - [x] 00276-make-the-gate-record-trustworthy-v1 (2 cycles)
 - [x] 00278-make-release-checks-tell-truth-v1 (2 cycles)
 - [x] 00279-run-one-exact-reuse-rule-v1 (1 cycle)
-- [ ] 00282-loop-guards-v1 (in progress, entering design)
+- [x] 00282-loop-guards-v1 (2 cycles)
 - [ ] 00283-loop-catchup-v1 (backlog)
 - [ ] 00284-loop-launch-context-v1 (backlog)
 
 Observations: held: 00277-catch-critical-rows-in-every-shape-v1 (stalled on a
   blocking-escalation design question, see commit 4debc71) and 00280
-  (2026-10-12 backlog review), plus 18 triage stubs minted across
-  00271/00285/00276/00278/00279's closes — 00286-00303 (`dev/bin/release-checks`
+  (2026-10-12 backlog review), plus 20 triage stubs minted across
+  00271/00285/00276/00278/00279/00282's closes — 00286-00305 (`dev/bin/release-checks`
   is still RED on this host for pre-existing sandbox reasons unrelated to
   any held item; 00279's close confirmed the 67 failures live only in
   test_gate_findings_unread_shapes.py, untouched by any closed PRD).
+
+Observations: 00282 closed converged-with-deferrals at the cycle-2 rework
+cap (30 deferred items: 5 cycle-1 + 25 cycle-2 cap-overflow findings,
+reconciled into the batch deferred JSON and minted into 2 new hold stubs —
+00304 (R2, high: `prd_spend_since` crashes on a non-UTF-8 ledger) and 00305
+(R5, high: failed loop_entry invalidation permits stale replay). No CRITICAL
+escaped. Carl (Gemini) failed after retry with no UI surface in the diff, so
+no batch latch.
 
 Observations: 00271 closed converged-with-deferrals at the cycle-2 rework
 cap (10 unresolved cap-overflow findings + 6 cycle-1 deferrals, 16 total,
