@@ -51,6 +51,10 @@ def _iso(epoch: float) -> str:
     return datetime.fromtimestamp(epoch, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _epoch(stamp: str) -> float:
+    return datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+
+
 def _prds(ap_dir: Path) -> Path:
     return ap_dir.parent / "prds"
 
@@ -137,25 +141,39 @@ def _launched_prds(lp) -> list[str]:
     return re.findall(r"· prd (\S+) ·", lp._test["out"].getvalue())
 
 
-def _deferred_items(ap_dir: Path) -> list[dict]:
-    path = ap_dir / "deferred" / f"{BATCH}-deferred.json"
-    return json.loads(path.read_text(encoding="utf-8"))["items"]
+def _loop_enter_fn(clock: FakeClock):
+    """A loop enter_fn that runs the real Phase 0 (`cli.enter.enter`) on
+    the fake clock, for tests exercising the loop's own pre-launch enter
+    (F2) rather than a child session's replay."""
+
+    def enter_fn(state_path, *, prds_dir, autopilot_dir, prd_arg, in_loop):
+        return enter_mod.enter(
+            state_path,
+            prds_dir=prds_dir,
+            autopilot_dir=autopilot_dir,
+            prd_arg=prd_arg,
+            in_loop=in_loop,
+            now=lambda: _iso(clock.now),
+            git_head=lambda root: None,
+            record_resume_row=lambda prd, site, autopilot_dir: None,
+        )
+
+    return enter_fn
 
 
-# ── acceptance ───────────────────────────────────────────────────────────────
+def _resume_from_hold(clock: FakeClock, prd: str):
+    """The operator resumes `prd` after a while: hold/ -> backlog/."""
+
+    def before(ap_dir: Path) -> None:
+        clock.now += 600
+        (_prds(ap_dir) / "hold" / prd).rename(_prds(ap_dir) / "backlog" / prd)
+
+    return before
 
 
-def test_budget_park_lands_prd_in_hold_and_next_prd_launches(tmp_path, monkeypatch):
-    clock = FakeClock()
-    entry: dict = {}
-    steps = [
-        _work_step(PRD_A, 200.0, tasks_completed=1),  # A at $200: under $300
-        _work_step(PRD_A, 150.0, tasks_completed=2),  # A at $350: over, park
-        _entry_step(clock, 5.0, entry),  # Phase 0 parks A, selects B
-        terminal_step(prd=PRD_B, batch=BATCH),
-    ]
-    decisions = _capture_decisions(monkeypatch)
-    lp = make_loop(tmp_path, steps, clock=clock)
+def _seed_ab_batch(lp) -> Path:
+    """The wip/backlog PRD tree and PRD_A's open-batch, budget-tracked
+    state shared by the budget park acceptance tests."""
     ap = lp._test["ap_dir"]
     _put(ap, "wip", PRD_A)
     _put(ap, "backlog", PRD_B)
@@ -168,27 +186,44 @@ def test_budget_park_lands_prd_in_hold_and_next_prd_launches(tmp_path, monkeypat
         prd_budget_since=_iso(_BEFORE_CLOCK),
         batch=_open_batch(),
     )
+    return ap
+
+
+def _deferred_items(ap_dir: Path) -> list[dict]:
+    path = ap_dir / "deferred" / f"{BATCH}-deferred.json"
+    return json.loads(path.read_text(encoding="utf-8"))["items"]
+
+
+# ── acceptance ───────────────────────────────────────────────────────────────
+
+
+def test_budget_park_lands_prd_in_hold_and_next_prd_launches(tmp_path, monkeypatch):
+    # Review finding 4 (PRD 00282): the loop's own pre-launch enter (F2)
+    # runs Phase 0 in-process before the launch after the park, so that
+    # launch selects B directly - no child session wastes a launch just to
+    # run Phase 0 itself, the way a pre-F2 loop would have.
+    clock = FakeClock()
+    steps = [
+        _work_step(PRD_A, 200.0, tasks_completed=1),  # A at $200: under $300
+        _work_step(PRD_A, 150.0, tasks_completed=2),  # A at $350: over, park
+        terminal_step(prd=PRD_B, batch=BATCH),
+    ]
+    decisions = _capture_decisions(monkeypatch)
+    lp = make_loop(tmp_path, steps, clock=clock, enter_fn=_loop_enter_fn(clock))
+    ap = _seed_ab_batch(lp)
 
     assert lp.run() == 0
 
     # The crossing session's decision is a budget park with the contract detail.
-    assert [d["signal"] for d in decisions] == ["continue", "park", "continue", "done"]
+    assert [d["signal"] for d in decisions] == ["continue", "park", "done"]
     assert decisions[0].get("park_site") != "budget"
     park = decisions[1]
     assert park["park_site"] == "budget"
     assert park["prd"] == PRD_A
     assert park["detail"] == f"budget: $350.00 > $300; parking {PRD_A}"
 
-    # The marker the loop handed to the next session names the budget site.
-    assert entry["marker"] == {
-        "prd": PRD_A,
-        "reason": f"budget: $350.00 > $300; parking {PRD_A}",
-        "site": "budget",
-    }
-
-    # Phase 0 consumed it: A sits in hold/ with a budget stall record, B runs.
-    assert entry["enter"]["parked"] == PRD_A
-    assert entry["enter"]["prd"] == PRD_B
+    # Phase 0 consumed the marker in-process: A sits in hold/ with a budget
+    # stall record, and the very next launch is B's, not another on A.
     assert _has(ap, "hold", PRD_A)
     assert not _has(ap, "wip", PRD_A)
     assert not (ap / "park-requested").exists()
@@ -200,44 +235,26 @@ def test_budget_park_lands_prd_in_hold_and_next_prd_launches(tmp_path, monkeypat
     assert [(r["prd"], r["signal"]) for r in rows] == [
         (PRD_A, "continue"),
         (PRD_A, "park"),
-        (PRD_B, "continue"),
         (PRD_B, "done"),
     ]
-    # The session after the park was launched on A's state; the one after
-    # that launches on B: a different PRD's session follows the budget park.
-    assert _launched_prds(lp) == [PRD_A, PRD_A, PRD_A, PRD_B]
+    # The park's very next launch selects B directly: no wasted launch on A.
+    assert _launched_prds(lp) == [PRD_A, PRD_A, PRD_B]
 
 
 def test_budget_resets_after_resume_from_hold(tmp_path, monkeypatch):
     clock = FakeClock()
-    park_entry: dict = {}
-    resume_entry: dict = {}
-
-    def resume_a_from_hold(ap_dir: Path) -> None:
-        # The operator resumes A after a while: hold/ -> backlog/.
-        clock.now += 600
-        (_prds(ap_dir) / "hold" / PRD_A).rename(_prds(ap_dir) / "backlog" / PRD_A)
-
+    park_entry, resume_entry = {}, {}
     steps = [
         _work_step(PRD_A, 310.0, tasks_completed=1),  # A at $310: park
         _entry_step(clock, 5.0, park_entry),  # Phase 0 parks A, selects B
-        _entry_step(clock, 50.0, resume_entry, prd_arg=PRD_A, before=resume_a_from_hold),
+        _entry_step(
+            clock, 50.0, resume_entry, prd_arg=PRD_A, before=_resume_from_hold(clock, PRD_A)
+        ),
         terminal_step(prd=PRD_A, batch=BATCH),
     ]
     decisions = _capture_decisions(monkeypatch)
     lp = make_loop(tmp_path, steps, clock=clock)
-    ap = lp._test["ap_dir"]
-    _put(ap, "wip", PRD_A)
-    _put(ap, "backlog", PRD_B)
-    write_state(
-        ap,
-        prd=PRD_A,
-        phase="build",
-        next_phase="build",
-        tasks_completed=0,
-        prd_budget_since=_iso(_BEFORE_CLOCK),
-        batch=_open_batch(),
-    )
+    ap = _seed_ab_batch(lp)
 
     assert lp.run() == 0
 
@@ -253,9 +270,7 @@ def test_budget_resets_after_resume_from_hold(tmp_path, monkeypatch):
     rows = metrics_rows(ap)
     first_a_row = rows[0]
     assert (first_a_row["prd"], first_a_row["cost_usd"]) == (PRD_A, 310.0)
-    since = datetime.strptime(resume_entry["budget_since"], "%Y-%m-%dT%H:%M:%SZ")
-    since_epoch = since.replace(tzinfo=timezone.utc).timestamp()
-    assert since_epoch > first_a_row["ts_start"]
+    assert _epoch(resume_entry["budget_since"]) > first_a_row["ts_start"]
 
     # The $50 session continues: the old $310 is outside the new window
     # (counted lifetime, A would sit at $360 and park again).
