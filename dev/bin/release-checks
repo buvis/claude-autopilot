@@ -300,7 +300,8 @@ run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_enter_decisions.py \
   skills/run-autopilot/cli/test_enter_loop_only.py \
   skills/run-autopilot/cli/test_enter_cli.py \
-  skills/run-autopilot/cli/test_catchup_probe.py
+  skills/run-autopilot/cli/test_catchup_probe.py \
+  skills/run-autopilot/cli/test_catchup_probe_cli.py
 
 echo "[checks] gather-context paths"
 run_gather_harness bash skills/review-work-completion/scripts/test_gather_context_paths.sh
