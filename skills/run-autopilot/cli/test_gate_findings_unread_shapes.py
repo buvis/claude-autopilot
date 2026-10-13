@@ -10,7 +10,9 @@ variant after a finding reference or on a structurally tabular line, and the
 findings-table header hidden by a fence that indents it. The negative half
 matters as much: counting prose, a consensus heading and a hyphenated severity
 compound must still pass, and the rows the findings parser does read must never
-be reported as unread.
+be reported as unread. The verdict space is pinned at both ends - a covered file
+exits 0, an uncovered one is refused without being called malformed - and so is
+the refusal text: the FIRST unread line, stripped and cut at 120 characters.
 """
 
 from __future__ import annotations
@@ -101,17 +103,60 @@ def test_every_severity_emoji_counts_wherever_it_sits_on_the_line(
     )
 
 
-@pytest.mark.parametrize("word", ["CRITICAL", "HIGH", "MEDIUM", "LOW"])
-def test_a_severity_word_with_pipes_around_it_is_a_finding(
-    word: str,
-    tmp_path: Path,
+# The three rules that are NOT the emoji rule, each in the shape whose escape
+# the check was written for: a bare `[m/n]` token with no pipe and no emoji, a
+# pipe row whose only severity signal is that token, and the pipe-less table
+# whose structure is a leading `m/n`. A content rule holding the emoji branch
+# alone passes every emoji test above and still lets all three through.
+_OTHER_CONTENT_RULES = {
+    "token alone, no pipe": "- [1/3] crash on empty input",
+    "bare pipe row": "| R3 | [1/3] | stale cache | src/d.py:1 |",
+    "pipe-less table row": (
+        f"2/2    {CRIT} CRITICAL    stale cache    skills/x.py:3    alice"
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    "row",
+    list(_OTHER_CONTENT_RULES.values()),
+    ids=list(_OTHER_CONTENT_RULES),
+)
+def test_the_token_pipe_row_and_pipeless_table_rules_each_stand_alone(
+    row: str,
 ) -> None:
-    """Rule (b): the pipes are what make a severity word a row. With them the
-    line is refused even with no emoji on it; the same word in prose, with no
-    pipe anywhere, stays prose."""
+    """The emoji rule is one of four: the `[m/n]` token, a pipe row carrying
+    one and a pipe-less table row beside a severity each make a line unread on
+    their own, with no emoji-and-nothing-else fixture to lean on."""
     from cli import gate
 
-    row = f"Row 3: | {word} | stale cache survives restart | src/x.py:3"
+    assert gate._is_unread_line(row) is True
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "Row 3: | {} | stale cache survives restart | src/x.py:3",
+        "Row 3: |{}| stale cache survives restart | src/x.py:3",
+    ],
+    ids=["spaced pipes", "tight pipes"],
+)
+@pytest.mark.parametrize(
+    "word",
+    ["CRITICAL", "HIGH", "MEDIUM", "LOW", "Critical", "medium"],
+)
+def test_a_severity_word_with_pipes_around_it_is_a_finding(
+    word: str,
+    template: str,
+    tmp_path: Path,
+) -> None:
+    """Rule (b): the pipes are what make a severity word a row, in any case and
+    with or without padding inside them. With them the line is refused even
+    with no emoji on it; the same word in prose, with no pipe anywhere, stays
+    prose."""
+    from cli import gate
+
+    row = template.format(word)
     text = _review_text(alice=row)
     assert gate._is_unread_line(row) is True
     assert _verdict_and_exit(text, _COVERED, tmp_path) == (
@@ -122,8 +167,18 @@ def test_a_severity_word_with_pipes_around_it_is_a_finding(
     assert gate._is_unread_line(f"- the reviewer called the risk {word}") is False
 
 
-_MARKER_VARIANTS = ("[2 / 2]", "［2/2］", "【2/2】", "(2/2)")
-_MARKER_IDS = ("spaced", "fullwidth", "lenticular", "parenthesized")
+# The marker variants, every one of them spelled with three different ratios:
+# a sweep that knows a finite set of literal marker strings ("[2/2]", "(2/2)")
+# cannot cover them, and the ratio's digit counts are not symmetric either.
+_MARKER_FORMS = ("[{} / {}]", "［{}/{}］", "【{}/{}】", "({}/{})")
+_MARKER_FORM_IDS = ("spaced", "fullwidth", "lenticular", "parenthesized")
+_MARKER_RATIOS = ((2, 2), (10, 12), (11, 2))
+_MARKER_VARIANTS = tuple(
+    form.format(m, n) for form in _MARKER_FORMS for m, n in _MARKER_RATIOS
+)
+_MARKER_IDS = tuple(
+    f"{name} {m}/{n}" for name in _MARKER_FORM_IDS for m, n in _MARKER_RATIOS
+)
 
 
 @pytest.mark.parametrize("marker", _MARKER_VARIANTS, ids=_MARKER_IDS)
@@ -221,6 +276,72 @@ def test_a_consensus_bullet_row_in_the_findings_section_is_not_unread() -> None:
     assert gate._unread_token(text) is None
 
 
+def test_a_stray_row_inside_the_findings_section_is_still_named(
+    tmp_path: Path,
+) -> None:
+    """Being inside the findings section is not what makes a row read: only the
+    shapes the parser consumes are. An emoji row below the table, in the same
+    section, is still the unread line the refusal names - a walker that stops
+    looking at the findings heading reports nothing here."""
+    from cli import gate
+
+    stray = f"- {CRIT} crash | src/a.py:3"
+    text = _review_text(f"{_REF_TABLE}\n{stray}\n")
+    assert stray in text.splitlines()
+    assert gate._unread_token(text) == _unread_detail(text, stray)
+    assert _verdict_and_exit(text, _COVERED, tmp_path) == (
+        "malformed",
+        _unread_detail(text, stray),
+        2,
+    )
+
+
+def test_a_covered_review_with_nothing_unread_passes_with_exit_0(
+    tmp_path: Path,
+) -> None:
+    """The other end of the exit space: the plain covered pair is `ok` and
+    exits 0, so widening the content rule cannot be bought by refusing
+    everything."""
+    assert _verdict_and_exit(_review_text(), _COVERED, tmp_path) == ("ok", None, 0)
+
+
+def test_a_review_row_no_finding_names_is_uncovered_not_malformed() -> None:
+    """A non-malformed refusal: the coverage half of the cross-check still
+    runs, so the unread-line check cannot stand in for the whole verdict."""
+    from cli import gate
+
+    assert gate.findings_verdict(_review_text(), [])[0] == "uncovered"
+
+
+def test_the_detail_strips_the_indent_and_cuts_the_quote_at_120_chars() -> None:
+    """The quoted text is `line.strip()[:120]`: an indented, overlong row is
+    named without its indent and cut, so the refusal stays one readable line."""
+    from cli import gate
+
+    row = f"   - {CRIT} " + "stale cache survives restart; " * 8
+    text = _review_text(alice=row)
+    detail = gate._unread_token(text)
+    assert len(row.strip()) > 200
+    assert detail == _unread_detail(text, row)
+    assert detail.endswith(row.strip()[:120])
+    assert not detail.endswith(row.strip())
+    assert "   " not in detail
+
+
+def test_the_first_unread_line_is_the_one_named_not_the_last() -> None:
+    """Two unread lines in one file: the refusal names the earlier one, the one
+    the operator reaches first when repairing the file."""
+    from cli import gate
+
+    first = f"- {CRIT} crash on empty input"
+    second = f"- {HIGH} wrong default | src/b.py:10"
+    text = _review_text(alice=f"{first}\n{second}")
+    lines = text.splitlines()
+    assert lines.index(first) < lines.index(second)
+    assert gate._unread_token(text) == _unread_detail(text, first)
+    assert gate._unread_token(text) != _unread_detail(text, second)
+
+
 _HEADER_ROW = "| Ref | Consensus | Severity | Issue | File | Found By |"
 _DATA_ROW = f"| R9 | [2/2] | {CRIT} | stale cache | src/x.py:1 | alice |"
 _FENCES = ("```", "~~~")
@@ -278,6 +399,42 @@ def test_a_fenced_example_without_the_findings_header_is_not_found(
     from cli import gate
 
     text = f"notes above\n{fence}\n{body}\n{fence}\nnotes below\n"
+    assert gate._fenced_findings_header(text) is False
+
+
+# Three files that DO hold both a fence and the findings-table header and are
+# still not a fenced header: the header sits outside the fence, the fence never
+# closes, or the "fence" is indented 4 spaces and so is a code block, not a
+# fence at all. A two-substring sniff ("```" in text and "Severity" in text)
+# calls all three True.
+_NOT_A_FENCED_HEADER = {
+    "header outside, example inside": "{h}\n{d}\n{f}\n  - [2/2] example\n{f}\n",
+    "unclosed fence holds the header": "notes above\n{f}\n{h}\n{d}\nnotes below\n",
+    "4-space fence is a code block": (
+        "notes above\n    {f}\n    {h}\n    {d}\n    {f}\nnotes below\n"
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    "template",
+    list(_NOT_A_FENCED_HEADER.values()),
+    ids=list(_NOT_A_FENCED_HEADER),
+)
+@pytest.mark.parametrize("fence", _FENCES, ids=_FENCE_IDS)
+def test_a_header_no_closed_fence_encloses_is_not_a_fenced_header(
+    fence: str,
+    template: str,
+) -> None:
+    """Only a CLOSED fence whose body holds the header counts: the detection
+    walks fence blocks, so a header beside a fence, a header under an opener
+    that never closes, and a header inside an indented code block all answer
+    False."""
+    from cli import gate
+
+    text = template.format(f=fence, h=_HEADER_ROW, d=_DATA_ROW)
+    assert "Severity" in text
+    assert fence in text
     assert gate._fenced_findings_header(text) is False
 
 
