@@ -313,6 +313,9 @@ def _guard_matches_roster(text: str, lines: list[str]) -> str | None:
     return None
 
 
+# ponytail: _backed is quadratic in reviewed rows (N(N+1)/2 comparisons);
+# fine at real review sizes (dozens of rows), 26s at 50,000. Index rows by
+# ref and by (severity, file, issue) if reviews ever reach the thousands.
 def _backed(row: dict, reviewed: list[Row]) -> bool:
     """Is this chosen row carried by a review row?
 
