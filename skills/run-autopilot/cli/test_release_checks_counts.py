@@ -319,7 +319,15 @@ def test_release_refuses_while_a_held_prd_blocks_it(tmp_path: Path) -> None:
 def _dir_is_bare_target(parent: str, text: str) -> bool:
     """True when `parent` appears in `text` as a whole word (not part of a
     longer path or name, before or after), and never for the repo root
-    ("." or ""), which would match any dot in the script."""
+    ("." or ""), which would match any dot in the script.
+
+    Needed because a gated whole-directory pytest target, e.g.
+    `run_pytest ... skills/fast-track/scripts` at release-checks:171, names
+    its test files by directory rather than by individual path -- the plain
+    `path not in text` substring check alone would flag every file under it
+    as missing. Caveat: a bare mention of the directory in an `echo` or
+    comment line also counts, so it would silently mark every test file
+    under that directory as gated even without a real pytest target."""
     if parent in (".", ""):
         return False
     return (
@@ -365,3 +373,11 @@ def test_the_repo_root_is_never_a_gated_target() -> None:
     dot in the script and silently pass the gate pin for an ungated file."""
     assert not _dir_is_bare_target(".", 'echo "[checks] x"\nrun_pytest a.b\n')
     assert not _dir_is_bare_target("", 'echo "[checks] x"\n')
+
+
+def test_the_fast_track_lane_whole_directory_target_is_a_gated_target() -> None:
+    """The real release-checks whole-directory target this helper exists
+    for: `skills/fast-track/scripts` is named once as a pytest target, so
+    every test file under it counts as gated by directory, not by path."""
+    text = _RELEASE_CHECKS.read_text()
+    assert _dir_is_bare_target("skills/fast-track/scripts", text)
