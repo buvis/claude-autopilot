@@ -527,6 +527,121 @@
       "impact": "PRD 00278 task 9 acceptance criterion \"bash dev/bin/release-checks exits 0 with FAIL 0\" is unmet, and the repo gate stays RED, so no release can pass release-checks until 00277 is finished or its tests are retired.",
       "recommendation": "Un-park 00277 (mv prds/hold/00277-... prds/backlog/) and finish it, or explicitly retire test_gate_findings_unread_shapes.py. Out of scope for 00278, whose task 9 owns only dev/bin/release-checks and test_release_checks_counts.py.",
       "prd": "00278-make-release-checks-tell-truth-v1.md"
+    },
+    {
+      "type": "deferred_decision",
+      "cycle": 2,
+      "issue": "The gate does not reach FAIL 0. Phase 1 acceptance and exit criterion, \"bash dev/bin/release-checks exits 0 with FAIL 0\", is unmet",
+      "severity": "\ud83d\udfe0",
+      "file": "skills/run-autopilot/cli/test_gate_findings_unread_shapes.py",
+      "reason": "deferred by review-close",
+      "prd": "00278-make-release-checks-tell-truth-v1.md"
+    },
+    {
+      "type": "deferred_decision",
+      "cycle": 2,
+      "issue": "The required FAIL 0 acceptance remains unmet: 67 failures reproduce identically at base and belong to parked PRD 00277. Resolving that PRD's unfinished behavior is outside this change's scope; retain the documented deferral.",
+      "severity": "\ud83d\udfe0",
+      "file": "skills/run-autopilot/cli/test_gate_findings_unread_shapes.py",
+      "reason": "deferred by review-close",
+      "prd": "00278-make-release-checks-tell-truth-v1.md"
+    },
+    {
+      "type": "deferred_decision",
+      "cycle": 2,
+      "issue": "The task 9 acceptance criterion (bash dev/bin/release-checks exits 0 with FAIL 0) is unmet. The gate shows 67 failures, all in test_gate_findings_unread_shapes.py, a PRD 00277 file that was already gated and is parked in hold. The deferred-findings record documents this and it is out of scope here. It still means the PRD's exit criterion is not met, and the gate stays RED for any release until 00277 is finished or its tests are retired.",
+      "severity": "\ud83d\udfe1",
+      "file": "docs/dev/project-management/autopilot/deferred/202610111300-deferred.json:522",
+      "reason": "deferred by review-close",
+      "prd": "00278-make-release-checks-tell-truth-v1.md"
+    },
+    {
+      "type": "deferred_decision",
+      "cycle": 2,
+      "issue": "The new refusal guard in dev/bin/release matches the open PRD 00278 itself, because it contains the phrase \"release is blocked\" and sits in wip/. No real release can run until the PRD reaches done/. The design doc records this and the test uses an isolated fixture, so no change is needed. Keep it in mind at release time.",
+      "severity": "\u26aa",
+      "file": "dev/bin/release:16",
+      "reason": "deferred by review-close",
+      "prd": "00278-make-release-checks-tell-truth-v1.md"
+    },
+    {
+      "type": "deferred_decision",
+      "cycle": 2,
+      "issue": "skills/work/SKILL.md is 492 lines and the leave-row test passes, but I could not confirm the moved text landed in a reference file. All of these pass in the combined run: the three red tests, test_release_refuses_while_a_held_prd_blocks_it, test_every_tracked_test_file_is_gated, and test_allow_corpus_ignores_scratch_dispatch_files (197 passed across those five files)",
+      "severity": "\u26aa",
+      "file": "skills/work/SKILL.md",
+      "reason": "deferred by review-close",
+      "prd": "00278-make-release-checks-tell-truth-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "test_allow_corpus_ignores_scratch_dispatch_files is tautological: it writes the scratch file into tmp_path, which neither the current nor the old _allow_corpus() globs, so the second assert cannot differ from the first. The fail-first replay confirms it passes at base. Plant the file where _allow_corpus reads it (or monkeypatch the corpus directory) and assert the committed fixtures list.",
+      "file": "hooks/test_guard_phase_delegation.py:98",
+      "severity": "high",
+      "consensus": "2/3",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00278-make-release-checks-tell-truth-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "state-schema.md documents CLI invocations that do not exist: autopilot group-rework <state.json> and autopilot review-stage <state.json> <review-file>. The real parsers take group-rework --findings <path> and review-stage --cycle-id --gate-command [--state ...]. test_doc_contract goes green on a false doc.",
+      "file": "skills/run-autopilot/references/state-schema.md:540",
+      "severity": "high",
+      "consensus": "1/3",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00278-make-release-checks-tell-truth-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "Prior R1 only half resolved: the new comment in dev/bin/release-checks repeats the scratch-replay path literally, so the plain path not in text pin passes whether or not UNGATED lists it. The UNGATED entry is dead again. Reword the comment, or pin that every UNGATED path is absent from the script text.",
+      "file": "dev/bin/release-checks:128",
+      "severity": "medium",
+      "consensus": "1/3",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00278-make-release-checks-tell-truth-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The gate pin accepts any substring hit in the script text, so a test path named only in a comment or echo counts as gated, and _dir_is_bare_target treats a bare directory word in a comment as gating every test under it. Match only inside run_pytest/run_harness argument lines.",
+      "file": "skills/run-autopilot/cli/test_release_checks_counts.py:344",
+      "severity": "medium",
+      "consensus": "1/3",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00278-make-release-checks-tell-truth-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "Doubt lens on the same defect as the high above: nothing redirects corpus discovery to tmp_path, so restoring the original scratch-reading _allow_corpus can still pass in a clean checkout. Monkeypatch the corpus location and verify failure against the original implementation.",
+      "file": "hooks/test_guard_phase_delegation.py:98",
+      "severity": "medium",
+      "consensus": "1/3",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00278-make-release-checks-tell-truth-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The PRD asks the task report to state the gate's new wall time; it is absent. Blake measured 5m08s on a sandboxed host against the ~220s baseline, unconfirmed. Bob asks for /usr/bin/time -p bash dev/bin/release-checks at base a15cbe13 and at e0101faa, with both elapsed times and the delta recorded.",
+      "file": "dev/bin/release-checks",
+      "severity": "low",
+      "consensus": "2/3",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00278-make-release-checks-tell-truth-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The CHANGELOG packet-7 bullet is not the observed-split form the PRD asks for (denies X, still allows Y); it says the four phrasings now correctly deny. Blake confirmed the claim is true at HEAD, so this is a form deviation only.",
+      "file": "CHANGELOG.md:37",
+      "severity": "low",
+      "consensus": "1/3",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00278-make-release-checks-tell-truth-v1.md"
     }
   ]
 }

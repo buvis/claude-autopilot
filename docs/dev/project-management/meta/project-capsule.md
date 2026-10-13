@@ -48,19 +48,15 @@ Generated: 2026-10-13
 - [x] 00271-guard-v2-structural-delegation-check-v1 (2 cycles)
 - [x] 00285-resolve-process-facts-without-ps-v1 (1 cycle)
 - [x] 00276-make-the-gate-record-trustworthy-v1 (2 cycles)
-- [ ] 00278-make-release-checks-tell-truth-v1 (in progress, build task 9/9
-      pending after a mid-task rotation; HEAD 301ada7, tree dirty with task-9
-      edits in `cli/gate.py`, `cli/test_release_checks_counts.py` and the two
-      `hooks/test_guard_phase_delegation*.py` files)
-- backlog: 00279 (agoge 2026-10-10 walkthrough),
+- [x] 00278-make-release-checks-tell-truth-v1 (2 cycles)
+- backlog: 00279-run-one-exact-reuse-rule-v1,
   plus 00282, 00283, 00284 (loop efficiency, from discovery 00281).
 - held: 00277-catch-critical-rows-in-every-shape-v1 (stalled on a
   blocking-escalation design question, see commit 4debc71) and 00280
-  (2026-10-12 backlog review), plus 9 triage stubs minted at 00271's close —
-  00286-00292 — 2 more minted at 00285's close — 00293-00294 — and 2 more
-  minted at 00276's close — 00295-00296 (`dev/bin/release-checks` is still
-  RED on this host for pre-existing sandbox reasons unrelated to any held
-  item).
+  (2026-10-12 backlog review), plus 16 triage stubs minted across
+  00271/00285/00276/00278's closes — 00286-00301 (`dev/bin/release-checks`
+  is still RED on this host for pre-existing sandbox reasons unrelated to
+  any held item).
 
 Observations: 00271 closed converged-with-deferrals at the cycle-2 rework
 cap (10 unresolved cap-overflow findings + 6 cycle-1 deferrals, 16 total,
@@ -81,7 +77,16 @@ reconciled into the batch deferred JSON and minted into 2 hold stubs —
 removed per cycle-1 R9, but the design doc and PRD tasks 5/7 still require
 it — `autopilot verify --log <tracked file>` truncates committed product
 code before the gate runs). Carl stayed unavailable both of 00276's review
-dispatches (copilot auth, exit 1 — no batch latch).
+dispatches (copilot auth, exit 1 — no batch latch). 00278 closed
+converged-with-deferrals at the cycle-2 rework cap: 5 cycle-1/2 deferrals +
+7 cycle-2 cap-overflow findings, 12 total, reconciled into the batch
+deferred JSON and minted into 5 hold stubs — 00297-00301. The required
+`FAIL 0` acceptance criterion stayed unmet (67 pre-existing failures belong
+to parked PRD 00277, out of scope here, documented as an accepted
+deferral). The two surviving cycle-2 HIGHs (a tautological corpus-scratch
+test at `hooks/test_guard_phase_delegation.py:98`, and
+`state-schema.md:540` documenting two CLI invocations that do not exist)
+are deferred, not fixed.
 
 ### Batch 202610101000
 - [x] 00269-sweep-every-findings-token-v1 (2 cycles)

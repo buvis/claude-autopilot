@@ -4075,3 +4075,5 @@
 {"id":"58f68457","ended_at":1791886654,"elapsed_s":485,"outcome":"ok","detail":"retry"}
 {"id":"db2dc4d5","ended_at":1791886658,"elapsed_s":489,"outcome":"error","detail":"retry: exit 1"}
 {"kind":"handoff","site":"review","edge":"leave","at":1791886864,"phase":"done","prd":"00278-make-release-checks-tell-truth-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1791886913,"phase":"done","prd":"00278-make-release-checks-tell-truth-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1791887186,"phase":"build","prd":"00278-make-release-checks-tell-truth-v1.md"}
