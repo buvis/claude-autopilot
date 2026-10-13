@@ -63,13 +63,20 @@ HIDDEN_FLAGS = pytest.mark.parametrize(
 )
 
 
-def _run_passing_gate(cwd: Path, sha: str = "abc") -> dict:
+def _run_passing_gate(cwd: Path, sha: str) -> dict:
     return verification.run_gate("echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'", cwd, sha, 1)
 
 
-def _assert_refused(repo: Path, result: dict) -> None:
+def _assert_refused(repo: Path, result: dict, dirty_paths: list[str]) -> None:
+    # Asserting the exact dirty_paths, not just "dirty is True", is what
+    # proves the refusal comes from the hidden-flag scan: a sha that simply
+    # does not match HEAD produces the same recorded/dirty shape with
+    # dirty_paths == [] (see `_dirty_result([])` in verification.py), so
+    # these tests must pass the real HEAD sha or they would pass unchanged
+    # with hidden-flag detection disabled entirely.
     assert result["recorded"] is False
     assert result["dirty"] is True
+    assert result["dirty_paths"] == dirty_paths
     assert not (repo / RECORD_REL).exists()
 
 
@@ -79,21 +86,17 @@ def _assert_hidden_flag_only_dirties_outside_the_store(
     not_a_repo: Path,
 ) -> None:
     # Fail closed: when git cannot answer at all (cwd is no repository), the
-    # tree counts as dirty and nothing is recorded.
-    no_git = _run_passing_gate(not_a_repo)
-    _assert_refused(not_a_repo, no_git)
+    # tree counts as dirty and nothing is recorded. There is no HEAD to pass
+    # here, so this one case keeps an arbitrary sha.
+    no_git = _run_passing_gate(not_a_repo, "abc")
+    _assert_refused(not_a_repo, no_git, [])
 
     # Control: the flag on a tracked store file, edited under it, is no dirt.
     store_file = f"{STORE}/autopilot/state.json"
     _commit(repo, store_file, "{}\n")
     _git(repo, "update-index", flag, "--", store_file)
     (repo / store_file).write_text('{"edited": true}\n')
-    allowed = verification.run_gate(
-        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
-        repo,
-        _git(repo, "rev-parse", "HEAD"),
-        1,
-    )
+    allowed = _run_passing_gate(repo, _git(repo, "rev-parse", "HEAD"))
     assert allowed["passed"] == 1
     assert allowed["recorded"] is True
     assert allowed["dirty"] is False
@@ -106,15 +109,8 @@ def _assert_hidden_flag_only_dirties_outside_the_store(
     (repo / "src" / "app.py").write_text("print('hidden edit')\n")
     status = _git(repo, "status", "--porcelain=1", "--untracked-files=all")
     assert "src/app.py" not in status
-    refused = verification.run_gate(
-        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
-        repo,
-        "abc",
-        1,
-    )
-    assert refused["recorded"] is False
-    assert refused["dirty"] is True
-    assert not (repo / RECORD_REL).exists()
+    refused = _run_passing_gate(repo, _git(repo, "rev-parse", "HEAD"))
+    _assert_refused(repo, refused, ["src/app.py"])
 
 
 def test_skip_worktree_edit_blocks_record(repo: Path, tmp_path_factory) -> None:
@@ -134,17 +130,16 @@ def test_assume_unchanged_edit_blocks_record(repo: Path, tmp_path_factory) -> No
 
 
 @HIDDEN_FLAGS
-def test_hidden_flag_alone_without_an_edit_is_not_dirt(repo: Path, flag: str) -> None:
-    # The flag by itself changes nothing in the work tree: no edit, no dirt.
+def test_hidden_flag_alone_without_an_edit_is_dirt(repo: Path, flag: str) -> None:
+    # The flag alone is dirt even with no edit: it hides the path from
+    # plain status, so its on-disk content can never be trusted to still
+    # match the index blob without reading it, which the gate does not do.
     _git(repo, "update-index", flag, "--", "src/app.py")
     assert (repo / "src" / "app.py").read_text() == "print(1)\n"
 
     result = _run_passing_gate(repo, _git(repo, "rev-parse", "HEAD"))
 
-    assert result["passed"] == 1
-    assert result["recorded"] is True
-    assert result["dirty"] is False
-    assert (repo / RECORD_REL).exists()
+    _assert_refused(repo, result, ["src/app.py"])
 
 
 @HIDDEN_FLAGS
@@ -160,7 +155,9 @@ def test_hidden_flag_same_length_edit_blocks_record(repo: Path, flag: str) -> No
         "--untracked-files=all",
     )
 
-    _assert_refused(repo, _run_passing_gate(repo))
+    result = _run_passing_gate(repo, _git(repo, "rev-parse", "HEAD"))
+
+    _assert_refused(repo, result, ["src/app.py"])
 
 
 @HIDDEN_FLAGS
@@ -169,7 +166,9 @@ def test_hidden_flag_deleted_product_file_blocks_record(repo: Path, flag: str) -
     _git(repo, "update-index", flag, "--", "src/app.py")
     (repo / "src" / "app.py").unlink()
 
-    _assert_refused(repo, _run_passing_gate(repo))
+    result = _run_passing_gate(repo, _git(repo, "rev-parse", "HEAD"))
+
+    _assert_refused(repo, result, ["src/app.py"])
 
 
 def test_skip_worktree_and_assume_unchanged_together_edit_blocks_record(
@@ -187,7 +186,9 @@ def test_skip_worktree_and_assume_unchanged_together_edit_blocks_record(
         "--untracked-files=all",
     )
 
-    _assert_refused(repo, _run_passing_gate(repo))
+    result = _run_passing_gate(repo, _git(repo, "rev-parse", "HEAD"))
+
+    _assert_refused(repo, result, ["src/app.py"])
 
 
 @HIDDEN_FLAGS
@@ -212,4 +213,6 @@ def test_hidden_flag_edit_near_but_outside_the_store_blocks_record(
     (repo / rel).write_text("x = 'hidden edit'\n")
     assert rel not in _git(repo, "status", "--porcelain=1", "--untracked-files=all")
 
-    _assert_refused(repo, _run_passing_gate(repo))
+    result = _run_passing_gate(repo, _git(repo, "rev-parse", "HEAD"))
+
+    _assert_refused(repo, result, [rel])
