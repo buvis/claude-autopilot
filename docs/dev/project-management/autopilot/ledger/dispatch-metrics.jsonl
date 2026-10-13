@@ -3850,3 +3850,5 @@
 {"kind":"handoff","site":"review","edge":"leave","at":1791852535,"phase":"done","prd":"00285-resolve-process-facts-without-ps-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1791852574,"phase":"done","prd":"00285-resolve-process-facts-without-ps-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1791852648,"phase":"build","prd":"00285-resolve-process-facts-without-ps-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791852778,"phase":"build","prd":"00276-make-the-gate-record-trustworthy-v1.md"}
+{"kind":"handoff","site":"build","edge":"leave","at":1791854346,"phase":"build","prd":"00276-make-the-gate-record-trustworthy-v1.md"}
