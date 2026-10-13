@@ -582,6 +582,16 @@ def test_a_closer_with_trailing_text_still_closes_the_fence(tmp_path: Path) -> N
     assert _verdict_and_exit(text, _COVERED, tmp_path) == ("ok", None, 0)
 
 
+@pytest.mark.parametrize("indent", ["\t", "    "], ids=["tab", "4 spaces"])
+def test_indented_fence_does_not_blank_rows(indent: str, tmp_path: Path) -> None:
+    """CommonMark reads a tab or 4+ spaces before a fence marker as a code
+    block, not a fence: neither the opener nor the closer counts, so the row
+    between them is live and refused like a row never fenced at all."""
+    text = _review_text(alice=f"{indent}```\n{_ALICE_ROW}\n{indent}```")
+    verdict = _verdict_and_exit(text, _COVERED, tmp_path)
+    assert verdict == ("malformed", _unread_detail(text, _ALICE_ROW), 2)
+
+
 def test_a_row_above_the_table_header_is_unreadable(tmp_path: Path) -> None:
     stray = _ref_row("R3", MED, "stray row", "src/d.py:1")
     rows = f"{_R1_ROW}\n{_R2_ROW}\n"
