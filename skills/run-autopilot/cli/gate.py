@@ -97,6 +97,7 @@ if __package__:
         _CANDIDATE_ROW_RE,
         _FINDING_ROW_RE,
         _FINDINGS_HEADING_RE,
+        _SEVERITY_EMOJI,
         Row,
         _finding_key,
         _reviewed_keys,
@@ -110,6 +111,7 @@ else:
         _CANDIDATE_ROW_RE,
         _FINDING_ROW_RE,
         _FINDINGS_HEADING_RE,
+        _SEVERITY_EMOJI,
         Row,
         _finding_key,
         _reviewed_keys,
@@ -150,27 +152,37 @@ _CONSENSUS_TOKEN_RE = re.compile(r"\[\d+/\d+\]")
 # an HTML <table>/<td> tag anywhere. Deliberately no bare bullet/blockquote
 # marker: a reviewer's plain "- 🟡 Name: free-text comment" bullet stays unread.
 _ROW_SHAPE_RE = re.compile(r"\||<t(?:able|d)\b", re.IGNORECASE)
-_SEVERITY_EMOJI_ANY_RE = re.compile("[\U0001f534\U0001f7e0\U0001f7e1⚪]")
+_SEVERITY_EMOJI_ANY_RE = re.compile(f"[{''.join(_SEVERITY_EMOJI)}]")
 # A severity word anywhere on the line; only ever consulted beside
 # _LEADING_RATIO_RE, so ordinary prose naming a severity is never flagged.
-_SEVERITY_WORD_ANY_RE = re.compile(r"\b(CRITICAL|HIGH|MEDIUM|LOW)\b", re.IGNORECASE)
+# `(?!-)` keeps a hyphenated compound ("low-hanging", "high-level") unread.
+_SEVERITY_WORD_ANY_RE = re.compile(
+    r"\b(CRITICAL|HIGH|MEDIUM|LOW)\b(?!-)", re.IGNORECASE
+)
 _SEVERITY_WORD_CELL_RE = re.compile(
     r"\|\s*(CRITICAL|HIGH|MEDIUM|LOW)\s*\|",
     re.IGNORECASE,
 )
-# A consensus-marker variant leading the line, after any bullet or blockquote
-# markers: spaced or asymmetric brackets, fullwidth or lenticular brackets, or
-# parentheses, open and close matched independently. Anchored so a count in
-# prose ("(1092/1092)") or a heading ("### Full Consensus (3/3)") stays unread.
+# A consensus-marker variant leading the line, after any indent and any bullet,
+# blockquote or ordinal ("1." / "1)") markers, optionally wrapped in one level
+# of emphasis ("**［2/2］**"): spaced or asymmetric brackets, fullwidth or
+# lenticular brackets, or parentheses, open and close matched independently.
+# Indent is unbounded, like _CANDIDATE_ROW_RE. Anchored so a count in prose
+# ("(1092/1092)") or a heading ("### Full Consensus (3/3)") stays unread.
 _CONSENSUS_VARIANT_RE = re.compile(
-    r"^[ \t]{0,3}(?:[-*+>][ \t]*)*[\[(［【]\s*\d+\s*/\s*\d+\s*[\])］】]",
+    r"^[ \t]*(?:(?:[-*+>]|\d+[.)])[ \t]*)*(?:\*{0,2}|_{0,2})"
+    r"[\[(［【]\s*\d+\s*/\s*\d+\s*[\])］】]",
 )
 # A severity emoji followed by its severity word ("🔴 CRITICAL"): a reviewer's
 # "[BLAKE] 🟡 issue | File: x" lens bullet names no word and stays unread.
 _SEVERITY_EMOJI_WORD_RE = re.compile(
-    "[\U0001f534\U0001f7e0\U0001f7e1⚪]\\s*(CRITICAL|HIGH|MEDIUM|LOW)\\b",
+    _SEVERITY_EMOJI_ANY_RE.pattern + r"\s*(CRITICAL|HIGH|MEDIUM|LOW)\b(?!-)",
     re.IGNORECASE,
 )
+# The attribution every finding row ends with (`| Found by: alice`, see
+# _FINDING_ROW_RE): beside a pipe and a severity emoji it marks a wordless
+# finding row, which a reviewer's free-text lens bullet never carries.
+_FOUND_BY = "Found by:"
 # A bare m/n leading the line (up to 3 spaces/tabs of indent): the pipe-less
 # table's only structural signal, read only beside a severity signal.
 _LEADING_RATIO_RE = re.compile(r"^[ \t]{0,3}\d+\s*/\s*\d+\b")
@@ -427,6 +439,11 @@ def _unread_token(live: str) -> str | None:
             or _CONSENSUS_VARIANT_RE.search(line)
             or _SEVERITY_WORD_CELL_RE.search(line)
             or (_ROW_SHAPE_RE.search(line) and _SEVERITY_EMOJI_WORD_RE.search(line))
+            or (
+                _FOUND_BY in line
+                and _ROW_SHAPE_RE.search(line)
+                and _SEVERITY_EMOJI_ANY_RE.search(line)
+            )
             or (
                 _LEADING_RATIO_RE.match(line)
                 and (
