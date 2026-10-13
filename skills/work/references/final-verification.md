@@ -134,10 +134,10 @@ certified.
 ```
 
 **Single writer:** `autopilot verify`, called from this step. **Single
-reader:** `review-work-completion` step 6, which composes the review file's
-`Tests:` line from the record when its `sha` equals the reviewed HEAD and the
-three counts are non-null. That record is what replaces the review's own
-second run of the same suite.
+reader:** `review-work-completion` step 6, which copies `gate.tests_line` (the
+`## Test gate` section) into the review file's `Tests:` line and runs
+`autopilot verify` only when that line is not a counts line. That record is
+what replaces the review's own second run of the same suite.
 
 - The counts come from the runner's own summary line. A run whose output
   carries **no parseable counts writes no record at all** — `autopilot

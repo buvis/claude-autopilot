@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **run-autopilot**: the CLI now needs Python 3.11 or newer (it uses datetime.UTC); 3.10 is no longer supported
+- **run-autopilot**: `normalize_command` only collapses whitespace now - it no longer strips a leading `bash `/`sh ` or `./`, so `bash X`, `sh X`, `./X` and `X` each get their own verification record instead of sharing one; an existing `last-verification.json` record written under the old stripping normalizer goes stale once after this ships, forcing one unavoidable rerun (about 220 seconds) the first time it is checked post-upgrade - expected, not a regression
 
 ### Fixed
 
@@ -60,7 +61,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: two concurrent `autopilot verify` runs no longer race the record and log file - the gate takes a lock, so only one run writes the record at a time; the wait for that lock is now bounded by the gate's own timeout, so a hung or orphaned holder can no longer block every later `verify` indefinitely
 - **run-autopilot**: a single-hop directory symlink that aliases the repository root (for example `src/root -> ..`) no longer escapes gate-reuse staleness detection
 - **run-autopilot**: gate reuse is refused when a tracked product symlink that aliases a path inside the store has a changed target, committed or uncommitted, so a store-only edit can no longer evade staleness detection
-- **run-autopilot**: `normalize_command` only collapses whitespace now - it no longer strips a leading `bash `/`sh ` or `./`, so `bash X`, `sh X`, `./X` and `X` each get their own verification record instead of sharing one; an existing `last-verification.json` record written under the old stripping normalizer goes stale once after this ships, forcing one unavoidable rerun (about 220 seconds) the first time it is checked post-upgrade - expected, not a regression
 
 ## [0.9.0] - 2026-10-05
 

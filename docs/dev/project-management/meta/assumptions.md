@@ -20,4 +20,4 @@ Ivan (implementor):
 Ivan (implementor):
 
 - Resolved the task's "Verify" line (run `dev/bin/release-checks`) as superseded by the dispatch's own standing rule against running the full suite inside a per-task dispatch, since this is a docs-only task with no failing tests named; left the full gate for the orchestrator's step 7.
-- Placed the new CHANGELOG bullet as the last entry in `[Unreleased] ### Changed`, immediately before the `## [0.9.0]` heading, since no specific position was mandated beyond "alongside the other `### Changed` entries."
+- The new CHANGELOG bullet first landed as the last entry of `[Unreleased] ### Fixed` (this note wrongly said Changed); review cycle 1 moved it to `[Unreleased] ### Changed`, after the Python 3.11 line.
