@@ -15,9 +15,7 @@ import os
 import signal
 import subprocess
 import sys
-import threading
 import time
-from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -195,94 +193,32 @@ def test_log_write_error_releases_the_gate_lock(
         _kill_group_quietly(pid)
 
 
-def _call_while_gate_lock_is_held(lock_path: Path, call: Callable[[], dict]) -> dict:
-    """Holds the gate lock from a separate process, starts `call` in a
-    thread, checks it is still waiting a second later (so its refusal cannot
-    come from before the lock), then releases the lock and returns what
-    `call` returned."""
-    holder_src = (
-        "import fcntl, os, sys\n"
-        "fd = os.open(sys.argv[1], os.O_RDWR)\n"
-        "fcntl.flock(fd, fcntl.LOCK_EX)\n"
-        "print('held', flush=True)\n"
-        "sys.stdin.read()\n"
-    )
-    holder = subprocess.Popen(
-        [sys.executable, "-c", holder_src, str(lock_path)],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        text=True,
-    )
-    out: dict = {}
-
-    def _run() -> None:
-        try:
-            out["result"] = call()
-        except BaseException as exc:  # handed back to the test thread below
-            out["error"] = exc
-
-    try:
-        assert holder.stdout.readline().strip() == "held"
-        worker = threading.Thread(target=_run, daemon=True)
-        worker.start()
-        worker.join(timeout=1.0)
-        assert worker.is_alive(), "run_gate answered while the gate lock was held"
-    finally:
-        holder.stdin.close()
-        holder.wait(timeout=30)
-        holder.stdout.close()
-    worker.join(timeout=30)
-    if "error" in out:
-        raise out["error"]
-    return out["result"]
-
-
 @pytest.mark.parametrize("via_symlink", [False, True], ids=["direct", "symlink"])
-@pytest.mark.parametrize("cwd_rel", [".", "src"])
-def test_run_gate_refuses_a_tracked_log_path_and_leaves_it_unchanged(
-    repo: Path, tmp_path_factory, cwd_rel: str, via_symlink: bool
+def test_run_gate_writes_through_a_tracked_log_path(
+    repo: Path, via_symlink: bool
 ) -> None:
-    # The log destination is a committed file (or an untracked symlink to
-    # it) and the tree is clean. The refusal names the real file
-    # toplevel-relative, also when cwd is a subdirectory.
+    # Only a store-resolving --log is refused (the CLI layer, before this
+    # function is ever reached); a tracked log elsewhere in the repo is not
+    # this function's business, scope creep that a prior cycle added and
+    # this one removes. Direct: the gate runs and the tracked file is
+    # written through like any other path -- but writing it is itself an
+    # edit, so the post-run dirty check (which never excuses a tracked log)
+    # still reports dirty and the record is not written. Symlink: the link
+    # itself is untracked, so it shows up as dirt in the ordinary pre-spawn
+    # scan and the gate never runs at all -- also dirty, also unrecorded,
+    # but the target is untouched.
     head = _commit(repo, "logs/gate.log", "committed log body\n")
-    cwd = repo / cwd_rel
-    record = cwd / RECORD_REL
-    assert verification.run_gate(SUMMARY, cwd, head, 1)["recorded"] is True
-    green = record.read_bytes()
-    ran = tmp_path_factory.mktemp("ran") / "ran.txt"
     log_path = repo / "logs" / "gate.log"
     if via_symlink:
         log_path = repo / "link.log"
         log_path.symlink_to(Path("logs") / "gate.log")
 
-    # Refused only once the lock is taken, while another holder keeps it.
-    result = _call_while_gate_lock_is_held(
-        cwd / GATE_LOCK_REL,
-        lambda: verification.run_gate(
-            f"echo ran > '{ran}'; {SUMMARY}", cwd, head, 2, log_path=log_path
-        ),
-    )
+    result = verification.run_gate(SUMMARY, repo, head, 1, log_path=log_path)
 
-    assert result == {
-        "passed": None,
-        "failed": None,
-        "skipped": None,
-        "exit": None,
-        "raw_line": None,
-        "timed_out": False,
-        "recorded": False,
-        "dirty": True,
-        "dirty_paths": ["logs/gate.log"],
-    }
-    # The log was never opened for writing, the gate never ran, the older
-    # record was not touched, and the lock was released on the way out.
-    assert (repo / "logs" / "gate.log").read_bytes() == b"committed log body\n"
-    assert not ran.exists()
-    assert record.read_bytes() == green
-    if via_symlink:
-        log_path.unlink()  # the untracked link would itself dirty the tree
-    assert verification.run_gate(SUMMARY, cwd, head, 3)["recorded"] is True
+    assert result["recorded"] is False
+    assert result["dirty"] is True
+    expected = b"committed log body\n" if via_symlink else b"PASS 1 FAIL 0 SKIP 0 EXIT 0\n"
+    assert (repo / "logs" / "gate.log").read_bytes() == expected
 
 
 @pytest.mark.parametrize("leftover", [None, b"an older run's log\n"], ids=["new", "leftover"])

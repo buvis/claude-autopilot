@@ -658,6 +658,22 @@ def test_failed_run_leaves_no_older_green_record(
     assert probe.read_text().split() == ["absent", "absent", "absent"]
 
 
+def test_gate_lock_wait_expires_without_running_the_gate(repo: Path) -> None:
+    # The lock wait is bounded by the gate's own timeout: a holder that
+    # never lets go must not block run_gate forever.
+    head = _git(repo, "rev-parse", "HEAD")
+    fd = _hold_gate_lock(repo)
+    try:
+        result = verification.run_gate(SUMMARY, repo, head, 1, timeout=0.2)
+    finally:
+        _release_gate_lock(fd)
+
+    assert result == verification._timed_out_result()
+    assert not (repo / RECORD_REL).exists()
+    # The expiry released nothing it never held.
+    assert _gate_lock_is_free(repo)
+
+
 def test_concurrent_runs_serialize_on_the_gate_lock(
     repo: Path, tmp_path_factory
 ) -> None:

@@ -29,6 +29,7 @@ from cli.store_tree import STORE_PREFIXES
 
 GATE_TIMEOUT_S = 1800
 GATE_OUTPUT_CAP = 2_000_000  # bytes of combined stdout+stderr kept
+_LOCK_POLL_S = 0.05  # LOCK_NB poll interval while waiting for the gate lock
 
 STORE_PREFIX = "docs/dev/project-management/"
 RECORD_REL = Path(STORE_PREFIX) / "autopilot" / "last-verification.json"
@@ -163,7 +164,12 @@ def _store_symlink_targets_changed(repo_root: Path, store_paths: list[str]) -> b
         if raw.returncode != 0:
             raise _GitProbeFailed("git cat-file failed")
         target = posixpath.normpath(posixpath.join(posixpath.dirname(link), raw.stdout))
-        if any(p == target or p.startswith(target + "/") for p in store_paths):
+        # "." is the repo root: every repo-relative store path is beneath it,
+        # but none of them literally starts with "./", so it needs its own
+        # branch rather than falling through to the startswith check below.
+        if target == "." or any(
+            p == target or p.startswith(target + "/") for p in store_paths
+        ):
             return True
     return False
 
@@ -173,18 +179,16 @@ def _dirty_outside_store_paths(
     extra_excluded: tuple[str, ...] = (),
 ) -> list[str]:
     """Sorted, deduplicated paths of every porcelain status record outside
-    the store roots, [] when clean. Store roots are
-    `{prefix + p for p in STORE_PREFIXES}` (prefix match), where
-    `prefix` is `git rev-parse --show-prefix`; `extra_excluded` holds
-    TOPLEVEL-relative POSIX file paths, used as given (not re-joined with
-    prefix) and matched exactly, never as prefixes. Runs
-    `git status --porcelain=1 -z --untracked-files=all` and reuses `_iter_porcelain_z_records` and `_dirty_path_is_in_store`; a
-    rename/copy record contributes both of its paths. Catches nothing: a
-    failing git call raises `_GitProbeFailed` (an OSError), never `[]`."""
-    prefix = _git(repo_root, "rev-parse", "--show-prefix")
-    if prefix.returncode != 0:
-        raise _GitProbeFailed("git rev-parse --show-prefix failed")
-    store = tuple(prefix.stdout.strip() + root for root in STORE_PREFIXES)
+    the store roots, [] when clean. Store roots come from `_store_roots`
+    (`prefix + p for p in STORE_PREFIXES`, `prefix` from `git rev-parse
+    --show-prefix`); `extra_excluded` holds TOPLEVEL-relative POSIX file
+    paths, used as given (not re-joined with prefix) and matched exactly,
+    never as prefixes. Runs `git status --porcelain=1 -z
+    --untracked-files=all` and reuses `_iter_porcelain_z_records` and
+    `_dirty_path_is_in_store`; a rename/copy record contributes both of its
+    paths. Catches nothing: a failing git call raises `_GitProbeFailed`
+    (an OSError), never `[]`."""
+    store = _store_roots(repo_root)
     status = _git(repo_root, "status", "--porcelain=1", "-z", "--untracked-files=all")
     if status.returncode != 0:
         raise _GitProbeFailed("git status failed")
@@ -201,9 +205,11 @@ def _dirty_outside_store_paths(
 
 def _hidden_flag_edits(repo_root: Path, store: tuple[str, ...]) -> list[str]:
     """Toplevel-relative paths outside `store` whose index entry carries the
-    skip-worktree or assume-unchanged flag (which hide edits from `git
-    status`) and whose work-tree content differs from the index blob, or is
-    gone. Raises `_GitProbeFailed` when a git call fails."""
+    skip-worktree or assume-unchanged flag. Either flag alone is dirt: both
+    hide the path from `git status`, so its on-disk content can never be
+    trusted to still match the index blob -- there is no safe way to tell
+    an unedited flagged file from an edited one without the gate itself
+    reading stale bytes. Raises `_GitProbeFailed` when a git call fails."""
     top = _git(repo_root, "rev-parse", "--show-toplevel")
     if top.returncode != 0:
         raise _GitProbeFailed("git rev-parse --show-toplevel failed")
@@ -211,25 +217,16 @@ def _hidden_flag_edits(repo_root: Path, store: tuple[str, ...]) -> list[str]:
     listing = _git(toplevel, "ls-files", "-v", "-s", "-z")
     if listing.returncode != 0:
         raise _GitProbeFailed("git ls-files failed")
-    flagged = {}
+    flagged = []
     for entry in listing.stdout.split("\0"):
         if not entry:
             continue
         meta, path = entry.split("\t", 1)
-        tag, _mode, blob, _stage = meta.split()
+        tag, _mode, _blob, _stage = meta.split()
         # "S" is skip-worktree; a lowercase tag is assume-unchanged.
         if (tag == "S" or tag.islower()) and not path.startswith(store):
-            flagged[path] = blob
-    edited = [p for p in flagged if not (toplevel / p).exists()]
-    present = [p for p in flagged if p not in edited]
-    if present:
-        hashed = _git(toplevel, "hash-object", "--", *present)
-        if hashed.returncode != 0:
-            raise _GitProbeFailed("git hash-object failed")
-        for path, blob in zip(present, hashed.stdout.split()):
-            if blob != flagged[path]:
-                edited.append(path)
-    return edited
+            flagged.append(path)
+    return flagged
 
 
 def _dirty_outside_store(
@@ -256,41 +253,36 @@ def _dirty_check(cwd: Path, extra_excluded: tuple[str, ...]) -> tuple[bool, list
     return bool(paths), paths
 
 
+def _log_rel_and_tracked(cwd: Path, log_path: Path | None) -> tuple[str, bool] | None:
+    """(toplevel-relative POSIX path of `log_path`, whether it is tracked
+    there), when `log_path` resolves inside cwd's git toplevel; None when
+    there is no log, it resolves outside the toplevel, or any git call
+    fails. The single probe both `_untracked_log_exclusion` callers used to
+    run separately."""
+    if log_path is None:
+        return None
+    try:
+        top = _git(cwd, "rev-parse", "--show-toplevel")
+        if top.returncode != 0:
+            return None
+        toplevel = Path(top.stdout.strip())
+        rel = log_path.resolve().relative_to(toplevel.resolve()).as_posix()
+        tracked = _git(toplevel, "ls-files", "--error-unmatch", "--", rel)
+    except (OSError, ValueError):
+        return None
+    return rel, tracked.returncode == 0
+
+
 def _untracked_log_exclusion(cwd: Path, log_path: Path | None) -> tuple[str, ...]:
     """`(toplevel-relative POSIX path of log_path,)` when the log resolves
     inside cwd's git toplevel and is NOT tracked there; `()` otherwise
     (no log, log outside the toplevel, log tracked, or any git failure).
     A tracked log is never excused: its edits stay dirt."""
-    if log_path is None:
+    resolved = _log_rel_and_tracked(cwd, log_path)
+    if resolved is None:
         return ()
-    try:
-        top = _git(cwd, "rev-parse", "--show-toplevel")
-        if top.returncode != 0:
-            return ()
-        toplevel = Path(top.stdout.strip())
-        rel = log_path.resolve().relative_to(toplevel.resolve()).as_posix()
-        tracked = _git(toplevel, "ls-files", "--error-unmatch", "--", rel)
-    except (OSError, ValueError):
-        return ()
-    return () if tracked.returncode == 0 else (rel,)
-
-
-def _tracked_log_path(cwd: Path, log_path: Path | None) -> str | None:
-    """The toplevel-relative POSIX path of `log_path`, symlinks resolved,
-    when it lies inside cwd's git toplevel AND is tracked there; None
-    otherwise. `run_gate` refuses such a log before opening it."""
-    if log_path is None:
-        return None
-    top = _git(cwd, "rev-parse", "--show-toplevel")
-    if top.returncode != 0:
-        return None
-    toplevel = Path(top.stdout.strip())
-    try:
-        rel = log_path.resolve().relative_to(toplevel.resolve()).as_posix()
-    except ValueError:
-        return None
-    tracked = _git(toplevel, "ls-files", "--error-unmatch", "--", rel)
-    return rel if tracked.returncode == 0 else None
+    rel, tracked = resolved
+    return () if tracked else (rel,)
 
 
 def _record_shape_ok(record: dict, gate_command: str) -> bool:
@@ -323,7 +315,7 @@ def normalize_command(command: object) -> str:
     text = " ".join(command.split())
     for shell in ("bash ", "sh "):
         if text.startswith(shell):
-            text = text[len(shell) :]
+            text = text[len(shell):]
             break
     return text.removeprefix("./")
 
@@ -357,10 +349,16 @@ def reuse_verdict(
       - a dirty or untracked docs/dev/project-management/ path is tolerated
       - a rename or copy is judged by both of its endpoint paths, so a move
         out of the store tree counts as dirty
+      - no tracked symlink outside the store resolves to a store path the
+        diff or the dirty scan touched, committed or uncommitted -- a
+        directory-level alias (even one normalizing to ".", the repo root)
+        counts too, since it covers every store path beneath it
     Returns ("stale", {}) otherwise, including when any git call itself
     fails (missing sha, unknown ref, non-git repo, non-zero exit on the
     ancestor check): fail toward re-running the gate, never toward
-    skipping it.
+    skipping it. The symlink-alias check above actually runs inside
+    `_ancestor_and_clean`, which this function calls, not in this function
+    itself.
     """
     if not isinstance(record, dict) or not _record_shape_ok(record, gate_command):
         return _STALE
@@ -524,17 +522,28 @@ def _record_gate(
     return result
 
 
+def _acquire_lock(lock_fd: int, deadline: float) -> bool:
+    """Polls a non-blocking exclusive flock on `lock_fd` until it succeeds
+    or `deadline` passes. Returns False on expiry, with the lock NOT held
+    (nothing to release)."""
+    while True:
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except OSError:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            time.sleep(min(_LOCK_POLL_S, remaining))
+
+
 def _lock_and_check(
-    lock_fd: int, cwd: Path, sha: str, log_path: Path | None
+    cwd: Path, sha: str, log_path: Path | None
 ) -> tuple[tuple[str, ...], dict | None]:
-    """The locked preamble of `run_gate`: take the flock on `lock_fd`, then
-    refuse when `log_path` is tracked, the tree is dirty or HEAD no longer
-    equals `sha`. Returns the
-    log exclusion and the `_dirty_result` refusal, or None to proceed."""
-    fcntl.flock(lock_fd, fcntl.LOCK_EX)
-    tracked_log = _tracked_log_path(cwd, log_path)
-    if tracked_log is not None:
-        return (), _dirty_result([tracked_log])
+    """The preamble of `run_gate`, called with the flock already held:
+    refuse when the tree is dirty or HEAD no longer equals `sha`. Returns
+    the log exclusion and the `_dirty_result` refusal, or None to
+    proceed."""
     extra_excluded = _untracked_log_exclusion(cwd, log_path)
     dirty, dirty_paths = _dirty_check(cwd, extra_excluded)
     if dirty:
@@ -550,13 +559,14 @@ def _run_locked_gate(
     cwd: Path,
     sha: str,
     cycle: int | None,
-    timeout: float,
+    deadline: float,
     log_path: Path | None,
     extra_excluded: tuple[str, ...],
 ) -> dict:
     """The spawn half of `run_gate`, called with the flock held: open the log,
-    delete any record, spawn, drain, reap and record. Closes the log in its
-    own `finally`, before `run_gate`'s `finally` releases the lock."""
+    delete any record, spawn, drain, reap and record against the same
+    `deadline` the lock wait was bounded by. Closes the log in its own
+    `finally`, before `run_gate`'s `finally` releases the lock."""
     log_file = None
     try:
         if log_path is not None:
@@ -571,12 +581,19 @@ def _run_locked_gate(
             stderr=subprocess.PIPE,
             start_new_session=True,
         )
-        deadline = time.monotonic() + timeout
         try:
             stdout_buf, done = _drain_bounded(proc, GATE_OUTPUT_CAP, deadline, log_file)
         except OSError:
             # A log-sink write error: kill and reap the gate, then re-raise.
-            os.killpg(proc.pid, signal.SIGKILL)
+            # The process group may already be gone by the time we get here
+            # (the child and its whole group can exit on their own between
+            # the failing write and this kill), which raises
+            # ProcessLookupError - itself an OSError - and must not mask the
+            # sink error this except block exists to propagate.
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
             proc.wait()
             proc.stdout.close()
             proc.stderr.close()
@@ -611,27 +628,35 @@ def run_gate(
     `log_path` is given, every byte of stdout and stderr is streamed to it,
     in read order, in addition to the bounded in-memory parse tail.
 
-    Everything below runs under an exclusive flock on `cwd / GATE_LOCK_REL`
-    (blocking, no timeout of its own), released in the closing `finally`.
-    Under the lock: the pre-spawn dirty check; then a re-check that
-    `git rev-parse HEAD` still equals `sha` (a mismatch or git failure
-    returns `_dirty_result([])`, the gate never runs); then `run_gate`
-    opens `log_path` itself (creating parent directories first) and
-    deletes any existing record before spawning the child, so a run that
-    fails, times out or dirties the tree leaves no older record behind. A
-    failure to open the log or delete the record raises the bare OSError
-    rather than being caught here. Neither refusal opens the log or
-    deletes the record.
+    `deadline = time.monotonic() + timeout` is computed once, before the
+    lock is even requested, and governs BOTH the wait for the exclusive
+    flock on `cwd / GATE_LOCK_REL` (polled with `LOCK_NB`, never a blocking
+    `LOCK_EX`) and, once acquired, the spawn/drain/reap below -- so a
+    caller's `timeout` is the whole wall-clock budget, not the budget for
+    each half separately. Expiry while still waiting for the lock returns
+    `_timed_out_result()` with the lock never taken, released in the
+    closing `finally` as a no-op. Once the lock is held: the pre-spawn
+    dirty check; then a re-check that `git rev-parse HEAD` still equals
+    `sha` (a mismatch or git failure returns `_dirty_result([])`, the gate
+    never runs); then `run_gate` opens `log_path` itself (creating parent
+    directories first) and deletes any existing record before spawning the
+    child, so a run that fails, times out or dirties the tree leaves no
+    older record behind. A failure to open the log or delete the record
+    raises the bare OSError rather than being caught here. Neither refusal
+    opens the log or deletes the record.
     """
     lock_path = cwd / GATE_LOCK_REL
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_fd = os.open(lock_path, os.O_RDWR | os.O_CREAT)
+    deadline = time.monotonic() + timeout
     try:
-        extra_excluded, refusal = _lock_and_check(lock_fd, cwd, sha, log_path)
+        if not _acquire_lock(lock_fd, deadline):
+            return _timed_out_result()
+        extra_excluded, refusal = _lock_and_check(cwd, sha, log_path)
         if refusal is not None:
             return refusal
         return _run_locked_gate(
-            command, cwd, sha, cycle, timeout, log_path, extra_excluded
+            command, cwd, sha, cycle, deadline, log_path, extra_excluded
         )
     finally:
         fcntl.flock(lock_fd, fcntl.LOCK_UN)

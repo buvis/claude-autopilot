@@ -245,3 +245,40 @@ def test_store_edit_behind_a_symlink_below_the_toplevel_is_stale(repo: Path) -> 
         "stale",
         {},
     )
+
+
+def test_directory_symlink_aliasing_the_repo_root_is_stale(repo: Path) -> None:
+    # A single-hop directory symlink to the repository root normalizes to
+    # ".", which must be treated as an ancestor of every store path -- no
+    # store path literally starts with "./", so a naive startswith check
+    # would miss this alias entirely and wrongly call the run reusable.
+    _commit(repo, f"{STORE}/x.toml", "a = 1\n")
+    (repo / "src" / "root").symlink_to("..")
+    _git(repo, "add", "--", "src/root")
+    _git(repo, "commit", "--no-verify", "-q", "-m", "link root")
+    record = _record(_git(repo, "rev-parse", "HEAD"))
+
+    head = _commit(repo, f"{STORE}/x.toml", "a = 2\n")
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == (
+        "stale",
+        {},
+    )
+
+
+def test_directory_symlink_aliasing_the_repo_root_blocks_uncommitted_reuse(
+    repo: Path,
+) -> None:
+    # Same alias, but the store edit is uncommitted: an uncommitted store
+    # path is normally tolerated, except when a product symlink reaches it,
+    # which the "." branch must still catch.
+    (repo / "src" / "root").symlink_to("..")
+    _git(repo, "add", "--", "src/root")
+    _git(repo, "commit", "--no-verify", "-q", "-m", "link root")
+    head = _commit(repo, f"{STORE}/x.toml", "a = 1\n")
+    record = _record(head)
+    (repo / STORE / "x.toml").write_text("a = 2\n")
+
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == (
+        "stale",
+        {},
+    )
