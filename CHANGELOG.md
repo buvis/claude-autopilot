@@ -14,11 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: a session that exits sub-30s billing $0 is now its own loop decision (`instant_exit`), distinct from a died/no-progress relaunch - applies whatever signal the table chose underneath, including a usage-limit wait
 - **run-autopilot**: the watchdog can now kill a session silent for `_AUTOPILOT_SESSION_IDLE` seconds at any point after launch, not only past the wall-clock cap, as long as nothing is in flight (`session_busy`)
 - **run-autopilot**: the loop now runs Phase 0 (`autopilot enter`) in-process before launching a build session or consuming a `park-requested` marker, and stores the result as `state.loop_entry` for the launched session to replay (one resume row per selection); the session brief gains a `## Entry` section when this ran
+- **run-autopilot**: a loop session's own commits are now stamped with committer `autopilot-loop/<batch.id>`; the `catchup-probe` subcommand records a batch-scoped `gh`/`engram` health check (`state.catchup_probe`) so a full catchup knows which steps to skip before it attempts them, instead of after they fail
 
 ### Changed
 
 - **run-autopilot**: the CLI now needs Python 3.11 or newer (it uses datetime.UTC); 3.10 is no longer supported
 - **run-autopilot**: `normalize_command` only collapses whitespace now - it no longer strips a leading `bash `/`sh ` or `./`, so `bash X`, `sh X`, `./X` and `X` each get their own verification record instead of sharing one; an existing `last-verification.json` record written under the old stripping normalizer goes stale once after this ships, forcing one unavoidable rerun (about 220 seconds) the first time it is checked post-upgrade - expected, not a regression
+- **run-autopilot**: `catchup: force` and a resume in either mode now read delta after loop-only commits since `catchup_head_sha`, not only on an unmoved HEAD
 
 ### Fixed
 
