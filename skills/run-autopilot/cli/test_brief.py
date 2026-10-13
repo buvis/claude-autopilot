@@ -115,6 +115,23 @@ def test_brief_entry_section():
     assert "## Entry" not in render_brief(without, NOW)
 
 
+def test_brief_repo_root_falls_back_to_project_root():
+    # PRD 00281 F13: a state without repo_root (every batch before
+    # records.py started writing it) showed "none" even when the caller
+    # knew exactly which repo this session runs in.
+    text = render_brief({}, NOW, project_root="/repo/root")
+    assert "- repo root: /repo/root\n" in text
+
+
+def test_brief_repo_root_state_value_wins_over_project_root():
+    text = render_brief({"repo_root": "/state/root"}, NOW, project_root="/repo/root")
+    assert "- repo root: /state/root\n" in text
+
+
+def test_brief_repo_root_still_none_without_a_project_root():
+    assert "- repo root: none\n" in render_brief({}, NOW)
+
+
 def test_read_next_table_covers_every_phase():
     assert set(READ_NEXT) == {"build", "review", "done", "paused"}
     for phase, entries in READ_NEXT.items():

@@ -20,6 +20,7 @@ from cli.runner import (
     BRIEF_SUFFIX,
     CLI_MAIN,
     CLI_SUFFIX,
+    DEFAULT_MCP_CONFIG,
     DEFAULT_PROMPT,
     HOST_MARKERS,
     LAUNCH_ENV,
@@ -27,6 +28,7 @@ from cli.runner import (
     child_env,
     idle_secs_for,
     make_presenter,
+    mcp_config_for,
     prompt_for,
     spawn,
     warn_secs_for,
@@ -86,6 +88,86 @@ def test_build_argv_skips_fallback_equal_to_launch_model():
 
 def test_build_argv_injects_an_alternate_runner_without_driver_change():
     assert build_argv("m", "low", None, runner_bin="codex-run")[0] == "codex-run"
+
+
+def test_default_mcp_config_restricts_to_context7():
+    # PRD 00281 F9/F7: every claude.ai connector cost boot-context tokens a
+    # loop session never used; the default now scopes the launch to Context7
+    # only.
+    assert set(DEFAULT_MCP_CONFIG["mcpServers"]) == {"context7"}
+
+
+def test_build_argv_strict_mcp_default_is_context7():
+    config = mcp_config_for({})
+    argv = build_argv("m", "low", None, mcp_config=config)
+    idx = argv.index("--mcp-config")
+    # The exact flag pair, immediately before --output-format.
+    assert argv[idx : idx + 2] == ["--mcp-config", config]
+    assert argv[idx + 2] == "--output-format"
+    assert set(json.loads(config)["mcpServers"]) == {"context7"}
+
+
+def test_build_argv_mcp_config_none_keeps_todays_argv():
+    # Existing build_argv tests stay green because the default is None.
+    assert build_argv("m1", "xhigh", "fb1") == build_argv(
+        "m1", "xhigh", "fb1", mcp_config=None
+    )
+    assert "--mcp-config" not in build_argv("m1", "xhigh", "fb1")
+
+
+def test_mcp_config_override_and_inherit():
+    # "inherit" restores today's launch (every connector, no restriction).
+    assert mcp_config_for({"_AUTOPILOT_MCP_CONFIG": "inherit"}) is None
+    override = json.dumps({"mcpServers": {"custom": {"command": "x"}}})
+    assert mcp_config_for({"_AUTOPILOT_MCP_CONFIG": override}) == override
+
+
+def test_spawn_passes_mcp_config_for_env_into_the_launch_argv(tmp_path):
+    ap = _ap_dir(tmp_path)
+    override = json.dumps({"mcpServers": {}})
+    result = spawn(
+        "m",
+        "low",
+        cap_secs=30,
+        autopilot_dir=ap,
+        env={"_AUTOPILOT_MCP_CONFIG": override},
+        runner_bin=_argv_stub(tmp_path),
+        presenter=_Collector(),
+    )
+    argv = json.loads(result.log_path.read_text())
+    idx = argv.index("--mcp-config")
+    assert argv[idx + 1] == override
+
+
+def test_spawn_omits_mcp_config_flag_when_env_requests_inherit(tmp_path):
+    ap = _ap_dir(tmp_path)
+    result = spawn(
+        "m",
+        "low",
+        cap_secs=30,
+        autopilot_dir=ap,
+        env={"_AUTOPILOT_MCP_CONFIG": "inherit"},
+        runner_bin=_argv_stub(tmp_path),
+        presenter=_Collector(),
+    )
+    argv = json.loads(result.log_path.read_text())
+    assert "--mcp-config" not in argv
+
+
+def test_spawn_default_env_scopes_mcp_to_context7(tmp_path):
+    ap = _ap_dir(tmp_path)
+    result = spawn(
+        "m",
+        "low",
+        cap_secs=30,
+        autopilot_dir=ap,
+        env={},
+        runner_bin=_argv_stub(tmp_path),
+        presenter=_Collector(),
+    )
+    argv = json.loads(result.log_path.read_text())
+    idx = argv.index("--mcp-config")
+    assert set(json.loads(argv[idx + 1])["mcpServers"]) == {"context7"}
 
 
 def test_spawn_tees_raw_output_and_feeds_the_presenter(tmp_path):

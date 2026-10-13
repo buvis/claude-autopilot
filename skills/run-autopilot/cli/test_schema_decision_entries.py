@@ -199,15 +199,29 @@ class AppendedDecisionRequiredKeysTest(unittest.TestCase):
             "autonomous_decisions entry missing issue",
         )
 
-    def test_bare_entry_names_issue_before_the_other_missing_keys(self) -> None:
+    def test_bare_entry_names_every_missing_key_in_rule_order(self) -> None:
         # The CLI acceptance case: appending `{"cycle": 1}` lacks issue,
-        # severity, action AND reason, and must name `issue` -- the first
-        # rule, not whichever check the implementation happens to run first.
+        # action, reason AND severity, and the refusal lists all four, in
+        # rule order, rather than stopping at the first.
         with self.assertRaises(schema.SchemaError) as ctx:
             schema.validate_changed(*_appended({"cycle": 1}))
         self.assertEqual(
             str(ctx.exception),
-            "autonomous_decisions entry missing issue",
+            "autonomous_decisions entry missing issue, action, reason, severity",
+        )
+
+    def test_validator_names_every_missing_field(self) -> None:
+        # A different subset of missing keys than the CLI acceptance case
+        # above, so a validator that merely hardcodes that one four-key
+        # message for `{"cycle": 1}` is still caught: here `issue` and
+        # `cycle` are present, and only action, reason and severity are
+        # collected, in rule order.
+        entry = {"cycle": 1, "issue": "the reviewers split on the retry cap"}
+        with self.assertRaises(schema.SchemaError) as ctx:
+            schema.validate_changed(*_appended(entry))
+        self.assertEqual(
+            str(ctx.exception),
+            "autonomous_decisions entry missing action, reason, severity",
         )
 
     def test_empty_issue_string_counts_as_missing(self) -> None:
