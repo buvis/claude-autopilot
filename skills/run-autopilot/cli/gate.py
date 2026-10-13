@@ -191,6 +191,14 @@ _LEADING_RATIO_RE = re.compile(r"^[ \t]{0,3}\d+\s*/\s*\d+\b")
 # (CommonMark's ceiling; a tab or a 4th space makes an indented code block, not
 # a fence), then the run. Trailing text (```markdown) is allowed.
 _FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+# The `malformed` detail when a closed fence hides the real findings-table
+# header - fencing a worked example must never be a way to smuggle a real
+# table past the parser.
+_FENCED_HEADER_DETAIL = (
+    "a fenced block (``` or ~~~) contains the findings table header "
+    "(naming Severity, Issue and File): the header row must never be "
+    "fenced, even to show an example"
+)
 # What `_reviewed_keys` could not read, as the operator has to hear it. The two
 # must stay distinct: "the section is missing" and "the section is there and its
 # table is what failed" are different repairs.
@@ -466,10 +474,41 @@ def _unread_token(live: str) -> str | None:
     return None
 
 
+def _fenced_findings_header(text: str) -> bool:
+    """True when a CLOSED fence (``` or ~~~) in the raw text contains a line
+    naming Severity, Issue and File - the findings-table header - anywhere in
+    its body. Walks fence blocks with the same opener/closer rule as
+    `_unfenced` (raw line, <=3 leading spaces) rather than reusing a regex
+    that assumes the header is the fence's first line."""
+    lines = text.splitlines()
+    i = 0
+    while i < len(lines):
+        opener = _FENCE_RE.match(lines[i])
+        if opener is not None:
+            run = opener.group(1)
+            for j in range(i + 1, len(lines)):
+                closer = _FENCE_RE.match(lines[j])
+                if (
+                    closer is not None
+                    and closer.group(1)[0] == run[0]
+                    and len(closer.group(1)) >= len(run)
+                ):
+                    body = lines[i + 1 : j]
+                    if any(_table_header(bl) is not None for bl in body):
+                        return True
+                    i = j
+                    break
+            else:
+                break
+        i += 1
+    return False
+
+
 def _malformed_detail(
     live: str,
     findings: list[dict],
     problem: str | None,
+    raw_text: str | None = None,
 ) -> str | None:
     """The `malformed` detail for `live` (already fence-blanked) given the
     section-reading `problem` the caller's own `_reviewed_keys(live)` call
@@ -479,6 +518,8 @@ def _malformed_detail(
     names."""
     if len(_FINDINGS_HEADING_RE.findall(live)) > 1:
         return _FINDINGS_PROBLEMS["repeated-section"]
+    if raw_text is not None and _fenced_findings_header(raw_text):
+        return _FENCED_HEADER_DETAIL
     unread = _unread_token(live)
     if unread is not None:
         return unread
@@ -516,7 +557,7 @@ def _cross_check_findings(
     """
     live = _unfenced(text)
     reviewed, problem = _reviewed_keys(live)
-    malformed = _malformed_detail(live, findings, problem)
+    malformed = _malformed_detail(live, findings, problem, raw_text=text)
     if malformed is not None:
         return "malformed", malformed
     conflict = _ref_conflict_verdict(findings)

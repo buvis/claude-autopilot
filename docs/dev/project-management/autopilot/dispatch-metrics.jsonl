@@ -4022,3 +4022,4 @@
 {"id":"09ab6175","ended_at":1791872046,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"id":"d747b067","ended_at":1791872046,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1791872046,"phase":"build","prd":"00277-catch-critical-rows-in-every-shape-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791872070,"phase":"build","prd":"00277-catch-critical-rows-in-every-shape-v1.md"}
