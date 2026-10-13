@@ -437,3 +437,74 @@ def test_run_gate_tolerates_dirty_store_paths(repo: Path) -> None:
     assert result["recorded"] is True
     assert result["dirty"] is False
     assert (repo / RECORD_REL).exists()
+
+
+def test_gate_runs_in_a_repo_that_does_not_ignore_docs_dev_tmp(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # No .gitignore anywhere and no user/system git config, so nothing hides
+    # docs/dev/tmp/: it is store by definition (STORE_PREFIXES), not dirt.
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    assert not (repo / ".gitignore").exists()
+    prompt = repo / "docs" / "dev" / "tmp" / "alice-prompt-1.md"
+    prompt.parent.mkdir(parents=True)
+    prompt.write_text("prompt\n")
+    _git(repo, "add", "--", "docs/dev/tmp/alice-prompt-1.md")
+
+    result = verification.run_gate(
+        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'", repo, "abc", 1
+    )
+
+    assert result["passed"] == 1
+    assert result["recorded"] is True
+    assert result["dirty"] is False
+    assert (repo / RECORD_REL).exists()
+
+    # The prefix is the directory, not a name stem: a staged sibling that
+    # merely starts with "docs/dev/tmp" is still foreign dirt.
+    (repo / RECORD_REL).unlink()
+    (repo / "docs" / "dev" / "tmp-notes.md").write_text("notes\n")
+    _git(repo, "add", "--", "docs/dev/tmp-notes.md")
+    refused = verification.run_gate(
+        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'", repo, "abc", 1
+    )
+    assert refused["recorded"] is False
+    assert refused["dirty"] is True
+    assert not (repo / RECORD_REL).exists()
+
+
+def test_own_log_outside_tmp_is_not_dirt(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A user-level ignore rule (a global `*.log`) must not be what hides the
+    # log, so git config outside the repo is switched off.
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    log_path = repo / "my-own.log"
+    assert not log_path.exists()
+
+    result = verification.run_gate(
+        "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'", repo, "abc", 1, log_path=log_path
+    )
+
+    assert result["passed"] == 1
+    assert result["recorded"] is True
+    assert result["dirty"] is False
+    assert (repo / RECORD_REL).exists()
+    assert "PASS 1 FAIL 0 SKIP 0 EXIT 0" in log_path.read_text()
+    assert _git(repo, "ls-files", "--", "my-own.log") == ""
+
+    # Only the gate's own log is excused: another untracked file outside the
+    # store, written by the same run, still refuses the record.
+    (repo / RECORD_REL).unlink()
+    refused = verification.run_gate(
+        "echo stray > stray.log; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
+        repo,
+        "abc",
+        1,
+        log_path=log_path,
+    )
+    assert refused["recorded"] is False
+    assert refused["dirty"] is True
+    assert not (repo / RECORD_REL).exists()
