@@ -95,6 +95,7 @@ PER_PRD_RESET_FIELDS = (
     # Per-PRD work product (PRD 00205): the solo lane's escalation record,
     # not re-derived at Phase 0 like its lane siblings below.
     "lane_escalated",
+    "prd_budget_since",
 )
 
 # NOT reset here, deliberately:
@@ -566,7 +567,8 @@ def _park_mutator(pause_detail: str | None = None):
 
 def _parse_marker(marker_path: Path) -> str | dict | None:
     """Return None (absent), "malformed" (unparseable or missing/empty
-    prd), or {"prd": str, "reason": str} for a present, usable marker."""
+    prd), or {"prd": str, "reason": str, "site": str} for a present, usable
+    marker; site defaults to "wrapper_died" when the marker omits it."""
     if not marker_path.exists():
         return None
     try:
@@ -575,7 +577,11 @@ def _parse_marker(marker_path: Path) -> str | dict | None:
         return "malformed"
     if not isinstance(raw, dict) or not raw.get("prd"):
         return "malformed"
-    return {"prd": raw["prd"], "reason": raw.get("reason", "")}
+    return {
+        "prd": raw["prd"],
+        "reason": raw.get("reason", ""),
+        "site": raw.get("site", "wrapper_died"),
+    }
 
 
 def _park_guard(stall_op, marker) -> int | None:
@@ -632,7 +638,7 @@ def _park_marker_present(
     delete_marker,
 ):
     """do_park's valid-marker path: reconcile any stall_op that isn't
-    simply the same wrapper_died park resuming, then confirm the PRD is
+    simply the same park (same site as the marker) resuming, then confirm the PRD is
     still in wip/. Returns (prd, reason, wip_filenames, None) to continue
     into _finish_park, or (None, None, None, exit_code) to return
     immediately."""
@@ -641,7 +647,7 @@ def _park_marker_present(
     wip_filenames = [p.name for p in (prds_dir / "wip").glob("*.md")]
     prd_in_wip = prd in wip_filenames
 
-    if stall_op and not (prd_in_wip and stall_op["site"] == "wrapper_died"):
+    if stall_op and not (prd_in_wip and stall_op["site"] == marker["site"]):
         rc = _reconcile_stall_op(stall_op, state_path, prds_dir, autopilot_dir)
         if rc is not None:
             return None, None, None, rc
@@ -678,7 +684,25 @@ def _finish_park(
     if consult_state.get("lane_effective"):
         reason = f"{reason}; lane={consult_state['lane_effective']}"
 
-    decision = resume.park_decision(marker, wip_filenames, parks_consecutive)
+    if marker["site"] == "budget":
+        # A budget park is not a wrapper death: no parks_consecutive
+        # increment, never the systemic halt (do_stall zeroes the counter).
+        rc = do_stall(
+            state_path,
+            prd=prd,
+            site="budget",
+            detail=reason,
+            prds_dir=prds_dir,
+            autopilot_dir=autopilot_dir,
+            extra_mutator=None,
+        )
+        if rc != 0:
+            return rc
+        delete_marker()
+        print(f"autopilot: parked {prd} (budget)")
+        return 0
+
+    decision =resume.park_decision(marker, wip_filenames, parks_consecutive)
     if decision.endswith("systemic halt"):
         pause_detail = f"{parks_consecutive + 1} consecutive PRDs parked via wrapper_died; batch halted"
         extra = _park_mutator(pause_detail=pause_detail)

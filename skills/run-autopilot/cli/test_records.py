@@ -179,6 +179,7 @@ class PerPrdResetFieldsTest(unittest.TestCase):
             "contract_card",
             "needs_attention",
             "lane_escalated",
+            "prd_budget_since",
         }
         self.assertEqual(set(records.PER_PRD_RESET_FIELDS), expected)
         self.assertEqual(
