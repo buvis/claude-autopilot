@@ -171,6 +171,31 @@ def test_each_iteration_records_the_store_after_metrics_and_before_acting(
     ]
 
 
+def test_instant_exit_continue_records_the_store_same_as_a_plain_continue(
+    tmp_path,
+    monkeypatch,
+):
+    # Review finding 3 (PRD 00282): a sub-30s, $0 session whose decision is
+    # `instant_exit` with `then == "continue"` is a continue in effect, so
+    # the loop must still record the store for it - skipping the record
+    # here is the same bug as never resetting the no-progress counters.
+    events, calls = [], []
+    _record_store_into(monkeypatch, events, calls)
+
+    def instant_progress(ap_dir: Path) -> None:
+        (ap_dir / "state.json").write_text(
+            json.dumps({"prd": "p.md", "next_phase": "plan", "batch": {"id": "b-1"}}),
+        )
+        write_log(ap_dir, {"type": "result", "total_cost_usd": 0})
+
+    lp = make_loop(tmp_path, [instant_progress, terminal_step(prd="q.md", batch="b-1")])
+    _git_init(lp.cwd)
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b-1"})
+    assert lp.run() == 0
+
+    assert [c["site"] for c in calls] == ["loop", "drained"]
+
+
 def test_loop_site_records_the_projects_repo_with_a_git_runner_bound_to_it(
     tmp_path,
     monkeypatch,

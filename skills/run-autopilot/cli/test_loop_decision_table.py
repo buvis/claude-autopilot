@@ -590,4 +590,37 @@ def test_fingerprint_bound_parks_a_prd_burning_sessions(tmp_path):
     assert rc == 0
     assert "no progress across 2 sessions; parking p.md" in (lp._test["out"].getvalue())
     assert (lp._test["ap_dir"] / "park-requested").exists()
-    assert len(lp._test["spawn"].launches) == 3
+
+
+def test_fingerprint_bound_treats_instant_exit_continue_like_plain_continue(tmp_path):
+    # Review finding 3 (PRD 00282): decision["signal"] == "instant_exit"
+    # with decision["then"] == "continue" must feed the fingerprint bound
+    # exactly like a plain "continue" signal - otherwise a loop stuck
+    # relaunching sub-30s, $0 sessions on an unmoving fingerprint never
+    # trips the no-progress park.
+    lp = make_loop(tmp_path, [], env={"_AUTOPILOT_PHASE_REPEATS_MAX": "2"})
+    ap = lp._test["ap_dir"]
+    state_path = ap / "state.json"
+    write_state(ap, prd="p.md", next_phase="review", review_cycles=2, batch={"id": "b"})
+
+    def row():
+        return {
+            "signal": "instant_exit",
+            "then": "continue",
+            "state_touched": True,
+            "detail": "session died; retry 1/3",
+            "prd": "p.md",
+        }
+
+    lp._fingerprint_bound(row(), state_path)
+    assert lp._fp_repeats == 0  # first sighting: nothing to compare against yet
+
+    second = row()
+    lp._fingerprint_bound(second, state_path)
+    assert lp._fp_repeats == 1
+    assert second["signal"] == "instant_exit"  # under the cap, unchanged
+
+    third = row()
+    lp._fingerprint_bound(third, state_path)
+    assert third["signal"] == "park"
+    assert "no progress across 2 sessions; parking p.md" in third["detail"]

@@ -203,6 +203,18 @@ def prd_spend_since(metrics_path: Path, prd: str, since: float) -> float:
     return total
 
 
+def effective_signal(decision: dict) -> str:
+    """The signal a downstream continue/park consumer should read: `then`
+    when the row is an `instant_exit` presentation, the signal itself
+    otherwise (review finding 3, PRD 00282). An instant_exit row whose
+    `then` is `continue` (the died-retry ladder's retry case, a usage-limit
+    wait, or a scheduling yield) IS a continue in effect, so it must count
+    for the fingerprint bound and the per-iteration store record the same
+    as a plain continue row - skipping it would let a loop stuck
+    relaunching sub-30s, unbilled sessions dodge both."""
+    return decision["then"] if decision["signal"] == "instant_exit" else decision["signal"]
+
+
 def _mtime(path: Path) -> int | None:
     try:
         return int(path.stat().st_mtime)
@@ -487,7 +499,7 @@ class DecisionMixin:
         burning sessions on nothing. Cap deliberately generous
         (default 5); any progress resets it."""
         if (
-            decision["signal"] == "continue"
+            effective_signal(decision) == "continue"
             and decision.get("state_touched")
             and decision["detail"] != "replan"
         ):

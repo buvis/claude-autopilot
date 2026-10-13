@@ -52,7 +52,10 @@ from cli import (
     statectl, store_tree, usage_limit, wave_slots,
 )
 from cli.loop_act import PURGE_SCRIPT, ActMixin, run_agoge, run_purge, store_git
-from cli.loop_decision import DecisionMixin, died_next, fingerprint, last_result_field, pause_detail, plugin_drift
+from cli.loop_decision import (
+    DecisionMixin, died_next, effective_signal, fingerprint, last_result_field, pause_detail,
+    plugin_drift,
+)
 from cli.loop_gates import DEFAULT_LOOPS_DIR, GatesMixin, live_wrapper_pid, prune_registry
 from cli.procinfo import exec_env
 from cli.routing import _load_json
@@ -680,9 +683,12 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
                 plan.effort,
             )
             # A lane branch carries no store commits. state_touched is not
-            # redundant: the first death continues as a retry.
+            # redundant: the first death continues as a retry. effective_signal
+            # reads through an instant_exit presentation to `then` (review
+            # finding 3, PRD 00282): a short or free session that is a
+            # continue in effect is recorded the same as any other continue.
             if (
-                decision["signal"] == "continue"
+                effective_signal(decision) == "continue"
                 and decision.get("state_touched")
                 and not store_tree.in_wave_lane(self.env)
             ):
