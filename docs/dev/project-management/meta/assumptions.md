@@ -86,3 +86,31 @@ Ivan (implementor):
 - `ts_start` is the loop clock value at session launch, as the contract states; this could not be verified directly since `cli/loop.py` (the caller) was outside the task's file allowlist, but the `wall_exactly_30s`/`wall_29s` boundary cases passing is consistent with it.
 
 Orchestrator note (not an implementor assumption, kept for the record): Devon broke the first draft of the tests with 7 confirmed weak points (threshold edges, a missing `state_touched` check, first-vs-last result event, missing done/paused/died exclusions, no-result-event sessions); Tess's strengthen pass fixed all 7 and marked 2 points in-contract (the `continue`-side of `state_touched`, and the metrics `limit_wait` field, which is out of this task's file scope). The strengthened test file sits at 820 lines against the 800-line cap; this is recorded as a sanctioned `style_gate: failed` rather than split, because splitting would orphan tests from the task's own pinned acceptance command (`pytest test_loop_decision.py -k instant_exit`).
+
+## 6: watchdog: busy_fn and pre-cap idle polling
+
+Ivan (implementor):
+
+- Idle polling also covers the wait before the warning window (launch to `cap - warn`), not only the final wait - the contract says "at ANY point after launch", and production passes `warn_secs`, so polling only the last stretch would leave most of the session unguarded.
+- When `busy_fn` is None, there is no polling at all, just one plain wait - matches "treat as busy, never idle-kill" and keeps existing callers byte-for-byte on today's code path.
+- If the activity file is missing or unreadable, silence counts as infinite, same as `_wait_past_cap`. An idle kill before the cap still needs `busy_fn()` to return False.
+- The runner passes `str(log_path)` because `session_busy` is typed `str` and `_run_session` receives a `Path`.
+- The post-cap path fires "idle" after the cap even while `busy_fn()` returns True, because that unchanged path ignores `busy_fn` entirely.
+
+## 7: loop: pre-launch enter() and brief Entry section
+
+Ivan (implementor):
+
+- Followed the design doc's `args.prd is None` gate: a manual `autopilot enter --prd X` never gets the replay, even when the PRD matches.
+- If deleting `loop_entry` in `_run_enter` fails, it prints an error and exits 2, the same as `enter()`'s existing `StateError` path.
+- If state.json is missing or corrupt, the replay check falls through to `enter()`, which reports or bootstraps as it does today.
+- The brief is re-rendered after every successful `loop_entry` write, even if no brief existed yet; a brief write failure is one stderr line and keeps `loop_entry`.
+- `make_loop`'s test-harness default `enter_fn` raises `StateError`, so existing loop tests keep today's "session enters itself" behavior, with one extra stderr line in build-phase runs.
+- `_pre_enter` is only wired into `_launch_phase`; `run_once` (review-once) does not call it, because the task named only `_launch_phase`.
+- (Orchestrator note, post-dispatch) the implementor's own addition - backdating `state.json`'s mtime by one second after a pre-launch `enter()` run, to keep the loop's own write from reading as session progress - was kept: it is speculative scope beyond the task contract (not requested by the design doc), but no test demonstrated it causing harm, and dropping it risks the no-progress ladder misreading a dead-on-arrival session as having made progress. `test_loop_record_store.py`'s 9 failures and `test_loop.py::test_one_metrics_line_per_session` were independently confirmed already failing at the task-6 commit (e4c6531), before this task's changes - a task-5 (instant-exit) regression, not caused by this task.
+
+## 8: docs: loop_entry/prd_budget_since schema rows, phase-build Entry sentence, knob docs, CHANGELOG
+
+Orchestrator note (docs-only task, no Tess/Ivan dispatch):
+
+- `loop_entry` needed an explicit PER_PRD_RESET_FIELDS decision to satisfy `test_records.py::SchemaResetParityTest` - added as defense-in-depth against a crash between the loop's write and the launched session's consume, since in normal operation `_run_enter`'s replay path already deletes it within the same PRD selection.
