@@ -112,12 +112,14 @@ LOOP = f"autopilot-loop/{BATCH_ID}"
 STALE = "2026-09-29T07:00:00Z"
 
 
-def _loop_repo(root: Path, *committers: str | bytes) -> tuple[str, str]:
+def _loop_repo(root: Path, *committers: str | bytes | tuple[str, str]) -> tuple[str, str]:
     """`git init` at `root`, one base commit, then one empty commit per
     committer name. The author is always someone else, so only the committer
     can mark a loop commit. A bytes name is written as a hand-built commit
     object, because `git commit` re-encodes a non-UTF-8 ident as Latin-1.
-    Returns (base sha, HEAD sha)."""
+    A `(side, merger)` pair commits once as `side` on a side branch, then
+    merges it into master with `--no-ff` as `merger`, so HEAD's first-parent
+    chain skips the side commit. Returns (base sha, HEAD sha)."""
 
     def git(*args: str, committer: str = "a human", stdin: bytes = b"") -> str:
         env = {
@@ -139,6 +141,13 @@ def _loop_repo(root: Path, *committers: str | bytes) -> tuple[str, str]:
     git("commit", "-q", "--allow-empty", "-m", "base")
     base = git("rev-parse", "HEAD")
     for i, name in enumerate(committers):
+        if isinstance(name, tuple):
+            side, merger = name
+            git("checkout", "-q", "-b", f"side{i}")
+            git("commit", "-q", "--allow-empty", "-m", f"s{i}", committer=side)
+            git("checkout", "-q", "master")
+            git("merge", "-q", "--no-ff", "-m", f"m{i}", f"side{i}", committer=merger)
+            continue
         if isinstance(name, str):
             git("commit", "-q", "--allow-empty", "-m", f"c{i}", committer=name)
             continue

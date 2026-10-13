@@ -511,7 +511,8 @@ def test_force_is_delta_when_all_commits_are_loop_commits(env: Env) -> None:
 
 
 @pytest.mark.parametrize(
-    "foreign", ["a human", "autopilot-loop/202609280000", "autopilot-loop/no-batch"]
+    "foreign",
+    ["a human", "autopilot-loop/202609280000", "autopilot-loop/no-batch", LOOP + "0"],
 )
 def test_force_is_full_when_one_commit_is_not(env: Env, foreign: str) -> None:
     base, _ = _loop_repo(env.root, LOOP, foreign, LOOP)
@@ -573,6 +574,105 @@ def test_resume_is_full_when_head_moved_by_a_foreign_commit(
     out = env.run()
 
     assert (out["stop"], out["catchup"]) == (None, "full")
+
+
+def test_force_is_full_when_every_commit_is_one_foreign_committer(env: Env) -> None:
+    # one distinct committer and an even count: neither may pass for loop-only
+    base, _ = _loop_repo(env.root, "a human", "a human")
+    env.write_state(_open_state(batch=_cache(catchup_head_sha=base)))
+    env.put("wip", PRD, _prd_text(catchup="force"))
+
+    out = env.run()
+
+    assert (out["stop"], out["catchup"]) == (None, "full")
+    assert enter_io.commits_all_loop(env.root, base, LOOP) is False
+
+
+def test_force_is_delta_for_a_single_loop_commit(env: Env) -> None:
+    # an odd-length range: a commit-count rule cannot stand in for the names
+    base, _ = _loop_repo(env.root, LOOP)
+    env.write_state(_open_state(batch=_cache(catchup_head_sha=base)))
+    env.put("wip", PRD, _prd_text(catchup="force"))
+
+    out = env.run()
+
+    assert (out["stop"], out["catchup"]) == (None, "delta")
+    assert enter_io.commits_all_loop(env.root, base, LOOP) is True
+
+
+@pytest.mark.parametrize(
+    ("merge", "expected"),
+    [(("a human", LOOP), "full"), ((LOOP, "a human"), "full"), ((LOOP, LOOP), "delta")],
+    ids=["foreign-side-commit", "foreign-merge-commit", "all-loop-merge"],
+)
+def test_force_is_delta_or_full_by_every_commit_of_a_merge(
+    env: Env, merge: tuple[str, str], expected: str
+) -> None:
+    # `--first-parent` misses the side commit, `--no-merges` the merge itself
+    base, _ = _loop_repo(env.root, LOOP, merge)
+    env.write_state(_open_state(batch=_cache(catchup_head_sha=base)))
+    env.put("wip", PRD, _prd_text(catchup="force"))
+
+    out = env.run()
+
+    assert (out["stop"], out["catchup"]) == (None, expected)
+    assert enter_io.commits_all_loop(env.root, base, LOOP) is (expected == "delta")
+
+
+OTHER_BATCH = "202610010000"
+
+
+@pytest.mark.parametrize(
+    ("committer", "expected"),
+    [(f"autopilot-loop/{OTHER_BATCH}", "delta"), (LOOP, "full")],
+    ids=["this-batch-loop", "another-batch-loop"],
+)
+def test_force_is_full_unless_the_commits_carry_this_batch_id(
+    env: Env, committer: str, expected: str
+) -> None:
+    # every other case runs under BATCH_ID, so a hardcoded name would pass them
+    base, _ = _loop_repo(env.root, committer, committer)
+    env.write_state(_open_state(batch=_cache(id=OTHER_BATCH, catchup_head_sha=base)))
+    env.put("wip", PRD, _prd_text(catchup="force"))
+
+    out = env.run()
+
+    assert (out["stop"], out["catchup"]) == (None, expected)
+    calls: list[tuple] = []
+    out = env.run(loop_only=lambda *a: calls.append(a) or True)
+    assert calls == [(env.root, base, enter_io.loop_committer(OTHER_BATCH))]
+    assert out["catchup"] == "delta"
+
+
+@pytest.mark.parametrize("mode", [None, "force"], ids=["run", "force-with-tasks"])
+@pytest.mark.parametrize(
+    ("committer", "answer", "expected"),
+    [(LOOP, False, "full"), ("a human", True, "delta")],
+    ids=["loop-repo-fake-says-no", "foreign-repo-fake-says-yes"],
+)
+def test_resume_is_delta_only_when_the_injected_loop_only_says_so(
+    env: Env, mode: str | None, committer: str, answer: bool, expected: str
+) -> None:
+    # The fake contradicts the real repo both ways, so a resume path that calls
+    # `enter_io.commits_all_loop` directly gets the opposite answer. It must be
+    # handed the cached sha: HEAD would make the range empty, hence vacuous.
+    base, head = _loop_repo(env.root, LOOP, committer)
+    env.write_state(_open_state(batch=_cache(catchup_head_sha=base), tasks=TASKS))
+    env.put("wip", PRD, _prd_text(**({"catchup": mode} if mode else {})))
+    env.head = head
+    calls: list[tuple] = []
+
+    out = env.run(loop_only=lambda *a: calls.append(a) or answer)
+
+    assert (out["stop"], out["catchup"]) == (None, expected)
+    assert calls == [(env.root, base, LOOP)]
+
+
+def test_force_is_delta_check_is_not_cached_per_root(env: Env) -> None:
+    base, _ = _loop_repo(env.root, LOOP, LOOP)
+
+    assert enter_io.commits_all_loop(env.root, base, LOOP) is True
+    assert enter_io.commits_all_loop(env.root, base, "a human") is False
 
 
 # -- step 11: the real `git rev-parse HEAD` read -------------------------------
