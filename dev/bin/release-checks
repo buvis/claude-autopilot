@@ -355,7 +355,8 @@ run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/review-work-completion/scripts/test_codex_resume_contract.py \
   skills/review-work-completion/scripts/test_compute_mech_facts.py \
   skills/review-work-completion/scripts/test_detect_tautological_tests.py \
-  skills/review-work-completion/scripts/test_replay_tests_against_base.py
+  skills/review-work-completion/scripts/test_replay_tests_against_base.py \
+  skills/review-work-completion/scripts/test_tests_line_source_prose.py
 
 echo "[checks] run-autopilot cli remainder"
 run_pytest uv run --no-project --with pytest python -m pytest -q \
