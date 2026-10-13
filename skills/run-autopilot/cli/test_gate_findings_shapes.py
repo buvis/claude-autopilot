@@ -820,5 +820,46 @@ def test_no_section_no_tokens_and_no_findings_keeps_the_exit_1_shape_gap(
     assert _verdict_and_exit(GOOD_FILE, verify, tmp_path) == ("malformed", one, 2)
 
 
+# PRD 00277: a red row needs no `[m/n]` token and no leading pipe to be a row.
+# Each line pairs a severity marker with a consensus-style marker or a column
+# layout, in a shape the bullet and pipe-row readers never read.
+_UNPARSED_CRITICAL_ROWS = {
+    "emoji bullet, no token": (
+        f"- {CRIT} CRITICAL: crash on empty input | src/a.py:3 | Found by: alice"
+    ),
+    "spaced brackets": f"- [2 / 2] {CRIT} crash on empty input | src/a.py:3",
+    "fullwidth brackets": f"- ［2/2］ {CRIT} crash on empty input | src/a.py:3",
+    "parentheses": f"- (2/2) {CRIT} crash on empty input | src/a.py:3",
+    "blockquoted table row": "> | CRITICAL | src/a.py:12 | crash on empty input |",
+    "pipe-less table": (
+        f"2/2    {CRIT} CRITICAL    crash on empty input    src/a.py:3    alice"
+    ),
+    "html table": (
+        f"<table><tr><td>{CRIT} CRITICAL</td><td>src/a.py:5</td>"
+        "<td>crash on empty input</td></tr></table>"
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    "row",
+    list(_UNPARSED_CRITICAL_ROWS.values()),
+    ids=list(_UNPARSED_CRITICAL_ROWS),
+)
+def test_critical_row_in_unparsed_shape_is_malformed(row: str, tmp_path: Path) -> None:
+    """Under `## Alice`, beside the covered ref table: a red row no reader
+    parses is refused, named by its own line, exit 2 - with an empty batch and
+    with the batch that covers every row the parser did read."""
+    from cli import gate
+
+    text = _review_text(alice=row)
+    for findings in ([], _COVERED):
+        verdict = _verdict_and_exit(text, findings, tmp_path)
+        assert verdict == ("malformed", _unread_detail(text, row), 2)
+    # Control: prose and a heading that only mention a severity are no row.
+    prose = "### Critical path\n\nTwo critical issues were found and fixed."
+    assert gate.findings_verdict(_review_text(alice=prose), _COVERED) == ("ok", None)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -164,6 +164,49 @@ _TAIL_SWEEP_EXEMPT_PHRASE = (
 )
 
 
+# PRD 00277: every saved review file carrying a findings section, replayed
+# through the gate with a findings JSON that classifies each of its rows `fix`.
+# The baseline holds the verdict tag each one got before the gate widened what
+# it refuses; a file whose tag flips is named here, never fixed by editing it.
+_REPO_ROOT = CLI_DIR.parents[2]
+_BASELINE_PATH = FIXTURES / "gate_replay_baseline.json"
+_ACCEPTED_FLIPS: dict[str, str] = {}
+
+
+def _replay_verdict(path: Path) -> dict:
+    """The gate's tag for `path` under one `fix` row per consolidated row it
+    reads: a ref-bearing row is named by its ref, a ref-less one by its text,
+    and coverage is required only when some row carries a ref."""
+    from cli import gate
+
+    text = path.read_text(encoding="utf-8")
+    rows, _problem = _keys(gate._unfenced(text))
+    findings = []
+    for row in rows:
+        finding = {
+            "classification": "fix",
+            "severity": row.severity,
+            "file": row.file,
+            "issue": row.issue,
+        }
+        findings.append({"ref": row.ref, **finding} if row.ref else finding)
+    coverage = any(row.ref for row in rows)
+    tag, _detail = gate.findings_verdict(text, findings, require_coverage=coverage)
+    return {"tag": tag, "coverage": coverage}
+
+
+class ReplayBaselineTests(unittest.TestCase):
+    def test_real_review_files_keep_their_baseline_verdict(self) -> None:
+        baseline = json.loads(_BASELINE_PATH.read_text(encoding="utf-8"))
+        self.assertTrue(baseline)
+        for relpath, recorded in baseline.items():
+            with self.subTest(relpath):
+                current = _replay_verdict(_REPO_ROOT / relpath)
+                self.assertEqual(current["coverage"], recorded["coverage"])
+                expected = _ACCEPTED_FLIPS.get(relpath, recorded["tag"])
+                self.assertEqual(current["tag"], expected)
+
+
 class FindingsJsonCoverageProseTests(unittest.TestCase):
     def test_findings_json_covers_every_row_prose(self) -> None:
         for path in (_PHASE_REVIEW, _REVIEW_SKILL):

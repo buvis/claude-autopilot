@@ -1,0 +1,318 @@
+{
+  "docs/dev/project-management/reviews/00093-cut-build-phase-clerical-overhead-v1-review-1.md": {
+    "tag": "ok",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00093-cut-build-phase-clerical-overhead-v1-review-2.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00119-shrink-work-skill-body-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00160-route-opus-on-task-local-risk-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00160-route-opus-on-task-local-risk-v1-review-2.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00161-doctor-codex-host-hooks-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00161-doctor-codex-host-hooks-v1-review-2.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00171-route-sonnet-prompt-through-stdin-v1-review-1.md": {
+    "tag": "ok",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00173-guard-the-canonical-read-in-the-doctor-verdict-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00178-fix-bob-first-run-and-specify-his-retry-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00178-fix-bob-first-run-and-specify-his-retry-v1-review-2.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00179-cap-the-adversarial-test-loop-at-one-round-v1-review-1.md": {
+    "tag": "ok",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00181-scrub-inherited-host-markers-at-loop-spawn-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00182-close-open-dispatch-rows-at-session-handoffs-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00182-close-open-dispatch-rows-at-session-handoffs-v1-review-2.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00183-make-batch-report-decisions-and-implementor-mix-render-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00183-make-batch-report-decisions-and-implementor-mix-render-v1-review-2.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00184-carry-tool-discipline-into-every-bash-bearing-loop-prompt-v1-review-1.md": {
+    "tag": "ok",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00185-route-review-reruns-to-high-effort-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00186-add-item-grained-fast-track-lane-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00186-add-item-grained-fast-track-lane-v1-review-2.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00187-keep-cap-out-criticals-off-master-and-home-deferred-highs-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00187-keep-cap-out-criticals-off-master-and-home-deferred-highs-v1-review-2.md": {
+    "tag": "ok",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00188-record-convergence-cap-and-roster-per-prd-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00188-record-convergence-cap-and-roster-per-prd-v1-review-2.md": {
+    "tag": "ok",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00189-stall-to-split-on-plan-expansion-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00189-stall-to-split-on-plan-expansion-v1-review-2.md": {
+    "tag": "ok",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00190-bind-the-codex-run-tests-and-dedupe-their-split-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00190-bind-the-codex-run-tests-and-dedupe-their-split-v1-review-2.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00191-clear-the-handoff-marker-at-phase-edges-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00192-split-loop-py-and-its-tests-under-the-cap-v1-review-1.md": {
+    "tag": "ok",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00207-route-rework-resume-sessions-on-task-tier-v1-review-01.md": {
+    "tag": "ok",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00207-route-rework-resume-sessions-on-task-tier-v1-review-02.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00208-hand-off-between-the-rework-design-and-the-first-fix-v1-review-01.md": {
+    "tag": "ok",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00208-hand-off-between-the-rework-design-and-the-first-fix-v1-review-02.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00209-run-a-forced-catchup-once-per-prd-entry-v1-review-01.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00209-run-a-forced-catchup-once-per-prd-entry-v1-review-02.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00210-clear-inherited-handoff-markers-at-session-start-v1-review-01.md": {
+    "tag": "ok",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00211-deny-skill-invocations-after-the-session-leave-row-v1-review-01.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00213-hold-the-loop-session-open-while-cli-reviewer-lanes-run-v1-review-1.md": {
+    "tag": "ok",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00214-plan-and-launch-a-wave-of-lanes-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00214-plan-and-launch-a-wave-of-lanes-v1-review-2.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1-review-1.md": {
+    "tag": "ok",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00216-review-the-assembled-wave-and-run-a-wave-end-to-end-v1-review-2.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00217-bound-concurrent-review-sessions-with-a-slot-semaphore-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00217-bound-concurrent-review-sessions-with-a-slot-semaphore-v1-review-2.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00218-leave-sessions-at-task-boundaries-and-run-one-devon-round-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00218-leave-sessions-at-task-boundaries-and-run-one-devon-round-v1-review-2.md": {
+    "tag": "ok",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00223-enter-the-build-gate-in-one-cli-call-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00223-enter-the-build-gate-in-one-cli-call-v1-review-2.md": {
+    "tag": "ok",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00231-route-rework-fixes-on-their-own-tier-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00231-route-rework-fixes-on-their-own-tier-v1-review-2.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00232-keep-subagent-test-runs-narrow-v1-review-1.md": {
+    "tag": "ok",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00232-keep-subagent-test-runs-narrow-v1-review-2.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00240-ignore-nested-store-lock-files-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00241-bound-rework-batches-by-file-v1-review-1.md": {
+    "tag": "ok",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00241-bound-rework-batches-by-file-v1-review-2.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00242-harden-the-wave-verbs-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00242-harden-the-wave-verbs-v1-review-2.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00244-tidy-the-enter-verb-and-the-review-diff-plumbing-v1-review-1.md": {
+    "tag": "ok",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00248-keep-phase-skills-in-the-session-v1-review-1.md": {
+    "tag": "ok",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00248-keep-phase-skills-in-the-session-v1-review-2.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00249-stage-and-close-reviews-in-code-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00249-stage-and-close-reviews-in-code-v1-review-2.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00254-tighten-the-phase-delegation-guard-v1-review-1.md": {
+    "tag": "ok",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00256-finish-the-review-verbs-before-release-v1-review-1.md": {
+    "tag": "ok",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00256-finish-the-review-verbs-before-release-v1-review-2.md": {
+    "tag": "ok",
+    "coverage": true
+  },
+  "docs/dev/project-management/reviews/00265-close-the-critical-row-escapes-v1-review-1.md": {
+    "tag": "ok",
+    "coverage": true
+  },
+  "docs/dev/project-management/reviews/00265-close-the-critical-row-escapes-v1-review-2.md": {
+    "tag": "ok",
+    "coverage": true
+  },
+  "docs/dev/project-management/reviews/00267-widen-the-phase-delegation-guard-v1-review-1.md": {
+    "tag": "ok",
+    "coverage": true
+  },
+  "docs/dev/project-management/reviews/00269-sweep-every-findings-token-v1-review-1.md": {
+    "tag": "ok",
+    "coverage": true
+  },
+  "docs/dev/project-management/reviews/00269-sweep-every-findings-token-v1-review-2.md": {
+    "tag": "ok",
+    "coverage": true
+  },
+  "docs/dev/project-management/reviews/00270-trust-only-real-gate-runs-v1-review-1.md": {
+    "tag": "ok",
+    "coverage": true
+  },
+  "docs/dev/project-management/reviews/00270-trust-only-real-gate-runs-v1-review-2.md": {
+    "tag": "ok",
+    "coverage": true
+  },
+  "docs/dev/project-management/reviews/00271-guard-v2-structural-delegation-check-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": false
+  },
+  "docs/dev/project-management/reviews/00271-guard-v2-structural-delegation-check-v1-review-2.md": {
+    "tag": "ok",
+    "coverage": true
+  },
+  "docs/dev/project-management/reviews/00276-make-the-gate-record-trustworthy-v1-review-1.md": {
+    "tag": "ref-required",
+    "coverage": true
+  },
+  "docs/dev/project-management/reviews/00276-make-the-gate-record-trustworthy-v1-review-2.md": {
+    "tag": "ref-required",
+    "coverage": true
+  },
+  "docs/dev/project-management/reviews/00285-resolve-process-facts-without-ps-v1-review-1.md": {
+    "tag": "ok",
+    "coverage": true
+  }
+}
