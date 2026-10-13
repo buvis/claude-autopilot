@@ -501,10 +501,7 @@ def test_yield_at_warning_kill_switch_short_circuits_before_reading_the_log(
         loop_decision.usage_limit, "detect_warning_from_log", must_not_read
     )
     result, decision = _yield_probe(
-        tmp_path,
-        monkeypatch,
-        oldest=1,
-        env={"_AUTOPILOT_NO_YIELD": "1"},
+        tmp_path, monkeypatch, oldest=1, env={"_AUTOPILOT_NO_YIELD": "1"}
     )
     assert result is False
     assert decision["limit_wait"] is None
@@ -531,7 +528,9 @@ def test_beyond_cap_warning_line_names_the_loop_it_did_not_yield_to(
     ap = lp._test["ap_dir"]
     write_log(ap, _warning_event(int(clock.now) + 600))
     monkeypatch.setattr(lp, "_oldest_live_loop_pid", lambda: 1)
-    lp._yield_at_warning({"signal": "continue", "limit_wait": None}, ap / "last-session.log")
+    lp._yield_at_warning(
+        {"signal": "continue", "limit_wait": None}, ap / "last-session.log"
+    )
     err = lp._test["err"].getvalue()
     assert "beyond _AUTOPILOT_LIMIT_WAIT_MAX; not yielding the window to loop 1" in err
 
@@ -714,66 +713,56 @@ def test_fingerprint_bound_parks_a_prd_burning_sessions(tmp_path):
 # ── instant exit ─────────────────────────────────────────────────────────────
 
 
-def _quick_session(clock: FakeClock, secs: float, *events):
-    """A session that touches no state, writes `events` as its log, and
-    runs `secs` beyond ScriptedSpawn's own 1 s."""
+_ZERO = {"type": "result", "total_cost_usd": 0}
+_BUILD = {"prd": "p.md", "next_phase": "build", "batch": {"id": "b"}}
+_DONE = {"prd": "00099-drained-v1.md", "next_phase": "", "batch": {"id": "b-1"}}
+_PAUSED = {**_BUILD, "next_phase": "review", "pause_reason": {"detail": "gate"}}
+_RETRY = "instant exit (session died; retry 1/1); then continue."
+
+
+def _quick_session(clock: FakeClock, secs: float, *events, log=True, state=None):
+    """Runs `secs` past ScriptedSpawn's own 1 s; writes `state`, then `events` if `log`."""
 
     def step(ap_dir: Path) -> None:
         clock.now += secs
-        write_log(ap_dir, *events)
+        if state is not None:
+            (ap_dir / "state.json").write_text(json.dumps(state))
+        if log:
+            write_log(ap_dir, *events)
 
     return step
 
 
 def test_instant_exit_signal_then_died_retry_without_limit(tmp_path):
-    # Two 3 s / $0 sessions on an untouched state: retry 1/1, then park.
-    # The untouched state never resets the died counter. Sessions 3-4 let
-    # the unconsumed-park guard halt the loop.
+    # Two 3 s sessions ($0, then no cost) on an untouched state; 3-4 trip the park guard.
     clock = FakeClock()
-    zero = _quick_session(clock, 2, {"type": "result", "total_cost_usd": 0})
+    zero = _quick_session(clock, 2, _ZERO)
     absent = _quick_session(clock, 2, {"type": "result"})
     lp = make_loop(tmp_path, [zero, absent, noop_step, noop_step], clock=clock)
     ap = lp._test["ap_dir"]
     write_state(ap, prd="00044-x-v1.md", next_phase="build", batch={"id": "b"})
     assert lp.run() == 1
     out = lp._test["out"].getvalue()
-    first = "instant exit (session died; retry 1/1); then continue."
-    second = (
-        "instant exit (died after 1 retries; parking 00044-x-v1.md); then park."
-    )
-    assert first in out and second in out
-    assert out.index(first) < out.index("Continuing (next phase: build)")
-    assert out.index("Continuing (next phase: build)") < out.index(second)
+    second = "instant exit (died after 1 retries; parking 00044-x-v1.md); then park."
+    cont = out.index("Continuing (next phase: build)")
+    assert out.index(_RETRY) < cont < out.index(second)
     assert "parking 00044-x-v1.md (died after 1 retries" in out
     assert json.loads((ap / "park-requested").read_text())["prd"] == "00044-x-v1.md"
     assert lp._died_retries == 1
-    assert [row["signal"] for row in metrics_rows(ap)][:2] == [
-        "instant_exit",
-        "instant_exit",
-    ]
+    assert [row["signal"] for row in metrics_rows(ap)][:2] == ["instant_exit"] * 2
 
 
 def test_instant_exit_waits_when_usage_limit_detected(tmp_path):
-    # The live-event staleness check reads the real clock.
-    clock = FakeClock(start=time.time())
-    reset = int(clock.now) + 600
-    limited = _quick_session(
-        clock,
-        2,
-        {"type": "result", "total_cost_usd": 0},
-        _rejected_event(reset),
-    )
+    clock = FakeClock(start=time.time())  # the live-limit staleness check reads it
+    hit = _quick_session(clock, 2, _ZERO, _rejected_event(int(clock.now) + 600))
+    detect = usage_limit.detect_from_log
     lp = make_loop(
-        tmp_path,
-        [limited, terminal_step()],
-        clock=clock,
-        detect_limit_fn=usage_limit.detect_from_log,
+        tmp_path, [hit, terminal_step()], clock=clock, detect_limit_fn=detect
     )
-    write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b"})
+    write_state(lp._test["ap_dir"], **_BUILD)
     assert lp.run() == 0
     out = lp._test["out"].getvalue()
-    assert "instant exit (usage-limit; resuming ~" in out
-    assert "); then continue." in out
+    assert "instant exit (usage-limit; resuming ~" in out and "); then continue." in out
     assert "usage limit hit; waiting" in out
     assert any(secs >= 500 for secs in lp._test["sleeps"])
     assert _notified(lp, "Usage limit")
@@ -782,15 +771,49 @@ def test_instant_exit_waits_when_usage_limit_detected(tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("secs", "cost"),
-    [(29, 0), (2, 0.5)],
-    ids=["wall_exactly_30s", "billed_session"],
+    ("session", "want"),  # (secs, costs | None=no log, state), (rc, signal, runs)
+    [
+        pytest.param((29, (0,), None), (0, "continue", 2), id="wall_exactly_30s"),
+        pytest.param((2, (0.01,), None), (0, "continue", 2), id="billed_cent"),
+        pytest.param((2, (0.5,), None), (0, "continue", 2), id="billed_half"),
+        pytest.param((2, (5.0,), None), (0, "continue", 2), id="billed_5"),
+        pytest.param((2, (0, 0.5), None), (0, "continue", 2), id="last_billed"),
+        pytest.param((28, (0,), None), (0, "instant_exit", 2), id="wall_29s"),
+        pytest.param((2, (), None), (0, "instant_exit", 2), id="log_without_result"),
+        pytest.param((2, None, None), (0, "instant_exit", 2), id="no_log"),
+        pytest.param((2, (0,), _DONE), (0, "done", 1), id="done"),
+        pytest.param((2, (0,), _PAUSED), (1, "paused", 1), id="paused"),
+    ],
 )
-def test_instant_exit_spares_a_30s_or_billed_session(tmp_path, secs, cost):
+def test_instant_exit_flags_only_sub_30s_unbilled_sessions(tmp_path, session, want):
+    (secs, costs, state), (rc, signal, runs) = session, want
+    expect_instant = signal == "instant_exit"
     clock = FakeClock()
-    died = _quick_session(clock, secs, {"type": "result", "total_cost_usd": cost})
-    lp = make_loop(tmp_path, [died, terminal_step()], clock=clock)
-    write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b"})
-    assert lp.run() == 0
-    assert "instant exit" not in lp._test["out"].getvalue()
-    assert metrics_rows(lp._test["ap_dir"])[0]["signal"] == "continue"
+    events = [{"type": "result", "total_cost_usd": cost} for cost in costs or ()]
+    quick = _quick_session(clock, secs, *events, log=costs is not None, state=state)
+    lp = make_loop(tmp_path, [quick, terminal_step()], clock=clock)
+    write_state(lp._test["ap_dir"], **_BUILD)
+    assert lp.run() == rc
+    out = lp._test["out"].getvalue()
+    assert ("instant exit" in out) is expect_instant
+    assert (_RETRY in out) is expect_instant
+    assert metrics_rows(lp._test["ap_dir"])[0]["signal"] == signal
+    assert len(lp._test["spawn"].launches) == runs
+
+
+@pytest.mark.parametrize(
+    ("reset_in", "err_fragment"),
+    [(50_000, "beyond _AUTOPILOT_LIMIT_WAIT_MAX"), (None, "no state.json")],
+    ids=["limit_beyond_cap", "bootstrap_no_state"],
+)
+def test_instant_exit_still_halts_a_died_session(tmp_path, reset_in, err_fragment):
+    clock = FakeClock()
+    reset = reset_in and int(clock.now) + reset_in
+    quick = _quick_session(clock, 2, _ZERO)
+    lp = make_loop(tmp_path, [quick], clock=clock, detect_limit_fn=lambda path: reset)
+    if reset_in:
+        write_state(lp._test["ap_dir"], **_BUILD)
+    assert lp.run() == 1
+    assert "); then died." in lp._test["out"].getvalue()
+    assert err_fragment in lp._test["err"].getvalue()
+    assert len(lp._test["spawn"].launches) == 1
