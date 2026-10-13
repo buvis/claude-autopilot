@@ -157,7 +157,8 @@ _SEVERITY_EMOJI_ANY_RE = re.compile(f"[{''.join(_SEVERITY_EMOJI)}]")
 # _LEADING_RATIO_RE, so ordinary prose naming a severity is never flagged.
 # `(?!-)` keeps a hyphenated compound ("low-hanging", "high-level") unread.
 _SEVERITY_WORD_ANY_RE = re.compile(
-    r"\b(CRITICAL|HIGH|MEDIUM|LOW)\b(?!-)", re.IGNORECASE
+    r"\b(CRITICAL|HIGH|MEDIUM|LOW)\b(?!-)",
+    re.IGNORECASE,
 )
 _SEVERITY_WORD_CELL_RE = re.compile(
     r"\|\s*(CRITICAL|HIGH|MEDIUM|LOW)\s*\|",
@@ -402,6 +403,30 @@ def _unfenced(text: str) -> str:
     return "\n".join(live)
 
 
+def _is_unread_line(line: str) -> bool:
+    """Whether `line` carries a [m/n] token or a finding-shaped row that,
+    left unconsumed by the findings parser, must be flagged as unread."""
+    return bool(
+        _CONSENSUS_TOKEN_RE.search(line)
+        or _CANDIDATE_ROW_RE.match(line)
+        or _CONSENSUS_VARIANT_RE.search(line)
+        or _SEVERITY_WORD_CELL_RE.search(line)
+        or (_ROW_SHAPE_RE.search(line) and _SEVERITY_EMOJI_WORD_RE.search(line))
+        or (
+            _FOUND_BY in line
+            and _ROW_SHAPE_RE.search(line)
+            and _SEVERITY_EMOJI_ANY_RE.search(line)
+        )
+        or (
+            _LEADING_RATIO_RE.match(line)
+            and (
+                _SEVERITY_EMOJI_ANY_RE.search(line)
+                or _SEVERITY_WORD_ANY_RE.search(line)
+            )
+        )
+    )
+
+
 def _unread_token(live: str) -> str | None:
     """The first line of `live` holding a [m/n] token or a pipe row that the
     findings parser does not read, named by number and text, else None.
@@ -433,25 +458,7 @@ def _unread_token(live: str) -> str | None:
     for i, line in enumerate(lines):
         if i in consumed:
             continue
-        if (
-            _CONSENSUS_TOKEN_RE.search(line)
-            or _CANDIDATE_ROW_RE.match(line)
-            or _CONSENSUS_VARIANT_RE.search(line)
-            or _SEVERITY_WORD_CELL_RE.search(line)
-            or (_ROW_SHAPE_RE.search(line) and _SEVERITY_EMOJI_WORD_RE.search(line))
-            or (
-                _FOUND_BY in line
-                and _ROW_SHAPE_RE.search(line)
-                and _SEVERITY_EMOJI_ANY_RE.search(line)
-            )
-            or (
-                _LEADING_RATIO_RE.match(line)
-                and (
-                    _SEVERITY_EMOJI_ANY_RE.search(line)
-                    or _SEVERITY_WORD_ANY_RE.search(line)
-                )
-            )
-        ):
+        if _is_unread_line(line):
             return (
                 f"line {i + 1}: a [m/n] token or table row the findings parser "
                 f"did not read: {line.strip()[:120]}"
