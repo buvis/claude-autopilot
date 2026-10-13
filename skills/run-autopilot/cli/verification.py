@@ -185,6 +185,16 @@ def _dirty_outside_store(
         return True
 
 
+def _dirty_check(cwd: Path, extra_excluded: tuple[str, ...]) -> tuple[bool, list[str]]:
+    """(dirty, dirty_paths) for `run_gate`'s result. A failing git probe is
+    dirty with no path to list."""
+    try:
+        paths = _dirty_outside_store_paths(cwd, extra_excluded)
+    except OSError:
+        return True, []
+    return bool(paths), paths
+
+
 def _untracked_log_exclusion(cwd: Path, log_path: Path | None) -> tuple[str, ...]:
     """`(toplevel-relative POSIX path of log_path,)` when the log resolves
     inside cwd's git toplevel and is NOT tracked there; `()` otherwise
@@ -350,10 +360,11 @@ def _timed_out_result() -> dict:
         "timed_out": True,
         "recorded": False,
         "dirty": False,
+        "dirty_paths": [],
     }
 
 
-def _dirty_result() -> dict:
+def _dirty_result(dirty_paths: list[str]) -> dict:
     """The refusal shape for a dirty-tree check, pre-spawn or post-reap.
     `timed_out` is explicitly False here, never inherited from
     `_timed_out_result()`, because `run_gate_line` branches on `timed_out`
@@ -368,6 +379,7 @@ def _dirty_result() -> dict:
         "timed_out": False,
         "recorded": False,
         "dirty": True,
+        "dirty_paths": dirty_paths,
     }
 
 
@@ -415,7 +427,7 @@ def _record_gate(
     """The post-reap half of `run_gate`: parse the summary, re-check the tree,
     and write the record only when a summary parsed and the tree is clean."""
     raw_line, found = _parse_summary(stdout_buf)
-    dirty = _dirty_outside_store(cwd, extra_excluded)
+    dirty, dirty_paths = _dirty_check(cwd, extra_excluded)
     result = {
         "passed": int(found.group(1)) if found else None,
         "failed": int(found.group(2)) if found else None,
@@ -425,6 +437,7 @@ def _record_gate(
         "timed_out": False,
         "recorded": False,
         "dirty": dirty,
+        "dirty_paths": dirty_paths,
     }
     if found and not dirty:
         _write_record(cwd, command, sha, cycle, result)
@@ -461,8 +474,9 @@ def run_gate(
         log_file = open(log_path, "wb", buffering=0)
     try:
         extra_excluded = _untracked_log_exclusion(cwd, log_path)
-        if _dirty_outside_store(cwd, extra_excluded):
-            return _dirty_result()
+        dirty, dirty_paths = _dirty_check(cwd, extra_excluded)
+        if dirty:
+            return _dirty_result(dirty_paths)
         proc = subprocess.Popen(
             command,
             shell=True,

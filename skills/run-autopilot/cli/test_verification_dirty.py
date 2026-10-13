@@ -524,6 +524,7 @@ def test_run_gate_on_a_dirty_tree_writes_no_record(repo: Path) -> None:
         "timed_out": False,
         "recorded": False,
         "dirty": True,
+        "dirty_paths": ["src/app.py"],
     }
     assert not (repo / RECORD_REL).exists()
 
@@ -580,7 +581,10 @@ def test_gate_runs_in_a_repo_that_does_not_ignore_docs_dev_tmp(
     _git(repo, "add", "--", "docs/dev/tmp/bob-notes.txt", "docs/dev/tmp/sub/x")
     (repo / "docs" / "dev" / "tmp" / "untracked.md").write_text("untracked\n")
     assert "?? docs/dev/tmp/untracked.md" in _git(
-        repo, "status", "--porcelain=1", "--untracked-files=all"
+        repo,
+        "status",
+        "--porcelain=1",
+        "--untracked-files=all",
     )
 
     result = verification.run_gate("echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'", repo, "abc", 1)
@@ -755,5 +759,6 @@ def test_own_log_does_not_skip_the_pre_spawn_dirty_check(
         "timed_out": False,
         "recorded": False,
         "dirty": True,
+        "dirty_paths": ["stray.txt"],
     }
     assert not (repo / RECORD_REL).exists()
