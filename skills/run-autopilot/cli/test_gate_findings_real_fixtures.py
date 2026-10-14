@@ -170,30 +170,28 @@ _TAIL_SWEEP_EXEMPT_PHRASE = (
 # it refuses; a file whose tag flips is named here, never fixed by editing it.
 _REPO_ROOT = CLI_DIR.parents[2]
 _BASELINE_PATH = FIXTURES / "gate_replay_baseline.json"
-# PRD 00282 task D1 (#11): `_is_unread_line` widened to flag a bullet- or
-# ordinal-led line carrying a bare severity emoji anywhere on it (a reviewer's
-# free-text finding note or discard rationale, with no pipe, word or token to
-# back it). Every one of these real review files carries such a line outside
-# the one structured findings table - a follow-up task list, a discard note,
-# an availability summary mentioning a count - and now correctly refuses.
+# PRD 00277 v2: `_is_unread_line`'s emoji check moved to lead normalisation
+# (`gate._is_emoji_row`) - a severity emoji counts only as the first
+# character remaining after stripping the line's lead (whitespace, bullets,
+# blockquote, ordinals, typographic dashes, emphasis). A path joins this list
+# only when the gate's named line starts with a severity emoji after lead
+# normalisation; every entry below carries a comment quoting that line.
 _ACCEPTED_FLIPS: dict[str, str] = {
+    # line 98: '- ⚪ CHANGELOG "streamed byte-exact" overstates what the code keeps...'
     "docs/dev/project-management/reviews/00171-route-sonnet-prompt-through-stdin-v1-review-1.md": "malformed",
-    "docs/dev/project-management/reviews/00187-keep-cap-out-criticals-off-master-and-home-deferred-highs-v1-review-2.md": "malformed",
-    "docs/dev/project-management/reviews/00188-record-convergence-cap-and-roster-per-prd-v1-review-2.md": "malformed",
-    "docs/dev/project-management/reviews/00189-stall-to-split-on-plan-expansion-v1-review-2.md": "malformed",
-    "docs/dev/project-management/reviews/00192-split-loop-py-and-its-tests-under-the-cap-v1-review-1.md": "malformed",
-    "docs/dev/project-management/reviews/00207-route-rework-resume-sessions-on-task-tier-v1-review-01.md": "malformed",
+    # line 107: '- ⚪ Add the missing second blank line before `test_phase_4_skip_is_the_rework_handoff_entry`...'
     "docs/dev/project-management/reviews/00208-hand-off-between-the-rework-design-and-the-first-fix-v1-review-01.md": "malformed",
-    "docs/dev/project-management/reviews/00218-leave-sessions-at-task-boundaries-and-run-one-devon-round-v1-review-2.md": "malformed",
-    "docs/dev/project-management/reviews/00223-enter-the-build-gate-in-one-cli-call-v1-review-2.md": "malformed",
+    # line 71: '- ⚪ Bob's "Cannot statically verify the next batch" row restates...'
     "docs/dev/project-management/reviews/00232-keep-subagent-test-runs-narrow-v1-review-1.md": "malformed",
-    "docs/dev/project-management/reviews/00244-tidy-the-enter-verb-and-the-review-diff-plumbing-v1-review-1.md": "malformed",
+    # line 62: '- 🟡 Blake: "`bash dev/bin/release-checks` exits 0 is not demonstrated...'
     "docs/dev/project-management/reviews/00256-finish-the-review-verbs-before-release-v1-review-1.md": "malformed",
-    "docs/dev/project-management/reviews/00256-finish-the-review-verbs-before-release-v1-review-2.md": "malformed",
-    "docs/dev/project-management/reviews/00265-close-the-critical-row-escapes-v1-review-2.md": "malformed",
+    # line 74: '- ⚪ Whitespace is not normalized after NFKC. The literal single space...'
     "docs/dev/project-management/reviews/00267-widen-the-phase-delegation-guard-v1-review-1.md": "malformed",
-    "docs/dev/project-management/reviews/00271-guard-v2-structural-delegation-check-v1-review-2.md": "malformed",
-    "docs/dev/project-management/reviews/00276-make-the-gate-record-trustworthy-v1-review-2.md": "malformed",
+    # line 137: '🔴 row while the unmatched opener itself stays live (R6)...' - a bare
+    # emoji with no bullet lead at all, newly caught under the no-lead-needed rule.
+    "docs/dev/project-management/reviews/00269-sweep-every-findings-token-v1-review-1.md": "malformed",
+    # line 65: '⚪ (the partly-fixed second-table escape, the returned formatter reflow...'
+    "docs/dev/project-management/reviews/00269-sweep-every-findings-token-v1-review-2.md": "malformed",
 }
 
 
