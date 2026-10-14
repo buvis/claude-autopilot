@@ -53,6 +53,9 @@ _EMOJI_SHAPES = {
     ),
     "emoji, issue and file": f"- {CRIT} stale cache | src/x.py:3",
     "mixed-case attribution": f"- {CRIT} crash | a.py:3 | Found By: alice",
+    "tab indent, no bullet": f"\t{CRIT} crash on empty input",
+    "plus bullet": f"+ {CRIT} crash on empty input",
+    "paren ordinal": f"1) {CRIT} crash | src/a.py:3",
 }
 
 
@@ -109,8 +112,14 @@ def _assert_prose_read(line: str) -> None:
 
 @pytest.mark.parametrize(
     "template",
-    ["- {} crash on empty input", "1. {} crash on empty input", "{} crash"],
-    ids=["dash bullet", "ordinal", "no lead"],
+    [
+        "- {} crash on empty input",
+        "1. {} crash on empty input",
+        "{} crash",
+        "        {} crash on empty input",
+        "> > > > > - **{}** x",
+    ],
+    ids=["dash bullet", "ordinal", "no lead", "8-space indent", "deep nested lead"],
 )
 @pytest.mark.parametrize(
     "emoji",
@@ -123,22 +132,32 @@ def test_every_severity_emoji_counts_as_the_first_character_after_the_lead(
     tmp_path: Path,
 ) -> None:
     """All four severity emoji (the real _SEVERITY_EMOJI keys) count when they
-    are the first character left once the lead is stripped."""
+    are the first character left once the lead is stripped, however long the
+    lead is: an 8-space indent and a five-deep quote nest leave the emoji
+    first too, past any fixed window into the start of the line."""
     from cli.findings_section import _SEVERITY_EMOJI
 
     assert emoji in _SEVERITY_EMOJI
     _assert_emoji_row_refused(template.format(emoji), tmp_path)
 
 
+_EMOJI_NOT_FIRST = {
+    "mid-line": "- crash {} on empty input",
+    "trailing": "- crash on empty input {}",
+    "digit before": "- 3 {} crash",
+    "other digit before": "- 7 {} crash",
+    "colon before": "- : {} crash",
+    "parenthesized word before": "- (x) {} crash",
+    "letter ordinal before": "a. {} crash",
+    "hash paren before": "#) {} x",
+    "number and hashes before": "- 42 ### {} x",
+}
+
+
 @pytest.mark.parametrize(
     "template",
-    [
-        "- crash {} on empty input",
-        "- crash on empty input {}",
-        "- 3 {} crash",
-        "- : {} crash",
-    ],
-    ids=["mid-line", "trailing", "digit before", "punctuation before"],
+    list(_EMOJI_NOT_FIRST.values()),
+    ids=list(_EMOJI_NOT_FIRST),
 )
 @pytest.mark.parametrize(
     "emoji",
@@ -149,58 +168,100 @@ def test_an_emoji_past_the_first_character_after_the_lead_is_prose(
     emoji: str,
     template: str,
 ) -> None:
-    """Mid-line and trailing emoji no longer make a row: they are prose."""
+    """Mid-line and trailing emoji are prose, and so is one behind junk that
+    is not a lead: only the listed lead shapes are stripped, so any digit,
+    `#)`, `###`, a parenthesized word or a letter ordinal in front of the
+    emoji keeps it from being first. The junk is varied so that no fixed set
+    of literal prefixes covers these lines."""
     _assert_prose_read(template.format(emoji))
+
+
+# Both halves of the rule are closed sets: the severity emoji, and the lead
+# marks that may precede one.
+_NOT_AN_EMOJI_ROW = {
+    "check mark": "- ✅ all green",
+    "purple circle": "- 🟣 note",
+    "puzzle piece": "🧩 follow-up",
+    "parenthesized emoji": f"( {CRIT} )",
+    "leading table pipe": f"| {CRIT} crash | src/a.py:3 |",
+    "bangs": f"!!! {CRIT} x",
+    "slashes": f"/// {CRIT} x",
+}
 
 
 @pytest.mark.parametrize(
     "line",
-    [f"- 3 {CRIT} crash", f"#) {CRIT} x", f"- 42 ### {CRIT} x"],
-    ids=["digit after bullet", "hash paren", "number and hashes"],
+    list(_NOT_AN_EMOJI_ROW.values()),
+    ids=list(_NOT_AN_EMOJI_ROW),
 )
-def test_non_letter_junk_before_the_emoji_is_not_a_lead(line: str) -> None:
-    """Only the listed lead shapes are stripped: digits, `#)` or `###` left in
-    front of the emoji keep it from being first."""
+def test_only_a_severity_emoji_behind_lead_marks_alone_is_a_row(line: str) -> None:
+    """A reader that asks "is the first character an emoji" refuses a green
+    tick, a purple circle or a puzzle piece; one that strips any punctuation
+    reads a table cell, a shouted note and a comment slash as finding rows."""
     from cli import gate
 
     assert gate._is_emoji_row(line) is False
 
 
 def test_strip_lead_removes_quote_bullet_emphasis_and_zero_width_space() -> None:
+    """The lead goes and nothing else does: the remainder is the content
+    verbatim (closing `**` included), and a lead with no emoji behind it
+    strips just the same - the lead marks are what is sought, not the emoji."""
     from cli import gate
 
-    assert gate._strip_lead(f"> - **​{CRIT}** x").startswith(CRIT)
+    assert gate._strip_lead(f"> - **\u200b{CRIT}** x") == f"{CRIT}** x"
+    assert gate._strip_lead("> - **x") == "x"
+    assert gate._strip_lead("\t> 1. x") == "x"
 
 
 # A lead mark that repeats back to back, or nests inside another kind, is
 # still lead: the emoji behind it is the first character of the content.
 _NESTED_LEADS = {
-    "nested blockquote": f"> > {CRIT} crash src/a.py:3",
-    "nested dash bullet": f"- - {CRIT} crash",
-    "nested typographic bullet": f"• • {CRIT} x",
-    "doubled dash": f"-- {CRIT} x",
-    "doubled en dash": f"– – {CRIT} x",
-    "quote nesting a bullet": f"> > - {CRIT} x",
+    "nested blockquote": "> > ",
+    "nested dash bullet": "- - ",
+    "nested typographic bullet": "• • ",
+    "doubled dash": "-- ",
+    "doubled en dash": "– – ",
+    "quote nesting a bullet": "> > - ",
+    "deep quote nest with emphasis": "> > > > > - **",
 }
+_NESTED_BODY = "crash src/a.py:3"
+_NESTED_LEAD_PARAM = pytest.mark.parametrize(
+    "lead",
+    list(_NESTED_LEADS.values()),
+    ids=list(_NESTED_LEADS),
+)
+_SEVERITY_PARAM = pytest.mark.parametrize(
+    "emoji",
+    [CRIT, HIGH, MED, LOW],
+    ids=["critical", "high", "medium", "low"],
+)
 
 
-@pytest.mark.parametrize("line", list(_NESTED_LEADS.values()), ids=list(_NESTED_LEADS))
-def test_a_repeated_or_nested_lead_mark_is_still_stripped(line: str) -> None:
-    """A lead is stripped however often it repeats and however the marks nest:
-    a reader that strips one mark and stops leaves `>`, `-` or `•` in front of
-    the emoji and reads the row as prose."""
+@_NESTED_LEAD_PARAM
+@_SEVERITY_PARAM
+def test_a_repeated_or_nested_lead_mark_is_still_stripped(
+    emoji: str,
+    lead: str,
+) -> None:
+    """A lead is stripped however often it repeats and however the marks nest,
+    for every severity emoji, and nothing past the lead is touched: a reader
+    that strips one mark and stops leaves `>`, `-` or `•` in front of the
+    emoji, and one that returns the bare emoji drops the finding's text."""
     from cli import gate
 
-    assert gate._strip_lead(line).startswith(CRIT)
+    content = f"{emoji} {_NESTED_BODY}"
+    assert gate._strip_lead(f"{lead}{content}") == content
 
 
-@pytest.mark.parametrize("line", list(_NESTED_LEADS.values()), ids=list(_NESTED_LEADS))
-def test_an_emoji_row_behind_a_nested_lead_is_a_row(line: str) -> None:
+@_NESTED_LEAD_PARAM
+@_SEVERITY_PARAM
+def test_an_emoji_row_behind_a_nested_lead_is_a_row(emoji: str, lead: str) -> None:
     """The emoji is first after the whole nested lead goes, so the row counts
     as a finding row - including `-- 🔴`, which was once pinned as junk."""
     from cli import gate
 
-    assert gate._is_emoji_row(line) is True
+    assert gate._is_emoji_row(f"{lead}{emoji} {_NESTED_BODY}") is True
 
 
 def test_bare_emoji_row_without_bullet_is_unread(tmp_path: Path) -> None:
@@ -225,13 +286,26 @@ def test_typographic_bullet_emoji_row_is_unread(bullet: str, tmp_path: Path) -> 
     _assert_emoji_row_refused(f"{bullet} {HIGH} wrong default", tmp_path)
 
 
+_INVISIBLE_LEADS = {
+    "zero-width space": "\u200b",
+    "byte order mark": "\ufeff",
+    "em space": "\u2003",
+    "left-to-right mark": "\u200e",
+    "no-break space": "\u00a0",
+    "bullet then zwsp": "- \u200b",
+    "nbsp then bullet": "\u00a0\u00a0- ",
+}
+
+
 @pytest.mark.parametrize(
     "lead",
-    ["\u200b", " ", "- \u200b", "  - "],
-    ids=["zero-width space", "no-break space", "bullet then zwsp", "nbsp then bullet"],
+    list(_INVISIBLE_LEADS.values()),
+    ids=list(_INVISIBLE_LEADS),
 )
 def test_invisible_lead_emoji_row_is_unread(lead: str, tmp_path: Path) -> None:
-    """Invisible space characters before the emoji are lead, not content."""
+    """Invisible space characters before the emoji are lead, not content - the
+    whole Zs and Cf space, not two hardcoded code points: a BOM, an em space
+    and a bidi mark lead a row just as a zero-width space does."""
     _assert_emoji_row_refused(f"{lead}{MED} stale cache", tmp_path)
 
 
@@ -310,7 +384,9 @@ def test_a_consensus_token_before_the_emoji_blocks_the_emoji_wording() -> None:
 
 
 @pytest.mark.parametrize(
-    "opener", ["```python`", "```py` x"], ids=["trailing backtick", "mid backtick"]
+    "opener",
+    ["```python`", "```py` x"],
+    ids=["trailing backtick", "mid backtick"],
 )
 def test_backtick_in_info_string_is_not_a_fence(opener: str) -> None:
     """A backtick anywhere in the info string means the line cannot open a
@@ -497,7 +573,9 @@ _NOT_A_FINDING = {
 
 
 @pytest.mark.parametrize(
-    "line", list(_NOT_A_FINDING.values()), ids=list(_NOT_A_FINDING)
+    "line",
+    list(_NOT_A_FINDING.values()),
+    ids=list(_NOT_A_FINDING),
 )
 def test_a_line_with_no_severity_signal_is_not_refused(line: str) -> None:
     """No false refusals: counting prose, a parenthesized count that does not
