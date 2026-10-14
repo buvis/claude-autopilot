@@ -133,9 +133,9 @@ def test_brief_repo_root_still_none_without_a_project_root():
     assert "- repo root: none\n" in render_brief({}, NOW)
 
 
-def test_write_brief_falls_back_to_the_project_root(tmp_path):
-    autopilot_dir = tmp_path / "autopilot"
-    autopilot_dir.mkdir()
+def test_write_brief_repo_root_falls_back_to_the_project_root(tmp_path):
+    autopilot_dir = tmp_path / "docs" / "dev" / "project-management" / "autopilot"
+    autopilot_dir.mkdir(parents=True)
     state_path = autopilot_dir / "state.json"
     state_path.write_text(json.dumps({"phase": "build"}), encoding="utf-8")
     out_path = tmp_path / "brief.md"
