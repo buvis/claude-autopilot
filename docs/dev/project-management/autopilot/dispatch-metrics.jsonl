@@ -4251,3 +4251,24 @@
 {"id":"5428bea5","kind":"fast-track:ivan","task":"00284-loop-launch-context-v1-c1","queued_at":1791932907,"prompt_bytes":56621}
 {"id":"5428bea5","ended_at":1791933334,"elapsed_s":427,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1791933406,"phase":"build","prd":"00284-loop-launch-context-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1791933712,"phase":"build","prd":"00284-loop-launch-context-v1.md"}
+{"id":"022a4563","kind":"fast-track:alice","task":"00284-loop-launch-context-v1-c1","queued_at":1791935196,"prompt_bytes":6223}
+{"id":"3c1c9cbc","kind":"fast-track:blake","task":"00284-loop-launch-context-v1-c1","queued_at":1791935210,"prompt_bytes":10941}
+{"id":"a603418d","kind":"fast-track:eve","task":"00284-loop-launch-context-v1-c1","queued_at":1791935213,"prompt_bytes":4996}
+{"id":"c9a59258","kind":"fast-track:bob","task":"00284-loop-launch-context-v1-c1","queued_at":1791935216,"prompt_bytes":9487}
+{"id":"384c8bc1","kind":"fast-track:carl","task":"00284-loop-launch-context-v1-c1","queued_at":1791935219,"prompt_bytes":6579}
+{"id":"384c8bc1","ended_at":1791935260,"elapsed_s":41,"outcome":"error","detail":"copilot backend auth failure (known sandbox issue, no retry)"}
+{"id":"c9a59258","ended_at":1791935361,"elapsed_s":145,"outcome":"ok","detail":null}
+{"id":"022a4563","ended_at":1791935376,"elapsed_s":180,"outcome":"ok","detail":null}
+{"id":"c9a59258","ended_at":1791935504,"elapsed_s":288,"outcome":"error","detail":"exit 0 but codex blocked by its own fact-forcing hook / sandbox-exec error both attempts; no usable review"}
+{"id":"69af2b58","kind":"fast-track:bob","task":"00284-loop-launch-context-v1-c1-retry","queued_at":1791935512,"prompt_bytes":9487}
+{"id":"69af2b58","ended_at":1791935515,"elapsed_s":3,"outcome":"error","detail":"codex blocked by fact-forcing hook/sandbox-exec, no usable review after one retry"}
+{"id":"3c1c9cbc","ended_at":1791935519,"elapsed_s":309,"outcome":"ok","detail":null}
+{"id":"a603418d","ended_at":1791935707,"elapsed_s":494,"outcome":"ok","detail":null}
+{"id":"8659f7c4","kind":"fast-track:victor","task":"00284-loop-launch-context-v1-c1","queued_at":1791935761,"prompt_bytes":2135}
+{"id":"8659f7c4","ended_at":1791935822,"elapsed_s":61,"outcome":"ok","detail":null}
+{"id":"17a2d7f7","kind":"fast-track:ivan","task":"00284-loop-launch-context-v1-c1","queued_at":1791935887,"prompt_bytes":7683}
+{"id":"17a2d7f7","ended_at":1791936067,"elapsed_s":180,"outcome":"ok","detail":null}
+{"id":"3cb24496","kind":"fast-track:delta","task":"00284-loop-launch-context-v1-c1","queued_at":1791936130,"prompt_bytes":5001}
+{"id":"3cb24496","ended_at":1791936800,"elapsed_s":670,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"build","edge":"leave","at":1791936887,"phase":"done","prd":"00284-loop-launch-context-v1.md"}
