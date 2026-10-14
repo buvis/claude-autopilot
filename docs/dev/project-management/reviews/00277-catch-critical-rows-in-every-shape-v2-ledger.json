@@ -22,5 +22,45 @@
     "issue": "`_ACCEPTED_FLIPS` accepts 00269-sweep-every-findings-token-v1-review-1 (comment: `🔴 row while the unmatched opener itself stays live (R6)...`). That line looks like a wrapped prose continuation that starts with a mention of the emoji. It meets the mechanical join rule but is probably a false refusal of the same kind packet 5 describes.",
     "file": "skills/run-autopilot/cli/test_gate_findings_real_fixtures.py:916",
     "reason": "Confirmed in rework cycle 1 (task 7): both 00269 entries ARE false refusals - each named line is the second line of a wrapped prose paragraph whose wrap falls before a severity emoji. Kept deliberately: nothing in such a line distinguishes it from a real no-lead finding row (`🔴 crash | src/a.py:3`), which the PRD requires the gate to catch, so narrowing the rule would reopen that escape. Recorded as a known limitation in the entries' comment and in docs/dev/project-management/reviews/00277-catch-critical-rows-in-every-shape-v2-flips-report.md, not as a justified true positive. Do not re-raise."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "⚪",
+    "issue": "The spec names the new symbol `_LEAD_RE`, and it does not exist. The lead is implemented as `_LEAD_MARKS` plus `_ORDINAL_LEAD_RE` plus a character loop in `_strip_lead`. Behaviour matches the spec.",
+    "file": "skills/run-autopilot/cli/gate.py:208",
+    "reason": "Blake confirms behaviour matches the spec on every probe; only the internal symbol name differs, and the frozenset form was itself a cycle-1 review fix (R9). Symbol names in the PRD are illustrative, not acceptance criteria. Renaming now would churn the diff for nothing. Deferred to batch end."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "⚪",
+    "issue": "`test_backtick_in_info_string_is_not_a_fence` and `test_closer_with_trailing_text_does_not_close` live in the new `test_gate_fence_shapes.py`, not in `test_gate_findings_unread_shapes.py` as the spec names. The existing `test_a_closer_with_trailing_text_still_closes_the_fence` was inverted and renamed rather than kept. This is forced by the new rule, but it is a changed pre-existing test against \"no test deleted\".",
+    "file": "skills/run-autopilot/cli/test_gate_fence_shapes.py:32",
+    "reason": "The split was the cycle-1 fix for R4 (the 800-line file limit) and the new file is registered in release-checks and test_release_checks_counts.py, so no test was lost. The inverted test pins the spec's new fence rule; keeping the old assertion would contradict the PRD. Blake himself calls it forced by the rule. Deferred to batch end."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "⚪",
+    "issue": "`_is_emoji_row` runs before the token and pipe arms. A row like `🔴 | x | [1/2]` gets the emoji wording, not the `[m/n]` wording. The spec says the `[m/n]` wording \"stays for token and pipe rows\", so this is an ambiguous reading.",
+    "file": "skills/run-autopilot/cli/gate.py:552",
+    "reason": "Wording only: the row is refused either way, which is what the PRD requires. The spec sentence preserves the `[m/n]` wording for rows that have no severity emoji; a row carrying both signals is genuinely ambiguous and the emoji wording is the more informative of the two. No behaviour change, no escape. Deferred to batch end."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "🟡",
+    "issue": "28 touched test(s) pass against the pre-change code: test_backtick_in_info_string_is_not_a_fence, test_a_pseudo_opener_leaves_only_a_later_real_fence_pair_blanked, test_a_longer_closer_closes_and_a_4_space_closer_does_not, test_a_4_space_opener_does_not_open_a_fence, test_closer_with_trailing_text_does_not_close +22 more",
+    "file": "skills/run-autopilot/cli/test_gate_fence_shapes.py",
+    "reason": "Artefact of the incremental diff range: cycle 2's base (95ff839) already carries cycle 1's implementation, so tests that merely MOVED into the new file (the R4 split) pass against that base by construction. They pinned the behaviour when they were written in cycle 1. Deferred to batch end."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "🟡",
+    "issue": "72 touched test(s) pass against the pre-change code: test_every_severity_emoji_counts_as_the_first_character_after_the_lead +66 more",
+    "file": "skills/run-autopilot/cli/test_gate_findings_unread_shapes.py",
+    "reason": "Same incremental-range artefact as the fence-shapes row: the base of this diff is cycle 1's HEAD, where the lead-normalisation rule was already implemented, so a test touched only by the cycle-2 reshuffle passes against it. The nested-lead tests added this cycle do fail against the pre-PRD base. Deferred to batch end."
   }
 ]
