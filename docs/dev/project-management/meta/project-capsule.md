@@ -52,7 +52,7 @@ Generated: 2026-10-13
 - [x] 00279-run-one-exact-reuse-rule-v1 (1 cycle)
 - [x] 00282-loop-guards-v1 (2 cycles)
 - [x] 00283-loop-catchup-v1 (2 cycles)
-- [ ] 00284-loop-launch-context-v1 (backlog)
+- [x] 00284-loop-launch-context-v1 (1 cycle)
 
 Observations: held: 00277-catch-critical-rows-in-every-shape-v1 (stalled on a
   blocking-escalation design question, see commit 4debc71) and 00280
@@ -106,6 +106,15 @@ CRITICAL/HIGH, constraint gate green at HEAD 339825d —
 findings swept; two trivial review-close notes deferred for awareness. Carl
 failed cycle 2 on copilot auth (exit 1, not latched); Bob needed one inlined
 retry.
+
+00284 ran the fast-track lane (card_sized), 1/1 task, 1 cycle. An earlier
+fast-track attempt stalled at gate 3 (`fast_track_blocked`: a contradiction
+between `test_schema_decision_scope.py`'s single-missing-field message and
+`test_schema_decision_entries.py`'s required collected-message behavior) and
+was held back to backlog; it was replanned and completed clean on retry under
+the full lane. The stall record was marked `resolved` in the batch deferred
+JSON so `render report` would not flag it as missing. Batch 202610111300
+drained at this close (7/7 PRDs done, backlog and wip empty).
 
 ### Batch 202610101000
 - [x] 00269-sweep-every-findings-token-v1 (2 cycles)
@@ -535,11 +544,10 @@ topic is unchanged; the hits above are the ones to use.
 ## Project Health
 
 CI: none configured/observed (0 open issues, 0 open PRs, no workflow runs —
-refreshed 2026-10-13). Batch 202610111300 is open with 6 drained
-(00271, 00285, 00276, 00278, 00279, 00282); 00283 now selected into wip,
-entering planning. `master` at 714227e, tree clean. `release-checks` stays RED
-on this host for pre-existing sandbox reasons (setuid `ps` unreachable under
-the agent seatbelt).
+refreshed 2026-10-13). Batch 202610111300 drained at 00284's close: 8/8 PRDs
+done (00271, 00285, 00276, 00278, 00279, 00282, 00283, 00284). `release-checks`
+stays RED on this host for pre-existing sandbox reasons (setuid `ps`
+unreachable under the agent seatbelt).
 Standing debt:
 `cli/__main__.py` and `test_state.py` exceed the 800-line cap (deliberately
 excluded by 00192).

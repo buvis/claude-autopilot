@@ -4272,3 +4272,5 @@
 {"id":"3cb24496","kind":"fast-track:delta","task":"00284-loop-launch-context-v1-c1","queued_at":1791936130,"prompt_bytes":5001}
 {"id":"3cb24496","ended_at":1791936800,"elapsed_s":670,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1791936887,"phase":"done","prd":"00284-loop-launch-context-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1791937678,"phase":"done","prd":"00284-loop-launch-context-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1791937822,"phase":"done","prd":"00284-loop-launch-context-v1.md"}
