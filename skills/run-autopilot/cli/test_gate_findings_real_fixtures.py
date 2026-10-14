@@ -187,10 +187,18 @@ _ACCEPTED_FLIPS: dict[str, str] = {
     "docs/dev/project-management/reviews/00256-finish-the-review-verbs-before-release-v1-review-1.md": "malformed",
     # line 74: '- ⚪ Whitespace is not normalized after NFKC. The literal single space...'
     "docs/dev/project-management/reviews/00267-widen-the-phase-delegation-guard-v1-review-1.md": "malformed",
-    # line 137: '🔴 row while the unmatched opener itself stays live (R6)...' - a bare
-    # emoji with no bullet lead at all, newly caught under the no-lead-needed rule.
+    # The two entries below are FALSE refusals, kept deliberately. Both named
+    # lines are the second line of a wrapped prose paragraph whose wrap point
+    # happens to fall before a severity emoji, so after lead normalisation the
+    # emoji is the first character and the rule - correctly, by its own terms -
+    # calls it a row. Nothing in the line's own text separates it from a real
+    # no-lead row (`🔴 crash on empty input | src/a.py:3`), which the PRD
+    # requires to be caught, so narrowing the rule would reopen that escape.
+    # The cost is one noisy refusal on a review file that wraps that way; the
+    # alternative is a CRITICAL row that no check reads.
+    # line 137: '🔴 row while the unmatched opener itself stays live (R6). This gate verified'
     "docs/dev/project-management/reviews/00269-sweep-every-findings-token-v1-review-1.md": "malformed",
-    # line 65: '⚪ (the partly-fixed second-table escape, the returned formatter reflow...'
+    # line 65: '⚪ (the partly-fixed second-table escape, the returned formatter reflow'
     "docs/dev/project-management/reviews/00269-sweep-every-findings-token-v1-review-2.md": "malformed",
 }
 
