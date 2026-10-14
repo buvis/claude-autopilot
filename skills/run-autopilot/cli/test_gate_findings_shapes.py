@@ -382,6 +382,7 @@ def test_ref_required_message_names_the_0_9_0_version_skew() -> None:
 _COVERED = [_r1_finding("fix"), _r2_finding("fix")]
 _REF_TABLE = _table_section(TABLE_HEADER_REF_6, _R1_ROW, _R2_ROW)
 _UNREAD = "a [m/n] token or table row the findings parser did not read: "
+_EMOJI_UNREAD = "a severity emoji row the findings parser did not read: "
 
 # Consensus tokens beyond the fixtures' own [1/3] [2/4] [3/3] [2/3]: any
 # `[m/n]` is a token, so a sweep that knows only the fixture values fails here.
@@ -420,8 +421,11 @@ def _verdict_and_exit(
 
 def _unread_detail(text: str, line: str) -> str:
     """The refusal naming `line` as the first token line nothing consumed."""
+    from cli import gate
+
     n = text.splitlines().index(line) + 1
-    return f"line {n}: {_UNREAD}{line.strip()[:120]}"
+    prefix = _EMOJI_UNREAD if gate._is_emoji_row(line) else _UNREAD
+    return f"line {n}: {prefix}{line.strip()[:120]}"
 
 
 @pytest.mark.parametrize(
@@ -615,12 +619,15 @@ def test_an_indented_fence_still_quotes_its_rows(tmp_path: Path) -> None:
     assert _verdict_and_exit(text, _COVERED, tmp_path) == ("ok", None, 0)
 
 
-def test_a_closer_with_trailing_text_still_closes_the_fence(tmp_path: Path) -> None:
-    """A closer line only needs to START with a run of the fence character at
-    least as long as the opener - trailing text after it still closes."""
+def test_a_closer_with_trailing_text_does_not_close_the_fence(tmp_path: Path) -> None:
+    """A closer line must have nothing but trailing whitespace after the run
+    - trailing text after it does not close the fence, so the opener never
+    closes, the scan stops there, and the row inside stays live and
+    refused."""
 
     text = _review_text(alice=f"```\n{_ALICE_ROW}\n``` trailing text")
-    assert _verdict_and_exit(text, _COVERED, tmp_path) == ("ok", None, 0)
+    verdict = _verdict_and_exit(text, _COVERED, tmp_path)
+    assert verdict == ("malformed", _unread_detail(text, _ALICE_ROW), 2)
 
 
 # (opener, closer) lines whose fence marker sits at column 4 or more, so

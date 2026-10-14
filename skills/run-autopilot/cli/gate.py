@@ -87,6 +87,7 @@ import argparse
 import json
 import re
 import sys
+import unicodedata
 from pathlib import Path
 
 # Run by path (review_coverage_hook.py) there is no package, and the cli dir is
@@ -202,8 +203,84 @@ _LEADING_RATIO_RE = re.compile(r"^[ \t]{0,3}\d+\s*/\s*\d+\b")
 _BULLET_LEAD_RE = re.compile(r"^[ \t]*(?:[-*+>]|\d+[.)])")
 # A fence opener or closer, read off the RAW line: at most 3 leading spaces
 # (CommonMark's ceiling; a tab or a 4th space makes an indented code block, not
-# a fence), then the run. Trailing text (```markdown) is allowed.
-_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+# a fence), then the run and its info string.
+_FENCE_RUN_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+# A closer: the run alone, with only trailing whitespace after it - a closer
+# followed by non-whitespace does not close, for both backtick and tilde
+# fences (CommonMark).
+_FENCE_CLOSE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
+# A mark that leads a finding-shaped line: ASCII bullets/emphasis, blockquote,
+# and the typographic bullet/dash variants a reviewer's renderer may produce.
+_LEAD_MARK_RE = re.compile(r"[-*+_>•◦‣–—－]")
+# No `^`: re's `^` anchors to the real string start even with `.match(line,
+# i)`'s `pos` argument, which would silently stop this ever matching past
+# index 0 (`re.compile(r"^\d+[.)]").match("  1. x", 2)` is None, checked) —
+# an unanchored pattern plus `.match(line, i)` is what actually anchors the
+# match at `i`.
+_ORDINAL_LEAD_RE = re.compile(r"\d+[.)]")
+_EMOJI_ROW_DETAIL = "a severity emoji row the findings parser did not read:"
+
+
+def _strip_lead(line: str) -> str:
+    """Strip `line`'s lead, repeatedly, in any combination: ASCII space/tab,
+    every other Unicode category Zs or Cf code point (no-break space, zero-
+    width space, BOM/bidi-control), ASCII bullets (-, *, +), blockquote (>),
+    ordinals (\\d+[.)]), typographic bullets/dashes, and emphasis markers
+    (*, _). Stops at the first character none of these consume. Returns the
+    remainder, which may be empty. A lead mark may repeat immediately only
+    when it is a paired emphasis delimiter (*, _) - markdown bold/italic is
+    written as a doubled character. Any other mark repeated back-to-back
+    (e.g. a stray "--") is not a second lead: the second occurrence is left
+    in the remainder, same as any other non-lead character."""
+    i, n = 0, len(line)
+    last_mark: str | None = None
+    while i < n:
+        ch = line[i]
+        if ch in " \t" or unicodedata.category(ch) in ("Zs", "Cf"):
+            i += 1
+            continue
+        if _LEAD_MARK_RE.match(ch):
+            if ch == last_mark and ch not in ("*", "_"):
+                break
+            last_mark = ch
+            i += 1
+            continue
+        m = _ORDINAL_LEAD_RE.match(line, i)
+        if m:
+            i = m.end()
+            continue
+        break
+    return line[i:]
+
+
+def _is_emoji_row(line: str) -> bool:
+    """True when the first character remaining after `_strip_lead` is a
+    severity emoji - a finding row regardless of what the lead looked like.
+    An emoji that is not the first remaining character (prose that mentions
+    one after other text) is never a row."""
+    stripped = _strip_lead(line)
+    return bool(stripped) and stripped[0] in _SEVERITY_EMOJI
+
+
+def _fence_open(line: str) -> str | None:
+    """The fence run (e.g. "```" or "~~~~") that opens on `line`, or None. A
+    backtick run's info string must not itself contain a backtick
+    (CommonMark); a tilde run's info string is unrestricted."""
+    m = _FENCE_RUN_RE.match(line)
+    if m is None:
+        return None
+    run, info = m.group(1), m.group(2)
+    if run[0] == "`" and "`" in info:
+        return None
+    return run
+
+
+def _fence_close(line: str, run: str) -> bool:
+    """True when `line` closes a fence opened with `run`: the same
+    character, a run at least as long, and nothing but trailing whitespace
+    after it."""
+    m = _FENCE_CLOSE_RE.match(line)
+    return m is not None and m.group(1)[0] == run[0] and len(m.group(1)) >= len(run)
 # The `malformed` detail when a closed fence hides the real findings-table
 # header - fencing a worked example must never be a way to smuggle a real
 # table past the parser.
@@ -399,24 +476,23 @@ def _unbacked_verdict(
 def _unfenced(text: str) -> str:
     """`text` with every line of a CLOSED fence blanked, opener and closer
     included, so a quoted example is no heading and no row while line numbers
-    hold. The raw line decides, through `_FENCE_RE`: a fence opens or closes
-    only on a line indented at most 3 spaces, and closes only on a run of its
-    own character at least as long as the opener's (trailing text allowed);
-    one that never closes quotes nothing - and stops the scan
-    right there, so a later run of the fence character further down (which
-    would otherwise read as its own, separate fence) cannot blank content
-    that is really just unclosed-fence text."""
+    hold. The raw line decides, through `_fence_open`/`_fence_close`: a fence
+    opens only on a line indented at most 3 spaces whose info string does not
+    itself smuggle the fence character (backtick runs only), and closes only
+    on a run of its own character at least as long as the opener's, with
+    nothing but trailing whitespace after it; one that never closes quotes
+    nothing - and stops the scan right there, so a later run of the fence
+    character further down (which would otherwise read as its own, separate
+    fence) cannot blank content that is really just unclosed-fence text."""
     lines = text.splitlines()
     live = list(lines)
     i = 0
     while i < len(lines):
-        opener = _FENCE_RE.match(lines[i])
-        if opener is not None:
-            run = opener.group(1)
+        run = _fence_open(lines[i])
+        if run is not None:
             closed = False
             for j in range(i + 1, len(lines)):
-                closer = _FENCE_RE.match(lines[j])
-                if closer is not None and closer.group(1).startswith(run):
+                if _fence_close(lines[j], run):
                     live[i : j + 1] = [""] * (j + 1 - i)
                     i = j
                     closed = True
@@ -431,8 +507,7 @@ def _is_unread_line(line: str) -> bool:
     """Whether `line` carries a [m/n] token or a finding-shaped row that,
     left unconsumed by the findings parser, must be flagged as unread."""
     return bool(
-        (_BULLET_LEAD_RE.match(line) and _SEVERITY_EMOJI_ANY_RE.search(line))
-        or _CONSENSUS_TOKEN_RE.search(line)
+        _CONSENSUS_TOKEN_RE.search(line)
         or _CANDIDATE_ROW_RE.match(line)
         or _CONSENSUS_VARIANT_RE.search(line)
         or (_ROW_SHAPE_RE.search(line) and _CONSENSUS_VARIANT_ANY_RE.search(line))
@@ -484,6 +559,8 @@ def _unread_token(live: str) -> str | None:
     for i, line in enumerate(lines):
         if i in consumed:
             continue
+        if _is_emoji_row(line):
+            return f"line {i + 1}: {_EMOJI_ROW_DETAIL} {line.strip()[:120]}"
         if _is_unread_line(line):
             return (
                 f"line {i + 1}: a [m/n] token or table row the findings parser "
@@ -501,16 +578,10 @@ def _fenced_findings_header(text: str) -> bool:
     lines = text.splitlines()
     i = 0
     while i < len(lines):
-        opener = _FENCE_RE.match(lines[i])
-        if opener is not None:
-            run = opener.group(1)
+        run = _fence_open(lines[i])
+        if run is not None:
             for j in range(i + 1, len(lines)):
-                closer = _FENCE_RE.match(lines[j])
-                if (
-                    closer is not None
-                    and closer.group(1)[0] == run[0]
-                    and len(closer.group(1)) >= len(run)
-                ):
+                if _fence_close(lines[j], run):
                     body = lines[i + 1 : j]
                     if any(_table_header(bl.strip()) is not None for bl in body):
                         return True
