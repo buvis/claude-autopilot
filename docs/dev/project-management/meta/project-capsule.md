@@ -45,8 +45,18 @@ Generated: 2026-10-13
 ## Active Work
 
 ### Batch 202610141430 (in progress)
-- [ ] 00277-catch-critical-rows-in-every-shape-v2 (started 2026-10-14)
+- [x] 00277-catch-critical-rows-in-every-shape-v2 (2 cycles)
 - backlog remaining: 00306-00313
+
+Observations: 00277 (full lane, design) converged at cycle 2 (rework_cap 2,
+beat the cap): cycle 1 fixed a nested-lead bypass in `_strip_lead` (two HIGHs:
+`> > 🔴`/`- - 🔴` style nested blockquote/bullet leads were not stripped,
+letting a CRITICAL row through) plus CHANGELOG/dead-code/simplification
+findings, all auto-fixed. Cycle 2's 8 findings were all medium/low: 3 swept
+inline, 5 settled in the PRD's review ledger (symbol-name-only drift,
+pre-existing cross-file test moves, wording-only precedence). `bash
+dev/bin/release-checks` green at 2fb2a40 (PASS 6688 FAIL 0 SKIP 34). No
+deferred items, no doubts, nothing minted to `hold/`.
 
 ### Batch 202610111300
 - [x] 00271-guard-v2-structural-delegation-check-v1 (2 cycles)
