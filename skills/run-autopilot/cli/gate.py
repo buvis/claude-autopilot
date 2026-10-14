@@ -550,7 +550,13 @@ def _unread_token(live: str) -> str | None:
         if i in consumed:
             continue
         if _is_emoji_row(line):
-            return f"line {i + 1}: {_EMOJI_ROW_DETAIL} {line.strip()[:120]}"
+            quoted = line.strip()[:120]
+            if _strip_lead(line)[0] not in quoted:
+                # The lead is longer than the quote budget (repeated "> ", many
+                # zero-width marks), so the raw cut lands before the emoji the
+                # detail names. Quote from the emoji instead.
+                quoted = _strip_lead(line).strip()[:120]
+            return f"line {i + 1}: {_EMOJI_ROW_DETAIL} {quoted}"
         if _is_unread_line(line):
             return (
                 f"line {i + 1}: a [m/n] token or table row the findings parser "

@@ -365,6 +365,20 @@ def test_refusal_names_the_matched_emoji() -> None:
     assert "[m/n] token" not in detail
 
 
+def test_a_lead_longer_than_the_quote_budget_still_shows_the_emoji() -> None:
+    """When the raw line's first 120 characters are all lead, the detail quotes
+    from the emoji instead, so a long lead cannot cut the emoji out of the
+    message the gate prints."""
+    from cli import gate
+
+    row = f"{'> ' * 80}{CRIT} crash | src/a.py:3"
+    text = _review_text(alice=row)
+    detail = gate._unread_token(text)
+    assert detail is not None
+    assert CRIT in detail
+    assert detail.endswith(f"{CRIT} crash | src/a.py:3")
+
+
 def test_a_consensus_token_before_the_emoji_blocks_the_emoji_wording() -> None:
     """`- [1/3] 🔴 crash` outside the findings section is unconsumed, but the
     `[1/3]` token is not a stripped lead character: `_strip_lead` stops at
