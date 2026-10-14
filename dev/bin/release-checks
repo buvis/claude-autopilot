@@ -333,6 +333,7 @@ run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_gate_findings_classification.py \
   skills/run-autopilot/cli/test_gate_findings_shapes.py \
   skills/run-autopilot/cli/test_gate_findings_unread_shapes.py \
+  skills/run-autopilot/cli/test_gate_fence_shapes.py \
   skills/run-autopilot/cli/test_gate_findings_real_fixtures.py \
   skills/run-autopilot/cli/test_main_review_close_validation.py \
   skills/run-autopilot/cli/test_store_tree_legibility.py \
