@@ -195,12 +195,6 @@ _FOUND_BY = "Found by:"
 # A bare m/n leading the line (up to 3 spaces/tabs of indent): the pipe-less
 # table's only structural signal, read only beside a severity signal.
 _LEADING_RATIO_RE = re.compile(r"^[ \t]{0,3}\d+\s*/\s*\d+\b")
-# A bullet, blockquote or ordinal ("1." / "1)") lead, after any indent: the
-# shape a reviewer's finding-like note always has, so a bare severity emoji
-# only counts beside this lead and never mid-sentence in ordinary prose (a
-# "Severity split: 0 🔴 Critical, ..." summary line names every emoji and is
-# not a finding).
-_BULLET_LEAD_RE = re.compile(r"^[ \t]*(?:[-*+>]|\d+[.)])")
 # A fence opener or closer, read off the RAW line: at most 3 leading spaces
 # (CommonMark's ceiling; a tab or a 4th space makes an indented code block, not
 # a fence), then the run and its info string.
@@ -211,7 +205,7 @@ _FENCE_RUN_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 _FENCE_CLOSE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
 # A mark that leads a finding-shaped line: ASCII bullets/emphasis, blockquote,
 # and the typographic bullet/dash variants a reviewer's renderer may produce.
-_LEAD_MARK_RE = re.compile(r"[-*+_>•◦‣–—－]")
+_LEAD_MARKS = frozenset("-*+_>•◦‣–—－")
 # No `^`: re's `^` anchors to the real string start even with `.match(line,
 # i)`'s `pos` argument, which would silently stop this ever matching past
 # index 0 (`re.compile(r"^\d+[.)]").match("  1. x", 2)` is None, checked) —
@@ -227,22 +221,16 @@ def _strip_lead(line: str) -> str:
     width space, BOM/bidi-control), ASCII bullets (-, *, +), blockquote (>),
     ordinals (\\d+[.)]), typographic bullets/dashes, and emphasis markers
     (*, _). Stops at the first character none of these consume. Returns the
-    remainder, which may be empty. A lead mark may repeat immediately only
-    when it is a paired emphasis delimiter (*, _) - markdown bold/italic is
-    written as a doubled character. Any other mark repeated back-to-back
-    (e.g. a stray "--") is not a second lead: the second occurrence is left
-    in the remainder, same as any other non-lead character."""
+    remainder, which may be empty. A mark repeats and nests freely: "> > ",
+    "-- " and "> > - **" are all lead, so a nested row's emoji is still the
+    first character of the content."""
     i, n = 0, len(line)
-    last_mark: str | None = None
     while i < n:
         ch = line[i]
         if ch in " \t" or unicodedata.category(ch) in ("Zs", "Cf"):
             i += 1
             continue
-        if _LEAD_MARK_RE.match(ch):
-            if ch == last_mark and ch not in ("*", "_"):
-                break
-            last_mark = ch
+        if ch in _LEAD_MARKS:
             i += 1
             continue
         m = _ORDINAL_LEAD_RE.match(line, i)
@@ -281,6 +269,8 @@ def _fence_close(line: str, run: str) -> bool:
     after it."""
     m = _FENCE_CLOSE_RE.match(line)
     return m is not None and m.group(1)[0] == run[0] and len(m.group(1)) >= len(run)
+
+
 # The `malformed` detail when a closed fence hides the real findings-table
 # header - fencing a worked example must never be a way to smuggle a real
 # table past the parser.
