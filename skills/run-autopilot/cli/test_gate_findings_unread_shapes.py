@@ -155,12 +155,12 @@ def test_an_emoji_past_the_first_character_after_the_lead_is_prose(
 
 @pytest.mark.parametrize(
     "line",
-    [f"- 3 {CRIT} crash", f"#) {CRIT} x", f"- 42 ### {CRIT} x", f"-- {CRIT}"],
-    ids=["digit after bullet", "hash paren", "number and hashes", "double dash"],
+    [f"- 3 {CRIT} crash", f"#) {CRIT} x", f"- 42 ### {CRIT} x"],
+    ids=["digit after bullet", "hash paren", "number and hashes"],
 )
 def test_non_letter_junk_before_the_emoji_is_not_a_lead(line: str) -> None:
-    """Only the listed lead shapes are stripped: digits, `#)`, `###` or a
-    doubled dash left in front of the emoji keep it from being first."""
+    """Only the listed lead shapes are stripped: digits, `#)` or `###` left in
+    front of the emoji keep it from being first."""
     from cli import gate
 
     assert gate._is_emoji_row(line) is False
@@ -170,6 +170,37 @@ def test_strip_lead_removes_quote_bullet_emphasis_and_zero_width_space() -> None
     from cli import gate
 
     assert gate._strip_lead(f"> - **​{CRIT}** x").startswith(CRIT)
+
+
+# A lead mark that repeats back to back, or nests inside another kind, is
+# still lead: the emoji behind it is the first character of the content.
+_NESTED_LEADS = {
+    "nested blockquote": f"> > {CRIT} crash src/a.py:3",
+    "nested dash bullet": f"- - {CRIT} crash",
+    "nested typographic bullet": f"• • {CRIT} x",
+    "doubled dash": f"-- {CRIT} x",
+    "doubled en dash": f"– – {CRIT} x",
+    "quote nesting a bullet": f"> > - {CRIT} x",
+}
+
+
+@pytest.mark.parametrize("line", list(_NESTED_LEADS.values()), ids=list(_NESTED_LEADS))
+def test_a_repeated_or_nested_lead_mark_is_still_stripped(line: str) -> None:
+    """A lead is stripped however often it repeats and however the marks nest:
+    a reader that strips one mark and stops leaves `>`, `-` or `•` in front of
+    the emoji and reads the row as prose."""
+    from cli import gate
+
+    assert gate._strip_lead(line).startswith(CRIT)
+
+
+@pytest.mark.parametrize("line", list(_NESTED_LEADS.values()), ids=list(_NESTED_LEADS))
+def test_an_emoji_row_behind_a_nested_lead_is_a_row(line: str) -> None:
+    """The emoji is first after the whole nested lead goes, so the row counts
+    as a finding row - including `-- 🔴`, which was once pinned as junk."""
+    from cli import gate
+
+    assert gate._is_emoji_row(line) is True
 
 
 def test_bare_emoji_row_without_bullet_is_unread(tmp_path: Path) -> None:
