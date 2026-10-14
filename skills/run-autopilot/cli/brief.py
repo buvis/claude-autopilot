@@ -166,7 +166,7 @@ def render_brief(state: dict, now: str, project_root: str | None = None) -> str:
     documented shape: header, Where, Entry (only after a loop pre-launch
     enter), Contract card, Read next, Do not re-read. `state` is whatever `state.json` parsed to; every field it
     lacks renders as `none`. `project_root`, when given, is the repo root
-    fallback for states written before `repo_root` existed (PRD 00281 F13)."""
+    fallback for states written before `repo_root` existed (PRD 00281 F9)."""
     card = state.get("contract_card")
     lines = [
         f"# Session brief (written {now} at {_text(state.get('phase'))} -> "

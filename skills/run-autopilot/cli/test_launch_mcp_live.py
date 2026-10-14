@@ -1,5 +1,5 @@
 """Live test for the loop's MCP launch restriction (task
-00284-loop-launch-context-v1-c1, PRD 00281 F7/F9).
+00284-loop-launch-context-v1-c1, PRD 00281 F7).
 
 Exercises `build_argv`'s `mcp_config` kwarg together with `mcp_config_for`
 against the real `claude` binary: a loop launch should load only Context7 by

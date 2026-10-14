@@ -109,7 +109,7 @@ def prompt_for(autopilot_dir: Path, prompt: str = DEFAULT_PROMPT) -> str:
 def mcp_config_for(env: dict) -> str | None:
     """`_AUTOPILOT_MCP_CONFIG`: a per-repo override, `"inherit"` to restore
     every claude.ai connector (today's launch), or unset for the Context7-only
-    default (PRD 00281 F7/F9)."""
+    default (PRD 00281 F7)."""
     raw = env.get("_AUTOPILOT_MCP_CONFIG")
     if raw is None:
         return json.dumps(DEFAULT_MCP_CONFIG)
@@ -251,7 +251,7 @@ def build_argv(
     brownouts (a ConnectionRefused relaunch storm killed a batch
     silently, 2026-07); skipped when it equals the launch model.
     `mcp_config`, when set, scopes the launch to it via
-    --strict-mcp-config (PRD 00281 F7/F9); None keeps today's argv."""
+    --strict-mcp-config (PRD 00281 F7); None keeps today's argv."""
     argv = [
         runner_bin,
         "-p",

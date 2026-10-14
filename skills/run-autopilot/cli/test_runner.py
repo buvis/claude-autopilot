@@ -91,7 +91,7 @@ def test_build_argv_injects_an_alternate_runner_without_driver_change():
 
 
 def test_default_mcp_config_restricts_to_context7():
-    # PRD 00281 F9/F7: every claude.ai connector cost boot-context tokens a
+    # PRD 00281 F7: every claude.ai connector cost boot-context tokens a
     # loop session never used; the default now scopes the launch to Context7
     # only.
     assert set(DEFAULT_MCP_CONFIG["mcpServers"]) == {"context7"}

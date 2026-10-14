@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from cli import statectl
 from cli.brief import READ_NEXT, render_brief
 
 GOLDEN = Path(__file__).resolve().parent / "golden"
@@ -116,7 +117,7 @@ def test_brief_entry_section():
 
 
 def test_brief_repo_root_falls_back_to_project_root():
-    # PRD 00281 F13: a state without repo_root (every batch before
+    # PRD 00281 F9: a state without repo_root (every batch before
     # records.py started writing it) showed "none" even when the caller
     # knew exactly which repo this session runs in.
     text = render_brief({}, NOW, project_root="/repo/root")
@@ -130,6 +131,17 @@ def test_brief_repo_root_state_value_wins_over_project_root():
 
 def test_brief_repo_root_still_none_without_a_project_root():
     assert "- repo root: none\n" in render_brief({}, NOW)
+
+
+def test_write_brief_falls_back_to_the_project_root(tmp_path):
+    autopilot_dir = tmp_path / "autopilot"
+    autopilot_dir.mkdir()
+    state_path = autopilot_dir / "state.json"
+    state_path.write_text(json.dumps({"phase": "build"}), encoding="utf-8")
+    out_path = tmp_path / "brief.md"
+    statectl.write_brief(state_path, out_path)
+    text = out_path.read_text(encoding="utf-8")
+    assert f"- repo root: {tmp_path}\n" in text
 
 
 def test_read_next_table_covers_every_phase():

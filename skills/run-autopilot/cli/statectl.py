@@ -57,7 +57,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from . import brief, render_report, schema, state
+from . import brief, custody, render_report, schema, state
 
 # statectl's exit-2 contract is state.StateError's: same class, not a parallel
 # one, so `except StateError` in main() cannot miss a boundary failure.
@@ -552,7 +552,9 @@ def write_brief(state_path: Path, out_path: Path) -> None:
     try:
         # Encode before opening the target: a lone surrogate in the card must
         # fail here, not after the previous brief was truncated.
-        payload = brief.render_brief(data, now).encode("utf-8")
+        payload = brief.render_brief(
+            data, now, project_root=str(custody.project_root(state_path.parent))
+        ).encode("utf-8")
         out_path.write_bytes(payload)
     except (OSError, UnicodeEncodeError) as err:
         raise StateError(f"cannot write {out_path}: {err}") from err
