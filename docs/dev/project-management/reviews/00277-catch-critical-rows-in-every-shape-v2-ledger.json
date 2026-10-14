@@ -1,0 +1,18 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "⚪",
+    "issue": "The shared test file exceeds the 800-line limit; its final test starts at line 1041. This predates the diff, and splitting it exceeds this task's prescribed helper and closer-test edits.",
+    "file": "skills/run-autopilot/cli/test_gate_findings_shapes.py:1041",
+    "reason": "Pre-existing before this PRD's work range and outside its scope; Bob himself filed it as KNOWN/predates-the-diff. Splitting the file is a separate refactor, not a 00277 fix. Deferred to batch end."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "🟡",
+    "issue": "7 touched test(s) pass against the pre-change code: test_a_longer_closer_closes_and_a_4_space_closer_does_not, test_a_4_space_opener_does_not_open_a_fence, test_a_line_with_no_severity_signal_is_not_refused +1 more",
+    "file": "skills/run-autopilot/cli/test_gate_findings_unread_shapes.py",
+    "reason": "Computed fact, weighed against PRD intent: 67 of the 74 touched tests fail against the base, so the change is pinned. The 7 that pass are supplementary edge pins around behaviour that was already correct before the diff (fence closer length, 4-space opener, a line with no severity signal), not tests meant to pin new behaviour. Deferred to batch end."
+  }
+]
