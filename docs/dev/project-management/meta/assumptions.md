@@ -2,57 +2,22 @@
 
 Per-plan. Replaced at the first completed task of a full-plan pass.
 
-Plan: PRD 00283 (loop catchup v1), batch 202610111300.
+Plan: PRD 00277 (catch critical rows in every shape v2), batch 202610141430.
 
-## 1: Stamp loop commits with autopilot-loop/<batch.id> committer identity
-
-Tess (test author):
-
-- Included the optional git-commit integration case (brief marked it "optional but valuable"); judged worth the small cost since it verifies the real mechanism the design depends on.
-- Placed the new tests in a sibling file (`test_loop_committer.py`) rather than appending to `test_loop.py`, because `test_loop.py` was already at 755 lines and the global size-limit rule (800 max) would otherwise be violated — a packaging choice, not a behavior assumption.
-
-Ivan (implementor):
-
-- The batch id to stamp is read from `state.json`'s `batch.id` field at launch time (matches the field already used elsewhere in `loop.py`, e.g. `_append_convergence`), since no other source of "current batch id" is given in the listed files.
-- `self.env["GIT_COMMITTER_NAME"]` is mutated in place on the shared env dict (rather than building a per-call copy) since `_launch` already passes `env=self.env` directly to `spawn_fn`, and the existing code mutates `self.env` the same way for `_AUTOPILOT_LOOP`.
-
-## 2: Add catchup-probe subcommand: batch-scoped gh/engram probes
+## 1: Phase 0 - pin the lead-normalised emoji rule and prose exemptions
 
 Tess (test author):
 
-- The unregistered stderr marker is matched as a substring of a longer stderr line, as "stderr containing" says.
-- `cwd` may be passed as a `str` or a `Path`; the test compares resolved Paths.
-- `catchup_probe` stays a sibling of `batch` at the top level of `state.json`, read back as `state["catchup_probe"]`.
-- On a reused probe in the same batch, the stored `catchup_probe` is left unchanged (no write), per "Writes ... unless the batch's existing probe already covers this batch.id".
-- A minimal temp `state.json` such as `{"batch": {"id": "B1"}}` is accepted by `statectl.mutate`, and `{}` is too, for the no-batch case.
-- `PermissionError` and `FileNotFoundError` both count as the "non-timeout OSError" case.
+- Prose tests also assert `_unread_token(text) is None` and `findings_verdict == ("ok", None)`, not just `_is_emoji_row(...) is False`.
+- The fence tests assert that the row survives `gate._unfenced(...)`, plus the verdict tag ("malformed" when the fence does not hide the row, "ok" for the closed ```python control).
+- Added an extra prose test (`test_an_emoji_past_the_first_character_after_the_lead_is_prose`) to carry the old mid-line/trailing templates, as the task described.
 
-Ivan (implementor):
+Devon (adversarial validator):
 
-- `project_root` is imported from `cli.custody`.
-- The engram marker is the substring `"not inside a registered repo"`, taken from the tests' `UNREGISTERED` stderr.
-- State is read with `state.load(state_path)` (returns `(data, version)`), following `__main__._load_state_or_exit`.
-- The state schema accepts a top-level `catchup_probe` key; the tests pass, so `mutate`'s validation accepts it.
-- The probes run outside the `mutate` lock, so a 15s timeout does not hold the state lock.
+- One exploit run that passes everything counts as proof for all seven listed weak points; weak points were read off the one passing wrong implementation rather than independently re-run per point.
 
-## 3: _catchup returns delta after loop-only commits
+Tess (strengthen, after Devon):
 
-Tess (test author):
-
-- `custody.project_root(autopilot_dir)` resolves to `env.root`, as the existing `calls == [(env.root, base, LOOP)]` assertion already assumes.
-- The resume path calls `loop_only` exactly once, positionally as `(root, sha, name)`, when HEAD has moved and the cache is fresh. This follows the existing force-test convention.
-- In the batch-id test, `catchup_head_sha` stays at `base` for the fake-loop_only run, so that run must also give "delta" when the fake returns True.
-- Point 2's "2-commit all-foreign range" is covered by the point-1 (name-blind) strengthening test, not by a separate one.
-
-Ivan (implementor):
-
-- First-entry force with no str `catchup_head_sha` resolves to "full" (no test covers a missing sha on this path).
-
-## 9: [D2] Tail sweep: prose
-
-Ivan (implementor):
-
-- The first-entry `force` rule is stated as its own paragraph ahead of the "ALL" list rather than as a renumbered list item.
-- The loop committer comes from `batch["id"]`, which `_batch_report` guarantees is a str by step 11 (superseded by the per-task review's fix: now `batch.get("id")`, defensive for direct unit-level callers of `_catchup`).
-- The range is `base..HEAD` of the project root's current HEAD, not the sha returned by the injected `git_head`.
-- `%cn` (committer name without mailmap) is the right field, not `%cN` (which would apply mailmap and could rewrite names).
+- A doubled bullet ("-- 🔴") must be prose, not a double-stripped lead.
+- The red test run after strengthening is expected (gate.py has no implementation yet).
+- (Orchestrator correction, not Tess's own: her weak-point-7 test as dispatched incorrectly expected `- [1/3] 🔴 crash` to get the emoji wording; corrected post-hoc to the generic wording, since `_strip_lead` stops at `[` before reaching the emoji — the emoji only wins precedence when it is the line's own first remaining character.)
