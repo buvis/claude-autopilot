@@ -241,3 +241,16 @@ than letting an implementor weaken them.
 The exact, byte-level patch is recoverable from the task-7 implementor
 transcript of this session; the block above is the whole change in reviewable
 form, with the unchanged bodies elided.
+
+## Resolution (2026-10-14)
+
+Decided under the standing authorization (`~/.claude/AGENTS.md` § Autonomy) at
+the agoge-2026-10-14 walkthrough, packet 4, after the user chose on 2026-10-13
+to keep commit 3218842 until batch end. None of the four options above as
+written: the row signal is the emoji's **position after lead normalisation**
+(indent, ASCII and typographic bullets, blockquote, ordinals, emphasis markers,
+Cf and Zs code points stripped; a line is a row when the first remaining
+character is a severity emoji). That catches every no-bullet shape of packet 4,
+keeps the lens bullets the 17 accepted flips cover, and stops refusing the
+bold-lead prose of packet 5. The PRD is reworded as v2 in `prds/backlog/`
+(same number); the emoji tests and `_ACCEPTED_FLIPS` are re-pinned there.

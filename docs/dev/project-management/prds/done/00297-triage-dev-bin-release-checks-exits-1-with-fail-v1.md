@@ -48,3 +48,7 @@ No implementation tasks until attended triage.
 ## Success Criteria
 
 - This file is no longer under `docs/dev/project-management/prds/hold/`.
+
+## Triage 2026-10-14
+
+Moot. The 67 failures were PRD 00277's red tests; commit 3218842 re-pinned them and the gate prints `PASS 6545 FAIL 0 SKIP 34` (agoge-2026-10-14, wendy). The rule itself is decided in PRD 00277 v2 (backlog). Closed into `done/`.

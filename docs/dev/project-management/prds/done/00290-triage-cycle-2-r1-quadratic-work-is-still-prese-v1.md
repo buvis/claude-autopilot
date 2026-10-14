@@ -48,3 +48,7 @@ No implementation tasks until attended triage.
 ## Success Criteria
 
 - This file is no longer under `docs/dev/project-management/prds/hold/`.
+
+## Triage 2026-10-14
+
+Promoted into PRD 00307 (`guard-citations-and-replay-contract`): `_ordered_to_follow` uses `bisect_left`, pinned by `test_ordered_to_follow_uses_bisect`. Closed into `done/`.

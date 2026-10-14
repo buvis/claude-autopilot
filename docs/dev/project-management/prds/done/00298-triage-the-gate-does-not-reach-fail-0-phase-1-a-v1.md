@@ -48,3 +48,7 @@ No implementation tasks until attended triage.
 ## Success Criteria
 
 - This file is no longer under `docs/dev/project-management/prds/hold/`.
+
+## Triage 2026-10-14
+
+Moot. The gate reaches FAIL 0 since commit 3218842 (`PASS 6545 FAIL 0 SKIP 34`, agoge-2026-10-14). Closed into `done/`.

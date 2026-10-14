@@ -48,3 +48,7 @@ No implementation tasks until attended triage.
 ## Success Criteria
 
 - This file is no longer under `docs/dev/project-management/prds/hold/`.
+
+## Triage 2026-10-14
+
+Promoted into PRD 00306 (`refuse-tracked-verify-log`): the refusal is restored at both entry points with byte-preservation tests. Closed into `done/`.

@@ -48,3 +48,7 @@ No implementation tasks until attended triage.
 ## Success Criteria
 
 - This file is no longer under `docs/dev/project-management/prds/hold/`.
+
+## Triage 2026-10-14
+
+Promoted into PRD 00312 (`close-ten-loop-truths`): a failed invalidation disables the cached replay for that launch. Closed into `done/`.

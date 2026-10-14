@@ -48,3 +48,7 @@ No implementation tasks until attended triage.
 ## Success Criteria
 
 - This file is no longer under `docs/dev/project-management/prds/hold/`.
+
+## Triage 2026-10-14
+
+Rejected. The (sentence, id) key is the documented design of `_is_scoped` (`hooks/guard_phase_delegation.py`): a bare number is a reference its sentence carries, so forty sentences naming task 1 before "Run the work phase now." must not scope a whole run. The stub's own example carries a whole-PRD order ("the hook must run the work phase for PRD 7") and is refused correctly; a per-task prompt that repeats its task number but orders no phase run is never denied. PRD 00307 names this as out of scope. Closed into `done/`.

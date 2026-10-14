@@ -90,3 +90,7 @@ No new test: both changes are documentation. A 3.10 import smoke test was offere
 
 - **Drops 3.10 users**: accepted by the operator (packet 11 option 2).
 - Source: `docs/dev/project-management/audit-results/agoge-2026-10-10.md` (2026-10-10).
+
+## Closed 2026-10-14
+
+Merged into PRD 00278 at the backlog review of 2026-10-12 and left in `hold/` without a note. Its acceptance already holds at HEAD: `skills/run-autopilot/SKILL.md` names `python3 (>= 3.11)`, CHANGELOG line 21 states the floor, and the `ponytail:` quadratic comment sits above `_backed` in `skills/run-autopilot/cli/gate.py` (commit 6c91048). Moved to `done/` rather than deleted, so no finalize re-mints it (agoge-2026-10-14 packet 30).

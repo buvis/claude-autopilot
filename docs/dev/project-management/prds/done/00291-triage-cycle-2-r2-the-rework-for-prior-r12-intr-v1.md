@@ -48,3 +48,7 @@ No implementation tasks until attended triage.
 ## Success Criteria
 
 - This file is no longer under `docs/dev/project-management/prds/hold/`.
+
+## Triage 2026-10-14
+
+Promoted into PRD 00307 (`guard-citations-and-replay-contract`): the negation floor becomes the verb's clause start, pinned by `test_negation_in_previous_clause_does_not_excuse_follow`. Closed into `done/`.

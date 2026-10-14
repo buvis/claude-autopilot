@@ -2,18 +2,18 @@
 catchup: skip
 design: skip
 ledger: deferred/202610111300-deferred.json
-ledger_key: 95c43fda18dd
+ledger_key: 52e0fdba9062
 source_prd: 00271-guard-v2-structural-delegation-check-v1.md
 severity: high
 ---
 
-# Triage: R7: the recorded live replay refuses six legitimate per-task dispatches, each...
+# Triage: R1: live replay exits 1 — the pinned deny id toolu_01Ku4TbcQoeik6ZLf5XkkAuD b...
 
 ## Problem
 
 Deferred finding with no PRD owner when this stub was minted: batch `202610111300`, ledger `deferred/202610111300-deferred.json`, type `deferred_decision`, cycle `1`, raised against `00271-guard-v2-structural-delegation-check-v1.md`.
 
-Issue: R7: the recorded live replay refuses six legitimate per-task dispatches, each because a phase name sits inside a longer quoted run (citation, not an order)
+Issue: R1: live replay exits 1 — the pinned deny id toolu_01Ku4TbcQoeik6ZLf5XkkAuD buckets per-task, so its correct refusal trips the contract's own per-task-refusal clause; PRD success metric 2 is unreachable as specified
 
 ## Solution
 
@@ -22,7 +22,7 @@ Attended triage. A human promotes this finding into a backlog PRD through normal
 ## Requirements
 
 ### Must have
-- A triage decision for ledger key `95c43fda18dd`: a backlog PRD, or closed.
+- A triage decision for ledger key `52e0fdba9062`: a backlog PRD, or closed.
 
 ### Nice to have
 - None until triage.
@@ -31,7 +31,7 @@ Attended triage. A human promotes this finding into a backlog PRD through normal
 
 ### Module: triage
 - **Location**: `docs/dev/project-management/prds/hold/`
-- **Responsibility**: hold ledger key `95c43fda18dd` from `00271-guard-v2-structural-delegation-check-v1.md` until a human triages it
+- **Responsibility**: hold ledger key `52e0fdba9062` from `00271-guard-v2-structural-delegation-check-v1.md` until a human triages it
 - **Exports**: none
 
 ### Dependencies
@@ -48,3 +48,7 @@ No implementation tasks until attended triage.
 ## Success Criteria
 
 - This file is no longer under `docs/dev/project-management/prds/hold/`.
+
+## Triage 2026-10-14
+
+Promoted into PRD 00307 (`guard-citations-and-replay-contract`), same issue as 00286 and 00293. Closed into `done/`.

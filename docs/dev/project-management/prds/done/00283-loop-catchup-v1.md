@@ -149,7 +149,7 @@ No dependencies - built first.
 
 ## Risks
 
-- **Human commit misread as a loop commit**: only if a human sets the loop's committer name by hand. Message prefixes are never used.
+- **Human commit misread as a loop commit**: only if a human sets the loop's committer name by hand. Message prefixes are never used. Trust assumption, stated 2026-10-14 (agoge-2026-10-14 packet 14, confirmed): `commits_all_loop` keys on the self-asserted `%cn` alone and the batch id is public in the tracked store, so any commit made with `GIT_COMMITTER_NAME=autopilot-loop/<batch.id>` reads as the loop's and gets a delta catchup. Accepted on a solo repo; recording the SHAs the loop creates is the upgrade if the repo ever gets a second writer.
 - **Committer name visible in history**: `git log --format=fuller` and GitHub's "committed by" line show `autopilot-loop/<id>`. The user accepted this (2026-10-12).
 - **Session ignores the skip instruction**: the cost falls back to today's, never worse. The probe still stops the repeat probing.
 - **Probe verdict goes stale mid-batch** (someone runs `gh auth login`): the next batch re-probes. Fixing gh mid-batch needs `statectl del catchup_probe`.
