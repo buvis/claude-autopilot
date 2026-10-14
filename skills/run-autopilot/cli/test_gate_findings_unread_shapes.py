@@ -132,8 +132,13 @@ def test_every_severity_emoji_counts_as_the_first_character_after_the_lead(
 
 @pytest.mark.parametrize(
     "template",
-    ["- crash {} on empty input", "- crash on empty input {}"],
-    ids=["mid-line", "trailing"],
+    [
+        "- crash {} on empty input",
+        "- crash on empty input {}",
+        "- 3 {} crash",
+        "- : {} crash",
+    ],
+    ids=["mid-line", "trailing", "digit before", "punctuation before"],
 )
 @pytest.mark.parametrize(
     "emoji",
@@ -146,6 +151,25 @@ def test_an_emoji_past_the_first_character_after_the_lead_is_prose(
 ) -> None:
     """Mid-line and trailing emoji no longer make a row: they are prose."""
     _assert_prose_read(template.format(emoji))
+
+
+@pytest.mark.parametrize(
+    "line",
+    [f"- 3 {CRIT} crash", f"#) {CRIT} x", f"- 42 ### {CRIT} x", f"-- {CRIT}"],
+    ids=["digit after bullet", "hash paren", "number and hashes", "double dash"],
+)
+def test_non_letter_junk_before_the_emoji_is_not_a_lead(line: str) -> None:
+    """Only the listed lead shapes are stripped: digits, `#)`, `###` or a
+    doubled dash left in front of the emoji keep it from being first."""
+    from cli import gate
+
+    assert gate._is_emoji_row(line) is False
+
+
+def test_strip_lead_removes_quote_bullet_emphasis_and_zero_width_space() -> None:
+    from cli import gate
+
+    assert gate._strip_lead(f"> - **​{CRIT}** x").startswith(CRIT)
 
 
 def test_bare_emoji_row_without_bullet_is_unread(tmp_path: Path) -> None:
@@ -236,15 +260,59 @@ def test_refusal_names_the_matched_emoji() -> None:
     assert "[m/n] token" not in detail
 
 
-def test_backtick_in_info_string_is_not_a_fence() -> None:
-    """```python` cannot open a backtick fence, so the row after it stays live
-    and the later bare ``` opens a fence that never closes."""
+def test_a_consensus_token_before_the_emoji_blocks_the_emoji_wording() -> None:
+    """`- [1/3] 🔴 crash` outside the findings section is unconsumed, but the
+    `[1/3]` token is not a stripped lead character: `_strip_lead` stops at
+    `[`, so the first remaining character is `[`, not the emoji.
+    `_is_emoji_row` is False, and the line is still refused - but through the
+    consensus-token arm of `_is_unread_line`, with the GENERIC `[m/n] token`
+    wording, not the emoji wording. Only an emoji that leads (with nothing
+    but stripped lead characters before it) earns the emoji wording -
+    see test_refusal_names_the_matched_emoji for that case, where the emoji
+    leads and a `[m/n]` token sits after it instead."""
+    from cli import gate
+
+    row = f"- [1/3] {CRIT} crash"
+    text = _review_text(alice=row)
+    assert gate._is_emoji_row(row) is False
+    assert gate._unread_token(text) == _unread_detail(text, row)
+
+
+@pytest.mark.parametrize(
+    "opener", ["```python`", "```py` x"], ids=["trailing backtick", "mid backtick"]
+)
+def test_backtick_in_info_string_is_not_a_fence(opener: str) -> None:
+    """A backtick anywhere in the info string means the line cannot open a
+    backtick fence, so the row after it stays live and the later bare ```
+    opens a fence that never closes."""
     from cli import gate
 
     row = f"- {CRIT} crash | src/a.py:3"
-    text = _review_text(alice=f"```python`\n{row}\n```")
+    text = _review_text(alice=f"{opener}\n{row}\n```")
     assert row in gate._unfenced(text).splitlines()
     assert gate.findings_verdict(text, _COVERED)[0] == "malformed"
+
+
+def test_a_longer_closer_closes_and_a_4_space_closer_does_not() -> None:
+    """CommonMark: a closer at least as long as the opener closes; one
+    indented 4 spaces is content, not a closer."""
+    from cli import gate
+
+    row = f"- {CRIT} crash | src/a.py:3"
+    longer = _review_text(alice=f"```\n{row}\n````")
+    assert row not in gate._unfenced(longer).splitlines()
+    indented = _review_text(alice=f"```\n{row}\n    ```")
+    assert row in gate._unfenced(indented).splitlines()
+
+
+def test_a_4_space_opener_does_not_open_a_fence() -> None:
+    """CommonMark caps fence indent at 3 spaces: a 4-space ``` is no opener,
+    so the row below it stays live even with a flush ``` after it."""
+    from cli import gate
+
+    row = f"- {CRIT} crash | src/a.py:3"
+    text = _review_text(alice=f"    ```\n{row}\n```")
+    assert row in gate._unfenced(text).splitlines()
 
 
 def test_closer_with_trailing_text_does_not_close() -> None:
