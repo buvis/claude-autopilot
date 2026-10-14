@@ -311,6 +311,18 @@
     "tag": "ref-required",
     "coverage": true
   },
+  "docs/dev/project-management/reviews/00277-catch-critical-rows-in-every-shape-v2-review-1.md": {
+    "tag": "malformed",
+    "coverage": true
+  },
+  "docs/dev/project-management/reviews/00278-make-release-checks-tell-truth-v1-review-1.md": {
+    "tag": "malformed",
+    "coverage": true
+  },
+  "docs/dev/project-management/reviews/00278-make-release-checks-tell-truth-v1-review-2.md": {
+    "tag": "malformed",
+    "coverage": true
+  },
   "docs/dev/project-management/reviews/00285-resolve-process-facts-without-ps-v1-review-1.md": {
     "tag": "ok",
     "coverage": true
