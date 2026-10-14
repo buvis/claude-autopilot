@@ -1,0 +1,30 @@
+Five lanes are running in the background (walter, heidi, wendy, peggy, trudy). Next I'll audit, dedup and write the report once they all report back.
+
+Trudy is back: 9 findings, 7 verified and 2 mocked. The harness flagged her report because it quotes `bypassPermissions` and `--dangerously-skip-permissions`. Those are her own test values for `_AUTOPILOT_MCP_CONFIG`, not instructions, and I'll note that in the report. Still waiting on walter, heidi, wendy and peggy.
+
+Heidi is back: 7 findings. Her F2 and trudy's F5 are the same defect. macOS `pgrep -P` leaves out the caller's own ancestors unless given `-a`, so from inside the loop's own process tree the live loop is invisible, and `prune_registry` deletes its registry entry. I'll merge those two. Still waiting on walter, wendy and peggy.
+
+Wendy is back: 9 findings. Two overlap earlier ones and get merged. Her W2 joins trudy's bullet-lead finding: a red row with no ASCII bullet in front passes the gate. Her W7 joins trudy's `agoge:` prefix-exemption finding. Still waiting on walter and peggy.
+
+Walter is back: 7 findings. His F2 and trudy's bullet-lead finding come from the same bullet-matching rule in `gate.py`, but they are opposite failures. His is ordinary bold prose refused as if it were a finding row; trudy's is a red row that slips through. Different symptoms, so they stay separate packets, cross-linked. Waiting only on peggy now.
+
+**Partly done.** The agoge run finished, but the 30 findings need you to walk them before any become PRDs.
+
+**Changed**
+- Report: `docs/dev/project-management/audit-results/agoge-2026-10-14.md`, with a JSON copy beside it. 30 findings: 0 critical, 0 high, 13 medium, 17 low. 26 were seen happening; 3 were only shown in a test setup and 1 could not be run.
+- Recon updated the agoge profile to the current HEAD `feb3fcb`. Your pins and vetoes section came through unchanged (same checksum before and after). Five checkers ran; the UI checker had nothing to test, since there is no browser surface. The security checker ran on your `--authorized autoclaude-drain` flag.
+- No tests were written, because the working tree is dirty. Nothing was committed and no PRDs were filed.
+```
+findings 30 | MEDIUM 13, LOW 17 | verified 26, mocked 3, unverified 1 | sidecar paths: 0 missing
+```
+
+What most needs you:
+- **Item 1 hits the loop running now, on 0.9.0.** macOS `pgrep` hides its own ancestors unless given `-a`. So any session the loop starts can't see the loop, and a registry cleanup from there deletes the live loop's entry. The fix is one flag.
+- **The test gate's "green" can be wrong** (items 2 and 3). `verify` exits 0 on a failing suite whenever the gate process itself exits 0. The live verification record was typed by a session, not written by the gate, and the current code would still reuse it.
+- **00277's decision is still open.** The "red emoji anywhere" question was escalated to you and never answered, yet a narrower version shipped anyway. Item 4 (critical rows slip through), item 5 (ordinary bold prose is wrongly refused) and item 6 all depend on that answer.
+
+**Not done**
+- 30 findings have no decision yet. Walking them closes this.
+- Lane leftovers under `/tmp/agoge-*` (about 650 MB, mostly synthetic logs in `/tmp/agoge-peggy-out`) were not deleted, because warden blocks `rm`.
+
+**Next:** You: run `/run-agoge --resume docs/dev/project-management/audit-results/agoge-2026-10-14.md` and walk the findings, starting with item 1.
