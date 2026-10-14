@@ -6,7 +6,9 @@ quoted neither the departures' nor the additions' refusal lines.
 
 Method: the departures were replayed against the gate as it stood at
 `86f571cea511` (`gate._unread_token` of that revision); the additions were
-replayed against the current gate. Each line below is that refusal verbatim.
+replayed against the current gate. Each line below is that refusal verbatim as
+the gate prints it, which means the quoted line itself is cut at the gate's own
+character limit - several end mid-word for that reason.
 
 ## Departures (12) - previous refusal line, old rule
 
