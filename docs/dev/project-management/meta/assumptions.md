@@ -44,3 +44,14 @@ Ivan (implementor):
 
 - The frozenset replacement keeps the identical character set (including the fullwidth dash `－`); equivalent to the regex for 1-char inputs.
 - The `_strip_lead` docstring rewrite is Ivan's own wording; the task said only that the old sentences are false.
+
+## 5: [D1] skills/run-autopilot/cli/test_gate_findings_unread_shapes.py (rework cycle 1)
+
+Orchestrator (micro lane): the task's first finding was already closed by task 4,
+so only the R8 pseudo-opener test was written here.
+
+Ivan (style-split fix dispatch):
+
+- "fence/`_unfenced` and fenced-findings-header tests" meant the fence block plus the fenced-header block of the original file.
+- The new module gets its own short docstring and the same `__main__` unittest footer as the original.
+- Per-module test counts before and after the split were not compared; the combined run passed 264 tests.
