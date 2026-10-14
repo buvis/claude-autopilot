@@ -4,8 +4,11 @@
 A sibling of test_gate_findings_shapes.py (1049 lines, past the 800-line limit
 in rules/coding-style.md), whose fixtures are imported here rather than
 re-spelled. Every test below pins what makes an unconsumed line a finding, as
-opposed to where it sits: a severity emoji ANYWHERE on the line with nothing
-else to back it, a severity word with pipes around it, a consensus-marker
+opposed to where it sits: a severity emoji as the FIRST character remaining
+after stripping the line's lead (indent, bullets, blockquote, ordinals,
+emphasis markers, invisible Unicode space/format characters) - an emoji
+after other text is prose, not a row - a severity word with pipes around
+it, a consensus-marker
 variant after a finding reference or on a structurally tabular line, and the
 findings-table header hidden by a fence that indents it. The negative half
 matters as much: counting prose, a consensus heading and a hyphenated severity
@@ -64,43 +67,199 @@ def test_a_severity_emoji_alone_makes_an_unread_line_a_finding(
     from cli import gate
 
     text = _review_text(alice=row)
-    assert gate._is_unread_line(row) is True
-    assert gate._unread_token(text) == _unread_detail(text, row)
+    assert gate._is_emoji_row(row) is True
+    assert gate._unread_token(text) == _emoji_detail(text, row)
     assert _verdict_and_exit(text, _COVERED, tmp_path) == (
         "malformed",
-        _unread_detail(text, row),
+        _emoji_detail(text, row),
         2,
     )
 
 
+_EMOJI_DETAIL = "a severity emoji row the findings parser did not read: "
+
+
+def _emoji_detail(text: str, line: str) -> str:
+    """The emoji-row refusal naming `line`, spelled out literally."""
+    n = text.splitlines().index(line) + 1
+    return f"line {n}: {_EMOJI_DETAIL}{line.strip()[:120]}"
+
+
+def _assert_emoji_row_refused(row: str, tmp_path: Path) -> None:
+    from cli import gate
+
+    text = _review_text(alice=row)
+    assert gate._is_emoji_row(row) is True
+    assert gate._unread_token(text) == _emoji_detail(text, row)
+    assert _verdict_and_exit(text, _COVERED, tmp_path) == (
+        "malformed",
+        _emoji_detail(text, row),
+        2,
+    )
+
+
+def _assert_prose_read(line: str) -> None:
+    from cli import gate
+
+    text = _review_text(alice=line)
+    assert gate._is_emoji_row(line) is False
+    assert gate._unread_token(text) is None
+    assert gate.findings_verdict(text, _COVERED) == ("ok", None)
+
+
 @pytest.mark.parametrize(
     "template",
-    [
-        "- {} crash on empty input",
-        "- crash {} on empty input",
-        "- crash on empty input {}",
-    ],
-    ids=["leading", "mid-line", "trailing"],
+    ["- {} crash on empty input", "1. {} crash on empty input", "{} crash"],
+    ids=["dash bullet", "ordinal", "no lead"],
 )
 @pytest.mark.parametrize(
     "emoji",
     [CRIT, HIGH, MED, LOW],
     ids=["critical", "high", "medium", "low"],
 )
-def test_every_severity_emoji_counts_wherever_it_sits_on_the_line(
+def test_every_severity_emoji_counts_as_the_first_character_after_the_lead(
     emoji: str,
     template: str,
     tmp_path: Path,
 ) -> None:
-    """All four severity emoji count, and position is irrelevant: a sweep that
-    only looks after the bullet marker misses the trailing one."""
-    row = template.format(emoji)
+    """All four severity emoji (the real _SEVERITY_EMOJI keys) count when they
+    are the first character left once the lead is stripped."""
+    from cli.findings_section import _SEVERITY_EMOJI
+
+    assert emoji in _SEVERITY_EMOJI
+    _assert_emoji_row_refused(template.format(emoji), tmp_path)
+
+
+@pytest.mark.parametrize(
+    "template",
+    ["- crash {} on empty input", "- crash on empty input {}"],
+    ids=["mid-line", "trailing"],
+)
+@pytest.mark.parametrize(
+    "emoji",
+    [CRIT, HIGH, MED, LOW],
+    ids=["critical", "high", "medium", "low"],
+)
+def test_an_emoji_past_the_first_character_after_the_lead_is_prose(
+    emoji: str,
+    template: str,
+) -> None:
+    """Mid-line and trailing emoji no longer make a row: they are prose."""
+    _assert_prose_read(template.format(emoji))
+
+
+def test_bare_emoji_row_without_bullet_is_unread(tmp_path: Path) -> None:
+    """No lead at all: the emoji is the first character, so it is a row."""
+    _assert_emoji_row_refused(f"{CRIT} crash on empty input | src/a.py:3", tmp_path)
+
+
+@pytest.mark.parametrize(
+    "bullet",
+    ["•", "◦", "‣", "–", "—", "－"],
+    ids=[
+        "bullet",
+        "white bullet",
+        "triangular bullet",
+        "en dash",
+        "em dash",
+        "fullwidth dash",
+    ],
+)
+def test_typographic_bullet_emoji_row_is_unread(bullet: str, tmp_path: Path) -> None:
+    """A typographic bullet is a lead like `-`: stripped before the emoji."""
+    _assert_emoji_row_refused(f"{bullet} {HIGH} wrong default", tmp_path)
+
+
+@pytest.mark.parametrize(
+    "lead",
+    ["\u200b", " ", "- \u200b", "  - "],
+    ids=["zero-width space", "no-break space", "bullet then zwsp", "nbsp then bullet"],
+)
+def test_invisible_lead_emoji_row_is_unread(lead: str, tmp_path: Path) -> None:
+    """Invisible space characters before the emoji are lead, not content."""
+    _assert_emoji_row_refused(f"{lead}{MED} stale cache", tmp_path)
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        f"**{CRIT} crash on empty input** | src/a.py:3",
+        f"__{LOW} cosmetic nit__",
+        f"> {CRIT} crash",
+        f"> - **{HIGH}** wrong default",
+    ],
+    ids=["bold", "underscore emphasis", "blockquote", "quoted bold bullet"],
+)
+def test_emphasis_wrapped_emoji_row_is_unread(row: str, tmp_path: Path) -> None:
+    """Emphasis and blockquote leads are stripped before the emoji is read."""
+    _assert_emoji_row_refused(row, tmp_path)
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        f"**Note.** The cycle carries no {CRIT} finding",
+        f"*Note:* the cycle carries no {CRIT} finding",
+    ],
+    ids=["bold", "italic"],
+)
+def test_bold_prose_mentioning_an_emoji_is_read(line: str) -> None:
+    _assert_prose_read(line)
+
+
+def test_blockquote_prose_mentioning_an_emoji_is_read() -> None:
+    _assert_prose_read(f"> The reviewer saw a {CRIT} earlier")
+
+
+def test_ordinal_year_prose_is_read() -> None:
+    """A year read as an ordinal lead leaves prose, not an emoji, in front."""
+    _assert_prose_read(f"2026. The year closed with one {CRIT} open")
+
+
+def test_severity_split_line_is_read() -> None:
+    _assert_prose_read(f"Severity split: 0 {CRIT} Critical, 2 {HIGH} High")
+
+
+def test_refusal_names_the_matched_emoji() -> None:
+    """An emoji row that would also match the [m/n] arm is named with the
+    emoji wording, never the generic token wording."""
+    from cli import gate
+
+    row = f"- {CRIT} crash [1/3] | src/a.py:3"
     text = _review_text(alice=row)
-    assert _verdict_and_exit(text, _COVERED, tmp_path) == (
-        "malformed",
-        _unread_detail(text, row),
-        2,
+    n = text.splitlines().index(row) + 1
+    detail = gate._unread_token(text)
+    assert detail == (
+        f"line {n}: a severity emoji row the findings parser did not read: "
+        f"- {CRIT} crash [1/3] | src/a.py:3"
     )
+    assert "[m/n] token" not in detail
+
+
+def test_backtick_in_info_string_is_not_a_fence() -> None:
+    """```python` cannot open a backtick fence, so the row after it stays live
+    and the later bare ``` opens a fence that never closes."""
+    from cli import gate
+
+    row = f"- {CRIT} crash | src/a.py:3"
+    text = _review_text(alice=f"```python`\n{row}\n```")
+    assert row in gate._unfenced(text).splitlines()
+    assert gate.findings_verdict(text, _COVERED)[0] == "malformed"
+
+
+def test_closer_with_trailing_text_does_not_close() -> None:
+    """``` trailing text is no closer: the fence never closes, nothing is
+    blanked. A bare ``` closer still blanks a ```python block."""
+    from cli import gate
+
+    row = f"- {CRIT} crash | src/a.py:3"
+    open_text = _review_text(alice=f"```\n{row}\n``` trailing text")
+    assert row in gate._unfenced(open_text).splitlines()
+    assert gate.findings_verdict(open_text, _COVERED)[0] == "malformed"
+
+    closed_text = _review_text(alice=f"```python\n{row}\n```")
+    assert row not in gate._unfenced(closed_text).splitlines()
+    assert gate.findings_verdict(closed_text, _COVERED) == ("ok", None)
 
 
 # The three rules that are NOT the emoji rule, each in the shape whose escape
@@ -238,7 +397,9 @@ _NOT_A_FINDING = {
 }
 
 
-@pytest.mark.parametrize("line", list(_NOT_A_FINDING.values()), ids=list(_NOT_A_FINDING))
+@pytest.mark.parametrize(
+    "line", list(_NOT_A_FINDING.values()), ids=list(_NOT_A_FINDING)
+)
 def test_a_line_with_no_severity_signal_is_not_refused(line: str) -> None:
     """No false refusals: counting prose, a parenthesized count that does not
     start its line, a hyphenated severity compound and a bare severity word
