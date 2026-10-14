@@ -44,6 +44,10 @@ Generated: 2026-10-13
 
 ## Active Work
 
+### Batch 202610141430 (in progress)
+- [ ] 00277-catch-critical-rows-in-every-shape-v2 (started 2026-10-14)
+- backlog remaining: 00306-00313
+
 ### Batch 202610111300
 - [x] 00271-guard-v2-structural-delegation-check-v1 (2 cycles)
 - [x] 00285-resolve-process-facts-without-ps-v1 (1 cycle)
