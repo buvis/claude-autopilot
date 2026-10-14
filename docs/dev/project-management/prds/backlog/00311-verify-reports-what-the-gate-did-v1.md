@@ -7,7 +7,7 @@ model_tier_rationale: passing the gate lock to the child and killing the group o
 
 # Make `autopilot verify` report what the gate did
 
-Source: `docs/dev/project-management/audit-results/agoge-2026-10-14.md` (packets 2, 3, 9, 19, 20, 21; all confirmed).
+Source: `docs/dev/project-management/audit-results/agoge-2026-10-14.md` (packets 2, 3, 9, 19, 20, 21; all confirmed). Line numbers below are HEAD f6a99ab of 2026-10-14; PRD 00306 edits `_refuse_verify_log` and `_lock_and_check` first and shifts them, so the symbol names are the anchor.
 
 ## Problem
 
