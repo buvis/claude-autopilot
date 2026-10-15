@@ -1,0 +1,41 @@
+The five lanes are running in the background. I'll write the report once they all return.
+
+Trudy is back with 7 findings. Waiting on walter, heidi, wendy and peggy.
+
+Walter is back with 6 findings. Waiting on heidi, wendy and peggy.
+
+Wendy is back with 14 findings. Waiting on heidi and peggy.
+
+Peggy is back with 4 findings. Only heidi is still running.
+
+The agoge run on claude-autopilot at `14bda14` is done. It ran unattended, so it wrote the findings for you to walk and stopped there. No PRDs were created and nothing was committed.
+
+**Recon:** the strategy profile was stale (from `feb3fcb`), so I refreshed it. Your "Pins and vetoes" section came through unchanged (checksum `1723024031 52` before and after).
+
+**Lanes:** walter, heidi, wendy, peggy and trudy all ran. Judy was skipped because the repo has no browser surface. Trudy, the security lane, ran on your `--authorized autoclaude-drain` flag; the profile still says "not asserted".
+
+**Findings:** the five lanes reported 37, which merge into 29: 3 HIGH, 11 MEDIUM, 15 LOW.
+- I dropped 2 because they are already in the 00311 deferred ledger.
+- I downgraded 1 to unverified (packet 14): the lane read the release script rather than running it, since running it is off-limits.
+- **HIGH:**
+  - `verify --log` through a hard link overwrites a tracked store file and still records a pass. Held PRD 00306's planned refusal would not catch it.
+  - A failing gate (non-zero exit, or a failing EXIT in its summary) reaches reviewers as a green "0 failed" `Tests:` line. 0.9.0 does the same.
+  - `cap-check` reports a regression the rework introduced as "not a regression" when a finding names two files or uses common line formats. This mislabels R5 on 00310's own review pair.
+- `cap-check` fails toward "not a regression" in more ways: run from a subdirectory, or given a wrong `head_sha`. 00310 is held, but this code is on master and in the CHANGELOG. Packets 3, 4, 5, 23 and 27 should be decided together.
+- Also notable:
+  - Four new ways past the delegation guard that 0.9.0 still blocks.
+  - PRD names containing U+0085 or U+2028 can still forge a section in the session brief.
+  - PRD 00313 closed as done with the release gate at 293 s, against its own "under 240 s" target.
+  - Hold has three CRITICAL stubs (00314-00316), and nothing would stop a release today.
+
+**Not done:**
+- No tests were written, because the working tree has uncommitted changes.
+- The specialists got their full briefs as a file in `/tmp/agoge-master-20261015/` rather than pasted into the prompt. The report header notes this.
+- Scratch fixtures are still in `/tmp/agoge-*`, about 230 MB of it peggy's metrics data. I didn't delete them because deletions need approval.
+- The live loop's leaked processes (replay runners 14557 and 28178, plus six gemini processes) were left alone.
+
+To walk the findings, run `/run-agoge --resume docs/dev/project-management/audit-results/agoge-2026-10-15.md`.
+
+Files are in `docs/dev/project-management/audit-results/`:
+- agoge-2026-10-15.md
+- agoge-2026-10-15.json

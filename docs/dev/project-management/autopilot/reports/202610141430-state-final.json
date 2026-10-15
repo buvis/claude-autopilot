@@ -1,0 +1,137 @@
+{
+  "prd": "00313-release-gate-runs-what-it-claims-v1.md",
+  "phase": "done",
+  "next_phase": "",
+  "schema_version": 1,
+  "batch": {
+    "id": "202610141430",
+    "mode": "autopilot",
+    "parks_consecutive": 0,
+    "completed_prds": [
+      {
+        "filename": "00277-catch-critical-rows-in-every-shape-v2.md",
+        "cycles": 2,
+        "autonomous_decisions": 21,
+        "escalated_decisions": 0,
+        "tasks_completed": 10,
+        "tasks_total": 10,
+        "lane": "full",
+        "lane_reason": "design",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00307-guard-citations-and-replay-contract-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 20,
+        "escalated_decisions": 0,
+        "tasks_completed": 9,
+        "tasks_total": 9,
+        "lane": "full",
+        "lane_reason": "hook",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00308-reviewer-lane-resilience-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 34,
+        "escalated_decisions": 0,
+        "tasks_completed": 11,
+        "tasks_total": 11,
+        "lane": "full",
+        "lane_reason": "design",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00309-loop-friction-verbs-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 1,
+        "tasks_total": 1,
+        "lane": "fast-track",
+        "lane_reason": "card_sized",
+        "lane_effective": "fast-track",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00311-verify-reports-what-the-gate-did-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 24,
+        "escalated_decisions": 0,
+        "tasks_completed": 8,
+        "tasks_total": 8,
+        "lane": "full",
+        "lane_reason": "design",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00312-close-ten-loop-truths-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 18,
+        "escalated_decisions": 0,
+        "tasks_completed": 9,
+        "tasks_total": 9,
+        "lane": "full",
+        "lane_reason": "uncardable",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00313-release-gate-runs-what-it-claims-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 1,
+        "tasks_total": 1,
+        "lane": "fast-track",
+        "lane_reason": "card_sized",
+        "lane_effective": "fast-track",
+        "lane_escalated": null
+      }
+    ],
+    "skips": [],
+    "catchup_completed_at": "2026-10-15T14:54:07Z",
+    "catchup_head_sha": "57fb258a2ef2612dcf1b53aab81e03a9da4a8fa4",
+    "minted_stubs": [
+      "00314-triage-prd-must-have-unmet-replay-delegation-gu-v1.md",
+      "00315-triage-test-six-corpus-dispatches-are-allowed-u-v1.md",
+      "00316-triage-the-replay-does-not-exit-0-and-does-not-v1.md",
+      "00317-triage-r2-spec-names-test-six-corpus-dispatches-v1.md",
+      "00318-triage-r3-the-own-wrapper-branch-bypasses-valid-v1.md",
+      "00319-triage-sigint-during-gate-spawn-still-leaks-the-v1.md"
+    ]
+  },
+  "catchup_mode": "run",
+  "doubt_reviewer": "codex",
+  "consensus_engine": "legacy",
+  "session_model": "sonnet",
+  "rework_cap": 2,
+  "lane": "fast-track",
+  "lane_reason": "card_sized",
+  "lane_effective": "fast-track",
+  "tasks_total": 0,
+  "tasks_completed": 0,
+  "cycle": 1,
+  "applied_review_batches": [
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00277-catch-critical-rows-in-every-shape-v2-review-1.md::decision-gate",
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00277-catch-critical-rows-in-every-shape-v2-review-2.md::tail-sweep",
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00307-guard-citations-and-replay-contract-v1-review-1.md::decision-gate",
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00308-reviewer-lane-resilience-v1-review-1.md::decision-gate",
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00308-reviewer-lane-resilience-v1-review-2.md::tail-sweep",
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00310-park-cap-regressions-v1-review-1.md::decision-gate",
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00311-verify-reports-what-the-gate-did-v1-review-1.md::decision-gate",
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00312-close-ten-loop-truths-v1-review-1.md::tail-sweep"
+  ],
+  "phases_completed": [
+    "review"
+  ],
+  "replan_count": 0,
+  "design_mode": "skip",
+  "work_start_sha": "ac975cfd4e51f243e16629a00329e8fc124eaadf",
+  "repo_root": "/Users/bob/git/src/github.com/buvis/claude-autopilot",
+  "tasks": []
+}
