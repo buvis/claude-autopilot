@@ -657,9 +657,18 @@ def _spawn_gate(
     cannot be handled, and this inheritance alone keeps the next verify
     waiting until the orphaned gate exits. Do not add a SIGKILL "handler".
     SIGTERM, or any other exception during drain/reap, kills the gate's
-    process group and re-raises."""
+    process group and re-raises. A SIGTERM before the gate has started
+    only sets a flag; it is raised right after `Popen`, inside the `try`,
+    so the just-spawned gate is still killed. SIGTERM is not blocked
+    around `Popen`: the gate would inherit the blocked mask."""
+    gate_started = False
+    sigterm_pending = False
 
     def _raise_on_sigterm(signum, frame):
+        nonlocal sigterm_pending
+        if not gate_started:
+            sigterm_pending = True
+            return
         raise RuntimeError("verify: SIGTERM during gate")
 
     old_handler = signal.getsignal(signal.SIGTERM)
@@ -675,6 +684,9 @@ def _spawn_gate(
             pass_fds=(lock_fd,),
         )
         try:
+            gate_started = True
+            if sigterm_pending:
+                raise RuntimeError("verify: SIGTERM during gate")
             stdout_buf, done = _drain_bounded(
                 proc,
                 GATE_OUTPUT_CAP,
