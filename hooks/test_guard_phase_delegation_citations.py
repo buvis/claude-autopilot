@@ -292,7 +292,7 @@ def _follow_fixture(text: str) -> tuple:
     normalized = module._normalize(text)
     spans = module._candidates(normalized)
     end = min(end for _, end, is_skill_md in spans if is_skill_md)
-    clause_starts, clause_ends, sentences = module._boundaries(normalized, spans)
+    clause_starts, clause_ends, sentences, _ = module._boundaries(normalized, spans)
     return normalized, end, sentences, clause_starts, clause_ends
 
 

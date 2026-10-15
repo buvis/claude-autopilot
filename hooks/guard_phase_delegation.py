@@ -76,6 +76,14 @@ _WRAP_PAIR = {
     "‘": "’", "“": "”", "«": "»",
     "「": "」", "(": ")", "[": "]",
 }
+# Hoisted out of _cited: the pair list is fixed, and rebuilding it per
+# candidate is pure overhead on a hot path. The straight single quote is
+# deliberately absent even though it appears in _WRAP_OPEN - contractions and
+# possessives ("don't run plan-tasks") would read as an open quote and excuse
+# a real order. _WRAP_OPEN governs what the span matcher may absorb as the
+# name's own wrapper; this tuple governs what may open a citation run around
+# it, and the two are not the same question.
+_WRAP_SCAN_PAIRS = (*_WRAP_PAIR.items(), ("`", "`"), ('"', '"'))
 
 # A "word" for the nearest-preceding-word and negation-gap lookups, once wrap
 # characters are stripped: \w plus internal apostrophe/hyphen. The class is
@@ -220,6 +228,24 @@ _MASKED_IN_SPAN = ":/."
 _MASK_TABLE = str.maketrans(_MASKED_IN_SPAN, "x" * len(_MASKED_IN_SPAN))
 _CLAUSE_BOUNDARY = re.compile(r"[.;,:!?\n)]|\s-\s")
 _SENTENCE_BOUNDARY = re.compile(r"[.!?\n]")
+# A sentence terminator for CITATION purposes only: `.`, `!` or `?` that is
+# actually followed by whitespace or end-of-text, plus a bare newline. A `.`
+# inside a dotted identifier ("cli/frontmatter.parse") or immediately before a
+# closing wrapper ("`... PRD 00300.`") is NOT a sentence end, and treating it
+# as one is what made the guard refuse two legitimate corpus dispatches.
+# Deliberately separate from _SENTENCE_BOUNDARY: that list feeds _is_scoped's
+# (sentence, id) folding, _strongly_anchored and the whole-run marker set,
+# whose behaviour is pinned by the existing suite and must not move.
+#
+# The closing-wrapper class before \Z is load-bearing, not decoration. A
+# terminator followed ONLY by closing wrappers to end-of-text IS a real
+# sentence end: '"Run the work phase for PRD 7."' is a whole quoted order and
+# must stay denied. Without that class the window runs to len(text), the final
+# quote is found as a close, and the guard allows it -- measured, 4 pinned
+# tests in hooks/test_guard_phase_delegation_structure.py go red.
+_CITE_SENTENCE_BOUNDARY = re.compile(
+    r"""[.!?](?=\s|[]'"’”»」)]|`*\s*(?:\Z|\n)|`+[ \t]*[^(\s])|\n"""
+)
 
 _AGOGE_PREFIX = "agoge:"
 # The agoge personas, enumerated: the exemption fails closed, so a new persona
@@ -412,13 +438,11 @@ def _candidates(text: str) -> list[tuple[int, int, bool]]:
     return sorted(spans)
 
 
-def _boundaries(
-    text: str, spans: list[tuple[int, int, bool]]
-) -> tuple[list[int], list[int], list[int]]:
-    """Pass 2's one-shot boundary build: clause starts, clause ends and
-    sentence starts for the whole field, from a scratch copy that masks the
-    punctuation inside pass 1's spans. Every later clause/sentence lookup is a
-    binary search into these sorted lists, never a fresh scan.
+def _scratch(text: str, spans: list[tuple[int, int, bool]]) -> str:
+    """`text` with the punctuation inside pass 1's spans masked, so no boundary
+    scan ever finds a boundary inside a recognized name. Same length, same
+    offsets, so every boundary list it feeds (clause, sentence, citation
+    sentence) indexes the ORIGINAL text.
 
     The scratch copy is built from slices (_MASK_TABLE over each span, the text
     between spans left alone) rather than from a character list, so the field is
@@ -444,10 +468,22 @@ def _boundaries(
         pieces.append(text[start:end].translate(_MASK_TABLE))
         cursor = end
     pieces.append(text[cursor:])
-    scratch = "".join(pieces)
+    return "".join(pieces)
+
+
+def _boundaries(
+    text: str, spans: list[tuple[int, int, bool]]
+) -> tuple[list[int], list[int], list[int], list[int]]:
+    """Pass 2's one-shot boundary build: clause starts, clause ends, sentence
+    starts and CITATION sentence starts for the whole field, from one masked
+    scratch copy. Every later clause/sentence lookup is a binary search into
+    these sorted lists, never a fresh scan. `cite_sentences` comes from the
+    same scratch as `sentences`, so the two index the same coordinate space."""
+    scratch = _scratch(text, spans)
     clauses = [(m.start(), m.end()) for m in _CLAUSE_BOUNDARY.finditer(scratch)]
     sentences = [m.start() for m in _SENTENCE_BOUNDARY.finditer(scratch)]
-    return [c[0] for c in clauses], [c[1] for c in clauses], sentences
+    cite_sentences = [m.start() for m in _CITE_SENTENCE_BOUNDARY.finditer(scratch)]
+    return [c[0] for c in clauses], [c[1] for c in clauses], sentences, cite_sentences
 
 
 def _is_scoped(text: str, sentences: list[int]) -> bool:
@@ -526,7 +562,10 @@ def _ordered_to_follow(
     from in front of the verb, where the gap cannot see it. Those few words
     stop at the verb's OWN clause start: a negation in an earlier clause ("do
     not stop, then follow it") negates something else."""
-    sentence_end = next((s for s in sentences if s >= end), len(text))
+    sentence_index = bisect_left(sentences, end)
+    sentence_end = (
+        sentences[sentence_index] if sentence_index < len(sentences) else len(text)
+    )
     match = _FOLLOW.search(text, end, min(sentence_end, end + 200))
     if not match or _NEGATION.search(match.group(2)):
         return False
@@ -558,7 +597,7 @@ def _cited(
     /autopilot:work, it is 6\" wide") never opens a quote around this one; an
     asymmetric opener is looked for from `sentence_start`, since "(" always
     opens ("(which handles catchup, design, parse and plan-tasks)")."""
-    for opener, closer in (*_WRAP_PAIR.items(), ("`", "`"), ('"', '"')):
+    for opener, closer in _WRAP_SCAN_PAIRS:
         if text.find(closer, end, sentence_end) == -1:
             continue
         if text[start] == opener and text.find(closer, start + 1, end) == -1:
@@ -593,7 +632,7 @@ def _field_delegation(text: str, per_task: bool) -> str | None:
     spans = _candidates(text)
     if not spans:
         return None
-    clause_starts, clause_ends, sentences = _boundaries(text, spans)
+    clause_starts, clause_ends, sentences, cite_sentences = _boundaries(text, spans)
     marked = {
         bisect_left(sentences, match.start())
         for match in _WHOLE_RUN_MARKERS.finditer(text)
@@ -624,10 +663,12 @@ def _field_delegation(text: str, per_task: bool) -> str | None:
                 continue
             # Checked after the anchor so an unanchored candidate costs no
             # scan: many mentions in one clause would otherwise go quadratic.
-            head = bisect_left(sentences, start)
-            sentence_start = sentences[head - 1] + 1 if head else 0
-            tail = bisect_left(sentences, end)
-            sentence_end = sentences[tail] if tail < len(sentences) else len(text)
+            head = bisect_left(cite_sentences, start)
+            sentence_start = cite_sentences[head - 1] + 1 if head else 0
+            tail = bisect_left(cite_sentences, end)
+            sentence_end = (
+                cite_sentences[tail] if tail < len(cite_sentences) else len(text)
+            )
             if _cited(text, start, end, clause_start, sentence_start, sentence_end):
                 continue
         if _negated(text, clause_start, start):
