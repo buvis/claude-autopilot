@@ -1,0 +1,50 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "`SUMMARY_RE.search` called without None-check on `raw_line`; guard regex match before accessing `group(4)`",
+    "file": "skills/run-autopilot/cli/__main__.py:1056",
+    "reason": "Verified false positive: `_record_gate` sets `raw_line` only from a line that already matched `SUMMARY_RE` (`verification.py:526-531`, `_parse_summary` returns the matched line or None), and every other result shape sets it to None. The re-search in `_report_verify` therefore cannot return None, so `.group(4)` cannot raise. The re-search is redundant (the match is already in hand at `_record_gate`), but that is a cosmetic simplification, not the crash the finding claims."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "1 touched test(s) pass against the pre-change code: test_review_close_rejects_an_unknown_batch_id",
+    "file": "skills/run-autopilot/cli/test_cli_review_verbs.py",
+    "reason": "Behavior-preserving relocation, which the mech-check block itself names as the weigh-before-raising case. Commit 42fb6210 split `test_cli_verify_verb.py` out of `test_cli_review_verbs.py` to get both under the 800-line limit: 489 lines moved out, 512 moved in, and `test_cli_verify_verb.py` does not exist at the base commit. The relocated tests pin behavior that already existed at base, so passing there is correct and pins nothing new. This PRD's own new tests do fail at base: 22 of 43 touched tests failed, which is where the fail-first evidence lives."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "20 touched test(s) pass against the pre-change code: test_verify_runs_the_gate_once_and_writes_the_record_and_log, test_verify_exits_1_on_a_red_gate, test_verify_writes_no_record_on_a_dirty_tree, test_verify_dirtied_during_the_run_still_reports_the_process_exit, test_verify_exits_2_outside_a_git_repo, test_verify_exits_2_when_head_resolution_raises_oserror +14 more",
+    "file": "skills/run-autopilot/cli/test_cli_verify_verb.py",
+    "reason": "Same behavior-preserving relocation as the row above: these 20 tests are the ones commit 42fb6210 moved into the new `test_cli_verify_verb.py` from `test_cli_review_verbs.py`. The file is absent at the base commit, so the replay overlays it onto code that already satisfied these assertions."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`run_gate_line` still returns `\"log\": str(log_path)` on a lock-timeout, head-moved or dirty refusal, when no log was created. The Problem section names this as a defect (\"review-stage's dirty line names a log that does not exist\"), but no requirement covers it, so it remains.",
+    "file": "skills/run-autopilot/cli/review_stage.py:405",
+    "reason": "Out of scope for this PRD, as the finding itself concedes. The PRD's Problem narrative mentions the stale log path, but no Must-have requires `run_gate_line` to null it; the only log-null requirement is `_run_verify`'s, which is implemented. Fixing an uncovered requirement here would be scope creep in the PRD's last cycle. Deferred to batch end so the gap stays visible."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The SIGTERM handler raises a bare `RuntimeError`. An uncaught SIGTERM therefore ends `verify` with a traceback and rc 1, with no JSON line. The PRD only says \"raises\", so this is within spec, but it does not match the tidy exit table.",
+    "file": "skills/run-autopilot/cli/verification.py:674",
+    "reason": "Within spec, as the finding states: the Must-have says the handler \"raises\" and says nothing about the exception type or about a JSON line on signal death. The resulting rc 1 is also the correct colour for a killed gate. Changing the exception type or adding a signal-path JSON line is a new requirement, not this PRD's."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The `_spawn_gate` helper has an extra `sigterm_pending` and `gate_started` mechanism and a main-thread guard that the PRD does not ask for. It is defensive, harmless, and the cost of the Popen race, so I flag it only for completeness.",
+    "file": "skills/run-autopilot/cli/verification.py:665",
+    "reason": "Not slop to remove: the mechanism is what closes the Popen race the PRD's own Must-have implies (a SIGTERM landing before `Popen` returns would otherwise leave an unkillable gate holding the flock, which commit 132cd9e7 fixed). The main-thread guard is required because `signal.signal` raises off the main thread, which broke two threaded lock tests during the build. R5 extends this same mechanism to SIGINT rather than deleting it, so removing it would contradict an accepted HIGH in the same cycle."
+  }
+]

@@ -4637,3 +4637,11 @@
 {"id":"ee544ea1","ended_at":1792068076,"elapsed_s":270,"outcome":"ok","detail":null}
 {"id":"0a78121e","ended_at":1792068629,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1792068629,"phase":"review","prd":"00311-verify-reports-what-the-gate-did-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1792068745,"phase":"review","prd":"00311-verify-reports-what-the-gate-did-v1.md"}
+{"id":"64573c9c","kind":"bob","task":"review-20261015-1252","queued_at":1792069246,"prompt_bytes":9564}
+{"id":"2bcead93","kind":"carl","task":"review-20261015-1252","queued_at":1792069246,"prompt_bytes":6563}
+{"id":"fe4ffd71","kind":"bob","task":"review-20261015-1252","queued_at":1792069762,"prompt_bytes":224360}
+{"id":"64573c9c","ended_at":1792070214,"elapsed_s":968,"outcome":"error","detail":"lack-of-input"}
+{"id":"fe4ffd71","ended_at":1792070217,"elapsed_s":455,"outcome":"ok","detail":"retry"}
+{"id":"2bcead93","ended_at":1792070220,"elapsed_s":974,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"review","edge":"leave","at":1792070583,"phase":"review","prd":"00311-verify-reports-what-the-gate-did-v1.md"}
