@@ -81,7 +81,9 @@ class BobInlinedFirstProseTests(unittest.TestCase):
         end = self.skill.index("\n\n", at)
         region = self.skill[at:end]
         self.assertIn("record_dispatch.py retry", region)
-        self.assertNotIn("second start row under the same --task", region)
+        self.assertNotIn(
+            "second start row under the same --task", region.replace("`", "")
+        )
 
 
 if __name__ == "__main__":
