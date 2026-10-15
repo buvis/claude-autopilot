@@ -287,7 +287,9 @@ def _untracked_log_exclusion(cwd: Path, log_path: Path | None) -> tuple[str, ...
 
 def _record_shape_ok(record: dict, gate_command: str) -> bool:
     """True iff the record has a full sha, all counts, and a green run of
-    exactly `gate_command`."""
+    exactly `gate_command`, stamped by `_write_record` (`writer: run_gate`)."""
+    if record.get("writer") != "run_gate":
+        return False
     sha = record.get("sha")
     if not isinstance(sha, str) or not _FULL_SHA_RE.fullmatch(sha):
         return False
@@ -376,6 +378,7 @@ def _write_record(
     record = {
         "sha": sha,
         "cycle": cycle,
+        "writer": "run_gate",
         "commands": [{"command": normalize_command(command), "exit": result["exit"]}],
         "passed": result["passed"],
         "failed": result["failed"],
@@ -432,6 +435,45 @@ def _timed_out_result() -> dict:
         "recorded": False,
         "dirty": False,
         "dirty_paths": [],
+        "lock_timeout": False,
+        "head_moved": False,
+    }
+
+
+def _lock_timeout_result() -> dict:
+    """The flock was never acquired by the deadline. No gate spawned, so
+    `timed_out` stays False (it means a gate killed at its deadline);
+    `lock_timeout` names this cause."""
+    return {
+        "passed": None,
+        "failed": None,
+        "skipped": None,
+        "exit": None,
+        "raw_line": None,
+        "timed_out": False,
+        "recorded": False,
+        "dirty": False,
+        "dirty_paths": [],
+        "lock_timeout": True,
+        "head_moved": False,
+    }
+
+
+def _head_moved_result() -> dict:
+    """HEAD no longer equals `sha` once the lock is held. Not a `dirty`
+    result: the tree can be clean while HEAD itself moved."""
+    return {
+        "passed": None,
+        "failed": None,
+        "skipped": None,
+        "exit": None,
+        "raw_line": None,
+        "timed_out": False,
+        "recorded": False,
+        "dirty": False,
+        "dirty_paths": [],
+        "lock_timeout": False,
+        "head_moved": True,
     }
 
 
@@ -451,6 +493,8 @@ def _dirty_result(dirty_paths: list[str]) -> dict:
         "recorded": False,
         "dirty": True,
         "dirty_paths": dirty_paths,
+        "lock_timeout": False,
+        "head_moved": False,
     }
 
 
@@ -509,6 +553,8 @@ def _record_gate(
         "recorded": False,
         "dirty": dirty,
         "dirty_paths": dirty_paths,
+        "lock_timeout": False,
+        "head_moved": False,
     }
     if found and not dirty:
         _write_record(cwd, command, sha, cycle, result)
@@ -531,20 +577,23 @@ def _acquire_lock(lock_fd: int, deadline: float) -> bool:
             time.sleep(min(_LOCK_POLL_S, remaining))
 
 
+_HEAD_MOVED = object()
+
+
 def _lock_and_check(
     cwd: Path, sha: str, log_path: Path | None
-) -> tuple[tuple[str, ...], dict | None]:
+) -> tuple[tuple[str, ...], dict | object | None]:
     """The preamble of `run_gate`, called with the flock already held:
     refuse when the tree is dirty or HEAD no longer equals `sha`. Returns
-    the log exclusion and the `_dirty_result` refusal, or None to
-    proceed."""
+    the log exclusion and the `_dirty_result` refusal, the `_HEAD_MOVED`
+    sentinel, or None to proceed."""
     extra_excluded = _untracked_log_exclusion(cwd, log_path)
     dirty, dirty_paths = _dirty_check(cwd, extra_excluded)
     if dirty:
         return extra_excluded, _dirty_result(dirty_paths)
     head = _git(cwd, "rev-parse", "HEAD")
     if head.returncode != 0 or head.stdout.strip() != sha:
-        return extra_excluded, _dirty_result([])
+        return extra_excluded, _HEAD_MOVED
     return extra_excluded, None
 
 
@@ -556,43 +605,62 @@ def _run_locked_gate(
     deadline: float,
     log_path: Path | None,
     extra_excluded: tuple[str, ...],
+    lock_fd: int,
 ) -> dict:
     """The spawn half of `run_gate`, called with the flock held: open the log,
     delete any record, spawn, drain, reap and record against the same
     `deadline` the lock wait was bounded by. Closes the log in its own
-    `finally`, before `run_gate`'s `finally` releases the lock."""
+    `finally`, before `run_gate`'s `finally` releases the lock.
+
+    The gate inherits `lock_fd` (`pass_fds`), so the flock stays held by
+    the gate's own process group if this process dies: a SIGKILLed verify
+    cannot be handled, and this inheritance alone keeps the next verify
+    waiting until the orphaned gate exits. Do not add a SIGKILL "handler".
+    SIGTERM, or any other exception during drain/reap, kills the gate's
+    process group and re-raises."""
     log_file = None
     try:
         if log_path is not None:
             log_path.parent.mkdir(parents=True, exist_ok=True)
             log_file = open(log_path, "wb", buffering=0)
         (cwd / RECORD_REL).unlink(missing_ok=True)
-        proc = subprocess.Popen(
-            command,
-            shell=True,
-            cwd=cwd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            start_new_session=True,
-        )
+
+        def _raise_on_sigterm(signum, frame):
+            raise RuntimeError("verify: SIGTERM during gate")
+
+        old_handler = signal.getsignal(signal.SIGTERM)
+        signal.signal(signal.SIGTERM, _raise_on_sigterm)
         try:
-            stdout_buf, done = _drain_bounded(proc, GATE_OUTPUT_CAP, deadline, log_file)
-        except OSError:
-            # A log-sink write error: kill and reap the gate, then re-raise.
-            # The process group may already be gone by the time we get here
-            # (the child and its whole group can exit on their own between
-            # the failing write and this kill), which raises
-            # ProcessLookupError - itself an OSError - and must not mask the
-            # sink error this except block exists to propagate.
+            proc = subprocess.Popen(
+                command,
+                shell=True,
+                cwd=cwd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                start_new_session=True,
+                pass_fds=(lock_fd,),
+            )
             try:
-                os.killpg(proc.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            proc.wait()
-            proc.stdout.close()
-            proc.stderr.close()
-            raise
-        if not _reap(proc, deadline, done):
+                stdout_buf, done = _drain_bounded(
+                    proc, GATE_OUTPUT_CAP, deadline, log_file
+                )
+                exited = _reap(proc, deadline, done)
+            except BaseException:
+                # A log-sink write error, SIGTERM, or an interrupt: kill and
+                # reap the gate, then re-raise. The group may already be
+                # gone, which raises ProcessLookupError and must not mask
+                # the error this block exists to propagate.
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                proc.wait()
+                proc.stdout.close()
+                proc.stderr.close()
+                raise
+        finally:
+            signal.signal(signal.SIGTERM, old_handler)
+        if not exited:
             return _timed_out_result()
         return _record_gate(
             command, cwd, sha, cycle, proc.returncode, stdout_buf, extra_excluded
@@ -628,11 +696,11 @@ def run_gate(
     `LOCK_EX`) and, once acquired, the spawn/drain/reap below -- so a
     caller's `timeout` is the whole wall-clock budget, not the budget for
     each half separately. Expiry while still waiting for the lock returns
-    `_timed_out_result()` with the lock never taken, released in the
+    `_lock_timeout_result()` with the lock never taken, released in the
     closing `finally` as a no-op. Once the lock is held: the pre-spawn
     dirty check; then a re-check that `git rev-parse HEAD` still equals
-    `sha` (a mismatch or git failure returns `_dirty_result([])`, the gate
-    never runs); then `run_gate` opens `log_path` itself (creating parent
+    `sha` (a mismatch or git failure returns `_head_moved_result()`, the
+    gate never runs); then `run_gate` opens `log_path` itself (creating parent
     directories first) and deletes any existing record before spawning the
     child, so a run that fails, times out or dirties the tree leaves no
     older record behind. A failure to open the log or delete the record
@@ -645,12 +713,14 @@ def run_gate(
     deadline = time.monotonic() + timeout
     try:
         if not _acquire_lock(lock_fd, deadline):
-            return _timed_out_result()
+            return _lock_timeout_result()
         extra_excluded, refusal = _lock_and_check(cwd, sha, log_path)
+        if refusal is _HEAD_MOVED:
+            return _head_moved_result()
         if refusal is not None:
             return refusal
         return _run_locked_gate(
-            command, cwd, sha, cycle, deadline, log_path, extra_excluded
+            command, cwd, sha, cycle, deadline, log_path, extra_excluded, lock_fd
         )
     finally:
         fcntl.flock(lock_fd, fcntl.LOCK_UN)

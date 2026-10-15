@@ -69,11 +69,11 @@ def _run_passing_gate(cwd: Path, sha: str) -> dict:
 
 def _assert_refused(repo: Path, result: dict, dirty_paths: list[str]) -> None:
     # Asserting the exact dirty_paths, not just "dirty is True", is what
-    # proves the refusal comes from the hidden-flag scan: a sha that simply
-    # does not match HEAD produces the same recorded/dirty shape with
-    # dirty_paths == [] (see `_dirty_result([])` in verification.py), so
-    # these tests must pass the real HEAD sha or they would pass unchanged
-    # with hidden-flag detection disabled entirely.
+    # proves the refusal comes from the hidden-flag scan: a failing git probe
+    # produces the same recorded/dirty shape with dirty_paths == [] (see
+    # `_dirty_check` in verification.py), and a sha that does not match HEAD
+    # is refused as `head_moved`, so these tests must pass the real HEAD sha
+    # or they would not exercise hidden-flag detection at all.
     assert result["recorded"] is False
     assert result["dirty"] is True
     assert result["dirty_paths"] == dirty_paths

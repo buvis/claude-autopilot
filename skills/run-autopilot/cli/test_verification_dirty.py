@@ -62,6 +62,7 @@ def _record(sha: object, passed=5, failed=0, skipped=1) -> dict:
     return {
         "sha": sha,
         "cycle": 1,
+        "writer": "run_gate",
         "commands": [{"command": "dev/bin/release-checks", "exit": 0}],
         "passed": passed,
         "failed": failed,
@@ -558,6 +559,8 @@ def test_run_gate_on_a_dirty_tree_writes_no_record(repo: Path) -> None:
         "recorded": False,
         "dirty": True,
         "dirty_paths": ["src/app.py"],
+        "lock_timeout": False,
+        "head_moved": False,
     }
     assert not (repo / RECORD_REL).exists()
 
@@ -795,5 +798,7 @@ def test_own_log_does_not_skip_the_pre_spawn_dirty_check(
         "recorded": False,
         "dirty": True,
         "dirty_paths": ["stray.txt"],
+        "lock_timeout": False,
+        "head_moved": False,
     }
     assert not (repo / RECORD_REL).exists()

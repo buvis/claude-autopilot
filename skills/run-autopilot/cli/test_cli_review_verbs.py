@@ -727,6 +727,8 @@ def _green_result(**overrides: object) -> dict:
         "recorded": True,
         "dirty": False,
         "dirty_paths": [],
+        "lock_timeout": False,
+        "head_moved": False,
         **overrides,
     }
 

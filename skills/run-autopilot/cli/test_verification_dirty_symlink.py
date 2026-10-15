@@ -68,6 +68,7 @@ def _record(sha: object, passed=5, failed=0, skipped=1) -> dict:
     return {
         "sha": sha,
         "cycle": 1,
+        "writer": "run_gate",
         "commands": [{"command": "dev/bin/release-checks", "exit": 0}],
         "passed": passed,
         "failed": failed,
