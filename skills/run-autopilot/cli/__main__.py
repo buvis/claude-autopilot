@@ -1028,8 +1028,8 @@ def _refuse_verify_log(log: Path, repo_root: Path, log_path: Path) -> bool:
     return False
 
 
-def _run_verify(args: argparse.Namespace) -> int:
-    repo_root = args.repo_root if args.repo_root is not None else Path.cwd()
+def _resolve_verify_head(repo_root: Path) -> str | None:
+    """HEAD's sha, or None after printing the exit-2 refusal."""
     try:
         proc = subprocess.run(
             ["git", "rev-parse", "HEAD"],
@@ -1040,15 +1040,45 @@ def _run_verify(args: argparse.Namespace) -> int:
         )
     except OSError as err:
         msg = f"cannot resolve HEAD in {repo_root}: {err}"
-        print(f"autopilot: verify: {msg}", file=sys.stderr)
-        print(json.dumps({"error": msg, "exit": 2}))
-        return 2
-    if proc.returncode != 0:
+    else:
+        if proc.returncode == 0:
+            return proc.stdout.strip()
         msg = f"cannot resolve HEAD in {repo_root}: {proc.stderr.strip()}"
-        print(f"autopilot: verify: {msg}", file=sys.stderr)
-        print(json.dumps({"error": msg, "exit": 2}))
+    print(f"autopilot: verify: {msg}", file=sys.stderr)
+    print(json.dumps({"error": msg, "exit": 2}))
+    return None
+
+
+def _report_verify(result: dict, head: str, log_path: Path) -> int:
+    """Print run_gate's result as one JSON line and derive the exit code."""
+    # Red/green follows the parsed summary, never the process returncode alone.
+    summary_exit = None
+    if result.get("raw_line"):
+        summary_exit = int(verification.SUMMARY_RE.search(result["raw_line"]).group(4))
+    is_red = (result.get("failed") or 0) > 0 or summary_exit not in (None, 0)
+    # "log": null iff no gate spawned (pre-spawn refusal or lock timeout).
+    spawned = result["exit"] is not None or result["timed_out"]
+    printed_log = str(log_path) if spawned else None
+    print(json.dumps({**result, "sha": head, "log": printed_log}))
+    # Pre-spawn dirt is a refusal (1); dirt found after the gate ran falls
+    # through to the record check (3), since run_gate never records it.
+    if (
+        result["lock_timeout"]
+        or result["head_moved"]
+        or result["timed_out"]
+        or (result["dirty"] and not spawned)
+    ):
+        return 1
+    if is_red:
+        return 1
+    return 0 if result["recorded"] else 3
+
+
+def _run_verify(args: argparse.Namespace) -> int:
+    repo_root = args.repo_root if args.repo_root is not None else Path.cwd()
+    head = _resolve_verify_head(repo_root)
+    if head is None:
         return 2
-    head = proc.stdout.strip()
     log_path = (
         repo_root / args.log
         if args.log is not None
@@ -1073,27 +1103,7 @@ def _run_verify(args: argparse.Namespace) -> int:
     except OSError as err:
         print(json.dumps({"sha": head, "log": str(log_path), "error": str(err)}))
         return 2
-    # Red/green follows the parsed summary, never the process returncode alone.
-    summary_exit = None
-    if result.get("raw_line"):
-        summary_exit = int(verification.SUMMARY_RE.search(result["raw_line"]).group(4))
-    is_red = (result.get("failed") or 0) > 0 or summary_exit not in (None, 0)
-    # "log": null iff no gate spawned (pre-spawn refusal or lock timeout).
-    spawned = result["exit"] is not None or result["timed_out"]
-    printed_log = str(log_path) if spawned else None
-    print(json.dumps({**result, "sha": head, "log": printed_log}))
-    # Pre-spawn dirt is a refusal (1); dirt found after the gate ran falls
-    # through to the record check (3), since run_gate never records it.
-    if (
-        result["lock_timeout"]
-        or result["head_moved"]
-        or result["timed_out"]
-        or (result["dirty"] and not spawned)
-    ):
-        return 1
-    if is_red:
-        return 1
-    return 0 if result["recorded"] else 3
+    return _report_verify(result, head, log_path)
 
 
 def _add_review_stage(subparsers) -> None:

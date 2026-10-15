@@ -336,6 +336,7 @@ run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_review_close_lowsev.py \
   skills/run-autopilot/cli/test_review_close_tail_sweep.py \
   skills/run-autopilot/cli/test_cli_review_verbs.py \
+  skills/run-autopilot/cli/test_cli_verify_verb.py \
   skills/run-autopilot/cli/test_release_checks_counts.py \
   skills/run-autopilot/cli/test_gate.py \
   skills/run-autopilot/cli/test_gate_findings_table.py \
