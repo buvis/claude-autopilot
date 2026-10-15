@@ -44,9 +44,9 @@ if [ -n "${GEMINI_ORPHAN_SECONDS:-}" ]; then
     [ -z "${GEMINI_CHILD_PIDFILE:-}" ] || echo $! > "$GEMINI_CHILD_PIDFILE"
 fi
 if [ -n "${GEMINI_BLOCK_MARKER:-}" ]; then
-    # Make only the watchdog's marker path unwritable, by occupying it with a
-    # directory: `touch` then fails with EISDIR while the rest of the run dir
-    # stays writable, so nothing but the marker write is broken.
+    # Occupy the watchdog's marker path with a directory. `touch` on a
+    # directory succeeds, but `[ -f marker ]` is false, so the wrapper's belt
+    # check cannot fire while the rest of the run dir stays writable.
     # macOS mktemp ignores $TMPDIR, so look in both places for the run dir
     # (the one holding the stderr fifo). Record it so the test can clean up.
     for p in "$TMPDIR"/tmp.*/stderr.pipe "$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null)"tmp.*/stderr.pipe; do
@@ -375,9 +375,9 @@ def test_exit_0_with_an_orphan_holding_stderr_still_exits_4_at_the_deadline(
     assert "within 2s" in result.stderr, f"stderr must name the deadline: {result.stderr}"
 
 
-def test_expiry_survives_a_failed_marker_write(tmp_path: Path) -> None:
-    # The stub occupies the marker path with a directory, so the watchdog's
-    # `touch` fails while everything else about the run keeps working.
+def test_expiry_survives_an_unusable_marker_path(tmp_path: Path) -> None:
+    # The stub occupies the marker path with a directory, so the wrapper's
+    # `[ -f marker ]` belt check is false and only the timer can report expiry.
     env = _timeout_env(tmp_path)
     del env["GEMINI_SLEEP_SECONDS"]
     env.update(

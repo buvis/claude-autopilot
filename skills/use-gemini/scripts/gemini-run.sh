@@ -215,8 +215,6 @@ run_streamed() {
     fi
 }
 
-# Preserve ordinary failure output for salvage, but do not publish a rejected
-# backend's partial output. An existing destination is left untouched on exit 4.
 start_watchdog() {
     # Sets pid and timer in run_cmd's scope (bash dynamic scoping).
     # A non-numeric or non-positive deadline would make `sleep` fail or kill
@@ -251,6 +249,8 @@ stop_watchdog() {
     [ "$tstat" -ne 97 ] || expired=1
 }
 
+# Preserve ordinary failure output for salvage, but do not publish a rejected
+# backend's partial output. An existing destination is left untouched on exit 4.
 run_cmd() {
     local rc=0 stderr_pid pid timer expired=0
     # Stream prompts/diagnostics immediately, then wait for tee to finish before
