@@ -536,27 +536,38 @@ def _ordered_to_follow(
     return not _negated(text, verb_clause_start, verb_start)
 
 
-def _cited(text: str, start: int, end: int, floor: int, ceiling: int) -> bool:
+def _cited(
+    text: str, start: int, end: int, clause_start: int, sentence_start: int,
+    sentence_end: int,
+) -> bool:
     """True iff the name at [start, end) sits inside a longer wrapped run - a
     quote, backtick or bracket that opens at or before `start` and closes only
-    past `end`, within [floor, ceiling) - so it is cited text, not an order.
+    past `end` - so it is cited text, not an order.
 
     An opener AT `start` is the match's own captured wrap: it cites unless its
     close was consumed into the span (`plan-tasks` wrapped on its own is a
     label and anchors as before). An earlier opener counts only while still
     open at `start`: by parity for a symmetric character, by no close since
     the opener for an asymmetric pair. The straight single quote is left out:
-    contractions and possessives would read as open quotes."""
+    contractions and possessives would read as open quotes.
+
+    The close may land anywhere before `sentence_end`: a quoted run routinely
+    spans a ',' or ':' ("`design-solution: <prd-stem>`"). An earlier opener is
+    looked for from `clause_start` for a symmetric character, which has no
+    open form of its own, so a '"' in an earlier clause ("the 5\" gap, run
+    /autopilot:work, it is 6\" wide") never opens a quote around this one; an
+    asymmetric opener is looked for from `sentence_start`, since "(" always
+    opens ("(which handles catchup, design, parse and plan-tasks)")."""
     for opener, closer in (*_WRAP_PAIR.items(), ("`", "`"), ('"', '"')):
-        if text.find(closer, end, ceiling) == -1:
+        if text.find(closer, end, sentence_end) == -1:
             continue
         if text[start] == opener and text.find(closer, start + 1, end) == -1:
             return True
         if opener == closer:
-            if text.count(opener, floor, start) % 2:
+            if text.count(opener, clause_start, start) % 2:
                 return True
         else:
-            open_at = text.rfind(opener, floor, start)
+            open_at = text.rfind(opener, sentence_start, start)
             if open_at != -1 and text.find(closer, open_at, start) == -1:
                 return True
     return False
@@ -611,14 +622,13 @@ def _field_delegation(text: str, per_task: bool) -> str | None:
             )
             if not anchored or scoped:
                 continue
-            # Sentence-bounded, not clause-bounded: a quoted run routinely
-            # spans a ',' or ':' ("`design-solution: <prd-stem>`"). Checked
-            # after the anchor so an unanchored candidate costs no scan.
+            # Checked after the anchor so an unanchored candidate costs no
+            # scan: many mentions in one clause would otherwise go quadratic.
             head = bisect_left(sentences, start)
             sentence_start = sentences[head - 1] + 1 if head else 0
             tail = bisect_left(sentences, end)
             sentence_end = sentences[tail] if tail < len(sentences) else len(text)
-            if _cited(text, start, end, sentence_start, sentence_end):
+            if _cited(text, start, end, clause_start, sentence_start, sentence_end):
                 continue
         if _negated(text, clause_start, start):
             continue
