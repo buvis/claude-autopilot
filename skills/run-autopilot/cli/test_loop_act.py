@@ -111,6 +111,47 @@ def test_failed_invalidation_marks_the_child_entry_stale(tmp_path, monkeypatch):
     assert lp._test["spawn"].launches[-1]["env"].get("_AUTOPILOT_LOOP_ENTRY_STALE") == "1"
 
 
+def test_stale_entry_marker_does_not_leak_into_a_later_successful_launch(
+    tmp_path,
+    monkeypatch,
+):
+    # The marker belongs to the launch whose pre-entry and invalidation both
+    # failed, not to the loop: the next launch, whose pre-entry succeeds,
+    # carries no marker key at all.
+    real_mutate = statectl.mutate
+    enter_calls = []
+
+    def enter_fails_once(*args, **kwargs):
+        enter_calls.append(1)
+        if len(enter_calls) == 1:
+            raise state.StateError("pre-launch enter not available")
+        return {}
+
+    def raise_on_mutate(path, apply):
+        raise OSError("disk full")
+
+    def first_session(ap_dir: Path) -> None:
+        # The failures end with the first session.
+        monkeypatch.setattr(statectl, "mutate", real_mutate)
+        write_state(ap_dir, prd="00010-x-v1.md", next_phase="build", batch={"id": "b"})
+
+    monkeypatch.setattr(statectl, "mutate", raise_on_mutate)
+    lp = make_loop(
+        tmp_path,
+        [first_session, terminal_step()],
+        enter_fn=enter_fails_once,
+    )
+    ap = lp._test["ap_dir"]
+    write_state(ap, prd="00010-x-v1.md", next_phase="build", batch={"id": "b"})
+
+    assert lp.run() == 0
+
+    launches = lp._test["spawn"].launches
+    assert len(launches) == 2
+    assert launches[0]["env"]["_AUTOPILOT_LOOP_ENTRY_STALE"] == "1"
+    assert "_AUTOPILOT_LOOP_ENTRY_STALE" not in launches[1]["env"]
+
+
 # ── drained-path helpers ─────────────────────────────────────────────────────
 
 

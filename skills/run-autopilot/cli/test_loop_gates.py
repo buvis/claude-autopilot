@@ -492,8 +492,12 @@ def test_pre_enter_state_write_failure_leaves_no_entry(tmp_path, monkeypatch):
 
     assert "loop_entry" not in _read_state(ap)
     assert not (ap / "session-brief.md").exists()
+    # The write fails, then the invalidation that answers it fails too, and
+    # each announces itself - the second line is what tells the operator the
+    # stale entry was left behind replayable.
     assert _pre_enter_lines(lp) == [
         "autoclaude: pre-launch enter: loop_entry write failed: disk full",
+        "autoclaude: pre-launch enter: loop_entry invalidation failed: disk full",
     ]
     # enter's warnings still reach the loop's stderr, never its stdout.
     assert "frontmatter: lane reset" in lp._test["err"].getvalue()
