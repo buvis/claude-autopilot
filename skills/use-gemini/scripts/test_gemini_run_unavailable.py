@@ -42,6 +42,7 @@ if [ -n "${GEMINI_ORPHAN_SECONDS:-}" ]; then
     sleep "$GEMINI_ORPHAN_SECONDS" &
     [ -z "${GEMINI_CHILD_PIDFILE:-}" ] || echo $! > "$GEMINI_CHILD_PIDFILE"
 fi
+[ -z "${GEMINI_SIGKILL_SELF:-}" ] || kill -9 $$
 echo "stub-gemini-ran"
 exit "${GEMINI_EXIT_CODE:-0}"
 """
@@ -322,3 +323,59 @@ def test_watchdog_stays_armed_while_a_child_holds_stderr(tmp_path: Path) -> None
     finally:
         if pid is not None and _alive(pid):
             os.kill(pid, signal.SIGKILL)
+
+
+@pytest.mark.parametrize("deadline", ["0", "-5", "   "])
+def test_non_positive_fallback_timeout_takes_the_default_not_an_instant_kill(
+    tmp_path: Path, deadline: str
+) -> None:
+    env = _stubs(tmp_path)
+    env.update(
+        COPILOT_EXIT_CODE="1",
+        COPILOT_STDERR=TIER_REJECTION,
+        GEMINI_FALLBACK_TIMEOUT=deadline,
+    )
+    result = _run(tmp_path, env)
+    assert Path(env["GEMINI_ARGV_FILE"]).is_file(), (
+        f"the native fallback must start; stderr: {result.stderr}"
+    )
+    assert result.returncode == 0, (
+        f"GEMINI_FALLBACK_TIMEOUT={deadline!r} must not kill the fallback; "
+        f"got {result.returncode}; stderr: {result.stderr}"
+    )
+    assert "stub-gemini-ran" in result.stdout
+
+
+def test_sigkilled_fallback_with_a_deadline_exits_4_naming_the_deadline(
+    tmp_path: Path,
+) -> None:
+    # The stub dies by SIGKILL before any deadline fires, so no watchdog marker
+    # can exist: expiry must still be classified, never surfaced as raw 137.
+    env = _stubs(tmp_path)
+    env.update(
+        COPILOT_EXIT_CODE="1",
+        COPILOT_STDERR=TIER_REJECTION,
+        GEMINI_FALLBACK_TIMEOUT="7",
+        GEMINI_SIGKILL_SELF="1",
+    )
+    result = _run(tmp_path, env)
+    assert Path(env["GEMINI_ARGV_FILE"]).is_file(), "the fallback must actually start"
+    assert result.returncode != 137, "the raw kill status must never reach the caller"
+    assert result.returncode == 4, (
+        f"a killed fallback under a deadline must exit 4; stderr: {result.stderr}"
+    )
+    assert "7s" in result.stderr, f"stderr must name the deadline: {result.stderr}"
+
+
+def test_sigkilled_backend_without_a_deadline_is_not_reported_as_a_timeout(
+    tmp_path: Path,
+) -> None:
+    # Forced native backend: no fallback, so no deadline is armed.
+    env = _stubs(tmp_path)
+    env.update(GEMINI_BACKEND="gemini", GEMINI_SIGKILL_SELF="1")
+    result = _run(tmp_path, env)
+    assert Path(env["GEMINI_ARGV_FILE"]).is_file(), "gemini must actually run"
+    assert result.returncode != 4, (
+        f"no deadline armed: must not be classified as expiry; stderr: {result.stderr}"
+    )
+    assert "produced no output within" not in result.stderr
