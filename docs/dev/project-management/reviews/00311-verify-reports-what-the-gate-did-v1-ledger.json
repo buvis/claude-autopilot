@@ -46,5 +46,85 @@
     "issue": "The `_spawn_gate` helper has an extra `sigterm_pending` and `gate_started` mechanism and a main-thread guard that the PRD does not ask for. It is defensive, harmless, and the cost of the Popen race, so I flag it only for completeness.",
     "file": "skills/run-autopilot/cli/verification.py:665",
     "reason": "Not slop to remove: the mechanism is what closes the Popen race the PRD's own Must-have implies (a SIGTERM landing before `Popen` returns would otherwise leave an unkillable gate holding the flock, which commit 132cd9e7 fixed). The main-thread guard is required because `signal.signal` raises off the main thread, which broke two threaded lock tests during the build. R5 extends this same mechanism to SIGINT rather than deleting it, so removing it would contradict an accepted HIGH in the same cycle."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "Phase 1 acceptance `rg -c '^def test_' skills/run-autopilot/cli/test_verification_dirty.py` was required to be unchanged from the base commit. It went from 31 (f6a99ab) to 26. The reuse-verdict and normalize tests were moved to `test_verification_normalize.py`, `test_verification_reuse_verdict.py` and `test_cli_verify_verb.py` by the \"split oversized test files\" commits. I could not confirm that every one of the 31 original test names survives elsewhere, so \"no test deleted\" is unproven. The literal criterion fails regardless.",
+    "file": "skills/run-autopilot/cli/test_verification_dirty.py",
+    "reason": "The 'unproven' half is now proven false mechanically: all 31 `def test_` names present in test_verification_dirty.py at f6a99ab are still present across skills/run-autopilot/cli/ at HEAD (0 missing; measured by diffing the base name set against the union of 1439 HEAD test names). No test was deleted. The literal per-file count did change, because the split IS cycle 1's accepted R6 fix for the 800-line limit, which this same cycle verifies as resolved. Holding the per-file count criterion would forbid the fix the prior cycle demanded. Discarded as contradicting computed facts."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "The dirty-tree helpers moved into a new module, `skills/run-autopilot/cli/dirty_tree.py` (270 lines), and `verification.py` re-exports them. The PRD does not mention this. It is a pure refactor for the 800-line limit and no behaviour changed.",
+    "file": "skills/run-autopilot/cli/dirty_tree.py",
+    "reason": "Not a defect, as the finding itself concedes: this is cycle 1's accepted R3 fix. R3 required verification.py back under the 800-line limit; extracting the dirty-tree helpers is how that was achieved (verification.py is now 643 lines). Behaviour is unchanged and the re-exports keep every caller working. A PRD need not pre-authorise the refactor its own style limit forces."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "18 touched test(s) pass against the pre-change code: test_normalize_command_collapses_whitespace_only +12 more",
+    "file": "skills/run-autopilot/cli/test_verification_normalize.py",
+    "reason": "Behavior-preserving relocation, the case the mech-check block names as weigh-before-raising. The file does not exist at the cycle-1 base b2408046 (`git cat-file -e` fails there), so the replay overlays it onto code that already satisfied these assertions. It was created by cycle 1's accepted R6 split. Same disposition as the two equivalent cycle-1 rows."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "4 touched test(s) pass against the pre-change code: test_reuse_verdict_refuses_a_record_of_a_failed_gate, test_reuse_verdict_refuses_a_non_dict_commands_entry, test_reuse_verdict_refuses_an_empty_commands_list, test_reuse_verdict_docstring_states_the_tolerances_it_applies",
+    "file": "skills/run-autopilot/cli/test_verification_reuse_verdict.py",
+    "reason": "Same behavior-preserving relocation as the row above: the file is absent at the cycle-1 base b2408046 and was created by cycle 1's accepted R6 split, so these four relocated tests pin behaviour that already existed at base."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "2 touched test(s) pass against the pre-change code: test_sigterm_pending_before_gate_started_kills_the_gate, test_run_gate_line_names_lock_timeout_and_head_moved",
+    "file": "skills/run-autopilot/cli/test_verify_truth.py",
+    "reason": "These two tests pass at base by construction, because that is exactly what cycle 1 asked for. R9 was 'nothing exercises the pending-SIGTERM branch' and R8 was 'the dirty_paths assertion compares [] on both sides' - both are requests to cover behaviour that was already correct. A test written to close a coverage gap in working code must pass against that code. Raising it would punish the prior cycle's accepted fix."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "Prior finding R5 (SIGINT during child creation leaks the gate) is only partly fixed. `_spawn_gate` recovers the child with `_child_from_exception`, which scans the traceback for a `Popen` and then calls `_kill_gate`. If SIGINT lands after `_fork_exec` returns but before `self.pid = ...` runs in `Popen._execute_child`, the recovered object has `pid is None`. `os.killpg(None, SIGKILL)` then raises `TypeError`, which replaces the `KeyboardInterrupt`. The forked gate keeps running, and the outer `LOCK_UN` still releases the lock. A second hole sits between `Popen()` returning and the `proc =` store, where no `Popen` is reachable at all. Measured: 1500 `_spawn_gate` trials with a SIGALRM-raised KeyboardInterrupt at random 0-12ms; 75 raised TypeError instead of KeyboardInterrupt and 68 left a live gate behind. The remedy is to defer SIGINT the way SIGTERM is deferred, which makes `_child_from_exception` and `_POPEN_TYPE` unnecessary.",
+    "file": "skills/run-autopilot/cli/verification.py:538",
+    "reason": "Rework cap reached (cycle 2 of 2) with this finding unresolved. Deferred to batch end as a cap-overflow, not dismissed: it is a real 3/4-consensus HIGH with a measured reproduction, and the remedy is named precisely. It is a narrowing of the same race cycle 1's R5 raised - the SIGTERM half is fixed and tested, the SIGINT-during-spawn half is not. A triage stub carries it forward; the loop may not open a third rework cycle at the cap."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "`_write_record` now folds a non-zero summary EXIT token into the persisted `failed`, so a summary of `FAIL 0 ... EXIT 1` is stored as `failed: 1`. This does fix the reuse hole (R4), and the new test `test_exit_token_drop_record_not_reused` binds it. The cost is a record whose count disagrees with the gate's own summary, in a PRD about reporting what the gate did. Persisting the EXIT token as its own record field, or setting `commands[0].exit` from it, would keep the counts faithful.",
+    "file": "skills/run-autopilot/cli/verification.py:168",
+    "reason": "Rework cap reached (cycle 2 of 2) with this finding unresolved. Both finders call the fix correct and the change optional (Alice: 'no other reader of the record depends on failed, so this is optional'). The reuse hole it closes is genuinely closed and tested. The fidelity complaint is real and ironic for this PRD's own theme, so it is deferred rather than discarded."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "`_kill_gate` does not guard against `proc.pid is None`, so a `TypeError` hides the original interrupt. `test_sigint_during_popen_leaves_the_gate_running` raises after `real_popen` returns, with the `Popen` still bound in a test-frame local. It never exercises the real `Popen.__init__` frame where `pid` is unset, so it passes while the real race still leaks. Add a case where the recovered `Popen` has `pid=None`, or defer SIGINT and test that path.",
+    "file": "skills/run-autopilot/cli/test_verify_truth.py:213",
+    "reason": "Rework cap reached (cycle 2 of 2). This is the test-coverage half of the HIGH deferred above and must travel with it: the SIGINT deferral fix and the test that would catch its regression belong in one change. Deferred to the same triage stub."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The JSON `error` on both exit-2 refusals omits the `autopilot: verify: ` prefix that the stderr line carries. The spec asks for `{\"error\": \"<the stderr line>\", \"exit\": 2}`. The text after the prefix is identical, and `test_exit_2_refusals_print_json` only checks that `error` is non-empty, so it does not catch the difference.",
+    "file": "skills/run-autopilot/cli/__main__.py:1048",
+    "reason": "Rework cap reached (cycle 2 of 2). A real, literal spec deviation, but cosmetic: the message text after the prefix is identical and no consumer parses the prefix. Deferred to batch end rather than discarded, because the spec sentence does say 'the stderr line'."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The recorded-result JSON shape in `final-verification.md` (lines 127-134) does not show the new `writer: run_gate` key. The exit table and the `log: null` note are present and correct.",
+    "file": "skills/work/references/final-verification.md:127",
+    "reason": "Rework cap reached (cycle 2 of 2). A genuine doc-drift gap: the writer marker is implemented and gated in code, but the documented record shape omits it. Cheap to fix and worth fixing, so deferred to batch end rather than discarded."
   }
 ]
