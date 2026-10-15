@@ -67,6 +67,17 @@ class BobInlinedFirstProseTests(unittest.TestCase):
             with self.subTest(file=name):
                 self.assertEqual(text.lower().count("lack-of-input"), 0)
 
+    def test_retry_case_uses_the_retry_verb(self) -> None:
+        # The ledger's retry case opens its row with the new CLI verb, not a
+        # hand-typed second `start --task` call under the same task.
+        at = self.skill.index("Ledger each CLI reviewer dispatch.")
+        region = self.skill[at : at + 900]
+        self.assertIn("record_dispatch.py retry", region)
+        self.assertNotIn(
+            'second `start` row under the same `--task`'.replace("`", ""),
+            region.replace("`", ""),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
