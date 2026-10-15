@@ -91,7 +91,7 @@ reference.
 
 ### Clear inherited hand-off markers
 
-Then, still before the abort handlers, run
+Then, still before the abort handlers, run `autopilot markers --clear`:
 `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/cli/__main__.py markers --clear handoff-requested cap-fired`
 (one Bash call; exits 1 only when no autopilot dir is found above cwd - an
 unlink failure is not caught today). It removes any `.handoff-requested` and
