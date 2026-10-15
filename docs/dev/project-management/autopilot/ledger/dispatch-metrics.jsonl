@@ -4656,3 +4656,13 @@
 {"kind":"handoff","site":"build","edge":"resume","at":1792075768,"phase":"build","prd":"00311-verify-reports-what-the-gate-did-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1792075782,"phase":"done","prd":"00311-verify-reports-what-the-gate-did-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1792075928,"phase":"build","prd":"00311-verify-reports-what-the-gate-did-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792076026,"phase":"build","prd":"00312-close-ten-loop-truths-v1.md"}
+{"id":"ba43f217","kind":"ivan","task":"1","queued_at":1792076479,"prompt_bytes":27050}
+{"id":"91694dd7","kind":"ivan","task":"1","queued_at":1792076483,"prompt_bytes":27050}
+{"id":"91694dd7","ended_at":1792077403,"elapsed_s":920,"outcome":"ok","detail":null}
+{"id":"de80b0e6","kind":"ivan","task":"1","queued_at":1792077525,"prompt_bytes":20929}
+{"id":"5048f7d2","kind":"ivan","task":"1","queued_at":1792077534,"prompt_bytes":20929}
+{"id":"5048f7d2","ended_at":1792077799,"elapsed_s":265,"outcome":"ok","detail":null}
+{"id":"ba43f217","ended_at":1792077932,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"de80b0e6","ended_at":1792077932,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1792077932,"phase":"build","prd":"00312-close-ten-loop-truths-v1.md"}

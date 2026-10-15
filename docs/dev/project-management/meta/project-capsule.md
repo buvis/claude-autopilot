@@ -1,6 +1,6 @@
 # Project Capsule: claude-autopilot
 
-Generated: 2026-10-15
+Generated: 2026-10-15 (catchup refreshed 14:54 UTC)
 
 ## Key Invariants
 
@@ -52,7 +52,8 @@ Generated: 2026-10-15
 - [x] 00311-verify-reports-what-the-gate-did-v1 (2 cycles, cap-out: 1 unresolved HIGH deferred)
 - 00306-refuse-tracked-verify-log-v1 parked to hold/ (stall mid-batch)
 - 00310-park-cap-regressions-v1 stalled to hold/ (cap_regression, cycle 2, four unresolved HIGH)
-- backlog remaining: 00312-00313
+- 00312-close-ten-loop-truths-v1 in wip/ (full lane, catchup resumed manually 2026-10-15 after the autoclaude loop died mid-00311-rework when the user's Claude Code app restarted for an update — see memory `batch-in-flight-2026-10-14`)
+- backlog remaining: 00313
 - minted to hold/: 00314-00319 (triage stubs from deferred CRITICAL/HIGH rows)
 
 Observations: 00277 (full lane, design) converged at cycle 2 (rework_cap 2,
