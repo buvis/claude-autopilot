@@ -236,6 +236,7 @@ start_watchdog() {
             echo "gemini-run: failed to write timeout marker: $(cat "$RUN_TMP/timer-err" 2>/dev/null)" >&2
         }
         kill -KILL -- "-$pid" 2>/dev/null || true
+        exit 97   # only a timer that reached the end of its sleep exits 97
     } &
     timer=$!
     [ "$mopt" -eq 1 ] || set +m
@@ -243,12 +244,15 @@ start_watchdog() {
 
 stop_watchdog() {
     [ -n "$1" ] || return 0
+    local tstat=0
     kill -- "-$1" 2>/dev/null || true
-    wait "$1" 2>/dev/null || true
+    wait "$1" 2>/dev/null || tstat=$?
+    # A timer killed above reports a signal status; 97 means it had already fired.
+    [ "$tstat" -ne 97 ] || expired=1
 }
 
 run_cmd() {
-    local rc=0 stderr_pid pid timer
+    local rc=0 stderr_pid pid timer expired=0
     # Stream prompts/diagnostics immediately, then wait for tee to finish before
     # classifying. Merely redirecting stderr to a file hides interactive prompts.
     tee "$RUN_TMP/stderr" < "$RUN_TMP/stderr.pipe" >&2 &
@@ -266,8 +270,8 @@ run_cmd() {
     wait "$stderr_pid" || stderr_rc=1
     stop_watchdog "$timer"
     [ "$stderr_rc" -eq 0 ] || return 1
-    # The marker write can fail, so a SIGKILL under an armed deadline counts too.
-    if [ -n "$FALLBACK_DEADLINE" ] && { [ -f "$RUN_TMP/timed_out" ] || [ "$rc" -eq 137 ]; }; then
+    # The marker write can fail, so the timer's own completion is the primary signal.
+    if [ -n "$FALLBACK_DEADLINE" ] && { [ "$expired" -eq 1 ] || [ -f "$RUN_TMP/timed_out" ]; }; then
         echo "ERROR: gemini fallback produced no output within ${FALLBACK_DEADLINE}s." >&2
         return 4
     fi

@@ -9,6 +9,7 @@ leaves that child alive and the leftover-child test catches it.
 from __future__ import annotations
 
 import os
+import shutil
 import signal
 import subprocess
 import time
@@ -42,7 +43,20 @@ if [ -n "${GEMINI_ORPHAN_SECONDS:-}" ]; then
     sleep "$GEMINI_ORPHAN_SECONDS" &
     [ -z "${GEMINI_CHILD_PIDFILE:-}" ] || echo $! > "$GEMINI_CHILD_PIDFILE"
 fi
-[ -z "${GEMINI_SIGKILL_SELF:-}" ] || kill -9 $$
+if [ -n "${GEMINI_BLOCK_MARKER:-}" ]; then
+    # Make only the watchdog's marker path unwritable, by occupying it with a
+    # directory: `touch` then fails with EISDIR while the rest of the run dir
+    # stays writable, so nothing but the marker write is broken.
+    # macOS mktemp ignores $TMPDIR, so look in both places for the run dir
+    # (the one holding the stderr fifo). Record it so the test can clean up.
+    for p in "$TMPDIR"/tmp.*/stderr.pipe "$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null)"tmp.*/stderr.pipe; do
+        [ -p "$p" ] || continue
+        mkdir -p "$(dirname "$p")/timed_out"
+        # The wrapper's EXIT trap deletes the run dir, so the proof that the
+        # marker path was unusable has to be recorded here, outside it.
+        [ -d "$(dirname "$p")/timed_out" ] && echo "blocked" >> "$GEMINI_BLOCK_MARKER"
+    done
+fi
 echo "stub-gemini-ran"
 exit "${GEMINI_EXIT_CODE:-0}"
 """
@@ -346,36 +360,40 @@ def test_non_positive_fallback_timeout_takes_the_default_not_an_instant_kill(
     assert "stub-gemini-ran" in result.stdout
 
 
-def test_sigkilled_fallback_with_a_deadline_exits_4_naming_the_deadline(
+def test_exit_0_with_an_orphan_holding_stderr_still_exits_4_at_the_deadline(
     tmp_path: Path,
 ) -> None:
-    # The stub dies by SIGKILL before any deadline fires, so no watchdog marker
-    # can exist: expiry must still be classified, never surfaced as raw 137.
-    env = _stubs(tmp_path)
-    env.update(
-        COPILOT_EXIT_CODE="1",
-        COPILOT_STDERR=TIER_REJECTION,
-        GEMINI_FALLBACK_TIMEOUT="7",
-        GEMINI_SIGKILL_SELF="1",
-    )
+    # gemini exits 0, so the main command's status carries no sign of expiry;
+    # only the watchdog killing the orphan can tell the wrapper the deadline hit.
+    env = _timeout_env(tmp_path)
+    del env["GEMINI_SLEEP_SECONDS"]
+    env.update(GEMINI_ORPHAN_SECONDS="30", GEMINI_FALLBACK_TIMEOUT="2")
     result = _run(tmp_path, env)
-    assert Path(env["GEMINI_ARGV_FILE"]).is_file(), "the fallback must actually start"
-    assert result.returncode != 137, "the raw kill status must never reach the caller"
     assert result.returncode == 4, (
-        f"a killed fallback under a deadline must exit 4; stderr: {result.stderr}"
+        f"expiry must exit 4 even when gemini exited 0; stderr: {result.stderr}"
     )
-    assert "7s" in result.stderr, f"stderr must name the deadline: {result.stderr}"
+    assert "within 2s" in result.stderr, f"stderr must name the deadline: {result.stderr}"
 
 
-def test_sigkilled_backend_without_a_deadline_is_not_reported_as_a_timeout(
-    tmp_path: Path,
-) -> None:
-    # Forced native backend: no fallback, so no deadline is armed.
-    env = _stubs(tmp_path)
-    env.update(GEMINI_BACKEND="gemini", GEMINI_SIGKILL_SELF="1")
+def test_expiry_survives_a_failed_marker_write(tmp_path: Path) -> None:
+    # The stub occupies the marker path with a directory, so the watchdog's
+    # `touch` fails while everything else about the run keeps working.
+    env = _timeout_env(tmp_path)
+    del env["GEMINI_SLEEP_SECONDS"]
+    env.update(
+        GEMINI_ORPHAN_SECONDS="30",
+        GEMINI_FALLBACK_TIMEOUT="2",
+        GEMINI_BLOCK_MARKER=str(tmp_path / "rundir.txt"),
+    )
     result = _run(tmp_path, env)
-    assert Path(env["GEMINI_ARGV_FILE"]).is_file(), "gemini must actually run"
-    assert result.returncode != 4, (
-        f"no deadline armed: must not be classified as expiry; stderr: {result.stderr}"
+    record = tmp_path / "rundir.txt"
+    # The stub occupied the marker path with a directory, so the wrapper's
+    # `[ -f marker ]` belt check cannot have fired: only the timer can report
+    # expiry here.
+    assert record.exists() and "blocked" in record.read_text(), (
+        f"the marker path must have been made unusable for this test to mean "
+        f"anything; stderr: {result.stderr}"
     )
-    assert "produced no output within" not in result.stderr
+    assert result.returncode == 4, (
+        f"expiry must not depend on the marker file; stderr: {result.stderr}"
+    )
