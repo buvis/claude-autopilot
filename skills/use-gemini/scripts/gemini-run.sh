@@ -197,11 +197,13 @@ if [ -n "${_AUTOPILOT_LOOP:-}" ]; then
 fi
 
 permanently_unavailable() {
-    grep -Eiq 'Model "[^"]+" from --model flag is not available|IneligibleTierError|reasonCode[^[:alnum:]]+UNSUPPORTED_CLIENT' "$RUN_TMP/stderr"
+    grep -Eiq 'Model "[^"]+" from --model flag is not available|IneligibleTierError|reasonCode[^[:alnum:]]+UNSUPPORTED_CLIENT|authentication failed|copilot requests permission' "$RUN_TMP/stderr"
 }
 
-# An auth failure is permanent too, but another backend cannot cure it.
-AUTH_FAILED=""
+auth_failure() {
+    grep -Eiq 'authentication failed|copilot requests permission' "$RUN_TMP/stderr"
+}
+
 # Set only for the native fallback: seconds before its process group is killed.
 FALLBACK_DEADLINE=""
 
@@ -229,28 +231,40 @@ run_cmd() {
         case $FALLBACK_DEADLINE in ''|*[!0-9]*) FALLBACK_DEADLINE=900 ;; esac
         # Job control gives each job its own process group, so the deadline
         # kills the command and its children, and nothing outside them.
+        local mopt=0
+        case $- in *m*) mopt=1 ;; esac
         set -m
         run_streamed "$@" &
         pid=$!
-        { sleep "$FALLBACK_DEADLINE" && touch "$RUN_TMP/timed_out" && kill -KILL -- "-$pid"; } > /dev/null 2>&1 &
+        {
+            sleep "$FALLBACK_DEADLINE"
+            touch "$RUN_TMP/timed_out" 2>"$RUN_TMP/timer-err" || {
+                echo "gemini-run: failed to write timeout marker: $(cat "$RUN_TMP/timer-err" 2>/dev/null)" >&2
+            }
+            kill -KILL -- "-$pid" 2>/dev/null || true
+        } &
         timer=$!
-        set +m
+        [ "$mopt" -eq 1 ] || set +m
         wait "$pid" 2>/dev/null || rc=$?
+    fi
+    # Keep the watchdog armed through stderr draining: a child that outlives
+    # the backend and still holds the stderr fifo open would otherwise leave
+    # this wait unbounded with nothing left to kill it.
+    wait "$stderr_pid" || return 1
+    if [ -n "$timer" ]; then
         kill -- "-$timer" 2>/dev/null || true
         wait "$timer" 2>/dev/null || true
     fi
-    wait "$stderr_pid" || return 1
     if [ -f "$RUN_TMP/timed_out" ]; then
-        echo "ERROR: $BACKEND gave no result within ${FALLBACK_DEADLINE}s; killed." >&2
-        return 4
-    fi
-    if [ "$rc" -ne 0 ] && grep -Eiq 'authentication failed|copilot requests permission' "$RUN_TMP/stderr"; then
-        echo "ERROR: $BACKEND authentication failed (permanent; no fallback)." >&2
-        AUTH_FAILED=1
+        echo "ERROR: gemini fallback produced no output within ${FALLBACK_DEADLINE}s." >&2
         return 4
     fi
     if [ "$rc" -ne 0 ] && permanently_unavailable; then
-        echo "ERROR: $BACKEND permanently unavailable (model/client tier rejected)." >&2
+        if auth_failure; then
+            echo "ERROR: $BACKEND authentication failed (permanent; no fallback)." >&2
+        else
+            echo "ERROR: $BACKEND permanently unavailable (model/client tier rejected)." >&2
+        fi
         return 4
     fi
     if [ -n "$OUTPUT_FILE" ]; then
@@ -353,7 +367,7 @@ run_gemini() {
 if [ "$BACKEND" = "copilot" ]; then
     rc=0
     run_copilot || rc=$?
-    if [ "$rc" -eq 4 ] && [ -z "$AUTH_FAILED" ] && [ -z "${GEMINI_BACKEND:-}" ] &&
+    if [ "$rc" -eq 4 ] && ! auth_failure && [ -z "${GEMINI_BACKEND:-}" ] &&
        [ -z "$MODEL" ] && [ "$MODE" = "prompt" ] && [ -n "$GEMINI_BIN" ]; then
         echo "gemini-run: trying native gemini fallback after permanent rejection." >&2
         BACKEND=gemini

@@ -36,6 +36,12 @@ if [ -n "${GEMINI_SLEEP_SECONDS:-}" ]; then
     [ -z "${GEMINI_CHILD_PIDFILE:-}" ] || echo $! > "$GEMINI_CHILD_PIDFILE"
     sleep "$GEMINI_SLEEP_SECONDS"
 fi
+if [ -n "${GEMINI_ORPHAN_SECONDS:-}" ]; then
+    # Backgrounded and never waited on: the stub exits while this child is
+    # still alive, still holding the inherited stderr fifo open.
+    sleep "$GEMINI_ORPHAN_SECONDS" &
+    [ -z "${GEMINI_CHILD_PIDFILE:-}" ] || echo $! > "$GEMINI_CHILD_PIDFILE"
+fi
 echo "stub-gemini-ran"
 exit "${GEMINI_EXIT_CODE:-0}"
 """
@@ -158,8 +164,9 @@ def test_auth_failure_exits_4_without_fallback(tmp_path: Path, auth_error: str) 
     )
     assert auth_error in result.stderr, "the auth reason must reach the caller"
     gemini_argv = Path(env["GEMINI_ARGV_FILE"])
-    assert not gemini_argv.exists() or gemini_argv.read_text() == "", (
-        f"native gemini must not be tried on an auth failure; argv: {gemini_argv.read_text()!r}"
+    assert not gemini_argv.exists(), (
+        "native gemini must not be tried on an auth failure; "
+        f"argv: {gemini_argv.read_text()!r}"
     )
     assert "stub-gemini-ran" not in result.stdout
 
@@ -281,3 +288,33 @@ def test_fallback_leaves_no_child_running(tmp_path: Path) -> None:
         for pid in pids:
             if _alive(pid):
                 os.kill(pid, signal.SIGKILL)
+
+
+def test_watchdog_stays_armed_while_a_child_holds_stderr(tmp_path: Path) -> None:
+    # gemini itself exits almost at once, but leaves a backgrounded child that
+    # still holds the inherited stderr fifo open. Draining stderr blocks until
+    # every writer closes, so if the watchdog is cancelled the moment gemini's
+    # own process exits (the pre-fix order), that wait has nothing left to
+    # bound it and the wrapper never reaches the deadline check.
+    env = _timeout_env(tmp_path)
+    del env["GEMINI_SLEEP_SECONDS"]
+    env["GEMINI_ORPHAN_SECONDS"] = "30"
+    env["GEMINI_FALLBACK_TIMEOUT"] = "2"
+    child_file = tmp_path / "gemini-child.pid"
+    pid: int | None = None
+    try:
+        rc, elapsed = _run_to_deadline(tmp_path, env)
+        pid = int(child_file.read_text().strip())
+        assert rc == 4, (
+            f"the watchdog must still fire and reap the orphaned child, got {rc}; "
+            f"stderr: {(tmp_path / 'wrapper.err').read_text()}"
+        )
+        assert elapsed < 10.0, (
+            f"wait on stderr must stay bounded by the watchdog: took {elapsed:.2f}s"
+        )
+        assert _gone_within(pid, 3), (
+            "the orphaned child holding stderr must be killed with its group"
+        )
+    finally:
+        if pid is not None and _alive(pid):
+            os.kill(pid, signal.SIGKILL)
