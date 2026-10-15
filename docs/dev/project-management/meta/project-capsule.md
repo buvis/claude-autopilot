@@ -47,10 +47,8 @@ Generated: 2026-10-13
 ### Batch 202610141430 (in progress)
 - [x] 00277-catch-critical-rows-in-every-shape-v2 (2 cycles)
 - [x] 00307-guard-citations-and-replay-contract-v1 (2 cycles)
+- [x] 00308-reviewer-lane-resilience-v1 (2 cycles)
 - 00306-refuse-tracked-verify-log-v1 parked to hold/ (stall mid-batch)
-- 00308-reviewer-lane-resilience-v1 (in progress): Bob inlined-first prompt,
-  Carl auth-failure latch, bounded gemini fallback, replay process-group kill,
-  retry-row verb
 - backlog remaining: 00309-00313
 
 Observations: 00277 (full lane, design) converged at cycle 2 (rework_cap 2,
@@ -61,6 +59,15 @@ findings, all auto-fixed. Cycle 2's 8 findings were all medium/low: 3 swept
 inline, 5 settled in the PRD's review ledger (symbol-name-only drift,
 pre-existing cross-file test moves, wording-only precedence). `bash
 dev/bin/release-checks` green at 2fb2a40 (PASS 6688 FAIL 0 SKIP 34). No
+deferred items, no doubts, nothing minted to `hold/`.
+
+00308 (full lane, design) converged at cycle 2: cycle 1 reworked Bob's
+inlined-first prompt wiring, dangling lack-of-input references, and an
+unbounded stderr wait after the watchdog was cancelled (3 high findings), plus
+an 11-item medium/low tail swept in the same pass. Cycle 2's only high finding
+(Blake, blind lens) was a settled call already adjudicated in cycle 1 against
+the design doc's waiver; the 8-item medium/low tail was swept before
+finalize. `release-checks` green at 2feb83a (PASS 6852 FAIL 0 EXIT 0). No
 deferred items, no doubts, nothing minted to `hold/`.
 
 00307 cap-out at cycle 2 (rework_cap 2) with two unresolved HIGH (R2: the
