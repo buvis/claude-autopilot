@@ -161,11 +161,12 @@ def main(argv: list[str] | None = None) -> int:
             failed = True
             continue
         counts[name][0] += 1
+        pinned = [tool_id for tool_id in ids if tool_id in PINNED_DENY]
         if refused:
             counts[name][1] += 1
             details.append(_detail(name, ids[0], tool_input))
-            failed = failed or name != "other"
-        pinned = [tool_id for tool_id in ids if tool_id in PINNED_DENY]
+            if name != "other" and not pinned:
+                failed = True
         if pinned and not refused:
             print(
                 f"replay: pinned deny id allowed: {' '.join(pinned)}",

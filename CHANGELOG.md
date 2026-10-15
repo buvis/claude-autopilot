@@ -72,6 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: two concurrent `autopilot verify` runs no longer race the record and log file - the gate takes a lock, so only one run writes the record at a time; the wait for that lock is now bounded by the gate's own timeout, so a hung or orphaned holder can no longer block every later `verify` indefinitely
 - **run-autopilot**: a single-hop directory symlink that aliases the repository root (for example `src/root -> ..`) no longer escapes gate-reuse staleness detection
 - **run-autopilot**: gate reuse is refused when a tracked product symlink that aliases a path inside the store has a changed target, committed or uncommitted, so a store-only edit can no longer evade staleness detection
+- **hooks**: the phase-delegation guard no longer refuses a dispatch whose only phase mention is a quoted citation (a phase named inside quotes or a citation is not an order to run it), and exempts agoge by an enumerated roster of its 7 personas instead of any `agoge:` prefix
 
 ## [0.9.0] - 2026-10-05
 
