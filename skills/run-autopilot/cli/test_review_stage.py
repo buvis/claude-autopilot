@@ -233,6 +233,7 @@ def test_stage_writes_every_input_file(env: dict) -> None:
         "tests_line": "Tests: 3 passed, 0 failed, 1 skipped (suite run this cycle)",
         "timed_out": False,
         "log": str(env["repo"] / "docs/dev/tmp" / f"gate-{CYCLE}.log"),
+        "dirty_paths": [],
     }
     assert summary["mode"] == "standalone"
     assert set(summary["prompts"]) == {"alice", "bob", "blake", "carl"}
