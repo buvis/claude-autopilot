@@ -4668,3 +4668,34 @@
 {"kind":"handoff","site":"build","edge":"leave","at":1792077932,"phase":"build","prd":"00312-close-ten-loop-truths-v1.md"}
 {"kind":"handoff","site":"build","edge":"resume","at":1792077961,"phase":"build","prd":"00312-close-ten-loop-truths-v1.md"}
 {"kind":"handoff","site":"build","edge":"leave","at":1792079779,"phase":"review","prd":"00312-close-ten-loop-truths-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1792079902,"phase":"review","prd":"00312-close-ten-loop-truths-v1.md"}
+{"id":"aa72c141","kind":"bob","task":"review-20261015-1800","queued_at":1792079948,"prompt_bytes":9564}
+{"id":"9757e5cc","kind":"carl","task":"review-20261015-1800","queued_at":1792079948,"prompt_bytes":6563}
+{"id":"aa72c141","ended_at":1792081025,"elapsed_s":1077,"outcome":"ok","detail":"retry"}
+{"id":"9757e5cc","ended_at":1792081028,"elapsed_s":1080,"outcome":"ok","detail":null}
+{"id":"91f2cad9","kind":"tess","task":"6","queued_at":1792081596,"prompt_bytes":19504}
+{"id":"91f2cad9","ended_at":1792081676,"elapsed_s":80,"outcome":"ok","detail":null}
+{"id":"23907fff","kind":"ivan","task":"6","queued_at":1792081775,"prompt_bytes":15077}
+{"id":"23907fff","ended_at":1792081832,"elapsed_s":57,"outcome":"ok","detail":null}
+{"id":"5e6660f1","kind":"pat","task":"6","queued_at":1792081911,"prompt_bytes":15537}
+{"id":"5e6660f1","ended_at":1792081951,"elapsed_s":40,"outcome":"ok","detail":null}
+{"id":"8cc7dbe3","kind":"tess","task":"7","queued_at":1792082125,"prompt_bytes":23353}
+{"id":"8cc7dbe3","ended_at":1792082169,"elapsed_s":44,"outcome":"ok","detail":null}
+{"id":"7919bbdf","kind":"ivan","task":"7","queued_at":1792082291,"prompt_bytes":15835}
+{"id":"71631d39","kind":"deslop","task":"7","queued_at":1792082433,"prompt_bytes":8868}
+{"id":"71631d39","ended_at":1792082464,"elapsed_s":31,"outcome":"ok","detail":"no slop found"}
+{"id":"41b84997","kind":"pat","task":"7","queued_at":1792082521,"prompt_bytes":15606}
+{"id":"78c0482c","kind":"pat","task":"7","queued_at":1792082682,"prompt_bytes":7164}
+{"id":"41b84997","ended_at":1792082707,"elapsed_s":186,"outcome":"ok","detail":null}
+{"id":"78c0482c","ended_at":1792082707,"elapsed_s":25,"outcome":"ok","detail":null}
+{"id":"aa9d10e4","kind":"ivan","task":"8","queued_at":1792082819,"prompt_bytes":17455}
+{"id":"aa9d10e4","ended_at":1792083020,"elapsed_s":201,"outcome":"ok","detail":null}
+{"id":"c3a773d7","kind":"deslop","task":"8","queued_at":1792083113,"prompt_bytes":8648}
+{"id":"c3a773d7","ended_at":1792083140,"elapsed_s":27,"outcome":"ok","detail":"no slop found"}
+{"id":"e1c14b4c","kind":"ivan","task":"8","queued_at":1792083184,"prompt_bytes":13406}
+{"id":"e1c14b4c","ended_at":1792083232,"elapsed_s":48,"outcome":"ok","detail":null}
+{"id":"bb617e89","kind":"pat","task":"8","queued_at":1792083296,"prompt_bytes":17548}
+{"id":"85b04c99","kind":"pat","task":"8","queued_at":1792083434,"prompt_bytes":7487}
+{"id":"bb617e89","ended_at":1792083498,"elapsed_s":202,"outcome":"ok","detail":null}
+{"id":"85b04c99","ended_at":1792083498,"elapsed_s":64,"outcome":"ok","detail":null}
+{"id":"961e9d78","kind":"ivan","task":"9","queued_at":1792083667,"prompt_bytes":16104}

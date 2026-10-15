@@ -1,0 +1,42 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "9 touched test(s) pass against the pre-change code: test_loop_entry_then_skill_entry_writes_one_resume_row, test_stale_loop_entry_is_dropped, test_manual_prd_arg_skips_the_replay_even_with_a_matching_entry, test_pre_enter_failure_invalidates_a_stale_same_prd_entry, test_pre_enter_write_failure_invalidates_a_stale_same_prd_entry, test_pre_enter_runs_only_for_a_build_or_a_park_marker +3 more",
+    "file": "skills/run-autopilot/cli/test_loop_gates.py",
+    "reason": "verified not a defect: every base-passer is a pre-existing test, not one of this PRD's new ones. All 17 of the PRD's named tests are absent at base 57fb258a (checked with git grep at that commit), so none can be among the 24 base-passers. The one new test that does live in this file, test_child_pids_passes_dash_a_on_darwin, cannot pass at base because the `-a` insert it asserts (skills/run-autopilot/cli/procinfo.py:126) does not exist there. 18 of the 42 replayed tests failed against base, which is the fail-first evidence for the new behaviour."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "15 touched test(s) pass against the pre-change code: test_duplicate_loop_guard_refuses_a_second_loop, test_registry_entry_written_and_removed_at_teardown, test_registry_entry_carries_the_tracon_contract_shape, test_own_stale_registry_entry_is_overwritten_not_refused, test_registry_write_failure_runs_unregistered_loud, test_loops_dir_is_propagated_to_session_children +9 more",
+    "file": "skills/run-autopilot/cli/test_loop_gates_registry.py",
+    "reason": "verified not a defect: this file is new in the diff purely as a carve-out of test_loop_gates.py (301 lines added here, 344 removed there), and it holds exactly 15 tests - the same 15 the replay reports as passing at base. Relocated pre-existing tests pass against the pre-change code by design; this is the behaviour-preserving-refactor case the replay block itself names."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "test_wrapper_alive_script_requires_root_arg hedges with or: either outcome satisfies it",
+    "file": "skills/run-autopilot/scripts/tracon/test_discovery.py:1665",
+    "reason": "pre-existing tautological assertion, unchanged by this diff and outside PRD 00312's seventeen named regression tests. Bob placed it in KNOWN for the same reason. Not silently dropped: recorded as a deferred decision so it is visible at batch end and can be fixed under its own item. Raised independently by Alice, Carl and the mechanical shapes check."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The diff grows files already far over the 800-line limit: `__main__.py` is 1967 lines (+5) and `test_discovery.py` is 1667 (+20). `test_loop_gates.py` was split to stay under the limit, but these two were not.",
+    "file": "skills/run-autopilot/cli/__main__.py:1967",
+    "reason": "the counts are correct (verified: 1967 and 1667 lines), so this is not a computed-facts discard. But both files were already far over the 800-line limit before this diff, and splitting them is a structural change several times larger than PRD 00312's own scope. Deferred to batch end rather than attempted inside a loop-truths PRD."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Existing size violations remain: `_select_report_block` is 55 lines, and its containing file exceeds 800 lines. These predate this diff; restructuring unchanged code is outside this PRD.",
+    "file": "skills/run-autopilot/cli/__main__.py:1508",
+    "reason": "confirmed by the mechanical-facts block itself (`_select_report_block` - line 1508, 55 lines), so not a computed-facts discard. Pre-existing and unchanged by this diff; Bob raised it in KNOWN as out of scope and it is deferred on the same grounds as the file-size finding above."
+  }
+]

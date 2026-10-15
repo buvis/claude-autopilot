@@ -280,6 +280,46 @@
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
       "prd": "00311-verify-reports-what-the-gate-did-v1.md"
+    },
+    {
+      "type": "review-finding",
+      "cycle": 1,
+      "issue": "test_wrapper_alive_script_requires_root_arg hedges with or: either outcome satisfies it (skills/run-autopilot/scripts/tracon/test_discovery.py:1665)",
+      "severity": "medium",
+      "consensus": "3/4",
+      "action": "deferred",
+      "reason": "pre-existing tautological assertion, unchanged by this diff and outside PRD 00312 scope; raised by Alice, Carl and the mechanical shapes check",
+      "prd": "00312-close-ten-loop-truths-v1.md"
+    },
+    {
+      "type": "review-finding",
+      "cycle": 1,
+      "issue": "__main__.py (1967 lines) and scripts/tracon/test_discovery.py (1667 lines) are far over the 800-line limit and this diff grows both; splitting them is out of PRD 00312 scope",
+      "severity": "low",
+      "consensus": "1/4",
+      "action": "deferred",
+      "reason": "counts verified correct; both files were already over the limit before this diff and splitting them is a structural change much larger than this PRD",
+      "prd": "00312-close-ten-loop-truths-v1.md"
+    },
+    {
+      "type": "review-finding",
+      "cycle": 1,
+      "issue": "_select_report_block is 55 lines (skills/run-autopilot/cli/__main__.py:1508), over the 50-line function limit, in a file over 800 lines; predates this diff",
+      "severity": "low",
+      "consensus": "1/4",
+      "action": "deferred",
+      "reason": "confirmed by the mechanical-facts block; pre-existing and unchanged by this diff, so restructuring it is outside PRD 00312",
+      "prd": "00312-close-ten-loop-truths-v1.md"
+    },
+    {
+      "type": "sweep-escape",
+      "cycle": 1,
+      "issue": "_check_line in skills/run-autopilot/cli/test_doc_contract.py catches a bare positional only as <...> text outside brackets, so a documented invocation carrying [<review-file>], [--state <s> <file>] or an unangled FILE would still pass",
+      "severity": "low",
+      "consensus": "1/1",
+      "action": "deferred",
+      "reason": "raised by the per-task reviewer (Pat) on task 8 of the cycle-1 tail sweep and accepted as real; hardening the placeholder parser against doc shapes nobody has written is beyond the finding that prompted it, which was about the committed line real drift, and this is a converged cycle whose sweep exists to stop polishing. The reviewer agreed the deferral is defensible provided this record stays visible.",
+      "prd": "00312-close-ten-loop-truths-v1.md"
     }
   ]
 }
