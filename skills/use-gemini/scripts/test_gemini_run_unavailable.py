@@ -305,9 +305,13 @@ def test_watchdog_stays_armed_while_a_child_holds_stderr(tmp_path: Path) -> None
     try:
         rc, elapsed = _run_to_deadline(tmp_path, env)
         pid = int(child_file.read_text().strip())
+        wrapper_err = (tmp_path / "wrapper.err").read_text()
         assert rc == 4, (
             f"the watchdog must still fire and reap the orphaned child, got {rc}; "
-            f"stderr: {(tmp_path / 'wrapper.err').read_text()}"
+            f"stderr: {wrapper_err}"
+        )
+        assert "produced no output within 2s" in wrapper_err, (
+            f"the fallback-timeout message must match the PRD text; stderr: {wrapper_err}"
         )
         assert elapsed < 10.0, (
             f"wait on stderr must stay bounded by the watchdog: took {elapsed:.2f}s"

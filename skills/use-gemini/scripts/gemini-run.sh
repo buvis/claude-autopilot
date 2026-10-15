@@ -250,11 +250,13 @@ run_cmd() {
     # Keep the watchdog armed through stderr draining: a child that outlives
     # the backend and still holds the stderr fifo open would otherwise leave
     # this wait unbounded with nothing left to kill it.
-    wait "$stderr_pid" || return 1
+    local stderr_rc=0
+    wait "$stderr_pid" || stderr_rc=1
     if [ -n "$timer" ]; then
         kill -- "-$timer" 2>/dev/null || true
         wait "$timer" 2>/dev/null || true
     fi
+    [ "$stderr_rc" -eq 0 ] || return 1
     if [ -f "$RUN_TMP/timed_out" ]; then
         echo "ERROR: gemini fallback produced no output within ${FALLBACK_DEADLINE}s." >&2
         return 4
