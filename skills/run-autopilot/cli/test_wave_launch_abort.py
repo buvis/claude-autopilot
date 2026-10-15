@@ -154,6 +154,56 @@ def test_pgid_alive_probes_the_group_not_a_single_pid(tmp_path: Path) -> None:
     assert wave_launch._pgid_alive(leader.pid) is False
 
 
+# ── kill grace (PRD 00313) ───────────────────────────────────────────────────
+
+
+def test_default_kill_grace_is_sixty_then_ten() -> None:
+    """`_kill_lane`'s escalation ladder must be a named, importable constant
+    (`KILL_GRACE`) rather than a hardcoded tuple literal, so a test can pin
+    its value and `abort`/`_kill_lane` can accept an override (00313).
+    `KILL_GRACE` does not exist yet, so this currently fails with
+    AttributeError/ImportError."""
+    assert wave_launch.KILL_GRACE == ((signal.SIGTERM, 60), (signal.SIGKILL, 10))
+
+
+def test_abort_escalates_after_the_configured_grace(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A lane whose group ignores SIGTERM must escalate to SIGKILL within
+    about one second when `abort` is given a 0.2s grace, not the real 60s
+    default -- `abort` does not accept a `grace` keyword yet (00313), so this
+    call currently fails with a TypeError."""
+    repo, wave_path = _launched(tmp_path, monkeypatch, TWO_LANES)
+    saved = wave.load(wave_path)
+    deaf = subprocess.Popen(
+        [sys.executable, "-c", "import signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(600)"],
+        start_new_session=True,
+    )
+    kills: list[tuple[int, int, float]] = []
+    start = time.monotonic()
+    try:
+        saved["lanes"][0].update(pid=deaf.pid, status="running")
+        wave.save(wave_path, saved)
+        exit_code = wave_launch.abort(
+            repo,
+            wave_path,
+            kill_fn=lambda pgid, sig: kills.append((pgid, sig, time.monotonic())),
+            grace=0.2,
+        )
+    finally:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(deaf.pid, signal.SIGKILL)
+        deaf.wait(30)
+    elapsed = time.monotonic() - start
+    assert elapsed < 1, elapsed
+    assert [each[:2] for each in kills] == [
+        (deaf.pid, signal.SIGTERM),
+        (deaf.pid, signal.SIGKILL),
+    ]
+    assert exit_code == 1
+
+
 # ── abort ────────────────────────────────────────────────────────────────────
 
 
@@ -644,8 +694,10 @@ def test_abort_leaves_a_lane_whose_group_outlived_sigkill_mid_loop(
     slots = _autopilot(repo) / "wave-slots"
     slots.mkdir()
     (slots / "slot-1").write_text("taken\n", encoding="utf-8")
-    # A group that never dies: `kill_fn` only records, so the real 60s and 10s
-    # poll windows both run out and the lane's kill genuinely fails.
+    # A group that never dies: `kill_fn` only records, so both grace windows
+    # run out and the lane's kill genuinely fails. `grace` is a sub-second
+    # override of the real 60s/10s windows -- `abort` does not accept this
+    # keyword yet (00313), so this call fails with a TypeError until it does.
     immovable = subprocess.Popen(
         [sys.executable, "-c", "import time; time.sleep(600)"],
         start_new_session=True,
@@ -658,6 +710,7 @@ def test_abort_leaves_a_lane_whose_group_outlived_sigkill_mid_loop(
             repo,
             wave_path,
             kill_fn=lambda pgid, sig: kills.append((pgid, sig, time.monotonic())),
+            grace=0.2,
         )
     finally:
         with contextlib.suppress(ProcessLookupError):
@@ -668,8 +721,9 @@ def test_abort_leaves_a_lane_whose_group_outlived_sigkill_mid_loop(
         (immovable.pid, signal.SIGTERM),
         (immovable.pid, signal.SIGKILL),
     ]
-    # the whole 60s SIGTERM grace ran before escalating, not a fraction of it
-    assert kills[1][2] - kills[0][2] >= 59
+    # the configured 0.2s grace ran before escalating, not the real 60s
+    assert kills[1][2] - kills[0][2] >= 0.2
+    assert kills[1][2] - kills[0][2] < 30
     after = wave.load(wave_path)
     assert after["status"] == "abort_failed"
     alive, finished = after["lanes"]

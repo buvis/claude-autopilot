@@ -275,6 +275,111 @@ def test_every_review_verb_test_file_is_listed() -> None:
     )
 
 
+def test_tracon_block_runs_with_textual() -> None:
+    """The `[checks] tracon` block must run its pytest invocation with
+    `--with textual` so test_screens.py's 31 Textual pilot tests actually
+    run instead of self-skipping via `importorskip("textual")` (00313)."""
+    text = _RELEASE_CHECKS.read_text()
+    marker = text.index('echo "[checks] tracon"')
+    next_marker = text.index('echo "[checks]', marker + 1)
+    block = text[marker:next_marker]
+    assert "--with textual" in block, block
+
+
+_RELEASE = Path(__file__).resolve().parents[3] / "dev" / "bin" / "release"
+
+
+def _copy_release_checks(tmp_path: Path) -> Path:
+    """A standalone copy of dev/bin/release-checks under `tmp_path`, so a stub
+    pytest summary can drive it without mutating the real script."""
+    copy = tmp_path / "release-checks"
+    copy.write_text(_RELEASE_CHECKS.read_text(), encoding="utf-8")
+    copy.chmod(0o755)
+    return copy
+
+
+def test_skip_ceiling_fails_the_gate_above_three(tmp_path: Path) -> None:
+    """A `run_pytest` call reporting `1 passed, 4 skipped` has 4 skips, above a
+    ceiling of 3 -- the gate must fail instead of silently folding every skip
+    into TOTAL_SKIP forever (00313: SKIP_ALLOWED does not exist yet)."""
+    copy = _copy_release_checks(tmp_path)
+    text = copy.read_text()
+    marker = '\necho "[checks] '
+    helpers = text[: text.index(marker)]
+    script = (
+        f"{helpers}\n"
+        "run_pytest bash -c 'echo \"1 passed, 4 skipped in 0.01s\"; exit 0'\n"
+        'EXIT_CODE=0\n'
+        'if [[ "$TOTAL_FAIL" -ne 0 || "$INFRA_FAIL" -ne 0 || "$TOTAL_SKIP" -gt "${SKIP_ALLOWED:?}" ]]; then EXIT_CODE=1; fi\n'
+        'echo "PASS $TOTAL_PASS FAIL $TOTAL_FAIL SKIP $TOTAL_SKIP EXIT $EXIT_CODE"\n'
+    )
+    proc = subprocess.run(
+        ["bash", "-c", script],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    out = proc.stdout + proc.stderr
+    assert "EXIT 1" in out, out
+    assert "ceiling" in out.lower() or "SKIP_ALLOWED" in out, out
+
+
+def _fixture_repo(tmp_path: Path) -> tuple[Path, Path]:
+    """A fixture repo with a real copy of dev/bin/release at
+    <fixture>/dev/bin/release, matching dev/bin/release's own REPO_ROOT
+    derivation from $0's location."""
+    fixture_root = tmp_path / "repo"
+    bin_dir = fixture_root / "dev" / "bin"
+    bin_dir.mkdir(parents=True)
+    release_copy = bin_dir / "release"
+    release_copy.write_text(_RELEASE.read_text(encoding="utf-8"), encoding="utf-8")
+    release_copy.chmod(0o755)
+    return fixture_root, release_copy
+
+
+def test_release_block_check_is_case_insensitive(tmp_path: Path) -> None:
+    """dev/bin/release's block check greps case-sensitively for "release is
+    blocked"; a held PRD that capitalizes "Release" must still block the
+    release (00313)."""
+    fixture_root, release_copy = _fixture_repo(tmp_path)
+
+    plugins_dir = tmp_path / "claude-plugins" / "scripts"
+    plugins_dir.mkdir(parents=True)
+    sentinel = tmp_path / "release-plugin-ran"
+    stub = plugins_dir / "release-plugin"
+    stub.write_text(f"#!/usr/bin/env bash\ntouch {sentinel}\n", encoding="utf-8")
+    stub.chmod(0o755)
+    subprocess.run(["git", "init", "-q", str(tmp_path / "claude-plugins")], check=True)
+
+    hold_dir = fixture_root / "docs" / "dev" / "project-management" / "prds" / "hold"
+    hold_dir.mkdir(parents=True)
+    prd = hold_dir / "0001-x.md"
+    prd.write_text("---\n---\n# A PRD\n\nRelease is blocked on this PRD.\n", encoding="utf-8")
+
+    result = subprocess.run([str(release_copy)], capture_output=True, text=True, check=False)
+    assert result.returncode == 1, (result.stdout, result.stderr)
+    assert not sentinel.exists()
+    assert str(prd) in result.stderr, result.stderr
+
+
+def test_release_block_check_runs_before_the_central_repo_check(tmp_path: Path) -> None:
+    """A clone without a ../claude-plugins sibling should still report the
+    blocking PRD, not just "claude-plugins not found" -- the block check must
+    run before the central-repo existence check (00313)."""
+    fixture_root, release_copy = _fixture_repo(tmp_path)
+    # No claude-plugins sibling created at all.
+
+    hold_dir = fixture_root / "docs" / "dev" / "project-management" / "prds" / "hold"
+    hold_dir.mkdir(parents=True)
+    prd = hold_dir / "0001-x.md"
+    prd.write_text("---\n---\n# A PRD\n\nrelease is blocked on this PRD.\n", encoding="utf-8")
+
+    result = subprocess.run([str(release_copy)], capture_output=True, text=True, check=False)
+    assert result.returncode == 1, (result.stdout, result.stderr)
+    assert str(prd) in result.stderr, result.stderr
+    assert "claude-plugins" not in result.stderr, result.stderr
+
+
 def test_release_refuses_while_a_held_prd_blocks_it(tmp_path: Path) -> None:
     """dev/bin/release derives REPO_ROOT purely from $0's own location
     (REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"), so the only fixture
