@@ -327,6 +327,32 @@ def test_each_pinned_deny_id_fails_when_allowed(tmp_path: Path, capsys) -> None:
         assert len(_guard_calls(log)) == 1, pinned
 
 
+def test_refused_pinned_per_task_id_does_not_fail_the_replay(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    # A pinned id the guard still refuses is the pinned verdict holding: the
+    # refusal is counted and printed, but it does not fail the run.
+    for index, pinned in enumerate(PINNED_DENY):
+        guard, log = _stub_guard(tmp_path, f"guard_{index}")
+        directory = _transcripts(
+            tmp_path,
+            [(pinned, _dispatch("task 7 build", "autopilot:ivan", deny=True))],
+            name=f"pinned_{index}",
+        )
+        code = _main(directory, guard)
+        out, err = capsys.readouterr()
+        total, buckets, details = _report(out)
+        assert code == 0, (pinned, total, buckets, details, err)
+        assert total == 1 and buckets == ["per-task 1 refused 1"], (pinned, buckets)
+        assert details == [f"per-task {pinned} autopilot:ivan task 7 build"], (
+            pinned,
+            details,
+        )
+        assert "pinned deny id allowed" not in out + err, (pinned, out, err)
+        assert len(_guard_calls(log)) == 1, (pinned, _guard_calls(log))
+
+
 def test_unpinned_tool_id_of_the_same_shape_does_not_fail(
     tmp_path: Path,
     capsys,
