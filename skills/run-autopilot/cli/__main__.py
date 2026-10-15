@@ -232,6 +232,7 @@ _SKILL_ROOT = _CLI_DIR.parent
 sys.path.insert(0, str(_SKILL_ROOT))
 
 from cli import (
+    cap_check,
     catchup_probe,
     custody,
     enter,
@@ -872,6 +873,28 @@ def _run_gate(args: argparse.Namespace) -> int:
         args.assert_constraint_met,
         args.findings,
     )
+
+
+def _add_cap_check(subparsers) -> None:
+    p = subparsers.add_parser("cap-check")
+    p.add_argument("--review-file", type=Path, required=True)
+    p.add_argument("--previous", type=Path, default=None)
+    p.add_argument("--repo-root", type=Path, default=Path.cwd())
+
+
+def _run_cap_check(args: argparse.Namespace) -> int:
+    try:
+        rows = cap_check.classify_findings(
+            args.repo_root,
+            args.review_file,
+            args.previous,
+        )
+    except cap_check.CapCheckError as err:
+        print(f"autopilot: cap-check: {err}", file=sys.stderr)
+        return 2
+    for row in rows:
+        print(json.dumps(row, ensure_ascii=False))
+    return 1 if any(row["regression"] for row in rows) else 0
 
 
 def _add_group_rework(subparsers) -> None:
@@ -1867,6 +1890,7 @@ _SUBCOMMANDS: dict[str, tuple] = {
     "phase-done": (_add_phase_done, _run_phase_done),
     "resume-target": (_add_resume_target, _run_resume_target),
     "gate": (_add_gate, _run_gate),
+    "cap-check": (_add_cap_check, _run_cap_check),
     "group-rework": (_add_group_rework, _run_group_rework),
     "verify": (_add_verify, _run_verify),
     "review-stage": (_add_review_stage, _run_review_stage),
