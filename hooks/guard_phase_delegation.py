@@ -244,7 +244,11 @@ _SENTENCE_BOUNDARY = re.compile(r"[.!?\n]")
 # quote is found as a close, and the guard allows it -- measured, 4 pinned
 # tests in hooks/test_guard_phase_delegation_structure.py go red.
 _CITE_SENTENCE_BOUNDARY = re.compile(
-    r"""[.!?](?=\s|[]'"’”»」)]|`*\s*(?:\Z|\n)|`+[ \t]*[^(\s])|\n"""
+    # The trailing class excludes the backtick itself: with a bare [^(\s] the
+    # `+ run gives one backtick back on a multi-backtick closer ("PRD 00300.``(
+    # verbatim)"), the class matches that backtick, and the terminator wrongly
+    # ends the citation sentence.
+    r"""[.!?](?=\s|[]'"’”»」)]|`*\s*(?:\Z|\n)|`+[ \t]*[^(\s`])|\n"""
 )
 
 _AGOGE_PREFIX = "agoge:"
