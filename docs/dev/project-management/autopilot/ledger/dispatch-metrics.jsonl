@@ -4486,3 +4486,13 @@
 {"id":"adf6284b","ended_at":1792046467,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"id":"c5648c85","ended_at":1792046467,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1792046467,"phase":"review","prd":"00308-reviewer-lane-resilience-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1792046516,"phase":"review","prd":"00308-reviewer-lane-resilience-v1.md"}
+{"id":"b1ddcc19","kind":"bob","task":"review-20261015-0700","queued_at":1792046607,"prompt_bytes":9564}
+{"id":"076340f7","kind":"carl","task":"review-20261015-0700","queued_at":1792046607,"prompt_bytes":6563}
+{"id":"60637809","kind":"bob","task":"review-20261015-0700","queued_at":1792046897,"prompt_bytes":187506}
+{"id":"b1ddcc19","ended_at":1792047302,"elapsed_s":695,"outcome":"error","detail":"lack-of-input"}
+{"id":"60637809","ended_at":1792047305,"elapsed_s":408,"outcome":"ok","detail":"retry"}
+{"id":"076340f7","ended_at":1792047308,"elapsed_s":701,"outcome":"ok","detail":null}
+{"id":"60637809","ended_at":1792047564,"elapsed_s":667,"outcome":"ok","detail":null}
+{"id":"076340f7","ended_at":1792047564,"elapsed_s":957,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"review","edge":"leave","at":1792047631,"phase":"review","prd":"00308-reviewer-lane-resilience-v1.md"}

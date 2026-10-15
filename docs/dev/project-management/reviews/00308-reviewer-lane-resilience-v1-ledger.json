@@ -1,0 +1,26 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "The spec says `permanently_unavailable` \"also matches\" auth strings. The implementation adds a separate branch in `run_cmd` (gemini-run.sh:247) gated on `rc -ne 0`, with `AUTH_FAILED` suppressing the fallback. Behavior is equivalent or stricter, and the fallback skip is correct (gemini-run.sh:356). `permanently_unavailable` itself (gemini-run.sh:199-201) is unchanged.",
+    "file": "skills/use-gemini/scripts/gemini-run.sh:199",
+    "reason": "The reviewer asserts no defect: he states the behavior is equivalent or stricter and the fallback skip correct. The shared-classifier shape deviation it describes is tracked as R10, which is a fix task this cycle, so this row carries no separate work."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Small additions beyond the spec: a non-numeric `GEMINI_FALLBACK_TIMEOUT` silently falls back to 900 (gemini-run.sh:229), and `retry` with no autopilot dir prints a random token and writes nothing (record_dispatch.py:92). Both fail safe and are tested; neither is specified.",
+    "file": "skills/work/scripts/record_dispatch.py:92",
+    "reason": "The reviewer states both behaviors fail safe and are already tested. An unspecified-but-safe-and-tested default is not a defect, and the PRD's simplest-safe-assumption rule covers choosing one."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "3 touched test(s) pass against the pre-change code: test_ordinary_copilot_failure_stays_exit_1_without_fallback, test_successful_copilot_run_mentioning_auth_keeps_exit_0, test_tier_rejection_still_falls_back",
+    "file": "skills/use-gemini/scripts/test_gemini_run_unavailable.py",
+    "reason": "All three are precision guards for the new auth classifier: they pin that behavior which must NOT change (an ordinary failure stays exit 1, a successful run mentioning auth stays exit 0, a tier rejection still falls back) is unchanged. Passing against the pre-change code is exactly what a guard against over-matching is supposed to do, so the replay's computed fact is not a defect here."
+  }
+]
