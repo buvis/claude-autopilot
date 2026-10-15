@@ -260,9 +260,9 @@ def test_stage_renders_the_dirty_tests_line_when_the_tree_is_dirty(
 
     summary = _stage(env)
 
-    assert (
-        summary["gate"]["tests_line"]
-        == "Tests: (gate skipped: working tree dirty outside the store)"
+    assert summary["gate"]["tests_line"] == (
+        "Tests: (gate skipped: working tree dirty outside the store: "
+        "src/untracked.py)"
     )
 
 

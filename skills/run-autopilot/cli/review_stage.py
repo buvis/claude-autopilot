@@ -355,7 +355,8 @@ def _gate_result_line(result: dict) -> str:
     if result["head_moved"]:
         return "Tests: (gate skipped: HEAD moved during the lock wait)"
     if result["dirty"]:
-        return "Tests: (gate skipped: working tree dirty outside the store)"
+        paths = ", ".join(result["dirty_paths"]) or "(no paths reported)"
+        return f"Tests: (gate skipped: working tree dirty outside the store: {paths})"
     if result["timed_out"]:
         # TESTS_RE needs counts; zeros plus the suffix say none were read.
         suffix = (
@@ -388,6 +389,7 @@ def run_gate_line(repo_root: Path, gate_command: str, cycle_id: str) -> dict:
             "verdict": verdict,
             "tests_line": _tests_line(counts, suffix),
             "timed_out": False,
+            "dirty_paths": [],
         }
     cycle = int(cycle_id) if cycle_id.isascii() and cycle_id.isdigit() else None
     log_path = repo_root / TMP_REL / f"gate-{cycle_id}.log"
