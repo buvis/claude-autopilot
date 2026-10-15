@@ -63,6 +63,6 @@ All six prior CRITICAL/HIGH findings verified RESOLVED against the rework commit
 **00309-loop-friction-verbs-v1-c1**
 No findings — the codex CLI's read-only sandbox failed to initialize (`mcp: node_repl/js (failed)`) before any file could be read; it reported "Cannot statically verify" against every rubric rule. Lens recorded as missing (one retry budget not spent, given overwhelming independent confirmation from the other 4 lenses on the same findings).
 
-Verdict: N findings
+Verdict: converged
 Tests: 6731 passed, 0 failed (repo-wide batch suite, dev/bin/release-checks, after fixing the doc-contract gap the batch suite itself caught)
 codex_rung_guard: not fired
