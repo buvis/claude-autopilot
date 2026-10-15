@@ -87,7 +87,7 @@ it to `dev/bin/release-checks`; that suite remains hermetic with stub binaries.
 | 0 | Backend succeeded (or `--help` printed); verify review output is non-empty. |
 | 1 | Usage, setup, temporary/output file error, or ordinary backend failure with code 1, 3, or 4. |
 | 3 | Nested dispatch refused; no backend ran. |
-| 4 | Model unavailable or client tier ineligible after any eligible fallback. |
+| 4 | Model unavailable or client tier ineligible after any eligible fallback; also an authentication failure (no fallback is attempted) and a native fallback killed at `GEMINI_FALLBACK_TIMEOUT`. |
 | Other non-zero | Backend/tool status propagated, including signal exits such as 130 or 143; a runtime failure, not classified permanent rejection. |
 
 Child codes 3 and 4 without a recognized stderr rejection map to 1 to keep the
