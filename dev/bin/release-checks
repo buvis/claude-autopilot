@@ -170,6 +170,7 @@ run_harness bash skills/use-codex/scripts/test_codex_run.sh
 run_harness bash skills/use-codex/scripts/test_codex_run_resume.sh
 run_harness bash skills/use-gemini/scripts/test_gemini_run.sh
 run_harness bash skills/use-sonnet/scripts/test_sonnet_run.sh
+run_pytest uv run --no-project --with pytest python -m pytest -q skills/use-gemini/scripts/test_gemini_run_unavailable.py
 
 echo "[checks] fast-track lane"
 run_pytest uv run --no-project --with pytest python -m pytest -q skills/fast-track/scripts
