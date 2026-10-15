@@ -123,8 +123,9 @@ def test_abort_finishes_a_lane_whose_group_vanishes_at_the_sigkill(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # ~60s: the SIGTERM is delivered for real to a group that ignores it, so the
-    # whole grace window runs before the escalation this test is about.
+    # A sub-second `grace` override: the SIGTERM is delivered for real to a
+    # group that ignores it, but the escalation this test is about must not
+    # burn the real 60s/10s windows to reach it.
     repo, wave_path = _launched(tmp_path, monkeypatch, ONE_LANE)
     saved = wave.load(wave_path)
     marker = tmp_path / "deaf.json"
@@ -141,6 +142,7 @@ def test_abort_finishes_a_lane_whose_group_vanishes_at_the_sigkill(
             repo,
             wave_path,
             kill_fn=_vanishing_kill(kills, at=signal.SIGKILL),
+            grace=0.2,
         )
     finally:
         with contextlib.suppress(ProcessLookupError):
