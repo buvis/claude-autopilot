@@ -1,0 +1,26 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "Extra `--repo-root` flag on the `cap-check` verb is not in the spec, which gives only `--review-file` and `--previous`. It defaults to cwd, so it is low-risk, but it is unrequested surface.",
+    "file": "skills/run-autopilot/cli/__main__.py:882",
+    "reason": "The flag is what lets the fixture tests invoke the verb against a temporary repo; it defaults to cwd so the documented two-flag surface is unchanged in use. Removing it would require the tests to chdir, which is worse. Kept deliberately."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`rework_range()` is an identity function that returns its arguments. It meets the spec's export list but does no range computation.",
+    "file": "skills/run-autopilot/cli/cap_check.py:24",
+    "reason": "The PRD mandates the export by name. The rework range genuinely is the endpoint pair (previous_head, head); there is nothing to compute. A richer implementation would be invented work."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Existing CLI size violations remain: the supplied mechanical facts show functions of 55 and 51 lines and a file exceeding 800 lines. Splitting these unchanged sections is outside this PRD's scope.",
+    "file": "skills/run-autopilot/cli/__main__.py:1469",
+    "reason": "Pre-existing, outside this PRD's diff, and Bob himself files it as KNOWN/out-of-scope. Touching it would violate the surgical-changes rule."
+  }
+]
