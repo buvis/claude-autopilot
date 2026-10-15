@@ -48,8 +48,9 @@ Generated: 2026-10-13
 - [x] 00277-catch-critical-rows-in-every-shape-v2 (2 cycles)
 - [x] 00307-guard-citations-and-replay-contract-v1 (2 cycles)
 - [x] 00308-reviewer-lane-resilience-v1 (2 cycles)
+- [x] 00309-loop-friction-verbs-v1 (1 cycle, fast-track)
 - 00306-refuse-tracked-verify-log-v1 parked to hold/ (stall mid-batch)
-- backlog remaining: 00309-00313
+- backlog remaining: 00310-00313
 
 Observations: 00277 (full lane, design) converged at cycle 2 (rework_cap 2,
 beat the cap): cycle 1 fixed a nested-lead bypass in `_strip_lead` (two HIGHs:
@@ -81,6 +82,10 @@ failed (readonly sqlite db); Bob's first codex dispatch returned a
 lack-of-input refusal, resolved on retry with an inlined prompt; the `Tests:`
 line reused `last-verification.json` at 6d963d4 since the three later
 commits were store records only.
+
+00309 (fast-track lane, card-sized) closed in 1 cycle: 1 rework round
+resolved all 6 CRITICAL/HIGH review findings, delta-verified. Repo-wide batch
+suite green (6731 passed, 0 failed). No deferred items, no doubts.
 
 ### Batch 202610111300
 - [x] 00271-guard-v2-structural-delegation-check-v1 (2 cycles)
