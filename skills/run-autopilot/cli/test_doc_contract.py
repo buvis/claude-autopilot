@@ -94,6 +94,34 @@ def _check_line(subparsers, verb: str, invocation: str) -> None:
         raise AssertionError(f"{verb}: bare positional placeholder remains")
 
 
+_REVIEW_STAGE_BASE = "autopilot review-stage --cycle-id <id> --gate-command <cmd>"
+
+# Self-checks of _check_line: each case carries the rule it must trip, so a
+# case cannot pass on some other failure and leave its own branch unexercised.
+_VALIDATOR_REJECTS = (
+    (
+        "bare positional",
+        f"{_REVIEW_STAGE_BASE} [--state <state.json>] <review-file>",
+        "bare positional placeholder remains",
+    ),
+    (
+        "required missing",
+        "autopilot review-stage --cycle-id <id> [--state <state.json>]",
+        "required --gate-command missing or bracketed",
+    ),
+    (
+        "unknown option",
+        f"{_REVIEW_STAGE_BASE} [--nonexistent <x>]",
+        "unknown --nonexistent",
+    ),
+    (
+        "optional as required",
+        f"{_REVIEW_STAGE_BASE} --state <state.json>",
+        "optional --state presented as required",
+    ),
+)
+
+
 class DocContractTests(unittest.TestCase):
     def test_every_registered_subcommand_has_an_autopilot_invocation_in_the_docs(
         self,
@@ -121,13 +149,11 @@ class DocContractTests(unittest.TestCase):
 
         text = (_REFERENCES_DIR / "state-schema.md").read_text(encoding="utf-8")
         group_rework_line = next(
-            line
-            for line in text.splitlines()
+            line for line in text.splitlines()
             if line.startswith("- `autopilot group-rework")
         )
         review_stage_line = next(
-            line
-            for line in text.splitlines()
+            line for line in text.splitlines()
             if line.startswith("- `autopilot review-stage")
         )
 
@@ -143,15 +169,9 @@ class DocContractTests(unittest.TestCase):
         _check_line(subparsers, "group-rework", group_rework_line.split("`")[1])
         _check_line(subparsers, "review-stage", review_stage_line.split("`")[1])
 
-        base = "autopilot review-stage --cycle-id <id> --gate-command <cmd>"
-        for label, bad in {
-            "bare positional": f"{base} [--state <state.json>] <review-file>",
-            "required missing": "autopilot review-stage --cycle-id <id> [--state <state.json>]",
-            "unknown option": f"{base} [--nonexistent <x>]",
-            "optional as required": f"{base} --state <state.json>",
-        }.items():
+        for label, bad, reason in _VALIDATOR_REJECTS:
             with self.subTest(validator_rejects=label):
-                with self.assertRaises(AssertionError):
+                with self.assertRaisesRegex(AssertionError, re.escape(reason)):
                     _check_line(subparsers, "review-stage", bad)
 
 
