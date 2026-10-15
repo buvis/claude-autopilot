@@ -1,0 +1,18 @@
+[
+  {
+    "cycle": 2,
+    "source": "bob",
+    "finding": "Cannot statically verify: release checks and live replay on the reviewed revision.",
+    "file": "N/A",
+    "command": "dev/bin/release-checks",
+    "result": {"exit": 0, "evidence": "last-verification.json at 6d963d4: 6827 passed, 0 failed, 34 skipped; Carl re-ran dev/bin/release-checks this cycle at d0a8163 with no failure"}
+  },
+  {
+    "cycle": 2,
+    "source": "bob",
+    "finding": "Cannot statically verify: release checks and live replay on the reviewed revision.",
+    "file": "N/A",
+    "command": "python3 dev/bin/replay_delegation_guard.py",
+    "result": {"exit": 0, "evidence": "Alice and Blake each ran it this cycle: exit 0, per-task 756 refused 1 (only pinned 01Ku4T)"}
+  }
+]
