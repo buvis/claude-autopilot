@@ -4601,3 +4601,39 @@
 {"id":"4f813e13","ended_at":1792065124,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"id":"59685bab","ended_at":1792065124,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1792065124,"phase":"build","prd":"00311-verify-reports-what-the-gate-did-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792065146,"phase":"build","prd":"00311-verify-reports-what-the-gate-did-v1.md"}
+{"id":"77d04651","kind":"ivan","task":"2","queued_at":1792065207,"prompt_bytes":40431}
+{"id":"77d04651","ended_at":1792065488,"elapsed_s":281,"outcome":"ok","detail":null}
+{"id":"f0d6fb1b","kind":"deslop","task":"2","queued_at":1792065612,"prompt_bytes":11236}
+{"id":"f0d6fb1b","ended_at":1792065644,"elapsed_s":32,"outcome":"ok","detail":null}
+{"id":"0a78121e","kind":"ivan","task":"2","queued_at":1792065705,"prompt_bytes":29475}
+{"id":"315c2694","kind":"pat","task":"2","queued_at":1792066002,"prompt_bytes":25090}
+{"id":"abdcdc81","kind":"ivan","task":"2","queued_at":1792066079,"prompt_bytes":30789}
+{"id":"a926c2a1","kind":"pat","task":"2","queued_at":1792066179,"prompt_bytes":5683}
+{"id":"36a87174","kind":"pat","task":"2","queued_at":1792066220,"prompt_bytes":27189}
+{"id":"315c2694","ended_at":1792066251,"elapsed_s":249,"outcome":"ok","detail":null}
+{"id":"a926c2a1","ended_at":1792066254,"elapsed_s":75,"outcome":"ok","detail":null}
+{"id":"36a87174","ended_at":1792066258,"elapsed_s":38,"outcome":"ok","detail":null}
+{"id":"abdcdc81","ended_at":1792066261,"elapsed_s":182,"outcome":"ok","detail":null}
+{"id":"ee2506d6","kind":"ivan","task":"3","queued_at":1792066321,"prompt_bytes":39760}
+{"id":"7bb79d9a","kind":"ivan","task":"3","queued_at":1792066475,"prompt_bytes":30838}
+{"id":"ee2506d6","ended_at":1792066535,"elapsed_s":214,"outcome":"ok","detail":null}
+{"id":"7bb79d9a","ended_at":1792066548,"elapsed_s":73,"outcome":"ok","detail":null}
+{"id":"7e8a4a35","kind":"deslop","task":"3","queued_at":1792066584,"prompt_bytes":8654}
+{"id":"7e8a4a35","ended_at":1792066723,"elapsed_s":139,"outcome":"ok","detail":null}
+{"id":"3c1d3aea","kind":"ivan","task":"3","queued_at":1792066748,"prompt_bytes":29557}
+{"id":"3c1d3aea","ended_at":1792066853,"elapsed_s":105,"outcome":"ok","detail":null}
+{"id":"8f4eb172","kind":"pat","task":"3","queued_at":1792066907,"prompt_bytes":46947}
+{"id":"8f4eb172","ended_at":1792066946,"elapsed_s":39,"outcome":"ok","detail":null}
+{"id":"06c78276","kind":"ivan","task":"4","queued_at":1792066987,"prompt_bytes":39928}
+{"id":"06c78276","ended_at":1792067085,"elapsed_s":98,"outcome":"ok","detail":null}
+{"id":"e8ab66ca","kind":"ivan","task":"4","queued_at":1792067110,"prompt_bytes":29341}
+{"id":"e8ab66ca","ended_at":1792067163,"elapsed_s":53,"outcome":"ok","detail":null}
+{"id":"ecf80756","kind":"pat","task":"4","queued_at":1792067208,"prompt_bytes":15939}
+{"id":"ecf80756","ended_at":1792067227,"elapsed_s":19,"outcome":"ok","detail":null}
+{"id":"2e76fd88","kind":"ivan","task":"2","queued_at":1792067774,"prompt_bytes":33645}
+{"id":"ee544ea1","kind":"ivan","task":"4","queued_at":1792067806,"prompt_bytes":30074}
+{"id":"2e76fd88","ended_at":1792068073,"elapsed_s":299,"outcome":"ok","detail":null}
+{"id":"ee544ea1","ended_at":1792068076,"elapsed_s":270,"outcome":"ok","detail":null}
+{"id":"0a78121e","ended_at":1792068629,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1792068629,"phase":"review","prd":"00311-verify-reports-what-the-gate-did-v1.md"}
