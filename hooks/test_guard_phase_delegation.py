@@ -95,19 +95,38 @@ def test_every_denied_fixture_is_denied() -> None:
         assert "with the Skill tool in THIS session" in result.stderr, name
 
 
-def test_allow_corpus_ignores_scratch_dispatch_files(tmp_path: Path) -> None:
+def test_allow_corpus_ignores_scratch_dispatch_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # A scratch dispatch-*.txt must never change the committed allow corpus -
-    # the live record must match a clean clone's. Pinned against the literal
-    # committed fixtures glob (not `_allow_corpus()` compared to itself) so a
-    # reverted implementation that folds scratch files back into the corpus
-    # fails here. The scratch file lives in an isolated tmp_path, never the
-    # live docs/dev/tmp, so this never risks real scratch content or races
-    # with a concurrent test run.
+    # the live record must match a clean clone's. FIXTURES is patched to an
+    # isolated tmp_path holding copies of the committed allowed fixtures AND
+    # scratch dispatch files beside them, so `_allow_corpus()` really sees the
+    # scratch files and only its own allowed/*.txt scoping keeps them out. The
+    # live docs/dev/tmp is never touched, so this never races a concurrent run.
     committed = sorted((FIXTURES / "allowed").glob("*.txt"))
-    assert _allow_corpus() == committed
-    scratch = tmp_path / "dispatch-zzz-scratch-test.txt"
-    scratch.write_text("scratch subagent\nRun the work phase for PRD 00300 now.\n", encoding="utf-8")
-    assert _allow_corpus() == committed
+    assert committed, "no committed allowed fixtures found: an empty glob must fail loudly"
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    copies = []
+    for fixture in committed:
+        copy = allowed / fixture.name
+        copy.write_bytes(fixture.read_bytes())
+        copies.append(copy)
+    scratch_body = "scratch subagent\nRun the work phase for PRD 00300 now.\n"
+    scratch_dir = tmp_path / "tmp"
+    scratch_dir.mkdir()
+    scratches = [
+        tmp_path / "dispatch-zzz-scratch-test.txt",
+        scratch_dir / "dispatch-zzz-scratch-test.txt",
+        allowed / "dispatch-zzz-scratch-test.md",
+    ]
+    for scratch in scratches:
+        scratch.write_text(scratch_body, encoding="utf-8")
+    monkeypatch.setattr(sys.modules[__name__], "FIXTURES", tmp_path)
+    corpus = _allow_corpus()
+    assert corpus == sorted(copies)
+    assert not set(scratches) & set(corpus)
 
 
 @pytest.mark.parametrize("prompt_file", _allow_corpus(), ids=lambda p: p.name)
