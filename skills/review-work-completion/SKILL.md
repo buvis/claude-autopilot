@@ -366,10 +366,12 @@ Save each subagent reviewer's returned text to `docs/dev/tmp/` — **Alice** to 
 | Terminal state | `<flags>` |
 |---|---|
 | the output holds a usable review, first run | `--outcome ok` |
+| the output holds a usable review, produced by the retry | `--outcome ok --detail retry` |
+| the retry itself failed | `--outcome error --detail "retry: exit <n>"` |
 | non-zero exit, nothing usable published | `--outcome error --detail "exit <n>"` |
 | exit 0 but the output is unusable — malformed issue lines, or incomplete per-rule verdicts (`references/retry-policy.md` §§ Format Compliance, Per-Rule Verdict Completeness) | `--outcome error --detail "format-invalid"` |
 
-Bob's Claude fallback (a Task subagent, not a CLI dispatch) gets no ledger row.
+The rows are mutually exclusive. Bob's Claude fallback (a Task subagent, not a CLI dispatch) gets no ledger row.
 
 Then run:
 

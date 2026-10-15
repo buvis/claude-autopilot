@@ -1,9 +1,8 @@
-"""Contract test for the Bob lack-of-input retry policy prose.
+"""Contract test for the Bob retry policy prose.
 
 Pins the retry-policy.md / SKILL.md / agent-invocation.md / agents/bob.md text
-that lets `review-work-completion` detect Bob's lack-of-input refusal shape and
-retry him with an inlined prompt (PRD 00178). Text-pinning only:
-stdlib unittest, no import of any module under test. Deleting the
+for Bob's inlined-prompt mechanics and retry handling (PRD 00178). Text-pinning
+only: stdlib unittest, no import of any module under test. Deleting the
 inlined-prompt mechanics, the dispatch-ledger kind flags,
 the Bob-invocation cross-reference, or the sandbox's read-only-command
 allowance must fail one of these tests.
@@ -28,7 +27,9 @@ def _section(text: str, header: str) -> str:
     start = text.index(header)
     after = start + len(header)
     ends = [
-        e for e in (text.find("\n### ", after), text.find("\n## ", after)) if e != -1
+        e
+        for e in (text.find("\n### ", after), text.find("\n## ", after))
+        if e != -1
     ]
     end = min(ends) if ends else len(text)
     return text[start:end]
