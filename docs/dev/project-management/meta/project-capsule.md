@@ -48,7 +48,10 @@ Generated: 2026-10-13
 - [x] 00277-catch-critical-rows-in-every-shape-v2 (2 cycles)
 - [x] 00307-guard-citations-and-replay-contract-v1 (2 cycles)
 - 00306-refuse-tracked-verify-log-v1 parked to hold/ (stall mid-batch)
-- backlog remaining: 00308-00313
+- 00308-reviewer-lane-resilience-v1 (in progress): Bob inlined-first prompt,
+  Carl auth-failure latch, bounded gemini fallback, replay process-group kill,
+  retry-row verb
+- backlog remaining: 00309-00313
 
 Observations: 00277 (full lane, design) converged at cycle 2 (rework_cap 2,
 beat the cap): cycle 1 fixed a nested-lead bypass in `_strip_lead` (two HIGHs:

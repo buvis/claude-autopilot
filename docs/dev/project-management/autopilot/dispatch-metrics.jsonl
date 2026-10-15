@@ -4439,3 +4439,15 @@
 {"kind":"handoff","site":"build","edge":"resume","at":1792040667,"phase":"build","prd":"00307-guard-citations-and-replay-contract-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1792040681,"phase":"done","prd":"00307-guard-citations-and-replay-contract-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1792040835,"phase":"build","prd":"00307-guard-citations-and-replay-contract-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792040852,"phase":"build","prd":"00308-reviewer-lane-resilience-v1.md"}
+{"id":"0fde29bd","kind":"tess","task":"1","queued_at":1792042071,"prompt_bytes":20639}
+{"id":"e5dfc9c4","kind":"devon","task":"1","queued_at":1792042160,"prompt_bytes":5909}
+{"id":"fe11d263","kind":"ivan","task":"1","queued_at":1792042347,"prompt_bytes":34686}
+{"id":"bf8dd76e","kind":"pat","task":"1","queued_at":1792042469,"prompt_bytes":9592}
+{"id":"3d50806a","kind":"pat","task":"1","queued_at":1792042542,"prompt_bytes":10327}
+{"id":"0fde29bd","ended_at":1792042625,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"e5dfc9c4","ended_at":1792042625,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"fe11d263","ended_at":1792042625,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"bf8dd76e","ended_at":1792042625,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"3d50806a","ended_at":1792042625,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1792042625,"phase":"build","prd":"00308-reviewer-lane-resilience-v1.md"}
