@@ -56,10 +56,11 @@ class RetryPolicyProseTests(unittest.TestCase):
         # everything is inlined - or he retries the same refusal.
         self.assertIn("INLINED BELOW as text", self.inlined_prompt)
 
-    def test_inlined_retry_prompt_uses_dedicated_retry_filename(self) -> None:
-        # The retry prompt is written to its own file, distinct from the first
-        # attempt's prompt file, so both are retained for forensics.
-        self.assertIn("bob-prompt-{id}-retry.md", self.inlined_prompt)
+    def test_inlined_prompt_overwrites_the_staged_file(self) -> None:
+        # The inlined build always runs on dispatch 1, so it writes the same
+        # path review-stage staged for Bob rather than a separate name.
+        self.assertIn("bob-prompt-{id}.md", self.inlined_prompt)
+        self.assertNotIn("bob-prompt-{id}-retry.md", self.inlined_prompt)
 
     def test_inlined_retry_prompt_restricts_review_to_inlined_text(self) -> None:
         # The persona edit that stops Bob from trying to explore the codebase
@@ -75,11 +76,11 @@ class RetryPolicyProseTests(unittest.TestCase):
         # Same ledger call names Carl's kind flag for his own dispatch rows.
         self.assertIn("--kind carl", self.skill)
 
-    def test_bob_invocation_cross_references_lack_of_input_refusal(self) -> None:
-        # The invocation doc must point at the refusal rule so the retry gets
-        # triggered from Bob's own dispatch section, not just documented in
-        # isolation in retry-policy.md.
-        self.assertIn("Lack-of-input refusal", self.bob_invocation)
+    def test_bob_invocation_cross_references_the_inlined_prompt_section(self) -> None:
+        # The invocation doc must point at the section that actually builds
+        # {bob_prompt_file_absolute_path}, not a deleted refusal-retry rule.
+        self.assertIn("Inlined prompt (Bob's first dispatch)", self.bob_invocation)
+        self.assertNotIn("Lack-of-input refusal", self.bob_invocation)
 
     def test_bob_persona_permits_read_only_shell_commands(self) -> None:
         # Bob's sandbox appendix must tell him HOW to read files (read-only
@@ -112,13 +113,12 @@ class RetryPolicyProseTests(unittest.TestCase):
             self.bob_invocation,
         )
 
-    def test_bob_invocation_other_exits_and_refusal_share_the_one_cli_retry(
-        self,
-    ) -> None:
-        # Every non-3/4 exit, plus the refusal shape, gets the one CLI retry.
+    def test_bob_invocation_other_exits_share_the_one_cli_retry(self) -> None:
+        # Every non-3/4 exit gets the one CLI retry, re-dispatching the same
+        # inlined prompt file rather than switching shapes mid-retry.
         self.assertIn(
-            "The one CLI retry above applies to every other non-zero exit, "
-            "and to the refusal shape it names",
+            "The one CLI retry above applies to every other non-zero exit: "
+            "it re-dispatches the same inlined prompt file",
             self.bob_invocation,
         )
 

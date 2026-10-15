@@ -36,6 +36,13 @@ unavailable after any eligible fallback; report the stderr reason without
 retrying the same configuration. If fallback fails transiently, its runtime
 exit code is returned instead; stderr retains both backend reasons.
 
+An authentication failure (exit 4, reason "authentication failed") is
+permanent too, but unlike a model/tier rejection it never triggers the native
+fallback - another backend cannot cure an auth problem. The native fallback
+itself, once started, is bounded: `GEMINI_FALLBACK_TIMEOUT` (seconds, default
+900) caps its total wall-clock time, not just output-free time, and a
+fallback still running at the deadline is killed and reported as exit 4.
+
 ## Model Selection
 
 - **Copilot backend (default):** spends Copilot AI credits per call (multiplier

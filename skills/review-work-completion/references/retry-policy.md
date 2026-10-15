@@ -20,7 +20,7 @@ Consolidation uses partial results from available agents.
 
 ## Inlined prompt (Bob's first dispatch)
 
-Bob's first dispatch (dispatch 1) always builds this inlined prompt. The prompt file is `docs/dev/tmp/bob-prompt-{id}-retry.md` (never `/tmp`), built as: head block, the review context verbatim, mid block, the diff verbatim inside a ```diff fence, then the persona prompt body with two edits. Dispatch it with the cycle-1 `codex-run.sh -f ... -o <bob-output path>` command, without `--resume-thread`.
+Bob's first dispatch of every cycle always builds this inlined prompt, overwriting the staged prompt `review-stage` wrote for him. The prompt file is `docs/dev/tmp/bob-prompt-{id}.md` (never `/tmp`, and never a separate `-retry` name — there is no staged content left to collide with once this build always runs first), built as: head block, the review context verbatim, mid block, the diff verbatim inside a ```diff fence, then the persona prompt body with two edits. Dispatch it with `agent-invocation.md`'s Bob command for the cycle: the cycle-1 form, or the incremental form with `--resume-thread` when step 3 read a prior `codex_thread_id` — the inlined build is orthogonal to that choice, so an incremental cycle's first dispatch still resumes its codex thread.
 
 Head block, verbatim:
 ```
