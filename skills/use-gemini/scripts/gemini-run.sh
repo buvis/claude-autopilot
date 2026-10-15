@@ -224,6 +224,9 @@ run_cmd() {
     if [ -z "$FALLBACK_DEADLINE" ]; then
         run_streamed "$@" || rc=$?
     else
+        # A non-numeric deadline would make `sleep` fail silently, leaving
+        # the fallback unbounded; fail closed to the documented default.
+        case $FALLBACK_DEADLINE in ''|*[!0-9]*) FALLBACK_DEADLINE=900 ;; esac
         # Job control gives each job its own process group, so the deadline
         # kills the command and its children, and nothing outside them.
         set -m
