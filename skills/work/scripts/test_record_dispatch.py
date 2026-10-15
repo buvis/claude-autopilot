@@ -466,7 +466,6 @@ def test_retry_row_copies_kind_and_task(
             "kind": kind,
             "task": task,
             "queued_at": queued_at,
-            "prompt_bytes": None,
             "detail": f"retry of {target}",
         }
         for new_id, queued_at in ((first, 5000), (second, 5001))

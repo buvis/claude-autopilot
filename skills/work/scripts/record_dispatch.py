@@ -106,7 +106,6 @@ def retry_row(autopilot_dir: Path | None, dispatch_id: str) -> str | None:
             "kind": start.get("kind"),
             "task": start.get("task"),
             "queued_at": int(time.time()),
-            "prompt_bytes": None,
             "detail": f"retry of {dispatch_id}",
         },
     )
