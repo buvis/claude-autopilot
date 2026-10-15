@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: the loop now runs Phase 0 (`autopilot enter`) in-process before launching a build session or consuming a `park-requested` marker, and stores the result as `state.loop_entry` for the launched session to replay (one resume row per selection); the session brief gains a `## Entry` section when this ran
 - **run-autopilot**: a loop session's own commits are now stamped with committer `autopilot-loop/<batch.id>`; the `catchup-probe` subcommand records a batch-scoped `gh`/`engram` health check (`state.catchup_probe`) so a full catchup knows which steps to skip before it attempts them, instead of after they fail
 - **run-autopilot**: new `autopilot cap-check --review-file --previous` classifies a loop-mode cap-out's remaining high/critical findings as regressions introduced by the rework range; the cap-overflow deferral path now runs it first and stalls the PRD (`site: cap_regression`) instead of silently deferring a finding the rework itself introduced
+- **release**: `dev/bin/release` now refuses first on a held/in-progress PRD blocking the release, before checking for the central `claude-plugins` repo; the block-phrase match is now case-insensitive
 
 ### Changed
 

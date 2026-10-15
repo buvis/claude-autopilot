@@ -32,6 +32,9 @@ from cli.wave import (
 )
 
 CLI_MAIN_PATH = Path(__file__).resolve().parent / "__main__.py"
+# `_kill_lane`'s escalation ladder: SIGTERM with a 60s grace, then SIGKILL
+# with a 10s grace. A caller (tests) may pass a shorter `grace` override.
+KILL_GRACE = ((signal.SIGTERM, 60), (signal.SIGKILL, 10))
 # `$$` is the lane shell's own pid, and `exec` keeps it: the loop registers as
 # its own incumbent, keyed on the lane worktree root.
 _SPAWN_CMD = 'export _AUTOPILOT_LOOP=$$; exec python3 "$0" loop'
@@ -379,11 +382,15 @@ def _wait_for_exit(pgid: int, timeout: float) -> bool:
     while time.monotonic() < deadline:
         if not _pgid_alive(pgid):
             return True
-        time.sleep(1)
+        time.sleep(min(1, max(0.0, deadline - time.monotonic())))
     return not _pgid_alive(pgid)
 
 
-def _kill_lane(lane: dict, kill_fn: Callable[[int, int], object]) -> str | None:
+def _kill_lane(
+    lane: dict,
+    kill_fn: Callable[[int, int], object],
+    grace: tuple[tuple[int, float], ...] = KILL_GRACE,
+) -> str | None:
     """SIGTERM the lane's group, then SIGKILL it if it outlives the 60s grace.
     None once the group is gone; the failure to record when it is still there.
     `lane["pid"]` IS the pgid: the loop was spawned as its own session leader.
@@ -396,14 +403,14 @@ def _kill_lane(lane: dict, kill_fn: Callable[[int, int], object]) -> str | None:
     pgid = lane["pid"]
     if pgid is None or not _pgid_alive(pgid):
         return None
-    for sig, grace in ((signal.SIGTERM, 60), (signal.SIGKILL, 10)):
+    for sig, window in grace:
         try:
             kill_fn(pgid, sig)
         except ProcessLookupError:
             return None
         except OSError as err:
             return f"could not signal process group {pgid}: {err}"
-        if _wait_for_exit(pgid, grace):
+        if _wait_for_exit(pgid, window):
             return None
     return f"process group {pgid} survived SIGKILL"
 
@@ -507,12 +514,13 @@ def _abort_lane(
     registry: dict[str, str],
     run_git: Callable[..., object],
     kill_fn: Callable[[int, int], object],
+    grace: tuple[tuple[int, float], ...],
 ) -> tuple[bool, bool]:
     """One lane's whole abort: (it did not finish, its group is still alive). A
     lane whose group survived its kill keeps its pid and status - it is still
     running - and its files are left alone. Every other failure is per-lane, so
     the next lane still runs."""
-    survived = _kill_lane(lane, kill_fn)
+    survived = _kill_lane(lane, kill_fn, grace)
     if survived is not None:
         lane["abort_error"] = survived
         print(f"autopilot: lane {lane['name']}: {survived}", file=sys.stderr)
@@ -536,10 +544,15 @@ def abort(
     *,
     run_git: Callable[..., object] = _default_run_git,
     kill_fn: Callable[[int, int], object] = os.killpg,
+    grace: tuple[tuple[int, float], ...] | float = KILL_GRACE,
 ) -> int:
     """Kill every lane's loop, return its PRDs and remove the worktrees this wave
     cut; 0 when every lane finished. The lock is held for the whole body, and the
-    wave is reloaded under it."""
+    wave is reloaded under it. `grace` is either the real ladder or a single
+    seconds value overriding every step's window (tests only)."""
+    ladder = (
+        grace if isinstance(grace, tuple) else tuple((sig, grace) for sig, _ in KILL_GRACE)
+    )
     with locked(wave_path):
         wave = load(wave_path)
         violations = _structural_errors(repo, wave)
@@ -559,6 +572,7 @@ def abort(
                 registry,
                 run_git,
                 kill_fn,
+                ladder,
             )
             failed = lane_failed or failed
             alive = lane_alive or alive

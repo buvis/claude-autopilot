@@ -8,15 +8,15 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CENTRAL_REPO="$REPO_ROOT/../claude-plugins"
 RELEASE="$CENTRAL_REPO/scripts/release-plugin"
 
-if [ ! -x "$RELEASE" ]; then
-  echo "Error: $RELEASE not found - clone buvis/claude-plugins beside this repo" >&2
-  exit 1
-fi
-
-BLOCKED="$(grep -rl "release is blocked" "$REPO_ROOT/docs/dev/project-management/prds/hold" "$REPO_ROOT/docs/dev/project-management/prds/wip" 2>/dev/null || true)"
+BLOCKED="$(grep -rli "release is blocked" "$REPO_ROOT/docs/dev/project-management/prds/hold" "$REPO_ROOT/docs/dev/project-management/prds/wip" 2>/dev/null || true)"
 if [ -n "$BLOCKED" ]; then
   echo "Error: release blocked by:" >&2
   echo "$BLOCKED" >&2
+  exit 1
+fi
+
+if [ ! -x "$RELEASE" ]; then
+  echo "Error: $RELEASE not found - clone buvis/claude-plugins beside this repo" >&2
   exit 1
 fi
 
