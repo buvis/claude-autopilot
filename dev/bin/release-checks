@@ -387,6 +387,7 @@ run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_frontmatter.py \
   skills/run-autopilot/cli/test_handoff.py \
   skills/run-autopilot/cli/test_lifecycle_cli.py \
+  skills/run-autopilot/cli/test_markers.py \
   skills/run-autopilot/cli/test_loop.py \
   skills/run-autopilot/cli/test_loop_act.py \
   skills/run-autopilot/cli/test_loop_committer.py \
@@ -438,6 +439,7 @@ run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/scripts/test_review_prompt_contracts.py \
   skills/run-autopilot/scripts/test_shims.py \
   skills/run-autopilot/scripts/test_statectl.py \
+  skills/run-autopilot/scripts/test_statectl_decide.py \
   skills/run-autopilot/scripts/test_statectl_complete_prd.py \
   skills/run-autopilot/scripts/test_statectl_ledger.py \
   skills/run-autopilot/scripts/test_statectl_new_task_verbs.py \

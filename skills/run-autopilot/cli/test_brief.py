@@ -167,6 +167,17 @@ def test_read_next_paths_carry_the_plugin_root_placeholder():
             assert path.startswith("${CLAUDE_PLUGIN_ROOT}/skills/")
 
 
+def test_brief_names_the_blocked_bash_commands():
+    # PRD 00309 fast-track card c1: 101 `head`/`tail`/`cat` calls were
+    # blocked in batch 202610111300 although both skill bodies already
+    # forbid them in prose - prose alone was not holding. The brief, read
+    # first every session, now names the three banned commands up front so
+    # a fresh session sees the ban before it ever reaches for one.
+    text = render_brief({}, NOW)
+    for banned in ("head", "tail", "cat"):
+        assert banned in text
+
+
 def test_malformed_id_entries_never_render_a_python_repr():
     state = {
         "tasks": [{"status": "pending"}, {"id": 4, "status": "pending"}, "junk"],

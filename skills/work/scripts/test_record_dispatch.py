@@ -674,3 +674,166 @@ def test_handoff_leaves_closed_rows_alone(
         "phase": "done",
         "prd": "Y",
     }
+
+
+# -- close_from_artifacts: PRD 00309 fast-track card c1 ---------------------
+#
+# Batch 202610111300 closed 29/42 pat rows, 30/60 tess rows and 24/55 ivan
+# rows as "lost" because the model never called `end`, even when the
+# dispatch's own work had actually landed (a task commit, a test commit, a
+# review artifact). `close_from_artifacts`, called from `_handoff` before the
+# unconditional lost-sweep, closes a still-open row as "ok" when its kind's
+# landing artifact exists for it, keyed by dispatch id under
+# `<autopilot_dir>/artifacts/<id>-<kind>`; an open row with no such artifact
+# still falls through to the existing "lost" sweep unchanged.
+
+
+def _artifact(autopilot_dir: Path, dispatch_id: str, kind: str) -> Path:
+    artifact = autopilot_dir / "artifacts" / f"{dispatch_id}-{kind}"
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_text("", encoding="utf-8")
+    return artifact
+
+
+def test_handoff_closes_ivan_row_from_task_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # An ivan dispatch whose task actually landed a commit must close "ok",
+    # not "lost", even though nobody called `end` for it.
+    autopilot = _project(tmp_path)
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "id": "aaaaaaaa",
+            "kind": "ivan",
+            "task": "1",
+            "queued_at": 1000,
+            "prompt_bytes": 1,
+        },
+    )
+    _artifact(autopilot, "aaaaaaaa", "ivan")
+    monkeypatch.chdir(tmp_path / "proj")
+    _pin_clock(monkeypatch, 4000)
+
+    exit_code = _run_handoff("build", "leave", "review", "X")
+
+    assert exit_code == 0
+    rows = _rows(autopilot / "dispatch-metrics.jsonl")
+    ends = [row for row in rows if row.get("id") == "aaaaaaaa" and "ended_at" in row]
+    assert ends == [
+        {
+            "id": "aaaaaaaa",
+            "ended_at": 4000,
+            "elapsed_s": None,
+            "outcome": "ok",
+            "detail": "closed from artifact at build/leave handoff",
+        },
+    ]
+
+
+def test_handoff_closes_tess_row_from_test_commit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    autopilot = _project(tmp_path)
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "id": "bbbbbbbb",
+            "kind": "tess",
+            "task": "2",
+            "queued_at": 1000,
+            "prompt_bytes": 2,
+        },
+    )
+    _artifact(autopilot, "bbbbbbbb", "tess")
+    monkeypatch.chdir(tmp_path / "proj")
+    _pin_clock(monkeypatch, 4000)
+
+    exit_code = _run_handoff("build", "leave", "review", "X")
+
+    assert exit_code == 0
+    rows = _rows(autopilot / "dispatch-metrics.jsonl")
+    ends = [row for row in rows if row.get("id") == "bbbbbbbb" and "ended_at" in row]
+    assert ends == [
+        {
+            "id": "bbbbbbbb",
+            "ended_at": 4000,
+            "elapsed_s": None,
+            "outcome": "ok",
+            "detail": "closed from artifact at build/leave handoff",
+        },
+    ]
+
+
+def test_handoff_closes_pat_row_from_review_artifact(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    autopilot = _project(tmp_path)
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "id": "cccccccc",
+            "kind": "pat",
+            "task": "3",
+            "queued_at": 1000,
+            "prompt_bytes": 3,
+        },
+    )
+    _artifact(autopilot, "cccccccc", "pat")
+    monkeypatch.chdir(tmp_path / "proj")
+    _pin_clock(monkeypatch, 4000)
+
+    exit_code = _run_handoff("review", "leave", "done", "X")
+
+    assert exit_code == 0
+    rows = _rows(autopilot / "dispatch-metrics.jsonl")
+    ends = [row for row in rows if row.get("id") == "cccccccc" and "ended_at" in row]
+    assert ends == [
+        {
+            "id": "cccccccc",
+            "ended_at": 4000,
+            "elapsed_s": None,
+            "outcome": "ok",
+            "detail": "closed from artifact at review/leave handoff",
+        },
+    ]
+
+
+def test_handoff_still_marks_lost_without_artifact(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # No artifact for this dispatch id: the existing lost-sweep must still
+    # apply unchanged, so a genuinely abandoned dispatch is not silently
+    # upgraded to "ok" just because the feature exists.
+    autopilot = _project(tmp_path)
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "id": "dddddddd",
+            "kind": "ivan",
+            "task": "4",
+            "queued_at": 1000,
+            "prompt_bytes": 4,
+        },
+    )
+    monkeypatch.chdir(tmp_path / "proj")
+    _pin_clock(monkeypatch, 4000)
+
+    exit_code = _run_handoff("build", "leave", "review", "X")
+
+    assert exit_code == 0
+    rows = _rows(autopilot / "dispatch-metrics.jsonl")
+    ends = [row for row in rows if row.get("id") == "dddddddd" and "ended_at" in row]
+    assert ends == [
+        {
+            "id": "dddddddd",
+            "ended_at": 4000,
+            "elapsed_s": None,
+            "outcome": "lost",
+            "detail": "open at build/leave handoff",
+        },
+    ]
