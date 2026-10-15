@@ -48,6 +48,52 @@ def _doc_files() -> list[Path]:
     return files
 
 
+def _surface(subparsers, verb: str) -> tuple[set[str], set[str], list]:
+    actions = subparsers.choices[verb]._actions
+    required = {
+        opt for action in actions for opt in action.option_strings if action.required
+    }
+    optional = {
+        opt
+        for action in actions
+        for opt in action.option_strings
+        if not action.required and opt not in ("-h", "--help")
+    }
+    positionals = [
+        action
+        for action in actions
+        if not action.option_strings
+        and not isinstance(action, argparse._SubParsersAction)
+    ]
+    return required, optional, positionals
+
+
+def _check_line(subparsers, verb: str, invocation: str) -> None:
+    required, optional, positionals = _surface(subparsers, verb)
+    if positionals != []:
+        raise AssertionError(f"{verb} parser grew a positional")
+    unbracketed = re.sub(r"\[[^\]]*\]", "", invocation)
+    bracketed = {
+        o
+        for g in re.findall(r"\[[^\]]*\]", invocation)
+        for o in re.findall(r"--[\w-]+", g)
+    }
+    bare = set(re.findall(r"--[\w-]+", unbracketed))
+    for opt in sorted(bracketed | bare):
+        if opt not in required | optional:
+            raise AssertionError(f"{verb}: unknown {opt}")
+    for opt in sorted(bracketed):
+        if opt not in optional:
+            raise AssertionError(f"{verb}: {opt} bracketed but required")
+    for opt in sorted(bare - required):
+        raise AssertionError(f"{verb}: optional {opt} presented as required")
+    for opt in sorted(required - bare):
+        raise AssertionError(f"{verb}: required {opt} missing or bracketed")
+    leftover = re.sub(r"--[\w-]+\s+<[^>]*>", "", unbracketed)
+    if re.search(r"<[^>]*>", leftover):
+        raise AssertionError(f"{verb}: bare positional placeholder remains")
+
+
 class DocContractTests(unittest.TestCase):
     def test_every_registered_subcommand_has_an_autopilot_invocation_in_the_docs(
         self,
@@ -90,57 +136,12 @@ class DocContractTests(unittest.TestCase):
         cli_main._add_group_rework(subparsers)
         cli_main._add_review_stage(subparsers)
 
-        def surface(verb: str) -> tuple[set[str], set[str], list]:
-            actions = subparsers.choices[verb]._actions
-            required = {
-                opt
-                for action in actions
-                for opt in action.option_strings
-                if action.required
-            }
-            optional = {
-                opt
-                for action in actions
-                for opt in action.option_strings
-                if not action.required and opt not in ("-h", "--help")
-            }
-            positionals = [
-                action
-                for action in actions
-                if not action.option_strings
-                and not isinstance(action, argparse._SubParsersAction)
-            ]
-            return required, optional, positionals
-
-        def check_line(verb: str, invocation: str) -> None:
-            required, optional, positionals = surface(verb)
-            self.assertEqual(positionals, [], f"{verb} parser grew a positional")
-            unbracketed = re.sub(r"\[[^\]]*\]", "", invocation)
-            bracketed = {
-                o
-                for g in re.findall(r"\[[^\]]*\]", invocation)
-                for o in re.findall(r"--[\w-]+", g)
-            }
-            bare = set(re.findall(r"--[\w-]+", unbracketed))
-            for opt in sorted(bracketed | bare):
-                self.assertIn(opt, required | optional, f"{verb}: unknown {opt}")
-            for opt in sorted(bracketed):
-                self.assertIn(opt, optional, f"{verb}: {opt} bracketed but required")
-            for opt in sorted(bare - required):
-                self.fail(f"{verb}: optional {opt} presented as required")
-            for opt in sorted(required - bare):
-                self.fail(f"{verb}: required {opt} missing or bracketed")
-            leftover = re.sub(r"--[\w-]+\s+<[^>]*>", "", unbracketed)
-            self.assertNotRegex(
-                leftover,
-                r"<[^>]*>",
-                f"{verb}: bare positional placeholder remains",
-            )
-
-        self.assertEqual(surface("group-rework")[0], {"--findings"})
-        self.assertEqual(surface("review-stage")[0], {"--cycle-id", "--gate-command"})
-        check_line("group-rework", group_rework_line.split("`")[1])
-        check_line("review-stage", review_stage_line.split("`")[1])
+        self.assertEqual(_surface(subparsers, "group-rework")[0], {"--findings"})
+        self.assertEqual(
+            _surface(subparsers, "review-stage")[0], {"--cycle-id", "--gate-command"}
+        )
+        _check_line(subparsers, "group-rework", group_rework_line.split("`")[1])
+        _check_line(subparsers, "review-stage", review_stage_line.split("`")[1])
 
         base = "autopilot review-stage --cycle-id <id> --gate-command <cmd>"
         for label, bad in {
@@ -151,7 +152,7 @@ class DocContractTests(unittest.TestCase):
         }.items():
             with self.subTest(validator_rejects=label):
                 with self.assertRaises(AssertionError):
-                    check_line("review-stage", bad)
+                    _check_line(subparsers, "review-stage", bad)
 
 
 if __name__ == "__main__":
