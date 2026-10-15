@@ -4451,3 +4451,38 @@
 {"id":"bf8dd76e","ended_at":1792042625,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"id":"3d50806a","ended_at":1792042625,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1792042625,"phase":"build","prd":"00308-reviewer-lane-resilience-v1.md"}
+{"id":"7af7939e","kind":"tess","task":"2","queued_at":1792042747,"prompt_bytes":75271}
+{"id":"d0db345c","kind":"tess","task":"2","queued_at":1792042759,"prompt_bytes":25464}
+{"id":"96afc5c8","kind":"devon","task":"2","queued_at":1792043015,"prompt_bytes":3093}
+{"id":"96afc5c8","ended_at":1792043468,"elapsed_s":453,"outcome":"ok","detail":null}
+{"id":"cd88d1e1","kind":"ivan","task":"2","queued_at":1792043690,"prompt_bytes":25709}
+{"id":"1da71f58","kind":"pat","task":"2","queued_at":1792043977,"prompt_bytes":24514}
+{"id":"02b8b6a5","kind":"pat","task":"2","queued_at":1792044081,"prompt_bytes":2897}
+{"id":"ae3c544d","kind":"tess","task":"3","queued_at":1792044211,"prompt_bytes":22043}
+{"id":"25f258f7","kind":"devon","task":"3","queued_at":1792044303,"prompt_bytes":3161}
+{"id":"25f258f7","ended_at":1792044565,"elapsed_s":262,"outcome":"ok","detail":null}
+{"id":"2ef921c4","kind":"ivan","task":"3","queued_at":1792044723,"prompt_bytes":33049}
+{"id":"23d38000","kind":"pat","task":"3","queued_at":1792044864,"prompt_bytes":16309}
+{"id":"3bdc3052","kind":"pat","task":"3","queued_at":1792044977,"prompt_bytes":5160}
+{"id":"7d87483d","kind":"tess","task":"4","queued_at":1792045122,"prompt_bytes":25635}
+{"id":"d6499e5a","kind":"ivan","task":"4","queued_at":1792045283,"prompt_bytes":76527}
+{"id":"62d7c051","kind":"ivan","task":"4","queued_at":1792045302,"prompt_bytes":18987}
+{"id":"7bb3f825","kind":"ivan","task":"4","queued_at":1792045337,"prompt_bytes":23845}
+{"id":"adf6284b","kind":"pat","task":"4","queued_at":1792045940,"prompt_bytes":28455}
+{"id":"c5648c85","kind":"pat","task":"4","queued_at":1792046053,"prompt_bytes":4959}
+{"id":"7af7939e","ended_at":1792046467,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"d0db345c","ended_at":1792046467,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"cd88d1e1","ended_at":1792046467,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"1da71f58","ended_at":1792046467,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"02b8b6a5","ended_at":1792046467,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"ae3c544d","ended_at":1792046467,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"2ef921c4","ended_at":1792046467,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"23d38000","ended_at":1792046467,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"3bdc3052","ended_at":1792046467,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"7d87483d","ended_at":1792046467,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"d6499e5a","ended_at":1792046467,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"62d7c051","ended_at":1792046467,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"7bb3f825","ended_at":1792046467,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"adf6284b","ended_at":1792046467,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"c5648c85","ended_at":1792046467,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1792046467,"phase":"review","prd":"00308-reviewer-lane-resilience-v1.md"}
