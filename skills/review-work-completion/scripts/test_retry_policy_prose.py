@@ -49,11 +49,11 @@ class RetryPolicyProseTests(unittest.TestCase):
         )
         cls.bob_invocation = _section(cls.agents, "## Bob (Codex)")
 
-    def test_inlined_retry_prompt_tells_bob_the_sandbox_supplied_everything(
+    def test_inlined_prompt_tells_bob_the_sandbox_supplied_everything(
         self,
     ) -> None:
-        # The retry prompt must explain why Bob cannot read files this time -
-        # everything is inlined - or he retries the same refusal.
+        # The inlined prompt must explain why Bob cannot read files this
+        # dispatch - everything is inlined - or he goes hunting for them.
         self.assertIn("INLINED BELOW as text", self.inlined_prompt)
 
     def test_inlined_prompt_overwrites_the_staged_file(self) -> None:
@@ -62,9 +62,9 @@ class RetryPolicyProseTests(unittest.TestCase):
         self.assertIn("bob-prompt-{id}.md", self.inlined_prompt)
         self.assertNotIn("bob-prompt-{id}-retry.md", self.inlined_prompt)
 
-    def test_inlined_retry_prompt_restricts_review_to_inlined_text(self) -> None:
+    def test_inlined_prompt_restricts_review_to_inlined_text(self) -> None:
         # The persona edit that stops Bob from trying to explore the codebase
-        # on the retry, which would just reproduce the refusal.
+        # on his first dispatch, which would just reproduce the refusal.
         self.assertIn("using ONLY the inlined text above", self.inlined_prompt)
 
     def test_skill_ledgers_bob_dispatch_with_its_kind(self) -> None:

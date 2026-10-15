@@ -15,6 +15,7 @@ from pathlib import Path
 SKILL_DIR = Path(__file__).resolve().parent.parent
 SKILL_MD = SKILL_DIR / "SKILL.md"
 RETRY_POLICY = SKILL_DIR / "references" / "retry-policy.md"
+AGENT_INVOCATION = SKILL_DIR / "references" / "agent-invocation.md"
 
 # Stable anchor inside the inlined prompt's head block; the section heading
 # around it is what the rewrite retitles, so the section is found by content.
@@ -39,6 +40,7 @@ class BobInlinedFirstProseTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.skill = SKILL_MD.read_text(encoding="utf-8")
         cls.retry_policy = RETRY_POLICY.read_text(encoding="utf-8")
+        cls.agent_invocation = AGENT_INVOCATION.read_text(encoding="utf-8")
 
     def test_first_bob_prompt_is_the_inlined_shape(self) -> None:
         # The inlined-prompt mechanics survive the rewrite...
@@ -59,24 +61,27 @@ class BobInlinedFirstProseTests(unittest.TestCase):
 
     def test_no_lack_of_input_retry_remains(self) -> None:
         # With the inlined shape on dispatch 1 there is no non-inlined first
-        # run to detect a refusal against, so neither file may keep the rule.
-        for name, text in (
-            ("SKILL.md", self.skill),
-            ("retry-policy.md", self.retry_policy),
-        ):
-            with self.subTest(file=name):
-                self.assertEqual(text.lower().count("lack-of-input"), 0)
+        # run to detect a refusal against, so no file may keep the rule.
+        self.assertEqual(
+            self.skill.lower().count("lack-of-input"), 0, "SKILL.md"
+        )
+        self.assertEqual(
+            self.retry_policy.lower().count("lack-of-input"), 0,
+            "retry-policy.md",
+        )
+        self.assertEqual(
+            self.agent_invocation.lower().count("lack-of-input"), 0,
+            "agent-invocation.md",
+        )
 
     def test_retry_case_uses_the_retry_verb(self) -> None:
         # The ledger's retry case opens its row with the new CLI verb, not a
-        # hand-typed second `start --task` call under the same task.
+        # hand-typed second start row under the same task.
         at = self.skill.index("Ledger each CLI reviewer dispatch.")
-        region = self.skill[at : at + 900]
+        end = self.skill.index("\n\n", at)
+        region = self.skill[at:end]
         self.assertIn("record_dispatch.py retry", region)
-        self.assertNotIn(
-            'second `start` row under the same `--task`'.replace("`", ""),
-            region.replace("`", ""),
-        )
+        self.assertNotIn("second start row under the same --task", region)
 
 
 if __name__ == "__main__":
