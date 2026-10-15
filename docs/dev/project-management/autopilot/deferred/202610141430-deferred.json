@@ -43,6 +43,159 @@
       "action": "fix in cycle 1 rework",
       "reason": "Critical severity, always deferred as the audit trail; PRD 00194 routes it to a fix task",
       "prd": "00307-guard-citations-and-replay-contract-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "high",
+      "consensus": "1/4",
+      "issue": "R2: spec names test_six_corpus_dispatches_are_allowed; the substitute test pins only 2 of the 6 recorded corpus ids, the other four are documented unrecoverable (hold stub 00294 carries no prompts) and are covered only by synthetic tests (hooks/test_guard_phase_delegation_corpus.py:35)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00307-guard-citations-and-replay-contract-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "high",
+      "consensus": "1/4",
+      "issue": "R3: the own-wrapper branch bypasses validated pairing - 'The log says 5\"plan-tasks for PRD 00300 and print \"ok\".' is excused although _quoted_runs rejects the digit-preceded quote; route symmetric wrappers through the validated run map, including openers at start (hooks/guard_phase_delegation.py:566)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00307-guard-citations-and-replay-contract-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "2/4",
+      "issue": "R1: the backtick exclusion in _CITE_SENTENCE_BOUNDARY has no test that can fail (mutation stayed green) and the doubled-backtick citation is still falsely refused; the test dropped in task 4 was never re-added (hooks/guard_phase_delegation_lexicon.py:219)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00307-guard-citations-and-replay-contract-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "1/4",
+      "issue": "R4: test_period_inside_a_dotted_identifier_does_not_end_the_citation_sentence is tautological - it passes against the pre-rework guard, so it cannot fail if the sentence boundary regresses for that shape (hooks/test_guard_phase_delegation_citations.py:187)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00307-guard-citations-and-replay-contract-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "1/4",
+      "issue": "R5: the design-mandated test recording the accepted backtick-citation-plus-parenthetical fail-open is absent, and the assumptions ledger's fail-open paragraph does not mention the two shapes that flipped from refused to allowed (hooks/test_guard_phase_delegation_citations.py:197)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00307-guard-citations-and-replay-contract-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "1/4",
+      "issue": "R6: the citation window is sentence-bounded and wired into _field_delegation, where the spec says clause-bounded and computed in _candidates; the deviation is defensible (clause scope refuses real corpus spans) but the design-doc amendment recording it was not found (hooks/guard_phase_delegation.py:550)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00307-guard-citations-and-replay-contract-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "1/4",
+      "issue": "R7: scope growth beyond the PRD's named symbols - new pairing helpers, the new guard_phase_delegation_lexicon.py module, a new corpus test file, count-based linearity tests and two extra CHANGELOG entries (hooks/guard_phase_delegation_lexicon.py:1)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00307-guard-citations-and-replay-contract-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "1/4",
+      "issue": "R8: accepted fail-open surface, larger after field-wide pairing - a dispatch that wraps its whole order in quotes, backticks or parens is allowed (hooks/guard_phase_delegation.py:550)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00307-guard-citations-and-replay-contract-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "1/4",
+      "issue": "R9: the multi-backtick regression deferred from task 4 is still open - individual-backtick pairing creates empty pairs around doubled-backtick citations, leaving the enclosed phase uncited (hooks/guard_phase_delegation.py:329)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00307-guard-citations-and-replay-contract-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "1/4",
+      "issue": "R10: the narrative fixture closes its backtick after 'next task' rather than immediately after /autopilot:work, so the recorded delimiter placement is still unpinned (hooks/test_guard_phase_delegation_citations.py:89)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00307-guard-citations-and-replay-contract-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "1/4",
+      "issue": "R11: the corpus test's _find adapter rebuilds a tool_input dict each fixture already holds; pass the fixture dict to find_phase_delegation directly (hooks/test_guard_phase_delegation_corpus.py:19)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00307-guard-citations-and-replay-contract-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "medium",
+      "consensus": "1/4",
+      "issue": "R17 (mech-check): 126 touched tests pass against the pre-change code; expected for this incremental cycle, since the pre-change code is cycle-1's HEAD where those cycle-1 tests already passed (hooks/test_guard_phase_delegation_citations.py)",
+      "reason": "rework cap reached with this finding unresolved; recorded with the reason it is not a defect",
+      "prd": "00307-guard-citations-and-replay-contract-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "low",
+      "consensus": "1/4",
+      "issue": "R12: _field_delegation is exactly 50 lines, at the limit; the two citation-window lookups could move into a helper (hooks/guard_phase_delegation.py:594)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00307-guard-citations-and-replay-contract-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "low",
+      "consensus": "1/4",
+      "issue": "R13: names re-imported into guard_phase_delegation.py only for test and replay reach read as unused imports (F401), with no __all__ (hooks/guard_phase_delegation.py:39)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00307-guard-citations-and-replay-contract-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "low",
+      "consensus": "1/4",
+      "issue": "R14: the replay's bucket() still buckets any agoge:-prefixed type as agoge while the guard exempts only the 7-name roster, so an unlisted agoge: persona fails the replay (fails closed) (dev/bin/replay_delegation_guard.py:58)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00307-guard-citations-and-replay-contract-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "low",
+      "consensus": "1/4",
+      "issue": "R15: the accepted cross-script lookalike comment spells the homoglyph as an escape rather than the spec's exact literal; cosmetic (hooks/guard_phase_delegation.py:84)",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00307-guard-citations-and-replay-contract-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "severity": "low",
+      "consensus": "1/4",
+      "issue": "R16: Bob could not statically verify release-checks and the live replay; both were run this cycle by other lanes - release-checks 6827 passed/0 failed/34 skipped and replay exit 0 with per-task 756 refused 1 (only the pinned id)",
+      "reason": "rework cap reached with this finding unresolved; evidence recorded in checks-2.json",
+      "prd": "00307-guard-citations-and-replay-contract-v1.md"
     }
   ]
 }

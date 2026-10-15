@@ -46,8 +46,8 @@ Generated: 2026-10-13
 
 ### Batch 202610141430 (in progress)
 - [x] 00277-catch-critical-rows-in-every-shape-v2 (2 cycles)
+- [x] 00307-guard-citations-and-replay-contract-v1 (2 cycles)
 - 00306-refuse-tracked-verify-log-v1 parked to hold/ (stall mid-batch)
-- now building: 00307-guard-citations-and-replay-contract-v1 (default_model opus; catchup/design both `run`)
 - backlog remaining: 00308-00313
 
 Observations: 00277 (full lane, design) converged at cycle 2 (rework_cap 2,
@@ -59,6 +59,18 @@ inline, 5 settled in the PRD's review ledger (symbol-name-only drift,
 pre-existing cross-file test moves, wording-only precedence). `bash
 dev/bin/release-checks` green at 2fb2a40 (PASS 6688 FAIL 0 SKIP 34). No
 deferred items, no doubts, nothing minted to `hold/`.
+
+00307 cap-out at cycle 2 (rework_cap 2) with two unresolved HIGH (R2: the
+spec-named `test_six_corpus_dispatches_are_allowed` pins only 2 of 6 recorded
+corpus ids, the other four documented unrecoverable; R3: the own-wrapper
+branch bypasses validated pairing, excusing a digit-preceded quote) plus 15
+medium/low findings, 17 total migrated to the batch deferred JSON as
+`cap-overflow`. `mint-stubs` minted 5 hold stubs for unowned severe rows,
+`00314`-`00318`. No CRITICAL escaped. Degradations this cycle: `engram pack`
+failed (readonly sqlite db); Bob's first codex dispatch returned a
+lack-of-input refusal, resolved on retry with an inlined prompt; the `Tests:`
+line reused `last-verification.json` at 6d963d4 since the three later
+commits were store records only.
 
 ### Batch 202610111300
 - [x] 00271-guard-v2-structural-delegation-check-v1 (2 cycles)
