@@ -74,6 +74,17 @@ class BobInlinedFirstProseTests(unittest.TestCase):
             "agent-invocation.md",
         )
 
+    def test_skill_step_5_builds_the_inlined_prompt_before_dispatch(self) -> None:
+        # The wiring itself, not just the section it points at: deleting step
+        # 5's paragraph must fail a test. It has to name the inlined shape, the
+        # staged path it overwrites, and that the overwrite precedes dispatch.
+        at = self.skill.index("Bob's prompt is always the inlined shape")
+        end = self.skill.index("\n\n", at)
+        region = self.skill[at:end]
+        self.assertIn("bob-prompt-{id}.md", region)
+        self.assertIn("overwriting", region)
+        self.assertIn("Before dispatching him", region)
+
     def test_retry_case_uses_the_retry_verb(self) -> None:
         # The ledger's retry case opens its row with the new CLI verb, not a
         # hand-typed second start row under the same task.
