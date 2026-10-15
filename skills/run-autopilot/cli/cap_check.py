@@ -14,7 +14,8 @@ from pathlib import Path
 from . import frontmatter
 from .findings_section import _reviewed_keys
 
-_FILE_LINE_RE = re.compile(r"^(.*):(\d+)$")
+_FILE_LINE_RE = re.compile(r"^(.*):(\d+)(?:[-,]\d+)*$")
+_SHA_RE = re.compile(r"^[0-9a-fA-F]{4,40}$")
 
 
 class CapCheckError(RuntimeError):
@@ -27,15 +28,20 @@ def rework_range(previous_head: str, head: str) -> tuple[str, str]:
     return (previous_head, head)
 
 
-def _head_sha(review_file: Path) -> str:
-    try:
-        text = review_file.read_text(encoding="utf-8")
-    except OSError as err:
-        raise CapCheckError(f"cannot read {review_file}: {err}") from err
+def _head_sha(text: str, review_file: Path) -> str:
     sha = frontmatter.declared(text).get("head_sha", "").strip()
     if not sha:
         raise CapCheckError(f"{review_file} carries no head_sha frontmatter line")
+    if not _SHA_RE.match(sha):
+        raise CapCheckError(f"{review_file} carries a malformed head_sha: {sha!r}")
     return sha
+
+
+def _read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as err:
+        raise CapCheckError(f"cannot read {path}: {err}") from err
 
 
 def _git(repo_root: str | Path, *args: str) -> str:
@@ -47,7 +53,10 @@ def _git(repo_root: str | Path, *args: str) -> str:
             text=True,
             check=True,
         )
-    except (OSError, subprocess.CalledProcessError) as err:
+    except subprocess.CalledProcessError as err:
+        reason = err.stderr.strip() if err.stderr else str(err)
+        raise CapCheckError(f"git {' '.join(args)} failed: {reason}") from err
+    except OSError as err:
         raise CapCheckError(f"git {' '.join(args)} failed: {err}") from err
     return result.stdout.strip()
 
@@ -59,26 +68,63 @@ def _split_file_line(cell: str) -> tuple[str, int | None]:
     return matched.group(1), int(matched.group(2))
 
 
-def _line_regression(
+def _missing_path_error(err: CapCheckError) -> bool:
+    """True only for a git failure that names a missing path, never any other
+    git error - those must propagate as CapCheckError per the spec, not be
+    read as "not a regression"."""
+    message = str(err).lower()
+    return "no such path" in message or "does not exist" in message
+
+
+def _introducing_commit(
     repo_root: str | Path,
     head: str,
     file: str,
     line: int,
-    rework_commits: set[str],
-) -> bool:
+) -> str | None:
     try:
         blame = _git(
             repo_root, "blame", "-L", f"{line},{line}", "--porcelain", head, "--", file,
         )
+    except CapCheckError as err:
+        if _missing_path_error(err):
+            return None
+        raise
+    if not blame:
+        return None
+    return blame.splitlines()[0].split()[0]
+
+
+def _first_commit_touching(
+    repo_root: str | Path,
+    previous_head: str,
+    head: str,
+    file: str,
+) -> str | None:
+    log = _git(
+        repo_root,
+        "log",
+        "--format=%h",
+        "--reverse",
+        f"{previous_head}..{head}",
+        "--",
+        file,
+    )
+    lines = log.splitlines()
+    return lines[0] if lines else None
+
+
+def _file_exists_at(repo_root: str | Path, head: str, file: str) -> bool:
+    try:
+        _git(repo_root, "cat-file", "-e", f"{head}:{file}")
     except CapCheckError:
         return False
-    if not blame:
-        return False
-    return blame.splitlines()[0].split()[0] in rework_commits
+    return True
 
 
 def _classify_row(
     repo_root: str | Path,
+    previous_head: str,
     head: str,
     row,
     rework_commits: set[str],
@@ -86,12 +132,16 @@ def _classify_row(
 ) -> dict:
     file, line = _split_file_line(row.file)
     regression = False
+    commit = None
     if file:
         if line is not None:
-            regression = _line_regression(repo_root, head, file, line, rework_commits)
-        else:
-            regression = file in changed_files
-    commit = _git(repo_root, "log", "--format=%h", "-1", head) if regression else None
+            introducing = _introducing_commit(repo_root, head, file, line)
+            if introducing is not None and introducing in rework_commits:
+                regression = True
+                commit = _git(repo_root, "log", "--format=%h", "-1", introducing)
+        elif file in changed_files and _file_exists_at(repo_root, head, file):
+            commit = _first_commit_touching(repo_root, previous_head, head, file)
+            regression = commit is not None
     return {
         "ref": row.ref,
         "severity": row.severity,
@@ -111,20 +161,24 @@ def classify_findings(
     section, classified against the rework range between
     `previous_review_file`'s head_sha and `review_file`'s head_sha."""
     review_file = Path(review_file)
-    if previous_review_file is None or not Path(previous_review_file).exists():
+    if previous_review_file is None or not str(previous_review_file) or not Path(
+        previous_review_file,
+    ).exists():
         return []
     previous_review_file = Path(previous_review_file)
 
-    try:
-        text = review_file.read_text(encoding="utf-8")
-    except OSError as err:
-        raise CapCheckError(f"cannot read {review_file}: {err}") from err
+    text = _read_text(review_file)
     rows, problem = _reviewed_keys(text)
     if problem is not None:
         raise CapCheckError(f"{review_file}: {problem}")
 
-    head = _head_sha(review_file)
-    previous_head = _head_sha(previous_review_file)
+    rows = [row for row in rows if row.severity in ("high", "critical")]
+    if not rows:
+        return []
+
+    head = _head_sha(text, review_file)
+    previous_text = _read_text(previous_review_file)
+    previous_head = _head_sha(previous_text, previous_review_file)
     previous_head, head = rework_range(previous_head, head)
 
     rework_commits = set(
@@ -135,7 +189,6 @@ def classify_findings(
     )
 
     return [
-        _classify_row(repo_root, head, row, rework_commits, changed_files)
+        _classify_row(repo_root, previous_head, head, row, rework_commits, changed_files)
         for row in rows
-        if row.severity in ("high", "critical")
     ]
