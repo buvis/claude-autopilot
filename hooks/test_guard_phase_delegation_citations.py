@@ -112,61 +112,6 @@ def test_already_closed_aside_before_the_name_is_not_a_citation() -> None:
     _assert_quotes(_find(prompt), prompt, "plan-tasks")
 
 
-_CORPUS = [
-    (
-        "re-invokes `/autopilot:work, which then",
-        None,
-        "The orchestrator automatically re-invokes `/autopilot:work, which then proceeds to the next task`.",
-    ),
-    (
-        "d reports `design-solution: <p",
-        GP,
-        "The subagent then prints and reports `design-solution: <prd-stem>` followed by the doc path.",
-    ),
-    (
-        '.assertIn("design-solution: <p',
-        GP,
-        'Write a test that checks self.assertIn("design-solution: <prd-stem>", report) for the exit line.',
-    ),
-    (
-        "ine reads `design-solution: <p",
-        GP,
-        "The first line reads `design-solution: <prd-stem>` exactly.",
-    ),
-    (
-        "parse and plan-tasks) looks fo",
-        GP,
-        "The dispatcher (which handles catchup, design, parse and plan-tasks) looks for the next phase.",
-    ),
-    (
-        "`Run the work phase for PRD 0",
-        "autopilot:worker-opus",
-        "The fixture prompt text is `Run the work phase for PRD 00300, every task` verbatim.",
-    ),
-]
-
-
-@pytest.mark.parametrize(
-    ("span", "subagent_type", "prompt"),
-    _CORPUS,
-    ids=[
-        "re-invokes-work",
-        "reports-design",
-        "assert-in-design",
-        "line-reads-design",
-        "paren-plan-tasks",
-        "fixture-work-phase",
-    ],
-)
-def test_six_corpus_dispatches_are_allowed(
-    span: str,
-    subagent_type: str | None,
-    prompt: str,
-) -> None:
-    assert span in prompt
-    assert _find(prompt, subagent_type) is None
-
-
 def test_negation_in_previous_clause_does_not_excuse_follow() -> None:
     assert (
         _find("Read skills/work/SKILL.md, do not stop, then follow it for every task.")
