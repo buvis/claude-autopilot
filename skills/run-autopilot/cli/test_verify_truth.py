@@ -468,7 +468,7 @@ def test_run_gate_line_names_lock_timeout_and_head_moved(
             f"{int(verification.GATE_TIMEOUT_S)}s)",
         ),
         (
-            _refusal(head_moved=True),
+            _refusal(head_moved=True, dirty_paths=["src/foo.py"]),
             "Tests: (gate skipped: HEAD moved during the lock wait)",
         ),
     ]
