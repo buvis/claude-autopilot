@@ -39,7 +39,7 @@ SKIP_ALLOWED=3
 # the header.
 run_pytest() {
   local out rc
-  out="$("$@" 2>&1)"
+  out="$("$@" -rs 2>&1)"
   rc=$?
   echo "$out"
   local p f s
@@ -110,37 +110,37 @@ run_gather_harness() {
 }
 
 echo "[checks] reviewer registry"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/review-work-completion/scripts/test_agent_registry.py \
   skills/review-work-completion/scripts/test_carl_skip_prose.py \
   skills/review-work-completion/scripts/test_reviewer_dispatch_prose.py
 
 echo "[checks] retry policy prose"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/review-work-completion/scripts/test_retry_policy_prose.py
 
 echo "[checks] bob inlined first prose"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/review-work-completion/scripts/test_bob_inlined_first_prose.py
 
 echo "[checks] adversarial cap prose"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/work/scripts/test_adversarial_cap_prose.py \
   skills/work/scripts/test_devon_round_prose.py
 
 echo "[checks] narrow runs prose"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/work/scripts/test_narrow_runs_prose.py
 
 echo "[checks] record_dispatch"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/work/scripts/test_record_dispatch.py
 
 # hooks/test_guard_phase_delegation_scratch_replay.py is intentionally UNGATED
 # (see UNGATED in skills/run-autopilot/cli/test_release_checks_counts.py): it
 # reads gitignored scratch input and is not reproducible in a clean clone.
 echo "[checks] hook registration"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/scripts/test_review_coverage_hook_registration.py \
   hooks/test_hook_registration.py \
   hooks/test_enforce_prd_location.py \
@@ -159,14 +159,14 @@ run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
   dev/bin/test_replay_delegation_guard.py
 
 echo "[checks] custody push guard"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs hooks/test_guard_push_on_critical.py
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs hooks/test_guard_push_grammar.py
+run_pytest uv run --no-project --with pytest python -m pytest -q hooks/test_guard_push_on_critical.py
+run_pytest uv run --no-project --with pytest python -m pytest -q hooks/test_guard_push_grammar.py
 
 # capped at 4 workers: bare -n auto resolves to 18 workers on this host and
 # dies with fork/process-table exhaustion (Errno 35/12, SIGKILLed git
 # children) on these blocks (PRD 00233)
 echo "[checks] custody core"
-run_pytest uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -rs -n auto --maxprocesses 4 \
+run_pytest uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n auto --maxprocesses 4 \
   skills/run-autopilot/cli/test_custody.py \
   skills/run-autopilot/cli/test_custody_stall.py \
   skills/run-autopilot/cli/test_custody_resolve.py \
@@ -181,22 +181,22 @@ run_harness bash skills/use-codex/scripts/test_codex_run.sh
 run_harness bash skills/use-codex/scripts/test_codex_run_resume.sh
 run_harness bash skills/use-gemini/scripts/test_gemini_run.sh
 run_harness bash skills/use-sonnet/scripts/test_sonnet_run.sh
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs skills/use-gemini/scripts/test_gemini_run_unavailable.py
+run_pytest uv run --no-project --with pytest python -m pytest -q skills/use-gemini/scripts/test_gemini_run_unavailable.py
 
 echo "[checks] fast-track lane"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs skills/fast-track/scripts
+run_pytest uv run --no-project --with pytest python -m pytest -q skills/fast-track/scripts
 
 # serial: mixes files outside skills/run-autopilot/cli/, not covered by the
 # whole-cli-directory parallel-safety proof (PRD 00233)
 echo "[checks] plan size gate"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/plan-tasks/scripts/test_plan_size_gate_prose.py \
   skills/run-autopilot/cli/test_policy.py \
   skills/run-autopilot/cli/test_policy_budget.py \
   skills/run-autopilot/cli/test_rework_groups.py
 
 echo "[checks] l3"
-run_pytest uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -rs -n auto --maxprocesses 4 \
+run_pytest uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n auto --maxprocesses 4 \
   skills/run-autopilot/cli/test_loop_prose.py \
   skills/run-autopilot/cli/test_pause.py \
   skills/run-autopilot/cli/test_usage_limit.py \
@@ -210,7 +210,7 @@ run_pytest uv run --no-project --with pytest --with pytest-xdist python -m pytes
   skills/run-autopilot/cli/test_handoff_request.py
 
 echo "[checks] reporting"
-run_pytest uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -rs -n auto --maxprocesses 4 \
+run_pytest uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n auto --maxprocesses 4 \
   skills/run-autopilot/cli/test_loop_metrics.py \
   skills/run-autopilot/cli/test_render_report.py \
   skills/run-autopilot/cli/test_render.py \
@@ -218,7 +218,7 @@ run_pytest uv run --no-project --with pytest --with pytest-xdist python -m pytes
 
 # serial: no skills/run-autopilot/cli/ files here, outside PRD 00233's scope
 echo "[checks] cap hook"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/scripts/test_autopilot_context_cap_hook.py \
   skills/run-autopilot/scripts/test_autopilot_cap_headroom.py \
   skills/run-autopilot/scripts/test_cap_task_record_wall.py \
@@ -236,12 +236,12 @@ run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
 # serial: mixes files outside skills/run-autopilot/cli/, not covered by the
 # whole-cli-directory parallel-safety proof (PRD 00233)
 echo "[checks] design rework prose"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/scripts/test_design_review_contract.py \
   skills/run-autopilot/cli/test_design_rework_prose.py
 # serial: no skills/run-autopilot/cli/ files here, outside PRD 00233's scope
 echo "[checks] loop blockers prose"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/work/scripts/test_tess_size_limits_prose.py \
   skills/work/scripts/test_step_order_prose.py \
   skills/work/scripts/test_loop_blockers_prose.py
@@ -249,7 +249,7 @@ run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
 # serial: mixes files outside skills/run-autopilot/cli/, not covered by the
 # whole-cli-directory parallel-safety proof (PRD 00233)
 echo "[checks] l4"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/review-work-completion/scripts/test_consolidate_findings.py \
   skills/review-work-completion/scripts/test_citation_format_prose.py \
   skills/run-autopilot/cli/test_triage.py \
@@ -257,7 +257,7 @@ run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
 # serial: mixes files outside skills/run-autopilot/cli/, not covered by the
 # whole-cli-directory parallel-safety proof (PRD 00233)
 echo "[checks] effort lanes"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_lane.py \
   skills/run-autopilot/cli/test_lane_cli.py \
   skills/run-autopilot/cli/test_lane_check.py \
@@ -266,11 +266,11 @@ run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
 
 # serial: spawns its own -n 2 subprocess internally (PRD 00233)
 echo "[checks] parallel safety"
-run_pytest uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest --with pytest-xdist python -m pytest -q \
   skills/run-autopilot/cli/test_parallel_safety.py
 
 echo "[checks] waves"
-run_pytest uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -rs -n auto --maxprocesses 4 \
+run_pytest uv run --no-project --with pytest --with pytest-xdist python -m pytest -q -n auto --maxprocesses 4 \
   skills/run-autopilot/cli/test_wave.py \
   skills/run-autopilot/cli/test_wave_launch.py \
   skills/run-autopilot/cli/test_wave_launch_status.py \
@@ -293,7 +293,7 @@ run_pytest uv run --no-project --with pytest --with pytest-xdist python -m pytes
   skills/run-autopilot/cli/test_loop_slots.py
 
 echo "[checks] store tree"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_store_tree_foreign_dirty.py \
   skills/run-autopilot/cli/test_store_tree_record_store.py \
   skills/run-autopilot/cli/test_store_tree_cli.py \
@@ -308,7 +308,7 @@ run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
 # serial: pinned by test_enter_prose.py's exact invocation text; runs in
 # ~2s serial, not worth the pin edit (PRD 00233)
 echo "[checks] enter"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_enter.py \
   skills/run-autopilot/cli/test_enter_budget.py \
   skills/run-autopilot/cli/test_enter_prose.py \
@@ -326,7 +326,7 @@ echo "[checks] gather-context id"
 run_gather_harness bash skills/review-work-completion/scripts/test_gather_context_id.sh
 
 echo "[checks] review verbs"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_verification.py \
   skills/run-autopilot/cli/test_verification_reuse_verdict.py \
   skills/run-autopilot/cli/test_verification_dirty.py \
@@ -364,10 +364,10 @@ run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
   skills/work/scripts/test_gate_record_writer_prose.py
 
 echo "[checks] process facts"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs skills/run-autopilot/cli/test_procinfo.py
+run_pytest uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_procinfo.py
 
 echo "[checks] plan-tasks scripts"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/plan-tasks/scripts/_classify_tier_test_support.py \
   skills/plan-tasks/scripts/test_classify_tier_cli.py \
   skills/plan-tasks/scripts/test_classify_tier_default_floor.py \
@@ -377,7 +377,7 @@ run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
   skills/plan-tasks/scripts/test_plan_tasks_prose.py
 
 echo "[checks] review-work-completion scripts"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/review-work-completion/scripts/test_await_reviewer_outputs.py \
   skills/review-work-completion/scripts/test_check_review_file.py \
   skills/review-work-completion/scripts/test_codex_resume_contract.py \
@@ -388,7 +388,7 @@ run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
   skills/review-work-completion/scripts/test_tests_line_source_prose.py
 
 echo "[checks] run-autopilot cli remainder"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_check_plan_cli.py \
   skills/run-autopilot/cli/test_cli.py \
   skills/run-autopilot/cli/test_cli_default_paths.py \
@@ -439,7 +439,7 @@ run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
   skills/run-autopilot/cli/test_transitions.py
 
 echo "[checks] run-autopilot scripts remainder"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/scripts/test_autopilot_lifecycle.py \
   skills/run-autopilot/scripts/test_autopilot_phase2_stall.py \
   skills/run-autopilot/scripts/test_autopilot_resume.py \
@@ -464,7 +464,7 @@ run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
   skills/run-autopilot/scripts/test_walk_up.py
 
 echo "[checks] tracon"
-run_pytest uv run --no-project --with pytest --with rich --with textual python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest --with rich --with textual python -m pytest -q \
   skills/run-autopilot/scripts/tracon/test_discovery.py \
   skills/run-autopilot/scripts/tracon/test_model.py \
   skills/run-autopilot/scripts/tracon/test_panels.py \
@@ -472,7 +472,7 @@ run_pytest uv run --no-project --with pytest --with rich --with textual python -
   skills/run-autopilot/scripts/tracon/test_stream.py
 
 echo "[checks] use-codex scripts"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/use-codex/scripts/test_codex_hook_doctor.py \
   skills/use-codex/scripts/test_codex_hook_doctor_extra.py \
   skills/use-codex/scripts/test_codex_hook_doctor_parse_errors.py \
@@ -480,7 +480,7 @@ run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
   skills/use-codex/scripts/test_codex_hook_doctor_repair_cycle.py
 
 echo "[checks] work scripts remainder"
-run_pytest uv run --no-project --with pytest python -m pytest -q -rs \
+run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/work/scripts/test_check_build_overhead.py \
   skills/work/scripts/test_check_memory_pressure.py \
   skills/work/scripts/test_check_qwen_output.py \
