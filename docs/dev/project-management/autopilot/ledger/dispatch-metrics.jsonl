@@ -4524,3 +4524,8 @@
 {"id":"510c07a2","ended_at":1792051646,"elapsed_s":113,"outcome":"killed","detail":null}
 {"id":"f3c6abd9","kind":"pat","task":"9","queued_at":1792051831,"prompt_bytes":10006}
 {"id":"69c95a95","kind":"pat","task":"10","queued_at":1792051991,"prompt_bytes":6697}
+{"id":"6313ee7d","ended_at":1792052464,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"b92492a4","ended_at":1792052464,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"f3c6abd9","ended_at":1792052464,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"69c95a95","ended_at":1792052464,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"kind":"handoff","site":"review","edge":"leave","at":1792052464,"phase":"done","prd":"00308-reviewer-lane-resilience-v1.md"}
