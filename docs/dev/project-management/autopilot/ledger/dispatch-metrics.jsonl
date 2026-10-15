@@ -4645,3 +4645,5 @@
 {"id":"fe4ffd71","ended_at":1792070217,"elapsed_s":455,"outcome":"ok","detail":"retry"}
 {"id":"2bcead93","ended_at":1792070220,"elapsed_s":974,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"review","edge":"leave","at":1792070583,"phase":"review","prd":"00311-verify-reports-what-the-gate-did-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792070612,"phase":"build","prd":"00311-verify-reports-what-the-gate-did-v1.md"}
+{"kind":"handoff","site":"review","edge":"leave","at":1792074297,"phase":"review","prd":"00311-verify-reports-what-the-gate-did-v1.md"}
