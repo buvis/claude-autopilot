@@ -4354,3 +4354,5 @@
 {"id":"ddd0b93c","ended_at":1792024195,"elapsed_s":98,"outcome":"ok","detail":null}
 {"id":"21100916","kind":"fast-track:delta","task":"00306-refuse-tracked-verify-log-v1-c1","queued_at":1792024577,"prompt_bytes":5948}
 {"id":"21100916","ended_at":1792025081,"elapsed_s":504,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"build","edge":"resume","at":1792025194,"phase":"build","prd":"00307-guard-citations-and-replay-contract-v1.md"}
+{"kind":"handoff","site":"build","edge":"leave","at":1792025220,"phase":"build","prd":"00307-guard-citations-and-replay-contract-v1.md"}
