@@ -207,6 +207,16 @@ def test_a_quoted_order_inside_one_sentence_is_a_citation(verb: str) -> None:
     assert _find(f'The log {verb} "run plan-tasks for PRD 00300" verbatim.') is None
 
 
+def test_inch_marks_around_an_order_do_not_wrap_it() -> None:
+    # A '"' behind a digit is a unit mark, not a delimiter: pairing the two
+    # would put the order inside one quoted run and excuse it.
+    prompt = 'the 5" gap, run /autopilot:work, it is 6" wide'
+    _assert_quotes(_find(prompt), prompt, "autopilot:work")
+    # Control: the same two marks with the digits dropped ARE quotes, and the
+    # order between them is a citation.
+    assert _find('the x" gap, run /autopilot:work, it is y" wide') is None
+
+
 @pytest.mark.parametrize(
     "prompt",
     [
@@ -237,7 +247,7 @@ def _follow_fixture(text: str) -> tuple:
     normalized = module._normalize(text)
     spans = module._candidates(normalized)
     end = min(end for _, end, is_skill_md in spans if is_skill_md)
-    clause_starts, clause_ends, sentences, _ = module._boundaries(normalized, spans)
+    clause_starts, clause_ends, sentences, _, _ = module._boundaries(normalized, spans)
     return normalized, end, sentences, clause_starts, clause_ends
 
 
@@ -305,6 +315,50 @@ def test_ordered_to_follow_does_not_walk_the_sentence_list() -> None:
     )
     assert counting.iterations == 0
     assert counting.lookups <= 32
+
+
+class _CountingRuns(dict):
+    """The symmetric-delimiter run map, recording how often it is consulted: a
+    rescan per candidate shows up as work growing with the SQUARE of the
+    candidate count, one map read per candidate as work growing with the count
+    itself. Counted, not timed, so the pin is machine-independent."""
+
+    def __init__(self, mapping: dict) -> None:
+        super().__init__(mapping)
+        self.consultations = 0
+
+    def get(self, key, default=None):
+        self.consultations += 1
+        return super().get(key, default)
+
+
+def _count_run_consultations(monkeypatch: pytest.MonkeyPatch, repeats: int) -> tuple:
+    """(candidate count, run-map consultations) for a prompt carrying `repeats`
+    anchored citations in ONE sentence - every candidate passes the anchor and
+    reaches the citation check, which is the shape that used to rescan."""
+    module = _guard_module()
+    build = module._quoted_runs
+    maps = []
+
+    def counting(scratch: str, spans: list) -> dict:
+        maps.append(_CountingRuns(build(scratch, spans)))
+        return maps[-1]
+
+    monkeypatch.setattr(module, "_quoted_runs", counting)
+    prompt = "The log says " + '"run plan-tasks for PRD 00300" ' * repeats + "verbatim."
+    assert module.find_phase_delegation({"prompt": prompt, "subagent_type": GP}) is None
+    candidates = len(module._candidates(module._normalize(prompt)))
+    return candidates, sum(runs.consultations for runs in maps)
+
+
+@pytest.mark.parametrize("repeats", [8, 64])
+def test_citation_checking_reads_the_run_map_once_per_candidate(
+    monkeypatch: pytest.MonkeyPatch,
+    repeats: int,
+) -> None:
+    candidates, consultations = _count_run_consultations(monkeypatch, repeats)
+    assert candidates == repeats
+    assert consultations == repeats
 
 
 _AGOGE_PROMPT = "Run /autopilot:work for PRD 00300, every task."
