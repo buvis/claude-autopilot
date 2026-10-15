@@ -6,7 +6,7 @@ whether a line lands: the working file, its ``ledger/`` mirror, or nowhere at
 all when no autopilot dir resolves. Time is pinned through the module's own
 ``time`` name so the elapsed arithmetic is asserted, not eyeballed.
 
-This file holds the ``end`` verb's tests plus four tests the PRD's own
+This file holds the ``end`` and ``retry`` verbs' tests plus four tests the PRD's own
 exit-criteria commands name here: ``test_open_ids_lists_only_unclosed_starts``,
 ``test_handoff_closes_open_rows_as_lost``,
 ``test_handoff_resume_closes_open_rows_as_lost``, and
@@ -36,6 +36,7 @@ _testutil = importlib.util.module_from_spec(_TESTUTIL_SPEC)
 _TESTUTIL_SPEC.loader.exec_module(_testutil)
 
 record_dispatch = _testutil.record_dispatch
+_HEX_ID = _testutil.HEX_ID
 _project = _testutil.project
 _rows = _testutil.rows
 _pin_clock = _testutil.pin_clock
@@ -381,6 +382,102 @@ def test_end_ignores_a_handoff_outside_the_open_window(
     last = _rows(autopilot / "dispatch-metrics.jsonl")[-1]
     assert last["elapsed_s"] == 42
     assert last["detail"] is None
+
+
+def test_retry_row_copies_kind_and_task(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # A retry is a new dispatch of the same task: it gets its own id and clock,
+    # but inherits kind and task from the named start row, not from whichever
+    # start row happens to sit last in the ledger.
+    autopilot = _project(tmp_path)
+    original = {
+        "id": "deadbeef",
+        "kind": "ivan",
+        "task": "3",
+        "queued_at": 1000,
+        "prompt_bytes": 42,
+    }
+    record_dispatch.append_row(autopilot, original)
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "id": "cafebabe",
+            "kind": "pat",
+            "task": "7",
+            "queued_at": 1100,
+            "prompt_bytes": 9,
+        },
+    )
+    rows_before = _rows(autopilot / "dispatch-metrics.jsonl")
+    monkeypatch.chdir(tmp_path / "proj" / "src")
+    _pin_clock(monkeypatch, 5000)
+
+    exit_code = record_dispatch.main(["retry", "deadbeef"])
+
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    (printed,) = captured.out.splitlines()
+    assert _HEX_ID.match(printed)
+    assert printed != "deadbeef"
+    assert _rows(autopilot / "dispatch-metrics.jsonl") == [
+        *rows_before,
+        {
+            "id": printed,
+            "kind": "ivan",
+            "task": "3",
+            "queued_at": 5000,
+            "prompt_bytes": None,
+            "detail": "retry of deadbeef",
+        },
+    ]
+
+
+def test_retry_of_unknown_id_exits_1(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # An id with only an end row was never started here, so there is no kind
+    # or task to inherit: the retry must fail loud and leave the ledger alone.
+    autopilot = _project(tmp_path)
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "id": "cafebabe",
+            "kind": "pat",
+            "task": "7",
+            "queued_at": 1100,
+            "prompt_bytes": 9,
+        },
+    )
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "id": "0badf00d",
+            "ended_at": 1200,
+            "elapsed_s": None,
+            "outcome": "lost",
+            "detail": None,
+        },
+    )
+    working = autopilot / "dispatch-metrics.jsonl"
+    mirror = autopilot / "ledger" / "dispatch-metrics.jsonl"
+    working_before = working.read_bytes()
+    mirror_before = mirror.read_bytes()
+    monkeypatch.chdir(tmp_path / "proj")
+    _pin_clock(monkeypatch, 5000)
+
+    exit_code = record_dispatch.main(["retry", "0badf00d"])
+
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "record_dispatch: no start row for 0badf00d" in captured.err
+    assert working.read_bytes() == working_before
+    assert mirror.read_bytes() == mirror_before
 
 
 def test_handoff_closes_open_rows_as_lost(
