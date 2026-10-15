@@ -37,7 +37,11 @@ from _common import allow, block, read_input
 # (format characters) because they are invisible and do the same (U+200B,
 # U+200C, U+200D, U+2060, U+FEFF, U+2061, U+180E, and U+00AD the soft hyphen).
 # Nothing else: a Cyrillic "o" (U+043E) is a different letter, not a lookalike
-# form, and folding letters would be guesswork.
+# form, and folding letters would be guesswork. So a cross-script homoglyph such
+# as "/autopilot:w<U+043E>rk" passes this guard unflagged: NFKD/NFKC fold
+# compatibility and combining forms, never cross-script lookalikes, and the
+# harness itself would not resolve such a spelling as a real skill name, so this
+# is an accepted, documented gap rather than a defect.
 # Every code point here is NAMED, never pasted: these characters are invisible
 # or combining, so a pasted one is unreadable in a comment and an editor or
 # formatter would silently destroy it.
@@ -218,6 +222,12 @@ _CLAUSE_BOUNDARY = re.compile(r"[.;,:!?\n)]|\s-\s")
 _SENTENCE_BOUNDARY = re.compile(r"[.!?\n]")
 
 _AGOGE_PREFIX = "agoge:"
+# The agoge personas, enumerated: the exemption fails closed, so a new persona
+# must be added here by hand, and "agoge:anything" is not exempt.
+_AGOGE_PERSONAS = frozenset({
+    "agoge:olivia", "agoge:walter", "agoge:heidi", "agoge:judy",
+    "agoge:wendy", "agoge:peggy", "agoge:trudy",
+})
 
 # Read-only reviewer personas: none of their persona files grant the Skill
 # tool (test_every_exempt_reviewer_lacks_the_skill_tool), so exempting them
@@ -502,17 +512,54 @@ def _weakly_anchored(
     return False  # a label: no word before the name, or determiners only
 
 
-def _ordered_to_follow(text: str, end: int, sentences: list[int]) -> bool:
+def _ordered_to_follow(
+    text: str,
+    end: int,
+    sentences: list[int],
+    clause_starts: list[int],
+    clause_ends: list[int],
+) -> bool:
     """A SKILL.md path counts when an order to follow it sits in the rest of
     the sentence (or the next 200 characters, whichever ends first), with no
     negation in the gap between that verb and its object, and none in the few
     words before the verb either: "you must never follow it" negates the order
-    from in front of the verb, where the gap cannot see it."""
+    from in front of the verb, where the gap cannot see it. Those few words
+    stop at the verb's OWN clause start: a negation in an earlier clause ("do
+    not stop, then follow it") negates something else."""
     sentence_end = next((s for s in sentences if s >= end), len(text))
     match = _FOLLOW.search(text, end, min(sentence_end, end + 200))
     if not match or _NEGATION.search(match.group(2)):
         return False
-    return not _negated(text, end, match.start())
+    verb_start = match.start()
+    index = bisect_left(clause_starts, verb_start)
+    verb_clause_start = clause_ends[index - 1] if index else 0
+    return not _negated(text, verb_clause_start, verb_start)
+
+
+def _cited(text: str, start: int, end: int, floor: int, ceiling: int) -> bool:
+    """True iff the name at [start, end) sits inside a longer wrapped run - a
+    quote, backtick or bracket that opens at or before `start` and closes only
+    past `end`, within [floor, ceiling) - so it is cited text, not an order.
+
+    An opener AT `start` is the match's own captured wrap: it cites unless its
+    close was consumed into the span (`plan-tasks` wrapped on its own is a
+    label and anchors as before). An earlier opener counts only while still
+    open at `start`: by parity for a symmetric character, by no close since
+    the opener for an asymmetric pair. The straight single quote is left out:
+    contractions and possessives would read as open quotes."""
+    for opener, closer in (*_WRAP_PAIR.items(), ("`", "`"), ('"', '"')):
+        if text.find(closer, end, ceiling) == -1:
+            continue
+        if text[start] == opener and text.find(closer, start + 1, end) == -1:
+            return True
+        if opener == closer:
+            if text.count(opener, floor, start) % 2:
+                return True
+        else:
+            open_at = text.rfind(opener, floor, start)
+            if open_at != -1 and text.find(closer, open_at, start) == -1:
+                return True
+    return False
 
 
 def _negated(text: str, clause_start: int, start: int) -> bool:
@@ -555,7 +602,7 @@ def _field_delegation(text: str, per_task: bool) -> str | None:
         if text[clause_end:clause_end + 1] == "?":
             continue  # a question about the phase, not an order to run it
         if is_skill_md:
-            if not _ordered_to_follow(text, end, sentences):
+            if not _ordered_to_follow(text, end, sentences, clause_starts, clause_ends):
                 continue
         else:
             anchored = _strongly_anchored(text, start, end, sentences, marked) or (
@@ -563,6 +610,15 @@ def _field_delegation(text: str, per_task: bool) -> str | None:
                 and _weakly_anchored(text, start, end, clause_start, clause_end)
             )
             if not anchored or scoped:
+                continue
+            # Sentence-bounded, not clause-bounded: a quoted run routinely
+            # spans a ',' or ':' ("`design-solution: <prd-stem>`"). Checked
+            # after the anchor so an unanchored candidate costs no scan.
+            head = bisect_left(sentences, start)
+            sentence_start = sentences[head - 1] + 1 if head else 0
+            tail = bisect_left(sentences, end)
+            sentence_end = sentences[tail] if tail < len(sentences) else len(text)
+            if _cited(text, start, end, sentence_start, sentence_end):
                 continue
         if _negated(text, clause_start, start):
             continue
@@ -581,7 +637,7 @@ def find_phase_delegation(tool_input: dict) -> str | None:
         return None
     subagent_type = tool_input.get("subagent_type")
     if isinstance(subagent_type, str) and (
-        subagent_type in _READ_ONLY_REVIEWERS or subagent_type.startswith(_AGOGE_PREFIX)
+        subagent_type in _READ_ONLY_REVIEWERS or subagent_type in _AGOGE_PERSONAS
     ):
         return None
     fields = []
