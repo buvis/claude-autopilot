@@ -119,6 +119,11 @@ _VALIDATOR_REJECTS = (
         f"{_REVIEW_STAGE_BASE} --state <state.json>",
         "optional --state presented as required",
     ),
+    (
+        "required bracketed",
+        "autopilot review-stage --cycle-id <id> [--gate-command <cmd>]",
+        "--gate-command bracketed but required",
+    ),
 )
 
 
