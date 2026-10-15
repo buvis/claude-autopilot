@@ -15,280 +15,61 @@ from __future__ import annotations
 import fcntl
 import json
 import os
-import posixpath
 import re
 import selectors
 import signal
 import subprocess
 import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
-# Dirty paths under these roots never refuse a record: the store, plus the
-# agents' scratch dir, which a repo need not gitignore.
-from cli.store_tree import STORE_PREFIXES
+# The dirty-tree and git-probe helpers live in `dirty_tree.py` (PRD 00311
+# review R3, split to keep this file under the 800-line limit); importing
+# them here keeps `verification._dirty_path_is_in_store` and friends working
+# for existing callers and tests.
+from cli.dirty_tree import (
+    STORE_PREFIX,
+    _ancestor_and_clean,
+    _dirty_check,
+    _dirty_outside_store,
+    _dirty_path_is_in_store,
+    _dirty_store_paths,
+    _dirty_outside_store_paths,
+    _git,
+    _GitProbeFailed,
+    _hidden_flag_edits,
+    _iter_porcelain_z_records,
+    _log_rel_and_tracked,
+    _store_roots,
+    _store_symlink_targets_changed,
+    _untracked_log_exclusion,
+)
 
 GATE_TIMEOUT_S = 1800
 GATE_OUTPUT_CAP = 2_000_000  # bytes of combined stdout+stderr kept
 _LOCK_POLL_S = 0.05  # LOCK_NB poll interval while waiting for the gate lock
 
-STORE_PREFIX = "docs/dev/project-management/"
 RECORD_REL = Path(STORE_PREFIX) / "autopilot" / "last-verification.json"
 GATE_LOCK_REL = Path("docs/dev/tmp") / "gate.lock"
 SUMMARY_RE = re.compile(r"PASS (\d+) FAIL (\d+) SKIP (\d+) EXIT (\d+)")
 _FULL_SHA_RE = re.compile(r"[0-9a-f]{40}")
 _STALE: tuple[str, dict] = ("stale", {})
-
-
-def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        ["git", *args],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-
-def _dirty_path_is_in_store(
-    new_path: str,
-    old_path: str | None,
-    store: str | tuple[str, ...],
-) -> bool:
-    """A porcelain -z status record's store check: the path field
-    (and the second, source path field when the record is a rename/copy)
-    must both be under `store`, or the record counts as dirty outside
-    the store. A rename or copy is judged by both its destination and
-    source path -- crossing the store boundary in either direction, on
-    either path, is dirty."""
-    paths = (new_path, old_path) if old_path else (new_path,)
-    return all(p.startswith(store) for p in paths)
-
-
-def _iter_porcelain_z_records(raw: str) -> list[tuple[str, str | None]]:
-    """Splits `git status --porcelain=1 -z` output into (path, source_path)
-    pairs. XY is always two status-code bytes (either may be blank); a
-    rename/copy record (R or C in EITHER column) carries a second,
-    NUL-terminated source-path field."""
-    fields = raw.split("\0")
-    records = []
-    i = 0
-    while i < len(fields) and fields[i]:
-        field = fields[i]
-        code, path = field[:2], field[3:]
-        if code[0] in "RC" or code[1] in "RC":
-            i += 1
-            records.append((path, fields[i]))
-        else:
-            records.append((path, None))
-        i += 1
-    return records
-
-
-def _ancestor_and_clean(repo_root: Path, sha: str, head_sha: str) -> bool:
-    """Unchanged ancestor check and status check. The change list source
-    is `git diff --name-only --no-renames -z <sha> <head_sha>` split on NUL
-    (replacing the `git log` call, which is silent for a merge commit's own
-    resolution edits - `git diff` between the two endpoints is not). The
-    status/store-filter part is shared with `_dirty_outside_store`."""
-    if _git(repo_root, "merge-base", "--is-ancestor", sha, head_sha).returncode != 0:
-        return False
-    # Git paths are toplevel-relative; repo_root may sit below the toplevel.
-    prefix = _git(repo_root, "rev-parse", "--show-prefix")
-    if prefix.returncode != 0:
-        return False
-    store = prefix.stdout.strip() + STORE_PREFIX
-    diff = _git(repo_root, "diff", "--name-only", "--no-renames", "-z", sha, head_sha)
-    if diff.returncode != 0:
-        return False
-    paths = [p for p in diff.stdout.split("\0") if p]
-    if not all(path.startswith(store) for path in paths):
-        return False
-    if _store_symlink_targets_changed(repo_root, paths):
-        return False
-    if _store_symlink_targets_changed(repo_root, _dirty_store_paths(repo_root)):
-        return False
-    return not _dirty_outside_store(repo_root)
-
-
-class _GitProbeFailed(OSError):
-    """A git call in the dirt probe exited non-zero (non-git cwd and the
-    like); an OSError so `_dirty_outside_store` counts it as dirty."""
-
-
-def _store_roots(repo_root: Path) -> tuple[str, ...]:
-    """Toplevel-relative store roots: `git rev-parse --show-prefix` joined
-    with each of STORE_PREFIXES. Raises `_GitProbeFailed` on a git failure."""
-    prefix = _git(repo_root, "rev-parse", "--show-prefix")
-    if prefix.returncode != 0:
-        raise _GitProbeFailed("git rev-parse --show-prefix failed")
-    return tuple(prefix.stdout.strip() + root for root in STORE_PREFIXES)
-
-
-def _dirty_store_paths(repo_root: Path) -> list[str]:
-    """Toplevel-relative paths of every porcelain status record path that
-    lies under the store roots (the inverse of `_dirty_outside_store_paths`);
-    a rename/copy contributes each of its paths that is in the store.
-    Raises `_GitProbeFailed` on a git failure."""
-    store = _store_roots(repo_root)
-    status = _git(repo_root, "status", "--porcelain=1", "-z", "--untracked-files=all")
-    if status.returncode != 0:
-        raise _GitProbeFailed("git status failed")
-    return [
-        p
-        for new, old in _iter_porcelain_z_records(status.stdout)
-        for p in (new, old)
-        if p and _dirty_path_is_in_store(p, None, store)
-    ]
-
-
-def _store_symlink_targets_changed(repo_root: Path, store_paths: list[str]) -> bool:
-    """True iff a tracked symlink outside the store, its blob target resolved
-    against the link's own directory, names one of `store_paths` (all
-    toplevel-relative) or a directory above one. Absolute targets and
-    symlink chains are taken at face value. Raises `_GitProbeFailed` on a
-    git failure."""
-    if not store_paths:
-        return False
-    store = _store_roots(repo_root)
-    listing = _git(repo_root, "ls-files", "-s", "-z", "--full-name")
-    if listing.returncode != 0:
-        raise _GitProbeFailed("git ls-files failed")
-    for entry in listing.stdout.split("\0"):
-        if not entry:
-            continue
-        meta, link = entry.split("\t", 1)
-        mode, blob, _stage = meta.split()
-        if mode != "120000" or link.startswith(store):
-            continue
-        raw = _git(repo_root, "cat-file", "-p", blob)
-        if raw.returncode != 0:
-            raise _GitProbeFailed("git cat-file failed")
-        target = posixpath.normpath(posixpath.join(posixpath.dirname(link), raw.stdout))
-        # "." is the repo root: every repo-relative store path is beneath it,
-        # but none of them literally starts with "./", so it needs its own
-        # branch rather than falling through to the startswith check below.
-        if target == "." or any(
-            p == target or p.startswith(target + "/") for p in store_paths
-        ):
-            return True
-    return False
-
-
-def _dirty_outside_store_paths(
-    repo_root: Path,
-    extra_excluded: tuple[str, ...] = (),
-) -> list[str]:
-    """Sorted, deduplicated paths of every porcelain status record outside
-    the store roots, [] when clean. Store roots come from `_store_roots`
-    (`prefix + p for p in STORE_PREFIXES`, `prefix` from `git rev-parse
-    --show-prefix`); `extra_excluded` holds TOPLEVEL-relative POSIX file
-    paths, used as given (not re-joined with prefix) and matched exactly,
-    never as prefixes. Runs `git status --porcelain=1 -z
-    --untracked-files=all` and reuses `_iter_porcelain_z_records` and
-    `_dirty_path_is_in_store`; a rename/copy record contributes both of its
-    paths. Catches nothing: a failing git call raises `_GitProbeFailed`
-    (an OSError), never `[]`."""
-    store = _store_roots(repo_root)
-    status = _git(repo_root, "status", "--porcelain=1", "-z", "--untracked-files=all")
-    if status.returncode != 0:
-        raise _GitProbeFailed("git status failed")
-    offending = set()
-    for new, old in _iter_porcelain_z_records(status.stdout):
-        # extra_excluded holds exact file paths: match by equality, never
-        # by prefix, so "my-own.log.bak" is not excused by "my-own.log".
-        excused = all(p in extra_excluded for p in (new, old) if p)
-        if not excused and not _dirty_path_is_in_store(new, old, store):
-            offending.update(p for p in (new, old) if p)
-    offending.update(_hidden_flag_edits(repo_root, store))
-    return sorted(offending)
-
-
-def _hidden_flag_edits(repo_root: Path, store: tuple[str, ...]) -> list[str]:
-    """Toplevel-relative paths outside `store` whose index entry carries the
-    skip-worktree or assume-unchanged flag. Either flag alone is dirt: both
-    hide the path from `git status`, so its on-disk content can never be
-    trusted to still match the index blob -- there is no safe way to tell
-    an unedited flagged file from an edited one without the gate itself
-    reading stale bytes. Raises `_GitProbeFailed` when a git call fails."""
-    top = _git(repo_root, "rev-parse", "--show-toplevel")
-    if top.returncode != 0:
-        raise _GitProbeFailed("git rev-parse --show-toplevel failed")
-    toplevel = Path(top.stdout.strip())
-    listing = _git(toplevel, "ls-files", "-v", "-s", "-z")
-    if listing.returncode != 0:
-        raise _GitProbeFailed("git ls-files failed")
-    flagged = []
-    for entry in listing.stdout.split("\0"):
-        if not entry:
-            continue
-        meta, path = entry.split("\t", 1)
-        tag, _mode, _blob, _stage = meta.split()
-        # "S" is skip-worktree; a lowercase tag is assume-unchanged.
-        if (tag == "S" or tag.islower()) and not path.startswith(store):
-            flagged.append(path)
-    return flagged
-
-
-def _dirty_outside_store(
-    repo_root: Path,
-    extra_excluded: tuple[str, ...] = (),
-) -> bool:
-    """True iff the working tree has any change outside the store roots
-    (see `_dirty_outside_store_paths`), or the git calls themselves fail
-    (non-git cwd, any OSError/non-zero exit counts as dirty - fail toward
-    refusing the record)."""
-    try:
-        return bool(_dirty_outside_store_paths(repo_root, extra_excluded))
-    except OSError:
-        return True
-
-
-def _dirty_check(cwd: Path, extra_excluded: tuple[str, ...]) -> tuple[bool, list[str]]:
-    """(dirty, dirty_paths) for `run_gate`'s result. A failing git probe is
-    dirty with no path to list."""
-    try:
-        paths = _dirty_outside_store_paths(cwd, extra_excluded)
-    except OSError:
-        return True, []
-    return bool(paths), paths
-
-
-def _log_rel_and_tracked(cwd: Path, log_path: Path | None) -> tuple[str, bool] | None:
-    """(toplevel-relative POSIX path of `log_path`, whether it is tracked
-    there), when `log_path` resolves inside cwd's git toplevel; None when
-    there is no log, it resolves outside the toplevel, or any git call
-    fails. The single probe both `_untracked_log_exclusion` callers used to
-    run separately."""
-    if log_path is None:
-        return None
-    try:
-        top = _git(cwd, "rev-parse", "--show-toplevel")
-        if top.returncode != 0:
-            return None
-        toplevel = Path(top.stdout.strip())
-        rel = log_path.resolve().relative_to(toplevel.resolve()).as_posix()
-        tracked = _git(toplevel, "ls-files", "--error-unmatch", "--", rel)
-    except (OSError, ValueError):
-        return None
-    return rel, tracked.returncode == 0
-
-
-def _untracked_log_exclusion(cwd: Path, log_path: Path | None) -> tuple[str, ...]:
-    """`(toplevel-relative POSIX path of log_path,)` when the log resolves
-    inside cwd's git toplevel and is NOT tracked there; `()` otherwise
-    (no log, log outside the toplevel, log tracked, or any git failure).
-    A tracked log is never excused: its edits stay dirt."""
-    resolved = _log_rel_and_tracked(cwd, log_path)
-    if resolved is None:
-        return ()
-    rel, tracked = resolved
-    return () if tracked else (rel,)
+# Captured at import time so `_child_from_exception` still recognizes a real
+# child even when a test monkeypatches `subprocess.Popen` itself to a plain
+# function (not a type, so `isinstance(value, subprocess.Popen)` would raise).
+_POPEN_TYPE = subprocess.Popen
 
 
 def _record_shape_ok(record: dict, gate_command: str) -> bool:
     """True iff the record has a full sha, all counts, and a green run of
-    exactly `gate_command`, stamped by `_write_record` (`writer: run_gate`)."""
+    exactly `gate_command`, stamped by `_write_record` (`writer: run_gate`).
+    `record["failed"]` alone carries the summary line's own EXIT token too:
+    `_write_record` folds a non-zero EXIT token into `failed` before writing,
+    so a summary of `FAIL 0 ... EXIT 1` is stored as failed, and this check
+    needs nothing beyond the existing `failed != 0` test to refuse it, even
+    though the gate process itself exited 0 and the true parsed failure
+    count (returned to the caller for the Tests line) stayed 0."""
     if record.get("writer") != "run_gate":
         return False
     sha = record.get("sha")
@@ -373,16 +154,26 @@ def _write_record(
     sha: str,
     cycle: int | None,
     result: dict,
+    summary_exit: int | None,
 ) -> None:
+    """Writes the record with the usual shape (no extra key): a non-zero
+    `summary_exit` (the summary line's own EXIT token, never returned to
+    `run_gate`'s caller) is folded into the persisted `failed` count here,
+    forcing it non-zero so `_record_shape_ok` refuses the record on reuse
+    exactly as it already does for a parsed failure -- without changing the
+    true parsed `failed` the caller gets back in `result`."""
     path = cwd / RECORD_REL
     path.parent.mkdir(parents=True, exist_ok=True)
+    persisted_failed = result["failed"]
+    if summary_exit not in (0, None):
+        persisted_failed = max(persisted_failed or 0, 1)
     record = {
         "sha": sha,
         "cycle": cycle,
         "writer": "run_gate",
         "commands": [{"command": normalize_command(command), "exit": result["exit"]}],
         "passed": result["passed"],
-        "failed": result["failed"],
+        "failed": persisted_failed,
         "skipped": result["skipped"],
     }
     path.write_text(json.dumps(record, indent=2) + "\n")
@@ -544,6 +335,10 @@ def _record_gate(
     and write the record only when a summary parsed and the tree is clean."""
     raw_line, found = _parse_summary(stdout_buf)
     dirty, dirty_paths = _dirty_check(cwd, extra_excluded)
+    # The summary line's own EXIT token: never surfaced to the caller (only
+    # the real process `returncode` is, as `exit`), used solely to fold a
+    # dropped failure into the persisted record below.
+    summary_exit = int(found.group(4)) if found else None
     result = {
         "passed": int(found.group(1)) if found else None,
         "failed": int(found.group(2)) if found else None,
@@ -558,7 +353,7 @@ def _record_gate(
         "head_moved": False,
     }
     if found and not dirty:
-        _write_record(cwd, command, sha, cycle, result)
+        _write_record(cwd, command, sha, cycle, result, summary_exit)
         result["recorded"] = True
     return result
 
@@ -643,6 +438,65 @@ def _run_locked_gate(
             log_file.close()
 
 
+class _SigtermGuard:
+    """Tracks whether the gate has started and whether a SIGTERM arrived
+    before that. `handle` is the installed signal handler: before the
+    gate starts it only records `sigterm_pending`; once started, it raises
+    directly (SIGTERM during drain/reap). `raise_if_pending` turns a
+    deferred signal into the same error, called right after the gate
+    starts."""
+
+    def __init__(self) -> None:
+        self.gate_started = False
+        self.sigterm_pending = False
+
+    def handle(self, signum, frame) -> None:
+        if not self.gate_started:
+            self.sigterm_pending = True
+            return
+        raise RuntimeError("verify: SIGTERM during gate")
+
+    def raise_if_pending(self) -> None:
+        if self.sigterm_pending:
+            raise RuntimeError("verify: SIGTERM during gate")
+
+
+@contextmanager
+def _deferred_sigterm():
+    """Installs `_SigtermGuard.handle` as the SIGTERM handler for the
+    caller's protected region, restoring the previous handler on exit.
+    SIGTERM is not blocked around `Popen`: the gate would inherit the
+    blocked mask. A no-op off the main thread, where `signal.signal`
+    cannot install a handler at all."""
+    guard = _SigtermGuard()
+    on_main_thread = threading.current_thread() is threading.main_thread()
+    if on_main_thread:
+        old_handler = signal.getsignal(signal.SIGTERM)
+        signal.signal(signal.SIGTERM, guard.handle)
+    try:
+        yield guard
+    finally:
+        if on_main_thread:
+            signal.signal(signal.SIGTERM, old_handler)
+
+
+def _child_from_exception(exc: BaseException) -> subprocess.Popen | None:
+    """When `Popen()` itself raises before returning -- a `KeyboardInterrupt`
+    from SIGINT can land mid-spawn, after the real session leader already
+    exists but before its handle reaches the caller -- that handle is only
+    reachable through the exception's own propagation path: it is still a
+    local in one of the frames between the raise point and here. Walks
+    `exc.__traceback__` for the first live `Popen` found in any frame's
+    locals; None when the gate never actually got far enough to fork."""
+    tb = exc.__traceback__
+    while tb is not None:
+        for value in tb.tb_frame.f_locals.values():
+            if isinstance(value, _POPEN_TYPE):
+                return value
+        tb = tb.tb_next
+    return None
+
+
 def _spawn_gate(
     command: str,
     cwd: Path,
@@ -657,61 +511,42 @@ def _spawn_gate(
     the gate's own process group if this process dies: a SIGKILLed verify
     cannot be handled, and this inheritance alone keeps the next verify
     waiting until the orphaned gate exits. Do not add a SIGKILL "handler".
-    SIGTERM, or any other exception during drain/reap, kills the gate's
-    process group and re-raises. A SIGTERM before the gate has started
-    only sets a flag; it is raised right after `Popen`, inside the `try`,
-    so the just-spawned gate is still killed. SIGTERM is not blocked
-    around `Popen`: the gate would inherit the blocked mask."""
-    gate_started = False
-    sigterm_pending = False
-    on_main_thread = threading.current_thread() is threading.main_thread()
-
-    def _raise_on_sigterm(signum, frame):
-        nonlocal sigterm_pending
-        if not gate_started:
-            sigterm_pending = True
-            return
-        raise RuntimeError("verify: SIGTERM during gate")
-
-    if on_main_thread:
-        old_handler = signal.getsignal(signal.SIGTERM)
-        signal.signal(signal.SIGTERM, _raise_on_sigterm)
-    try:
-        proc = subprocess.Popen(
-            command,
-            shell=True,
-            cwd=cwd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            start_new_session=True,
-            pass_fds=(lock_fd,),
-        )
+    `Popen` itself is inside the guarded region now, so SIGTERM and SIGINT
+    landing during spawn get the same cleanup as one landing during
+    drain/reap: kill the gate's process group and re-raise. When `Popen`
+    raises before `proc` is ever assigned, `_child_from_exception` recovers
+    the already-forked child from the exception's own traceback."""
+    proc = None
+    with _deferred_sigterm() as guard:
         try:
-            gate_started = True
-            if sigterm_pending:
-                raise RuntimeError("verify: SIGTERM during gate")
-            stdout_buf, done = _drain_bounded(
-                proc,
-                GATE_OUTPUT_CAP,
-                deadline,
-                log_file,
+            proc = subprocess.Popen(
+                command,
+                shell=True,
+                cwd=cwd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                start_new_session=True,
+                pass_fds=(lock_fd,),
             )
+            guard.gate_started = True
+            guard.raise_if_pending()
+            stdout_buf, done = _drain_bounded(proc, GATE_OUTPUT_CAP, deadline, log_file)
             exited = _reap(proc, deadline, done)
-        except BaseException:
+        except BaseException as exc:
             # A log-sink write error, SIGTERM, or an interrupt: kill and
             # reap the gate, then re-raise.
-            _kill_gate(proc)
+            _kill_gate(proc if proc is not None else _child_from_exception(exc))
             raise
-    finally:
-        if on_main_thread:
-            signal.signal(signal.SIGTERM, old_handler)
     return proc.returncode, stdout_buf, exited
 
 
-def _kill_gate(proc: subprocess.Popen) -> None:
-    """Kills and reaps the gate's process group and closes its pipes. The
-    group may already be gone, which raises ProcessLookupError and must not
-    mask the error the caller is propagating."""
+def _kill_gate(proc: subprocess.Popen | None) -> None:
+    """Kills and reaps the gate's process group and closes its pipes.
+    `proc` is None when the gate never actually forked, which is a no-op.
+    The group may already be gone, which raises ProcessLookupError and must
+    not mask the error the caller is propagating."""
+    if proc is None:
+        return
     try:
         os.killpg(proc.pid, signal.SIGKILL)
     except ProcessLookupError:
