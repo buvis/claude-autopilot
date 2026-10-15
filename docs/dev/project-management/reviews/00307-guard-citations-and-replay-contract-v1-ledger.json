@@ -1,0 +1,26 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "1 touched test(s) pass against the pre-change code: test_allow_corpus_ignores_scratch_dispatch_files",
+    "file": "hooks/test_guard_phase_delegation.py",
+    "reason": "Behaviour-preserving test-quality fix: the test's subject is the corpus glob, which this diff does not change. Stub 00300 asked only that the test be able to fail against a planted scratch file in the globbed directory, which it now is. Passing against the pre-change code is expected for this test and is not evidence it fails to pin anything."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`test_ordered_to_follow_uses_bisect` asserts on `inspect.getsource` strings. That is brittle, but the PRD specifies it. The behavioural twin `test_negation_in_previous_clause_does_not_excuse_follow` does bind the intent.",
+    "file": "hooks/test_guard_phase_delegation_citations.py:119",
+    "reason": "The PRD's Phase 0 task specifies this exact source-inspection assertion ('the function body contains bisect_left and no next('). Its own finder judged it acceptable and named the behavioural twin that binds intent. Changing it would depart from the spec to no benefit."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The scratch test (hooks/test_guard_phase_delegation.py:98) monkeypatches FIXTURES to a tmp_path that holds copies of the committed fixtures. It can fail and asserts the committed list, so it is acceptable.",
+    "file": "hooks/test_guard_phase_delegation.py:98",
+    "reason": "Raised and resolved in the same breath by its own finder: the test can fail and asserts the committed list, which is exactly what stub 00300 required. No defect stated."
+  }
+]

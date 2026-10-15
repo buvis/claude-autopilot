@@ -7,6 +7,42 @@
       "detail": "fast-track/00306-refuse-tracked-verify-log-v1-c1: 2 confirmed findings survive rework (CRITICAL: default-log-path symlink bypass still live; HIGH: .git identity check incomplete for subdirectory cwd). Branch fast-track/00306-refuse-tracked-verify-log-v1-c1 holds the fix attempt (4 commits).",
       "op_id": "07f73fe88b82",
       "prd": "00306-refuse-tracked-verify-log-v1.md"
+    },
+    {
+      "type": "review-critical",
+      "cycle": 1,
+      "ref": "R1",
+      "issue": "PRD must-have unmet: replay_delegation_guard.py exits 1 with per-task refused 3; ids toolu_011UqbqFtUDPuSeCiLLgMvEg and toolu_013ePUKbLDE7DLnbnGmgszzR still refused because _cited bounds its close/opener search by sentence",
+      "severity": "critical",
+      "consensus": "3/4",
+      "file": "hooks/guard_phase_delegation.py:539",
+      "action": "fix in cycle 1 rework",
+      "reason": "Critical severity, always deferred as the audit trail; PRD 00194 routes it to a fix task",
+      "prd": "00307-guard-citations-and-replay-contract-v1.md"
+    },
+    {
+      "type": "review-critical",
+      "cycle": 1,
+      "ref": "R2",
+      "issue": "test_six_corpus_dispatches_are_allowed uses invented prompts instead of the six stub-00294 prompts verbatim, so it is green while the real corpus replay is red",
+      "severity": "critical",
+      "consensus": "3/4",
+      "file": "hooks/test_guard_phase_delegation_citations.py:67",
+      "action": "fix in cycle 1 rework",
+      "reason": "Critical severity, always deferred as the audit trail; PRD 00194 routes it to a fix task",
+      "prd": "00307-guard-citations-and-replay-contract-v1.md"
+    },
+    {
+      "type": "review-critical",
+      "cycle": 1,
+      "ref": "R4",
+      "issue": "The replay does not exit 0 and does not read per-task <n> refused 1; it exits 1 with refused 3, two of them non-pinned, failing the Phase 2 acceptance and Success Criterion 1",
+      "severity": "critical",
+      "consensus": "1/4",
+      "file": "dev/bin/replay_delegation_guard.py",
+      "action": "fix in cycle 1 rework",
+      "reason": "Critical severity, always deferred as the audit trail; PRD 00194 routes it to a fix task",
+      "prd": "00307-guard-citations-and-replay-contract-v1.md"
     }
   ]
 }
