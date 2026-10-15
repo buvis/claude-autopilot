@@ -131,6 +131,9 @@ def render_metrics(rows: list[dict]) -> str:
     for row in rows:
         prds.setdefault(str(row.get("prd", "?")), []).append(row)
     lines = [
+        "Cost USD excludes the finalizing session, which is recorded "
+        "after this report is written.",
+        "",
         "| PRD | Sessions | Wall secs | Cost USD |",
         "|-----|----------|-----------|----------|",
     ]

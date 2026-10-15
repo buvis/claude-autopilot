@@ -45,13 +45,25 @@ def sequence(name: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
+def _has_control_char(name: str) -> bool:
+    return any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in name)
+
+
 def selectable(names: Iterable[str]) -> list[str]:
     """Return the selectable entries of `names`, lowest sequence number first.
 
     Ties on sequence (two PRDs sharing a number) break on the full name, so
     the order is total and two calls on the same directory agree.
+
+    A name holding a control character (below U+0020, or U+007F) is excluded
+    regardless of its sequence prefix - such a name can forge a `## Read
+    next` section once printed raw into the session brief.
     """
-    picks = [n for n in names if n.endswith(".md") and sequence(n) is not None]
+    picks = [
+        n
+        for n in names
+        if n.endswith(".md") and sequence(n) is not None and not _has_control_char(n)
+    ]
     return sorted(picks, key=lambda n: (sequence(n) or 0, n))
 
 

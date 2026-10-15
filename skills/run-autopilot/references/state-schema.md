@@ -542,8 +542,8 @@ promoting on the next relaunch by construction.
 
 ## Two more CLI verbs
 
-- `autopilot group-rework <state.json>` — regroup rework tasks by file (see Phase 6 rework grouping).
-- `autopilot review-stage <state.json> <review-file>` — stage a finished review file for the decision gate.
+- `autopilot group-rework --findings <path>` — regroup rework tasks by file (see Phase 6 rework grouping).
+- `autopilot review-stage --cycle-id <id> --gate-command <cmd> [--state <state.json>]` — stage a finished review file for the decision gate.
 - `autopilot cap-check --review-file <path> [--previous <path>] [--repo-root <path>]` — classify a review file's HIGH/CRITICAL findings as regressions introduced by the rework range between `--previous`'s `head_sha` and `--review-file`'s `head_sha` (`cli/cap_check.py`, PRD 00310). Prints one JSON line per classified row (`ref`, `severity`, `file`, `line`, `regression`, `commit`). Exit 1 when any row classifies `regression: true`, exit 0 otherwise (including when `--previous` is omitted or does not exist, or when no HIGH/CRITICAL row survives), exit 2 (`CapCheckError`, reason on stderr) on an unreadable file, a missing or malformed `head_sha`, or a git failure. Invoked by the loop-mode cap-out branch (`references/phase-review.md` Cap check) before a cap-overflow deferral.
 
 ## Skip Logic

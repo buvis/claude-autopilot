@@ -354,6 +354,10 @@ def _run_init(args: argparse.Namespace) -> int:
     try:
         state.init(state_path, initial)
     except state.StateExistsError:
+        print(
+            f"autopilot: init: state.json already exists at {state_path}",
+            file=sys.stderr,
+        )
         return 7
     except OSError as err:
         print(f"autopilot: init failed: {err}", file=sys.stderr)
@@ -398,6 +402,7 @@ def _replay_loop_entry(state_path: Path, prd_arg: str | None) -> int | None:
         prd_arg is not None
         or loop_entry.get("prd") != current.get("prd")
         or not isinstance(result, dict)
+        or os.environ.get("_AUTOPILOT_LOOP_ENTRY_STALE")
     ):
         return None
     print(json.dumps(result, sort_keys=True))
