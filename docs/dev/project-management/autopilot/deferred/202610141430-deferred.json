@@ -1,0 +1,12 @@
+{
+  "batch_id": "202610141430",
+  "items": [
+    {
+      "type": "stall",
+      "site": "fast_track_blocked",
+      "detail": "fast-track/00306-refuse-tracked-verify-log-v1-c1: 2 confirmed findings survive rework (CRITICAL: default-log-path symlink bypass still live; HIGH: .git identity check incomplete for subdirectory cwd). Branch fast-track/00306-refuse-tracked-verify-log-v1-c1 holds the fix attempt (4 commits).",
+      "op_id": "07f73fe88b82",
+      "prd": "00306-refuse-tracked-verify-log-v1.md"
+    }
+  ]
+}
