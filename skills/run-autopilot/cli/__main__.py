@@ -220,7 +220,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -1077,9 +1076,7 @@ def _run_verify(args: argparse.Namespace) -> int:
     # Red/green follows the parsed summary, never the process returncode alone.
     summary_exit = None
     if result.get("raw_line"):
-        m = re.search(r"EXIT (\d+)", result["raw_line"])
-        if m:
-            summary_exit = int(m.group(1))
+        summary_exit = int(verification.SUMMARY_RE.search(result["raw_line"]).group(4))
     is_red = (result.get("failed") or 0) > 0 or summary_exit not in (None, 0)
     # "log": null iff no gate spawned (pre-spawn refusal or lock timeout).
     spawned = result["exit"] is not None or result["timed_out"]
@@ -1885,9 +1882,7 @@ def _run_markers(args: argparse.Namespace) -> int:
     names = args.check if args.check is not None else args.clear
     unknown = [n for n in names if n not in markers.MARKERS]
     if unknown:
-        print(
-            f"autopilot: markers: unknown marker {', '.join(unknown)}", file=sys.stderr
-        )
+        print(f"autopilot: markers: unknown marker {', '.join(unknown)}", file=sys.stderr)
         return 1
     if args.check is not None:
         print(json.dumps(markers.check(autopilot_dir, names)))
