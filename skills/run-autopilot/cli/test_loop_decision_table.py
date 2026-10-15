@@ -153,7 +153,7 @@ def test_died_session_retries_once_then_parks_then_guard_halts(tmp_path):
     assert 30 in lp._test["sleeps"]
     assert "park-requested unconsumed (2 relaunches" in err
     assert _notified(lp, "Park marker unconsumed")
-    assert _notified(lp, "Parking 00044-x-v1.md.")
+    assert _notified(lp, "Parking 00044-x-v1.md (died after 1 retries")
     assert len(lp._test["spawn"].launches) == 4
 
 

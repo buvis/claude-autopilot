@@ -1,3 +1,5 @@
+Cost USD excludes the finalizing session, which is recorded after this report is written.
+
 | PRD | Sessions | Wall secs | Cost USD |
 |-----|----------|-----------|----------|
 | 00040-feature-x-v1.md | 5 | 1069 | 28.16 |
