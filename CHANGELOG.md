@@ -84,6 +84,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: a single-hop directory symlink that aliases the repository root (for example `src/root -> ..`) no longer escapes gate-reuse staleness detection
 - **run-autopilot**: gate reuse is refused when a tracked product symlink that aliases a path inside the store has a changed target, committed or uncommitted, so a store-only edit can no longer evade staleness detection
 - **hooks**: the phase-delegation guard no longer refuses a dispatch whose only phase mention is a quoted citation (a phase named inside quotes or a citation is not an order to run it), and exempts agoge by an enumerated roster of its 7 personas instead of any `agoge:` prefix
+- **run-autopilot**: the loop registry, catchup guard and tracon discovery now find a Darwin loop's own ancestor processes - `pgrep -P` leaves them out on macOS unless `-a` is given, which blinded the registry to a live loop
+- **run-autopilot**: a reset or rebase that leaves a capsule's recorded base no longer a descendant of HEAD is detected before the catchup guard reads an empty, vacuously-passing commit range
+- **run-autopilot**: a scheduled usage-limit wait inside the loop's budget check now prints the same wait line and sends the same notification the ordinary continue path does, before it sleeps, instead of sleeping silently
+- **run-autopilot**: a backlog or wip filename holding a control character can no longer be selected - such a name could forge a `## Read next` section once printed raw into the session brief
+- **run-autopilot**: `autopilot init` now names the existing `state.json` path on stderr when it refuses to overwrite one, instead of exiting 7 with no message
+- **run-autopilot**: the loop's per-PRD budget probe no longer crashes the unattended loop on a non-UTF-8 metrics ledger; it reports the read failure on stderr and counts the PRD's spend as 0 for that check
+- **run-autopilot**: a loop session whose `loop_entry` invalidation write failed no longer lets a later child replay the stale result - the launched child's environment is marked and the session enters for real
 
 ## [0.9.0] - 2026-10-05
 
