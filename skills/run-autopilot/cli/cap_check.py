@@ -59,6 +59,49 @@ def _split_file_line(cell: str) -> tuple[str, int | None]:
     return matched.group(1), int(matched.group(2))
 
 
+def _line_regression(
+    repo_root: str | Path,
+    head: str,
+    file: str,
+    line: int,
+    rework_commits: set[str],
+) -> bool:
+    try:
+        blame = _git(
+            repo_root, "blame", "-L", f"{line},{line}", "--porcelain", head, "--", file,
+        )
+    except CapCheckError:
+        return False
+    if not blame:
+        return False
+    return blame.splitlines()[0].split()[0] in rework_commits
+
+
+def _classify_row(
+    repo_root: str | Path,
+    head: str,
+    row,
+    rework_commits: set[str],
+    changed_files: set[str],
+) -> dict:
+    file, line = _split_file_line(row.file)
+    regression = False
+    if file:
+        if line is not None:
+            regression = _line_regression(repo_root, head, file, line, rework_commits)
+        else:
+            regression = file in changed_files
+    commit = _git(repo_root, "log", "--format=%h", "-1", head) if regression else None
+    return {
+        "ref": row.ref,
+        "severity": row.severity,
+        "file": file,
+        "line": line,
+        "regression": regression,
+        "commit": commit,
+    }
+
+
 def classify_findings(
     repo_root: str | Path,
     review_file: str | Path,
@@ -91,45 +134,8 @@ def classify_findings(
         _git(repo_root, "diff", "--name-only", f"{previous_head}..{head}").splitlines(),
     )
 
-    out: list[dict] = []
-    for row in rows:
-        if row.severity not in ("high", "critical"):
-            continue
-        file, line = _split_file_line(row.file)
-        regression = False
-        commit: str | None = None
-        if file:
-            if line is not None:
-                try:
-                    blame = _git(
-                        repo_root,
-                        "blame",
-                        "-L",
-                        f"{line},{line}",
-                        "--porcelain",
-                        head,
-                        "--",
-                        file,
-                    )
-                except CapCheckError:
-                    blame = ""
-                if blame:
-                    blamed_commit = blame.splitlines()[0].split()[0]
-                    if blamed_commit in rework_commits:
-                        regression = True
-                        commit = _git(repo_root, "log", "--format=%h", "-1", head)
-            else:
-                if file in changed_files:
-                    regression = True
-                    commit = _git(repo_root, "log", "--format=%h", "-1", head)
-        out.append(
-            {
-                "ref": row.ref,
-                "severity": row.severity,
-                "file": file,
-                "line": line,
-                "regression": regression,
-                "commit": commit,
-            },
-        )
-    return out
+    return [
+        _classify_row(repo_root, head, row, rework_commits, changed_files)
+        for row in rows
+        if row.severity in ("high", "critical")
+    ]
