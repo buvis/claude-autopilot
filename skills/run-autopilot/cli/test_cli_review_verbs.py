@@ -501,7 +501,11 @@ def test_rejects_log_path_resolving_to_record(
     assert code == 2
     captured = capsys.readouterr()
     assert f"--log {record} resolves inside the store" in captured.err
-    assert captured.out == ""
+    lines = captured.out.splitlines()
+    assert len(lines) == 1
+    printed = json.loads(lines[0])
+    assert "resolves inside the store" in printed["error"]
+    assert printed["exit"] == 2
     assert record.read_bytes() == before
 
 
@@ -619,7 +623,11 @@ def test_verify_rejects_a_symlinked_log_that_points_at_the_record(
     assert code == 2
     captured = capsys.readouterr()
     assert "resolves inside the store" in captured.err
-    assert captured.out == ""
+    lines = captured.out.splitlines()
+    assert len(lines) == 1
+    printed = json.loads(lines[0])
+    assert "resolves inside the store" in printed["error"]
+    assert printed["exit"] == 2
     assert record.read_bytes() == before
 
 

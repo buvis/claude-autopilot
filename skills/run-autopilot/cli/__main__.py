@@ -220,6 +220,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -1039,16 +1040,14 @@ def _run_verify(args: argparse.Namespace) -> int:
             check=False,
         )
     except OSError as err:
-        print(
-            f"autopilot: verify: cannot resolve HEAD in {repo_root}: {err}",
-            file=sys.stderr,
-        )
+        msg = f"cannot resolve HEAD in {repo_root}: {err}"
+        print(f"autopilot: verify: {msg}", file=sys.stderr)
+        print(json.dumps({"error": msg, "exit": 2}))
         return 2
     if proc.returncode != 0:
-        print(
-            f"autopilot: verify: cannot resolve HEAD in {repo_root}: {proc.stderr.strip()}",
-            file=sys.stderr,
-        )
+        msg = f"cannot resolve HEAD in {repo_root}: {proc.stderr.strip()}"
+        print(f"autopilot: verify: {msg}", file=sys.stderr)
+        print(json.dumps({"error": msg, "exit": 2}))
         return 2
     head = proc.stdout.strip()
     log_path = (
@@ -1058,6 +1057,11 @@ def _run_verify(args: argparse.Namespace) -> int:
     ).resolve()
     log_display = args.log if args.log is not None else log_path
     if _refuse_verify_log(log_display, repo_root, log_path):
+        print(
+            json.dumps(
+                {"error": f"--log {log_display} resolves inside the store", "exit": 2},
+            ),
+        )
         return 2
     try:
         result = verification.run_gate(
@@ -1070,10 +1074,29 @@ def _run_verify(args: argparse.Namespace) -> int:
     except OSError as err:
         print(json.dumps({"sha": head, "log": str(log_path), "error": str(err)}))
         return 2
-    print(json.dumps({**result, "sha": head, "log": str(log_path)}))
-    if result["exit"] == 0 and not result["timed_out"]:
-        return 0 if result["recorded"] else 3
-    return 1
+    # Red/green follows the parsed summary, never the process returncode alone.
+    summary_exit = None
+    if result.get("raw_line"):
+        m = re.search(r"EXIT (\d+)", result["raw_line"])
+        if m:
+            summary_exit = int(m.group(1))
+    is_red = (result.get("failed") or 0) > 0 or summary_exit not in (None, 0)
+    # "log": null iff no gate spawned (pre-spawn refusal or lock timeout).
+    spawned = result["exit"] is not None or result["timed_out"]
+    printed_log = str(log_path) if spawned else None
+    print(json.dumps({**result, "sha": head, "log": printed_log}))
+    # Pre-spawn dirt is a refusal (1); dirt found after the gate ran falls
+    # through to the record check (3), since run_gate never records it.
+    if (
+        result["lock_timeout"]
+        or result["head_moved"]
+        or result["timed_out"]
+        or (result["dirty"] and not spawned)
+    ):
+        return 1
+    if is_red:
+        return 1
+    return 0 if result["recorded"] else 3
 
 
 def _add_review_stage(subparsers) -> None:
@@ -1862,7 +1885,9 @@ def _run_markers(args: argparse.Namespace) -> int:
     names = args.check if args.check is not None else args.clear
     unknown = [n for n in names if n not in markers.MARKERS]
     if unknown:
-        print(f"autopilot: markers: unknown marker {', '.join(unknown)}", file=sys.stderr)
+        print(
+            f"autopilot: markers: unknown marker {', '.join(unknown)}", file=sys.stderr
+        )
         return 1
     if args.check is not None:
         print(json.dumps(markers.check(autopilot_dir, names)))
