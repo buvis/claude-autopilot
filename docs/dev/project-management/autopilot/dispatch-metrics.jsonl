@@ -4364,3 +4364,29 @@
 {"id":"c8b1766c","ended_at":1792027455,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"id":"7443ec94","ended_at":1792027455,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1792027455,"phase":"build","prd":"00307-guard-citations-and-replay-contract-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792027473,"phase":"build","prd":"00307-guard-citations-and-replay-contract-v1.md"}
+{"id":"0fca2a71","kind":"ivan","task":"2","queued_at":1792027522,"prompt_bytes":45432}
+{"id":"a6897bb8","kind":"pat","task":"2","queued_at":1792027834,"prompt_bytes":20887}
+{"id":"234243f5","kind":"ivan","task":"2","queued_at":1792027924,"prompt_bytes":42842}
+{"id":"b3820da2","kind":"pat","task":"2","queued_at":1792028241,"prompt_bytes":6411}
+{"id":"9c1a18d2","kind":"tess","task":"3","queued_at":1792028371,"prompt_bytes":31902}
+{"id":"43f4d03b","kind":"devon","task":"3","queued_at":1792028463,"prompt_bytes":3602}
+{"id":"43f4d03b","ended_at":1792028698,"elapsed_s":235,"outcome":"ok","detail":null}
+{"id":"a07c3e8e","kind":"tess","task":"3","queued_at":1792028724,"prompt_bytes":9489}
+{"id":"4ee9a220","kind":"ivan","task":"3","queued_at":1792028850,"prompt_bytes":61245}
+{"id":"add75857","kind":"ivan","task":"3","queued_at":1792028877,"prompt_bytes":26988}
+{"id":"422de5f5","kind":"pat","task":"3","queued_at":1792029149,"prompt_bytes":14157}
+{"id":"309f55cf","kind":"pat","task":"3","queued_at":1792029241,"prompt_bytes":3692}
+{"id":"2430444d","kind":"ivan","task":"2","queued_at":1792029669,"prompt_bytes":8808}
+{"id":"0fca2a71","ended_at":1792030476,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"a6897bb8","ended_at":1792030476,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"234243f5","ended_at":1792030476,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"b3820da2","ended_at":1792030476,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"9c1a18d2","ended_at":1792030476,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"a07c3e8e","ended_at":1792030476,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"4ee9a220","ended_at":1792030476,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"add75857","ended_at":1792030476,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"422de5f5","ended_at":1792030476,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"309f55cf","ended_at":1792030476,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"2430444d","ended_at":1792030476,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1792030476,"phase":"review","prd":"00307-guard-citations-and-replay-contract-v1.md"}
