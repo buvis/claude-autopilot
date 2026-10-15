@@ -49,10 +49,11 @@ Generated: 2026-10-15
 - [x] 00307-guard-citations-and-replay-contract-v1 (2 cycles)
 - [x] 00308-reviewer-lane-resilience-v1 (2 cycles)
 - [x] 00309-loop-friction-verbs-v1 (1 cycle, fast-track)
+- [x] 00311-verify-reports-what-the-gate-did-v1 (2 cycles, cap-out: 1 unresolved HIGH deferred)
 - 00306-refuse-tracked-verify-log-v1 parked to hold/ (stall mid-batch)
 - 00310-park-cap-regressions-v1 stalled to hold/ (cap_regression, cycle 2, four unresolved HIGH)
-- in progress: 00311-verify-reports-what-the-gate-did-v1 (entering build)
 - backlog remaining: 00312-00313
+- minted to hold/: 00314-00319 (triage stubs from deferred CRITICAL/HIGH rows)
 
 Observations: 00277 (full lane, design) converged at cycle 2 (rework_cap 2,
 beat the cap): cycle 1 fixed a nested-lead bypass in `_strip_lead` (two HIGHs:
@@ -62,7 +63,11 @@ findings, all auto-fixed. Cycle 2's 8 findings were all medium/low: 3 swept
 inline, 5 settled in the PRD's review ledger (symbol-name-only drift,
 pre-existing cross-file test moves, wording-only precedence). `bash
 dev/bin/release-checks` green at 2fb2a40 (PASS 6688 FAIL 0 SKIP 34). No
-deferred items, no doubts, nothing minted to `hold/`.
+deferred items, no doubts, nothing minted to `hold/`. 00311 hit the rework
+cap at cycle 2 with one unresolved HIGH (SIGINT during gate spawn can leak
+the gate process and release the flock early) and no CRITICAL; the cap-out
+path deferred all 10 cycle-2 findings, discarded 5 with verified reasons, and
+minted a hold stub (00319) for the surviving HIGH.
 
 00308 (full lane, design) converged at cycle 2: cycle 1 reworked Bob's
 inlined-first prompt wiring, dangling lack-of-input references, and an
