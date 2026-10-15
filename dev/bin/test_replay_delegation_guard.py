@@ -56,7 +56,7 @@ MARKER = "DENY-ME"
 
 BUCKET_LINE = r"\S+ \d+ refused \d+"
 
-STUB_GUARD = """\
+STUB_GUARD = '''\
 import os
 import sys
 
@@ -71,7 +71,7 @@ if loop and "{marker}" in raw:
     sys.stderr.write("stub refusal\\n")
     sys.exit(2)
 sys.exit(0)
-"""
+'''
 
 
 def _module():
@@ -214,7 +214,7 @@ def test_reviewer_bucket_follows_the_exempt_set() -> None:
     # Every exempt name is a reviewer, not just the few that show up in
     # fixtures; a name dropped from the set stops being one.
     verdicts = {name: bucket(_dispatch("do the work", name), EXEMPT) for name in EXEMPT}
-    assert verdicts == dict.fromkeys(EXEMPT, "reviewer")
+    assert verdicts == {name: "reviewer" for name in EXEMPT}
     for dropped in sorted(EXEMPT):
         lone = _dispatch("do the work", dropped)
         assert bucket(lone, EXEMPT - {dropped}) == "other", dropped
