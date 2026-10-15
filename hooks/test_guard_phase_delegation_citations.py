@@ -116,10 +116,56 @@ def test_negation_inside_the_verb_clause_still_excuses() -> None:
     assert _find("Read skills/work/SKILL.md and do not follow it for every task.") is None
 
 
+def test_period_inside_a_dotted_identifier_does_not_end_the_citation_sentence() -> None:
+    assert (
+        _find(
+            "The dispatcher (which handles cli/frontmatter.parse and plan-tasks) "
+            "looks for the next phase."
+        )
+        is None
+    )
+
+
+def test_period_before_a_closing_backtick_does_not_end_the_citation_sentence() -> None:
+    assert (
+        _find(
+            "The fixture prompt text is `Run the work phase for PRD 00300.` "
+            "(verbatim, from the log)"
+        )
+        is None
+    )
+
+
+def test_a_real_sentence_end_still_bounds_the_citation_window() -> None:
+    # The quote opens in the first sentence; ". " ends that sentence, so the
+    # bare order in the next one is outside the citation window.
+    assert _find('The log says "ready. Run plan-tasks for PRD 00300, every task.') is not None
+
+
+def test_balanced_quotes_in_one_clause_do_not_hide_an_order() -> None:
+    assert (
+        _find('The log says "ready, done" then run plan-tasks for PRD 00300 and print "ok".')
+        is not None
+    )
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        '"Run the work phase for PRD 7."',
+        'Insert the line "Invoke `/autopilot:work` skill."',
+    ],
+    ids=["quoted-order", "quoted-skill-line"],
+)
+def test_a_terminator_before_only_closing_wrappers_still_ends_the_sentence(prompt: str) -> None:
+    assert _find(prompt) is not None
+
+
 def test_ordered_to_follow_uses_bisect() -> None:
     source = inspect.getsource(_guard_module()._ordered_to_follow)
     assert "bisect_left" in source
     assert "_negated(text, end, match.start())" not in source
+    assert "next(" not in source
 
 
 _AGOGE_PROMPT = "Run /autopilot:work for PRD 00300, every task."
