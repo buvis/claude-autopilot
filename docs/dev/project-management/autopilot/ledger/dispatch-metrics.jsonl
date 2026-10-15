@@ -4422,3 +4422,9 @@
 {"id":"e2bac774","kind":"ivan","task":"7","queued_at":1792038059,"prompt_bytes":3999}
 {"id":"e2bac774","ended_at":1792038592,"elapsed_s":533,"outcome":"ok","detail":null}
 {"id":"9c013b95","kind":"pat","task":"7","queued_at":1792038764,"prompt_bytes":22837}
+{"id":"15ab7167","ended_at":1792039485,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"4d308cdd","ended_at":1792039485,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"d8c09866","ended_at":1792039485,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"ca998fdb","ended_at":1792039485,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"9c013b95","ended_at":1792039485,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"kind":"handoff","site":"review","edge":"leave","at":1792039485,"phase":"review","prd":"00307-guard-citations-and-replay-contract-v1.md"}
