@@ -56,7 +56,7 @@ MARKER = "DENY-ME"
 
 BUCKET_LINE = r"\S+ \d+ refused \d+"
 
-STUB_GUARD = '''\
+STUB_GUARD = """\
 import os
 import sys
 
@@ -71,7 +71,7 @@ if loop and "{marker}" in raw:
     sys.stderr.write("stub refusal\\n")
     sys.exit(2)
 sys.exit(0)
-'''
+"""
 
 
 def _module():
@@ -214,7 +214,7 @@ def test_reviewer_bucket_follows_the_exempt_set() -> None:
     # Every exempt name is a reviewer, not just the few that show up in
     # fixtures; a name dropped from the set stops being one.
     verdicts = {name: bucket(_dispatch("do the work", name), EXEMPT) for name in EXEMPT}
-    assert verdicts == {name: "reviewer" for name in EXEMPT}
+    assert verdicts == dict.fromkeys(EXEMPT, "reviewer")
     for dropped in sorted(EXEMPT):
         lone = _dispatch("do the work", dropped)
         assert bucket(lone, EXEMPT - {dropped}) == "other", dropped
@@ -332,25 +332,48 @@ def test_refused_pinned_per_task_id_does_not_fail_the_replay(
     capsys,
 ) -> None:
     # A pinned id the guard still refuses is the pinned verdict holding: the
-    # refusal is counted and printed, but it does not fail the run.
-    for index, pinned in enumerate(PINNED_DENY):
+    # refusal is counted and printed, but it does not fail the run. Persona and
+    # description vary per id, so only the exact id can excuse the refusal.
+    personas = ("tess", "devon", "worker-3", "worker-12")
+    cases = [
+        ([(pinned, f"autopilot:{persona}", f"task {index + 1} tests")], 0)
+        for index, (pinned, persona) in enumerate(zip(PINNED_DENY, personas))
+    ]
+    # An unpinned refusal still fails: alone, with a pinned id's `toolu_0`
+    # prefix, as `autopilot:ivan` `task 7 build`, or beside a refused pinned id.
+    lookalike = ("toolu_011eQouP7ZMWxba7b8ijXmiX", "autopilot:ivan", "task 7 build")
+    cases += [
+        ([("toolu_01Zz9QouP7ZMWxba7b8ijXmQ", "autopilot:tess", "task 2 build")], 1),
+        ([lookalike], 1),
+        ([(PINNED_DENY[0], "autopilot:tess", "task 1 tests"), lookalike], 1),
+    ]
+    for index, (records, expected) in enumerate(cases):
         guard, log = _stub_guard(tmp_path, f"guard_{index}")
         directory = _transcripts(
             tmp_path,
-            [(pinned, _dispatch("task 7 build", "autopilot:ivan", deny=True))],
-            name=f"pinned_{index}",
+            [(i, _dispatch(d, p, deny=True)) for i, p, d in records],
+            name=f"refused_{index}",
         )
         code = _main(directory, guard)
         out, err = capsys.readouterr()
         total, buckets, details = _report(out)
-        assert code == 0, (pinned, total, buckets, details, err)
-        assert total == 1 and buckets == ["per-task 1 refused 1"], (pinned, buckets)
-        assert details == [f"per-task {pinned} autopilot:ivan task 7 build"], (
-            pinned,
-            details,
-        )
-        assert "pinned deny id allowed" not in out + err, (pinned, out, err)
-        assert len(_guard_calls(log)) == 1, (pinned, _guard_calls(log))
+        assert code == expected, (records, total, buckets, details, err)
+        count = len(records)
+        assert buckets == [f"per-task {count} refused {count}"], (records, buckets)
+        assert details == [f"per-task {i} {p} {d}" for i, p, d in records], details
+        assert "pinned deny id allowed" not in out + err, (records, out, err)
+        assert len(_guard_calls(log)) == count, (records, _guard_calls(log))
+
+    # A pinned id the guard allows is still the regression it always was.
+    guard, log = _stub_guard(tmp_path, "guard_allowed")
+    allowed = _dispatch("task 1 tests", "autopilot:tess")
+    directory = _transcripts(tmp_path, [(PINNED_DENY[0], allowed)], name="allowed")
+    code = _main(directory, guard)
+    out, err = capsys.readouterr()
+    assert code == 1, (out, err)
+    assert _report(out)[1] == ["per-task 1 refused 0"], out
+    assert "pinned deny id allowed" in err, err
+    assert len(_guard_calls(log)) == 1, _guard_calls(log)
 
 
 def test_unpinned_tool_id_of_the_same_shape_does_not_fail(
