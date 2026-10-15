@@ -433,6 +433,7 @@ run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/scripts/test_codex_review_run.py \
   skills/run-autopilot/scripts/test_detect_usage_limit.py \
   skills/run-autopilot/scripts/test_fablectl.py \
+  skills/run-autopilot/scripts/test_friction_verbs_prose.py \
   skills/run-autopilot/scripts/test_golden_contracts.py \
   skills/run-autopilot/scripts/test_render_stream.py \
   skills/run-autopilot/scripts/test_review_coverage_hook.py \

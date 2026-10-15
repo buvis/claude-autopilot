@@ -142,7 +142,7 @@ Two things this row does **not** change. **Convergence:** the test is unchanged 
 
 (**Interactive:** present via `AskUserQuestion`. **Loop mode (`$_AUTOPILOT_LOOP` set):** never call `AskUserQuestion` and never pause the batch — the Outcomes "Has blocking escalation" row routes these to the **Loop-mode stall procedure** with `site: "blocking_escalation"` and continues. Scope alarm — >10 follow-ups — is deliberately NOT in this list: the Safety Checks table above already defers-and-continues it in loop mode as a `scope-overflow` record, so it never pauses AND never stalls.)
 
-Log every decision in the state file (`autonomous_decisions` or `deferred_decisions`), each entry carrying every key — `{"cycle": <state.cycle>, "issue": "...", "severity": "...", "action": "...", "reason": "..."}` — and note the review cycle (`state.cycle`) in the entry's Decision text. The Phase 9 audit render reads these arrays — do not write `audit.md` here.
+Log every decision in the state file (`autonomous_decisions` or `deferred_decisions`), each entry carrying every key — `{"cycle": <state.cycle>, "issue": "...", "severity": "...", "action": "...", "reason": "..."}` — and note the review cycle (`state.cycle`) in the entry's Decision text. Append an `autonomous_decisions` entry with `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/scripts/statectl.py <state.json> decide '<json entry>'` (`decide` rejects an entry missing a required key before it writes); `deferred_decisions` still appends via `statectl set`. The Phase 9 audit render reads these arrays — do not write `audit.md` here.
 
 ### Settled-decisions ledger (PRD 00095)
 
