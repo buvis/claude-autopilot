@@ -68,6 +68,7 @@ def _record(sha: object, passed=5, failed=0, skipped=1) -> dict:
     return {
         "sha": sha,
         "cycle": 1,
+        "writer": "run_gate",
         "commands": [{"command": "dev/bin/release-checks", "exit": 0}],
         "passed": passed,
         "failed": failed,
@@ -185,6 +186,8 @@ def test_run_gate_prints_one_summary_line(repo: Path) -> None:
         "recorded": True,
         "dirty": False,
         "dirty_paths": [],
+        "lock_timeout": False,
+        "head_moved": False,
     }
 
 
@@ -282,6 +285,8 @@ def test_run_gate_times_out_and_writes_nothing(repo: Path) -> None:
         "recorded": False,
         "dirty": False,
         "dirty_paths": [],
+        "lock_timeout": False,
+        "head_moved": False,
     }
     # The deadline tracks the `timeout` argument: waiting out the given 6s
     # (not some constant deadline of its own) and then returning promptly.
@@ -315,6 +320,8 @@ def test_run_gate_times_out_when_the_child_closes_both_pipes_and_lingers(
         "recorded": False,
         "dirty": False,
         "dirty_paths": [],
+        "lock_timeout": False,
+        "head_moved": False,
     }
     # A 1s timeout returns in about 1s: paired with the 6s case above, no
     # single hardcoded deadline can satisfy both bounds.
@@ -427,6 +434,7 @@ def test_run_gate_writes_last_verification_json_on_fresh_run(repo: Path) -> None
     assert written == {
         "sha": head,
         "cycle": 4,
+        "writer": "run_gate",
         "commands": [{"command": command, "exit": 1}],
         "passed": 7,
         "failed": 2,
@@ -533,6 +541,7 @@ def test_run_gate_writes_the_normalized_command(repo: Path) -> None:
     assert written == {
         "sha": head,
         "cycle": 2,
+        "writer": "run_gate",
         "commands": [{"command": "bash ./gate.sh --quick", "exit": 0}],
         "passed": 3,
         "failed": 0,
@@ -587,7 +596,7 @@ def _probed(repo: Path, probe: Path, command: str) -> str:
     )
 
 
-# A sha refusal: dirty-shaped, with no path at fault, nothing recorded.
+# A sha refusal: head-moved-shaped, not dirty, nothing recorded.
 SHA_REFUSAL = {
     "passed": None,
     "failed": None,
@@ -596,8 +605,10 @@ SHA_REFUSAL = {
     "raw_line": None,
     "timed_out": False,
     "recorded": False,
-    "dirty": True,
+    "dirty": False,
     "dirty_paths": [],
+    "lock_timeout": False,
+    "head_moved": True,
 }
 
 
@@ -668,7 +679,7 @@ def test_gate_lock_wait_expires_without_running_the_gate(repo: Path) -> None:
     finally:
         _release_gate_lock(fd)
 
-    assert result == verification._timed_out_result()
+    assert result == verification._lock_timeout_result()
     assert not (repo / RECORD_REL).exists()
     # The expiry released nothing it never held.
     assert _gate_lock_is_free(repo)
@@ -765,7 +776,7 @@ def test_run_gate_refuses_a_sha_that_head_moved_past_while_waiting_for_the_lock(
 
     assert not thread.is_alive()
     assert moved != captured
-    # Dirty-refusal shape with no path at fault; the gate never ran and the
+    # Head-moved refusal shape, not dirty; the gate never ran and the
     # older record (never invalidated on a refusal) is untouched.
     assert out["result"] == SHA_REFUSAL
     assert not ran.exists()

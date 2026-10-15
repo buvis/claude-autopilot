@@ -20,6 +20,7 @@ import re
 import selectors
 import signal
 import subprocess
+import threading
 import time
 from pathlib import Path
 
@@ -663,6 +664,7 @@ def _spawn_gate(
     around `Popen`: the gate would inherit the blocked mask."""
     gate_started = False
     sigterm_pending = False
+    on_main_thread = threading.current_thread() is threading.main_thread()
 
     def _raise_on_sigterm(signum, frame):
         nonlocal sigterm_pending
@@ -671,8 +673,9 @@ def _spawn_gate(
             return
         raise RuntimeError("verify: SIGTERM during gate")
 
-    old_handler = signal.getsignal(signal.SIGTERM)
-    signal.signal(signal.SIGTERM, _raise_on_sigterm)
+    if on_main_thread:
+        old_handler = signal.getsignal(signal.SIGTERM)
+        signal.signal(signal.SIGTERM, _raise_on_sigterm)
     try:
         proc = subprocess.Popen(
             command,
@@ -700,7 +703,8 @@ def _spawn_gate(
             _kill_gate(proc)
             raise
     finally:
-        signal.signal(signal.SIGTERM, old_handler)
+        if on_main_thread:
+            signal.signal(signal.SIGTERM, old_handler)
     return proc.returncode, stdout_buf, exited
 
 
