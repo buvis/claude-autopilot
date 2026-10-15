@@ -1,44 +1,11 @@
-# Assumptions ledger — PRD 00308-reviewer-lane-resilience-v1
+# Assumptions ledger — PRD 00310-park-cap-regressions-v1
 
-## 1: Replay kills its process group
+## 1: Write test_cap_check.py fixture tests and register in release-checks
 
-- Using `files=["test_calc.py"]` with the sibling fixture (`_repo`, `HEAD_IMPL`, `HEAD_TESTS` from `test_replay_tests_against_base.py`) is a valid real worktree setup.
-- A 3s grace poll is enough for the killed processes to be cleaned up before checking their pids.
-- `/bin/sh` as the runner shell is fine for macOS and Linux.
-- `git checkout --` counts as overwriting a file with its original content for Devon's cleanup obligation (no `rm` used).
-- The current test failure before the implementation is the expected red state, since the test-only commit precedes it.
-- 2.0s of slack above the timeout is enough on a loaded machine (later flagged by review as possibly too tight; left as a non-blocking LOW).
-- The exact wording of the timeout skip reason is free, as long as it starts with "runner did not complete:" — the test only checks that a reason is returned.
-
-## 2: Auth failure is permanent; bounded native fallback
-
-- Auth-phrase matching is case-insensitive, like the existing `grep -Ei` in `permanently_unavailable` — the task names only the phrases `Authentication failed` and `Copilot Requests permission`, not the case rule.
-- No bare "401" variant was added to the auth-failure test matrix — the task's match list covers the two named phrases only.
-- The 3s upper margin on the fallback deadline tests (2→<5s, 3→<6s) follows the existing test's margin.
-- `GEMINI_FALLBACK_TIMEOUT` bounds the whole fallback run (a hard deadline), not specifically "time without output" despite the test name — the tests cannot distinguish the two, and a hard limit is simpler.
-- The auth latch applies on every backend (not just copilot): on the native gemini backend an auth failure still exits 4, with nothing further to fall back to.
-- If stderr matches both an auth pattern and a tier-rejection pattern, the auth classification wins and there is no fallback.
-
-## 3: Retry rows inherit their task
-
-- The new `queued_at` comes from `time.time()`, truncated to an int like `start_row`.
-- The new row has exactly the keys id, kind, task, queued_at, prompt_bytes and detail, nothing more.
-- A row with a matching id but no `queued_at` (an end-only row) is not a start row, so retrying that id exits 1.
-- Ids must match exactly (no prefix matching).
-- A dispatch that already ended (timeout, error) can still be retried — its end row does not block a retry of its start row.
-- The retry row belongs in the `ledger/` mirror too, like every other row.
-- With no autopilot dir, `retry` prints a token and writes nothing, matching `start_row`'s existing no-op precedent (not the silent-exit-0 behavior `end`/`handoff` have).
-
-## 4: Bob inlined on the first run; review skill uses the new shapes
-
-- Auth matching is case-insensitive, like the existing `grep -Ei` in `permanently_unavailable` — carried over from task 2.
-- The new retry-policy.md section heading is "## Inlined prompt (Bob's first dispatch)" (not specified verbatim by the task).
-- `bob-prompt-{id}-retry.md` keeps its "-retry" filename even though the prompt is now built on the first dispatch — renaming it would require updating `test_inlined_retry_prompt_uses_dedicated_retry_filename` too, which is out of this task's scope.
-- The outcome table's two retry rows (success-via-retry, retry-itself-failed) stay, with only the `lack-of-input` detail variant removed — a retry still exists (format/verdict gate retries, and the dispatch-ledger `retry` verb), so dropping those rows entirely would leave a retried dispatch unrecorded.
-
-## 9: [D2] Tail sweep: skills/use-gemini/scripts/gemini-run.sh
-
-- "No deadline armed" means a forced `GEMINI_BACKEND=gemini` run: only the native fallback is bounded, and the task did not say how else to disarm the deadline.
-- "Names the deadline" is checked as the `<n>s` substring in stderr, matching the existing "produced no output within Ns" message.
-- A deadline-armed run killed by SIGKILL for any reason was first treated as expiry; the per-task review rejected that, and expiry is now derived from the watchdog's own exit status instead.
-- `touch` on a path occupied by a directory succeeds, so the marker-write test proves the marker was unusable (`[ -f ]` false) rather than that the write failed. The test name and comment say so.
+- The review-file fixture uses YAML frontmatter `---\nhead_sha: <sha>\n---` and a `## Consolidated Findings` pipe table with headers `| Ref | Severity | File | Issue |` and plain uppercase severity words (HIGH, CRITICAL, MEDIUM, LOW).
+- The import path is `cli.cap_check`, inferred from `skills/run-autopilot/cli/__init__.py` existing (rootdir-insert import mode).
+- The previous review file only needs `head_sha`; its findings table is empty.
+- The 8 test names and cases (plus 2 CLI-level tests added after review) are the implementor's own, derived from the design doc's contract rather than the PRD's exact naming.
+- `rework_range` is directly unit-tested rather than left to transitive coverage.
+- Expected short SHAs are computed with `git log --format=%h -1 <sha>`, matching the design's stated `%h` format.
+- The previous review's `head_sha` is not checked against an unknown revision; only the current review's is.

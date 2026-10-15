@@ -50,7 +50,8 @@ Generated: 2026-10-13
 - [x] 00308-reviewer-lane-resilience-v1 (2 cycles)
 - [x] 00309-loop-friction-verbs-v1 (1 cycle, fast-track)
 - 00306-refuse-tracked-verify-log-v1 parked to hold/ (stall mid-batch)
-- backlog remaining: 00310-00313
+- in progress: 00310-park-cap-regressions-v1 (entering build)
+- backlog remaining: 00311-00313
 
 Observations: 00277 (full lane, design) converged at cycle 2 (rework_cap 2,
 beat the cap): cycle 1 fixed a nested-lead bypass in `_strip_lead` (two HIGHs:
