@@ -98,6 +98,14 @@ carries `clarification`, `reviewer_fail`, `sub_skill_fail`, and the others):
   custody" handler (`references/phase-build.md`) closes it with the attended
   `autopilot custody resolve --prd <stem> --choice <choice>` — `revert`,
   `branch-and-revert`, or `accept`.
+- `cap_regression` — a loop-mode Phase 5 cap-out whose remaining unresolved
+  findings are all high or below, but `autopilot cap-check` classified at
+  least one of them as a regression introduced by this cycle's own rework
+  (`references/phase-review.md`, the cap-overflow deferral bullet, PRD 00310).
+  `detail` carries the regressed rows' refs and commits from `cap-check`'s
+  stdout. Resume exactly like `cap_critical` above — the PRD sits in
+  `hold/`, a human resolves the regression on it, then moves it back to
+  `backlog/`.
 - `oversized_task`, `escalation_exhausted`, `replan_exhausted`, `clarification` —
   the pre-existing stall sites (plan-tasks per-task oversize, rework
   tier-exhaustion, replan-loop exhaustion, and a loop-mode Phase 2 ambiguity
