@@ -4577,3 +4577,4 @@
 {"id":"57b9bd8f","ended_at":1792058586,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"id":"edd5a8a5","ended_at":1792058586,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1792058586,"phase":"build","prd":"00310-park-cap-regressions-v1.md"}
+{"kind":"handoff","site":"build","edge":"leave","at":1792059328,"phase":"review","prd":"00310-park-cap-regressions-v1.md"}
