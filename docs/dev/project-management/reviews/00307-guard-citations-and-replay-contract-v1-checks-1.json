@@ -4,6 +4,7 @@
     "finding": "The supplied live-replay record still reports exit 1 for required allowed IDs `toolu_011UqbqFtUDPuSeCiLLgMvEg` and `toolu_013ePUKbLDE7DLnbnGmgszzR`. Run `python3 dev/bin/replay_delegation_guard.py` on the reviewed revision against that corpus; require exit 0, no non-pinned refusals, preserved pinned denials, and reconcile the required `refused 1` count with deduplication.",
     "file": "docs/dev/project-management/meta/assumptions.md:27",
     "command": "python3 dev/bin/replay_delegation_guard.py",
-    "source": "bob"
+    "source": "bob",
+    "result": {"exit": 0}
   }
 ]

@@ -27,6 +27,32 @@
 - The live-corpus replay run still exits 1 after this fix, from two non-pinned refusals (toolu_011UqbqFtUDPuSeCiLLgMvEg, toolu_013ePUKbLDE7DLnbnGmgszzR) unrelated to the pinned-exemption contract this task implements; flagged for the PRD-level review rather than silently loosening the acceptance check, per the task's own Verify instruction.
   - **Resolved in review cycle 1** (tasks 4 and 7). Both refusals came from the citation window being truncated by a period that is not a sentence end. Re-measured on the reviewed revision (23b99ef): `python3 dev/bin/replay_delegation_guard.py` exits **0** and prints `total 1183 / per-task 756 refused 1 / reviewer 168 refused 0 / agoge 49 refused 0 / other 210 refused 6`. No non-pinned refusal remains in the three gated buckets, and both previously-refused ids are now allowed (verified individually against the pre-change guard at 4eb6b53, where both are refused).
 
+## Review cycle 1 rework (tasks 4-9)
+
+- Contract item 2's 4-tuple `_boundaries` shipped literally; the test fixture's unpack was
+  widened to match, rather than keeping a 3-tuple and building the masked scratch twice per
+  field (the implementor's first resolution).
+- Task 4: Pat's MEDIUM on the citation boundary's backtracking was real - `` `+[ \t]*[^(\s] ``
+  gives one backtick back on a multi-backtick closer - and the trailing class now excludes the
+  backtick. The matching multi-backtick CITATION test was dropped from task 4 rather than left
+  red: it fails on `_cited`'s pairing, not on the boundary, and that was task 7's scope.
+- Task 5: each recorded payload keeps its real `description` as well as its `subagent_type` and
+  `prompt`; verified to change no verdict under either guard. The ~17 KB of literals pushed the
+  citations file over the 800-line limit, so they live in `hooks/test_guard_phase_delegation_corpus.py`.
+- Task 7: a digit-preceded `"` opens nothing but may still close a pending open (the literal
+  "skip it when pairing" rule broke three pinned allows, whose closing quote follows a PRD
+  number). Once a mark has been skipped, pairing stops and later marks form no run - a guard
+  resolves the ambiguity by denying - while pairs completed before the skip stand.
+- Task 7: the digit rule is the `"` pass only; no unit is written with a backtick, and skipping
+  a backtick opener hands the opener role to its own closer.
+- Task 7: the lexical layer moved to `hooks/guard_phase_delegation_lexicon.py` with every name
+  re-imported, because eight test modules and `dev/bin/replay_delegation_guard.py` reach them
+  as `guard_phase_delegation.<name>`.
+- Task 9: `toolu_015DM18ubZLJZbA65ozvuw8c` has no recoverable payload, so its "exact span" was
+  pinned as a SHAPE (a run closing at the sentence tail) with a standalone-label control,
+  never as a reconstructed prompt.
+- Tasks 6 and 8 carried no production diff: the replay acceptance gate and the record of it.
+
 ## Reconciling the required `refused 1` with the four pinned ids
 
 The replay pins **four** deny ids (`replay_delegation_guard.py:PINNED_DENY`), yet the acceptance line reads `per-task ... refused 1`. The reason is bucketing, not deduplication: `bucket()` files each dispatch by persona, and of the four pinned ids only `toolu_01Ku4TbcQoeik6ZLf5XkkAuD` carries a per-task persona. The other three (`toolu_011eQouP7ZMWxba7b8ijXmiR`, `toolu_01WwjmFapBm8w3NYCwWddUbk`, `toolu_01S6V4tZDtrS3ePnXWtD9dT2`) dispatch as `general-purpose` and land in the ungated `other` bucket, which is where 3 of that bucket's 6 refusals come from. `_dedupe` does fold identical `tool_input` payloads into one group, so a count is of groups rather than records, but no pinned id is folded into another here.
