@@ -130,7 +130,10 @@ def _run_in_worktree(
             )
             stdout, stderr = proc.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
-            os.killpg(proc.pid, signal.SIGKILL)
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
             proc.communicate()
             return "", f"runner did not complete: timed out after {timeout} seconds"
         except OSError as exc:
