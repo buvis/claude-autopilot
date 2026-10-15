@@ -181,11 +181,11 @@ def test_the_quoted_span_tracks_the_match_not_the_start_of_the_prompt() -> None:
     assert "Nothing to see" not in span, span
 
 
-def test_an_unlisted_agoge_persona_is_exempt_by_its_prefix() -> None:
-    # The exemption is a prefix rule, not a roster: an agoge persona added
-    # after this guard was written must not start being denied.
+def test_an_unlisted_agoge_persona_is_not_exempt() -> None:
+    # The exemption is an enumerated roster (_AGOGE_PERSONAS), not a prefix
+    # rule: an agoge persona not on the roster is denied like any other.
     result = _dispatch("agoge:zelda")
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 2, result.stderr
 
 
 def _best_seconds_per_mb(prompt: str) -> float:
