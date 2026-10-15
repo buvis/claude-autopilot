@@ -1055,7 +1055,11 @@ def _report_verify(result: dict, head: str, log_path: Path) -> int:
     summary_exit = None
     if result.get("raw_line"):
         summary_exit = int(verification.SUMMARY_RE.search(result["raw_line"]).group(4))
-    is_red = (result.get("failed") or 0) > 0 or summary_exit not in (None, 0)
+    is_red = (
+        (result.get("failed") or 0) > 0
+        or summary_exit not in (None, 0)
+        or result["exit"] not in (None, 0)
+    )
     # "log": null iff no gate spawned (pre-spawn refusal or lock timeout).
     spawned = result["exit"] is not None or result["timed_out"]
     printed_log = str(log_path) if spawned else None

@@ -500,6 +500,33 @@ def test_verify_exits_1_when_the_gate_timed_out_with_exit_0(
     assert printed["timed_out"] is True
 
 
+def test_verify_exits_1_on_a_nonzero_process_exit_with_no_summary_line(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # No summary line at all, but the process itself failed: is_red must
+    # follow the process exit, not just the (absent) parsed summary.
+    code = main(_verify_argv(repo, "--gate-command", "echo build failed; exit 2"))
+
+    assert code == 1
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["exit"] == 2
+    assert printed["raw_line"] is None
+
+
+def test_verify_exits_1_on_a_nonzero_process_exit_despite_a_green_summary(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A green summary line can't paper over a nonzero process exit: the
+    # gate command itself failed after printing the summary.
+    command = "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'; exit 5"
+
+    code = main(_verify_argv(repo, "--gate-command", command))
+
+    assert code == 1
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["exit"] == 5
+
+
 def test_verify_prints_the_dirty_paths(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
