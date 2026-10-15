@@ -8,7 +8,7 @@ PRD task 2) only when the watchdog actually fired.
 
 from __future__ import annotations
 
-from cli import loop, render_metrics
+from cli import render_metrics
 from cli.loop_testutil import make_loop, metrics_rows, write_state
 from cli.runner import SpawnResult
 
@@ -52,23 +52,86 @@ def test_row_carries_killed_by_only_when_the_cap_fired(tmp_path):
     assert "killed_by" not in clean_row
 
 
-def test_instant_exit_limit_row_carries_limit_wait():
-    # Packet 23: _decision_fields keyed limit_wait on `signal == "continue"`
-    # literally, so an instant_exit row whose `then` is "continue" (the
+def _row_for_decision(tmp_path, monkeypatch, **overrides) -> dict:
+    # Drives the scripted loop through one session; the loop exposes no
+    # decision seam, so the instance's `_decide` is pinned to the decision
+    # under test and the emitted metrics row is what gets asserted on.
+    lp = make_loop(tmp_path, [], spawn_fn=_spawn_fn(False, None))
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="review", batch={"id": "b"})
+    decision = {
+        "signal": "continue",
+        "detail": "",
+        "next": "review",
+        "phase_end": "review",
+        "prd": "p.md",
+        "batch": {"id": "b"},
+        "limit_wait": None,
+        "lane": None,
+        "lane_effective": None,
+        "state_touched": True,
+        **overrides,
+    }
+    monkeypatch.setattr(lp, "_decide", lambda ap_dir, ts_start: decision)
+    lp.run_once()
+    (row,) = metrics_rows(lp._test["ap_dir"])
+    return row
+
+
+def test_instant_exit_limit_row_carries_limit_wait(tmp_path, monkeypatch):
+    # Packet 23: an instant_exit row whose `then` is "continue" (the
     # died-retry ladder, a usage-limit wait, a scheduling yield) carried
-    # none - it must key on the effective signal instead.
-    decision = {"signal": "instant_exit", "then": "continue", "limit_wait": 180}
+    # no limit_wait - the effective signal must decide, not the presented one.
+    row = _row_for_decision(
+        tmp_path,
+        monkeypatch,
+        signal="instant_exit",
+        then="continue",
+        limit_wait=180,
+    )
 
-    assert loop._decision_fields(decision).get("limit_wait") == 180
+    assert row["limit_wait"] == 180
 
 
-def test_budget_park_row_carries_limit_wait():
-    # Packet 23: a budget park reached through a scheduled wait (the sleep
-    # _budget_bound runs before turning the decision into a park) carried
+def test_budget_park_row_carries_limit_wait(tmp_path, monkeypatch):
+    # Packet 23: a budget park reached through a scheduled wait carried
     # no limit_wait either.
-    decision = {"signal": "park", "park_site": "budget", "limit_wait": 180}
+    row = _row_for_decision(
+        tmp_path,
+        monkeypatch,
+        signal="park",
+        park_site="budget",
+        limit_wait=180,
+    )
 
-    assert loop._decision_fields(decision).get("limit_wait") == 180
+    assert row["limit_wait"] == 180
+
+
+def test_park_row_at_a_non_budget_site_carries_no_limit_wait_key(tmp_path, monkeypatch):
+    # Absent, not null: only the budget park site records the slept seconds.
+    row = _row_for_decision(
+        tmp_path,
+        monkeypatch,
+        signal="park",
+        park_site="review",
+        limit_wait=180,
+    )
+
+    assert "limit_wait" not in row
+
+
+def test_failed_loop_entry_invalidation_prints_a_line_to_stderr(tmp_path):
+    # A failed clear leaves a replayable stale entry; the operator must be
+    # told on stderr. A successful clear stays silent.
+    lp = make_loop(tmp_path, [])
+    ap = lp._test["ap_dir"]
+    err = lp._test["err"]
+    write_state(ap, prd="p.md", next_phase="build", loop_entry={"prd": "p.md"})
+
+    assert lp._invalidate_loop_entry(ap / "state.json") is True
+    assert err.getvalue() == ""
+
+    assert lp._invalidate_loop_entry(ap / "missing" / "state.json") is False
+    assert "loop_entry" in err.getvalue()
 
 
 def test_prd_table_says_it_excludes_the_finalizing_session():
