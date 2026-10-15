@@ -6,6 +6,7 @@ mirror. Every write is best-effort and exits 0; no gate reads these rows.
 
     record_dispatch.py start --kind KIND --task ID --prompt-file PATH
     record_dispatch.py end ID --outcome ok|timeout|killed|error|lost [--detail TEXT]
+    record_dispatch.py retry ID
     record_dispatch.py handoff --site build|review|done --edge leave|resume --phase P --prd PRD
 
 ``start`` prints the prompt's byte count and then the id, the two lines a
@@ -80,6 +81,32 @@ def start_row(
             },
         )
     return dispatch_id
+
+
+def retry_row(autopilot_dir: Path, dispatch_id: str) -> str | None:
+    """Open a new row copying ``kind``/``task`` from ``dispatch_id``'s start
+    row, or None if no start row exists for it (caller exits 1).
+    """
+    rows, _ = _read_rows(autopilot_dir, "start row lookup failed")
+    start = next(
+        (row for row in rows if row.get("id") == dispatch_id and "queued_at" in row),
+        None,
+    )
+    if start is None:
+        return None
+    new_id = secrets.token_hex(4)
+    append_row(
+        autopilot_dir,
+        {
+            "id": new_id,
+            "kind": start.get("kind"),
+            "task": start.get("task"),
+            "queued_at": int(time.time()),
+            "prompt_bytes": None,
+            "detail": f"retry of {dispatch_id}",
+        },
+    )
+    return new_id
 
 
 def _read_rows(
@@ -217,6 +244,9 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     end.add_argument("--outcome", required=True, choices=OUTCOMES)
     end.add_argument("--detail")
 
+    retry = verbs.add_parser("retry", help="open a fresh row re-dispatching ID's task")
+    retry.add_argument("id")
+
     handoff = verbs.add_parser("handoff", help="stamp one edge of a session handoff")
     handoff.add_argument("--site", required=True, choices=SITES)
     handoff.add_argument("--edge", required=True, choices=EDGES)
@@ -257,6 +287,12 @@ def main(argv: list[str] | None = None) -> int:
                 "detail": detail,
             },
         )
+    elif args.verb == "retry":
+        new_id = retry_row(autopilot_dir, args.id)
+        if new_id is None:
+            print(f"record_dispatch: no start row for {args.id}", file=sys.stderr)
+            return 1
+        print(new_id)
     else:
         _handoff(autopilot_dir, args)
     return 0
