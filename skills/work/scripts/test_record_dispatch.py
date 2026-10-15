@@ -527,6 +527,20 @@ def test_retry_of_unknown_id_exits_1(
     assert mirror.read_bytes() == mirror_before
 
 
+def test_retry_with_no_autopilot_dir_prints_a_token_and_writes_nothing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Same no-op precedent as start_row: nowhere to persist the row, but a
+    # stdout consumer still gets a stable-looking id rather than silence.
+    monkeypatch.chdir(tmp_path)
+    exit_code = record_dispatch.main(["retry", "deadbeef"])
+    assert exit_code == 0
+    (printed,) = capsys.readouterr().out.splitlines()
+    assert _HEX_ID.match(printed)
+
+
 def test_handoff_closes_open_rows_as_lost(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

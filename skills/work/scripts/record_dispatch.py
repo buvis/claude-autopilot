@@ -83,10 +83,14 @@ def start_row(
     return dispatch_id
 
 
-def retry_row(autopilot_dir: Path, dispatch_id: str) -> str | None:
+def retry_row(autopilot_dir: Path | None, dispatch_id: str) -> str | None:
     """Open a new row copying ``kind``/``task`` from ``dispatch_id``'s start
-    row, or None if no start row exists for it (caller exits 1).
+    row, or None if no start row exists for it (caller exits 1). No dir means
+    no lookup is possible, so it prints a token with no write, same as
+    ``start_row``.
     """
+    if autopilot_dir is None:
+        return secrets.token_hex(4)
     rows, _ = _read_rows(autopilot_dir, "start row lookup failed")
     start = next(
         (row for row in rows if row.get("id") == dispatch_id and "queued_at" in row),
@@ -266,6 +270,12 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         print(prompt_bytes)
         print(start_row(autopilot_dir, args.kind, args.task, prompt_bytes))
+    elif args.verb == "retry":
+        new_id = retry_row(autopilot_dir, args.id)
+        if new_id is None:
+            print(f"record_dispatch: no start row for {args.id}", file=sys.stderr)
+            return 1
+        print(new_id)
     elif autopilot_dir is None:
         return 0
     elif args.verb == "end":
@@ -287,12 +297,6 @@ def main(argv: list[str] | None = None) -> int:
                 "detail": detail,
             },
         )
-    elif args.verb == "retry":
-        new_id = retry_row(autopilot_dir, args.id)
-        if new_id is None:
-            print(f"record_dispatch: no start row for {args.id}", file=sys.stderr)
-            return 1
-        print(new_id)
     else:
         _handoff(autopilot_dir, args)
     return 0
