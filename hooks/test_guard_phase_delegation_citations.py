@@ -86,6 +86,28 @@ def test_paren_aside_is_a_citation() -> None:
     )
 
 
+def test_a_run_closing_at_the_sentence_tail_cites_the_name_inside_it() -> None:
+    # The tightly wrapped narrative shape: the backtick opens right before the
+    # skill name and closes only at the sentence tail, so the name is quoted
+    # prose. This is the shape the deleted invented corpus fixture had moved
+    # the closer for; it is pinned here as a shape instead, because the id it
+    # came from (toolu_015DM18ubZLJZbA65ozvuw8c) has no recoverable payload
+    # and inventing one is the defect the recorded corpus exists to kill.
+    assert (
+        _find(
+            "The orchestrator automatically re-invokes `/autopilot:work, which "
+            "then proceeds to the next task`.",
+            None,
+        )
+        is None
+    )
+    # Control, in the same test: a name wrapped on its OWN is a standalone
+    # label and must still be refused, so this pin cannot be satisfied by
+    # letting any backtick before the name excuse the order.
+    label = "Run `/autopilot:work` for PRD 00300."
+    _assert_quotes(_find(label), label, "autopilot:work")
+
+
 @pytest.mark.parametrize(
     ("prompt", "name"),
     [
