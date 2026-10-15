@@ -260,7 +260,7 @@ class ActMixin:
         )
         self._notify(
             f"autopilot ⏭ {self._repo_name()}",
-            f"Parking {decision['prd']}.",
+            f"Parking {decision['prd']} ({decision['detail']}).",
         )
         return None
 

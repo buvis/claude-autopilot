@@ -133,7 +133,9 @@ def _decision_fields(decision: dict) -> dict:
     if decision.get("stood_down"):
         fields["stood_down"] = decision["stood_down"]
         fields["stood_down_condition"] = decision.get("stood_down_condition", "unknown")
-    if decision["signal"] == "continue" and decision.get("limit_wait") is not None:
+    if effective_signal(decision) == "continue" and decision.get("limit_wait") is not None:
+        fields["limit_wait"] = decision["limit_wait"]
+    elif decision["signal"] == "park" and decision.get("park_site") == "budget" and decision.get("limit_wait") is not None:
         fields["limit_wait"] = decision["limit_wait"]
     if "then" in decision:
         fields["then"] = decision["then"]
@@ -575,6 +577,7 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
         current = _load_json(state_path)
         next_phase = current.get("next_phase") if isinstance(current, dict) else None
         if next_phase != "build" and not (ap_dir / "park-requested").is_file():
+            self.env.pop("_AUTOPILOT_LOOP_ENTRY_STALE", None)
             return
         try:
             self._record_entry(state_path, ap_dir)
@@ -605,6 +608,7 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
         SchemaError (a permission error under `state.load`, a corrupt
         schema write) must not halt the unattended loop either - the
         module's spec intent is "never halts the loop"."""
+        self.env.pop("_AUTOPILOT_LOOP_ENTRY_STALE", None)
         try:
             result = self._enter_fn(
                 state_path,
@@ -615,7 +619,8 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
             )
         except (state.StateError, state.StateExistsError, OSError, schema.SchemaError) as err:
             print(f"autoclaude: pre-launch enter failed: {err}", file=self.err)
-            self._invalidate_loop_entry(state_path)
+            if not self._invalidate_loop_entry(state_path):
+                self.env["_AUTOPILOT_LOOP_ENTRY_STALE"] = "1"
             return
         for line in result.pop("warnings", []):
             print(line, file=self.err)
@@ -624,23 +629,26 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
             statectl.mutate(state_path, lambda data: data.update(loop_entry=entry))
         except (OSError, state.StateError, schema.SchemaError) as err:
             print(f"autoclaude: pre-launch enter: loop_entry write failed: {err}", file=self.err)
-            self._invalidate_loop_entry(state_path)
+            if not self._invalidate_loop_entry(state_path):
+                self.env["_AUTOPILOT_LOOP_ENTRY_STALE"] = "1"
             return
         try:
             statectl.write_brief(state_path, ap_dir / runner.BRIEF_NAME)
         except state.StateError as err:
             print(f"autoclaude: pre-launch enter: brief write failed: {err}", file=self.err)
 
-    def _invalidate_loop_entry(self, state_path: Path) -> None:
+    def _invalidate_loop_entry(self, state_path: Path) -> bool:
         """Drop any `loop_entry` left by an earlier successful pre-entry,
         so a failed one never leaves a stale same-PRD entry for a later
-        child to replay. Best-effort: a second write failure here is no
-        worse than the one already reported for the launch that triggered
-        it, so it stays silent."""
+        child to replay. Returns False when the write itself fails -
+        the caller then marks the launched child's environment so it
+        skips the replay instead of trusting a `loop_entry` this call
+        could not actually clear."""
         try:
             statectl.mutate(state_path, lambda data: data.pop("loop_entry", None))
         except (OSError, state.StateError, schema.SchemaError):
-            pass
+            return False
+        return True
 
     def _launch_phase(self, ap_dir: Path) -> tuple[float, str, routing.Route]:
         """Run the pre-launch enter, then read state, route it, announce

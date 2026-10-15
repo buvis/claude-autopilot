@@ -186,7 +186,7 @@ def prd_spend_since(metrics_path: Path, prd: str, since: float) -> float:
         return 0.0
     try:
         metrics_path.read_text(encoding="utf-8")
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         print(
             f"autopilot: loop-metrics read failed for budget check "
             f"({metrics_path}): {exc}",
@@ -561,6 +561,16 @@ class DecisionMixin:
             total += session
         if total > budget:
             if decision.get("limit_wait") is not None:
+                print(
+                    f"\nautoclaude: usage limit hit; waiting "
+                    f"{decision['limit_wait'] // 60} min "
+                    f"({decision['detail']}).",
+                    file=self.out,
+                )
+                self._notify(
+                    f"autopilot ⏳ {self._repo_name()}",
+                    f"Usage limit; {decision['detail']}.",
+                )
                 self._sleep(decision["limit_wait"])
             decision["signal"] = "park"
             decision["park_site"] = "budget"
