@@ -239,6 +239,7 @@ from cli import (
     gate,
     handoff,
     lane_check,
+    markers,
     policy,
     records,
     render_audit,
@@ -1826,6 +1827,27 @@ def _run_ensure_store(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add_markers(subparsers) -> None:
+    p = subparsers.add_parser("markers")
+    group = p.add_mutually_exclusive_group(required=True)
+    group.add_argument("--check", nargs="+", metavar="NAME")
+    group.add_argument("--clear", nargs="+", metavar="NAME")
+
+
+def _run_markers(args: argparse.Namespace) -> int:
+    autopilot_dir = _walk_up_or_exit("--state")
+    names = args.check if args.check is not None else args.clear
+    unknown = [n for n in names if n not in markers.MARKERS]
+    if unknown:
+        print(f"autopilot: markers: unknown marker {', '.join(unknown)}", file=sys.stderr)
+        return 1
+    if args.check is not None:
+        print(json.dumps(markers.check(autopilot_dir, names)))
+    else:
+        markers.clear(autopilot_dir, names)
+    return 0
+
+
 # Registry, not an if/elif chain over sys.argv: PRD 00106 adds entries here
 # (an (add_parser_fn, run_fn) pair per subcommand name).
 _SUBCOMMANDS: dict[str, tuple] = {
@@ -1858,6 +1880,7 @@ _SUBCOMMANDS: dict[str, tuple] = {
     "ensure-store": (_add_ensure_store, _run_ensure_store),
     "catchup-probe": (_add_catchup_probe, _run_catchup_probe),
     "wave": (wave_cli.add, _run_wave),
+    "markers": (_add_markers, _run_markers),
 }
 
 

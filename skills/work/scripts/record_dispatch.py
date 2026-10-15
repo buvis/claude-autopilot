@@ -202,10 +202,57 @@ def open_ids(autopilot_dir: Path) -> list[str]:
     return [dispatch_id for dispatch_id in started if dispatch_id not in ended]
 
 
+def close_from_artifacts(
+    autopilot_dir: Path,
+    rows: list[dict[str, object]],
+    open_id_list: list[str],
+    at: int,
+    site: str,
+    edge: str,
+) -> set[str]:
+    """Close each id in ``open_id_list`` as "ok" when its kind's landing
+    artifact exists at ``<autopilot_dir>/artifacts/<id>-<kind>``. Returns the
+    set of ids closed this way, so the caller's lost-sweep can skip them.
+    """
+    closed: set[str] = set()
+    for dispatch_id in open_id_list:
+        kind = next(
+            (
+                row.get("kind")
+                for row in rows
+                if row.get("id") == dispatch_id and "queued_at" in row
+            ),
+            None,
+        )
+        if not isinstance(kind, str):
+            continue
+        artifact = autopilot_dir / "artifacts" / f"{dispatch_id}-{kind}"
+        if not artifact.exists():
+            continue
+        append_row(
+            autopilot_dir,
+            {
+                "id": dispatch_id,
+                "ended_at": at,
+                "elapsed_s": None,
+                "outcome": "ok",
+                "detail": f"closed from artifact at {site}/{edge} handoff",
+            },
+        )
+        closed.add(dispatch_id)
+    return closed
+
+
 def _handoff(autopilot_dir: Path, args: argparse.Namespace) -> None:
-    """Close any dispatches still open at this handoff as lost, then stamp the edge."""
+    """Close any dispatches still open at this handoff as lost (or "ok" when
+    their landing artifact exists), then stamp the edge."""
     at = int(time.time())
-    for dispatch_id in open_ids(autopilot_dir):
+    rows, _ = _read_rows(autopilot_dir, "working file unreadable")
+    ids = open_ids(autopilot_dir)
+    closed = close_from_artifacts(autopilot_dir, rows, ids, at, args.site, args.edge)
+    for dispatch_id in ids:
+        if dispatch_id in closed:
+            continue
         append_row(
             autopilot_dir,
             {

@@ -19,3 +19,4 @@ step: build/Phase 3 (work, task 4 of 7) | invariants: statectl is the sole state
 ## Do not re-read
 - state.json keys listed above (already here)
 - the reference files not listed under Read next
+- never run head, tail, or cat directly: use Read, rg, or rg --files

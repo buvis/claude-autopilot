@@ -33,6 +33,7 @@ See `cli/statectl.py`'s docstring for the two behaviors the move changed.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -42,6 +43,7 @@ from pathlib import Path
 # import below has to follow it, exactly as it does in __main__.py.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from cli import schema
 from cli.statectl import (
     USAGE,
     StateError,
@@ -68,6 +70,58 @@ from cli.statectl import (
     read_and_parse,
     write_brief,
 )
+
+
+def _run_decide(state_path: Path, json_arg: str) -> int:
+    try:
+        entry = json.loads(json_arg)
+    except ValueError as err:
+        print(f"statectl: decide: invalid JSON: {err}", file=sys.stderr)
+        return 1
+
+    def apply(data):
+        data.setdefault("autonomous_decisions", []).append(entry)
+
+    try:
+        mutate(state_path, apply)
+    except schema.SchemaError as err:
+        print(f"statectl: decide: {err}", file=sys.stderr)
+        return 1
+    except (StateError, OSError) as err:
+        print(f"statectl: decide: {err}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def _run_get_with_default(state_path: Path, json_path: str, default_raw: str) -> int:
+    try:
+        default = json.loads(default_raw)
+    except ValueError as err:
+        print(f"statectl: get: invalid --default JSON: {err}", file=sys.stderr)
+        return 1
+    try:
+        _, data = read_and_parse(state_path)
+    except StateError as err:
+        print(f"statectl: get: {err}", file=sys.stderr)
+        return 2
+    try:
+        value = get_value(data, parse_path(json_path))
+    except UsageError:
+        value = default
+    print(json.dumps(value))
+    return 0
+
+
+def _dispatch(argv: list[str]) -> int:
+    """Entry-point-only dispatch: intercepts `decide` and `get --default`
+    before falling through to the re-exported `main` unchanged, so `main`
+    itself stays the same object `cli.statectl.main` is (test_shims.py)."""
+    if len(argv) >= 2 and argv[1] == "decide":
+        return _run_decide(Path(argv[0]), argv[2])
+    if len(argv) >= 3 and argv[1] == "get" and "--default" in argv[2:]:
+        idx = argv.index("--default")
+        return _run_get_with_default(Path(argv[0]), argv[2], argv[idx + 1])
+    return main(argv)
 
 __all__ = [
     "USAGE",
@@ -98,4 +152,4 @@ __all__ = [
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(_dispatch(sys.argv[1:]))

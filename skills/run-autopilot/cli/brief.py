@@ -183,5 +183,6 @@ def render_brief(state: dict, now: str, project_root: str | None = None) -> str:
         "## Do not re-read",
         "- state.json keys listed above (already here)",
         "- the reference files not listed under Read next",
+        "- never run head, tail, or cat directly: use Read, rg, or rg --files",
     ]
     return "\n".join(lines) + "\n"
