@@ -307,17 +307,7 @@ class ActMixin:
 
     def _act_continue(self, decision: dict) -> None:
         if decision["limit_wait"] is not None:
-            print(
-                f"\nautoclaude: usage limit hit; waiting "
-                f"{decision['limit_wait'] // 60} min "
-                f"({decision['detail']}).",
-                file=self.out,
-            )
-            self._notify(
-                f"autopilot ⏳ {self._repo_name()}",
-                f"Usage limit; {decision['detail']}.",
-            )
-            self._sleep(decision["limit_wait"])
+            self._announce_limit_wait(decision)
         elif decision["detail"] == "replan":
             print(
                 "\nWork task prompt overran budget; PRD will be replanned. Continuing…",

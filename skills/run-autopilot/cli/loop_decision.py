@@ -527,6 +527,21 @@ class DecisionMixin:
             self._fp_repeats = 0
             self._fp_prev = ""
 
+    def _announce_limit_wait(self, decision: dict) -> None:
+        """Prints and notifies the scheduled usage-limit wait, then sleeps it.
+        Callers guard on `limit_wait` being set."""
+        print(
+            f"\nautoclaude: usage limit hit; waiting "
+            f"{decision['limit_wait'] // 60} min "
+            f"({decision['detail']}).",
+            file=self.out,
+        )
+        self._notify(
+            f"autopilot ⏳ {self._repo_name()}",
+            f"Usage limit; {decision['detail']}.",
+        )
+        self._sleep(decision["limit_wait"])
+
     def _budget_bound(self, decision: dict, ap_dir: Path) -> None:
         """Per-PRD dollar budget: a relaunch whose PRD has spent more than
         `_AUTOPILOT_PRD_BUDGET_USD` since `state.prd_budget_since` (metrics
@@ -561,17 +576,7 @@ class DecisionMixin:
             total += session
         if total > budget:
             if decision.get("limit_wait") is not None:
-                print(
-                    f"\nautoclaude: usage limit hit; waiting "
-                    f"{decision['limit_wait'] // 60} min "
-                    f"({decision['detail']}).",
-                    file=self.out,
-                )
-                self._notify(
-                    f"autopilot ⏳ {self._repo_name()}",
-                    f"Usage limit; {decision['detail']}.",
-                )
-                self._sleep(decision["limit_wait"])
+                self._announce_limit_wait(decision)
             decision["signal"] = "park"
             decision["park_site"] = "budget"
             decision["detail"] = f"budget: ${total:.2f} > ${budget:g}; parking {prd}"

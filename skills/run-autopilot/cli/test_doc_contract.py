@@ -19,6 +19,7 @@ guards against that regression recurring rather than describing a live gap.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -74,11 +75,13 @@ class DocContractTests(unittest.TestCase):
 
         text = (_REFERENCES_DIR / "state-schema.md").read_text(encoding="utf-8")
         group_rework_line = next(
-            line for line in text.splitlines()
+            line
+            for line in text.splitlines()
             if line.startswith("- `autopilot group-rework")
         )
         review_stage_line = next(
-            line for line in text.splitlines()
+            line
+            for line in text.splitlines()
             if line.startswith("- `autopilot review-stage")
         )
 
@@ -86,24 +89,69 @@ class DocContractTests(unittest.TestCase):
         subparsers = parser.add_subparsers(dest="cmd")
         cli_main._add_group_rework(subparsers)
         cli_main._add_review_stage(subparsers)
-        group_rework_required = {
-            opt
-            for action in subparsers.choices["group-rework"]._actions
-            for opt in action.option_strings
-            if action.required
-        }
-        review_stage_required = {
-            opt
-            for action in subparsers.choices["review-stage"]._actions
-            for opt in action.option_strings
-            if action.required
-        }
 
-        self.assertEqual(group_rework_required, {"--findings"})
-        self.assertIn("--findings", group_rework_line)
-        self.assertEqual(review_stage_required, {"--cycle-id", "--gate-command"})
-        self.assertIn("--cycle-id", review_stage_line)
-        self.assertIn("--gate-command", review_stage_line)
+        def surface(verb: str) -> tuple[set[str], set[str], list]:
+            actions = subparsers.choices[verb]._actions
+            required = {
+                opt
+                for action in actions
+                for opt in action.option_strings
+                if action.required
+            }
+            optional = {
+                opt
+                for action in actions
+                for opt in action.option_strings
+                if not action.required and opt not in ("-h", "--help")
+            }
+            positionals = [
+                action
+                for action in actions
+                if not action.option_strings
+                and not isinstance(action, argparse._SubParsersAction)
+            ]
+            return required, optional, positionals
+
+        def check_line(verb: str, invocation: str) -> None:
+            required, optional, positionals = surface(verb)
+            self.assertEqual(positionals, [], f"{verb} parser grew a positional")
+            unbracketed = re.sub(r"\[[^\]]*\]", "", invocation)
+            bracketed = {
+                o
+                for g in re.findall(r"\[[^\]]*\]", invocation)
+                for o in re.findall(r"--[\w-]+", g)
+            }
+            bare = set(re.findall(r"--[\w-]+", unbracketed))
+            for opt in sorted(bracketed | bare):
+                self.assertIn(opt, required | optional, f"{verb}: unknown {opt}")
+            for opt in sorted(bracketed):
+                self.assertIn(opt, optional, f"{verb}: {opt} bracketed but required")
+            for opt in sorted(bare - required):
+                self.fail(f"{verb}: optional {opt} presented as required")
+            for opt in sorted(required - bare):
+                self.fail(f"{verb}: required {opt} missing or bracketed")
+            leftover = re.sub(r"--[\w-]+\s+<[^>]*>", "", unbracketed)
+            self.assertNotRegex(
+                leftover,
+                r"<[^>]*>",
+                f"{verb}: bare positional placeholder remains",
+            )
+
+        self.assertEqual(surface("group-rework")[0], {"--findings"})
+        self.assertEqual(surface("review-stage")[0], {"--cycle-id", "--gate-command"})
+        check_line("group-rework", group_rework_line.split("`")[1])
+        check_line("review-stage", review_stage_line.split("`")[1])
+
+        base = "autopilot review-stage --cycle-id <id> --gate-command <cmd>"
+        for label, bad in {
+            "bare positional": f"{base} [--state <state.json>] <review-file>",
+            "required missing": "autopilot review-stage --cycle-id <id> [--state <state.json>]",
+            "unknown option": f"{base} [--nonexistent <x>]",
+            "optional as required": f"{base} --state <state.json>",
+        }.items():
+            with self.subTest(validator_rejects=label):
+                with self.assertRaises(AssertionError):
+                    check_line("review-stage", bad)
 
 
 if __name__ == "__main__":
