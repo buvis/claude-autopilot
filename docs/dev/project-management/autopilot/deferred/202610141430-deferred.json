@@ -196,6 +196,13 @@
       "issue": "R16: Bob could not statically verify release-checks and the live replay; both were run this cycle by other lanes - release-checks 6827 passed/0 failed/34 skipped and replay exit 0 with per-task 756 refused 1 (only the pinned id)",
       "reason": "rework cap reached with this finding unresolved; evidence recorded in checks-2.json",
       "prd": "00307-guard-citations-and-replay-contract-v1.md"
+    },
+    {
+      "type": "stall",
+      "site": "cap_regression",
+      "detail": "cap-check exit 1 at cycle 2/2: R6 (high, skills/run-autopilot/references/phase-review.md:59) introduced by 8b3a58f; R7 (high, skills/run-autopilot/cli/cap_check.py:117) introduced by b2d9a56. Non-regression highs still open: R5, R8. Full table: docs/dev/project-management/reviews/00310-park-cap-regressions-v1-review-2.md",
+      "op_id": "70bd2a537008",
+      "prd": "00310-park-cap-regressions-v1.md"
     }
   ]
 }

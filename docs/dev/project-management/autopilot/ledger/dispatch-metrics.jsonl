@@ -4587,3 +4587,11 @@
 {"id":"def0d462","ended_at":1792060635,"elapsed_s":896,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"review","edge":"leave","at":1792060898,"phase":"review","prd":"00310-park-cap-regressions-v1.md"}
 {"kind":"handoff","site":"review","edge":"leave","at":1792061862,"phase":"review","prd":"00310-park-cap-regressions-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1792061926,"phase":"review","prd":"00310-park-cap-regressions-v1.md"}
+{"id":"ceb8662a","kind":"bob","task":"review-00310c2","queued_at":1792062306,"prompt_bytes":28114}
+{"id":"4411cb56","kind":"carl","task":"review-00310c2","queued_at":1792062306,"prompt_bytes":25125}
+{"id":"06524632","kind":"bob","task":"review-00310c2","queued_at":1792062695,"prompt_bytes":146421}
+{"id":"ceb8662a","ended_at":1792063128,"elapsed_s":822,"outcome":"error","detail":"lack-of-input"}
+{"id":"06524632","ended_at":1792063128,"elapsed_s":433,"outcome":"ok","detail":"retry"}
+{"id":"4411cb56","ended_at":1792063128,"elapsed_s":822,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"review","edge":"leave","at":1792063266,"phase":"build","prd":"00310-park-cap-regressions-v1.md"}
