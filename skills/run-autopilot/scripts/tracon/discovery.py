@@ -90,7 +90,8 @@ def _child_pids(pid: int) -> list[str]:
         ).stdout
     except (OSError, subprocess.SubprocessError):
         return []
-    return [token for token in out.split() if token.isdigit()]
+    tokens = (line.partition(" ")[0] for line in out.splitlines())
+    return [token for token in tokens if token.isdigit()]
 
 
 def _pid_tagged(pid: int, tag_pid: int) -> bool:
