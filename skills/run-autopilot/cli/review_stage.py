@@ -371,7 +371,14 @@ def run_gate_line(repo_root: Path, gate_command: str, cycle_id: str) -> dict:
         cycle=cycle,
         log_path=log_path,
     )
-    if result["dirty"]:
+    if result["lock_timeout"]:
+        line = (
+            "Tests: (gate skipped: another gate held the lock for "
+            f"{int(verification.GATE_TIMEOUT_S)}s)"
+        )
+    elif result["head_moved"]:
+        line = "Tests: (gate skipped: HEAD moved during the lock wait)"
+    elif result["dirty"]:
         line = "Tests: (gate skipped: working tree dirty outside the store)"
     elif result["timed_out"]:
         # TESTS_RE needs counts; zeros plus the suffix say none were read.
@@ -393,6 +400,7 @@ def run_gate_line(repo_root: Path, gate_command: str, cycle_id: str) -> dict:
         "tests_line": line,
         "timed_out": result["timed_out"],
         "log": str(log_path),
+        "dirty_paths": result["dirty_paths"],
     }
 
 

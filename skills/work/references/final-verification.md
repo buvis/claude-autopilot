@@ -159,12 +159,23 @@ what replaces the review's own second run of the same suite.
   "stale" sentinel for this case — the verb's own ancestry check already
   refuses it.
 
-Read the verb's exit code as one of three outcomes, not as "non-zero = red
-suite": exit 0 means green and recorded; exit 1 means timed out or a non-zero
-gate exit; exit 3 means the gate exited 0 and did not time out, but no record
-was written (the tree went dirty mid-run, or the gate printed no parseable
-summary line) — the suite did not fail, so it does not enter § Handling
-failures below.
+Read the verb's exit code from this table, not as "non-zero = red suite":
+
+```
+autopilot verify exit codes:
+  0 - gate ran green and the record was written
+  1 - gate red (parsed FAIL > 0 or EXIT token non-zero, whatever the
+      process exit), timed out, lock timeout, HEAD moved during the lock
+      wait, or the tree was dirty before the gate could spawn
+  2 - refusal (one JSON line with "error" and "exit": 2) - a tracked --log
+      inside the store, or HEAD could not be resolved
+  3 - the gate exited 0 and did not time out, but no summary line was
+      parsed, or the tree dirtied mid-run (record not written)
+```
+
+Exit 3 means the suite did not fail, so it does not enter § Handling failures
+below. The printed JSON's `log` is `null` when no gate spawned (a lock
+timeout, HEAD moved, or a tree dirty before the spawn).
 
 A `--log` path that resolves inside the store is refused with exit 2 before
 anything is opened: no log file, no lock, no change to the record. A log

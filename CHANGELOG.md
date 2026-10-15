@@ -21,13 +21,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **run-autopilot**: the CLI now needs Python 3.11 or newer (it uses datetime.UTC); 3.10 is no longer supported
-- **run-autopilot**: `normalize_command` only collapses whitespace now - it no longer strips a leading `bash `/`sh ` or `./`, so `bash X`, `sh X`, `./X` and `X` each get their own verification record instead of sharing one; an existing `last-verification.json` record written under the old stripping normalizer goes stale once after this ships, forcing one unavoidable rerun (about 220 seconds) the first time it is checked post-upgrade - expected, not a regression
+- **run-autopilot**: `normalize_command` only collapses whitespace now - it no longer strips a leading `bash `/`sh ` or `./`, so `bash X`, `sh X`, `./X` and `X` each get their own verification record instead of sharing one; a hand-written or pre-upgrade `last-verification.json` (missing the `writer: run_gate` marker) is never reused - `autopilot verify` always reruns the gate for it
 - **run-autopilot**: `catchup: force` and a resume in either mode now read delta after loop-only commits since `catchup_head_sha`, not only on an unmoved HEAD
 - **run-autopilot**: a loop session's launch loads only the Context7 MCP server by default instead of every claude.ai connector on the account (`_AUTOPILOT_MCP_CONFIG=inherit` restores the old unscoped launch)
 - **review-work-completion**: Bob's first dispatch now always uses the inlined-context prompt, so the review context and diff reach him inline every time instead of only on a retry after a refusal; a retry's dispatch-ledger row is now opened with the `record_dispatch.py retry` verb
 
 ### Fixed
 
+- **run-autopilot**: `autopilot verify` takes its exit code from the gate's parsed summary line, so a gate that prints `FAIL` > 0 or a non-zero `EXIT` token exits 1 even when its process exits 0; its exit-2 refusals now also print one JSON line with `error` and `exit`, and `log` is `null` when no gate spawned
+- **run-autopilot**: the verification record carries a `writer: run_gate` marker and reuse requires it, so a hand-written record is never reused
+- **run-autopilot**: a killed `autopilot verify` no longer leaves its gate running beside the next one - SIGTERM kills the gate's process group, and after a SIGKILL the orphaned gate keeps the gate lock until it exits
+- **run-autopilot**: a gate that never ran because another gate held the lock, or because HEAD moved during the lock wait, now reports `lock_timeout` or `head_moved` and its own `Tests:` line instead of reading as a timeout or a dirty tree
 - **run-autopilot**: the session brief's `repo root` line falls back to the project root instead of printing `none` when `state.repo_root` is unset
 - **run-autopilot**: the `autonomous_decisions` validator now names every missing field in one rejection instead of one field per rejected call
 - **run-autopilot**: `autopilot catchup-probe` now takes `--state` as optional and resolves the state path by walking up from cwd when it is omitted, so the documented bare invocation probes instead of failing on a missing required flag
