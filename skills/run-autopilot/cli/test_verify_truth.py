@@ -193,6 +193,110 @@ def test_hand_written_record_without_writer_is_never_reused(repo: Path) -> None:
     )
 
 
+def test_exit_token_drop_record_not_reused(repo: Path) -> None:
+    # The summary says EXIT 1 but the gate's own process exits 0 (FAIL 0, so
+    # the failure only shows up in the EXIT token). The written record must
+    # not be eligible for reuse on a later cycle: reuse eligibility has to
+    # treat EXIT 1 as a failure, not just the FAIL count.
+    head = _git(repo, "rev-parse", "HEAD")
+    command = "printf 'PASS 4 FAIL 0 SKIP 0 EXIT 1\\n'"
+
+    result = verification.run_gate(command, repo, head, 1)
+
+    assert result["recorded"] is True
+    record = json.loads((repo / verification.RECORD_REL).read_text())
+
+    verdict, _ = verification.reuse_verdict(record, repo, head, gate_command=command)
+    assert verdict == "stale"
+
+
+def test_sigint_during_popen_leaves_the_gate_running(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # SIGINT arriving while Popen() is still spawning the child: the real
+    # child is created, but the interrupt is raised before `proc` is ever
+    # bound in `_spawn_gate`, so the `except BaseException:
+    # _kill_gate(proc)` guard that protects SIGTERM and every later
+    # failure never runs, and the gate's process group is left running.
+    # (`_group_alive` here mirrors test_sigterm_kills_the_gate_group's own
+    # assertion exactly, just against a captured pid instead of a pgid
+    # file: an explicit `flock(LOCK_UN)` releases a shared lock for every
+    # duplicate fd on this host, so a kept-alive orphan -- not a held
+    # lock -- is the fact this race actually leaves behind.)
+    head = _git(repo, "rev-parse", "HEAD")
+    real_popen = subprocess.Popen
+    spawned: list[subprocess.Popen] = []
+
+    def popen_then_sigint(*args, **kwargs):
+        proc = real_popen(*args, **kwargs)
+        # Only the gate's own spawn uses start_new_session: the git calls
+        # `run_gate` makes for its dirty/HEAD checks must pass through
+        # untouched, or this interrupt fires outside the protected window
+        # entirely and kills the test process itself.
+        if kwargs.get("start_new_session"):
+            spawned.append(proc)
+            raise KeyboardInterrupt()
+        return proc
+
+    monkeypatch.setattr(verification.subprocess, "Popen", popen_then_sigint)
+
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            verification.run_gate("sleep 60", repo, head, 1)
+
+        assert spawned, "the gate's Popen call never ran"
+        pgid = spawned[0].pid  # start_new_session makes the child its own pgid
+        assert _wait_for(lambda: not _group_alive(pgid), 2.0), (
+            "gate group still alive 2s after SIGINT during spawn: cleanup was skipped"
+        )
+    finally:
+        for proc in spawned:
+            if _group_alive(proc.pid):
+                os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait()
+
+
+def test_sigterm_pending_before_gate_started_kills_the_gate(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # SIGTERM delivered while `gate_started` is still False (before Popen()
+    # returns to `_spawn_gate`): `_raise_on_sigterm` only sets
+    # `sigterm_pending`; the raise happens right after Popen returns,
+    # inside the try that `_kill_gate` guards, so the gate still gets
+    # killed.
+    head = _git(repo, "rev-parse", "HEAD")
+    real_popen = subprocess.Popen
+    spawned: list[subprocess.Popen] = []
+
+    def popen_then_sigterm(*args, **kwargs):
+        proc = real_popen(*args, **kwargs)
+        # Only the gate's own spawn uses start_new_session: the git calls
+        # `run_gate` makes for its dirty/HEAD checks must pass through
+        # untouched, or this signal fires outside the protected window
+        # entirely (no handler installed yet) and kills the test process.
+        if kwargs.get("start_new_session"):
+            spawned.append(proc)
+            os.kill(os.getpid(), signal.SIGTERM)
+        return proc
+
+    monkeypatch.setattr(verification.subprocess, "Popen", popen_then_sigterm)
+
+    try:
+        with pytest.raises(RuntimeError, match="SIGTERM during gate"):
+            verification.run_gate("sleep 60", repo, head, 1)
+
+        assert spawned, "the gate's Popen call never ran"
+        pgid = spawned[0].pid
+        assert _wait_for(lambda: not _group_alive(pgid), 2.0), (
+            "gate group still alive 2s after pending SIGTERM"
+        )
+    finally:
+        for proc in spawned:
+            if _group_alive(proc.pid):
+                os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait()
+
+
 def test_sigkilled_verify_leaves_no_overlapping_gate(
     repo: Path, tmp_path: Path
 ) -> None:
