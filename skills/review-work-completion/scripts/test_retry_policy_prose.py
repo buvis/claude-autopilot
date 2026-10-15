@@ -3,8 +3,8 @@
 Pins the retry-policy.md / SKILL.md / agent-invocation.md / agents/bob.md text
 that lets `review-work-completion` detect Bob's lack-of-input refusal shape and
 retry him with an inlined prompt (PRD 00178). Text-pinning only:
-stdlib unittest, no import of any module under test. Deleting the refusal
-detection rule, the inlined-prompt mechanics, the dispatch-ledger kind flags,
+stdlib unittest, no import of any module under test. Deleting the
+inlined-prompt mechanics, the dispatch-ledger kind flags,
 the Bob-invocation cross-reference, or the sandbox's read-only-command
 allowance must fail one of these tests.
 """
@@ -44,27 +44,10 @@ class RetryPolicyProseTests(unittest.TestCase):
         cls.agents = AGENT_INVOCATION.read_text(encoding="utf-8")
         cls.registry = AGENT_REGISTRY.read_text(encoding="utf-8")
         cls.bob_persona = BOB_MD.read_text(encoding="utf-8")
-        cls.refusal = _section(
-            cls.retry_policy, "## Lack-of-input refusal (Bob)"
-        )
         cls.inlined_prompt = _section(
             cls.retry_policy, "## Inlined retry prompt (CLI reviewers)"
         )
         cls.bob_invocation = _section(cls.agents, "## Bob (Codex)")
-
-    def test_refusal_shape_checks_no_pass_verdict_lines(self) -> None:
-        # The refusal detector's first gate: no `R{n}: pass` line at all.
-        self.assertIn("rg -c '^R[0-9]+: pass'", self.refusal)
-
-    def test_refusal_shape_checks_no_issue_lines(self) -> None:
-        # The second gate: no emitted issue line of any severity/clean emoji.
-        self.assertIn("(🔴|🟠|🟡|✅)", self.refusal)
-
-    def test_refusal_shape_requires_cannot_statically_verify_line(self) -> None:
-        # The third gate: at least one explicit "cannot verify" line, which is
-        # what distinguishes a genuine refusal from a reviewer that just found
-        # nothing to say.
-        self.assertIn("⚪ Cannot statically verify", self.refusal)
 
     def test_inlined_retry_prompt_tells_bob_the_sandbox_supplied_everything(
         self,

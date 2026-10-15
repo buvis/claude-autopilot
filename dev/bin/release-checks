@@ -112,6 +112,10 @@ echo "[checks] retry policy prose"
 run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/review-work-completion/scripts/test_retry_policy_prose.py
 
+echo "[checks] bob inlined first prose"
+run_pytest uv run --no-project --with pytest python -m pytest -q \
+  skills/review-work-completion/scripts/test_bob_inlined_first_prose.py
+
 echo "[checks] adversarial cap prose"
 run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/work/scripts/test_adversarial_cap_prose.py \
