@@ -330,13 +330,18 @@ def test_git_head_sha_is_none_outside_a_repo(tmp_path: Path) -> None:
 # grandchild -------------------------------------------------------------
 
 _ASK_SCRIPT = (
-    "import sys\n"
+    "import os, sys, time\n"
     "sys.path.insert(0, sys.argv[4])\n"
     "from pathlib import Path\n"
     "from cli.loop_gates import live_wrapper_pid\n"
     "root, loops_dir, result_file = sys.argv[1], sys.argv[2], sys.argv[3]\n"
+    "deadline = time.monotonic() + 5\n"
+    "while time.monotonic() < deadline and not list(Path(loops_dir).glob('*.json')):\n"
+    "    time.sleep(0.02)\n"
     "found = live_wrapper_pid(Path(root), Path(loops_dir))\n"
-    "Path(result_file).write_text(str(found))\n"
+    "tmp = result_file + '.tmp'\n"
+    "Path(tmp).write_text(str(found))\n"
+    "os.replace(tmp, result_file)\n"
 )
 
 _M_SCRIPT = (

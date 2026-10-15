@@ -392,6 +392,10 @@ def _replay_loop_entry(state_path: Path, prd_arg: str | None) -> int | None:
     loop_entry = current.get("loop_entry")
     if not isinstance(loop_entry, dict):
         return None
+    # The loop sets this marker when it could not clear the entry, so the state
+    # file may be unwritable: check it before the delete, which would fail too.
+    if os.environ.get("_AUTOPILOT_LOOP_ENTRY_STALE"):
+        return None
     try:
         statectl.mutate(state_path, lambda data: data.pop("loop_entry", None))
     except (OSError, state.StateError, schema.SchemaError) as err:
@@ -402,7 +406,6 @@ def _replay_loop_entry(state_path: Path, prd_arg: str | None) -> int | None:
         prd_arg is not None
         or loop_entry.get("prd") != current.get("prd")
         or not isinstance(result, dict)
-        or os.environ.get("_AUTOPILOT_LOOP_ENTRY_STALE")
     ):
         return None
     print(json.dumps(result, sort_keys=True))

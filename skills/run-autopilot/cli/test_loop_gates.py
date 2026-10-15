@@ -354,6 +354,36 @@ def test_loop_entry_delete_failure_halts_enter(tmp_path, monkeypatch, capsys):
     assert "enter failed: loop_entry delete: disk full" in capsys.readouterr().err
 
 
+def test_stale_marker_runs_enter_for_real_when_the_entry_cannot_be_deleted(
+    tmp_path, monkeypatch, capsys
+):
+    # The loop sets _AUTOPILOT_LOOP_ENTRY_STALE exactly when it could not clear
+    # the entry, so the marker check must precede the delete: an unwritable
+    # state file must not turn the marker into exit 2.
+    ap = tmp_path / "docs" / "dev" / "project-management" / "autopilot"
+    ap.mkdir(parents=True)
+    matching = {
+        "stop": None,
+        "detail": "",
+        "prd": _PRD,
+        "catchup": "delta",
+        "design": "reuse",
+    }
+    _build_tree(ap, loop_entry={"entered_by": "loop", "prd": _PRD, "result": matching})
+    monkeypatch.setenv("_AUTOPILOT_LOOP_ENTRY_STALE", "1")
+    monkeypatch.setattr(enter_mod, "enter", _entered)
+
+    def refuse(path, apply):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(statectl, "mutate", refuse)
+
+    assert cli_main.main(["enter", "--state", str(ap / "state.json")]) == 0
+    captured = capsys.readouterr()
+    assert json.loads(captured.out)["catchup"] == "full"
+    assert "loop_entry delete" not in captured.err
+
+
 def test_pre_enter_utime_failure_is_reported(tmp_path, monkeypatch):
     # Review finding 6: the loop_entry write succeeding but the post-write
     # backdate (os.utime) failing for a reason other than a vanished file
