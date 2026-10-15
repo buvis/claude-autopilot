@@ -48,3 +48,7 @@ No implementation tasks until attended triage.
 ## Success Criteria
 
 - This file is no longer under `docs/dev/project-management/prds/hold/`.
+
+## Triage 2026-10-15
+
+Promoted into PRD 00322 (`kill-the-gate-on-every-signal`) together with agoge-2026-10-15 packets 10 (SIGHUP), 11 (the replay runner) and 22 (the shared lock deadline): one signal guard for SIGTERM, SIGINT and SIGHUP, and `_child_from_exception` removed. Closed into `done/`.

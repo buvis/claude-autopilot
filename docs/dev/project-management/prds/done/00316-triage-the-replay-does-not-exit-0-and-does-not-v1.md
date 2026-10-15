@@ -48,3 +48,7 @@ No implementation tasks until attended triage.
 ## Success Criteria
 
 - This file is no longer under `docs/dev/project-management/prds/hold/`.
+
+## Triage 2026-10-15
+
+Moot. Same fix as 00314: the replay exits 0 with refused 1 since PRD 00307's cycle-1 rework (cycle 2 R16). Minted for the same `mint-stubs` reason (PRD 00326). Closed into `done/`.

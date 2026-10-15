@@ -48,3 +48,7 @@ No implementation tasks until attended triage.
 ## Success Criteria
 
 - This file is no longer under `docs/dev/project-management/prds/hold/`.
+
+## Triage 2026-10-15
+
+Moot as a CRITICAL. PRD 00307's cycle-1 rework pinned the two recorded ids; cycle 2 re-raised the remaining gap as HIGH R2 (stub 00317), which is decided there. Minted for the same `mint-stubs` reason as 00314 (PRD 00326). Closed into `done/`.

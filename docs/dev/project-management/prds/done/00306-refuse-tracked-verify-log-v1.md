@@ -64,3 +64,7 @@ Refuse before any byte is written, at both entry points. The CLI refuses (exit 2
 - The probe from the Problem section (clean tree, `--log src/app.py`) exits 2, prints `is tracked` on stderr, and leaves `src/app.py` byte-identical with `git status --short` empty.
 - `--log docs/dev/Project-Management/autopilot/x.log` and `--log .git/config` each exit 2 and create or change no file; a FIFO sink exits 2 without blocking.
 - `test_verify_log_refusal.py` is green and listed in `dev/bin/release-checks`.
+
+## Closed 2026-10-15
+
+Parked by the fast-track lane at 02:46 (`fast_track_blocked`): after its one rework the solo review still confirmed a CRITICAL (a symlink planted at the default log path wrote through) and a HIGH (the git-directory identity check missed a subdirectory cwd), so the lane branched the attempt (4 commits with the nine-test `test_verify_log_refusal.py`, on the git branch named fast-track/00306-refuse-tracked-verify-log-v1-c1, head 1eb1fa95) and reset master. Its 77-minute, $25 session is booked under 00307 in `loop-metrics.jsonl` (PRD 00326 fixes the attribution). Superseded by PRD 00320 (v2: the same seven refusals plus hard links and an exclusive open, `lane: full`, with the branch's tests carried over by name). Closed into `done/`; the branch stays until 00320 lands.

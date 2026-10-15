@@ -48,3 +48,7 @@ No implementation tasks until attended triage.
 ## Success Criteria
 
 - This file is no longer under `docs/dev/project-management/prds/hold/`.
+
+## Triage 2026-10-15
+
+Moot. Fixed in PRD 00307's cycle-1 rework: cycle 2's R16 records the live replay at exit 0 with per-task refused 1 (only the pinned id). Minted because `mint-stubs` mints every `review-critical` row whose action was a rework fix; that over-minting is a task of PRD 00326. Closed into `done/`.

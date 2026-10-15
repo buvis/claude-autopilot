@@ -73,3 +73,7 @@ The cap-out prose routes exit 1 to the existing loop-mode stall procedure with t
 
 - Replaying the fixture of `test_cap_check.py` through the verb exits 1 and names the rework commit for the a.py line-3 row and the b.py row only.
 - On the next batch, a PRD whose final cycle carries a rework-introduced HIGH lands in `prds/hold/` with a stall site of `cap_regression` instead of `prds/done/`, and its `review_converged` row is absent (the PRD never reached done).
+
+## Closed 2026-10-15
+
+Parked by its own rule at 13:28: the cycle-2 review session followed the checkout's `phase-review.md` (not the installed 0.9.0's), ran the checkout's `cap-check`, and stalled with `site: cap_regression` (R6 at `phase-review.md:59` introduced by 8b3a58f2, R7 at `cap_check.py:117` by b2d9a563). The code stays on master and is claimed on CHANGELOG line 19. The success criterion above held on the first try, on itself. The open HIGHs R5-R8, R1's `-z` half, and agoge-2026-10-15 packets 3, 4, 5, 23 and 27 go to PRD 00321 (v2), which also makes the stall record its rows in the ledger and mint a stub. Closed into `done/`.
