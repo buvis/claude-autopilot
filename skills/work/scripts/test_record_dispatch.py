@@ -384,23 +384,11 @@ def test_end_ignores_a_handoff_outside_the_open_window(
     assert last["detail"] is None
 
 
-def test_retry_row_copies_kind_and_task(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    # A retry is a new dispatch of the same task: it gets its own id and clock,
-    # but inherits kind and task from the named start row, not from whichever
-    # start row happens to sit last in the ledger.
-    autopilot = _project(tmp_path)
-    original = {
-        "id": "deadbeef",
-        "kind": "ivan",
-        "task": "3",
-        "queued_at": 1000,
-        "prompt_bytes": 42,
-    }
-    record_dispatch.append_row(autopilot, original)
+def _seed_retry_fixture(autopilot: Path, target: str) -> None:
+    # cafebabe/pat/7 first, deadbeef/ivan/3 second: a "copy the first (or
+    # last) start row" implementation picks the wrong one for one of the two
+    # parametrized targets. The timeout end row proves an already-ended
+    # dispatch can still be retried.
     record_dispatch.append_row(
         autopilot,
         {
@@ -411,37 +399,96 @@ def test_retry_row_copies_kind_and_task(
             "prompt_bytes": 9,
         },
     )
-    rows_before = _rows(autopilot / "dispatch-metrics.jsonl")
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "id": "deadbeef",
+            "kind": "ivan",
+            "task": "3",
+            "queued_at": 1000,
+            "prompt_bytes": 42,
+        },
+    )
+    record_dispatch.append_row(
+        autopilot,
+        {
+            "id": target,
+            "ended_at": 1200,
+            "elapsed_s": None,
+            "outcome": "timeout",
+            "detail": None,
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    ("target", "kind", "task"),
+    [("deadbeef", "ivan", "3"), ("cafebabe", "pat", "7")],
+    ids=["second_start_row", "first_start_row"],
+)
+def test_retry_row_copies_kind_and_task(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    target: str,
+    kind: str,
+    task: str,
+) -> None:
+    # A retry is a new dispatch of the same task: it gets its own id and clock,
+    # but inherits kind and task from the named start row, not from whichever
+    # start row happens to sit first or last in the ledger. Each retry mints a
+    # fresh id, and both the working file and its ledger/ mirror get the row.
+    autopilot = _project(tmp_path)
+    _seed_retry_fixture(autopilot, target)
+    working = autopilot / "dispatch-metrics.jsonl"
+    mirror = autopilot / "ledger" / "dispatch-metrics.jsonl"
+    rows_before = _rows(working)
+    mirror_before = _rows(mirror)
+    ids_before = {row["id"] for row in rows_before}
     monkeypatch.chdir(tmp_path / "proj" / "src")
     _pin_clock(monkeypatch, 5000)
 
-    exit_code = record_dispatch.main(["retry", "deadbeef"])
+    first_exit = record_dispatch.main(["retry", target])
+    (first,) = capsys.readouterr().out.splitlines()
+    _pin_clock(monkeypatch, 5001)
+    second_exit = record_dispatch.main(["retry", target])
+    (second,) = capsys.readouterr().out.splitlines()
 
-    assert exit_code == 0
-    captured = capsys.readouterr()
-    (printed,) = captured.out.splitlines()
-    assert _HEX_ID.match(printed)
-    assert printed != "deadbeef"
-    assert _rows(autopilot / "dispatch-metrics.jsonl") == [
-        *rows_before,
+    assert (first_exit, second_exit) == (0, 0)
+    assert _HEX_ID.match(first)
+    assert _HEX_ID.match(second)
+    assert first != second
+    assert first not in ids_before
+    assert second not in ids_before
+    expected_new = [
         {
-            "id": printed,
-            "kind": "ivan",
-            "task": "3",
-            "queued_at": 5000,
+            "id": new_id,
+            "kind": kind,
+            "task": task,
+            "queued_at": queued_at,
             "prompt_bytes": None,
-            "detail": "retry of deadbeef",
-        },
+            "detail": f"retry of {target}",
+        }
+        for new_id, queued_at in ((first, 5000), (second, 5001))
     ]
+    assert _rows(working) == [*rows_before, *expected_new]
+    assert _rows(mirror) == [*mirror_before, *expected_new]
 
 
+@pytest.mark.parametrize(
+    "unknown",
+    ["0badf00d", "feedface", "cafe"],
+    ids=["end_row_only", "no_rows_at_all", "prefix_of_a_started_id"],
+)
 def test_retry_of_unknown_id_exits_1(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    unknown: str,
 ) -> None:
-    # An id with only an end row was never started here, so there is no kind
-    # or task to inherit: the retry must fail loud and leave the ledger alone.
+    # An id with only an end row, with no rows at all, or that merely prefixes
+    # a started id was never started here, so there is no kind or task to
+    # inherit: the retry must fail loud and leave the ledger alone.
     autopilot = _project(tmp_path)
     record_dispatch.append_row(
         autopilot,
@@ -470,12 +517,12 @@ def test_retry_of_unknown_id_exits_1(
     monkeypatch.chdir(tmp_path / "proj")
     _pin_clock(monkeypatch, 5000)
 
-    exit_code = record_dispatch.main(["retry", "0badf00d"])
+    exit_code = record_dispatch.main(["retry", unknown])
 
     assert exit_code == 1
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert "record_dispatch: no start row for 0badf00d" in captured.err
+    assert f"record_dispatch: no start row for {unknown}" in captured.err
     assert working.read_bytes() == working_before
     assert mirror.read_bytes() == mirror_before
 
