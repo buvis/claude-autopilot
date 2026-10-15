@@ -21,6 +21,7 @@ import argparse
 import importlib.util
 import json
 import secrets
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -202,6 +203,31 @@ def open_ids(autopilot_dir: Path) -> list[str]:
     return [dispatch_id for dispatch_id in started if dispatch_id not in ended]
 
 
+def _git_log(autopilot_dir: Path) -> list[tuple[str, int, str]]:
+    """``(sha, committer_time, subject)`` for every commit, newest first, in
+    the repo enclosing ``autopilot_dir``. An empty list when there is no
+    repo there (no pathspec is passed, so this naturally scopes to the whole
+    repo rather than any subtree).
+    """
+    try:
+        result = subprocess.run(
+            ["git", "log", "--format=%H %ct %s"],
+            cwd=autopilot_dir,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return []
+    if result.returncode != 0:
+        return []
+    commits: list[tuple[str, int, str]] = []
+    for line in result.stdout.splitlines():
+        sha, ct, subject = line.split(" ", 2)
+        commits.append((sha, int(ct), subject))
+    return commits
+
+
 def close_from_artifacts(
     autopilot_dir: Path,
     rows: list[dict[str, object]],
@@ -210,36 +236,76 @@ def close_from_artifacts(
     site: str,
     edge: str,
 ) -> set[str]:
-    """Close each id in ``open_id_list`` as "ok" when its kind's landing
-    artifact exists at ``<autopilot_dir>/artifacts/<id>-<kind>``. Returns the
-    set of ids closed this way, so the caller's lost-sweep can skip them.
+    """Close each id in ``open_id_list`` as "ok" from the landing artifact its
+    subagent leaves behind: an ``ivan``/``tess`` row closes on the newest
+    commit after ``queued_at`` whose subject ends with ``(task <task>)`` (a
+    ``tess`` subject must also start with ``test(``); a ``pat`` row closes
+    when its review output file's mtime is at or after ``queued_at``. Returns
+    the set of ids closed this way, so the caller's lost-sweep can skip them.
     """
     closed: set[str] = set()
+    commits = _git_log(autopilot_dir)
     for dispatch_id in open_id_list:
-        kind = next(
+        start = next(
             (
-                row.get("kind")
+                row
                 for row in rows
                 if row.get("id") == dispatch_id and "queued_at" in row
             ),
             None,
         )
-        if not isinstance(kind, str):
+        if start is None:
             continue
-        artifact = autopilot_dir / "artifacts" / f"{dispatch_id}-{kind}"
-        if not artifact.exists():
-            continue
-        append_row(
-            autopilot_dir,
-            {
-                "id": dispatch_id,
-                "ended_at": at,
-                "elapsed_s": None,
-                "outcome": "ok",
-                "detail": f"closed from artifact at {site}/{edge} handoff",
-            },
-        )
-        closed.add(dispatch_id)
+        kind = start.get("kind")
+        queued_at = start.get("queued_at")
+        task = start.get("task")
+        if kind in ("ivan", "tess"):
+            suffix = f"(task {task})"
+            match = next(
+                (
+                    commit
+                    for commit in commits
+                    if commit[1] > queued_at
+                    and commit[2].endswith(suffix)
+                    and (kind != "tess" or commit[2].startswith("test("))
+                ),
+                None,
+            )
+            if match is None:
+                continue
+            sha, commit_time, _subject = match
+            append_row(
+                autopilot_dir,
+                {
+                    "id": dispatch_id,
+                    "ended_at": at,
+                    "elapsed_s": commit_time - queued_at,
+                    "outcome": "ok",
+                    "detail": f"closed-by: commit {sha}",
+                },
+            )
+            closed.add(dispatch_id)
+        elif kind == "pat":
+            review_file = (
+                autopilot_dir.parents[2] / "dev" / "tmp" / f"review-task-{task}.md"
+            )
+            try:
+                mtime = review_file.stat().st_mtime
+            except OSError:
+                continue
+            if mtime < queued_at:
+                continue
+            append_row(
+                autopilot_dir,
+                {
+                    "id": dispatch_id,
+                    "ended_at": at,
+                    "elapsed_s": None,
+                    "outcome": "ok",
+                    "detail": "closed-by: artifact",
+                },
+            )
+            closed.add(dispatch_id)
     return closed
 
 

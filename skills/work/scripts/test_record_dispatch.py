@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -682,17 +684,38 @@ def test_handoff_leaves_closed_rows_alone(
 # rows as "lost" because the model never called `end`, even when the
 # dispatch's own work had actually landed (a task commit, a test commit, a
 # review artifact). `close_from_artifacts`, called from `_handoff` before the
-# unconditional lost-sweep, closes a still-open row as "ok" when its kind's
-# landing artifact exists for it, keyed by dispatch id under
-# `<autopilot_dir>/artifacts/<id>-<kind>`; an open row with no such artifact
-# still falls through to the existing "lost" sweep unchanged.
+# unconditional lost-sweep, closes a still-open row as "ok" from that landing
+# artifact; an open row with no such artifact still falls through to the
+# existing "lost" sweep unchanged.
 
 
-def _artifact(autopilot_dir: Path, dispatch_id: str, kind: str) -> Path:
-    artifact = autopilot_dir / "artifacts" / f"{dispatch_id}-{kind}"
-    artifact.parent.mkdir(parents=True, exist_ok=True)
-    artifact.write_text("", encoding="utf-8")
-    return artifact
+def _git_init(repo: Path) -> None:
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+
+
+def _git_commit(repo: Path, subject: str, commit_time: int) -> str:
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "t",
+        "GIT_AUTHOR_EMAIL": "t@t",
+        "GIT_COMMITTER_NAME": "t",
+        "GIT_COMMITTER_EMAIL": "t@t",
+        "GIT_AUTHOR_DATE": f"@{commit_time} +0000",
+        "GIT_COMMITTER_DATE": f"@{commit_time} +0000",
+    }
+    subprocess.run(
+        ["git", "commit", "--allow-empty", "-q", "-m", subject],
+        cwd=repo,
+        env=env,
+        check=True,
+    )
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
 
 
 def test_handoff_closes_ivan_row_from_task_commit(
@@ -702,6 +725,7 @@ def test_handoff_closes_ivan_row_from_task_commit(
     # An ivan dispatch whose task actually landed a commit must close "ok",
     # not "lost", even though nobody called `end` for it.
     autopilot = _project(tmp_path)
+    repo = tmp_path / "proj"
     record_dispatch.append_row(
         autopilot,
         {
@@ -712,8 +736,9 @@ def test_handoff_closes_ivan_row_from_task_commit(
             "prompt_bytes": 1,
         },
     )
-    _artifact(autopilot, "aaaaaaaa", "ivan")
-    monkeypatch.chdir(tmp_path / "proj")
+    _git_init(repo)
+    sha = _git_commit(repo, "implement the thing (task 1)", 1500)
+    monkeypatch.chdir(repo)
     _pin_clock(monkeypatch, 4000)
 
     exit_code = _run_handoff("build", "leave", "review", "X")
@@ -725,9 +750,9 @@ def test_handoff_closes_ivan_row_from_task_commit(
         {
             "id": "aaaaaaaa",
             "ended_at": 4000,
-            "elapsed_s": None,
+            "elapsed_s": 500,
             "outcome": "ok",
-            "detail": "closed from artifact at build/leave handoff",
+            "detail": f"closed-by: commit {sha}",
         },
     ]
 
@@ -737,6 +762,7 @@ def test_handoff_closes_tess_row_from_test_commit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     autopilot = _project(tmp_path)
+    repo = tmp_path / "proj"
     record_dispatch.append_row(
         autopilot,
         {
@@ -747,8 +773,9 @@ def test_handoff_closes_tess_row_from_test_commit(
             "prompt_bytes": 2,
         },
     )
-    _artifact(autopilot, "bbbbbbbb", "tess")
-    monkeypatch.chdir(tmp_path / "proj")
+    _git_init(repo)
+    sha = _git_commit(repo, "test(skill): cover the thing (task 2)", 1500)
+    monkeypatch.chdir(repo)
     _pin_clock(monkeypatch, 4000)
 
     exit_code = _run_handoff("build", "leave", "review", "X")
@@ -760,9 +787,9 @@ def test_handoff_closes_tess_row_from_test_commit(
         {
             "id": "bbbbbbbb",
             "ended_at": 4000,
-            "elapsed_s": None,
+            "elapsed_s": 500,
             "outcome": "ok",
-            "detail": "closed from artifact at build/leave handoff",
+            "detail": f"closed-by: commit {sha}",
         },
     ]
 
@@ -782,7 +809,10 @@ def test_handoff_closes_pat_row_from_review_artifact(
             "prompt_bytes": 3,
         },
     )
-    _artifact(autopilot, "cccccccc", "pat")
+    review_file = tmp_path / "proj" / "docs" / "dev" / "tmp" / "review-task-3.md"
+    review_file.parent.mkdir(parents=True, exist_ok=True)
+    review_file.write_text("", encoding="utf-8")
+    os.utime(review_file, (2000, 2000))
     monkeypatch.chdir(tmp_path / "proj")
     _pin_clock(monkeypatch, 4000)
 
@@ -797,7 +827,7 @@ def test_handoff_closes_pat_row_from_review_artifact(
             "ended_at": 4000,
             "elapsed_s": None,
             "outcome": "ok",
-            "detail": "closed from artifact at review/leave handoff",
+            "detail": "closed-by: artifact",
         },
     ]
 

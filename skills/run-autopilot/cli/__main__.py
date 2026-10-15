@@ -1844,7 +1844,9 @@ def _run_markers(args: argparse.Namespace) -> int:
     if args.check is not None:
         print(json.dumps(markers.check(autopilot_dir, names)))
     else:
+        before = markers.check(autopilot_dir, names)
         markers.clear(autopilot_dir, names)
+        print(json.dumps(before))
     return 0
 
 

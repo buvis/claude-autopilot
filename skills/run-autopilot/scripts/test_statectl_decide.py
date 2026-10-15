@@ -54,12 +54,24 @@ class StatectlDecideTest(unittest.TestCase):
         self.write_state({"autonomous_decisions": []})
         entry = {
             "issue": "no CHANGELOG entry template matched the fix",
+            "severity": "low",
+            "cycle": 1,
             "action": "added one under Fixed",
             "reason": "closest documented category",
-            "cycle": 1,
-            "severity": "low",
         }
-        result = self.run_cli("decide", json.dumps(entry))
+        result = self.run_cli(
+            "decide",
+            "--issue",
+            entry["issue"],
+            "--severity",
+            entry["severity"],
+            "--cycle",
+            str(entry["cycle"]),
+            "--action",
+            entry["action"],
+            "--reason",
+            entry["reason"],
+        )
 
         self.assertEqual(result.returncode, 0, result.stderr)
         state = self.load_state()
@@ -70,15 +82,19 @@ class StatectlDecideTest(unittest.TestCase):
     def test_decide_missing_severity_exits_1_before_write(self) -> None:
         self.write_state({"autonomous_decisions": []})
         before = self.state.read_bytes()
-        entry = {
-            "issue": "no CHANGELOG entry template matched the fix",
-            "action": "added one under Fixed",
-            "reason": "closest documented category",
-            "cycle": 1,
-            # severity deliberately omitted
-        }
 
-        result = self.run_cli("decide", json.dumps(entry))
+        result = self.run_cli(
+            "decide",
+            "--issue",
+            "no CHANGELOG entry template matched the fix",
+            "--cycle",
+            "1",
+            "--action",
+            "added one under Fixed",
+            "--reason",
+            "closest documented category",
+            # --severity deliberately omitted
+        )
 
         self.assertEqual(result.returncode, 1)
         self.assertIn("severity", result.stderr)

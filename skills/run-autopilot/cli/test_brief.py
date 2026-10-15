@@ -168,14 +168,18 @@ def test_read_next_paths_carry_the_plugin_root_placeholder():
 
 
 def test_brief_names_the_blocked_bash_commands():
-    # PRD 00309 fast-track card c1: 101 `head`/`tail`/`cat` calls were
-    # blocked in batch 202610111300 although both skill bodies already
-    # forbid them in prose - prose alone was not holding. The brief, read
-    # first every session, now names the three banned commands up front so
-    # a fresh session sees the ban before it ever reaches for one.
+    # PRD 00309 fast-track card c1: 101 `head`/`tail`/`cat`/`grep`/`find`
+    # calls were blocked in batch 202610111300 although both skill bodies
+    # already forbid them in prose - prose alone was not holding. The
+    # brief, read first every session, now names the exact banned commands
+    # directly under the title, the first thing a fresh session reads.
     text = render_brief({}, NOW)
-    for banned in ("head", "tail", "cat"):
-        assert banned in text
+    lines = text.splitlines()
+    assert lines[0].startswith("# Session brief")
+    assert (
+        lines[1]
+        == "Tools: Read, Edit, Write, rg. Bash head, tail, cat, grep and find are hook-blocked."
+    )
 
 
 def test_malformed_id_entries_never_render_a_python_repr():

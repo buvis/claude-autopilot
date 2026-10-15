@@ -33,6 +33,7 @@ See `cli/statectl.py`'s docstring for the two behaviors the move changed.
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -72,12 +73,28 @@ from cli.statectl import (
 )
 
 
-def _run_decide(state_path: Path, json_arg: str) -> int:
+def _run_decide(state_path: Path, decide_argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(prog="statectl.py decide", add_help=False)
+    parser.add_argument("--issue", required=True)
+    parser.add_argument("--severity", required=True)
+    parser.add_argument("--cycle", required=True, type=int)
+    parser.add_argument("--action", required=True)
+    parser.add_argument("--reason", required=True)
+    parser.add_argument("--type")
     try:
-        entry = json.loads(json_arg)
-    except ValueError as err:
-        print(f"statectl: decide: invalid JSON: {err}", file=sys.stderr)
+        args = parser.parse_args(decide_argv)
+    except SystemExit:
         return 1
+
+    entry: dict[str, object] = {
+        "issue": args.issue,
+        "severity": args.severity,
+        "cycle": args.cycle,
+        "action": args.action,
+        "reason": args.reason,
+    }
+    if args.type is not None:
+        entry["type"] = args.type
 
     def apply(data):
         data.setdefault("autonomous_decisions", []).append(entry)
@@ -117,7 +134,7 @@ def _dispatch(argv: list[str]) -> int:
     before falling through to the re-exported `main` unchanged, so `main`
     itself stays the same object `cli.statectl.main` is (test_shims.py)."""
     if len(argv) >= 2 and argv[1] == "decide":
-        return _run_decide(Path(argv[0]), argv[2])
+        return _run_decide(Path(argv[0]), argv[2:])
     if len(argv) >= 3 and argv[1] == "get" and "--default" in argv[2:]:
         idx = argv.index("--default")
         return _run_get_with_default(Path(argv[0]), argv[2], argv[idx + 1])

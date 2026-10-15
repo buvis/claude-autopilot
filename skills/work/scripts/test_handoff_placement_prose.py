@@ -70,7 +70,7 @@ def test_build_gate_hands_off_at_design_and_plan_edges() -> None:
     # Every fresh session clears the dead session's markers at Phase 0 (PRD
     # 00210), so the hook is not blind during its prologue.
     prologue = _section(text, "### Clear inherited hand-off markers", "### Handle park request")
-    assert "_walk_up.py --clear-markers" in prologue, (
+    assert "markers --clear handoff-requested cap-fired" in prologue, (
         f"{_PHASE_BUILD}: Phase 0 never clears the inherited markers"
     )
 

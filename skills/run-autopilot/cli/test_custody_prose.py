@@ -418,7 +418,7 @@ def test_phase_0_clears_inherited_markers_before_the_abort_handlers() -> None:
         (
             "lifecycle `mkdir -p` block",
             "### Clear inherited hand-off markers",
-            "_walk_up.py --clear-markers",
+            "markers --clear handoff-requested cap-fired",
             "never this session's to act on",
         ),
     )

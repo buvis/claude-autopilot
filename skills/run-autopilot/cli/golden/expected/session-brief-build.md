@@ -1,4 +1,5 @@
 # Session brief (written 2026-09-20T12:00:00Z at build -> build)
+Tools: Read, Edit, Write, rg. Bash head, tail, cat, grep and find are hook-blocked.
 
 ## Where
 - repo root: /Users/dev/git/src/github.com/buvis/example
@@ -19,4 +20,3 @@ step: build/Phase 3 (work, task 4 of 7) | invariants: statectl is the sole state
 ## Do not re-read
 - state.json keys listed above (already here)
 - the reference files not listed under Read next
-- never run head, tail, or cat directly: use Read, rg, or rg --files

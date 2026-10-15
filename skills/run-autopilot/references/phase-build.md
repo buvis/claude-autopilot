@@ -93,7 +93,8 @@ reference.
 
 Then, still before the abort handlers, run
 `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/cli/__main__.py markers --clear handoff-requested cap-fired`
-(one Bash call; always exits 0). It removes any `.handoff-requested` and
+(one Bash call; exits 1 only when no autopilot dir is found above cwd - an
+unlink failure is not caught today). It removes any `.handoff-requested` and
 `.cap-fired` beside `state.json`.
 A marker present when a session starts was written by an earlier session for a
 boundary that session never reached (a wall-cap kill, a crash, a plugin upgrade
