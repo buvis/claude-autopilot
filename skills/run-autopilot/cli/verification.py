@@ -581,7 +581,9 @@ _HEAD_MOVED = object()
 
 
 def _lock_and_check(
-    cwd: Path, sha: str, log_path: Path | None
+    cwd: Path,
+    sha: str,
+    log_path: Path | None,
 ) -> tuple[tuple[str, ...], dict | object | None]:
     """The preamble of `run_gate`, called with the flock already held:
     refuse when the tree is dirty or HEAD no longer equals `sha`. Returns
@@ -610,7 +612,45 @@ def _run_locked_gate(
     """The spawn half of `run_gate`, called with the flock held: open the log,
     delete any record, spawn, drain, reap and record against the same
     `deadline` the lock wait was bounded by. Closes the log in its own
-    `finally`, before `run_gate`'s `finally` releases the lock.
+    `finally`, before `run_gate`'s `finally` releases the lock."""
+    log_file = None
+    try:
+        if log_path is not None:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            log_file = open(log_path, "wb", buffering=0)
+        (cwd / RECORD_REL).unlink(missing_ok=True)
+        returncode, stdout_buf, exited = _spawn_gate(
+            command,
+            cwd,
+            deadline,
+            log_file,
+            lock_fd,
+        )
+        if not exited:
+            return _timed_out_result()
+        return _record_gate(
+            command,
+            cwd,
+            sha,
+            cycle,
+            returncode,
+            stdout_buf,
+            extra_excluded,
+        )
+    finally:
+        if log_file is not None:
+            log_file.close()
+
+
+def _spawn_gate(
+    command: str,
+    cwd: Path,
+    deadline: float,
+    log_file,
+    lock_fd: int,
+) -> tuple[int | None, bytes, bool]:
+    """Spawns the gate, drains and reaps it against `deadline`. Returns
+    (returncode, stdout_tail, exited) as `_reap` left them.
 
     The gate inherits `lock_fd` (`pass_fds`), so the flock stays held by
     the gate's own process group if this process dies: a SIGKILLed verify
@@ -618,56 +658,51 @@ def _run_locked_gate(
     waiting until the orphaned gate exits. Do not add a SIGKILL "handler".
     SIGTERM, or any other exception during drain/reap, kills the gate's
     process group and re-raises."""
-    log_file = None
+
+    def _raise_on_sigterm(signum, frame):
+        raise RuntimeError("verify: SIGTERM during gate")
+
+    old_handler = signal.getsignal(signal.SIGTERM)
+    signal.signal(signal.SIGTERM, _raise_on_sigterm)
     try:
-        if log_path is not None:
-            log_path.parent.mkdir(parents=True, exist_ok=True)
-            log_file = open(log_path, "wb", buffering=0)
-        (cwd / RECORD_REL).unlink(missing_ok=True)
-
-        def _raise_on_sigterm(signum, frame):
-            raise RuntimeError("verify: SIGTERM during gate")
-
-        old_handler = signal.getsignal(signal.SIGTERM)
-        signal.signal(signal.SIGTERM, _raise_on_sigterm)
-        try:
-            proc = subprocess.Popen(
-                command,
-                shell=True,
-                cwd=cwd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                start_new_session=True,
-                pass_fds=(lock_fd,),
-            )
-            try:
-                stdout_buf, done = _drain_bounded(
-                    proc, GATE_OUTPUT_CAP, deadline, log_file
-                )
-                exited = _reap(proc, deadline, done)
-            except BaseException:
-                # A log-sink write error, SIGTERM, or an interrupt: kill and
-                # reap the gate, then re-raise. The group may already be
-                # gone, which raises ProcessLookupError and must not mask
-                # the error this block exists to propagate.
-                try:
-                    os.killpg(proc.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                proc.wait()
-                proc.stdout.close()
-                proc.stderr.close()
-                raise
-        finally:
-            signal.signal(signal.SIGTERM, old_handler)
-        if not exited:
-            return _timed_out_result()
-        return _record_gate(
-            command, cwd, sha, cycle, proc.returncode, stdout_buf, extra_excluded
+        proc = subprocess.Popen(
+            command,
+            shell=True,
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+            pass_fds=(lock_fd,),
         )
+        try:
+            stdout_buf, done = _drain_bounded(
+                proc,
+                GATE_OUTPUT_CAP,
+                deadline,
+                log_file,
+            )
+            exited = _reap(proc, deadline, done)
+        except BaseException:
+            # A log-sink write error, SIGTERM, or an interrupt: kill and
+            # reap the gate, then re-raise.
+            _kill_gate(proc)
+            raise
     finally:
-        if log_file is not None:
-            log_file.close()
+        signal.signal(signal.SIGTERM, old_handler)
+    return proc.returncode, stdout_buf, exited
+
+
+def _kill_gate(proc: subprocess.Popen) -> None:
+    """Kills and reaps the gate's process group and closes its pipes. The
+    group may already be gone, which raises ProcessLookupError and must not
+    mask the error the caller is propagating."""
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    proc.wait()
+    proc.stdout.close()
+    proc.stderr.close()
 
 
 def run_gate(
@@ -697,31 +732,61 @@ def run_gate(
     caller's `timeout` is the whole wall-clock budget, not the budget for
     each half separately. Expiry while still waiting for the lock returns
     `_lock_timeout_result()` with the lock never taken, released in the
-    closing `finally` as a no-op. Once the lock is held: the pre-spawn
-    dirty check; then a re-check that `git rev-parse HEAD` still equals
-    `sha` (a mismatch or git failure returns `_head_moved_result()`, the
-    gate never runs); then `run_gate` opens `log_path` itself (creating parent
-    directories first) and deletes any existing record before spawning the
-    child, so a run that fails, times out or dirties the tree leaves no
-    older record behind. A failure to open the log or delete the record
-    raises the bare OSError rather than being caught here. Neither refusal
-    opens the log or deletes the record.
+    closing `finally` as a no-op. What runs once the lock is held:
+    `_gate_under_lock`.
     """
     lock_path = cwd / GATE_LOCK_REL
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_fd = os.open(lock_path, os.O_RDWR | os.O_CREAT)
     deadline = time.monotonic() + timeout
     try:
-        if not _acquire_lock(lock_fd, deadline):
-            return _lock_timeout_result()
-        extra_excluded, refusal = _lock_and_check(cwd, sha, log_path)
-        if refusal is _HEAD_MOVED:
-            return _head_moved_result()
-        if refusal is not None:
-            return refusal
-        return _run_locked_gate(
-            command, cwd, sha, cycle, deadline, log_path, extra_excluded, lock_fd
+        return _gate_under_lock(
+            command,
+            cwd,
+            sha,
+            cycle,
+            deadline,
+            log_path,
+            lock_fd,
         )
     finally:
         fcntl.flock(lock_fd, fcntl.LOCK_UN)
         os.close(lock_fd)
+
+
+def _gate_under_lock(
+    command: str,
+    cwd: Path,
+    sha: str,
+    cycle: int | None,
+    deadline: float,
+    log_path: Path | None,
+    lock_fd: int,
+) -> dict:
+    """The locked half of `run_gate`: wait for the flock until `deadline`
+    (`_lock_timeout_result()` on expiry). Once the lock is held: the
+    pre-spawn dirty check; then a re-check that `git rev-parse HEAD` still
+    equals `sha` (a mismatch or git failure returns `_head_moved_result()`,
+    the gate never runs); then `_run_locked_gate` opens `log_path` itself
+    (creating parent directories first) and deletes any existing record
+    before spawning the child, so a run that fails, times out or dirties
+    the tree leaves no older record behind. A failure to open the log or
+    delete the record raises the bare OSError rather than being caught
+    here. Neither refusal opens the log or deletes the record."""
+    if not _acquire_lock(lock_fd, deadline):
+        return _lock_timeout_result()
+    extra_excluded, refusal = _lock_and_check(cwd, sha, log_path)
+    if refusal is _HEAD_MOVED:
+        return _head_moved_result()
+    if refusal is not None:
+        return refusal
+    return _run_locked_gate(
+        command,
+        cwd,
+        sha,
+        cycle,
+        deadline,
+        log_path,
+        extra_excluded,
+        lock_fd,
+    )
