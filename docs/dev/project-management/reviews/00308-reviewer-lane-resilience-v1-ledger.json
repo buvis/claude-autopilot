@@ -22,5 +22,53 @@
     "issue": "3 touched test(s) pass against the pre-change code: test_ordinary_copilot_failure_stays_exit_1_without_fallback, test_successful_copilot_run_mentioning_auth_keeps_exit_0, test_tier_rejection_still_falls_back",
     "file": "skills/use-gemini/scripts/test_gemini_run_unavailable.py",
     "reason": "All three are precision guards for the new auth classifier: they pin that behavior which must NOT change (an ordinary failure stays exit 1, a successful run mentioning auth stays exit 0, a tier rejection still falls back) is unchanged. Passing against the pre-change code is exactly what a guard against over-matching is supposed to do, so the replay's computed fact is not a defect here."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "The auth-failure stderr line does not match the spec. The PRD requires `ERROR: copilot permanently unavailable (authentication failed).`. The code prints `ERROR: $BACKEND authentication failed (permanent; no fallback).`, and no test asserts the specified text, so the drift is unguarded. The exit code (4) and the latch still work, so the effect is limited to anything or anyone matching the specified string.",
+    "file": "skills/use-gemini/scripts/gemini-run.sh:266",
+    "reason": "Already adjudicated in cycle 1 (R4) against the design doc, which waives this literal string explicitly: `00308-reviewer-lane-resilience-v1-design.md:71-81` says the PRD line is NOT a string the code must emit and that the success metric reads as 'exits 4 and latches', never as a literal-string requirement, because the latch keys on the exit code. Blake is the blind lens and never sees the design doc, which is why it returned. Exit 4 and the latch both hold and are tested, so no defect remains."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "Removing `prompt_bytes` contradicts the explicit retry-row contract, which deliberately requires `prompt_bytes: None` for an unmeasured prompt. Restore the field and its test expectation.",
+    "file": "skills/work/scripts/record_dispatch.py:109",
+    "reason": "This asks to revert cycle 1's R19 fix. R19 raised the null field as the risk ('consumers that sum prompt_bytes could trip on null') and dropping the key was the chosen resolution; Alice re-verified this cycle that the only consumer reads prompt_bytes from `start` rows, so an absent key is strictly safer than a null one. Reinstating it would re-open the finding just closed."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "\"Partial output is not published\" holds only with `-o`. Without `-o`, `run_streamed` streams the fallback's stdout straight through, so output printed before the deadline has already reached the caller when the run exits 4. Carl's dispatch always uses `-o`, so the PRD's use case is covered.",
+    "file": "skills/use-gemini/scripts/gemini-run.sh:210",
+    "reason": "The reviewer states the PRD's use case is covered: Carl's dispatch always passes `-o`, which is the only caller the PRD's no-partial-output requirement describes. Buffering the streaming path would change unrelated behavior for every other caller, which is out of this PRD's scope."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "1 touched test(s) pass against the pre-change code: test_retry_case_uses_the_retry_verb",
+    "file": "skills/review-work-completion/scripts/test_bob_inlined_first_prose.py",
+    "reason": "This cycle's replay base is cycle 1's head, not the PRD's start, so the computed fact only states that the rework did not change this behavior. The retry verb was already landed and reviewed in cycle 1, where its own replay row was the finding; a rework touching other files is supposed to leave it passing."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "2 touched test(s) pass against the pre-change code: test_inlined_prompt_restricts_review_to_inlined_text, test_inlined_prompt_tells_bob_the_sandbox_supplied_everything",
+    "file": "skills/review-work-completion/scripts/test_retry_policy_prose.py",
+    "reason": "Same incremental-base reason: both tests pin prose that cycle 1 already landed in retry-policy.md, so they pass against cycle 1's head by construction. The genuine gap this neighbourhood has is the missing SKILL.md step-5 assertion, which is swept as its own finding (R3/R9), not this row."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "1 touched test(s) pass against the pre-change code: test_auth_failure_exits_4_without_fallback",
+    "file": "skills/use-gemini/scripts/test_gemini_run_unavailable.py",
+    "reason": "Same incremental-base reason, and the same guard family cycle 1 already settled for this file: auth exit 4 landed before cycle 1's head, so the test passing against that base is expected. The rework only de-hedged its assertion, which cannot make it fail against code that already behaved correctly."
   }
 ]

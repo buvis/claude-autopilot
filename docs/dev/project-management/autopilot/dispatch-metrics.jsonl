@@ -4507,3 +4507,20 @@
 {"id":"6d1a7f2a","ended_at":1792049295,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"id":"eedac431","ended_at":1792049295,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"kind":"handoff","site":"review","edge":"leave","at":1792049295,"phase":"review","prd":"00308-reviewer-lane-resilience-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1792049335,"phase":"review","prd":"00308-reviewer-lane-resilience-v1.md"}
+{"id":"3399f6c0","kind":"bob","task":"review-20261015-0750","queued_at":1792049719,"prompt_bytes":28541}
+{"id":"514274f6","kind":"carl","task":"review-20261015-0750","queued_at":1792049719,"prompt_bytes":25540}
+{"id":"a8ddba68","kind":"bob","task":"review-20261015-0750","queued_at":1792050421,"prompt_bytes":161624}
+{"id":"3399f6c0","ended_at":1792050740,"elapsed_s":1021,"outcome":"error","detail":"lack-of-input"}
+{"id":"a8ddba68","ended_at":1792050748,"elapsed_s":327,"outcome":"ok","detail":"retry"}
+{"id":"514274f6","ended_at":1792050759,"elapsed_s":1040,"outcome":"ok","detail":null}
+{"id":"6313ee7d","kind":"tess","task":"9","queued_at":1792051120,"prompt_bytes":26471}
+{"id":"76601f03","kind":"ivan","task":"9","queued_at":1792051233,"prompt_bytes":25211}
+{"id":"76601f03","ended_at":1792051285,"elapsed_s":52,"outcome":"killed","detail":null}
+{"id":"2e027c68","kind":"ivan","task":"9","queued_at":1792051297,"prompt_bytes":25211}
+{"id":"2e027c68","ended_at":1792051358,"elapsed_s":61,"outcome":"ok","detail":null}
+{"id":"b92492a4","kind":"pat","task":"9","queued_at":1792051434,"prompt_bytes":14996}
+{"id":"510c07a2","kind":"ivan","task":"9","queued_at":1792051533,"prompt_bytes":14782}
+{"id":"510c07a2","ended_at":1792051646,"elapsed_s":113,"outcome":"killed","detail":null}
+{"id":"f3c6abd9","kind":"pat","task":"9","queued_at":1792051831,"prompt_bytes":10006}
+{"id":"69c95a95","kind":"pat","task":"10","queued_at":1792051991,"prompt_bytes":6697}

@@ -35,3 +35,10 @@
 - The new retry-policy.md section heading is "## Inlined prompt (Bob's first dispatch)" (not specified verbatim by the task).
 - `bob-prompt-{id}-retry.md` keeps its "-retry" filename even though the prompt is now built on the first dispatch — renaming it would require updating `test_inlined_retry_prompt_uses_dedicated_retry_filename` too, which is out of this task's scope.
 - The outcome table's two retry rows (success-via-retry, retry-itself-failed) stay, with only the `lack-of-input` detail variant removed — a retry still exists (format/verdict gate retries, and the dispatch-ledger `retry` verb), so dropping those rows entirely would leave a retried dispatch unrecorded.
+
+## 9: [D2] Tail sweep: skills/use-gemini/scripts/gemini-run.sh
+
+- "No deadline armed" means a forced `GEMINI_BACKEND=gemini` run: only the native fallback is bounded, and the task did not say how else to disarm the deadline.
+- "Names the deadline" is checked as the `<n>s` substring in stderr, matching the existing "produced no output within Ns" message.
+- A deadline-armed run killed by SIGKILL for any reason was first treated as expiry; the per-task review rejected that, and expiry is now derived from the watchdog's own exit status instead.
+- `touch` on a path occupied by a directory succeeds, so the marker-write test proves the marker was unusable (`[ -f ]` false) rather than that the write failed. The test name and comment say so.
