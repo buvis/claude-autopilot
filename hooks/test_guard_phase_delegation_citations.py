@@ -232,6 +232,16 @@ def test_a_backtick_right_after_a_digit_still_opens_its_run() -> None:
     _assert_quotes(_find(quoted), quoted, "plan-tasks")
 
 
+def test_a_unit_mark_after_a_citation_does_not_un_cite_it() -> None:
+    # Pairing stops at the first suppressed mark, but pairs completed BEFORE it
+    # are unambiguous and still cite: denying them would refuse a real citation
+    # that merely happens to precede a unit mark.
+    assert (
+        _find('The log reads "run plan-tasks for PRD 00300" verbatim, in the 5" column.')
+        is None
+    )
+
+
 @pytest.mark.parametrize(
     "prompt",
     [

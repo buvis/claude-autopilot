@@ -345,13 +345,14 @@ def _quoted_runs(
                     skipped = True
                     continue
                 if skipped:
-                    # A skipped mark makes every later pairing a guess: the
+                    # A skipped mark makes every LATER pairing a guess: the
                     # quote that opens here may really be the skipped one's
                     # close. `The log says 5"ready", run plan-tasks for PRD
                     # 00300, print "ok".` pairs the close of "ready" with the
                     # open of "ok" and swallows the order. A guard fails
-                    # closed, so this field gets no '"' runs at all.
-                    pairs = []
+                    # closed, so pairing stops here. Pairs completed BEFORE the
+                    # skip are unambiguous and stand: wiping them would refuse
+                    # a real citation that merely precedes a unit mark.
                     break
                 open_at = match.start()
             else:
