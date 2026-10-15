@@ -18,13 +18,9 @@ Consolidation uses partial results from available agents.
 - **Alice** (the native Claude Task Agent): message the running agent again in the same conversation, as written.
 - **Bob (codex), Carl (gemini)** (the bg-Bash CLI reviewers, PRD 00034): these are one-shot `run_in_background` Bash processes that have already exited by the time their output file is read, so there is no in-conversation target. A retry means re-dispatching a FRESH `run_in_background` Bash call of the same `*-run.sh` with an amended prompt file, writing the same `docs/dev/tmp/{agent}-output-{id}.txt` path. The one-retry budget is unchanged.
 
-## Lack-of-input refusal (Bob)
+## Inlined prompt (Bob's first dispatch)
 
-the output is a lack-of-input refusal when ALL THREE hold: `rg -c '^R[0-9]+: pass' <bob-output>` reports 0 (exit 1), `rg -c '^\[BOB\] (🔴|🟠|🟡|✅)' <bob-output>` reports 0 (exit 1), and `rg -c '^\[BOB\] ⚪ Cannot statically verify' <bob-output>` prints at least 1; on that shape send the one retry as the inlined retry prompt. Any other first-run shape is final: Bob is dispatched exactly once per cycle unless an existing trigger fires (non-zero `codex-run.sh` exit, malformed issue-line format, incomplete per-rule verdicts). The one-retry budget is unchanged; the lack-of-input retry and a format retry share it.
-
-## Inlined retry prompt (CLI reviewers)
-
-the retry prompt file is `docs/dev/tmp/bob-prompt-{id}-retry.md` (retained beside the first prompt, never `/tmp`), built as: head block, the review context verbatim, mid block, the diff verbatim inside a ```diff fence, then the persona prompt body with two edits. Dispatch it with the cycle-1 `codex-run.sh -f ... -o <same bob-output path>` command, without `--resume-thread`.
+Bob's first dispatch (dispatch 1) always builds this inlined prompt. The prompt file is `docs/dev/tmp/bob-prompt-{id}-retry.md` (never `/tmp`), built as: head block, the review context verbatim, mid block, the diff verbatim inside a ```diff fence, then the persona prompt body with two edits. Dispatch it with the cycle-1 `codex-run.sh -f ... -o <bob-output path>` command, without `--resume-thread`.
 
 Head block, verbatim:
 ```
@@ -50,8 +46,6 @@ Mid block, verbatim:
 ```
 
 The two persona edits: replace `Review the completed work against PRD requirements. Explore the codebase as needed.` with `Review the completed work against PRD requirements using ONLY the inlined text above.`; and append after the `OUTPUT FORMAT IS MANDATORY` block the line `Do NOT emit "Cannot statically verify" lines about reading files or test results: both are supplied above. Only mark a rule fail when the evidence above actually shows a failure.`
-
-The retry keeps the same `{id}` and `-o` path as the first run. The review file's Bob section records `after one retry (inlined)` when it ran. Until PRD 00180 lands, the assembled file must stay under the host's argv limit (1 MiB total on macOS); the 2026-09-05 prompt was 39 KB.
 
 ## Format Compliance
 

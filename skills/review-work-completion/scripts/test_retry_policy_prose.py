@@ -28,9 +28,7 @@ def _section(text: str, header: str) -> str:
     start = text.index(header)
     after = start + len(header)
     ends = [
-        e
-        for e in (text.find("\n### ", after), text.find("\n## ", after))
-        if e != -1
+        e for e in (text.find("\n### ", after), text.find("\n## ", after)) if e != -1
     ]
     end = min(ends) if ends else len(text)
     return text[start:end]
@@ -45,7 +43,8 @@ class RetryPolicyProseTests(unittest.TestCase):
         cls.registry = AGENT_REGISTRY.read_text(encoding="utf-8")
         cls.bob_persona = BOB_MD.read_text(encoding="utf-8")
         cls.inlined_prompt = _section(
-            cls.retry_policy, "## Inlined retry prompt (CLI reviewers)"
+            cls.retry_policy,
+            "## Inlined prompt (Bob's first dispatch)",
         )
         cls.bob_invocation = _section(cls.agents, "## Bob (Codex)")
 

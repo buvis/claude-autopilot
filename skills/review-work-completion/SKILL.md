@@ -259,7 +259,7 @@ Per persona (the table `review-stage` applies):
 
 **Launch ALL active reviewers in a SINGLE message so they run concurrently.** Alice, Blake, and Eve (when active) are Task subagent calls (native Claude tools), dispatched as `autopilot:alice`, `autopilot:blake`, `autopilot:eve` - the bare persona name is not a registered agent type and fails the dispatch outright (`references/agent-registry.md` § Dispatch mechanism). Every one of those Agent calls, and the Watcher below, carries `run_in_background: true` - never `false`, never omitted: an Agent dispatched with `run_in_background: false` makes the harness hold the background Bash calls in the same message until that Agent returns, while the Watcher only returns once those Bash lanes have written their outputs, so one `false` idles the cycle for the Watcher's whole 30-run budget (~50 min, seen twice on 2026-09-26). Bob and Carl are parallel **background Bash** commands (`run_in_background: true`) - never wrap a CLI reviewer (codex/gemini) in a subagent, it hangs and strands the whole cycle (see `references/agent-invocation.md`). Put the Task calls, the Watcher (below, if `$_AUTOPILOT_LOOP` is set), and the background Bash calls in the one message - if any CLI reviewer is in the dispatch, the Watcher goes in the same message or nothing holds the session open to see it finish.
 
-**Ledger each CLI reviewer dispatch.** Under autopilot, `review-stage` already opened one dispatch row per CLI reviewer; hold its `dispatch_rows` ids for step 6's `end` call. Open a row by hand with `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind bob --task review-{id} --prompt-file <absolute prompt path>` (`--kind carl` for Carl), and hold the printed id, in three cases: a dispatched CLI reviewer whose `dispatch_rows` id is `null` (the failure is in `errors`), a retry (`references/retry-policy.md`), which opens a second `start` row under the same `--task`, and the bare-repo fallback.
+**Ledger each CLI reviewer dispatch.** Under autopilot, `review-stage` already opened one dispatch row per CLI reviewer; hold its `dispatch_rows` ids for step 6's `end` call. Open a row by hand with `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind bob --task review-{id} --prompt-file <absolute prompt path>` (`--kind carl` for Carl), and hold the printed id, in three cases: a dispatched CLI reviewer whose `dispatch_rows` id is `null` (the failure is in `errors`), a retry (`references/retry-policy.md`), which opens its row with `python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py retry <original-id>` instead (`<original-id>` is the id already held from the first dispatch's `start` call), and the bare-repo fallback.
 
 **Bare-repo fallback (step 3's carve-out), autopilot runs.** With no `review-stage` run, also REPLACE `state.review_lenses` yourself (merge into state.json, do NOT replace sibling fields) with one key per active lens set to `"running"`: `consensus` (Alice), `blind` (Blake), `doubt` (Bob), plus `ui` (Carl) and `fable` (Eve) only when active. tracon renders these as the review phase's sub-steps; step 6 flips them to `"done"`/`"failed"`.
 
@@ -366,13 +366,10 @@ Save each subagent reviewer's returned text to `docs/dev/tmp/` — **Alice** to 
 | Terminal state | `<flags>` |
 |---|---|
 | the output holds a usable review, first run | `--outcome ok` |
-| the output holds a usable review, produced by the retry | `--outcome ok --detail retry` |
-| the retry itself failed | `--outcome error --detail "retry: exit <n>"` or `--outcome error --detail "retry: lack-of-input"` |
 | non-zero exit, nothing usable published | `--outcome error --detail "exit <n>"` |
-| exit 0 but the refusal shape (`references/retry-policy.md` § Lack-of-input refusal) | `--outcome error --detail "lack-of-input"` |
 | exit 0 but the output is unusable — malformed issue lines, or incomplete per-rule verdicts (`references/retry-policy.md` §§ Format Compliance, Per-Rule Verdict Completeness) | `--outcome error --detail "format-invalid"` |
 
-The rows are mutually exclusive. `--detail` is a single field, so a failed retry encodes both facts in it as `retry: <the failure>` rather than losing one of them. Bob's Claude fallback (a Task subagent, not a CLI dispatch) gets no ledger row.
+Bob's Claude fallback (a Task subagent, not a CLI dispatch) gets no ledger row.
 
 Then run:
 
@@ -427,7 +424,7 @@ Stamp the `reviewers:` frontmatter field with the comma-separated lowercase name
 
 **Shadow runs (`CONSENSUS_ENGINE == "shadow"`).** The workflow's `review_markdown` carries the literal token `{{TESTS_LINE}}` (step 5 passed no `tests_line`). Substitute the `Tests:` line composed in step 6 for that token — a file still carrying the token cannot pass `check_review_file.py` — then write the result to `docs/dev/tmp/<prd-base>-consensus-shadow-{cycle}.md`. **Never** to `docs/dev/project-management/reviews/`: step 3's `-review-*.md` glob finds the prior cycle there, and a shadow file in that directory would be mistaken for one. Gate the shadow file with `check_review_file.py --reviewers alice`, then record in the real review file, under Alice's section, the engine's `stats_line` and any verdict divergence from legacy Alice — as an observation, never as a finding. The shadow never gates.
 
-Include all findings even if zero issues. Give each reviewer that ran a `## <Name>` section (their findings, or a one-line all-clear; Bob's keeps his `D{n}:` verdict lines, and records `after one retry (inlined)` whenever the inlined retry was dispatched, whether or not it produced them), and end the file with the `Verdict:` and `Tests:` lines composed in step 6.
+Include all findings even if zero issues. Give each reviewer that ran a `## <Name>` section (their findings, or a one-line all-clear; Bob's keeps his `D{n}:` verdict lines), and end the file with the `Verdict:` and `Tests:` lines composed in step 6.
 
 Place the `codex_rung_guard:` line composed in step 6 in the top matter: directly after the `Diff range:` block, before the body sections.
 
