@@ -650,5 +650,11 @@ def test_drained_path_skips_init_when_state_exists() -> None:
     # Packet 22: the entry verb already creates state.json before this row
     # is ever reached, so telling the operator to run `autopilot init`
     # unconditionally always hits the exit-7 re-run guard. The row must
-    # scope that advice to the case state.json is absent.
-    assert "init only when `state.json` is absent" in _SKILL_TEXT
+    # scope that advice to the case state.json is absent. The assertion is
+    # scoped to the drained row: a document-wide search would still pass if
+    # the condition drifted into any other paragraph.
+    row = next(
+        line for line in _SKILL_TEXT.splitlines()
+        if line.startswith("| No PRDs anywhere |")
+    )
+    assert "only when `state.json` is absent" in row
