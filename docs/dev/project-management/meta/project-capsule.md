@@ -50,9 +50,9 @@ Generated: 2026-10-15 (catchup refreshed 14:54 UTC)
 - [x] 00308-reviewer-lane-resilience-v1 (2 cycles)
 - [x] 00309-loop-friction-verbs-v1 (1 cycle, fast-track)
 - [x] 00311-verify-reports-what-the-gate-did-v1 (2 cycles, cap-out: 1 unresolved HIGH deferred)
+- [x] 00312-close-ten-loop-truths-v1 (1 cycle, full lane)
 - 00306-refuse-tracked-verify-log-v1 parked to hold/ (stall mid-batch)
 - 00310-park-cap-regressions-v1 stalled to hold/ (cap_regression, cycle 2, four unresolved HIGH)
-- 00312-close-ten-loop-truths-v1 in wip/ (full lane, catchup resumed manually 2026-10-15 after the autoclaude loop died mid-00311-rework when the user's Claude Code app restarted for an update — see memory `batch-in-flight-2026-10-14`)
 - backlog remaining: 00313
 - minted to hold/: 00314-00319 (triage stubs from deferred CRITICAL/HIGH rows)
 

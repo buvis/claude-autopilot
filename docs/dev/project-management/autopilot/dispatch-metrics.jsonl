@@ -4704,3 +4704,5 @@
 {"id":"7919bbdf","ended_at":1792084028,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"id":"961e9d78","ended_at":1792084028,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"kind":"handoff","site":"review","edge":"leave","at":1792084028,"phase":"done","prd":"00312-close-ten-loop-truths-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1792084099,"phase":"done","prd":"00312-close-ten-loop-truths-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1792084171,"phase":"build","prd":"00312-close-ten-loop-truths-v1.md"}
