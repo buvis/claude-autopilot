@@ -217,6 +217,36 @@ run_streamed() {
 
 # Preserve ordinary failure output for salvage, but do not publish a rejected
 # backend's partial output. An existing destination is left untouched on exit 4.
+start_watchdog() {
+    # Sets pid and timer in run_cmd's scope (bash dynamic scoping).
+    # A non-numeric or non-positive deadline would make `sleep` fail or kill
+    # at once; fail closed to the documented default.
+    case $FALLBACK_DEADLINE in ''|*[!0-9]*) FALLBACK_DEADLINE=900 ;; esac
+    [ "$((10#$FALLBACK_DEADLINE))" -gt 0 ] || FALLBACK_DEADLINE=900
+    # Job control gives each job its own process group, so the deadline
+    # kills the command and its children, and nothing outside them.
+    local mopt=0
+    case $- in *m*) mopt=1 ;; esac
+    set -m
+    run_streamed "$@" &
+    pid=$!
+    {
+        sleep "$FALLBACK_DEADLINE"
+        touch "$RUN_TMP/timed_out" 2>"$RUN_TMP/timer-err" || {
+            echo "gemini-run: failed to write timeout marker: $(cat "$RUN_TMP/timer-err" 2>/dev/null)" >&2
+        }
+        kill -KILL -- "-$pid" 2>/dev/null || true
+    } &
+    timer=$!
+    [ "$mopt" -eq 1 ] || set +m
+}
+
+stop_watchdog() {
+    [ -n "$1" ] || return 0
+    kill -- "-$1" 2>/dev/null || true
+    wait "$1" 2>/dev/null || true
+}
+
 run_cmd() {
     local rc=0 stderr_pid pid timer
     # Stream prompts/diagnostics immediately, then wait for tee to finish before
@@ -226,25 +256,7 @@ run_cmd() {
     if [ -z "$FALLBACK_DEADLINE" ]; then
         run_streamed "$@" || rc=$?
     else
-        # A non-numeric deadline would make `sleep` fail silently, leaving
-        # the fallback unbounded; fail closed to the documented default.
-        case $FALLBACK_DEADLINE in ''|*[!0-9]*) FALLBACK_DEADLINE=900 ;; esac
-        # Job control gives each job its own process group, so the deadline
-        # kills the command and its children, and nothing outside them.
-        local mopt=0
-        case $- in *m*) mopt=1 ;; esac
-        set -m
-        run_streamed "$@" &
-        pid=$!
-        {
-            sleep "$FALLBACK_DEADLINE"
-            touch "$RUN_TMP/timed_out" 2>"$RUN_TMP/timer-err" || {
-                echo "gemini-run: failed to write timeout marker: $(cat "$RUN_TMP/timer-err" 2>/dev/null)" >&2
-            }
-            kill -KILL -- "-$pid" 2>/dev/null || true
-        } &
-        timer=$!
-        [ "$mopt" -eq 1 ] || set +m
+        start_watchdog "$@"
         wait "$pid" 2>/dev/null || rc=$?
     fi
     # Keep the watchdog armed through stderr draining: a child that outlives
@@ -252,12 +264,10 @@ run_cmd() {
     # this wait unbounded with nothing left to kill it.
     local stderr_rc=0
     wait "$stderr_pid" || stderr_rc=1
-    if [ -n "$timer" ]; then
-        kill -- "-$timer" 2>/dev/null || true
-        wait "$timer" 2>/dev/null || true
-    fi
+    stop_watchdog "$timer"
     [ "$stderr_rc" -eq 0 ] || return 1
-    if [ -f "$RUN_TMP/timed_out" ]; then
+    # The marker write can fail, so a SIGKILL under an armed deadline counts too.
+    if [ -n "$FALLBACK_DEADLINE" ] && { [ -f "$RUN_TMP/timed_out" ] || [ "$rc" -eq 137 ]; }; then
         echo "ERROR: gemini fallback produced no output within ${FALLBACK_DEADLINE}s." >&2
         return 4
     fi
