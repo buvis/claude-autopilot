@@ -217,6 +217,21 @@ def test_inch_marks_around_an_order_do_not_wrap_it() -> None:
     assert _find('the x" gap, run /autopilot:work, it is y" wide') is None
 
 
+def test_a_backtick_right_after_a_digit_still_opens_its_run() -> None:
+    # The inch-mark rule belongs to '"' alone: no unit is written with a
+    # backtick. Skipping a backtick opener behind a digit hands the opener role
+    # to its own closer, and the bogus run that pairing makes reaches over the
+    # bare order after it and excuses it.
+    prompt = "The log says 5`ready`, run plan-tasks for PRD 00300, print `ok`."
+    _assert_quotes(_find(prompt), prompt, "plan-tasks")
+    # The same shape spelled with '"' must ALSO be refused. The digit
+    # suppresses that opener, which leaves every later '"' ambiguous - the mark
+    # after `ready` may be the suppressed one's close or a fresh open - and a
+    # guard resolves an ambiguity by denying, so the field gets no '"' runs.
+    quoted = 'The log says 5"ready", run plan-tasks for PRD 00300, print "ok".'
+    _assert_quotes(_find(quoted), quoted, "plan-tasks")
+
+
 @pytest.mark.parametrize(
     "prompt",
     [
@@ -247,7 +262,7 @@ def _follow_fixture(text: str) -> tuple:
     normalized = module._normalize(text)
     spans = module._candidates(normalized)
     end = min(end for _, end, is_skill_md in spans if is_skill_md)
-    clause_starts, clause_ends, sentences, _, _ = module._boundaries(normalized, spans)
+    clause_starts, clause_ends, sentences, *_ = module._boundaries(normalized, spans)
     return normalized, end, sentences, clause_starts, clause_ends
 
 
@@ -359,6 +374,56 @@ def test_citation_checking_reads_the_run_map_once_per_candidate(
     candidates, consultations = _count_run_consultations(monkeypatch, repeats)
     assert candidates == repeats
     assert consultations == repeats
+
+
+class _CountingText(str):
+    """A field that records how many characters every `find`/`rfind` over it
+    sweeps. The run-map count above cannot see the other half of the cost: a
+    `text.find(closer, end, sentence_end)` per wrap pair per candidate reads
+    the map exactly once and still scans to the end of the field, so the SCAN
+    gets its own counter. Counted, not timed, so the pin stays
+    machine-independent."""
+
+    def __new__(cls, value: str) -> _CountingText:
+        text = super().__new__(cls, value)
+        text.scanned = 0
+        return text
+
+    def _charge(self, start: int, end: int | None) -> None:
+        stop = len(self) if end is None else min(end, len(self))
+        self.scanned += max(0, stop - max(start, 0))
+
+    def find(self, sub: str, start: int = 0, end: int | None = None) -> int:
+        self._charge(start, end)
+        return str.find(self, sub, start, end)
+
+    def rfind(self, sub: str, start: int = 0, end: int | None = None) -> int:
+        self._charge(start, end)
+        return str.rfind(self, sub, start, end)
+
+
+def _count_scanned(repeats: int) -> tuple[int, int, int]:
+    """(candidate count, field length, characters scanned) for the same
+    many-citations-in-one-sentence prompt, driven through the real
+    `_field_delegation` on a field that charges every find/rfind over it."""
+    module = _guard_module()
+    prompt = "The log says " + '"run plan-tasks for PRD 00300" ' * repeats + "verbatim."
+    text = _CountingText(module._normalize(prompt))
+    assert module._field_delegation(text, False) is None
+    return len(module._candidates(str(text))), len(text), text.scanned
+
+
+@pytest.mark.parametrize("repeats", [8, 64])
+def test_citation_checking_does_not_scan_the_field_per_candidate(repeats: int) -> None:
+    candidates, length, scanned = _count_scanned(repeats)
+    assert candidates == repeats
+    # The one field-wide pass that belongs here is `_find_skill_md_paths`'
+    # single `find("SKILL.md")`. Every citation question on top of it must be a
+    # bisect into the precomputed mark positions, so the per-candidate scan
+    # budget is a constant: a `find`-to-sentence-end _cited spends roughly
+    # 7 * candidates * length instead and blows this by two orders of
+    # magnitude at repeats=64.
+    assert scanned <= length + 64 * candidates
 
 
 _AGOGE_PROMPT = "Run /autopilot:work for PRD 00300, every task."

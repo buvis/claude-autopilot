@@ -24,7 +24,7 @@ import re
 import sys
 import unicodedata
 from bisect import bisect_left
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from itertools import islice
 from pathlib import Path
 
@@ -73,6 +73,7 @@ from guard_phase_delegation_lexicon import (
     _WRAP_CLOSE,
     _WRAP_OPEN,
     _WRAP_PAIR,
+    _WRAP_SCAN_CHARS,
     _WRAP_SCAN_PAIRS,
 )
 
@@ -306,6 +307,25 @@ def _scratch(text: str, spans: list[tuple[int, int, bool]]) -> str:
     return "".join(pieces)
 
 
+# A delimiter's marks pair in order (first with second, third with fourth, ...),
+# so no punctuation inside a quoted run can desynchronise the pairing the way a
+# clause-local parity count does (see _cited). A '"' behind a digit with nothing
+# open is an inch/unit mark and opens nothing: that is what keeps `the 5" gap,
+# run /autopilot:work, it is 6" wide` from pairing into one run around the name.
+# Behind a digit with a quote already open it still closes, because an order
+# quoted off a log ends on a PRD number all day long ("run plan-tasks for PRD
+# 00300"). Once a mark has been skipped every later pairing is a guess, so the
+# field gets no '"' runs at all - a guard resolves an ambiguity by denying.
+#
+# The rule is the '"' pass ONLY (the `inch_mark` flag in _SYMMETRIC_DELIMS): no
+# unit is written with a backtick, so a backtick behind a digit opens a run like
+# any other, and skipping it would hand the opener role to its CLOSER and let
+# that bogus run swallow a later bare order.
+#
+# Within one delimiter the pairs are disjoint and increasing, so the last pair
+# opening before a span is the only one that can enclose it: the merge walk over
+# the start-sorted spans costs one probe per span, and _cited then reads one map
+# entry per candidate instead of rescanning the field around each one.
 def _quoted_runs(
     scratch: str,
     spans: list[tuple[int, int, bool]],
@@ -313,29 +333,26 @@ def _quoted_runs(
     """Every candidate span mapped to the symmetric-delimiter runs that
     STRICTLY enclose it (opening before `start`, closing at or after `end`),
     from one left-to-right pairing pass per delimiter over the whole field.
-
-    A delimiter's marks pair in order (first with second, third with fourth,
-    ...), so no punctuation inside a quoted run can desynchronise the pairing
-    the way a clause-local parity count does (see _cited). A '"' behind a digit
-    with nothing open is an inch/unit mark and opens nothing: that is what keeps
-    `the 5" gap, run /autopilot:work, it is 6" wide` from pairing into one run
-    around the name. Behind a digit with a quote already open it still closes,
-    because an order quoted off a log ends on a PRD number all day long
-    ("run plan-tasks for PRD 00300").
-
-    Within one delimiter the pairs are disjoint and increasing, so the last
-    pair opening before a span is the only one that can enclose it: the merge
-    walk over the start-sorted spans costs one probe per span, and _cited then
-    reads one map entry per candidate instead of rescanning the field around
-    each one."""
+    See the comment above for the pairing rules."""
     runs: dict[tuple[int, int], list[tuple[int, int]]] = {}
-    for pattern in _SYMMETRIC_DELIMS:
+    for pattern, inch_mark in _SYMMETRIC_DELIMS:
         pairs: list[tuple[int, int]] = []
         open_at = -1
+        skipped = False
         for match in pattern.finditer(scratch):
             if open_at == -1:
-                if match.start() and scratch[match.start() - 1].isdigit():
+                if inch_mark and match.start() and scratch[match.start() - 1].isdigit():
+                    skipped = True
                     continue
+                if skipped:
+                    # A skipped mark makes every later pairing a guess: the
+                    # quote that opens here may really be the skipped one's
+                    # close. `The log says 5"ready", run plan-tasks for PRD
+                    # 00300, print "ok".` pairs the close of "ready" with the
+                    # open of "ok" and swallows the order. A guard fails
+                    # closed, so this field gets no '"' runs at all.
+                    pairs = []
+                    break
                 open_at = match.start()
             else:
                 pairs.append((open_at, match.start()))
@@ -349,6 +366,35 @@ def _quoted_runs(
     return runs
 
 
+def _delim_positions(scratch: str) -> dict[str, list[int]]:
+    """Every _WRAP_SCAN_PAIRS character mapped to its ascending positions, from
+    ONE pass over the field. _cited asks "is there a closer between here and
+    the sentence end" once per pair per candidate; as a `str.find` that question
+    scanned to the sentence end whenever the closer was absent (the usual case
+    for 6 of the 8 pairs) - the whole remaining field when the field has no
+    terminator - so N candidates in one long sentence cost N * field. Against
+    these lists the same question is a bisect, and the per-candidate cost no
+    longer depends on the field length."""
+    positions: dict[str, list[int]] = {}
+    for match in _WRAP_SCAN_CHARS.finditer(scratch):
+        positions.setdefault(match.group(), []).append(match.start())
+    return positions
+
+
+def _mark_in(positions: Sequence[int], start: int, limit: int) -> bool:
+    """`str.find(c, start, limit) != -1` for the delimiter whose positions these
+    are, in O(log n) and with no scan."""
+    index = bisect_left(positions, start)
+    return index < len(positions) and positions[index] < limit
+
+
+def _mark_before(positions: Sequence[int], floor: int, start: int) -> int:
+    """`str.rfind(c, floor, start)` for the delimiter whose positions these are,
+    in O(log n) and with no scan."""
+    index = bisect_left(positions, start)
+    return positions[index - 1] if index and positions[index - 1] >= floor else -1
+
+
 def _boundaries(
     text: str,
     spans: list[tuple[int, int, bool]],
@@ -358,13 +404,16 @@ def _boundaries(
     list[int],
     list[int],
     dict[tuple[int, int], list[tuple[int, int]]],
+    dict[str, list[int]],
 ]:
     """Pass 2's one-shot boundary build: clause starts, clause ends, sentence
-    starts, CITATION sentence starts and the symmetric-delimiter runs for the
-    whole field, from one masked scratch copy. Every later clause/sentence
-    lookup is a binary search into these sorted lists, never a fresh scan.
-    `cite_sentences` and the runs come from the same scratch as `sentences`, so
-    all of them index the same coordinate space."""
+    starts, CITATION sentence starts, the symmetric-delimiter runs and every
+    wrap character's positions for the whole field, from one masked scratch
+    copy. Every later clause/sentence/delimiter lookup is a binary search into
+    these sorted lists, never a fresh scan. `cite_sentences`, the runs and the
+    marks come from the same scratch as `sentences`, so all of them index the
+    same coordinate space - masking touches _MASKED_IN_SPAN (":/.") only, so a
+    wrap character sits at the same offset in scratch and in `text`."""
     scratch = _scratch(text, spans)
     clauses = [(m.start(), m.end()) for m in _CLAUSE_BOUNDARY.finditer(scratch)]
     sentences = [m.start() for m in _SENTENCE_BOUNDARY.finditer(scratch)]
@@ -375,6 +424,7 @@ def _boundaries(
         sentences,
         cite_sentences,
         _quoted_runs(scratch, spans),
+        _delim_positions(scratch),
     )
 
 
@@ -467,50 +517,56 @@ def _ordered_to_follow(
     return not _negated(text, verb_clause_start, verb_start)
 
 
+# An opener AT `start` is the match's own captured wrap: it cites unless its
+# close was consumed into the span (`plan-tasks` wrapped on its own is a label
+# and anchors as before). An earlier ASYMMETRIC opener counts while no close has
+# come since it, looked for from `sentence_start` because "(" always opens
+# ("(which handles catchup, design, parse and plan-tasks)"). The straight single
+# quote is left out: contractions and possessives would read as open quotes.
+#
+# A symmetric delimiter ('"', '`') has no open form of its own, so an earlier
+# one of those counts only when the field-wide pairing (_quoted_runs) put the
+# name strictly inside one of its pairs - a map lookup, built once per field.
+# Pairing is field-wide rather than clause-local because a parity count from the
+# clause start desynchronises on punctuation INSIDE a quoted run: the scratch
+# masks punctuation only inside recognized name spans, so in `The log says
+# "ready, done" then run plan-tasks for PRD 00300 and print "ok".` the comma
+# inside the quote started the clause, the quote after `done` counted as an
+# opener, and the order was excused (measured). The pairing opens no run on an
+# inch/unit mark, which is what still leaves `the 5" gap, run /autopilot:work,
+# it is 6" wide` with no run around the name.
+#
+# The close may land anywhere before `sentence_end`: a quoted run routinely
+# spans a ',' or ':' ("`design-solution: <prd-stem>`"). A pair closing past the
+# citation sentence is no run around this name, so '"Run the work phase for PRD
+# 7."' stays a whole quoted order and is denied.
+#
+# Every mark question is a bisect into `marks` (_delim_positions, built once per
+# field), never a `str.find` from this candidate: the find form scanned to
+# `sentence_end` per pair per candidate - the rest of the field when the field
+# has no terminator - which is the quadratic cost many anchored candidates in
+# one long sentence used to pay.
 def _cited(
     text: str,
     start: int,
     end: int,
     runs: dict[tuple[int, int], list[tuple[int, int]]],
+    marks: dict[str, list[int]],
     sentence_start: int,
     sentence_end: int,
 ) -> bool:
     """True iff the name at [start, end) sits inside a longer wrapped run - a
     quote, backtick or bracket that opens at or before `start` and closes only
-    past `end` - so it is cited text, not an order.
-
-    An opener AT `start` is the match's own captured wrap: it cites unless its
-    close was consumed into the span (`plan-tasks` wrapped on its own is a
-    label and anchors as before). An earlier ASYMMETRIC opener counts while no
-    close has come since it, looked for from `sentence_start` because "("
-    always opens ("(which handles catchup, design, parse and plan-tasks)").
-    The straight single quote is left out: contractions and possessives would
-    read as open quotes.
-
-    A symmetric delimiter ('"', '`') has no open form of its own, so an earlier
-    one of those counts only when the field-wide pairing (_quoted_runs) put the
-    name strictly inside one of its pairs - a map lookup here, built once per
-    field. Pairing is field-wide rather than clause-local because a parity
-    count from the clause start desynchronises on punctuation INSIDE a quoted
-    run: the scratch masks punctuation only inside recognized name spans, so in
-    `The log says "ready, done" then run plan-tasks for PRD 00300 and print
-    "ok".` the comma inside the quote started the clause, the quote after
-    `done` counted as an opener, and the order was excused (measured). The
-    pairing opens no run on an inch/unit mark, which is what still leaves "the
-    5\" gap, run /autopilot:work, it is 6\" wide" with no run around the name.
-
-    The close may land anywhere before `sentence_end`: a quoted run routinely
-    spans a ',' or ':' ("`design-solution: <prd-stem>`"). A pair closing past
-    the citation sentence is no run around this name, so '"Run the work phase
-    for PRD 7."' stays a whole quoted order and is denied."""
+    past `end` - so it is cited text, not an order. See the comment above."""
     for opener, closer in _WRAP_SCAN_PAIRS:
-        if text.find(closer, end, sentence_end) == -1:
+        closes = marks.get(closer, ())
+        if not _mark_in(closes, end, sentence_end):
             continue
-        if text[start] == opener and text.find(closer, start + 1, end) == -1:
+        if text[start] == opener and not _mark_in(closes, start + 1, end):
             return True
         if opener != closer:
-            open_at = text.rfind(opener, sentence_start, start)
-            if open_at != -1 and text.find(closer, open_at, start) == -1:
+            open_at = _mark_before(marks.get(opener, ()), sentence_start, start)
+            if open_at != -1 and not _mark_in(closes, open_at, start):
                 return True
     return any(
         sentence_start <= open_at and close_at < sentence_end
@@ -538,7 +594,7 @@ def _field_delegation(text: str, per_task: bool) -> str | None:
     spans = _candidates(text)
     if not spans:
         return None
-    clause_starts, clause_ends, sentences, cite_sentences, runs = _boundaries(
+    clause_starts, clause_ends, sentences, cite_sentences, runs, marks = _boundaries(
         text,
         spans,
     )
@@ -578,7 +634,7 @@ def _field_delegation(text: str, per_task: bool) -> str | None:
             sentence_end = (
                 cite_sentences[tail] if tail < len(cite_sentences) else len(text)
             )
-            if _cited(text, start, end, runs, sentence_start, sentence_end):
+            if _cited(text, start, end, runs, marks, sentence_start, sentence_end):
                 continue
         if _negated(text, clause_start, start):
             continue

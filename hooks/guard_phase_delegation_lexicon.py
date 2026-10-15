@@ -38,8 +38,20 @@ _WRAP_PAIR = {
 # name's own wrapper; this tuple governs what may open a citation run around
 # it, and the two are not the same question.
 _WRAP_SCAN_PAIRS = (*_WRAP_PAIR.items(), ("`", "`"), ('"', '"'))
-# The symmetric citation delimiters, paired field-wide by _quoted_runs.
-_SYMMETRIC_DELIMS = (re.compile('"'), re.compile("`"))
+# Every character _WRAP_SCAN_PAIRS pairs on, as one class: _delim_positions
+# buckets a single pass over the field by character, so _cited answers each
+# "is there a mark in this range" with a bisect instead of a str.find that
+# scans to the sentence end once per candidate.
+_WRAP_SCAN_CHARS = re.compile(
+    "["
+    + re.escape("".join(sorted({c for pair in _WRAP_SCAN_PAIRS for c in pair})))
+    + "]"
+)
+# The symmetric citation delimiters, paired field-wide by _quoted_runs, with
+# the inch/unit-mark rule each one obeys: a '"' behind a digit opens nothing
+# (5" is a measurement), a backtick behind one opens a run like any other
+# (`00300`), because no unit is ever written with a backtick.
+_SYMMETRIC_DELIMS = ((re.compile('"'), True), (re.compile("`"), False))
 
 # A "word" for the nearest-preceding-word and negation-gap lookups, once wrap
 # characters are stripped: \w plus internal apostrophe/hyphen. The class is
