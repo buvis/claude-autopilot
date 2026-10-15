@@ -28,9 +28,11 @@ from __future__ import annotations
 
 import argparse
 import ast
+import os
 import re
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -121,15 +123,22 @@ def _run_in_worktree(
             "-p", "no:cacheprovider", "--continue-on-collection-errors", *files,
         ]
         try:
-            run = subprocess.run(
-                argv, cwd=worktree, capture_output=True, text=True, timeout=timeout, check=False
+            # Own session, so a timeout kills the runner and everything it forked.
+            proc = subprocess.Popen(
+                argv, cwd=worktree, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True, start_new_session=True,
             )
-        except (OSError, subprocess.TimeoutExpired) as exc:
+            stdout, stderr = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.communicate()
+            return "", f"runner did not complete: timed out after {timeout} seconds"
+        except OSError as exc:
             return "", f"runner did not complete: {exc}"
-        if not RESULT_RE.search(run.stdout) and not COLLECT_ERROR_RE.search(run.stdout):
-            tail = (run.stderr or run.stdout).strip().splitlines()[-1:] or ["no output"]
-            return "", f"runner produced no results (exit {run.returncode}: {tail[0]})"
-        return run.stdout, None
+        if not RESULT_RE.search(stdout) and not COLLECT_ERROR_RE.search(stdout):
+            tail = (stderr or stdout).strip().splitlines()[-1:] or ["no output"]
+            return "", f"runner produced no results (exit {proc.returncode}: {tail[0]})"
+        return stdout, None
     finally:
         run_git(root, "worktree", "remove", "--force", str(worktree))
         shutil.rmtree(tmp, ignore_errors=True)
