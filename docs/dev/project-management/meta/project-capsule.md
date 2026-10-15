@@ -44,16 +44,17 @@ Generated: 2026-10-15 (catchup refreshed 14:54 UTC)
 
 ## Active Work
 
-### Batch 202610141430 (in progress)
+### Batch 202610141430 (complete)
 - [x] 00277-catch-critical-rows-in-every-shape-v2 (2 cycles)
 - [x] 00307-guard-citations-and-replay-contract-v1 (2 cycles)
 - [x] 00308-reviewer-lane-resilience-v1 (2 cycles)
 - [x] 00309-loop-friction-verbs-v1 (1 cycle, fast-track)
 - [x] 00311-verify-reports-what-the-gate-did-v1 (2 cycles, cap-out: 1 unresolved HIGH deferred)
 - [x] 00312-close-ten-loop-truths-v1 (1 cycle, full lane)
+- [x] 00313-release-gate-runs-what-it-claims-v1 (1 cycle, fast-track)
 - 00306-refuse-tracked-verify-log-v1 parked to hold/ (stall mid-batch)
 - 00310-park-cap-regressions-v1 stalled to hold/ (cap_regression, cycle 2, four unresolved HIGH)
-- backlog remaining: 00313
+- backlog remaining: none
 - minted to hold/: 00314-00319 (triage stubs from deferred CRITICAL/HIGH rows)
 
 Observations: 00277 (full lane, design) converged at cycle 2 (rework_cap 2,
@@ -94,6 +95,11 @@ commits were store records only.
 00309 (fast-track lane, card-sized) closed in 1 cycle: 1 rework round
 resolved all 6 CRITICAL/HIGH review findings, delta-verified. Repo-wide batch
 suite green (6731 passed, 0 failed). No deferred items, no doubts.
+
+00313 (fast-track lane, card_sized) closed in 1 cycle. No deferred items, no
+doubts, nothing minted to `hold/`. Backlog and wip/ both empty at close —
+batch 202610141430 drained (7 PRDs done, 2 parked to hold/, 6 triage stubs
+minted).
 
 ### Batch 202610111300
 - [x] 00271-guard-v2-structural-delegation-check-v1 (2 cycles)

@@ -4735,3 +4735,4 @@
 {"id":"820a62a7","kind":"fast-track:delta","task":"00313-release-gate-runs-what-it-claims-v1-c1","queued_at":1792087821,"prompt_bytes":4679}
 {"id":"820a62a7","ended_at":1792087976,"elapsed_s":155,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1792088582,"phase":"done","prd":"00313-release-gate-runs-what-it-claims-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1792088719,"phase":"done","prd":"00313-release-gate-runs-what-it-claims-v1.md"}
