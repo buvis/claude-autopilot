@@ -345,6 +345,33 @@ def _tests_line(counts: tuple, suffix: str) -> str:
     )
 
 
+def _gate_result_line(result: dict) -> str:
+    """The human `Tests:` line for one fresh `run_gate` result."""
+    if result["lock_timeout"]:
+        return (
+            "Tests: (gate skipped: another gate held the lock for "
+            f"{int(verification.GATE_TIMEOUT_S)}s)"
+        )
+    if result["head_moved"]:
+        return "Tests: (gate skipped: HEAD moved during the lock wait)"
+    if result["dirty"]:
+        return "Tests: (gate skipped: working tree dirty outside the store)"
+    if result["timed_out"]:
+        # TESTS_RE needs counts; zeros plus the suffix say none were read.
+        suffix = (
+            f"(suite timed out after {int(verification.GATE_TIMEOUT_S)}s, "
+            "treated as failed)"
+        )
+        return _tests_line((0, 0, 0), suffix)
+    if result["passed"] is None:
+        return (
+            f"Tests: counts unavailable (suite run this cycle, exit {result['exit']}, "
+            "no PASS/FAIL/SKIP/EXIT summary line)"
+        )
+    counts = (result["passed"], result["failed"], result["skipped"])
+    return _tests_line(counts, "(suite run this cycle)")
+
+
 def run_gate_line(repo_root: Path, gate_command: str, cycle_id: str) -> dict:
     """Reuse the recorded gate when it still certifies HEAD, else run it once."""
     head = _git_out(repo_root, "rev-parse", "HEAD") or ""
@@ -371,33 +398,9 @@ def run_gate_line(repo_root: Path, gate_command: str, cycle_id: str) -> dict:
         cycle=cycle,
         log_path=log_path,
     )
-    if result["lock_timeout"]:
-        line = (
-            "Tests: (gate skipped: another gate held the lock for "
-            f"{int(verification.GATE_TIMEOUT_S)}s)"
-        )
-    elif result["head_moved"]:
-        line = "Tests: (gate skipped: HEAD moved during the lock wait)"
-    elif result["dirty"]:
-        line = "Tests: (gate skipped: working tree dirty outside the store)"
-    elif result["timed_out"]:
-        # TESTS_RE needs counts; zeros plus the suffix say none were read.
-        suffix = (
-            f"(suite timed out after {int(verification.GATE_TIMEOUT_S)}s, "
-            "treated as failed)"
-        )
-        line = _tests_line((0, 0, 0), suffix)
-    elif result["passed"] is None:
-        line = (
-            f"Tests: counts unavailable (suite run this cycle, exit {result['exit']}, "
-            "no PASS/FAIL/SKIP/EXIT summary line)"
-        )
-    else:
-        counts = (result["passed"], result["failed"], result["skipped"])
-        line = _tests_line(counts, "(suite run this cycle)")
     return {
         "verdict": verdict,
-        "tests_line": line,
+        "tests_line": _gate_result_line(result),
         "timed_out": result["timed_out"],
         "log": str(log_path),
         "dirty_paths": result["dirty_paths"],
