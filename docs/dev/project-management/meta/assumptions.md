@@ -1,57 +1,11 @@
-# Assumption ledger
+# Assumptions ledger — PRD 00307-guard-citations-and-replay-contract-v1
 
-Per-plan. Replaced at the first completed task of a full-plan pass.
+## 1: Write pinned citation/negation/agoge tests and register the new test file
 
-Plan: PRD 00277 (catch critical rows in every shape v2), batch 202610141430.
-
-## 1: Phase 0 - pin the lead-normalised emoji rule and prose exemptions
-
-Tess (test author):
-
-- Prose tests also assert `_unread_token(text) is None` and `findings_verdict == ("ok", None)`, not just `_is_emoji_row(...) is False`.
-- The fence tests assert that the row survives `gate._unfenced(...)`, plus the verdict tag ("malformed" when the fence does not hide the row, "ok" for the closed ```python control).
-- Added an extra prose test (`test_an_emoji_past_the_first_character_after_the_lead_is_prose`) to carry the old mid-line/trailing templates, as the task described.
-
-Devon (adversarial validator):
-
-- One exploit run that passes everything counts as proof for all seven listed weak points; weak points were read off the one passing wrong implementation rather than independently re-run per point.
-
-Tess (strengthen, after Devon):
-
-- A doubled bullet ("-- 🔴") must be prose, not a double-stripped lead.
-- The red test run after strengthening is expected (gate.py has no implementation yet).
-- (Orchestrator correction, not Tess's own: her weak-point-7 test as dispatched incorrectly expected `- [1/3] 🔴 crash` to get the emoji wording; corrected post-hoc to the generic wording, since `_strip_lead` stops at `[` before reaching the emoji — the emoji only wins precedence when it is the line's own first remaining character.)
-
-## 4: [D1] skills/run-autopilot/cli/gate.py (rework cycle 1)
-
-Note: the cycle-1 assumption above that `-- 🔴` must be prose is reversed by
-this task — the review found it was in neither the PRD nor the design.
-
-Tess (test author):
-
-- Used CRIT for every nested-lead case; the four-emoji sweep stays with the existing test.
-- Spelled the doubled-dash row as `-- 🔴 x` rather than the removed bare `-- 🔴`.
-- Asserted `.startswith(CRIT)` for "first character is the severity emoji" (each severity emoji is a single code point).
-- Placed the new tests immediately after the existing `_strip_lead` test; the brief did not specify placement.
-
-Tess (strengthen, after Devon):
-
-- `_SEVERITY_EMOJI` is exactly {🔴, 🟠, 🟡, ⚪}, so ✅/🟣/🧩 are valid non-severity emoji for weak point 5.
-- The leading-pipe case `| 🔴 crash | src/a.py:3 |` is pinned only through `_is_emoji_row is False`; whether it is unread via the pipe/severity-word rule is not asserted.
-- Merging `test_non_letter_junk_before_the_emoji_is_not_a_lead` into the prose test is an acceptable way to stay under 800 lines.
-
-Ivan (implementor):
-
-- The frozenset replacement keeps the identical character set (including the fullwidth dash `－`); equivalent to the regex for 1-char inputs.
-- The `_strip_lead` docstring rewrite is Ivan's own wording; the task said only that the old sentences are false.
-
-## 5: [D1] skills/run-autopilot/cli/test_gate_findings_unread_shapes.py (rework cycle 1)
-
-Orchestrator (micro lane): the task's first finding was already closed by task 4,
-so only the R8 pseudo-opener test was written here.
-
-Ivan (style-split fix dispatch):
-
-- "fence/`_unfenced` and fenced-findings-header tests" meant the fence block plus the fenced-header block of the original file.
-- The new module gets its own short docstring and the same `__main__` unittest footer as the original.
-- Per-module test counts before and after the split were not compared; the combined run passed 264 tests.
+- The dispatch's example "Note (an aside) then also run plan-tasks for cleanup)" returns None today because nothing anchors it, and a `_cited` fix can only allow more, so a non-None assertion on it could never pass. Used "Note (an aside) then also run plan-tasks for PRD 00300 cleanup)" instead: same closed-aside-then-stray-`)` shape, flagged today.
+- The test is named `test_already_closed_aside_before_the_name_is_not_a_citation`; the dispatch gave no name.
+- The c2 example sentence ("always reads ...") does not contain the required span "d reports `design-solution: <p", so used "The subagent then prints and reports `design-solution: <prd-stem>` followed by the doc path."
+- The c3 sentence is invented: 'Write a test that checks self.assertIn("design-solution: <prd-stem>", report) for the exit line.' It contains the required span.
+- The agoge prompt is "Run /autopilot:work for PRD 00300, every task."
+- The citation-test prompts ("The report line reads `run plan-tasks for PRD 00300` verbatim." and its quote and paren variants) are invented; the dispatch gave none.
+- In the allow-corpus test, a scratch file means any file outside `allowed/*.txt`.

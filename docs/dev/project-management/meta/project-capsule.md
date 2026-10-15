@@ -46,7 +46,9 @@ Generated: 2026-10-13
 
 ### Batch 202610141430 (in progress)
 - [x] 00277-catch-critical-rows-in-every-shape-v2 (2 cycles)
-- backlog remaining: 00306-00313
+- 00306-refuse-tracked-verify-log-v1 parked to hold/ (stall mid-batch)
+- now building: 00307-guard-citations-and-replay-contract-v1 (default_model opus; catchup/design both `run`)
+- backlog remaining: 00308-00313
 
 Observations: 00277 (full lane, design) converged at cycle 2 (rework_cap 2,
 beat the cap): cycle 1 fixed a nested-lead bypass in `_strip_lead` (two HIGHs:
