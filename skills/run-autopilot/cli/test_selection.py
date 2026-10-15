@@ -77,6 +77,23 @@ class SelectableTests(unittest.TestCase):
         self.assertEqual(selection.selectable([]), [])
 
 
+def test_newline_named_backlog_file_is_not_selectable(tmp_path: Path) -> None:
+    # Packet 17: a backlog filename holding a newline and "## Read next"
+    # forged a section in the brief once `_text` printed it raw. Neither
+    # selectable() nor select_eligible() may ever offer such a name.
+    name = "00090-x\n## Read next.md"
+    assert selection.selectable([name]) == []
+
+    (tmp_path / "prds" / "backlog").mkdir(parents=True)
+    (tmp_path / "prds" / "backlog" / name).write_text(
+        "---\n---\n\n# PRD\n", encoding="utf-8",
+    )
+
+    prd, source, skips = selection.select_eligible(tmp_path / "prds")
+
+    assert (prd, source) == (None, "drained")
+
+
 class SelectTests(unittest.TestCase):
     def test_wip_lowest_sequence_wins(self) -> None:
         prd, source = selection.select(["00095-b.md", "00089-a.md"], [])

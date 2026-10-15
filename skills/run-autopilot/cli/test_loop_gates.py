@@ -34,6 +34,26 @@ from cli.loop_testutil import (
 _no_real_drain_side_effects = loop_testutil._no_real_drain_side_effects
 
 
+def test_child_pids_passes_dash_a_on_darwin(monkeypatch):
+    # macOS pgrep leaves out the caller's own ancestors unless -a is given;
+    # on Linux -a means something else, so it must be added only on darwin.
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    monkeypatch.setattr(sys, "platform", "darwin")
+    loop_gates._child_pids(123)
+    assert "-a" in calls[-1]
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    loop_gates._child_pids(123)
+    assert "-a" not in calls[-1]
+
+
 # ── preflights ───────────────────────────────────────────────────────────────
 
 

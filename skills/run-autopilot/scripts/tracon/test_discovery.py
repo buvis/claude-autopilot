@@ -41,6 +41,26 @@ def _state(**overrides: Any) -> model.LoopState:
     return model.LoopState(**base)
 
 
+def test_discovery_child_pids_passes_dash_a_on_darwin(monkeypatch):
+    # macOS pgrep leaves out the caller's own ancestors unless -a is given;
+    # on Linux -a means something else, so it must be added only on darwin.
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    monkeypatch.setattr(sys, "platform", "darwin")
+    discovery._child_pids(123)
+    assert "-a" in calls[-1]
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    discovery._child_pids(123)
+    assert "-a" not in calls[-1]
+
+
 def _row(**overrides: Any) -> model.MetricsRow:
     base: dict[str, Any] = dict(
         ts_start=1000.0,

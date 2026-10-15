@@ -13,7 +13,7 @@ import stat
 import sys
 from pathlib import Path
 
-from cli import loop_act
+from cli import loop_act, state, statectl
 from cli.loop_act import run_agoge
 from cli import loop_testutil
 from cli.loop_testutil import (
@@ -69,6 +69,46 @@ def test_empty_stand_down_marker_reads_as_operator_pause(tmp_path):
     assert len(lp._test["spawn"].launches) == 1
     assert not (ap / "park-requested").exists()
     assert "session stood down: no reason given" in lp._test["out"].getvalue()
+
+
+def test_park_notification_names_the_reason(tmp_path):
+    # Packet 13: the park notification said only "Parking <prd>.", while
+    # the stdout line it mirrors carries the decision detail - the
+    # notification must name the reason too.
+    lp = make_loop(tmp_path, [])
+    ap = lp._test["ap_dir"]
+    decision = {
+        "prd": "00010-x-v1.md",
+        "detail": "budget: $310.00 > $300; parking 00010-x-v1.md",
+    }
+
+    assert lp._act_park(decision, ap) is None
+
+    assert _notified(lp, f"Parking {decision['prd']} ({decision['detail']}).")
+
+
+def test_failed_invalidation_marks_the_child_entry_stale(tmp_path, monkeypatch):
+    # Stub 00305 (PRD 00282 cycle 2): _invalidate_loop_entry swallowed a
+    # second write failure, so a loop_entry from an earlier successful
+    # launch stayed on disk and the session replayed its stale result
+    # instead of running enter() for real. The launched child's
+    # environment must carry the stale marker so the session skips the
+    # replay.
+    def raise_state_error(*args, **kwargs):
+        raise state.StateError("pre-launch enter not available")
+
+    def raise_on_mutate(path, apply):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(statectl, "mutate", raise_on_mutate)
+
+    lp = make_loop(tmp_path, [terminal_step()], enter_fn=raise_state_error)
+    ap = lp._test["ap_dir"]
+    write_state(ap, prd="00010-x-v1.md", next_phase="build", batch={"id": "b"})
+
+    assert lp.run() == 0
+
+    assert lp._test["spawn"].launches[-1]["env"].get("_AUTOPILOT_LOOP_ENTRY_STALE") == "1"
 
 
 # ── drained-path helpers ─────────────────────────────────────────────────────

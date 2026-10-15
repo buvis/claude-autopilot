@@ -8,6 +8,7 @@ PRD task 2) only when the watchdog actually fired.
 
 from __future__ import annotations
 
+from cli import loop, render_metrics
 from cli.loop_testutil import make_loop, metrics_rows, write_state
 from cli.runner import SpawnResult
 
@@ -49,3 +50,37 @@ def test_row_carries_killed_by_only_when_the_cap_fired(tmp_path):
     lp2.run_once()
     (clean_row,) = metrics_rows(lp2._test["ap_dir"])
     assert "killed_by" not in clean_row
+
+
+def test_instant_exit_limit_row_carries_limit_wait():
+    # Packet 23: _decision_fields keyed limit_wait on `signal == "continue"`
+    # literally, so an instant_exit row whose `then` is "continue" (the
+    # died-retry ladder, a usage-limit wait, a scheduling yield) carried
+    # none - it must key on the effective signal instead.
+    decision = {"signal": "instant_exit", "then": "continue", "limit_wait": 180}
+
+    assert loop._decision_fields(decision).get("limit_wait") == 180
+
+
+def test_budget_park_row_carries_limit_wait():
+    # Packet 23: a budget park reached through a scheduled wait (the sleep
+    # _budget_bound runs before turning the decision into a park) carried
+    # no limit_wait either.
+    decision = {"signal": "park", "park_site": "budget", "limit_wait": 180}
+
+    assert loop._decision_fields(decision).get("limit_wait") == 180
+
+
+def test_prd_table_says_it_excludes_the_finalizing_session():
+    # Packet 24: the per-PRD table is written inside the finalizing
+    # session, whose own row lands after it - the caption must say so.
+    out = render_metrics.render_metrics(
+        [{"prd": "00001-a.md", "wall_secs": 10, "cost_usd": 1.0}],
+    )
+    caption = (
+        "Cost USD excludes the finalizing session, which is recorded "
+        "after this report is written."
+    )
+
+    assert caption in out
+    assert out.index(caption) < out.index("| PRD |")

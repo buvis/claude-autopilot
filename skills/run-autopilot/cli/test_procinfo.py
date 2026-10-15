@@ -149,6 +149,26 @@ def test_cpu_seconds_is_none_for_a_negative_pid():
     assert cpu_seconds(-1) is None
 
 
+def test_child_names_passes_dash_a_on_darwin(monkeypatch):
+    # macOS pgrep leaves out the caller's own ancestors unless -a is given;
+    # on Linux -a means something else, so it must be added only on darwin.
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    monkeypatch.setattr(sys, "platform", "darwin")
+    child_names(123)
+    assert "-a" in calls[-1]
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    child_names(123)
+    assert "-a" not in calls[-1]
+
+
 def test_child_names_lists_a_spawned_child():
     # Absolute path: a PATH-first coreutils `sleep` is named "gsleep".
     proc = subprocess.Popen(["/bin/sleep", "60"])

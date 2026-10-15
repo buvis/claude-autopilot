@@ -11,11 +11,16 @@ independence matrix all stay there).
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+from cli import __main__ as cli_main
+from cli import state as state_mod
+from cli import statectl
 
 CLI_DIR = Path(__file__).resolve().parent
 CLI_MAIN = CLI_DIR / "__main__.py"
@@ -70,6 +75,22 @@ class InitTests(_TempDirTestCase):
         self.assertEqual(second.returncode, 7)
         self.assertEqual(state_path.read_bytes(), before)
 
+    def test_init_on_existing_state_names_the_path(self) -> None:
+        # Packet 22: a silent exit 7 left the operator no clue which state
+        # already existed; the message must name it.
+        state_path = self.root / "state.json"
+        args = ["init", "--state", str(state_path), "--prd", "00004-feature-x.md"]
+        first = _run(args, cwd=self.root)
+        self.assertEqual(first.returncode, 0, first.stderr)
+
+        second = _run(args, cwd=self.root)
+
+        self.assertEqual(second.returncode, 7)
+        self.assertIn(
+            f"autopilot: init: state.json already exists at {state_path}",
+            second.stderr,
+        )
+
     def test_missing_state_parent_dir_exits_11_naming_the_directory_and_fix(
         self,
     ) -> None:
@@ -85,6 +106,36 @@ class InitTests(_TempDirTestCase):
         self.assertEqual(proc.returncode, 11)
         self.assertIn(str(state_path.parent), proc.stderr)
         self.assertIn("Phase 0 creates the lifecycle dirs", proc.stderr)
+
+
+class ReplayLoopEntryTests(_TempDirTestCase):
+    def test_stale_marker_skips_the_loop_entry_replay(self) -> None:
+        # Stub 00305 (PRD 00282 cycle 2): a failed invalidation leaves the
+        # child's env tagged _AUTOPILOT_LOOP_ENTRY_STALE=1, which must make
+        # _replay_loop_entry run enter() for real instead of replaying the
+        # stale same-PRD result.
+        state_path = self.root / "state.json"
+        state_mod.init(
+            state_path, {"prd": "00004-feature-x.md", "phase": "build", "next_phase": "build"},
+        )
+        statectl.mutate(
+            state_path,
+            lambda data: data.update(
+                loop_entry={
+                    "entered_by": "loop",
+                    "prd": "00004-feature-x.md",
+                    "result": {"stop": None, "detail": "", "prd": "00004-feature-x.md"},
+                },
+            ),
+        )
+
+        os.environ["_AUTOPILOT_LOOP_ENTRY_STALE"] = "1"
+        try:
+            result = cli_main._replay_loop_entry(state_path, None)
+        finally:
+            del os.environ["_AUTOPILOT_LOOP_ENTRY_STALE"]
+
+        self.assertIsNone(result)
 
 
 if __name__ == "__main__":

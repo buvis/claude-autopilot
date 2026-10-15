@@ -18,6 +18,7 @@ guards against that regression recurring rather than describing a live gap.
 
 from __future__ import annotations
 
+import argparse
 import sys
 import unittest
 from pathlib import Path
@@ -62,6 +63,47 @@ class DocContractTests(unittest.TestCase):
             "subcommand(s) missing an 'autopilot <verb>' invocation in "
             f"references/*.md or SKILL.md: {undocumented}",
         )
+
+    def test_state_schema_cli_rows_match_the_parsers(self) -> None:
+        # Stub 00301 (PRD 00278 cycle 2): state-schema.md's rows spelled
+        # `group-rework <state.json>` and `review-stage <state.json>
+        # <review-file>`, while the real parsers take `--findings <path>`
+        # and `--cycle-id`/`--gate-command`. The doc must name the real
+        # argv.
+        from cli import __main__ as cli_main
+
+        text = (_REFERENCES_DIR / "state-schema.md").read_text(encoding="utf-8")
+        group_rework_line = next(
+            line for line in text.splitlines()
+            if line.startswith("- `autopilot group-rework")
+        )
+        review_stage_line = next(
+            line for line in text.splitlines()
+            if line.startswith("- `autopilot review-stage")
+        )
+
+        parser = argparse.ArgumentParser()
+        subparsers = parser.add_subparsers(dest="cmd")
+        cli_main._add_group_rework(subparsers)
+        cli_main._add_review_stage(subparsers)
+        group_rework_required = {
+            opt
+            for action in subparsers.choices["group-rework"]._actions
+            for opt in action.option_strings
+            if action.required
+        }
+        review_stage_required = {
+            opt
+            for action in subparsers.choices["review-stage"]._actions
+            for opt in action.option_strings
+            if action.required
+        }
+
+        self.assertEqual(group_rework_required, {"--findings"})
+        self.assertIn("--findings", group_rework_line)
+        self.assertEqual(review_stage_required, {"--cycle-id", "--gate-command"})
+        self.assertIn("--cycle-id", review_stage_line)
+        self.assertIn("--gate-command", review_stage_line)
 
 
 if __name__ == "__main__":

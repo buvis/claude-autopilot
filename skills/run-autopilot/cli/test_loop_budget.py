@@ -29,6 +29,7 @@ from cli.loop import Loop
 from cli.loop_testutil import (
     _BEFORE_CLOCK,
     FakeClock,
+    _notified,
     make_loop,
     metrics_rows,
     noop_step,
@@ -377,6 +378,20 @@ def test_prd_spend_since_reports_other_read_failures_on_stderr(tmp_path, capsys)
     assert "loop-metrics read failed" in capsys.readouterr().err
 
 
+def test_prd_spend_since_survives_a_non_utf8_ledger(tmp_path, capsys):
+    # Stub 00304 (PRD 00282 cycle 2): the probe catches OSError only, so a
+    # ledger holding non-UTF-8 bytes raised UnicodeDecodeError out of
+    # _budget_bound into the unattended loop. It must read as 0.0, loud on
+    # stderr, never a crash.
+    from cli.loop_decision import prd_spend_since
+
+    path = tmp_path / "loop-metrics.jsonl"
+    path.write_bytes(b"\xff\xfe{}")
+
+    assert prd_spend_since(path, PRD_A, 0.0) == 0.0
+    assert "loop-metrics read failed" in capsys.readouterr().err
+
+
 def test_prd_spend_since_delegates_row_loading_to_render_metrics_load_rows(tmp_path):
     # Review finding 11 (PRD 00282, task 9): row loading is cli.render_
     # metrics.load_rows, not a parallel reader - so a malformed line and an
@@ -572,6 +587,33 @@ def test_budget_bound_sleeps_out_a_scheduled_limit_wait_then_parks(tmp_path):
     assert decision["signal"] == "park"
     assert decision["park_site"] == "budget"
     assert decision["detail"] == f"budget: $1800.00 > $300; parking {PRD_A}"
+
+
+def test_budget_park_prints_the_wait_line_before_sleeping(tmp_path):
+    # Review packet 13: _budget_bound sleeps out a scheduled limit_wait
+    # itself, before turning the decision into a park, so the usage-limit
+    # line and notification _act_continue would otherwise print must
+    # appear here too - and before the sleep, not after.
+    lp, ap = _bound_loop(tmp_path)
+    _seed_state(ap, prd=PRD_A, prd_budget_since=_SINCE)
+    _seed_metrics(ap, _row(PRD_A, _SINCE_EPOCH + 1, 900.0))
+    _cost_log(ap, 900.0)
+    decision = _decision(PRD_A)
+    decision["limit_wait"] = 600
+    snapshot = {}
+    real_sleep = lp._sleep
+
+    def spy_sleep(secs):
+        snapshot["out"] = lp._test["out"].getvalue()
+        snapshot["notified"] = _notified(lp, "Usage limit")
+        return real_sleep(secs)
+
+    lp._sleep = spy_sleep
+
+    lp._budget_bound(decision, ap)
+
+    assert "usage limit hit; waiting 10 min" in snapshot["out"]
+    assert snapshot["notified"] is True
 
 
 def test_budget_bound_reads_through_an_instant_exit_signal_to_then(tmp_path):

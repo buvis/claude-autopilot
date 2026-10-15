@@ -6,7 +6,13 @@ Split from test_enter_decisions.py for size; shares its Env harness.
 
 from __future__ import annotations
 
+import json
+import os
+import shlex
+import signal
 import subprocess
+import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -213,6 +219,22 @@ def test_resume_is_delta_only_when_the_injected_loop_only_says_so(
     assert calls == [(env.root, base, LOOP)]
 
 
+def test_catchup_is_full_when_head_is_behind_base(tmp_path: Path) -> None:
+    # A reset (or a fast-track park resetting master) can leave HEAD no
+    # longer a descendant of the capsule's recorded base. `git log
+    # base..HEAD` over that range is empty (vacuously "all loop"), which
+    # wrongly reuses a capsule describing commits no longer in history.
+    root = tmp_path / "repo"
+    root.mkdir()
+    base, head = _loop_repo(root, LOOP, LOOP)
+    subprocess.run(
+        ["git", "-C", str(root), "reset", "--hard", base],
+        capture_output=True, check=True, timeout=30,
+    )
+
+    assert enter_io.commits_all_loop(root, head, LOOP) is False
+
+
 def test_force_is_delta_check_is_not_cached_per_root(env: Env) -> None:
     base, _ = _loop_repo(env.root, LOOP, LOOP)
 
@@ -302,3 +324,67 @@ def test_git_head_sha_reads_the_stripped_head_of_a_real_repo(tmp_path: Path) -> 
 
 def test_git_head_sha_is_none_outside_a_repo(tmp_path: Path) -> None:
     assert enter_io.git_head_sha(tmp_path) is None
+
+
+# -- registry blind from inside the tree (packet 1): live_wrapper_pid from a
+# grandchild -------------------------------------------------------------
+
+_ASK_SCRIPT = (
+    "import sys\n"
+    "sys.path.insert(0, sys.argv[4])\n"
+    "from pathlib import Path\n"
+    "from cli.loop_gates import live_wrapper_pid\n"
+    "root, loops_dir, result_file = sys.argv[1], sys.argv[2], sys.argv[3]\n"
+    "found = live_wrapper_pid(Path(root), Path(loops_dir))\n"
+    "Path(result_file).write_text(str(found))\n"
+)
+
+_M_SCRIPT = (
+    "import subprocess, sys, time\n"
+    "subprocess.run(sys.argv[1:])\n"
+    "time.sleep(60)\n"
+)
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="darwin-only pgrep ancestor exclusion")
+def test_live_wrapper_pid_found_from_a_grandchild(tmp_path: Path) -> None:
+    # macOS pgrep excludes the CALLER's own ancestors from a match by
+    # default: a direct child M of the registered wrapper W, tagged via
+    # inherited exec env, is invisible to `pgrep -P W` when the process
+    # asking is itself a further descendant of M (a grandchild of W) - M is
+    # that grandchild's own ancestor. -a is required to see it.
+    root = tmp_path / "repo"
+    root.mkdir()
+    loops = tmp_path / "loops"
+    loops.mkdir()
+    result_file = tmp_path / "result.txt"
+    ask_script = tmp_path / "ask.py"
+    m_script = tmp_path / "m.py"
+    ask_script.write_text(_ASK_SCRIPT, encoding="utf-8")
+    m_script.write_text(_M_SCRIPT, encoding="utf-8")
+    cli_parent = str(Path(__file__).resolve().parents[1])
+
+    ask_argv = [
+        sys.executable, str(ask_script), str(root), str(loops),
+        str(result_file), cli_parent,
+    ]
+    m_argv = [sys.executable, str(m_script), *ask_argv]
+    bash_cmd = (
+        "export _AUTOPILOT_LOOP=$$; "
+        + " ".join(shlex.quote(a) for a in m_argv)
+        + " &\nwait"
+    )
+
+    wrapper = subprocess.Popen(["bash", "-c", bash_cmd], start_new_session=True)
+    try:
+        (loops / f"{wrapper.pid}.json").write_text(
+            json.dumps({"pid": wrapper.pid, "root": str(root)}),
+        )
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and not result_file.exists():
+            time.sleep(0.05)
+        assert result_file.exists(), "grandchild never finished asking"
+        assert result_file.read_text() == str(wrapper.pid)
+    finally:
+        os.killpg(wrapper.pid, signal.SIGKILL)
+        wrapper.wait()
