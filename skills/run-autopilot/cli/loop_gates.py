@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 from cli import state as state_mod
@@ -35,9 +36,12 @@ def _pid_alive(pid: int) -> bool:
 
 
 def _child_pids(pid: int) -> list[str]:
+    cmd = ["pgrep", "-P", str(pid)]
+    if sys.platform == "darwin":
+        cmd.insert(1, "-a")
     try:
         out = subprocess.run(
-            ["pgrep", "-P", str(pid)],
+            cmd,
             capture_output=True,
             text=True,
             timeout=10,

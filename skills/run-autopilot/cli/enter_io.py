@@ -71,8 +71,17 @@ def loop_committer(batch_id: str | None) -> str:
 def commits_all_loop(repo_root: Path, base: str, committer: str) -> bool:
     """True when every commit in `base..HEAD` (merges and side commits too)
     has exactly `committer` as its committer name; an empty range is True.
-    Any git failure or a name that is not valid UTF-8 is False."""
+    Any git failure or a name that is not valid UTF-8 is False. `base` must
+    be an ancestor of HEAD -- a reset or rebase that leaves it a sibling or
+    descendant makes `base..HEAD` empty (vacuously "all loop"), which would
+    wrongly reuse a capsule describing commits no longer in history."""
     try:
+        ancestor = subprocess.run(
+            ["git", "-C", str(repo_root), "merge-base", "--is-ancestor", base, "HEAD"],
+            capture_output=True, timeout=10,
+        )
+        if ancestor.returncode != 0:
+            return False
         proc = subprocess.run(
             ["git", "-C", str(repo_root), "log", "--format=%cn", f"{base}..HEAD"],
             capture_output=True, timeout=10,

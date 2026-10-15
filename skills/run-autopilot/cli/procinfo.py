@@ -121,9 +121,12 @@ def cpu_seconds(pid: int) -> float | None:
 
 def child_names(pid: int) -> list[tuple[int, str]]:
     """(pid, short name) of each direct child of `pid`, via pgrep."""
+    cmd = ["pgrep", "-l", "-P", str(pid)]
+    if sys.platform == "darwin":
+        cmd.insert(1, "-a")
     try:
         out = subprocess.run(
-            ["pgrep", "-l", "-P", str(pid)],
+            cmd,
             capture_output=True,
             text=True,
             errors="surrogateescape",
