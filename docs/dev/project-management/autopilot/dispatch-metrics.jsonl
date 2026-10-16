@@ -4780,3 +4780,5 @@
 {"kind":"handoff","site":"review","edge":"leave","at":1792170525,"phase":"done","prd":"00320-refuse-every-unsafe-verify-log-sink-v2.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1792170566,"phase":"done","prd":"00320-refuse-every-unsafe-verify-log-sink-v2.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1792170671,"phase":"build","prd":"00320-refuse-every-unsafe-verify-log-sink-v2.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792170686,"phase":"build","prd":"00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md"}
+{"kind":"handoff","site":"build","edge":"leave","at":1792173318,"phase":"review","prd":"00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md"}
