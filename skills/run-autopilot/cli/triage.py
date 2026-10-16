@@ -288,7 +288,13 @@ def slugify(text: str) -> str:
 
 def _severity(row: dict) -> str:
     if row.get("type") == "stall":
-        return "critical"
+        # Only CUSTODY_SITE and REGRESSION_SITE stalls reach here (qualifies()
+        # gates every other stall site out before _severity is ever called).
+        # A cap_regression stall fires only when every unresolved finding is
+        # high-or-below (an unresolved CRITICAL takes the cap_critical branch
+        # instead), so "critical" would overstate it - "high" is this stall's
+        # true worst case.
+        return "critical" if row.get("site") == custody.CUSTODY_SITE else "high"
     return str(row.get("severity")).strip().casefold()
 
 
