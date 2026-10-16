@@ -14,11 +14,14 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import random
 import shlex
 import signal
 import subprocess
 import sys
+import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -166,6 +169,81 @@ def _group_alive(pgid: int) -> bool:
     return True
 
 
+class _StraySignal(Exception):
+    """A signal reached the test's own fallback handler: no handler in the
+    code under test was installed for it (and the default action would
+    have killed or interrupted the pytest process itself)."""
+
+
+@contextmanager
+def _stray_signals_raise(*signums: int):
+    def raise_stray(signum, frame):
+        raise _StraySignal(signal.Signals(signum).name)
+
+    old = {signum: signal.signal(signum, raise_stray) for signum in signums}
+    try:
+        yield
+    finally:
+        for signum, handler in old.items():
+            signal.signal(signum, handler)
+
+
+def _popen_then_signal(spawned: list, signum: int):
+    """A Popen that delivers `signum` to this process right after the
+    gate's own spawn returns, before `_spawn_gate` sees the handle. Only
+    the gate's spawn uses start_new_session; git calls pass untouched."""
+    real_popen = subprocess.Popen
+
+    def fake(*args, **kwargs):
+        proc = real_popen(*args, **kwargs)
+        if kwargs.get("start_new_session"):
+            spawned.append(proc)
+            os.kill(os.getpid(), signum)
+        return proc
+
+    return fake
+
+
+def _kill_spawned(spawned: list) -> None:
+    for proc in spawned:
+        if _group_alive(proc.pid):
+            os.killpg(proc.pid, signal.SIGKILL)
+        proc.wait()
+
+
+def _group_gate_command(tmp_path: Path) -> tuple[str, Path]:
+    gate = tmp_path / "group_gate.py"
+    gate.write_text(GROUP_GATE)
+    pgid_file = tmp_path / "gate.pgid"
+    command = " ".join(
+        shlex.quote(part) for part in (sys.executable, str(gate), str(pgid_file))
+    )
+    return command, pgid_file
+
+
+def _lock_free(lock_path: Path) -> bool:
+    fd = os.open(lock_path, os.O_RDWR | os.O_CREAT)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        return False
+    finally:
+        os.close(fd)
+    return True
+
+
+def _hold_lock(repo: Path, seconds: float) -> tuple[int, threading.Timer]:
+    """Takes the gate lock on a separate open file description and
+    releases it after `seconds` from a timer thread."""
+    lock_path = repo / verification.GATE_LOCK_REL
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    held = os.open(lock_path, os.O_RDWR | os.O_CREAT)
+    fcntl.flock(held, fcntl.LOCK_EX)
+    release = threading.Timer(seconds, fcntl.flock, (held, fcntl.LOCK_UN))
+    release.start()
+    return held, release
+
+
 def test_red_summary_with_green_process_exits_1(repo: Path) -> None:
     # The gate says it failed (FAIL 1, EXIT 1) but its process exits 0: the
     # verb must follow the summary line, not the returncode.
@@ -210,50 +288,102 @@ def test_exit_token_drop_record_not_reused(repo: Path) -> None:
     assert verdict == "stale"
 
 
-def test_sigint_during_popen_leaves_the_gate_running(
-    repo: Path, monkeypatch: pytest.MonkeyPatch
+def test_sigint_during_spawn_kills_the_gate(
+    repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # SIGINT arriving while Popen() is still spawning the child: the real
-    # child is created, but the interrupt is raised before `proc` is ever
-    # bound in `_spawn_gate`, so the `except BaseException:
-    # _kill_gate(proc)` guard that protects SIGTERM and every later
-    # failure never runs, and the gate's process group is left running.
-    # (`_group_alive` here mirrors test_sigterm_kills_the_gate_group's own
-    # assertion exactly, just against a captured pid instead of a pgid
-    # file: an explicit `flock(LOCK_UN)` releases a shared lock for every
-    # duplicate fd on this host, so a kept-alive orphan -- not a held
-    # lock -- is the fact this race actually leaves behind.)
+    # A real SIGINT landing while Popen() is still spawning the gate (before
+    # `gate_started` is set) must reach the gate's own signal guard, like
+    # SIGTERM: the gate group dies and run_gate raises the guard's error,
+    # not a bare interrupt. The fallback handler turns an unguarded SIGINT
+    # into _StraySignal instead of a KeyboardInterrupt that aborts pytest.
     head = _git(repo, "rev-parse", "HEAD")
-    real_popen = subprocess.Popen
     spawned: list[subprocess.Popen] = []
-
-    def popen_then_sigint(*args, **kwargs):
-        proc = real_popen(*args, **kwargs)
-        # Only the gate's own spawn uses start_new_session: the git calls
-        # `run_gate` makes for its dirty/HEAD checks must pass through
-        # untouched, or this interrupt fires outside the protected window
-        # entirely and kills the test process itself.
-        if kwargs.get("start_new_session"):
-            spawned.append(proc)
-            raise KeyboardInterrupt()
-        return proc
-
-    monkeypatch.setattr(verification.subprocess, "Popen", popen_then_sigint)
+    monkeypatch.setattr(
+        verification.subprocess,
+        "Popen",
+        _popen_then_signal(spawned, signal.SIGINT),
+    )
 
     try:
-        with pytest.raises(KeyboardInterrupt):
-            verification.run_gate("sleep 60", repo, head, 1)
+        with _stray_signals_raise(signal.SIGINT):
+            with pytest.raises(RuntimeError) as info:
+                verification.run_gate("sleep 60", repo, head, 1)
 
+        assert str(info.value) == "verify: SIGINT during gate"
         assert spawned, "the gate's Popen call never ran"
         pgid = spawned[0].pid  # start_new_session makes the child its own pgid
         assert _wait_for(lambda: not _group_alive(pgid), 2.0), (
-            "gate group still alive 2s after SIGINT during spawn: cleanup was skipped"
+            "gate group still alive 2s after SIGINT during spawn"
         )
     finally:
-        for proc in spawned:
-            if _group_alive(proc.pid):
-                os.killpg(proc.pid, signal.SIGKILL)
-            proc.wait()
+        _kill_spawned(spawned)
+
+
+def _interrupt_one_gate(
+    repo: Path,
+    head: str,
+    marker: Path,
+    delay: float,
+) -> BaseException | None:
+    """Runs one gate that records its pgid in `marker` and sends this
+    process SIGINT `delay` seconds in. Returns what run_gate raised."""
+    command = f"echo $$ > {shlex.quote(str(marker))}; exec sleep 60"
+    timer = threading.Timer(delay, os.kill, (os.getpid(), signal.SIGINT))
+    try:
+        try:
+            timer.start()
+            verification.run_gate(command, repo, head, 1, timeout=5)
+        finally:
+            timer.join()
+            time.sleep(0.001)  # run a pending handler inside the try
+    except BaseException as exc:
+        return exc
+    return None
+
+
+def test_sigint_storm_leaks_no_gate(repo: Path, tmp_path: Path) -> None:
+    # 100 interrupts, each at a random point of a run_gate call (lock wait,
+    # git checks, spawn, drain). Every gate that got far enough to record
+    # its pgid must be dead afterward, and every such run must have ended
+    # through the guard's error, not a stray interrupt.
+    head = _git(repo, "rev-parse", "HEAD")
+    markers = tmp_path / "storm"
+    markers.mkdir()
+    rng = random.Random(311)
+    outcomes: list[tuple[Path, BaseException | None]] = []
+    started = time.monotonic()
+    try:
+        with _stray_signals_raise(signal.SIGINT):
+            for trial in range(100):
+                if time.monotonic() - started > 20:
+                    break
+                marker = markers / f"{trial}.pgid"
+                delay = rng.uniform(0.0, 0.08)
+                outcomes.append(
+                    (marker, _interrupt_one_gate(repo, head, marker, delay))
+                )
+        elapsed = time.monotonic() - started
+        time.sleep(0.5)  # a leaked gate's shell writes its pgid well within this
+        pgids = {
+            path: int(text)
+            for path in markers.iterdir()
+            if (text := path.read_text().strip())
+        }
+        assert len(outcomes) == 100 and elapsed < 20, (
+            f"{len(outcomes)} trials in {elapsed:.1f}s"
+        )
+        assert [pgid for pgid in pgids.values() if _group_alive(pgid)] == []
+        for marker, caught in outcomes:
+            assert caught is not None, f"{marker.name}: the interrupt never landed"
+            if marker in pgids:
+                assert isinstance(caught, RuntimeError), repr(caught)
+                assert str(caught) == "verify: SIGINT during gate"
+    finally:
+        for path in markers.iterdir():
+            text = path.read_text().strip()
+            if text and _group_alive(int(text)):
+                os.killpg(int(text), signal.SIGKILL)
 
 
 def test_sigterm_pending_before_gate_started_kills_the_gate(
@@ -295,6 +425,38 @@ def test_sigterm_pending_before_gate_started_kills_the_gate(
             if _group_alive(proc.pid):
                 os.killpg(proc.pid, signal.SIGKILL)
             proc.wait()
+
+
+def test_sighup_before_spawn_kills_the_gate(
+    repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The SIGTERM-pending shape above, for SIGHUP (a closed terminal):
+    # delivered while `gate_started` is still False, it is recorded as
+    # pending and raised right after Popen returns, so the gate still dies.
+    # Unguarded, the fallback handler raises _StraySignal instead of letting
+    # SIGHUP's default action kill pytest.
+    head = _git(repo, "rev-parse", "HEAD")
+    spawned: list[subprocess.Popen] = []
+    monkeypatch.setattr(
+        verification.subprocess,
+        "Popen",
+        _popen_then_signal(spawned, signal.SIGHUP),
+    )
+
+    try:
+        with _stray_signals_raise(signal.SIGHUP):
+            with pytest.raises(RuntimeError) as info:
+                verification.run_gate("sleep 60", repo, head, 1)
+
+        assert str(info.value) == "verify: SIGHUP during gate"
+        assert spawned, "the gate's Popen call never ran"
+        pgid = spawned[0].pid
+        assert _wait_for(lambda: not _group_alive(pgid), 2.0), (
+            "gate group still alive 2s after pending SIGHUP"
+        )
+    finally:
+        _kill_spawned(spawned)
 
 
 def test_sigkilled_verify_leaves_no_overlapping_gate(
@@ -363,6 +525,110 @@ def test_sigterm_kills_the_gate_group(repo: Path, tmp_path: Path) -> None:
             os.killpg(pgid, signal.SIGKILL)
 
 
+def test_sighup_kills_the_gate_group_and_frees_the_lock(
+    repo: Path,
+    tmp_path: Path,
+) -> None:
+    command, pgid_file = _group_gate_command(tmp_path)
+
+    verify = _spawn_verify(repo, command)
+    pgid = None
+    try:
+        assert _wait_for(pgid_file.exists, 15), "gate never started"
+        pgid = int(pgid_file.read_text())
+        assert _group_alive(pgid)
+
+        verify.send_signal(signal.SIGHUP)
+        assert _wait_for(lambda: not _group_alive(pgid), 2.0), (
+            "gate group still alive 2s after SIGHUP"
+        )
+        lock_path = repo / verification.GATE_LOCK_REL
+        assert _wait_for(lambda: _lock_free(lock_path), 1.0), (
+            "gate lock still held 1s after the gate group died"
+        )
+    finally:
+        if verify.poll() is None:
+            verify.kill()
+        verify.wait()
+        if pgid is not None and _group_alive(pgid):
+            os.killpg(pgid, signal.SIGKILL)
+
+
+def test_signal_exit_prints_one_json_line(repo: Path, tmp_path: Path) -> None:
+    head = _git(repo, "rev-parse", "HEAD")
+    command, pgid_file = _group_gate_command(tmp_path)
+
+    verify = subprocess.Popen(
+        _verify_argv(repo, command),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    pgid = None
+    try:
+        assert _wait_for(pgid_file.exists, 15), "gate never started"
+        pgid = int(pgid_file.read_text())
+        verify.send_signal(signal.SIGTERM)
+        stdout, stderr = verify.communicate(timeout=15)
+    finally:
+        if verify.poll() is None:
+            verify.kill()
+            verify.communicate()
+        if pgid is not None and _group_alive(pgid):
+            os.killpg(pgid, signal.SIGKILL)
+
+    lines = [line for line in stdout.splitlines() if line.strip()]
+    assert len(lines) == 1, stdout
+    payload = json.loads(lines[0])
+    assert payload["error"] == "verify: SIGTERM during gate"
+    assert payload["exit"] == 2
+    # The log was opened before the gate spawned, so it exists.
+    assert payload["log"] == str(repo / "docs/dev/tmp" / f"gate-{head[:7]}.log")
+    assert verify.returncode == 2
+    assert "Traceback" not in stderr, stderr
+
+
+def test_sigterm_during_cleanup_does_not_leak(
+    repo: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A second SIGTERM lands inside the cleanup itself (`_kill_gate`'s
+    # killpg/wait window). It must not abort the cleanup: the gate group
+    # still dies and the lock still frees.
+    head = _git(repo, "rev-parse", "HEAD")
+    command, pgid_file = _group_gate_command(tmp_path)
+    original = verification._kill_gate
+
+    def kill_gate_under_second_sigterm(*args, **kwargs):
+        os.kill(os.getpid(), signal.SIGTERM)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(verification, "_kill_gate", kill_gate_under_second_sigterm)
+    sender = threading.Thread(
+        target=lambda: (
+            _wait_for(pgid_file.exists, 15) and os.kill(os.getpid(), signal.SIGTERM)
+        ),
+    )
+    try:
+        with _stray_signals_raise(signal.SIGTERM):
+            sender.start()
+            with pytest.raises(RuntimeError, match="SIGTERM during gate"):
+                verification.run_gate(command, repo, head, 1, timeout=30)
+            sender.join()
+
+        pgid = int(pgid_file.read_text())
+        assert _wait_for(lambda: not _group_alive(pgid), 2.0), (
+            "gate group still alive 2s after a SIGTERM during cleanup"
+        )
+        lock_path = repo / verification.GATE_LOCK_REL
+        assert _wait_for(lambda: _lock_free(lock_path), 1.0)
+    finally:
+        sender.join()
+        if pgid_file.exists() and _group_alive(int(pgid_file.read_text())):
+            os.killpg(int(pgid_file.read_text()), signal.SIGKILL)
+
+
 def test_lock_wait_expiry_reports_lock_timeout(repo: Path) -> None:
     head = _git(repo, "rev-parse", "HEAD")
     lock_path = repo / verification.GATE_LOCK_REL
@@ -386,6 +652,53 @@ def test_lock_wait_expiry_reports_lock_timeout(repo: Path) -> None:
     assert result.get("lock_timeout") is True
     assert result["timed_out"] is False
     assert not log_path.exists()
+
+
+def test_late_waiter_gate_gets_full_timeout(repo: Path) -> None:
+    # The lock wait has its own budget: a gate that gets the lock 3s into a
+    # 4s lock wait still gets its whole 2s run, so a 1.5s gate finishes.
+    # Neither a 2s nor a 4s deadline shared with the lock wait allows that.
+    head = _git(repo, "rev-parse", "HEAD")
+    held, release = _hold_lock(repo, 3.0)
+    try:
+        result = verification.run_gate(
+            "sleep 1.5; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
+            repo,
+            head,
+            1,
+            timeout=2,
+            lock_timeout=4,
+        )
+    finally:
+        release.join()
+        os.close(held)
+
+    assert result["lock_timeout"] is False
+    assert result["timed_out"] is False
+    assert result["passed"] == 1
+
+
+def test_result_reports_waited_s(repo: Path) -> None:
+    # The lock is held ~1s, then the gate is killed at its own 0.5s
+    # timeout: `waited_s` is the lock wait alone, not the wait plus the run.
+    head = _git(repo, "rev-parse", "HEAD")
+    held, release = _hold_lock(repo, 1.0)
+    try:
+        result = verification.run_gate(
+            "sleep 30",
+            repo,
+            head,
+            1,
+            timeout=0.5,
+            lock_timeout=5,
+        )
+    finally:
+        release.join()
+        os.close(held)
+
+    assert result["timed_out"] is True
+    assert isinstance(result["waited_s"], float)
+    assert 0.8 <= result["waited_s"] < 1.4, result["waited_s"]
 
 
 def test_head_moved_reports_head_moved(
