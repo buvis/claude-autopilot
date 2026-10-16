@@ -177,6 +177,17 @@ def test_line_range_and_comma_cells_are_parsed_to_their_first_line(repo):
     ]
 
 
+def test_range_followed_by_comma_blames_every_named_line(repo):
+    """`a.py:1-2,3` must blame lines 1, 2 AND 3 - a trailing comma entry
+    after a range must not be dropped, only the cell's first line used."""
+    rows = _classify(repo, [("R1", "HIGH", "a.py:1-2,3")])
+
+    assert [(r["ref"], r["line"], r["regression"]) for r in rows] == [
+        ("R1", 1, True),
+    ]
+    assert rows[0]["commit"] == repo["line_fix_short"]
+
+
 def test_row_without_file_is_not_regression(repo):
     rows = _classify(repo, [("R1", "HIGH", "")])
 
@@ -224,13 +235,17 @@ def test_medium_and_low_only_rows_never_invoke_git(repo, monkeypatch):
 
 
 def test_missing_previous_review_yields_no_rows(repo):
-    from cli.cap_check import classify_findings
+    """No --previous argument (None or "") is the legitimate first-cycle
+    case and defers cleanly. A --previous naming a path git cannot find is
+    a mistyped argument, not "no previous review", and must not fail open."""
+    from cli.cap_check import CapCheckError, classify_findings
 
     current = _review(repo["reviews"] / "review-2.md", repo["rework"], [("R1", "HIGH", "a.py:3")])
 
     assert classify_findings(repo["root"], current, None) == []
-    assert classify_findings(repo["root"], current, repo["reviews"] / "absent.md") == []
     assert classify_findings(repo["root"], current, "") == []
+    with pytest.raises(CapCheckError):
+        classify_findings(repo["root"], current, repo["reviews"] / "absent.md")
 
 
 def test_unreadable_head_sha_raises_cap_check_error(repo):
@@ -397,6 +412,7 @@ def test_backtick_hash_l_and_colon_l_shapes_parse(repo):
             ("R3", "HIGH", "a.py:L4"),
             ("R4", "HIGH", "a.py: 4"),
             ("R5", "HIGH", "`b.py`"),
+            ("R6", "HIGH", "a.py:L 4"),
         ],
     )
 
@@ -406,6 +422,7 @@ def test_backtick_hash_l_and_colon_l_shapes_parse(repo):
         ("R3", True, repo["rework_short"]),
         ("R4", True, repo["rework_short"]),
         ("R5", True, repo["rework_short"]),
+        ("R6", True, repo["rework_short"]),
     ]
 
 
@@ -630,3 +647,40 @@ def test_missing_path_detection_reads_stderr_only(repo):
         _git(repo["root"], "cat-file", "-e", f"{repo['rework']}:nothere.py")
     assert "nothere.py" in real.value.stderr
     assert _missing_path_error(real.value)
+
+    assert _missing_path_error(
+        CapCheckError(
+            "git cat-file failed",
+            stderr="fatal: path 'x.py' exists on disk, but not in 'abc'",
+        ),
+    )
+
+
+def test_path_present_on_disk_but_absent_at_head_is_unresolved(repo):
+    """A path that exists in the live work tree but was never committed at
+    `head` is git's "exists on disk, but not in" wording, not "does not
+    exist" / "no such path" - it must still read as unresolved (null,
+    reason), not propagate as an unhandled CapCheckError."""
+    root = repo["root"]
+    (root / "untracked.py").write_text("x = 1\n")
+
+    rows = _classify(repo, [("R1", "HIGH", "untracked.py")])
+
+    assert [(r["ref"], r["regression"], r.get("reason")) for r in rows] == [
+        ("R1", None, "unresolved path untracked.py"),
+    ]
+
+
+def test_case_variant_equal_head_shas_are_treated_as_equal(repo):
+    """Comparing head_sha values as raw strings lets an upper-case spelling
+    of the SAME commit bypass the empty-range guard: _verify_range must
+    fold case before comparing."""
+    from cli.cap_check import CapCheckError, classify_findings
+
+    previous = _review(repo["reviews"] / "review-1.md", repo["rework"], [])
+    current = _review(
+        repo["reviews"] / "review-2.md", repo["rework"].upper(), [("R1", "HIGH", "a.py:3")],
+    )
+
+    with pytest.raises(CapCheckError):
+        classify_findings(repo["root"], current, previous)
