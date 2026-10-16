@@ -4,11 +4,8 @@ open its log sink for writing before it is proven safe: tracked, symlinked,
 outside the git toplevel, a case-variant spelling of the store, inside
 .git/, a FIFO, an existing executable, hard-linked, inside another repo's
 store (nested or sibling), or reached through a symlink-swapped parent
-directory. Today only a literal path-prefix check against the store
-(`_refuse_verify_log` in cli/__main__.py) exists, so every refusal test
-below is expected to FAIL (or ERROR) against the current code -- that is
-the point. The one happy-path test (an untracked docs/dev/tmp sink) must
-already pass.
+directory. The one happy-path test (an untracked docs/dev/tmp sink) must
+also pass.
 
 See docs/dev/project-management/designs/00320-refuse-every-unsafe-verify-log-
 sink-v2-design.md for the full case list this file pins.
@@ -16,6 +13,7 @@ sink-v2-design.md for the full case list this file pins.
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import shutil
@@ -27,12 +25,7 @@ from pathlib import Path
 
 import pytest
 
-from cli import verification
-
-try:
-    from cli import log_sink_refusal
-except ImportError:  # not implemented yet at this task's base commit
-    log_sink_refusal = None
+from cli import log_sink_refusal, verification
 
 CLI_DIR = Path(__file__).resolve().parent
 CLI_MAIN = CLI_DIR / "__main__.py"
@@ -141,6 +134,7 @@ def test_cli_refuses_log_outside_toplevel(repo: Path) -> None:
     result = _verify(repo, "../outside.log")
 
     assert result.returncode == 2
+    assert "resolves outside the repository" in result.stderr
     assert not (repo.parent / "outside.log").exists()
 
 
@@ -188,6 +182,7 @@ def test_cli_refuses_fifo_log(repo: Path) -> None:
 
     assert elapsed < 2.0
     assert result.returncode == 2
+    assert "is not a regular file" in result.stderr
 
 
 def test_cli_refuses_executable_target(repo: Path) -> None:
@@ -202,6 +197,7 @@ def test_cli_refuses_executable_target(repo: Path) -> None:
     result = _verify(repo, "docs/dev/tmp/runme.sh")
 
     assert result.returncode == 2
+    assert "is executable" in result.stderr
     assert target.read_bytes() == before
 
 
@@ -242,6 +238,7 @@ def test_cli_refuses_hardlinked_log(repo: Path) -> None:
     result = _verify(repo, "docs/dev/tmp/hardlinked.log")
 
     assert result.returncode == 2
+    assert "has more than one hard link" in result.stderr
     assert marker.read_bytes() == before
 
 
@@ -263,6 +260,7 @@ def test_default_sink_symlink_is_refused(repo: Path) -> None:
     result = _verify(repo)
 
     assert result.returncode == 2
+    assert "is a symlink" in result.stderr
     assert target.read_bytes() == before
 
 
@@ -276,6 +274,7 @@ def test_default_sink_hardlink_is_refused(repo: Path) -> None:
     result = _verify(repo)
 
     assert result.returncode == 2
+    assert "has more than one hard link" in result.stderr
     assert marker.read_bytes() == before
 
 
@@ -296,7 +295,10 @@ def test_git_dir_identity_holds_from_a_subdirectory_cwd(repo: Path) -> None:
     )
 
     assert result.returncode == 2
-    assert _git(repo, "status", "--short").returncode == 0
+    assert "resolves inside the git directory" in result.stderr
+    status = _git(repo, "status", "--short")
+    assert status.returncode == 0
+    assert status.stdout == ""
 
 
 def test_log_into_another_repos_store_is_refused(repo: Path, tmp_path_factory) -> None:
@@ -311,16 +313,11 @@ def test_log_into_another_repos_store_is_refused(repo: Path, tmp_path_factory) -
     result = _verify(repo, rel)
 
     assert result.returncode == 2
+    assert "resolves outside the repository" in result.stderr
     assert other_marker.read_bytes() == before
 
 
-def test_parent_dir_symlink_swap_is_refused(repo: Path, monkeypatch) -> None:
-    if log_sink_refusal is None:
-        pytest.fail(
-            "cli.log_sink_refusal does not exist yet at this task's base commit",
-        )
-    monkeypatch.setattr(log_sink_refusal, "refuse", lambda *a, **k: None)
-
+def test_parent_dir_symlink_swap_is_refused(repo: Path) -> None:
     before = (repo / ".git" / "config").read_bytes()
 
     tmp = repo / "docs" / "dev" / "tmp"
@@ -330,9 +327,10 @@ def test_parent_dir_symlink_swap_is_refused(repo: Path, monkeypatch) -> None:
 
     sink = tmp / "config"
 
-    with pytest.raises(OSError):
-        verification._open_log_sink(sink)
+    with pytest.raises(OSError) as excinfo:
+        verification._open_log_sink(sink, repo)
 
+    assert excinfo.value.errno in (errno.ELOOP, errno.ENOTDIR)
     assert (repo / ".git" / "config").read_bytes() == before
 
 
@@ -357,10 +355,6 @@ def test_symlink_above_repo_root_does_not_refuse_default_sink(tmp_path: Path) ->
     macOS, where `/tmp` is a symlink to `/private/tmp`) refuses every run,
     the default `docs/dev/tmp/gate-<sha7>.log` sink included.
     """
-    if log_sink_refusal is None:
-        pytest.fail(
-            "cli.log_sink_refusal does not exist yet at this task's base commit",
-        )
     real = tmp_path / "real"
     real.mkdir()
     _git_ok(real, "init", "-q")
@@ -382,10 +376,6 @@ def test_worktree_dotgit_file_log_is_refused(tmp_path: Path) -> None:
     `resolved.parent`), so the `.git` file itself is never compared against
     the git-dir identity targets, and it then sails through the plain
     is-regular-file / is-executable / hardlink checks untouched."""
-    if log_sink_refusal is None:
-        pytest.fail(
-            "cli.log_sink_refusal does not exist yet at this task's base commit",
-        )
     main = tmp_path / "main"
     main.mkdir()
     _git_ok(main, "init", "-q")
@@ -414,10 +404,6 @@ def test_nested_repo_git_internals_are_refused(repo: Path, rel: str) -> None:
     `resolved.parent` lands for `<nested-repo>/.git/<rel>`. The failure is
     read as permission to fall through to the plain file-type checks
     instead of being refused as the nested repo's own git internals."""
-    if log_sink_refusal is None:
-        pytest.fail(
-            "cli.log_sink_refusal does not exist yet at this task's base commit",
-        )
     nested = repo / "docs" / "dev" / "tmp" / "other"
     nested.mkdir(parents=True)
     _git_ok(nested, "init", "-q")
@@ -442,10 +428,6 @@ def test_absolute_log_outside_repo_via_symlinked_ancestor_reports_outside(
     a symlink": `refuse()` runs the symlink-component check before the
     outside-toplevel check, so the symlink reason wins even though the path
     never touches the repository at all."""
-    if log_sink_refusal is None:
-        pytest.fail(
-            "cli.log_sink_refusal does not exist yet at this task's base commit",
-        )
     repo = tmp_path / "repo"
     repo.mkdir()
     _git_ok(repo, "init", "-q")
@@ -472,10 +454,6 @@ def test_probe_failure_inside_toplevel_fails_closed_as_outside(
     the repository" for a target that IS inside the toplevel, not silently
     treat the failed probe as "not tracked" and fall through to the plain
     file-type checks, which can allow the sink through."""
-    if log_sink_refusal is None:
-        pytest.fail(
-            "cli.log_sink_refusal does not exist yet at this task's base commit",
-        )
     monkeypatch.setattr(log_sink_refusal, "_log_rel_and_tracked", lambda *a, **k: None)
 
     target = repo / "docs" / "dev" / "tmp" / "sink.log"
@@ -495,10 +473,6 @@ def test_symlinked_ancestor_component_walk_is_bounded_to_the_repo(
     nothing to do with the repo, until it hits a symlink somewhere up the
     tree and reports "is a symlink" instead of first recognizing the path
     is outside the repository altogether."""
-    if log_sink_refusal is None:
-        pytest.fail(
-            "cli.log_sink_refusal does not exist yet at this task's base commit",
-        )
     repo = tmp_path / "project" / "repo"
     repo.mkdir(parents=True)
     _git_ok(repo, "init", "-q")
