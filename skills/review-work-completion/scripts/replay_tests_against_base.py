@@ -164,7 +164,6 @@ def _run_in_worktree(
             *shlex.split(cmd), "-q", "-rA", "--rootdir", str(worktree),
             "-p", "no:cacheprovider", "--continue-on-collection-errors", *files,
         ]
-        proc = None
         try:
             with _raise_on_signal((signal.SIGTERM, signal.SIGHUP)) as guard:
                 try:
@@ -183,13 +182,11 @@ def _run_in_worktree(
                     proc.communicate()
                     return "", f"runner did not complete: timed out after {timeout} seconds"
                 except _SignalRaised as exc:
-                    guard.cleaning = True
-                    if proc is not None:
-                        try:
-                            os.killpg(proc.pid, signal.SIGKILL)
-                        except ProcessLookupError:
-                            pass
-                        proc.communicate()
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    proc.communicate()
                     return "", f"runner did not complete: killed by {signal.Signals(exc.signum).name}"
         except OSError as exc:
             return "", f"runner did not complete: {exc}"
