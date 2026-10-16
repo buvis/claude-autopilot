@@ -1,0 +1,26 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "The supplied mechanical check identifies an either-or assertion that cannot fail as written. Replace it with the required single outcome in its owning maintenance task; the assertion predates this diff and is outside this signal/timeout PRD.",
+    "file": "skills/run-autopilot/cli/test_release_checks_counts.py:326",
+    "reason": "Pre-existing: test_skip_ceiling_fails_the_gate_above_three was introduced by commit 9d5779eb (PRD 00313) and is not touched by this PRD's diff range. Out of scope for a signal/timeout PRD; belongs to its owning maintenance task."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "test_skip_ceiling_fails_the_gate_above_three hedges with or: either outcome satisfies it",
+    "file": "skills/run-autopilot/cli/test_release_checks_counts.py:326",
+    "reason": "Same pre-existing assertion as the Bob finding above (introduced by 9d5779eb, PRD 00313, untouched by this diff). Deferred for the same reason; fixing it here would be an out-of-scope edit."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "File review_stage.py exceeds the 800-line limit (874 lines)",
+    "file": "skills/run-autopilot/cli/review_stage.py:874",
+    "reason": "Pre-existing violation: the file was already 856 lines at the PRD's base commit c657de35, so it breached the 800-line limit before this work began. This diff added 18 lines. Splitting the module is a refactor outside this PRD's scope; deferred to batch end rather than reworked here."
+  }
+]
