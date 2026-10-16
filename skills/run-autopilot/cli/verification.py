@@ -414,22 +414,17 @@ def _lock_and_check(
     return extra_excluded, None
 
 
-def _open_log_sink(log_path: Path):
-    """Opens `log_path` for a fresh write without following a symlink at
-    ANY level, including a swapped-in parent directory.
+def _pinned_parent_fd(parent: Path) -> int:
+    """A descriptor for `parent`, opened without following a symlink at any
+    level.
 
     The walk is anchored at the deepest ancestor that lstats as a real
     directory, then descends one component at a time with
     `O_DIRECTORY | O_NOFOLLOW`, creating missing directories against the
     pinned descriptor -- a symlink standing in for any of those components
-    fails that level's open with ELOOP/ENOTDIR instead of being followed.
-    The leaf is unlinked (safe: the refusal check already proved an
-    existing leaf untracked, non-symlink, single-link, regular and
-    non-executable) and recreated with `O_EXCL | O_NOFOLLOW` relative to
-    that descriptor, so a later symlink swap of the PATHNAME cannot
-    redirect the open either."""
+    fails that level's open with ELOOP/ENOTDIR instead of being followed."""
     missing: list[str] = []
-    anchor = log_path.parent
+    anchor = parent
     while True:
         try:
             if stat.S_ISDIR(os.lstat(anchor).st_mode):
@@ -439,19 +434,34 @@ def _open_log_sink(log_path: Path):
         missing.append(anchor.name)
         anchor = anchor.parent
     parent_fd = os.open(anchor, os.O_DIRECTORY | os.O_NOFOLLOW)
-    try:
-        for name in reversed(missing):
-            try:
-                os.mkdir(name, dir_fd=parent_fd)
-            except FileExistsError:
-                pass
+    for name in reversed(missing):
+        try:
+            os.mkdir(name, dir_fd=parent_fd)
+        except FileExistsError:
+            pass
+        try:
             next_fd = os.open(
                 name,
                 os.O_DIRECTORY | os.O_NOFOLLOW,
                 dir_fd=parent_fd,
             )
+        finally:
             os.close(parent_fd)
-            parent_fd = next_fd
+        parent_fd = next_fd
+    return parent_fd
+
+
+def _open_log_sink(log_path: Path):
+    """Opens `log_path` for a fresh write without following a symlink at
+    ANY level, including a swapped-in parent directory.
+
+    The leaf is unlinked (safe: the refusal check already proved an
+    existing leaf untracked, non-symlink, single-link, regular and
+    non-executable) and recreated with `O_EXCL | O_NOFOLLOW` relative to a
+    descriptor pinned by `_pinned_parent_fd`, so a later symlink swap of
+    the PATHNAME cannot redirect the open either."""
+    parent_fd = _pinned_parent_fd(log_path.parent)
+    try:
         try:
             os.unlink(log_path.name, dir_fd=parent_fd)
         except FileNotFoundError:
