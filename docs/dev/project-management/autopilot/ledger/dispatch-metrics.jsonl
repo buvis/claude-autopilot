@@ -4872,3 +4872,11 @@
 {"id":"aeeac559","ended_at":1792194295,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"id":"3b77b37b","ended_at":1792194295,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"kind":"handoff","site":"review","edge":"leave","at":1792194295,"phase":"review","prd":"00322-kill-the-gate-on-every-signal-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1792194349,"phase":"review","prd":"00322-kill-the-gate-on-every-signal-v1.md"}
+{"id":"4260f093","kind":"bob","task":"review-20261017-00322-c2","queued_at":1792194475,"prompt_bytes":18253}
+{"id":"efa54cbc","kind":"carl","task":"review-20261017-00322-c2","queued_at":1792194475,"prompt_bytes":15244}
+{"id":"7ebe6dae","kind":"bob","task":"review-20261017-00322-c2","queued_at":1792194616,"prompt_bytes":177966}
+{"id":"4260f093","ended_at":1792194921,"elapsed_s":446,"outcome":"error","detail":"lack-of-input"}
+{"id":"7ebe6dae","ended_at":1792194941,"elapsed_s":325,"outcome":"ok","detail":"retry"}
+{"id":"efa54cbc","ended_at":1792194944,"elapsed_s":469,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"review","edge":"leave","at":1792195157,"phase":"done","prd":"00322-kill-the-gate-on-every-signal-v1.md"}
