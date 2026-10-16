@@ -17,14 +17,14 @@ from pathlib import Path
 from . import frontmatter
 from .findings_section import _reviewed_keys
 
-_FILE_LINE_RE = re.compile(r"^(.*):(\d+)(?:[-,]\d+)*$")
+_FILE_LINE_RE = re.compile(r"^(.*):(\d+(?:[-,]\d+)*)$")
 _SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 _ANNOTATION_RE = re.compile(r"\s*\([^)]*\)\s*$")
 # ';' always splits; ',' splits only when the next non-space char is not a
 # digit, so `a.py:3,9` stays one segment for _FILE_LINE_RE's comma list.
 _SPLIT_RE = re.compile(r";|,(?!\s*\d)")
 _HASH_L_RE = re.compile(r"^(.*)#[Ll](\d+)(?:-[Ll]?(\d+))?$")
-_COLON_L_RE = re.compile(r"^(.*?):\s*[Ll](\d+)(?:-[Ll]?(\d+))?$")
+_COLON_L_RE = re.compile(r"^(.*?):\s*[Ll]\s*(\d+)(?:-[Ll]?(\d+))?$")
 # `path:N`, `path: N`, `path:N-M`; the comma list falls through to _FILE_LINE_RE.
 _COLON_RANGE_RE = re.compile(r"^(.*?):\s*(\d+)(?:\s*-\s*(\d+))?$")
 
@@ -88,11 +88,25 @@ def _toplevel(repo_root: str | Path) -> Path:
     return Path(_git(repo_root, "rev-parse", "--show-toplevel"))
 
 
-def _split_file_line(cell: str) -> tuple[str, int | None]:
+def _parse_number_list(spec: str) -> list[int]:
+    """`spec` is the digits-and-separators suffix `_FILE_LINE_RE` captured
+    (e.g. "3-5,9"): every named line, a range expanded in full."""
+    lines: list[int] = []
+    for token in spec.split(","):
+        if "-" in token:
+            first_s, last_s = token.split("-", 1)
+            first, last = int(first_s), int(last_s)
+            lines.extend(range(first, max(first, last) + 1))
+        else:
+            lines.append(int(token))
+    return lines
+
+
+def _split_file_line(cell: str) -> tuple[str, list[int] | None]:
     matched = _FILE_LINE_RE.match(cell)
     if matched is None:
         return cell, None
-    return matched.group(1), int(matched.group(2))
+    return matched.group(1), _parse_number_list(matched.group(2))
 
 
 def _clean_segment(segment: str) -> str:
@@ -107,8 +121,8 @@ def _segment_lines(segment: str) -> tuple[str, list[int] | None]:
             first = int(matched.group(2))
             last = int(matched.group(3)) if matched.group(3) else first
             return matched.group(1).strip(), list(range(first, max(first, last) + 1))
-    path, line = _split_file_line(segment)
-    return path.strip(), None if line is None else [line]
+    path, lines = _split_file_line(segment)
+    return path.strip(), lines
 
 
 def _normalise_path(path: str, toplevel: Path, changed_files: set[str]) -> str:
@@ -158,7 +172,7 @@ def _verify_range(repo_root: str | Path, previous_head: str, head: str) -> None:
             _git(repo_root, "rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}")
         except CapCheckError as err:
             raise CapCheckError(f"head_sha {sha} does not resolve to a commit", err.stderr) from err
-    if previous_head == head:
+    if previous_head.casefold() == head.casefold():
         raise CapCheckError(
             f"previous and current head_sha are equal ({head}); the rework range is empty",
         )
@@ -178,7 +192,11 @@ def _missing_path_error(err: CapCheckError) -> bool:
     message is never read: it carries the command text, so a path spelled
     "does not exist.py" would otherwise mask a corrupt-object failure."""
     stderr = err.stderr.lower()
-    return "no such path" in stderr or "does not exist" in stderr
+    return (
+        "no such path" in stderr
+        or "does not exist" in stderr
+        or "exists on disk, but not in" in stderr
+    )
 
 
 def _introducing_commit(
@@ -300,11 +318,11 @@ def classify_findings(
     section, classified against the rework range between
     `previous_review_file`'s head_sha and `review_file`'s head_sha."""
     review_file = Path(review_file)
-    if previous_review_file is None or not str(previous_review_file) or not Path(
-        previous_review_file,
-    ).exists():
+    if previous_review_file is None or not str(previous_review_file):
         return []
     previous_review_file = Path(previous_review_file)
+    if not previous_review_file.exists():
+        raise CapCheckError(f"{previous_review_file}: previous review file does not exist")
 
     text = _read_text(review_file)
     rows, problem = _reviewed_keys(text)
