@@ -1909,9 +1909,7 @@ def _run_markers(args: argparse.Namespace) -> int:
     names = args.check if args.check is not None else args.clear
     unknown = [n for n in names if n not in markers.MARKERS]
     if unknown:
-        print(
-            f"autopilot: markers: unknown marker {', '.join(unknown)}", file=sys.stderr
-        )
+        print(f"autopilot: markers: unknown marker {', '.join(unknown)}", file=sys.stderr)
         return 1
     if args.check is not None:
         print(json.dumps(markers.check(autopilot_dir, names)))

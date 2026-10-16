@@ -22,12 +22,7 @@ def refuse(log_path: Path, repo_root: Path) -> str | None:
     be opened. `log_path` must be the UNRESOLVED candidate: resolving it
     before this call follows any symlink in its ancestry and makes the
     symlink case unreachable. Every probe is scoped to `repo_root`, never to
-    cwd. Cases, first match wins: identity with the store or the git
-    directory, tracked at HEAD, a symlinked path component, resolving
-    outside this repository (or inside a repository nested under it), a
-    non-regular or executable existing target, an existing target with more
-    than one hard link. A path that does not exist yet is eligible."""
-    log_path = Path(log_path)
+    cwd. First match wins. A path that does not exist yet is eligible."""
     toplevel = _toplevel(repo_root)
     if toplevel is None:
         return _OUTSIDE  # a failing git probe fails closed
