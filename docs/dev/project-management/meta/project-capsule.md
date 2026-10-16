@@ -1,6 +1,6 @@
 # Project Capsule: claude-autopilot
 
-Generated: 2026-10-15 (catchup refreshed 14:54 UTC)
+Generated: 2026-10-16 (catchup refreshed 15:55 UTC)
 
 ## Key Invariants
 
@@ -43,6 +43,12 @@ Generated: 2026-10-15 (catchup refreshed 14:54 UTC)
   review skill only *reads* `last-verification.json`, never writes it.
 
 ## Active Work
+
+### Batch 202610161547 (in progress)
+- PRD 00320 (refuse-every-unsafe-verify-log-sink-v1) selected first; backlog
+  remaining: 00321-00327. This batch unblocks `dev/bin/release`: `verify --log`
+  is destructive on master until 00320 lands, and HEAD's delegation guard has
+  four regressions against 0.9.0 until 00324 lands.
 
 ### Batch 202610141430 (complete)
 - [x] 00277-catch-critical-rows-in-every-shape-v2 (2 cycles)

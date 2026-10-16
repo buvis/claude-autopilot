@@ -4736,3 +4736,13 @@
 {"id":"820a62a7","ended_at":1792087976,"elapsed_s":155,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1792088582,"phase":"done","prd":"00313-release-gate-runs-what-it-claims-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1792088719,"phase":"done","prd":"00313-release-gate-runs-what-it-claims-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792158516,"phase":"build","prd":"00320-refuse-every-unsafe-verify-log-sink-v2.md"}
+{"id":"4962ecab","kind":"ivan","task":"1","queued_at":1792160272,"prompt_bytes":39369}
+{"id":"f2c6c6cc","kind":"pat","task":"1","queued_at":1792160761,"prompt_bytes":22014}
+{"id":"099dfdef","kind":"ivan","task":"1","queued_at":1792160859,"prompt_bytes":42265}
+{"id":"efc386bb","kind":"pat","task":"1","queued_at":1792160973,"prompt_bytes":5119}
+{"id":"4962ecab","ended_at":1792161105,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"f2c6c6cc","ended_at":1792161105,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"099dfdef","ended_at":1792161105,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"efc386bb","ended_at":1792161105,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1792161105,"phase":"build","prd":"00320-refuse-every-unsafe-verify-log-sink-v2.md"}
