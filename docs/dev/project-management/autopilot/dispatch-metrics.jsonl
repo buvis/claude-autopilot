@@ -4849,3 +4849,26 @@
 {"id":"b4d8d619","ended_at":1792190151,"elapsed_s":345,"outcome":"ok","detail":null}
 {"id":"30fce38e","ended_at":1792190151,"elapsed_s":983,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"review","edge":"leave","at":1792190213,"phase":"review","prd":"00322-kill-the-gate-on-every-signal-v1.md"}
+{"id":"b11b27bf","kind":"tess","task":"4","queued_at":1792190459,"prompt_bytes":76955}
+{"id":"548c3678","kind":"tess","task":"4","queued_at":1792190491,"prompt_bytes":21957}
+{"id":"7bfc7d80","kind":"tess","task":"5","queued_at":1792190582,"prompt_bytes":23647}
+{"id":"be050b58","kind":"tess","task":"5","queued_at":1792191007,"prompt_bytes":11150}
+{"id":"8dac41c0","kind":"ivan","task":"4","queued_at":1792191232,"prompt_bytes":20220}
+{"id":"a684ed9c","kind":"ivan","task":"5","queued_at":1792191825,"prompt_bytes":22961}
+{"id":"4ccfe1c5","kind":"pat","task":"4","queued_at":1792192056,"prompt_bytes":36512}
+{"id":"6fc85fbd","kind":"pat","task":"5","queued_at":1792192769,"prompt_bytes":23394}
+{"id":"1d2c5c84","kind":"tess","task":"6","queued_at":1792192991,"prompt_bytes":26085}
+{"id":"aeeac559","kind":"ivan","task":"6","queued_at":1792193248,"prompt_bytes":20919}
+{"id":"3b77b37b","kind":"pat","task":"6","queued_at":1792193469,"prompt_bytes":13697}
+{"id":"b11b27bf","ended_at":1792194295,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"548c3678","ended_at":1792194295,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"7bfc7d80","ended_at":1792194295,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"be050b58","ended_at":1792194295,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"8dac41c0","ended_at":1792194295,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"a684ed9c","ended_at":1792194295,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"4ccfe1c5","ended_at":1792194295,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"6fc85fbd","ended_at":1792194295,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"1d2c5c84","ended_at":1792194295,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"aeeac559","ended_at":1792194295,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"3b77b37b","ended_at":1792194295,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"kind":"handoff","site":"review","edge":"leave","at":1792194295,"phase":"review","prd":"00322-kill-the-gate-on-every-signal-v1.md"}
