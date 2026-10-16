@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """triage.py - mint hold stubs for unowned deferred severe findings (PRD 00195).
 
-An open CRITICAL/HIGH row in a batch's deferred JSON, or a `cap_critical`
-stall row, lives only in that JSON until someone writes a PRD for it. This
+An open CRITICAL/HIGH row in a batch's deferred JSON, or a `cap_critical` or
+`cap_regression` stall row, lives only in that JSON until someone writes a PRD for it. This
 module gives each such row a file: `docs/dev/project-management/prds/hold/<NNNNN>-triage-
 <slug>-v1.md`, a HOLD triage artifact whose single task is "promote to
 backlog or close". Autopilot never drains `hold/`, so nothing here is ever
@@ -57,6 +57,9 @@ SEVERE = frozenset({"critical", "high", "\U0001f534", "\U0001f7e0"})
 _SLUG_MAX = 40
 _TITLE_MAX = 80
 _REVISION_RE = re.compile(r"-v\d+\.md$")
+# The cap-check regression stall site (PRD 00310/00321): mints a stub like a
+# cap_critical stall, but has no custody record.
+REGRESSION_SITE = "cap_regression"
 
 TRIAGE_TASK = (
     "- [ ] triage: promote to backlog or close - Acceptance: this file is no "
@@ -154,11 +157,12 @@ def load_ledger(path: Path) -> list | None:
 
 
 def qualifies(row) -> bool:
-    """An open row at CRITICAL/HIGH (case-insensitive), or a cap_critical stall."""
+    """An open row at CRITICAL/HIGH (case-insensitive), or a cap_critical or
+    cap_regression stall."""
     if not isinstance(row, dict) or not render_report._is_open(row):
         return False
     if row.get("type") == "stall":
-        return row.get("site") == custody.CUSTODY_SITE
+        return row.get("site") in (custody.CUSTODY_SITE, REGRESSION_SITE)
     return str(row.get("severity") or "").strip().casefold() in SEVERE
 
 

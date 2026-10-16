@@ -52,7 +52,7 @@ import sys
 import uuid
 from pathlib import Path
 
-from . import custody, handoff, schema, state
+from . import custody, handoff, schema, state, triage
 
 # park_decision used to be imported from scripts/resume_target.py behind a
 # scoped sys.path insert. PRD 00089 absorbed it into cli/resume.py, so it is
@@ -417,6 +417,27 @@ def _append_stall_deferred(
     return None
 
 
+def _migrate_stall_deferrals(
+    autopilot_dir: Path,
+    current: dict,
+    prd: str,
+    op_id: str,
+) -> int | None:
+    """do_stall's step 4a, cap_regression only (PRD 00321): copy each pending
+    state.deferred_decisions record into the batch ledger as `<op_id>-dd<i>`
+    (custody.migration_records, the shape cap_critical's custody write
+    uses), before the commit's reset_prd_fields drops the list. Deduped by
+    that op_id, so a retry appends nothing twice. Returns an exit code (9) on
+    failure, None on success."""
+    batch_id = (current.get("batch") or {}).get("id")
+    try:
+        for record in custody.migration_records(current, op_id, prd):
+            record_defer(autopilot_dir, prd, batch_id, record)
+    except (OSError, ValueError):
+        return 9
+    return None
+
+
 def _record_stall_custody(
     autopilot_dir: Path,
     prds_dir: Path,
@@ -460,7 +481,8 @@ def _write_stall_records(
     op_id: str,
     capture: dict,
 ) -> tuple[dict | None, int | None]:
-    """do_stall's steps 4 and 4b as one call: the deferred append, then the
+    """do_stall's steps 4, 4a and 4b as one call: the deferred append, the
+    pending-deferral migration (cap_regression), then the
     cap_critical custody record. Returns (marker entry for the commit's
     mirror or None, None) on success, (None, 9) on failure."""
     rc = _append_stall_deferred(
@@ -468,6 +490,13 @@ def _write_stall_records(
     )
     if rc is not None:
         return None, rc
+    # cap_critical migrates the same records inside its custody write, under
+    # the marker lock and after its own failpoint; only cap_regression, which
+    # never reaches custody, migrates here.
+    if site == triage.REGRESSION_SITE:
+        rc = _migrate_stall_deferrals(autopilot_dir, current, prd, op_id)
+        if rc is not None:
+            return None, rc
     return _record_stall_custody(
         autopilot_dir, prds_dir, current, prd, site, detail, op_id, capture
     )

@@ -103,9 +103,14 @@ carries `clarification`, `reviewer_fail`, `sub_skill_fail`, and the others):
   least one of them as a regression introduced by this cycle's own rework
   (`references/phase-review.md`, the cap-overflow deferral bullet, PRD 00310).
   `detail` carries the regressed rows' refs and commits from `cap-check`'s
-  stdout. Resume exactly like `cap_critical` above — the PRD sits in
-  `hold/`, a human resolves the regression on it, then moves it back to
-  `backlog/`.
+  stdout (a `"regression": null` row gives its ref and reason instead). The
+  stall captures no custody, so no `autopilot custody` command applies to
+  this site. Resume (PRD 00321): the PRD sits in `prds/hold/<filename>`; its
+  regressed rows sit in `deferred/<batch_id>-deferred.json` (the stall row
+  plus the cap-overflow records migrated as `<op_id>-dd<i>`) and in the
+  triage hold stub the cap-out minted after the stall. Fix the regression on
+  a branch, or write a v2 PRD against the stub, then `mv` the original back
+  to `backlog/` when it is ready to run again.
 - `oversized_task`, `escalation_exhausted`, `replan_exhausted`, `clarification` —
   the pre-existing stall sites (plan-tasks per-task oversize, rework
   tier-exhaustion, replan-loop exhaustion, and a loop-mode Phase 2 ambiguity
