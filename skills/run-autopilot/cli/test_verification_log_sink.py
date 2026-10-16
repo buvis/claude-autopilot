@@ -195,12 +195,17 @@ def test_log_write_error_releases_the_gate_lock(
         _kill_group_quietly(pid)
 
 
-def test_run_gate_refuses_a_symlinked_log_and_leaves_its_target(repo: Path) -> None:
+def test_run_gate_refuses_a_symlinked_log_and_leaves_its_target(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # The direct (non-symlink) tracked-log case is owned by
     # test_verify_log_refusal.py::test_run_gate_refuses_tracked_log_without_opening.
-    # A symlinked log never reaches the gate either: the link itself is
-    # untracked, so it shows up as dirt in the ordinary pre-spawn scan and
-    # the gate never runs at all -- dirty, unrecorded, target untouched.
+    # A symlinked log is also refused by the pre-spawn dirt scan (the link
+    # itself is untracked). To bind this test to case 3's own refusal in
+    # `_lock_and_check` -- not just the ordinary dirt scan -- the dirt scan
+    # is forced to report a clean tree; the symlinked log must still be
+    # refused, and the refusal must name the log via `_log_rel_and_tracked`.
+    monkeypatch.setattr(verification, "_dirty_check", lambda cwd, extra_excluded: (False, []))
     head = _commit(repo, "logs/gate.log", "committed log body\n")
     log_path = repo / "link.log"
     log_path.symlink_to(Path("logs") / "gate.log")
@@ -209,6 +214,7 @@ def test_run_gate_refuses_a_symlinked_log_and_leaves_its_target(repo: Path) -> N
 
     assert result["recorded"] is False
     assert result["dirty"] is True
+    assert result["dirty_paths"] == ["logs/gate.log"]
     assert (repo / "logs" / "gate.log").read_bytes() == b"committed log body\n"
 
 

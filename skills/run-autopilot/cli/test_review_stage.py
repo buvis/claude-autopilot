@@ -296,8 +296,7 @@ def test_gate_log_write_failure_degrades_instead_of_crashing(env: dict) -> None:
     # the failure is signalled through the summary instead (an errors entry,
     # or a gate result that skipped the gate instead of recording a green run)
     assert "gate" in summary
-    signalled = bool(summary["errors"]) or "gate skipped" in summary["gate"]["tests_line"]
-    assert signalled, summary
+    assert "gate skipped" in summary["gate"]["tests_line"], summary
 
 
 @pytest.mark.parametrize(
