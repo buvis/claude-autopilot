@@ -531,7 +531,12 @@ def test_sighup_kills_the_gate_group_and_frees_the_lock(
 ) -> None:
     command, pgid_file = _group_gate_command(tmp_path)
 
-    verify = _spawn_verify(repo, command)
+    verify = subprocess.Popen(
+        _verify_argv(repo, command),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
     pgid = None
     try:
         assert _wait_for(pgid_file.exists, 15), "gate never started"
@@ -546,12 +551,22 @@ def test_sighup_kills_the_gate_group_and_frees_the_lock(
         assert _wait_for(lambda: _lock_free(lock_path), 1.0), (
             "gate lock still held 1s after the gate group died"
         )
+        stdout, _ = verify.communicate(timeout=15)
     finally:
         if verify.poll() is None:
             verify.kill()
+            verify.communicate()
         verify.wait()
         if pgid is not None and _group_alive(pgid):
             os.killpg(pgid, signal.SIGKILL)
+
+    # The JSON line names the signal that arrived, not a fixed one.
+    lines = [line for line in stdout.splitlines() if line.strip()]
+    assert len(lines) == 1, stdout
+    payload = json.loads(lines[0])
+    assert payload["error"] == "verify: SIGHUP during gate"
+    assert payload["exit"] == 2
+    assert verify.returncode == 2
 
 
 def test_signal_exit_prints_one_json_line(repo: Path, tmp_path: Path) -> None:
@@ -586,6 +601,63 @@ def test_signal_exit_prints_one_json_line(repo: Path, tmp_path: Path) -> None:
     assert payload["log"] == str(repo / "docs/dev/tmp" / f"gate-{head[:7]}.log")
     assert verify.returncode == 2
     assert "Traceback" not in stderr, stderr
+
+
+def test_signal_exit_reports_the_custom_log_path(repo: Path, tmp_path: Path) -> None:
+    # With --log, the signal's JSON line names that log, not the default
+    # gate-<sha7>.log; SIGINT here also proves the name follows the signal.
+    head = _git(repo, "rev-parse", "HEAD")
+    command, pgid_file = _group_gate_command(tmp_path)
+    custom = "docs/dev/tmp/custom-signal-gate.log"
+
+    verify = subprocess.Popen(
+        _verify_argv(repo, command, "--log", custom),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    pgid = None
+    try:
+        assert _wait_for(pgid_file.exists, 15), "gate never started"
+        pgid = int(pgid_file.read_text())
+        verify.send_signal(signal.SIGINT)
+        stdout, stderr = verify.communicate(timeout=15)
+    finally:
+        if verify.poll() is None:
+            verify.kill()
+            verify.communicate()
+        if pgid is not None and _group_alive(pgid):
+            os.killpg(pgid, signal.SIGKILL)
+
+    lines = [line for line in stdout.splitlines() if line.strip()]
+    assert len(lines) == 1, stdout
+    payload = json.loads(lines[0])
+    assert payload["error"] == "verify: SIGINT during gate"
+    assert payload["exit"] == 2
+    assert payload["log"] == str(repo / custom)
+    assert (repo / custom).exists()
+    assert not (repo / "docs/dev/tmp" / f"gate-{head[:7]}.log").exists()
+    assert verify.returncode == 2
+    assert "Traceback" not in stderr, stderr
+
+
+@pytest.mark.parametrize(
+    ("signum", "expected"),
+    [
+        (signal.SIGTERM, "verify: SIGTERM during gate"),
+        (signal.SIGINT, "verify: SIGINT during gate"),
+        (signal.SIGHUP, "verify: SIGHUP during gate"),
+        # Never guarded, so only this direct call reaches it: the name
+        # still comes from the number, not a fixed fallback.
+        (signal.SIGUSR1, "verify: SIGUSR1 during gate"),
+    ],
+    ids=["SIGTERM", "SIGINT", "SIGHUP", "SIGUSR1"],
+)
+def test_signal_error_names_the_signal_it_got(signum: int, expected: str) -> None:
+    err = verification._signal_error(signum)
+
+    assert isinstance(err, RuntimeError)
+    assert str(err) == expected
 
 
 def test_sigterm_during_cleanup_does_not_leak(
@@ -629,97 +701,8 @@ def test_sigterm_during_cleanup_does_not_leak(
             os.killpg(int(pgid_file.read_text()), signal.SIGKILL)
 
 
-def test_lock_wait_expiry_reports_lock_timeout(repo: Path) -> None:
-    head = _git(repo, "rev-parse", "HEAD")
-    lock_path = repo / verification.GATE_LOCK_REL
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    log_path = repo / "docs" / "dev" / "tmp" / "gate-lock-timeout.log"
-    held = os.open(lock_path, os.O_RDWR | os.O_CREAT)
-    try:
-        fcntl.flock(held, fcntl.LOCK_EX)
-        result = verification.run_gate(
-            "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
-            repo,
-            head,
-            1,
-            timeout=0.2,
-            log_path=log_path,
-        )
-    finally:
-        fcntl.flock(held, fcntl.LOCK_UN)
-        os.close(held)
-
-    assert result.get("lock_timeout") is True
-    assert result["timed_out"] is False
-    assert not log_path.exists()
-
-
-def test_late_waiter_gate_gets_full_timeout(repo: Path) -> None:
-    # The lock wait has its own budget: a gate that gets the lock 3s into a
-    # 4s lock wait still gets its whole 2s run, so a 1.5s gate finishes.
-    # Neither a 2s nor a 4s deadline shared with the lock wait allows that.
-    head = _git(repo, "rev-parse", "HEAD")
-    held, release = _hold_lock(repo, 3.0)
-    try:
-        result = verification.run_gate(
-            "sleep 1.5; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'",
-            repo,
-            head,
-            1,
-            timeout=2,
-            lock_timeout=4,
-        )
-    finally:
-        release.join()
-        os.close(held)
-
-    assert result["lock_timeout"] is False
-    assert result["timed_out"] is False
-    assert result["passed"] == 1
-
-
-def test_result_reports_waited_s(repo: Path) -> None:
-    # The lock is held ~1s, then the gate is killed at its own 0.5s
-    # timeout: `waited_s` is the lock wait alone, not the wait plus the run.
-    head = _git(repo, "rev-parse", "HEAD")
-    held, release = _hold_lock(repo, 1.0)
-    try:
-        result = verification.run_gate(
-            "sleep 30",
-            repo,
-            head,
-            1,
-            timeout=0.5,
-            lock_timeout=5,
-        )
-    finally:
-        release.join()
-        os.close(held)
-
-    assert result["timed_out"] is True
-    assert isinstance(result["waited_s"], float)
-    assert 0.8 <= result["waited_s"] < 1.4, result["waited_s"]
-
-
-def test_head_moved_reports_head_moved(
-    repo: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    head = _git(repo, "rev-parse", "HEAD")
-    original = verification._acquire_lock
-
-    def acquire_then_commit(lock_fd: int, deadline: float) -> bool:
-        held = original(lock_fd, deadline)
-        # A concurrent commit lands while the lock is held: the tree stays
-        # clean, only HEAD moves.
-        _commit(repo, "src/other.py", "print(2)\n")
-        return held
-
-    monkeypatch.setattr(verification, "_acquire_lock", acquire_then_commit)
-
-    result = verification.run_gate("echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'", repo, head, 1)
-
-    assert result.get("head_moved") is True
-    assert result["dirty"] is False
+# The lock-wait tests (lock_timeout, head_moved, waited_s) live in the
+# sibling test_verify_truth_lock.py: this file sits at the 800-line limit.
 
 
 def test_pre_spawn_refusal_reports_null_log(repo: Path) -> None:

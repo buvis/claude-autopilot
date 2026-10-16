@@ -9,6 +9,7 @@ says so in the returned block, and never raises.
 
 from __future__ import annotations
 
+import inspect
 import os
 import signal
 import sys
@@ -36,6 +37,18 @@ signal.signal(signal.SIGTERM, on_term)
 time.sleep(30)
 """
 
+# SIGTERM is ignored BEFORE the pid is written, so a pid file proves the
+# helper could only be stopped by SIGKILL.
+IGNORER = """\
+import os, signal, sys, time
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+tmp = sys.argv[1] + ".tmp"
+with open(tmp, "w") as f:
+    f.write(str(os.getpid()))
+os.replace(tmp, sys.argv[1])
+time.sleep(30)
+"""
+
 
 def _alive(pid: int) -> bool:
     try:
@@ -43,6 +56,59 @@ def _alive(pid: int) -> bool:
     except ProcessLookupError:
         return False
     return True
+
+
+def _exited_within(pid: int, seconds: float) -> bool:
+    """True once `pid` (a child of this process) has exited: already reaped
+    by `_run_script`, or a zombie reaped here. `kill(pid, 0)` alone would
+    call a zombie alive."""
+    deadline = time.monotonic() + seconds
+    while True:
+        try:
+            reaped, _ = os.waitpid(pid, os.WNOHANG)
+        except ChildProcessError:
+            return not _alive(pid)
+        if reaped:
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.05)
+
+
+def test_run_script_default_timeout_is_script_timeout_s() -> None:
+    # PRD 00322: every helper is bounded at SCRIPT_TIMEOUT_S (540s, under
+    # the Bash tool's 600s ceiling). The design binds it as the signature
+    # default (`timeout: float = SCRIPT_TIMEOUT_S`), so a monkeypatched
+    # constant would not reach it; the value and the binding are pinned.
+    assert review_stage.SCRIPT_TIMEOUT_S == 540
+    params = inspect.signature(review_stage._run_script).parameters
+    assert params["timeout"].default == review_stage.SCRIPT_TIMEOUT_S
+
+
+def test_run_script_sigkills_a_helper_that_ignores_sigterm(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # SIGTERM is only the first step: once SCRIPT_GRACE_S runs out, a helper
+    # that ignores it is SIGKILLed, so _run_script returns near timeout +
+    # grace instead of sitting out the helper's 30s sleep.
+    monkeypatch.setattr(review_stage, "SCRIPT_GRACE_S", 0.3)
+    helper = tmp_path / "ignorer.py"
+    helper.write_text(IGNORER)
+    pid_file = tmp_path / "ignorer.pid"
+
+    started = time.monotonic()
+    block = review_stage._run_script(helper, [str(pid_file)], tmp_path, timeout=2)
+    elapsed = time.monotonic() - started
+
+    pid = int(pid_file.read_text()) if pid_file.exists() else None
+    try:
+        assert block == "_ignorer.py failed (timeout after 2s)_"
+        assert pid is not None, "the helper never got past ignoring SIGTERM"
+        assert elapsed < 2 + 0.3 + 3, f"no SIGKILL after the grace: took {elapsed:.1f}s"
+        assert _exited_within(pid, 1), "the helper outlived the SIGKILL fallback"
+    finally:
+        if pid is not None and _alive(pid):
+            os.kill(pid, signal.SIGKILL)
 
 
 def test_run_script_times_out_and_says_so(tmp_path: Path) -> None:

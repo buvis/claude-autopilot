@@ -130,10 +130,20 @@ def test_timeout_kills_the_runner_process_group(tmp_path: Path) -> None:
                 os.kill(pid, signal.SIGKILL)
 
 
-def test_group_sigterm_kills_runner_and_removes_worktree(tmp_path: Path) -> None:
-    # A SIGTERM to the replay's whole process group (what a supervisor's
-    # killpg does) must not orphan the runner, which lives in its own
-    # session, nor leave the temporary worktree registered or on disk.
+# PRD 00322 names SIGTERM and SIGHUP (the loop's orphan sweep) for the
+# replay's guard; SIGINT is outside its contract.
+REPLAY_SIGNALS = pytest.mark.parametrize(
+    "signum", [signal.SIGTERM, signal.SIGHUP], ids=lambda s: s.name
+)
+
+
+@REPLAY_SIGNALS
+def test_group_sigterm_kills_runner_and_removes_worktree(
+    tmp_path: Path, signum: int
+) -> None:
+    # A SIGTERM or SIGHUP to the replay's whole process group (what a
+    # supervisor's killpg does) must not orphan the runner, which lives in
+    # its own session, nor leave the temporary worktree registered or on disk.
     root, base = _repo(tmp_path, {"calc.py": HEAD_IMPL, "test_calc.py": HEAD_TESTS})
     runner, leader_file, child_file = _slow_runner(tmp_path)
     tmp_root = tmp_path / "tmproot"  # the driver's whole system tmp root
@@ -164,7 +174,7 @@ def test_group_sigterm_kills_runner_and_removes_worktree(tmp_path: Path) -> None
             int(child_file.read_text().strip()),
         ]
 
-        os.killpg(driver.pid, signal.SIGTERM)
+        os.killpg(driver.pid, signum)
         driver.wait(timeout=15)
 
         assert _gone_within(pids[0], 3), "the runner itself must be killed"
@@ -189,43 +199,45 @@ def test_group_sigterm_kills_runner_and_removes_worktree(tmp_path: Path) -> None
                 os.kill(pid, signal.SIGKILL)
 
 
+@REPLAY_SIGNALS
 def test_sigterm_during_popen_kills_the_runner(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    signum: int,
 ) -> None:
-    # SIGTERM arriving while subprocess.Popen is still executing inside
-    # _run_in_worktree (the runner already forked, its handle not yet back
-    # to the caller) must still reach the replay's signal handling: the
-    # runner group dies and the worktree is removed. An unhandled SIGTERM
+    # SIGTERM or SIGHUP arriving while subprocess.Popen is still executing
+    # inside _run_in_worktree (the runner already forked, its handle not yet
+    # back to the caller) must still reach the replay's signal handling: the
+    # runner group dies and the worktree is removed. An unhandled signal
     # hits the test's fallback handler (_StraySignal) instead of pytest.
     root, base = _repo(tmp_path, {"calc.py": HEAD_IMPL, "test_calc.py": HEAD_TESTS})
     runner, _, _ = _slow_runner(tmp_path)
     real_popen = subprocess.Popen
     spawned: list[subprocess.Popen] = []
 
-    def popen_then_sigterm(*args, **kwargs):
+    def popen_then_signal(*args, **kwargs):
         proc = real_popen(*args, **kwargs)
         # Only the runner uses start_new_session; git calls pass untouched.
         if kwargs.get("start_new_session"):
             spawned.append(proc)
-            os.kill(os.getpid(), signal.SIGTERM)
+            os.kill(os.getpid(), signum)
         return proc
 
-    monkeypatch.setattr(r.subprocess, "Popen", popen_then_sigterm)
+    monkeypatch.setattr(r.subprocess, "Popen", popen_then_signal)
     caught: BaseException | None = None
-    old_handler = signal.signal(signal.SIGTERM, _raise_stray)
+    old_handler = signal.signal(signum, _raise_stray)
     try:
         try:
             r._run_in_worktree(root, base, ["test_calc.py"], str(runner), 30)
         except BaseException as exc:
             caught = exc
     finally:
-        signal.signal(signal.SIGTERM, old_handler)
+        signal.signal(signum, old_handler)
 
     try:
         assert spawned, "the runner's Popen call never ran"
         assert not isinstance(caught, _StraySignal), (
-            "SIGTERM during Popen went unhandled"
+            f"{signum.name} during Popen went unhandled"
         )
         assert _group_gone_within(spawned[0], 3), "the runner group must be killed"
         assert _worktree_count(root) == 1, "the temporary worktree must be removed"
