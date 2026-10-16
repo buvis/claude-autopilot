@@ -288,6 +288,7 @@ def test_cap_regression_stall_row_mints_a_stub(tree) -> None:
     text = _stub_text(tree, row)
     assert "# Triage: Cycle 2 cap-check regressions: R5 8b3a58f2, R6 8b3a58f2." in text
     assert "site `cap_regression`" in text
+    assert "severity: high" in text, "a cap_regression stall never involves an unresolved CRITICAL - severity: critical would overstate it"
 
 
 def test_minting_never_promotes_into_backlog_or_wip(tree) -> None:
