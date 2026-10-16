@@ -30,12 +30,21 @@ def refuse(log_path: Path, repo_root: Path) -> str | None:
     identity = _identity_hit(resolved, repo_root, toplevel)
     if identity is not None:
         return identity
+    # Containment comes before the symlink-component walk: a path that never
+    # touches the repository at all (reached through a symlinked ancestor
+    # outside it, or otherwise) must be reported as outside, not misreported
+    # by whatever the component walk trips over first while climbing past
+    # filesystem ancestors that have nothing to do with the repo.
+    if not resolved.is_relative_to(toplevel):
+        return _OUTSIDE
     probe = _log_rel_and_tracked(repo_root, log_path)
-    if probe is not None and probe[1]:
+    if probe is None:
+        return _OUTSIDE  # a failing tracked-probe fails closed
+    if probe[1]:
         return "is tracked"
     if _symlinked_component(log_path, repo_root, toplevel):
         return "is a symlink"
-    if not resolved.is_relative_to(toplevel) or _in_nested_repo(resolved, toplevel):
+    if _in_nested_repo(resolved, toplevel):
         return _OUTSIDE
     try:
         st = os.lstat(resolved)
@@ -70,7 +79,7 @@ def _identity_targets(repo_root: Path) -> list[tuple[Path, str]]:
             # repo_root; an absolute one replaces it.
             targets.append(
                 (
-                    Path(repo_root) / probe.stdout.strip(),
+                    repo_root / probe.stdout.strip(),
                     "resolves inside the git directory",
                 ),
             )
@@ -89,6 +98,14 @@ def _identity_hit(resolved: Path, repo_root: Path, toplevel: Path) -> str | None
     if resolved.is_relative_to((repo_root / STORE_PREFIX).resolve()):
         return "resolves inside the store"
     targets = _identity_targets(repo_root)
+    pointer = _worktree_gitdir_pointer(resolved)
+    if pointer is not None:
+        for target, reason in targets:
+            try:
+                if os.path.samefile(pointer, target):
+                    return reason
+            except OSError:
+                continue  # one of the two does not exist
     current = resolved.parent
     while True:
         for target, reason in targets:
@@ -100,6 +117,24 @@ def _identity_hit(resolved: Path, repo_root: Path, toplevel: Path) -> str | None
         if current == toplevel or current.parent == current:
             return None
         current = current.parent
+
+
+def _worktree_gitdir_pointer(resolved: Path) -> Path | None:
+    """The target of a linked worktree's `.git` FILE (`gitdir: <path>`), or
+    None when `resolved` is not such a file. A linked worktree's `.git` is a
+    regular file, not a directory, so it never shows up as an ancestor's
+    identity match for anything resolved below it -- and the file IS itself
+    the candidate sink, so it must be checked directly against the identity
+    targets by what it points at, not by its own (unrelated) inode."""
+    try:
+        if not stat.S_ISREG(os.lstat(resolved).st_mode):
+            return None
+        text = resolved.read_text()
+    except (OSError, UnicodeDecodeError):
+        return None
+    if not text.startswith("gitdir:"):
+        return None
+    return Path(text.split(":", 1)[1].strip())
 
 
 def _symlinked_component(log_path: Path, repo_root: Path, toplevel: Path) -> bool:
@@ -123,11 +158,18 @@ def _in_nested_repo(resolved: Path, toplevel: Path) -> bool:
     `toplevel`'s working tree (an ignored directory carrying its own `.git`
     and its own committed store). The probe is scoped to where the target
     actually lives, not to `repo_root`. A parent directory that does not
-    exist yet cannot hold a nested repo, so its failure is not a refusal."""
+    exist yet cannot hold a nested repo, so its failure is not a refusal.
+    Git also fails this same probe with "fatal: this operation must be run
+    in a work tree" (rc 128) when invoked from inside a `.git` administrative
+    directory itself -- which is exactly where `resolved.parent` lands for
+    `<nested-repo>/.git/<rel>`. By the time this runs, `toplevel`'s own
+    `.git` has already been ruled out by the identity check above, so that
+    specific failure can only mean a DIFFERENT repo's git internals, and
+    must be treated as nested rather than as "no repo here"."""
     try:
         probe = _git(resolved.parent, "rev-parse", "--show-toplevel")
     except OSError:
         return False
     if probe.returncode != 0:
-        return False
+        return "work tree" in probe.stderr
     return Path(probe.stdout.strip()).resolve() != toplevel
