@@ -1120,6 +1120,13 @@ def _run_verify(args: argparse.Namespace) -> int:
     except OSError as err:
         print(json.dumps({"sha": head, "log": str(log_path), "error": str(err)}))
         return 2
+    except RuntimeError as exc:
+        # `verification._signal_error`: a guarded signal killed the gate.
+        if not str(exc).startswith("verify: "):
+            raise
+        log = str(log_path) if log_path.exists() else None
+        print(json.dumps({"error": str(exc), "exit": 2, "log": log}))
+        return 2
     return _report_verify(result, head, log_path)
 
 

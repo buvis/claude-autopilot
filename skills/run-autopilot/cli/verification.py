@@ -49,6 +49,7 @@ from cli.dirty_tree import (
 )
 
 GATE_TIMEOUT_S = 1800
+GATE_LOCK_TIMEOUT_S = 600  # the lock wait's own budget, separate from the gate's
 GATE_OUTPUT_CAP = 2_000_000  # bytes of combined stdout+stderr kept
 _LOCK_POLL_S = 0.05  # LOCK_NB poll interval while waiting for the gate lock
 
@@ -57,10 +58,6 @@ GATE_LOCK_REL = Path("docs/dev/tmp") / "gate.lock"
 SUMMARY_RE = re.compile(r"PASS (\d+) FAIL (\d+) SKIP (\d+) EXIT (\d+)")
 _FULL_SHA_RE = re.compile(r"[0-9a-f]{40}")
 _STALE: tuple[str, dict] = ("stale", {})
-# Captured at import time so `_child_from_exception` still recognizes a real
-# child even when a test monkeypatches `subprocess.Popen` itself to a plain
-# function (not a type, so `isinstance(value, subprocess.Popen)` would raise).
-_POPEN_TYPE = subprocess.Popen
 
 
 def _record_shape_ok(record: dict, gate_command: str) -> bool:
@@ -217,7 +214,7 @@ def _drain_bounded(
     return stdout_buf, not open_fds
 
 
-def _timed_out_result() -> dict:
+def _timed_out_result(waited_s: float) -> dict:
     """The all-None result of a gate killed at its deadline."""
     return {
         "passed": None,
@@ -231,10 +228,11 @@ def _timed_out_result() -> dict:
         "dirty_paths": [],
         "lock_timeout": False,
         "head_moved": False,
+        "waited_s": waited_s,
     }
 
 
-def _lock_timeout_result() -> dict:
+def _lock_timeout_result(waited_s: float) -> dict:
     """The flock was never acquired by the deadline. No gate spawned, so
     `timed_out` stays False (it means a gate killed at its deadline);
     `lock_timeout` names this cause."""
@@ -250,10 +248,11 @@ def _lock_timeout_result() -> dict:
         "dirty_paths": [],
         "lock_timeout": True,
         "head_moved": False,
+        "waited_s": waited_s,
     }
 
 
-def _head_moved_result() -> dict:
+def _head_moved_result(waited_s: float) -> dict:
     """HEAD no longer equals `sha` once the lock is held. Not a `dirty`
     result: the tree can be clean while HEAD itself moved."""
     return {
@@ -268,10 +267,11 @@ def _head_moved_result() -> dict:
         "dirty_paths": [],
         "lock_timeout": False,
         "head_moved": True,
+        "waited_s": waited_s,
     }
 
 
-def _dirty_result(dirty_paths: list[str]) -> dict:
+def _dirty_result(dirty_paths: list[str], waited_s: float) -> dict:
     """The refusal shape for a dirty-tree check, pre-spawn or post-reap.
     `timed_out` is explicitly False here, never inherited from
     `_timed_out_result()`, because `run_gate_line` branches on `timed_out`
@@ -289,6 +289,7 @@ def _dirty_result(dirty_paths: list[str]) -> dict:
         "dirty_paths": dirty_paths,
         "lock_timeout": False,
         "head_moved": False,
+        "waited_s": waited_s,
     }
 
 
@@ -392,6 +393,7 @@ def _lock_and_check(
     cwd: Path,
     sha: str,
     log_path: Path | None,
+    waited_s: float,
 ) -> tuple[tuple[str, ...], dict | object | None]:
     """The preamble of `run_gate`, called with the flock already held:
     refuse when the log sink is unsafe (`_refuse_verify_log_path`, checked
@@ -403,10 +405,10 @@ def _lock_and_check(
     if _refuse_verify_log_path(cwd, log_path) is not None:
         resolved = _log_rel_and_tracked(cwd, log_path)
         rel = resolved[0] if resolved is not None else str(log_path)
-        return extra_excluded, _dirty_result([rel])
+        return extra_excluded, _dirty_result([rel], waited_s)
     dirty, dirty_paths = _dirty_check(cwd, extra_excluded)
     if dirty:
-        return extra_excluded, _dirty_result(dirty_paths)
+        return extra_excluded, _dirty_result(dirty_paths, waited_s)
     head = _git(cwd, "rev-parse", "HEAD")
     if head.returncode != 0 or head.stdout.strip() != sha:
         return extra_excluded, _HEAD_MOVED
@@ -502,11 +504,12 @@ def _run_locked_gate(
     log_path: Path | None,
     extra_excluded: tuple[str, ...],
     lock_fd: int,
+    waited_s: float,
 ) -> dict:
     """The spawn half of `run_gate`, called with the flock held: open the log,
-    delete any record, spawn, drain, reap and record against the same
-    `deadline` the lock wait was bounded by. Closes the log in its own
-    `finally`, before `run_gate`'s `finally` releases the lock."""
+    delete any record, spawn, drain, reap and record against the gate's own
+    `deadline`, computed once the lock was acquired. Closes the log in its
+    own `finally`, before `run_gate`'s `finally` releases the lock."""
     log_file = None
     try:
         if log_path is not None:
@@ -520,8 +523,8 @@ def _run_locked_gate(
             lock_fd,
         )
         if not exited:
-            return _timed_out_result()
-        return _record_gate(
+            return _timed_out_result(waited_s)
+        recorded = _record_gate(
             command,
             cwd,
             sha,
@@ -530,68 +533,62 @@ def _run_locked_gate(
             stdout_buf,
             extra_excluded,
         )
+        return {**recorded, "waited_s": waited_s}
     finally:
         if log_file is not None:
             log_file.close()
 
 
-class _SigtermGuard:
-    """Tracks whether the gate has started and whether a SIGTERM arrived
-    before that. `handle` is the installed signal handler: before the
-    gate starts it only records `sigterm_pending`; once started, it raises
-    directly (SIGTERM during drain/reap). `raise_if_pending` turns a
-    deferred signal into the same error, called right after the gate
-    starts."""
+def _signal_error(signum: int) -> RuntimeError:
+    """The error a guarded signal turns into, named after the signal."""
+    return RuntimeError(f"verify: {signal.Signals(signum).name} during gate")
+
+
+class _SignalGuard:
+    """Tracks whether the gate has started, the first signal that arrived
+    while raising was unsafe, and whether cleanup has begun. `handle` is
+    the installed signal handler: before the gate starts, or once cleanup
+    has begun, it only records `pending_signum`; otherwise it marks
+    cleanup as begun and raises directly (a signal during drain/reap).
+    `raise_if_pending` turns a signal deferred during spawn into the same
+    error, called right after the gate starts."""
 
     def __init__(self) -> None:
-        self.gate_started = False
-        self.sigterm_pending = False
+        self.gate_started: bool = False
+        self.pending_signum: int | None = None
+        self.cleaning: bool = False
 
-    def handle(self, signum, frame) -> None:
-        if not self.gate_started:
-            self.sigterm_pending = True
+    def handle(self, signum: int, frame) -> None:
+        if not self.gate_started or self.cleaning:
+            if self.pending_signum is None:
+                self.pending_signum = signum
             return
-        raise RuntimeError("verify: SIGTERM during gate")
+        self.cleaning = True
+        raise _signal_error(signum)
 
     def raise_if_pending(self) -> None:
-        if self.sigterm_pending:
-            raise RuntimeError("verify: SIGTERM during gate")
+        if self.pending_signum is not None and not self.cleaning:
+            self.cleaning = True
+            raise _signal_error(self.pending_signum)
 
 
 @contextmanager
-def _deferred_sigterm():
-    """Installs `_SigtermGuard.handle` as the SIGTERM handler for the
-    caller's protected region, restoring the previous handler on exit.
-    SIGTERM is not blocked around `Popen`: the gate would inherit the
-    blocked mask. A no-op off the main thread, where `signal.signal`
-    cannot install a handler at all."""
-    guard = _SigtermGuard()
-    on_main_thread = threading.current_thread() is threading.main_thread()
-    if on_main_thread:
-        old_handler = signal.getsignal(signal.SIGTERM)
-        signal.signal(signal.SIGTERM, guard.handle)
+def _deferred_signals(signums: tuple[int, ...]):
+    """Installs `_SignalGuard.handle` as the handler for every signal in
+    `signums` for the caller's protected region, restoring each previous
+    handler on exit. The signals are not blocked around `Popen`: the gate
+    would inherit the blocked mask. A no-op off the main thread, where
+    `signal.signal` cannot install a handler at all."""
+    guard = _SignalGuard()
+    old_handlers = {}
+    if threading.current_thread() is threading.main_thread():
+        for signum in signums:
+            old_handlers[signum] = signal.signal(signum, guard.handle)
     try:
         yield guard
     finally:
-        if on_main_thread:
-            signal.signal(signal.SIGTERM, old_handler)
-
-
-def _child_from_exception(exc: BaseException) -> subprocess.Popen | None:
-    """When `Popen()` itself raises before returning -- a `KeyboardInterrupt`
-    from SIGINT can land mid-spawn, after the real session leader already
-    exists but before its handle reaches the caller -- that handle is only
-    reachable through the exception's own propagation path: it is still a
-    local in one of the frames between the raise point and here. Walks
-    `exc.__traceback__` for the first live `Popen` found in any frame's
-    locals; None when the gate never actually got far enough to fork."""
-    tb = exc.__traceback__
-    while tb is not None:
-        for value in tb.tb_frame.f_locals.values():
-            if isinstance(value, _POPEN_TYPE):
-                return value
-        tb = tb.tb_next
-    return None
+        for signum, handler in old_handlers.items():
+            signal.signal(signum, handler)
 
 
 def _spawn_gate(
@@ -608,13 +605,13 @@ def _spawn_gate(
     the gate's own process group if this process dies: a SIGKILLed verify
     cannot be handled, and this inheritance alone keeps the next verify
     waiting until the orphaned gate exits. Do not add a SIGKILL "handler".
-    `Popen` itself is inside the guarded region now, so SIGTERM and SIGINT
-    landing during spawn get the same cleanup as one landing during
-    drain/reap: kill the gate's process group and re-raise. When `Popen`
-    raises before `proc` is ever assigned, `_child_from_exception` recovers
-    the already-forked child from the exception's own traceback."""
+    `Popen` itself is inside the guarded region, so SIGTERM, SIGINT and
+    SIGHUP landing during spawn are deferred until `Popen` returns and then
+    get the same cleanup as one landing during drain/reap: kill the gate's
+    process group and re-raise. `proc` is therefore always a real `Popen`
+    or None in the cleanup branch."""
     proc = None
-    with _deferred_sigterm() as guard:
+    with _deferred_signals((signal.SIGTERM, signal.SIGINT, signal.SIGHUP)) as guard:
         try:
             proc = subprocess.Popen(
                 command,
@@ -629,10 +626,12 @@ def _spawn_gate(
             guard.raise_if_pending()
             stdout_buf, done = _drain_bounded(proc, GATE_OUTPUT_CAP, deadline, log_file)
             exited = _reap(proc, deadline, done)
-        except BaseException as exc:
-            # A log-sink write error, SIGTERM, or an interrupt: kill and
-            # reap the gate, then re-raise.
-            _kill_gate(proc if proc is not None else _child_from_exception(exc))
+        except BaseException:
+            # A log-sink write error or a guarded signal: kill and reap the
+            # gate, then re-raise. A signal landing during the cleanup is
+            # recorded, never raised over it.
+            guard.cleaning = True
+            _kill_gate(proc)
             raise
     return proc.returncode, stdout_buf, exited
 
@@ -660,6 +659,7 @@ def run_gate(
     cycle: int | None,
     timeout: float = GATE_TIMEOUT_S,
     log_path: Path | None = None,
+    lock_timeout: float = GATE_LOCK_TIMEOUT_S,
 ) -> dict:
     """
     Runs `command` via Popen(shell=True), draining stdout/stderr in bounded
@@ -673,29 +673,31 @@ def run_gate(
     `log_path` is given, every byte of stdout and stderr is streamed to it,
     in read order, in addition to the bounded in-memory parse tail.
 
-    `deadline = time.monotonic() + timeout` is computed once, before the
-    lock is even requested, and governs BOTH the wait for the exclusive
-    flock on `cwd / GATE_LOCK_REL` (polled with `LOCK_NB`, never a blocking
-    `LOCK_EX`) and, once acquired, the spawn/drain/reap below -- so a
-    caller's `timeout` is the whole wall-clock budget, not the budget for
-    each half separately. Expiry while still waiting for the lock returns
+    The wait for the exclusive flock on `cwd / GATE_LOCK_REL` (polled with
+    `LOCK_NB`, never a blocking `LOCK_EX`) is bounded by `lock_timeout`
+    alone. Once the lock is held, the gate's own deadline is computed fresh
+    as `time.monotonic() + timeout`, so a late waiter still gets the full
+    `timeout` for its gate. Expiry while still waiting for the lock returns
     `_lock_timeout_result()` with the lock never taken, released in the
-    closing `finally` as a no-op. What runs once the lock is held:
+    closing `finally` as a no-op. Every result carries `waited_s`, the
+    seconds spent waiting for the lock. What runs once the lock is held:
     `_gate_under_lock`.
     """
     lock_path = cwd / GATE_LOCK_REL
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     lock_fd = os.open(lock_path, os.O_RDWR | os.O_CREAT)
-    deadline = time.monotonic() + timeout
+    wait_start = time.monotonic()
     try:
         return _gate_under_lock(
             command,
             cwd,
             sha,
             cycle,
-            deadline,
+            timeout,
             log_path,
             lock_fd,
+            wait_start + lock_timeout,
+            wait_start,
         )
     finally:
         fcntl.flock(lock_fd, fcntl.LOCK_UN)
@@ -707,12 +709,17 @@ def _gate_under_lock(
     cwd: Path,
     sha: str,
     cycle: int | None,
-    deadline: float,
+    timeout: float,
     log_path: Path | None,
     lock_fd: int,
+    lock_deadline: float,
+    wait_start: float,
 ) -> dict:
-    """The locked half of `run_gate`: wait for the flock until `deadline`
-    (`_lock_timeout_result()` on expiry). Once the lock is held: the
+    """The locked half of `run_gate`: wait for the flock until
+    `lock_deadline` (`_lock_timeout_result()` on expiry). `waited_s`, the
+    time since `wait_start`, is measured once the wait ends and goes on
+    every result. Once the lock is held, the gate gets its own deadline
+    `timeout` seconds from now. Then: the
     pre-spawn dirty check; then a re-check that `git rev-parse HEAD` still
     equals `sha` (a mismatch or git failure returns `_head_moved_result()`,
     the gate never runs); then `_run_locked_gate` opens `log_path` itself
@@ -721,11 +728,14 @@ def _gate_under_lock(
     the tree leaves no older record behind. A failure to open the log or
     delete the record raises the bare OSError rather than being caught
     here. Neither refusal opens the log or deletes the record."""
-    if not _acquire_lock(lock_fd, deadline):
-        return _lock_timeout_result()
-    extra_excluded, refusal = _lock_and_check(cwd, sha, log_path)
+    acquired = _acquire_lock(lock_fd, lock_deadline)
+    waited_s = time.monotonic() - wait_start
+    if not acquired:
+        return _lock_timeout_result(waited_s)
+    gate_deadline = time.monotonic() + timeout
+    extra_excluded, refusal = _lock_and_check(cwd, sha, log_path, waited_s)
     if refusal is _HEAD_MOVED:
-        return _head_moved_result()
+        return _head_moved_result(waited_s)
     if refusal is not None:
         return refusal
     return _run_locked_gate(
@@ -733,8 +743,9 @@ def _gate_under_lock(
         cwd,
         sha,
         cycle,
-        deadline,
+        gate_deadline,
         log_path,
         extra_excluded,
         lock_fd,
+        waited_s,
     )
