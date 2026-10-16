@@ -265,6 +265,19 @@ def test_unreadable_head_sha_raises_cap_check_error(repo):
         classify_findings(repo["root"], bad_sha, previous)
 
 
+def test_unresolvable_full_sha_raises_naming_does_not_resolve(repo):
+    """A well-formed 40-hex head_sha that names no commit object - distinct
+    from a malformed sha - is `_verify_range`'s "does not resolve to a
+    commit" branch, not `_head_sha`'s format check."""
+    from cli.cap_check import CapCheckError, classify_findings
+
+    previous = _review(repo["reviews"] / "review-1.md", repo["base"], [])
+    unknown = _review(repo["reviews"] / "unknown.md", "f" * 40, [("R1", "HIGH", "a.py:3")])
+
+    with pytest.raises(CapCheckError, match="does not resolve to a commit"):
+        classify_findings(repo["root"], unknown, previous)
+
+
 def test_invalid_utf8_in_review_file_raises_cap_check_error(repo):
     from cli.cap_check import CapCheckError, classify_findings
 
@@ -531,10 +544,13 @@ def test_subdirectory_cwd_classifies_the_same_rows(repo):
     assert (nested.returncode, nested.stdout) == (top.returncode, top.stdout), nested.stderr
 
 
-def _assert_exit_2_naming(result: subprocess.CompletedProcess, *words: str) -> None:
+def _assert_exit_2_naming(result: subprocess.CompletedProcess, word: str) -> None:
+    """`word` must be the exact substring `_verify_range` emits for this
+    failure - not one of several accepted synonyms, which would pass even
+    if the real wording drifted to something unrelated."""
     assert result.returncode == 2, (result.stdout, result.stderr)
     assert "autopilot: cap-check:" in result.stderr
-    assert any(word.lower() in result.stderr.lower() for word in words), (words, result.stderr)
+    assert word.lower() in result.stderr.lower(), (word, result.stderr)
 
 
 def test_equal_or_reversed_head_shas_exit_2(repo):
@@ -546,13 +562,11 @@ def test_equal_or_reversed_head_shas_exit_2(repo):
 
     same_prev = _review(reviews / "same-1.md", repo["rework"], [])
     same_cur = _review(reviews / "same-2.md", repo["rework"], rows)
-    _assert_exit_2_naming(
-        _run_cap_check_cli(repo, same_cur, same_prev), "equal", "same", "identical", "differ",
-    )
+    _assert_exit_2_naming(_run_cap_check_cli(repo, same_cur, same_prev), "equal")
 
     rev_prev = _review(reviews / "rev-1.md", repo["rework"], [])
     rev_cur = _review(reviews / "rev-2.md", repo["base"], rows)
-    _assert_exit_2_naming(_run_cap_check_cli(repo, rev_cur, rev_prev), "ancestor")
+    _assert_exit_2_naming(_run_cap_check_cli(repo, rev_cur, rev_prev), "is not an ancestor of head_sha")
 
     _git(root, "checkout", "-q", "-b", "side", repo["base"])
     (root / "side.py").write_text("side = True\n")
@@ -561,11 +575,11 @@ def test_equal_or_reversed_head_shas_exit_2(repo):
 
     off_prev = _review(reviews / "off-1.md", repo["base"], [])
     off_cur = _review(reviews / "off-2.md", side, rows)
-    _assert_exit_2_naming(_run_cap_check_cli(repo, off_cur, off_prev), "ancestor", "reachable")
+    _assert_exit_2_naming(_run_cap_check_cli(repo, off_cur, off_prev), "not reachable from HEAD")
 
     sib_prev = _review(reviews / "sib-1.md", side, [])
     sib_cur = _review(reviews / "sib-2.md", repo["rework"], rows)
-    _assert_exit_2_naming(_run_cap_check_cli(repo, sib_cur, sib_prev), "ancestor")
+    _assert_exit_2_naming(_run_cap_check_cli(repo, sib_cur, sib_prev), "is not an ancestor of head_sha")
 
 
 def test_ref_name_head_sha_exits_2(repo):
@@ -586,7 +600,7 @@ def test_ref_name_head_sha_exits_2(repo):
     _assert_exit_2_naming(_run_cap_check_cli(repo, current, branch_prev), "beef")
 
     short_cur = _review(reviews / "short.md", short, rows)
-    _assert_exit_2_naming(_run_cap_check_cli(repo, short_cur, previous), short, "40")
+    _assert_exit_2_naming(_run_cap_check_cli(repo, short_cur, previous), "40-hex")
 
 
 def test_blame_failure_propagates_from_file_exists_at(repo, monkeypatch):

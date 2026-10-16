@@ -452,6 +452,49 @@ class CapRegressionStallTests(_StallTestCase):
         )
         self.assertFalse(self._state().get("deferred_decisions"))
 
+    def test_cap_regression_migration_failure_exits_9(self) -> None:
+        """A record_defer failure during the pending-deferral migration
+        (OSError/ValueError) must exit 9, exactly like the step-4 append
+        failure - never silently drop the migration and succeed."""
+        self._put_in_wip()
+        pending = [{"type": "cap-overflow", "issue": "x", "severity": "high"}]
+        self._write_state(self._sample_state(deferred_decisions=pending))
+
+        real_record_defer = records.record_defer
+
+        def _fail_on_migration(path, prd, batch_id, record):
+            if record.get("op_id", "").endswith("-dd0"):
+                raise OSError("disk full")
+            return real_record_defer(path, prd, batch_id, record)
+
+        with mock.patch.object(records, "record_defer", side_effect=_fail_on_migration):
+            rc = self._do_stall(site="cap_regression", detail="R5 8b3a58f2")
+
+        self.assertEqual(rc, 9)
+
+    def test_cap_regression_migration_dedupes_on_retry(self) -> None:
+        """A kill between the migration and the commit (after-append-before-
+        commit) must not double-migrate on retry - the migrated records are
+        deduped by their own `<op_id>-ddN` op_id, same as the stall record
+        itself."""
+        self._put_in_wip()
+        pending = [{"type": "cap-overflow", "issue": "only finding", "severity": "high"}]
+        self._write_state(self._sample_state(deferred_decisions=pending))
+
+        with mock.patch.dict(os.environ, {FAILPOINT_ENV: "after-append-before-commit"}):
+            with self.assertRaises(RuntimeError):
+                self._do_stall(site="cap_regression", detail="R5 8b3a58f2")
+
+        migrated_before = [i for i in self._deferred_items() if i.get("type") != "stall"]
+        self.assertEqual(len(migrated_before), 1)
+
+        rc = self._do_stall(site="cap_regression", detail="R5 8b3a58f2")
+
+        self.assertEqual(rc, 0)
+        migrated_after = [i for i in self._deferred_items() if i.get("type") != "stall"]
+        self.assertEqual(len(migrated_after), 1, "retry must not double-migrate (op_id dedup)")
+        self.assertFalse(self._state().get("deferred_decisions"))
+
 
 class FailpointRecoveryTests(_StallTestCase):
     """Each stall-side failpoint simulates a kill immediately after that
