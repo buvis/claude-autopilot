@@ -907,7 +907,7 @@ def _run_cap_check(args: argparse.Namespace) -> int:
         return 2
     for row in rows:
         print(json.dumps(row, ensure_ascii=False))
-    return 1 if any(row["regression"] for row in rows) else 0
+    return 1 if any(row["regression"] is not False for row in rows) else 0
 
 
 def _add_group_rework(subparsers) -> None:

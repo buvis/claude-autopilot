@@ -139,8 +139,8 @@ def test_rows_outside_rework_range_are_not_regressions(repo):
     assert [(r["ref"], r["file"], r["line"], r["regression"], r["commit"]) for r in rows] == [
         ("R1", "a.py", 1, False, None),
         ("R2", "c.py", None, False, None),
-        ("R3", "gone.py", 2, False, None),
-        ("R4", "missing.py", 2, False, None),
+        ("R3", "gone.py", 2, None, None),
+        ("R4", "missing.py", 2, None, None),
     ]
 
 
@@ -148,7 +148,8 @@ def test_deleted_file_only_row_is_not_a_regression(repo):
     """gone.py is still in `git diff --name-only` for the rework range (it was
     deleted there), but it no longer exists at head - a file-only row naming it
     must not be classified a regression just because the path appears in the
-    diff."""
+    diff. Per PRD 00321 a path missing at head is unresolved (null), never a
+    clean false."""
     rows = _classify(repo, [("R1", "CRITICAL", "gone.py")])
 
     assert rows == [
@@ -157,8 +158,9 @@ def test_deleted_file_only_row_is_not_a_regression(repo):
             "severity": "critical",
             "file": "gone.py",
             "line": None,
-            "regression": False,
+            "regression": None,
             "commit": None,
+            "reason": "unresolved path gone.py",
         }
     ]
 
