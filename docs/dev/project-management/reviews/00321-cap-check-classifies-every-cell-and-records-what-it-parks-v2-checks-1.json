@@ -1,0 +1,9 @@
+[
+  {
+    "source": "bob",
+    "finding": "Real review-pair attribution",
+    "file": "skills/run-autopilot/cli/cap_check.py",
+    "command": "python3 skills/run-autopilot/cli/__main__.py cap-check --review-file docs/dev/project-management/reviews/00310-park-cap-regressions-v1-review-2.md --previous docs/dev/project-management/reviews/00310-park-cap-regressions-v1-review-1.md",
+    "expect": "exit 1 with R5 and R6 both regression true at commit 8b3a58f2"
+  }
+]

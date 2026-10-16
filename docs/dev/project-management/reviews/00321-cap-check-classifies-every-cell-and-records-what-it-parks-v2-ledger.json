@@ -1,0 +1,18 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`__main__.py` is about 1970 lines, over the 800-line limit. The diff changes one line and adds nothing, so I am not counting it against the diff.",
+    "file": "skills/run-autopilot/cli/__main__.py",
+    "reason": "Pre-existing file size, outside this PRD's scope; the finder itself excludes it from the diff. Splitting __main__.py is its own PRD."
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Cannot statically verify: the 00310 review-pair command exits 1 and attributes R5 and R6 to `8b3a58f2`",
+    "file": "N/A",
+    "reason": "Not a defect: Alice, Blake and Carl each ran that command this cycle and all three report exit 1 with R5/R6 regression true at 8b3a58f2. Routed to verification as the cycle's queued check."
+  }
+]

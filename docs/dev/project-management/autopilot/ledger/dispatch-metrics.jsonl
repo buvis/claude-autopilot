@@ -4782,3 +4782,9 @@
 {"kind":"handoff","site":"done","edge":"leave","at":1792170671,"phase":"build","prd":"00320-refuse-every-unsafe-verify-log-sink-v2.md"}
 {"kind":"handoff","site":"build","edge":"resume","at":1792170686,"phase":"build","prd":"00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md"}
 {"kind":"handoff","site":"build","edge":"leave","at":1792173318,"phase":"review","prd":"00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1792173375,"phase":"review","prd":"00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md"}
+{"id":"d2488131","kind":"bob","task":"review-00321-c1","queued_at":1792173718,"prompt_bytes":9544}
+{"id":"5ef597ce","kind":"carl","task":"review-00321-c1","queued_at":1792173718,"prompt_bytes":6553}
+{"id":"d2488131","ended_at":1792174588,"elapsed_s":870,"outcome":"ok","detail":"retry"}
+{"id":"5ef597ce","ended_at":1792174593,"elapsed_s":875,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"review","edge":"leave","at":1792174791,"phase":"review","prd":"00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md"}
