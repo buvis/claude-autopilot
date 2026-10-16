@@ -195,20 +195,20 @@ def qualifies(row) -> bool:
 ### `cli/records.py`
 
 ```python
-def _migrate_pending_deferrals(
-    autopilot_dir: Path, current: dict, prd: str,
+def _migrate_stall_deferrals(
+    autopilot_dir: Path, current: dict, prd: str, op_id: str,
 ) -> int | None:
     """do_stall's new step 4a (spliced between the existing step 4
     `_append_stall_deferred` and step 4b `_record_stall_custody`),
-    cap_critical and cap_regression only: append
-    every item of current.get("deferred_decisions", []) to the batch
+    **cap_regression only** — cap_critical migrates the same records inside
+    its own custody write, so gating both sites here would write them twice:
+    append every item of current.get("deferred_decisions", []) to the batch
     deferred JSON via record_defer (same sink _append_stall_deferred uses),
     BEFORE _commit_stall's reset_prd_fields drops state.deferred_decisions
     (it is in PER_PRD_RESET_FIELDS). Each migrated record keeps its own
-    shape untouched plus the stamped "prd" record_defer always adds; no
-    op_id is added here (these are pre-existing pending records, not the
-    stall record itself — record_defer's op_id dedupe only matters for the
-    retry-idempotent stall record _append_stall_deferred writes). Returns 9
+    shape untouched plus the stamped "prd" record_defer always adds, and is
+    keyed `op_id: "<op_id>-dd<i>"` (via `custody.migration_records`) so a
+    retry of the same stall dedupes instead of duplicating. Returns 9
     on an OSError/ValueError from record_defer (same failure code as
     _append_stall_deferred), None on success (including an empty/absent
     deferred_decisions list, which migrates nothing)."""
@@ -291,7 +291,7 @@ accept the `cap_regression` stall row, mints a hold stub.
 - `findings_section._reviewed_keys` / `Row` (`cli/findings_section.py`) —
   already the source of `row.file`/`row.severity`/`row.ref`; unchanged.
 - `record_defer` (`cli/records.py:138`) — already the sink
-  `_append_stall_deferred` writes to; `_migrate_pending_deferrals` calls
+  `_append_stall_deferred` writes to; `_migrate_stall_deferrals` calls
   the same function per pending item instead of introducing a second
   writer.
 - `custody.CUSTODY_SITE`, `custody.record_critical`, `custody.marker_entry`
@@ -357,11 +357,13 @@ accept the `cap_regression` stall row, mints a hold stub.
   (e.g. a `path@<ref>` form) only needs a new regex alternative tried
   before the bare-path fallback — the function is designed as an ordered
   list of regex attempts for exactly this reason.
-- **Edge case boxed in by this design:** `_migrate_pending_deferrals` is
-  gated on site, not called unconditionally from `do_stall`. A future
-  third site that also wants its PRD's pending `deferred_decisions`
-  preserved through a stall must add itself to the same tuple; this design
-  does not generalize it to "every stall site" because `cap_critical`'s own
+- **Edge case boxed in by this design:** `_migrate_stall_deferrals` is
+  gated on site (`cap_regression` alone — `cap_critical` migrates the same
+  records inside `custody.record_critical`), not called unconditionally from
+  `do_stall`. A future third site that also wants its PRD's pending
+  `deferred_decisions` preserved through a stall must add itself to the same
+  gate; this design does not generalize it to "every stall site" because
+  `cap_critical`'s own
   custody capture depends on site-specific branching already, and widening
   the migration to every site (including, say, `design_gate` or
   `clarification`) is outside this PRD's scope and untested here.

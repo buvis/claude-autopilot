@@ -547,15 +547,9 @@ def do_stall(
     test_records_stall.py. Exit codes: 0 stalled | 2 state unreadable or
     capture failed | 4 move failed | 9 record/custody write failed | 10 conflict.
 
-    `site == triage.REGRESSION_SITE` ("cap_regression") migrates every
-    pending `state.deferred_decisions` record exactly as `CUSTODY_SITE`
-    ("cap_critical") does - but through `_write_stall_records`'s own
-    `_migrate_stall_deferrals` step, not through `_record_stall_custody`'s
-    step 4b: `cap_regression` never takes the custody branch (`site !=
-    custody.CUSTODY_SITE` there returns `(None, None)` unconditionally), so
-    it gets a 9 on a failed migration exactly like `cap_critical` does, but
-    writes no custody marker, no journal row, and no
-    `batch.critical_on_master` mirror entry."""
+    `site == triage.REGRESSION_SITE` also migrates pending
+    `deferred_decisions` (step 4a, via `_write_stall_records`), writing no
+    custody marker; a failed migration is a 9 as for `cap_critical`."""
     state_path = Path(state_path)
     prds_dir = Path(prds_dir)
     autopilot_dir = Path(autopilot_dir)
