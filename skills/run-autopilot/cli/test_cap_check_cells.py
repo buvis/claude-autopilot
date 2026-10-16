@@ -45,6 +45,17 @@ def test_wrapped_or_nested_annotated_cell_classifies_like_bare_a_py_4(repo, cell
     assert wrapped["commit"] == repo["rework_short"] == bare["commit"]
 
 
+def test_mid_cell_note_with_backticks_does_not_split_the_cell(repo):
+    bare, noted = _classify(
+        repo, [("R1", "HIGH", "a.py:4"), ("R2", "HIGH", "a.py:4 (see `foo`), b.py")]
+    )
+
+    assert bare["regression"] is True
+    assert noted["regression"] is True
+    assert noted["commit"] == repo["rework_short"] == bare["commit"]
+    assert (noted["file"], noted["line"]) == ("a.py", 4)
+
+
 def test_nested_parenthesis_annotation_is_not_read_as_part_of_the_path(repo):
     rows = _classify(repo, [("R1", "HIGH", "a.py:1 (note (nested))")])
 

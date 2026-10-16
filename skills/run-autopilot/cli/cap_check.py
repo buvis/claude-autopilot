@@ -26,6 +26,7 @@ _ANNOTATION_RE = re.compile(r"\s*\([^()]*(?:\([^()]*\)[^()]*)*\)\s*$")
 # when whitespace follows and the next non-space char is not a digit, so
 # `a.py:3,9` stays one segment for _FILE_LINE_RE's comma list and `a,b.py`
 # stays one path.
+_NOTE_RE = re.compile(r"\s+\((?:[^()]|\([^()]*\))*\)")
 _SPLIT_RE = re.compile(r";|\s+(?=`)|,(?=\s)(?!\s*\d)")
 _HASH_L_RE = re.compile(r"^(.*)#[Ll](\d+)(?:-[Ll]?(\d+))?$")
 _COLON_L_RE = re.compile(r"^(.*?):\s*[Ll]\s*(\d+)(?:-[Ll]?(\d+))?$")
@@ -161,7 +162,7 @@ def _parse_file_cell(
     """One File cell's (path, lines) pairs; `lines` is None for a path with no
     line spec, else every line the cell names (a range yields all of them, a
     comma list every line it lists). An empty segment yields no pair."""
-    cell = _ANNOTATION_RE.sub("", cell.strip())
+    cell = _NOTE_RE.sub("", _ANNOTATION_RE.sub("", cell.strip()))
     pairs = []
     for segment in _SPLIT_RE.split(cell):
         segment = _clean_segment(segment)
