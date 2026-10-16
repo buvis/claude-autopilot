@@ -253,6 +253,14 @@
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
       "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+    },
+    {
+      "type": "verify-escape",
+      "issue": "queued check non-zero by design: python3 skills/run-autopilot/cli/__main__.py cap-check --review-file docs/dev/project-management/reviews/00310-park-cap-regressions-v1-review-2.md --previous .../review-1.md -> exit 1, which is the verb exit code for \"at least one row is a regression\". R5 and R6 both classified regression true at 8b3a58f2 and R7 at b2d9a563, which is exactly the PRD success criterion; recorded because the sweep rule counts any non-zero exit as not-passed.",
+      "severity": "low",
+      "command": "python3 skills/run-autopilot/cli/__main__.py cap-check --review-file docs/dev/project-management/reviews/00310-park-cap-regressions-v1-review-2.md --previous docs/dev/project-management/reviews/00310-park-cap-regressions-v1-review-1.md",
+      "exit": 1,
+      "prd": "00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md"
     }
   ]
 }

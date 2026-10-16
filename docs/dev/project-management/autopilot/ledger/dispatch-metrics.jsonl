@@ -4789,3 +4789,21 @@
 {"id":"5ef597ce","ended_at":1792174593,"elapsed_s":875,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"review","edge":"leave","at":1792174791,"phase":"review","prd":"00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md"}
 {"kind":"handoff","site":"review","edge":"leave","at":1792176524,"phase":"review","prd":"00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1792176571,"phase":"review","prd":"00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md"}
+{"id":"08c5cbe1","kind":"bob","task":"review-c2x202610162000","queued_at":1792176883,"prompt_bytes":20909}
+{"id":"d50ea193","kind":"carl","task":"review-c2x202610162000","queued_at":1792176883,"prompt_bytes":17904}
+{"id":"31ec5f75","kind":"bob","task":"review-c2x202610162000","queued_at":1792177351,"prompt_bytes":195668}
+{"id":"08c5cbe1","ended_at":1792177490,"elapsed_s":607,"outcome":"error","detail":"lack-of-input"}
+{"id":"31ec5f75","ended_at":1792177493,"elapsed_s":142,"outcome":"ok","detail":"retry"}
+{"id":"d50ea193","ended_at":1792177499,"elapsed_s":616,"outcome":"ok","detail":null}
+{"id":"5e63da73","kind":"tess","task":"8","queued_at":1792177782,"prompt_bytes":46463}
+{"id":"5e63da73","ended_at":1792177883,"elapsed_s":101,"outcome":"ok","detail":null}
+{"id":"6a8de435","kind":"ivan","task":"8","queued_at":1792177937,"prompt_bytes":20476}
+{"id":"6a8de435","ended_at":1792178104,"elapsed_s":167,"outcome":"ok","detail":null}
+{"id":"2be6359f","kind":"pat","task":"8","queued_at":1792178324,"prompt_bytes":23842}
+{"id":"2be6359f","ended_at":1792178378,"elapsed_s":54,"outcome":"ok","detail":null}
+{"id":"04a8a8ce","kind":"ivan","task":"8","queued_at":1792178397,"prompt_bytes":19685}
+{"id":"04a8a8ce","ended_at":1792178442,"elapsed_s":45,"outcome":"ok","detail":null}
+{"id":"c670f86e","kind":"pat","task":"8","queued_at":1792178474,"prompt_bytes":4278}
+{"id":"c670f86e","ended_at":1792179088,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"kind":"handoff","site":"review","edge":"leave","at":1792179088,"phase":"done","prd":"00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md"}

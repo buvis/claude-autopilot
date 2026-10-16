@@ -14,5 +14,21 @@
     "issue": "Cannot statically verify: the 00310 review-pair command exits 1 and attributes R5 and R6 to `8b3a58f2`",
     "file": "N/A",
     "reason": "Not a defect: Alice, Blake and Carl each ran that command this cycle and all three report exit 1 with R5/R6 regression true at 8b3a58f2. Routed to verification as the cycle's queued check."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "3 touched test(s) pass against the pre-change code: test_unresolvable_full_sha_raises_naming_does_not_resolve, test_equal_or_reversed_head_shas_exit_2, test_ref_name_head_sha_exits_2",
+    "file": "skills/run-autopilot/cli/test_cap_check.py",
+    "reason": "Behaviour-preserving pin: these tests cover range-proof behaviour that already existed and was only untested (cycle-1 R5 asked for exactly these tests). Alice verified each would fail if that behaviour broke, so they are not tautological."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "2 touched test(s) pass against the pre-change code: test_cap_regression_migration_dedupes_on_retry, test_cap_regression_migration_failure_exits_9",
+    "file": "skills/run-autopilot/cli/test_records_stall.py",
+    "reason": "Behaviour-preserving pin: the migration exit-9 and op_id dedup paths already existed and were untested (cycle-1 R5). Alice verified each test fails if that behaviour breaks."
   }
 ]
