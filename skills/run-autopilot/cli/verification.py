@@ -463,7 +463,7 @@ def _descend(parent_fd: int, name: str) -> int:
     return next_fd
 
 
-def _open_log_sink(log_path: Path, root: Path = Path("/")):
+def _open_log_sink(log_path: Path, root: Path):
     """Opens `log_path` for a fresh write without following a symlink at
     any level below `root` (`log_path`'s own parent chain included).
 
@@ -471,9 +471,8 @@ def _open_log_sink(log_path: Path, root: Path = Path("/")):
     existing leaf untracked, non-symlink, single-link, regular and
     non-executable) and recreated with `O_EXCL | O_NOFOLLOW` relative to a
     descriptor pinned by `_pinned_parent_fd`, so a later symlink swap of
-    the PATHNAME cannot redirect the open either. Callers pass the repo
-    root as `root`; the filesystem-root default keeps the strictest walk
-    for a caller that has no repo root to offer."""
+    the PATHNAME cannot redirect the open either. `root` is the repo
+    root; every caller has one and must pass it."""
     parent_fd = _pinned_parent_fd(log_path.parent, root)
     try:
         try:
