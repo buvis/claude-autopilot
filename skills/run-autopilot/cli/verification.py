@@ -430,8 +430,16 @@ def _pinned_parent_fd(parent: Path, root: Path) -> int:
     OWN path is trusted (a checkout reached through a symlinked ancestor,
     e.g. a repo under macOS `/tmp`, is normal and must not be refused),
     while everything the caller could be tricked about lives below it."""
+    try:
+        names = parent.relative_to(root).parts
+    except ValueError as exc:
+        # A lexical mismatch, not a filesystem fault: the caller spelled the
+        # sink through a different root than it passed (`/tmp/x` vs
+        # `/private/tmp/x`). Raised as OSError so the caller's handling of a
+        # refused sink covers it, and before `root` is opened so no fd leaks.
+        raise OSError(f"{parent} is not under {root}") from exc
     parent_fd = os.open(root, os.O_DIRECTORY)
-    for name in parent.relative_to(root).parts:
+    for name in names:
         try:
             parent_fd = _descend(parent_fd, name)
         except OSError:
