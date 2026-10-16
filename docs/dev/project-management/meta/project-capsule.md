@@ -45,11 +45,20 @@ Generated: 2026-10-16 (catchup delta 14:33 UTC at HEAD 14aa347d)
 ## Active Work
 
 ### Batch 202610161547 (in progress)
-- PRD 00320 (refuse-every-unsafe-verify-log-sink-v2) in wip, task 1 of 3 done
-  (fail-first tests committed at a5b4a32f); backlog remaining: 00321-00327.
-  This batch unblocks `dev/bin/release`: `verify --log` is destructive on
-  master until 00320 lands, and HEAD's delegation guard has four regressions
-  against 0.9.0 until 00324 lands.
+- [x] 00320-refuse-every-unsafe-verify-log-sink-v2 (2 cycles, cap-out: 1 HIGH + 15 lower deferred)
+- [ ] 00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2
+- [ ] 00322-kill-the-gate-on-every-signal-v1
+- [ ] 00323-tests-line-and-verify-record-say-red-v1
+- [ ] 00324-guard-pairs-delimiters-as-nested-runs-v1
+- [ ] 00325-sweep-reads-emoji-rows-by-character-class-v1
+- [ ] 00326-close-the-loops-remaining-verb-and-ledger-truths-v2
+- [ ] 00327-release-gate-and-notes-say-what-ships-v2
+
+Observations: 00320's review cap-out deferred two severe findings into fresh
+hold stubs (00328, 00329) rather than rework tasks; `dev/bin/release` is
+unblocked for the `verify --log` destructive-sink risk now that 00320 landed,
+but HEAD's delegation guard still has four regressions against 0.9.0 until
+00324 lands.
 
 ### Batch 202610141430 (complete)
 - [x] 00277-catch-critical-rows-in-every-shape-v2 (2 cycles)

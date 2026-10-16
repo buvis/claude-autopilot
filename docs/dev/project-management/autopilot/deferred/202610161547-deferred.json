@@ -7,6 +7,252 @@
       "severity": "high",
       "reason": "found while consolidating 00320 cycle 1; worked around by stripping the prefix and re-consolidating. Needs its own PRD - it is a defect in the pack, not in 00320.",
       "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+    },
+    {
+      "issue": "File test_review_stage.py exceeds the 800-line limit (805 lines)",
+      "severity": "\ud83d\udfe1",
+      "file": "skills/run-autopilot/cli/test_review_stage.py:805",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "cycle": 2
+    },
+    {
+      "issue": "Additions beyond the PRD. `_in_nested_repo` refuses a sink inside any nested git repository. `_open_log_sink` takes an extra `root` parameter. The test file has three tests the spec does not name: `test_parent_dir_symlink_swap_is_refused`, `test_nested_repo_store_is_refused` and `test_symlink_above_repo_root_does_not_refuse_default_sink`. The nested-repo refusal is a fair reading of \"outside the repository\" but is not stated.",
+      "severity": "\u26aa",
+      "file": "skills/run-autopilot/cli/log_sink_refusal.py:121",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "cycle": 2
+    },
+    {
+      "issue": "`_lock_and_check` folds every refusal reason into a dirty result, where the spec names only tracked and symlinked sinks. It is a safe superset. The \"tracked\" test is `git ls-files --error-unmatch`, which checks the index, not HEAD, as the spec literally says.",
+      "severity": "\u26aa",
+      "file": "skills/run-autopilot/cli/verification.py:403",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "cycle": 2
+    },
+    {
+      "issue": "`_descend` creates missing parent directories before opening the sink. That is only reached after the refusal passes, so it is not a hole, but the gate path now makes directories.",
+      "severity": "\u26aa",
+      "file": "skills/run-autopilot/cli/verification.py:458",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "cycle": 2
+    },
+    {
+      "issue": "Fail-first replay: `test_run_gate_streams_stdout_and_stderr_to_the_log` and `test_held_gate_lock_blocks_before_the_log_open_and_record_delete` pass against the pre-change code \u2014 out of scope as findings: both were only relocated from a `tmp_path_factory` sink into `docs/dev/tmp` because case 4 now refuses an out-of-repo sink, and they are pre-existing regression tests, not this PRD's behavior pins",
+      "severity": "\u26aa",
+      "file": "skills/run-autopilot/cli/test_verification.py:454",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "cycle": 2
+    },
+    {
+      "issue": "Fail-first replay: `test_run_gate_refuses_a_symlinked_log_and_leaves_its_target` passes at base \u2014 out of scope: it is the surviving `symlink` arm of a deleted parametrize whose behavior was already correct at base, and its tracked arm moved to `test_verify_log_refusal.py::test_run_gate_refuses_tracked_log_without_opening` (which is red at base)",
+      "severity": "\u26aa",
+      "file": "skills/run-autopilot/cli/test_verification_log_sink.py:198",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "cycle": 2
+    },
+    {
+      "issue": "Fail-first replay: `test_untracked_tmp_log_still_records` passes at base \u2014 out of scope: the PRD and design both state this happy-path test must already pass at the task's base commit",
+      "severity": "\u26aa",
+      "file": "skills/run-autopilot/cli/test_verify_log_refusal.py:225",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "cycle": 2
+    },
+    {
+      "issue": "A CLI `verify` run now executes `log_sink_refusal.refuse` twice (pre-flight plus inside the lock), each pass spawning ~6 `git` subprocesses, so a gate run pays ~12 extra probes \u2014 out of scope: both enforcement points are a PRD Must-have (\"a library caller cannot bypass the CLI\"), and caching across the flock boundary would reintroduce the TOCTOU the second check exists to close",
+      "severity": "\u26aa",
+      "file": "skills/run-autopilot/cli/log_sink_refusal.py:20",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "cycle": 2
+    },
+    {
+      "issue": "R13: two changed files exceed the 800-line limit \u2014 `skills/run-autopilot/cli/__main__.py` (~1975 lines, last function at 1968) and `skills/run-autopilot/cli/test_review_stage.py` (~802, last function at 786+16) \u2014 out of scope: both were already over before this diff, which adds ~15 and 2 net lines respectively; splitting them is its own PRD (the same precedent that split `verification.py`/`dirty_tree.py` under 00311), and the new files this PRD adds are well inside the limit (log_sink_refusal.py 133, test_verify_log_refusal.py 374, verification.py ~742)",
+      "severity": "\u26aa",
+      "file": "skills/run-autopilot/cli/__main__.py:1968",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "cycle": 2
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "A `.git` file with a RELATIVE `gitdir:` pointer is still not refused. `_worktree_gitdir_pointer` returns the pointer unresolved, so `os.path.samefile` resolves it against cwd, raises, and the `continue` swallows it; reproduced on a submodule and on a `worktree.useRelativePaths` worktree. `_open_log_sink` would unlink and recreate that `.git` file. Fix: anchor a relative pointer on `resolved.parent`, plus a regression test.",
+      "severity": "high",
+      "file": "skills/run-autopilot/cli/log_sink_refusal.py:137",
+      "consensus": "3/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The nested-repo refusal is locale-dependent and fails open: `_in_nested_repo` matches the English git message `\"work tree\" in probe.stderr` and `dirty_tree._git` pins no locale, so under a translated LC_ALL the probe failure reads as \"not nested\". Fix: use `git rev-parse --is-inside-git-dir`, or pin LC_ALL=C.",
+      "severity": "medium",
+      "file": "skills/run-autopilot/cli/log_sink_refusal.py:174",
+      "consensus": "2/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The nested-`.git` refusal still misses a path whose parent directory does not exist yet (`nested/.git/refs/heads/newdir/ref`, `.git/hooks/sub/x`, `.git/objects/zz/yy` all return None): `_git(resolved.parent, ...)` raises FileNotFoundError and that reads as \"no nested repo\". Fix: lexical ancestor walk for a `.git` entry below toplevel.",
+      "severity": "medium",
+      "file": "skills/run-autopilot/cli/log_sink_refusal.py:169",
+      "consensus": "2/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "`_worktree_gitdir_pointer` slurps the whole candidate file with `read_text()` to test a 7-byte prefix, on every existing regular-file sink, twice per verify run. Fix: read a bounded binary prefix.",
+      "severity": "medium",
+      "file": "skills/run-autopilot/cli/log_sink_refusal.py:132",
+      "consensus": "2/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "Case-order deviation: containment (case 4) runs before the symlink walk (case 3), so a symlink resolving outside the toplevel reports `resolves outside the repository` instead of `is a symlink`. Refusal and exit 2 unchanged; no test covers the shape.",
+      "severity": "medium",
+      "file": "skills/run-autopilot/cli/log_sink_refusal.py:38",
+      "consensus": "2/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "`test_cli_refuses_symlinked_log` only plants a symlink to an untracked in-repo target, so the reason-text overlap above is unpinned.",
+      "severity": "medium",
+      "file": "skills/run-autopilot/cli/test_verify_log_refusal.py:118",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "Refusal behaviour beyond the spec's case list: the worktree gitfile pointer check, the nested-repo stderr-sniffing probe, and seven tests beyond the PRD's fourteen.",
+      "severity": "medium",
+      "file": "skills/run-autopilot/cli/log_sink_refusal.py:122",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The two tests added for this cycle's refusal gaps assert only `result is not None`, so a refusal for the wrong reason still passes. Fix: assert the exact reason string (also in `test_cli_refuses_git_dir_log`).",
+      "severity": "medium",
+      "file": "skills/run-autopilot/cli/test_verify_log_refusal.py:392",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "`test_run_gate_refuses_a_symlinked_log_and_leaves_its_target` binds case 2 (tracked), not the case 3 its rewritten comment claims, because its symlink target is committed. Fix: retarget the link at an untracked in-repo file, or correct the comment.",
+      "severity": "medium",
+      "file": "skills/run-autopilot/cli/test_verification_log_sink.py:204",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "`test_absolute_log_outside_repo_via_symlinked_ancestor_reports_outside` and `test_symlinked_ancestor_component_walk_is_bounded_to_the_repo` pin the same ordering; keep one or differentiate the second.",
+      "severity": "low",
+      "file": "skills/run-autopilot/cli/test_verify_log_refusal.py:689",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "`_pinned_parent_fd` raises a bare OSError for an absolute `--log` spelled through a different root than `--repo-root`, producing exit 2 with a JSON line that lacks the stated `{\"error\",\"exit\",\"log\":null}` shape.",
+      "severity": "low",
+      "file": "skills/run-autopilot/cli/verification.py:440",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "Residual check-then-act: a leaf swapped between the refusal and `os.unlink(leaf)` is deleted (not written through). Minor and recoverable; the exclusive no-follow open closes the write hole.",
+      "severity": "low",
+      "file": "skills/run-autopilot/cli/verification.py:479",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "The `gitdir:` pointer loop compares against every `_identity_targets` entry including the store, where it can only ever yield the wrong reason text. Restrict it to the two git-dir targets.",
+      "severity": "low",
+      "file": "skills/run-autopilot/cli/log_sink_refusal.py:103",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "Stale comment left by the cycle-1 R2 fix: it still describes the removed either-or while the assertion below pins the `gate skipped` branch alone.",
+      "severity": "low",
+      "file": "skills/run-autopilot/cli/test_review_stage.py:296",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "issue": "Two tests pin the identical containment early return with the same fixture and assertion; one is redundant.",
+      "severity": "low",
+      "file": "skills/run-autopilot/cli/test_verify_log_refusal.py:466",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
     }
   ]
 }
