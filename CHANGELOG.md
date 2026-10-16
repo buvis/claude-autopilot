@@ -95,6 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: the loop's per-PRD budget probe no longer crashes the unattended loop on a non-UTF-8 metrics ledger; it reports the read failure on stderr and counts the PRD's spend as 0 for that check
 - **run-autopilot**: a loop session whose `loop_entry` invalidation write failed no longer lets a later child replay the stale result - the launched child's environment is marked and the session enters for real
 - **run-autopilot**: `autopilot cap-check` reads every File-cell shape, proves the rework range before classifying, and stalls on a path git cannot resolve instead of deferring it; a `cap_regression` stall now records every unresolved finding in the batch deferred JSON and mints a hold stub, where before its findings were dropped
+- **run-autopilot**: `autopilot cap-check` now classifies a backtick-wrapped, nested-annotated, comma-named or directory File cell instead of failing open to "not a regression", reports an unreadable cell (out-of-repo path, line past end of file, line 0) as one unresolved row rather than aborting the whole verb, raises a named error on a malformed line spec like `a.py:1-2-3`, and no longer depends on git's message locale
 
 ## [0.9.0] - 2026-10-05
 

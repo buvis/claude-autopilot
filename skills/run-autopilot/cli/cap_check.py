@@ -9,6 +9,7 @@ its row `regression: null` (a stall), never a clean `false` (a deferral).
 
 from __future__ import annotations
 
+import os
 import posixpath
 import re
 import subprocess
@@ -19,10 +20,13 @@ from .findings_section import _reviewed_keys
 
 _FILE_LINE_RE = re.compile(r"^(.*):(\d+(?:[-,]\d+)*)$")
 _SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
-_ANNOTATION_RE = re.compile(r"\s*\([^)]*\)\s*$")
-# ';' always splits; ',' splits only when the next non-space char is not a
-# digit, so `a.py:3,9` stays one segment for _FILE_LINE_RE's comma list.
-_SPLIT_RE = re.compile(r";|,(?!\s*\d)")
+# A trailing parenthesised note, one nesting level deep.
+_ANNOTATION_RE = re.compile(r"\s*\([^()]*(?:\([^()]*\)[^()]*)*\)\s*$")
+# ';' and a backticked path after whitespace always split; ',' splits only
+# when whitespace follows and the next non-space char is not a digit, so
+# `a.py:3,9` stays one segment for _FILE_LINE_RE's comma list and `a,b.py`
+# stays one path.
+_SPLIT_RE = re.compile(r";|\s+(?=`)|,(?=\s)(?!\s*\d)")
 _HASH_L_RE = re.compile(r"^(.*)#[Ll](\d+)(?:-[Ll]?(\d+))?$")
 _COLON_L_RE = re.compile(r"^(.*?):\s*[Ll]\s*(\d+)(?:-[Ll]?(\d+))?$")
 # `path:N`, `path: N`, `path:N-M`; the comma list falls through to _FILE_LINE_RE.
@@ -72,6 +76,7 @@ def _git(repo_root: str | Path, *args: str) -> str:
             capture_output=True,
             text=True,
             check=True,
+            env={**os.environ, "LC_ALL": "C", "LANGUAGE": "C"},
         )
     except subprocess.CalledProcessError as err:
         stderr = err.stderr.strip() if err.stderr else ""
@@ -92,13 +97,16 @@ def _parse_number_list(spec: str) -> list[int]:
     """`spec` is the digits-and-separators suffix `_FILE_LINE_RE` captured
     (e.g. "3-5,9"): every named line, a range expanded in full."""
     lines: list[int] = []
-    for token in spec.split(","):
-        if "-" in token:
-            first_s, last_s = token.split("-", 1)
-            first, last = int(first_s), int(last_s)
-            lines.extend(range(first, max(first, last) + 1))
-        else:
-            lines.append(int(token))
+    try:
+        for token in spec.split(","):
+            if "-" in token:
+                first_s, last_s = token.split("-", 1)
+                first, last = int(first_s), int(last_s)
+                lines.extend(range(first, max(first, last) + 1))
+            else:
+                lines.append(int(token))
+    except ValueError as err:
+        raise CapCheckError(f"malformed line spec {spec!r}") from err
     return lines
 
 
@@ -110,8 +118,8 @@ def _split_file_line(cell: str) -> tuple[str, list[int] | None]:
 
 
 def _clean_segment(segment: str) -> str:
-    segment = segment.strip().strip("`").strip()
-    return _ANNOTATION_RE.sub("", segment).strip().strip("`").strip()
+    segment = segment.replace("`", "").strip()
+    return _ANNOTATION_RE.sub("", segment).strip()
 
 
 def _segment_lines(segment: str) -> tuple[str, list[int] | None]:
@@ -147,8 +155,8 @@ def _parse_file_cell(
 ) -> list[tuple[str, list[int] | None]]:
     """One File cell's (path, lines) pairs; `lines` is None for a path with no
     line spec, else every line the cell names (a range yields all of them, a
-    comma list only its first, as before). An empty segment yields no pair."""
-    cell = _ANNOTATION_RE.sub("", cell.strip().strip("`").strip())
+    comma list every line it lists). An empty segment yields no pair."""
+    cell = _ANNOTATION_RE.sub("", cell.strip())
     pairs = []
     for segment in _SPLIT_RE.split(cell):
         segment = _clean_segment(segment)
@@ -196,6 +204,18 @@ def _missing_path_error(err: CapCheckError) -> bool:
         "no such path" in stderr
         or "does not exist" in stderr
         or "exists on disk, but not in" in stderr
+    )
+
+
+def _unreadable_cell_error(err: CapCheckError) -> bool:
+    """True only when git's stderr says the cell itself is unreadable: a line
+    past the file's end or below 1, or a path outside the repository. Any
+    other git failure (a corrupt object) still propagates."""
+    stderr = err.stderr.lower()
+    return (
+        "invalid line number" in stderr
+        or " has only " in stderr
+        or "is outside repository" in stderr
     )
 
 
@@ -259,7 +279,7 @@ def _pair_commit(
     """The abbreviated commit that made an existing pair a regression, else
     None."""
     if lines is None:
-        if path in changed_files:
+        if path in changed_files or any(f.startswith(path + "/") for f in changed_files):
             return _first_commit_touching(repo_root, previous_head, head, path)
         return None
     for line in lines:
@@ -283,23 +303,28 @@ def _classify_row(
     pairs = _parse_file_cell(row.file, repo_root, changed_files)
     result = {"regression": False, "commit": None}
     decider = pairs[0] if pairs else ("", None)
-    missing = [pair for pair in pairs if not _file_exists_at(repo_root, head, pair[0])]
-    if missing:
-        decider = missing[0]
-        result = {
-            "regression": None,
-            "commit": None,
-            "reason": f"unresolved path {decider[0]}",
-        }
-    else:
-        for path, lines in pairs:
-            commit = _pair_commit(
-                repo_root, previous_head, head, path, lines, rework_commits, changed_files,
-            )
-            if commit is not None:
-                decider = (path, lines)
-                result = {"regression": True, "commit": commit}
-                break
+    try:
+        missing = [pair for pair in pairs if not _file_exists_at(repo_root, head, pair[0])]
+        if missing:
+            decider = missing[0]
+            result = {
+                "regression": None,
+                "commit": None,
+                "reason": f"unresolved path {decider[0]}",
+            }
+        else:
+            for path, lines in pairs:
+                commit = _pair_commit(
+                    repo_root, previous_head, head, path, lines, rework_commits, changed_files,
+                )
+                if commit is not None:
+                    decider = (path, lines)
+                    result = {"regression": True, "commit": commit}
+                    break
+    except CapCheckError as err:
+        if not _unreadable_cell_error(err):
+            raise
+        result = {"regression": None, "commit": None, "reason": f"unresolved cell: {err}"}
     return {
         "ref": row.ref,
         "severity": row.severity,
