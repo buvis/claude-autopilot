@@ -135,7 +135,10 @@ def _segment_lines(segment: str) -> tuple[str, list[int] | None]:
 
 def _normalise_path(path: str, toplevel: Path, changed_files: set[str]) -> str:
     if Path(path).is_absolute():
-        for candidate, top in ((Path(path), toplevel), (Path(path).resolve(), toplevel.resolve())):
+        for candidate, top in (
+            (Path(path), toplevel),
+            (Path(path).resolve(), toplevel.resolve()),
+        ):
             try:
                 path = candidate.relative_to(top).as_posix()
                 break
@@ -151,7 +154,9 @@ def _normalise_path(path: str, toplevel: Path, changed_files: set[str]) -> str:
 
 
 def _parse_file_cell(
-    cell: str, toplevel: Path, changed_files: set[str],
+    cell: str,
+    toplevel: Path,
+    changed_files: set[str],
 ) -> list[tuple[str, list[int] | None]]:
     """One File cell's (path, lines) pairs; `lines` is None for a path with no
     line spec, else every line the cell names (a range yields all of them, a
@@ -179,14 +184,24 @@ def _verify_range(repo_root: str | Path, previous_head: str, head: str) -> None:
         try:
             _git(repo_root, "rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}")
         except CapCheckError as err:
-            raise CapCheckError(f"head_sha {sha} does not resolve to a commit", err.stderr) from err
+            raise CapCheckError(
+                f"head_sha {sha} does not resolve to a commit", err.stderr
+            ) from err
     if previous_head.casefold() == head.casefold():
         raise CapCheckError(
             f"previous and current head_sha are equal ({head}); the rework range is empty",
         )
     checks = (
-        (previous_head, head, f"previous head_sha {previous_head} is not an ancestor of head_sha {head}"),
-        (head, "HEAD", f"head_sha {head} is not an ancestor of HEAD (not reachable from HEAD)"),
+        (
+            previous_head,
+            head,
+            f"previous head_sha {previous_head} is not an ancestor of head_sha {head}",
+        ),
+        (
+            head,
+            "HEAD",
+            f"head_sha {head} is not an ancestor of HEAD (not reachable from HEAD)",
+        ),
     )
     for ancestor, descendant, message in checks:
         try:
@@ -227,7 +242,14 @@ def _introducing_commit(
 ) -> str | None:
     try:
         blame = _git(
-            repo_root, "blame", "-L", f"{line},{line}", "--porcelain", head, "--", file,
+            repo_root,
+            "blame",
+            "-L",
+            f"{line},{line}",
+            "--porcelain",
+            head,
+            "--",
+            file,
         )
     except CapCheckError as err:
         if _missing_path_error(err):
@@ -279,7 +301,9 @@ def _pair_commit(
     """The abbreviated commit that made an existing pair a regression, else
     None."""
     if lines is None:
-        if path in changed_files or any(f.startswith(path + "/") for f in changed_files):
+        if path in changed_files or any(
+            f.startswith(path + "/") for f in changed_files
+        ):
             return _first_commit_touching(repo_root, previous_head, head, path)
         return None
     for line in lines:
@@ -287,6 +311,29 @@ def _pair_commit(
         if introducing is not None and introducing in rework_commits:
             return _git(repo_root, "log", "--format=%h", "-1", introducing)
     return None
+
+
+def _pairs_verdict(
+    repo_root: Path,
+    previous_head: str,
+    head: str,
+    pairs: list[tuple[str, list[int] | None]],
+    rework_commits: set[str],
+    changed_files: set[str],
+) -> tuple[tuple, dict]:
+    """(decider, result) over every pair: null when a path is missing at head,
+    else true at the first pair the rework range introduced, else false."""
+    missing = [pair for pair in pairs if not _file_exists_at(repo_root, head, pair[0])]
+    if missing:
+        reason = f"unresolved path {missing[0][0]}"
+        return missing[0], {"regression": None, "commit": None, "reason": reason}
+    for path, lines in pairs:
+        commit = _pair_commit(
+            repo_root, previous_head, head, path, lines, rework_commits, changed_files,
+        )
+        if commit is not None:
+            return (path, lines), {"regression": True, "commit": commit}
+    return (pairs[0] if pairs else ("", None)), {"regression": False, "commit": None}
 
 
 def _classify_row(
@@ -298,33 +345,23 @@ def _classify_row(
     changed_files: set[str],
 ) -> dict:
     """Row verdict over every (path, lines) pair of its File cell: null when
-    any path is missing at head, else true when any pair is a regression,
-    else false. `file`/`line` name the pair that decided the verdict."""
+    any path is missing at head or the cell itself is unreadable, else true
+    when any pair is a regression, else false. `file`/`line` name the pair
+    that decided the verdict."""
     pairs = _parse_file_cell(row.file, repo_root, changed_files)
-    result = {"regression": False, "commit": None}
-    decider = pairs[0] if pairs else ("", None)
     try:
-        missing = [pair for pair in pairs if not _file_exists_at(repo_root, head, pair[0])]
-        if missing:
-            decider = missing[0]
-            result = {
-                "regression": None,
-                "commit": None,
-                "reason": f"unresolved path {decider[0]}",
-            }
-        else:
-            for path, lines in pairs:
-                commit = _pair_commit(
-                    repo_root, previous_head, head, path, lines, rework_commits, changed_files,
-                )
-                if commit is not None:
-                    decider = (path, lines)
-                    result = {"regression": True, "commit": commit}
-                    break
+        decider, result = _pairs_verdict(
+            repo_root, previous_head, head, pairs, rework_commits, changed_files,
+        )
     except CapCheckError as err:
         if not _unreadable_cell_error(err):
             raise
-        result = {"regression": None, "commit": None, "reason": f"unresolved cell: {err}"}
+        decider = pairs[0] if pairs else ("", None)
+        result = {
+            "regression": None,
+            "commit": None,
+            "reason": f"unresolved cell: {err}",
+        }
     return {
         "ref": row.ref,
         "severity": row.severity,
