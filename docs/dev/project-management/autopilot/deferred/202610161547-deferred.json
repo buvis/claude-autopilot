@@ -1,0 +1,12 @@
+{
+  "batch_id": "202610161547",
+  "items": [
+    {
+      "type": "product-defect",
+      "issue": "consolidate_findings.py silently drops reviewer finding lines that arrive bullet-prefixed (`- [BOB] ...`): _LINE_RE anchors on ^\\[. Bob/codex emits exactly that shape, so in cycle 1 of 00320 all 13 of his findings were absent from the first consolidation, including the two sharpest correctness findings. Fix: tolerate an optional leading list marker in _LINE_RE, and add a fixture pinning the bullet-prefixed shape.",
+      "severity": "high",
+      "reason": "found while consolidating 00320 cycle 1; worked around by stripping the prefix and re-consolidating. Needs its own PRD - it is a defect in the pack, not in 00320.",
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+    }
+  ]
+}

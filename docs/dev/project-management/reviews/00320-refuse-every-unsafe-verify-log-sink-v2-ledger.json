@@ -1,0 +1,74 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "File test_review_stage.py exceeds the 800-line limit (805 lines)",
+    "file": "skills/run-autopilot/cli/test_review_stage.py:805",
+    "reason": "pre-existing breach, not introduced here: the file was 803 lines at the task's base commit 7b47b02c and this diff adds 2 net lines. Splitting it is its own PRD, on the precedent that split verification.py/dirty_tree.py under 00311. Surgical-changes rule: a pre-existing limit breach is surfaced, not refactored inside an unrelated PRD."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "R13: two changed files exceed the 800-line limit - `skills/run-autopilot/cli/__main__.py` (~1975 lines, last function at 1968) and `skills/run-autopilot/cli/test_review_stage.py` (~802, last function at 786+16) - out of scope: both were already over before this diff, which adds ~15 and 2 net lines respectively; splitting them is its own PRD (the same precedent that split `verification.py`/`dirty_tree.py` under 00311), and the new files this PRD adds are well inside the limit (log_sink_refusal.py 133, test_verify_log_refusal.py 374, verification.py ~742)",
+    "file": "skills/run-autopilot/cli/__main__.py:1968",
+    "reason": "verified: __main__.py is 1975 lines and test_review_stage.py was 803 at base. Both breaches pre-date this PRD. Same settlement as the R13 row above; the reviewer's own out-of-scope reasoning is accepted."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Additions beyond the PRD. `_in_nested_repo` refuses a sink inside any nested git repository. `_open_log_sink` takes an extra `root` parameter. The test file has three tests the spec does not name: `test_parent_dir_symlink_swap_is_refused`, `test_nested_repo_store_is_refused` and `test_symlink_above_repo_root_does_not_refuse_default_sink`. The nested-repo refusal is a fair reading of \"outside the repository\" but is not stated.",
+    "file": "skills/run-autopilot/cli/log_sink_refusal.py:121",
+    "reason": "accepted as a safe superset on a refusal boundary, where over-refusing is the correct failure direction. The `root` parameter is already recorded in the build's assumption ledger: without it the strict descent would have refused every repo whose own path has a symlinked ancestor. The extra tests pin the superset. R12 separately removes the parameter's unused default, which is the only part of this that is real debt."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`_lock_and_check` folds every refusal reason into a dirty result, where the spec names only tracked and symlinked sinks. It is a safe superset. The \"tracked\" test is `git ls-files --error-unmatch`, which checks the index, not HEAD, as the spec literally says.",
+    "file": "skills/run-autopilot/cli/verification.py:403",
+    "reason": "spec-faithful: the design doc prescribes exactly this `_dirty_result([rel])` return, and the build recorded the lost reason text as a known consequence. `ls-files --error-unmatch` against the index rather than HEAD is the stricter test (it also catches a staged-but-uncommitted sink), so it fails in the safe direction."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`_descend` creates missing parent directories before opening the sink. That is only reached after the refusal passes, so it is not a hole, but the gate path now makes directories.",
+    "file": "skills/run-autopilot/cli/verification.py:458",
+    "reason": "reviewer concedes it is not a hole: directory creation runs only after every refusal case has cleared, so no refused path reaches it. Creating `docs/dev/tmp/` for the default sink is required behavior, not drift."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Fail-first replay: `test_run_gate_streams_stdout_and_stderr_to_the_log` and `test_held_gate_lock_blocks_before_the_log_open_and_record_delete` pass against the pre-change code - out of scope as findings: both were only relocated from a `tmp_path_factory` sink into `docs/dev/tmp` because case 4 now refuses an out-of-repo sink, and they are pre-existing regression tests, not this PRD's behavior pins",
+    "file": "skills/run-autopilot/cli/test_verification.py:454",
+    "reason": "the reviewer who raised it argues it out of scope and is right: these are pre-existing regression tests whose only change is the sink location, forced by case 4. A relocated test passing at base is expected, not a missing pin."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Fail-first replay: `test_run_gate_refuses_a_symlinked_log_and_leaves_its_target` passes at base - out of scope: it is the surviving `symlink` arm of a deleted parametrize whose behavior was already correct at base, and its tracked arm moved to `test_verify_log_refusal.py::test_run_gate_refuses_tracked_log_without_opening` (which is red at base)",
+    "file": "skills/run-autopilot/cli/test_verification_log_sink.py:198",
+    "reason": "settled as a replay row only. The actionable half of the same observation is kept as a fix (row R7 of cycle 1): add an assertion the new code alone satisfies, or state that the test pins pre-existing behavior."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "Fail-first replay: `test_untracked_tmp_log_still_records` passes at base - out of scope: the PRD and design both state this happy-path test must already pass at the task's base commit",
+    "file": "skills/run-autopilot/cli/test_verify_log_refusal.py:225",
+    "reason": "the PRD's own Phase 0 acceptance requires this test to pass at the base commit while the other thirteen fail. Passing at base is the specified outcome, so the replay row is correct and not a defect."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "A CLI `verify` run now executes `log_sink_refusal.refuse` twice (pre-flight plus inside the lock), each pass spawning ~6 `git` subprocesses, so a gate run pays ~12 extra probes - out of scope: both enforcement points are a PRD Must-have (\"a library caller cannot bypass the CLI\"), and caching across the flock boundary would reintroduce the TOCTOU the second check exists to close",
+    "file": "skills/run-autopilot/cli/log_sink_refusal.py:20",
+    "reason": "accepted with the reviewer's own reasoning: the PRD requires both enforcement points, and caching across the lock boundary would reopen the TOCTOU window the in-lock check exists to close. Twelve git probes on a gate run that then executes a full test suite is not a measurable cost."
+  }
+]
