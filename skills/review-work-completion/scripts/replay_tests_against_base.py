@@ -139,6 +139,40 @@ def _raise_on_signal(signums: tuple[int, ...]) -> Iterator[_ReplaySignalGuard]:
             signal.signal(signum, handler)
 
 
+def _run_runner(
+    argv: list[str], worktree: Path, timeout: float
+) -> tuple[str, str, int | None, str | None]:
+    """(stdout, stderr, exit code, skip reason) of one runner process; a timeout
+    or SIGTERM/SIGHUP kills its whole session."""
+    try:
+        with _raise_on_signal((signal.SIGTERM, signal.SIGHUP)) as guard:
+            try:
+                # Own session, so a timeout kills the runner and everything it forked.
+                proc = subprocess.Popen(argv, cwd=worktree, stdout=subprocess.PIPE,
+                                         stderr=subprocess.PIPE, text=True, start_new_session=True)
+                guard.spawned = True
+                guard.raise_if_pending()
+                stdout, stderr = proc.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                guard.cleaning = True
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                proc.communicate()
+                return "", "", None, f"runner did not complete: timed out after {timeout} seconds"
+            except _SignalRaised as exc:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                proc.communicate()
+                return "", "", None, f"runner did not complete: killed by {signal.Signals(exc.signum).name}"
+    except OSError as exc:
+        return "", "", None, f"runner did not complete: {exc}"
+    return stdout, stderr, proc.returncode, None
+
+
 def _run_in_worktree(
     root: Path, base: str, files: list[str], cmd: str, timeout: float
 ) -> tuple[str, str | None]:
@@ -164,35 +198,12 @@ def _run_in_worktree(
             *shlex.split(cmd), "-q", "-rA", "--rootdir", str(worktree),
             "-p", "no:cacheprovider", "--continue-on-collection-errors", *files,
         ]
-        try:
-            with _raise_on_signal((signal.SIGTERM, signal.SIGHUP)) as guard:
-                try:
-                    # Own session, so a timeout kills the runner and everything it forked.
-                    proc = subprocess.Popen(argv, cwd=worktree, stdout=subprocess.PIPE,
-                                             stderr=subprocess.PIPE, text=True, start_new_session=True)
-                    guard.spawned = True
-                    guard.raise_if_pending()
-                    stdout, stderr = proc.communicate(timeout=timeout)
-                except subprocess.TimeoutExpired:
-                    guard.cleaning = True
-                    try:
-                        os.killpg(proc.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-                    proc.communicate()
-                    return "", f"runner did not complete: timed out after {timeout} seconds"
-                except _SignalRaised as exc:
-                    try:
-                        os.killpg(proc.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-                    proc.communicate()
-                    return "", f"runner did not complete: killed by {signal.Signals(exc.signum).name}"
-        except OSError as exc:
-            return "", f"runner did not complete: {exc}"
+        stdout, stderr, returncode, reason = _run_runner(argv, worktree, timeout)
+        if reason:
+            return "", reason
         if not RESULT_RE.search(stdout) and not COLLECT_ERROR_RE.search(stdout):
             tail = (stderr or stdout).strip().splitlines()[-1:] or ["no output"]
-            return "", f"runner produced no results (exit {proc.returncode}: {tail[0]})"
+            return "", f"runner produced no results (exit {returncode}: {tail[0]})"
         return stdout, None
     finally:
         run_git(root, "worktree", "remove", "--force", str(worktree))
