@@ -4746,3 +4746,18 @@
 {"id":"099dfdef","ended_at":1792161105,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"id":"efc386bb","ended_at":1792161105,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1792161105,"phase":"build","prd":"00320-refuse-every-unsafe-verify-log-sink-v2.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792161148,"phase":"build","prd":"00320-refuse-every-unsafe-verify-log-sink-v2.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792161161,"phase":"build","prd":"00320-refuse-every-unsafe-verify-log-sink-v2.md"}
+{"id":"57d727b3","kind":"ivan","task":"2","queued_at":1792161296,"prompt_bytes":27201}
+{"id":"57d727b3","ended_at":1792161925,"elapsed_s":629,"outcome":"ok","detail":null}
+{"id":"4c995814","kind":"deslop","task":"2","queued_at":1792162155,"prompt_bytes":7087}
+{"id":"4c995814","ended_at":1792162525,"elapsed_s":370,"outcome":"ok","detail":null}
+{"id":"642e5c64","kind":"pat","task":"2","queued_at":1792162579,"prompt_bytes":31813}
+{"id":"642e5c64","ended_at":1792162632,"elapsed_s":53,"outcome":"ok","detail":null}
+{"id":"d648b2c9","kind":"ivan","task":"2","queued_at":1792162688,"prompt_bytes":20635}
+{"id":"d648b2c9","ended_at":1792162974,"elapsed_s":286,"outcome":"ok","detail":null}
+{"id":"9a267e7b","kind":"pat","task":"2","queued_at":1792163076,"prompt_bytes":11643}
+{"id":"9a267e7b","ended_at":1792163148,"elapsed_s":72,"outcome":"ok","detail":null}
+{"id":"c9a86173","kind":"ivan","task":"2","queued_at":1792163886,"prompt_bytes":23461}
+{"id":"c9a86173","ended_at":1792164425,"elapsed_s":539,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"build","edge":"leave","at":1792164776,"phase":"review","prd":"00320-refuse-every-unsafe-verify-log-sink-v2.md"}

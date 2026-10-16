@@ -1,6 +1,6 @@
 # Project Capsule: claude-autopilot
 
-Generated: 2026-10-16 (catchup refreshed 15:55 UTC)
+Generated: 2026-10-16 (catchup delta 14:33 UTC at HEAD 14aa347d)
 
 ## Key Invariants
 
@@ -45,10 +45,11 @@ Generated: 2026-10-16 (catchup refreshed 15:55 UTC)
 ## Active Work
 
 ### Batch 202610161547 (in progress)
-- PRD 00320 (refuse-every-unsafe-verify-log-sink-v1) selected first; backlog
-  remaining: 00321-00327. This batch unblocks `dev/bin/release`: `verify --log`
-  is destructive on master until 00320 lands, and HEAD's delegation guard has
-  four regressions against 0.9.0 until 00324 lands.
+- PRD 00320 (refuse-every-unsafe-verify-log-sink-v2) in wip, task 1 of 3 done
+  (fail-first tests committed at a5b4a32f); backlog remaining: 00321-00327.
+  This batch unblocks `dev/bin/release`: `verify --log` is destructive on
+  master until 00320 lands, and HEAD's delegation guard has four regressions
+  against 0.9.0 until 00324 lands.
 
 ### Batch 202610141430 (complete)
 - [x] 00277-catch-critical-rows-in-every-shape-v2 (2 cycles)

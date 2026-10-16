@@ -1,8 +1,35 @@
-## 1: Write fail-first tests for verify --log refusal
+# Assumption ledger
 
-- For test #16 (`test_nested_repo_store_is_refused`), used `docs/dev/tmp/other/` as the nested repo's root and committed `docs/dev/project-management/autopilot/nested-marker.txt` inside it, then called `--log docs/dev/tmp/other/docs/dev/project-management/autopilot/nested-marker.txt` — matches the task note's example path shape exactly.
-- For test #15 (`test_parent_dir_symlink_swap_is_refused`), since `cli.log_sink_refusal` doesn't exist yet, wrapped the import in try/except and call `pytest.fail` with a descriptive message if `log_sink_refusal` is `None`, rather than letting the test error with a raw `ImportError`/`AttributeError`.
-- Extended the shared fixture (beyond the carried-over branch's fixture) to also commit a `docs/dev/project-management/autopilot/marker.txt` file at setup, since several new tests need a pre-existing tracked store file to hardlink against or probe.
-- Added `skills/run-autopilot/cli/test_verify_log_refusal.py` to release-checks' "review verbs" block (not a new `[checks]` section) since it tests the same `verify --log` surface as the other files already grouped there.
-- Did not read or modify `__main__.py`'s actual implementation (out of scope — Task 2's job); grounded only in its name usage via the design doc and the carried-over fixture.
-- (Retry fix, review MEDIUM findings) "narrow to the expected failure mode" for the parent-dir symlink swap test means `OSError`, as the review explicitly named it.
+## PRD 00320-refuse-every-unsafe-verify-log-sink-v2
+
+### Task 2 (implement the six-case refusal and exclusive sink open)
+
+- `_open_log_sink` is handed the repo root as `root` (default `/`) so the
+  strict `O_NOFOLLOW` descent starts at the trust boundary. The repo's OWN
+  path is trusted: a checkout reached through a symlinked ancestor (a repo
+  under macOS `/tmp`) is normal and must not be refused, while everything
+  below the root is walked strictly. The design doc's contract gave
+  `_open_log_sink(log_path)` only and told it to walk "from the toplevel
+  downward", which the one-argument signature cannot do; the added parameter
+  is what makes the documented walk possible, and `_run_locked_gate` passes
+  `cwd`.
+- The sink is created with mode `0o666` (builtin `open`'s mode), not
+  `os.open`'s `0o777` default -- an executable sink would make the next run
+  refuse its own log.
+- Case 1 refuses a literal `docs/dev/project-management/` prefix match in
+  addition to the inode walk, so a store path whose directory does not exist
+  yet is still refused (it has no inode to compare).
+- A failing `git rev-parse --show-toplevel` from `repo_root` fails closed as
+  `resolves outside the repository`.
+- Case 3's component walk can report a path outside the repo as
+  `is a symlink` rather than `resolves outside the repository`; no test pins
+  the reason text for that path, only exit 2.
+- `repo_root` reaching `refuse()` is always absolute (as `__main__` and
+  `run_gate`'s `cwd` provide it), so the walk's stop test matches by path
+  equality; a relative `repo_root` would not stop the walk.
+- A root/log spelling mismatch in `_pinned_parent_fd` raises `OSError`
+  rather than `ValueError`, so a caller's existing handling of a refused
+  sink covers it.
+- The symlinked-root regression test asserts on `log_sink_refusal.refuse`
+  directly rather than through a CLI `verify` run, to keep the two findings
+  it separates from conflating.
