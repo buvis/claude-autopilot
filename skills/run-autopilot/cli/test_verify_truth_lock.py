@@ -22,6 +22,7 @@ from pathlib import Path
 import pytest
 
 from cli import verification
+from cli.test_verification_log_sink import _fail_the_log_sink
 from cli.test_verify_truth import (
     _commit,
     _git,
@@ -237,13 +238,37 @@ def test_signal_before_a_refusal_is_not_swallowed(
         kwargs = {"lock_timeout": 0.3}
     try:
         with _stray_signals_raise(signal.SIGTERM):
-            with pytest.raises((_StraySignal, RuntimeError)) as info:
+            with pytest.raises(_StraySignal):
                 verification.run_gate(PASS_GATE, repo, head, 1, timeout=30, **kwargs)
     finally:
         if release is not None:
             release.join()
             os.close(held)
 
-    if not isinstance(info.value, _StraySignal):
-        assert str(info.value) == "verify: SIGTERM during gate"
+    assert _lock_free(repo / verification.GATE_LOCK_REL)
+
+
+def test_signal_during_cleanup_after_log_sink_error_is_not_swallowed(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A log-sink OSError starts _spawn_gate's cleanup; a SIGTERM lands while
+    # that cleanup (_kill_gate) is running. The signal error must win over
+    # the original OSError, not get silently dropped by it - but the OSError
+    # must still be reachable as its cause.
+    head = _git(repo, "rev-parse", "HEAD")
+    _fail_the_log_sink(monkeypatch, 5)
+
+    original_kill_gate = verification._kill_gate
+
+    def kill_gate_under_sigterm(*args, **kwargs):
+        os.kill(os.getpid(), signal.SIGTERM)
+        return original_kill_gate(*args, **kwargs)
+
+    monkeypatch.setattr(verification, "_kill_gate", kill_gate_under_sigterm)
+
+    with _stray_signals_raise(signal.SIGTERM):
+        with pytest.raises(RuntimeError, match="SIGTERM during gate") as info:
+            verification.run_gate(f"{PASS_GATE}; sleep 30", repo, head, 1, timeout=30)
+
+    assert isinstance(info.value.__cause__, OSError)
     assert _lock_free(repo / verification.GATE_LOCK_REL)
