@@ -696,5 +696,5 @@ def test_case_variant_equal_head_shas_are_treated_as_equal(repo):
         repo["reviews"] / "review-2.md", repo["rework"].upper(), [("R1", "HIGH", "a.py:3")],
     )
 
-    with pytest.raises(CapCheckError):
+    with pytest.raises(CapCheckError, match="equal"):
         classify_findings(repo["root"], current, previous)
