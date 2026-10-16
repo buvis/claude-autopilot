@@ -4810,3 +4810,5 @@
 {"kind":"handoff","site":"build","edge":"resume","at":1792179144,"phase":"build","prd":"00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1792179151,"phase":"done","prd":"00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1792179204,"phase":"build","prd":"00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792179294,"phase":"build","prd":"00322-kill-the-gate-on-every-signal-v1.md"}
+{"kind":"handoff","site":"build","edge":"leave","at":1792180459,"phase":"build","prd":"00322-kill-the-gate-on-every-signal-v1.md"}
