@@ -478,6 +478,7 @@ def test_run_gate_on_a_dirty_tree_writes_no_record(repo: Path) -> None:
         "dirty_paths": ["src/app.py"],
         "lock_timeout": False,
         "head_moved": False,
+        "waited_s": pytest.approx(0, abs=1),
     }
     assert not (repo / RECORD_REL).exists()
 
@@ -717,5 +718,6 @@ def test_own_log_does_not_skip_the_pre_spawn_dirty_check(
         "dirty_paths": ["stray.txt"],
         "lock_timeout": False,
         "head_moved": False,
+        "waited_s": pytest.approx(0, abs=1),
     }
     assert not (repo / RECORD_REL).exists()

@@ -187,6 +187,7 @@ def test_run_gate_prints_one_summary_line(repo: Path) -> None:
         "dirty_paths": [],
         "lock_timeout": False,
         "head_moved": False,
+        "waited_s": pytest.approx(0, abs=1),
     }
 
 
@@ -286,6 +287,7 @@ def test_run_gate_times_out_and_writes_nothing(repo: Path) -> None:
         "dirty_paths": [],
         "lock_timeout": False,
         "head_moved": False,
+        "waited_s": pytest.approx(0, abs=1),
     }
     # The deadline tracks the `timeout` argument: waiting out the given 6s
     # (not some constant deadline of its own) and then returning promptly.
@@ -321,6 +323,7 @@ def test_run_gate_times_out_when_the_child_closes_both_pipes_and_lingers(
         "dirty_paths": [],
         "lock_timeout": False,
         "head_moved": False,
+        "waited_s": pytest.approx(0, abs=1),
     }
     # A 1s timeout returns in about 1s: paired with the 6s case above, no
     # single hardcoded deadline can satisfy both bounds.
@@ -547,6 +550,7 @@ SHA_REFUSAL = {
     "dirty_paths": [],
     "lock_timeout": False,
     "head_moved": True,
+    "waited_s": pytest.approx(0, abs=1),
 }
 
 
@@ -608,16 +612,17 @@ def test_failed_run_leaves_no_older_green_record(
 
 
 def test_gate_lock_wait_expires_without_running_the_gate(repo: Path) -> None:
-    # The lock wait is bounded by the gate's own timeout: a holder that
-    # never lets go must not block run_gate forever.
+    # The lock wait is bounded by its own lock_timeout, independent of the
+    # gate's own timeout: a holder that never lets go must not block
+    # run_gate forever.
     head = _git(repo, "rev-parse", "HEAD")
     fd = _hold_gate_lock(repo)
     try:
-        result = verification.run_gate(SUMMARY, repo, head, 1, timeout=0.2)
+        result = verification.run_gate(SUMMARY, repo, head, 1, lock_timeout=0.2)
     finally:
         _release_gate_lock(fd)
 
-    assert result == verification._lock_timeout_result()
+    assert result == verification._lock_timeout_result(result["waited_s"])
     assert not (repo / RECORD_REL).exists()
     # The expiry released nothing it never held.
     assert _gate_lock_is_free(repo)
@@ -717,7 +722,7 @@ def test_run_gate_refuses_a_sha_that_head_moved_past_while_waiting_for_the_lock(
     assert moved != captured
     # Head-moved refusal shape, not dirty; the gate never ran and the
     # older record (never invalidated on a refusal) is untouched.
-    assert out["result"] == SHA_REFUSAL
+    assert out["result"] == {**SHA_REFUSAL, "waited_s": out["result"]["waited_s"]}
     assert not ran.exists()
     assert record.read_bytes() == green
     # The refusal released the lock on its way out.

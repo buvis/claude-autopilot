@@ -340,6 +340,8 @@ run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_state_no_change.py \
   skills/run-autopilot/cli/test_review_stage.py \
   skills/run-autopilot/cli/test_review_stage_paths.py \
+  skills/run-autopilot/cli/test_review_stage_run_script.py \
+  skills/run-autopilot/cli/test_verify_truth_lock.py \
   skills/run-autopilot/cli/test_review_close.py \
   skills/run-autopilot/cli/test_review_close_apply.py \
   skills/run-autopilot/cli/test_review_close_carry.py \
