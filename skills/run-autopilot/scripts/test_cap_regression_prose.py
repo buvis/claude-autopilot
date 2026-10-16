@@ -107,3 +107,82 @@ def test_recovery_lists_cap_regression_slug() -> None:
             f"{path}: a heading sits between the closest `cap_critical`/"
             "`cap_regression` pair - they are not in the same list"
         )
+
+
+# --- PRD 00321 ---------------------------------------------------------------
+
+_CAP_REGRESSION_ENTRY_START = "- `cap_regression`"
+# How far past a "rename" mention the limit wording may sit and still count
+# as the same sentence-sized statement.
+_RENAME_WINDOW = 300
+
+
+def _cap_out_line() -> str:
+    """The whole cap-out bullet (one markdown line), not cut at the
+    cap-overflow sentence - the rename limit may sit anywhere in it."""
+    text = _PHASE_REVIEW.read_text()
+    assert _CAP_OUT_BULLET_START in text, (
+        f"{_PHASE_REVIEW}: the cap-out deferral bullet is gone"
+    )
+    start = text.rfind("\n", 0, text.index(_CAP_OUT_BULLET_START)) + 1
+    end = text.find("\n", start)
+    return text[start : end if end != -1 else len(text)]
+
+
+def _recovery_cap_regression_entry() -> str:
+    text = _RECOVERY.read_text()
+    assert _CAP_REGRESSION_ENTRY_START in text, (
+        f"{_RECOVERY}: the `cap_regression` stall-site entry is gone"
+    )
+    start = text.index(_CAP_REGRESSION_ENTRY_START)
+    end = text.find("\n- `", start + 1)
+    return text[start : end if end != -1 else len(text)]
+
+
+def test_cap_out_records_every_unresolved_row_before_the_stall() -> None:
+    """The Exit 1 clause writes the cap-overflow records into
+    state.deferred_decisions FIRST, then stalls at cap_regression, then runs
+    mint-stubs - so the regressed rows reach the ledger and a stub."""
+    clause = _exit_1_clause(_cap_out_bullet())
+    for needle in ("cap-overflow", "deferred_decisions", "autopilot mint-stubs"):
+        assert needle in clause, f"{_PHASE_REVIEW}: the Exit 1 clause never names {needle}"
+    records = clause.index("cap-overflow")
+    stall = clause.index('site: "cap_regression"')
+    mint = clause.index("autopilot mint-stubs")
+    assert records < stall < mint, (
+        f"{_PHASE_REVIEW}: the Exit 1 clause must order the cap-overflow"
+        " records, then the cap_regression stall, then mint-stubs"
+    )
+    assert re.search(r"\b(?:every|all) unresolved\b", clause[:stall]), (
+        f"{_PHASE_REVIEW}: the Exit 1 clause must record every unresolved row"
+        " before the stall"
+    )
+    assert "mints no hold stub" not in clause, (
+        f"{_PHASE_REVIEW}: the Exit 1 clause still says a cap_regression"
+        " stall mints no hold stub"
+    )
+
+
+def test_recovery_names_the_real_resume_steps() -> None:
+    entry = _recovery_cap_regression_entry()
+    assert "exactly like `cap_critical`" not in entry, (
+        f"{_RECOVERY}: the cap_regression entry still resumes through"
+        " cap_critical's custody path"
+    )
+    for needle in ("hold/", "-deferred.json", "stub", "v2", "backlog/", "autopilot custody"):
+        assert needle in entry, f"{_RECOVERY}: the cap_regression resume steps never name {needle}"
+    assert re.search(r"\bno\b[^.]{0,40}`autopilot custody", entry), (
+        f"{_RECOVERY}: the cap_regression entry must say no `autopilot custody`"
+        " command applies"
+    )
+
+
+def test_phase_review_names_the_rename_limit() -> None:
+    line = _cap_out_line()
+    match = re.search(r"renam", line, re.IGNORECASE)
+    assert match, f"{_PHASE_REVIEW}: the cap-out bullet never names the rename limit"
+    window = line[match.start() : match.start() + _RENAME_WINDOW].lower()
+    assert "blame" in window and "limit" in window, (
+        f"{_PHASE_REVIEW}: the cap-out bullet's rename mention must say a"
+        " rename's blame is a documented limit"
+    )

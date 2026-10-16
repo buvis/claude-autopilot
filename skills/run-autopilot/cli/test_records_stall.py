@@ -409,6 +409,50 @@ class ExtraMutatorTests(_StallTestCase):
         self.assertNotIn("stall_op", final)
 
 
+class CapRegressionStallTests(_StallTestCase):
+    def test_cap_regression_stall_migrates_pending_deferrals(self) -> None:
+        """PRD 00321: the cap-out writes its cap-overflow records to
+        state.deferred_decisions and then stalls at cap_regression; the
+        commit's reset_prd_fields drops that list, so do_stall must migrate
+        it into the batch ledger first, as `<op_id>-dd<i>` records."""
+        self._put_in_wip()
+        pending = [
+            {
+                "type": "cap-overflow",
+                "issue": "first unresolved finding",
+                "severity": "high",
+                "consensus": "1/5",
+                "reason": "rework cap reached with this finding unresolved",
+            },
+            {
+                "type": "cap-overflow",
+                "issue": "second unresolved finding",
+                "severity": "medium",
+                "consensus": "2/5",
+                "reason": "rework cap reached with this finding unresolved",
+            },
+        ]
+        self._write_state(self._sample_state(deferred_decisions=pending))
+
+        rc = self._do_stall(site="cap_regression", detail="R5 8b3a58f2")
+
+        self.assertEqual(rc, 0)
+        items = self._deferred_items()
+        stalls = [i for i in items if i.get("type") == "stall"]
+        self.assertEqual(len(stalls), 1)
+        self.assertEqual(stalls[0]["site"], "cap_regression")
+        op_id = stalls[0]["op_id"]
+        migrated = [i for i in items if i.get("type") != "stall"]
+        self.assertEqual(
+            [(i["op_id"], i["issue"], i["prd"]) for i in migrated],
+            [
+                (f"{op_id}-dd0", "first unresolved finding", self.PRD),
+                (f"{op_id}-dd1", "second unresolved finding", self.PRD),
+            ],
+        )
+        self.assertFalse(self._state().get("deferred_decisions"))
+
+
 class FailpointRecoveryTests(_StallTestCase):
     """Each stall-side failpoint simulates a kill immediately after that
     step's on-disk effect. Re-running the identical call afterward, with the

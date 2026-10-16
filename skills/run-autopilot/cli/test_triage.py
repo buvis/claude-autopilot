@@ -275,6 +275,21 @@ def test_stall_stub_is_critical_and_titled_from_its_detail(tree) -> None:
     assert "site `cap_critical`" in text and "op_id `c389f89aed18`" in text
 
 
+def test_cap_regression_stall_row_mints_a_stub(tree) -> None:
+    """PRD 00321: a cap_regression stall reaches the ledger and must mint a
+    hold stub titled from its detail, exactly like a cap_critical stall."""
+    assert triage.REGRESSION_SITE == "cap_regression"
+    row = {
+        **_stall_row(),
+        "site": "cap_regression",
+        "detail": "Cycle 2 cap-check regressions: R5 8b3a58f2, R6 8b3a58f2.",
+    }
+    assert triage.qualifies(row)
+    text = _stub_text(tree, row)
+    assert "# Triage: Cycle 2 cap-check regressions: R5 8b3a58f2, R6 8b3a58f2." in text
+    assert "site `cap_regression`" in text
+
+
 def test_minting_never_promotes_into_backlog_or_wip(tree) -> None:
     autopilot, prds = tree
     _ledger(autopilot, [_row(), _stall_row()])
