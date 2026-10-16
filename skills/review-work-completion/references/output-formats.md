@@ -253,7 +253,7 @@ Example: PRD `00004-exchanger-web-ui-v1.md` → review `00004-exchanger-web-ui-v
 prd: docs/dev/project-management/prds/wip/<prd-filename>
 review: 1
 date: YYYY-MM-DD
-head_sha: <git HEAD sha at review time>
+head_sha: <full 40-hex sha from `git rev-parse HEAD`, never --short, at review time>
 codex_thread_id: <codex session thread id, optional>
 consensus_run_id: <review-fanout workflow runId, optional>
 agents:
@@ -270,7 +270,7 @@ Agent states: `available` (ran successfully), `unavailable` (failed after retrie
 
 `dispatch_rows`: keyed by persona, not by dispatch id. `review_close.py`'s `close()` reads this block to map each persona in `agents:` to the dispatch id it opened, then ends that id with the outcome `_DISPATCH_OUTCOME[agents[persona]]`; every dispatch the session opened must have its persona listed here before the review file is saved.
 
-`head_sha`: the `git rev-parse HEAD` value captured when this review ran. The next rework cycle reads it and passes `--since <head_sha>` to `gather-context.sh`, scoping that cycle's diff to the rework commits. Absent on review files created before this field existed — consumers fall back to a full-branch diff.
+`head_sha`: the `git rev-parse HEAD` value captured when this review ran — the full 40-hex sha, never the abbreviated `--short` form. `autopilot cap-check` (PRD 00321) rejects anything else with exit 2, since it proves the rework range from this value before classifying a row. The next rework cycle reads it and passes `--since <head_sha>` to `gather-context.sh`, scoping that cycle's diff to the rework commits. Absent on review files created before this field existed — consumers fall back to a full-branch diff.
 
 `codex_thread_id`: the codex session thread id captured on cycle 1 via `codex-run.sh --emit-thread-id` (Bob/Codex reviewer). The next rework cycle reads it and passes `--resume-thread <codex_thread_id>` so Bob resumes his prior session instead of re-reviewing from zero. Omitted when Bob was skipped this cycle or thread-id capture failed — consumers then run Bob fresh.
 

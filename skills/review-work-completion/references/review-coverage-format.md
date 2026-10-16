@@ -9,7 +9,7 @@ were retired (their operational record was false blocks, not caught defects).
 ## Required shape
 
 1. **Frontmatter** with at least:
-   - `head_sha: <sha>` — HEAD at review time (next cycle scopes its diff from it)
+   - `head_sha: <full 40-hex sha from `git rev-parse HEAD`>` — HEAD at review time (next cycle scopes its diff from it; `autopilot cap-check` rejects anything but the full 40-hex form)
    - `reviewers: alice,blake,bob[,carl][,eve]` — comma-separated
      lowercase names of every reviewer that actually RAN this cycle
    - `codex_thread_id: <id>` — optional; present when Bob ran on codex
