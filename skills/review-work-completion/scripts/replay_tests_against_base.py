@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import contextlib
 import os
 import re
 import shlex
@@ -36,6 +37,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 
 from detect_tautological_tests import is_test_file, test_functions
@@ -97,6 +99,46 @@ def parse_results(stdout: str) -> list[tuple[str, str, str]]:
     return rows
 
 
+class _SignalRaised(Exception):
+    def __init__(self, signum: int) -> None:
+        super().__init__(signum)
+        self.signum = signum
+
+
+class _ReplaySignalGuard:
+    """Turns SIGTERM/SIGHUP into `_SignalRaised` once the runner is spawned;
+    a signal before spawn, or during cleanup, is recorded instead."""
+
+    def __init__(self) -> None:
+        self.spawned: bool = False
+        self.pending_signum: int | None = None
+        self.cleaning: bool = False
+
+    def handle(self, signum: int, frame) -> None:
+        if not self.spawned or self.cleaning:
+            self.pending_signum = signum
+            return
+        self.cleaning = True
+        raise _SignalRaised(signum)
+
+    def raise_if_pending(self) -> None:
+        if self.pending_signum is not None:
+            signum, self.pending_signum = self.pending_signum, None
+            self.cleaning = True
+            raise _SignalRaised(signum)
+
+
+@contextlib.contextmanager
+def _raise_on_signal(signums: tuple[int, ...]) -> Iterator[_ReplaySignalGuard]:
+    guard = _ReplaySignalGuard()
+    previous = {signum: signal.signal(signum, guard.handle) for signum in signums}
+    try:
+        yield guard
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+
+
 def _run_in_worktree(
     root: Path, base: str, files: list[str], cmd: str, timeout: float
 ) -> tuple[str, str | None]:
@@ -122,20 +164,33 @@ def _run_in_worktree(
             *shlex.split(cmd), "-q", "-rA", "--rootdir", str(worktree),
             "-p", "no:cacheprovider", "--continue-on-collection-errors", *files,
         ]
+        proc = None
         try:
-            # Own session, so a timeout kills the runner and everything it forked.
-            proc = subprocess.Popen(
-                argv, cwd=worktree, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                text=True, start_new_session=True,
-            )
-            stdout, stderr = proc.communicate(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            try:
-                os.killpg(proc.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            proc.communicate()
-            return "", f"runner did not complete: timed out after {timeout} seconds"
+            with _raise_on_signal((signal.SIGTERM, signal.SIGHUP)) as guard:
+                try:
+                    # Own session, so a timeout kills the runner and everything it forked.
+                    proc = subprocess.Popen(argv, cwd=worktree, stdout=subprocess.PIPE,
+                                             stderr=subprocess.PIPE, text=True, start_new_session=True)
+                    guard.spawned = True
+                    guard.raise_if_pending()
+                    stdout, stderr = proc.communicate(timeout=timeout)
+                except subprocess.TimeoutExpired:
+                    guard.cleaning = True
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    proc.communicate()
+                    return "", f"runner did not complete: timed out after {timeout} seconds"
+                except _SignalRaised as exc:
+                    guard.cleaning = True
+                    if proc is not None:
+                        try:
+                            os.killpg(proc.pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                        proc.communicate()
+                    return "", f"runner did not complete: killed by {signal.Signals(exc.signum).name}"
         except OSError as exc:
             return "", f"runner did not complete: {exc}"
         if not RESULT_RE.search(stdout) and not COLLECT_ERROR_RE.search(stdout):

@@ -15,8 +15,10 @@ work/scripts/render_prompt.py, applying SKILL.md step 4's substitution table;
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -44,6 +46,8 @@ AGENTS_DIR = _SKILLS.parent / "agents"
 
 ENGRAM = "engram"
 ENGRAM_TIMEOUT_S = 300
+SCRIPT_TIMEOUT_S = 540
+SCRIPT_GRACE_S = 30
 CAPSULE_REL = "docs/dev/project-management/meta/project-capsule.md"
 TMP_REL = Path("docs/dev/tmp")
 NO_PACK = "(no pack available this cycle)"
@@ -203,19 +207,33 @@ def _gather(repo_root: Path, since: str | None, cycle_id: str) -> dict:
     return {"ok": True, "context": context, "diff": diff}
 
 
-def _run_script(script: Path, args: list[str], cwd: Path) -> str:
-    """A helper script's stdout; a failed run says so in the block instead."""
-    proc = subprocess.run(
+def _run_script(
+    script: Path, args: list[str], cwd: Path, timeout: float = SCRIPT_TIMEOUT_S
+) -> str:
+    """A helper script's stdout; a failed run says so in the block instead.
+    On timeout its session gets SIGTERM, then SIGKILL after SCRIPT_GRACE_S."""
+    proc = subprocess.Popen(
         [sys.executable, str(script), *args],
         cwd=cwd,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-        check=False,
+        start_new_session=True,
     )
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        os.killpg(proc.pid, signal.SIGTERM)
+        try:
+            proc.communicate(timeout=SCRIPT_GRACE_S)
+        except subprocess.TimeoutExpired:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.communicate()
+        return f"_{script.name} failed (timeout after {int(timeout)}s)_"
     if proc.returncode != 0:
-        detail = proc.stderr.strip().splitlines()[-1:] or ["no stderr"]
+        detail = stderr.strip().splitlines()[-1:] or ["no stderr"]
         return f"_{script.name} failed (exit {proc.returncode}): {detail[0]}_"
-    return proc.stdout.strip()
+    return stdout.strip()
 
 
 def _append_mech_blocks(
@@ -242,7 +260,7 @@ def _append_mech_blocks(
         _append(context, "replay: skipped (no diff-range base resolved)")
         return
     # replay_cmd is the PER-FILE pytest invocation, never the gate command.
-    replay_args = ["--base", base, "--cmd", replay_cmd]
+    replay_args = ["--base", base, "--cmd", replay_cmd, "--timeout", "480"]
     _append(context, _run_script(REPLAY_SCRIPT, replay_args, repo_root))
 
 
