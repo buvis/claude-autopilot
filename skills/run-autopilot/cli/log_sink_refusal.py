@@ -33,7 +33,7 @@ def refuse(log_path: Path, repo_root: Path) -> str | None:
     probe = _log_rel_and_tracked(repo_root, log_path)
     if probe is not None and probe[1]:
         return "is tracked"
-    if _symlinked_component(log_path, toplevel):
+    if _symlinked_component(log_path, repo_root, toplevel):
         return "is a symlink"
     if not resolved.is_relative_to(toplevel) or _in_nested_repo(resolved, toplevel):
         return _OUTSIDE
@@ -102,16 +102,20 @@ def _identity_hit(resolved: Path, repo_root: Path, toplevel: Path) -> str | None
         current = current.parent
 
 
-def _symlinked_component(log_path: Path, toplevel: Path) -> bool:
-    """True iff any component of the UNRESOLVED `log_path`, from the full
-    path up to `toplevel`, is a symlink (the final component included)."""
+def _symlinked_component(log_path: Path, repo_root: Path, toplevel: Path) -> bool:
+    """True iff any component of the UNRESOLVED `log_path` BELOW the
+    repository is a symlink (the final component included). The walk stops
+    at the unresolved `repo_root` as well as at the resolved `toplevel`:
+    the repository's own path may carry a symlink in its ancestry (on
+    macOS a repo under `/tmp` does), and that symlink is not the sink's --
+    climbing past the repo root would refuse every run, the default sink
+    included. Only components at or below the repo root are inspected."""
     current = log_path
-    while True:
+    while current not in (repo_root, toplevel) and current.parent != current:
         if os.path.islink(current):
             return True
-        if current == toplevel or current.parent == current:
-            return False
         current = current.parent
+    return False
 
 
 def _in_nested_repo(resolved: Path, toplevel: Path) -> bool:

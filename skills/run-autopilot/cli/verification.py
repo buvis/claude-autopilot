@@ -18,7 +18,6 @@ import os
 import re
 import selectors
 import signal
-import stat
 import subprocess
 import threading
 import time
@@ -414,53 +413,60 @@ def _lock_and_check(
     return extra_excluded, None
 
 
-def _pinned_parent_fd(parent: Path) -> int:
+def _pinned_parent_fd(parent: Path, root: Path) -> int:
     """A descriptor for `parent`, opened without following a symlink at any
-    level.
+    level below `root`.
 
-    The walk is anchored at the deepest ancestor that lstats as a real
-    directory, then descends one component at a time with
-    `O_DIRECTORY | O_NOFOLLOW`, creating missing directories against the
-    pinned descriptor -- a symlink standing in for any of those components
-    fails that level's open with ELOOP/ENOTDIR instead of being followed."""
-    missing: list[str] = []
-    anchor = parent
-    while True:
+    The descent starts at `root` and takes every component beneath it one
+    at a time with `O_DIRECTORY | O_NOFOLLOW`, so a symlink standing in
+    for any of them fails that level's open with ELOOP/ENOTDIR instead of
+    being followed. Anchoring at the deepest ancestor that lstats as a
+    directory would not do: `O_NOFOLLOW` guards only the final component
+    of the path it is given, leaving every level above the anchor followed
+    silently, and the lstat-then-open pair is itself the
+    time-of-check/time-of-use gap this chain exists to close.
+
+    `root` is where the strictness starts, not where it ends: the repo's
+    OWN path is trusted (a checkout reached through a symlinked ancestor,
+    e.g. a repo under macOS `/tmp`, is normal and must not be refused),
+    while everything the caller could be tricked about lives below it."""
+    parent_fd = os.open(root, os.O_DIRECTORY)
+    for name in parent.relative_to(root).parts:
         try:
-            if stat.S_ISDIR(os.lstat(anchor).st_mode):
-                break
+            parent_fd = _descend(parent_fd, name)
         except OSError:
-            pass
-        missing.append(anchor.name)
-        anchor = anchor.parent
-    parent_fd = os.open(anchor, os.O_DIRECTORY | os.O_NOFOLLOW)
-    for name in reversed(missing):
-        try:
-            os.mkdir(name, dir_fd=parent_fd)
-        except FileExistsError:
-            pass
-        try:
-            next_fd = os.open(
-                name,
-                os.O_DIRECTORY | os.O_NOFOLLOW,
-                dir_fd=parent_fd,
-            )
-        finally:
             os.close(parent_fd)
-        parent_fd = next_fd
+            raise
     return parent_fd
 
 
-def _open_log_sink(log_path: Path):
+def _descend(parent_fd: int, name: str) -> int:
+    """`name`'s directory descriptor, opened relative to `parent_fd` and
+    created there first when it is missing (an existing component is not
+    an error; a symlinked one fails the reopen, which is the refusal).
+    Closes `parent_fd` once the new descriptor replaces it, and leaves it
+    open for the caller to close when either step raises."""
+    try:
+        os.mkdir(name, dir_fd=parent_fd)
+    except FileExistsError:
+        pass
+    next_fd = os.open(name, os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent_fd)
+    os.close(parent_fd)
+    return next_fd
+
+
+def _open_log_sink(log_path: Path, root: Path = Path("/")):
     """Opens `log_path` for a fresh write without following a symlink at
-    ANY level, including a swapped-in parent directory.
+    any level below `root` (`log_path`'s own parent chain included).
 
     The leaf is unlinked (safe: the refusal check already proved an
     existing leaf untracked, non-symlink, single-link, regular and
     non-executable) and recreated with `O_EXCL | O_NOFOLLOW` relative to a
     descriptor pinned by `_pinned_parent_fd`, so a later symlink swap of
-    the PATHNAME cannot redirect the open either."""
-    parent_fd = _pinned_parent_fd(log_path.parent)
+    the PATHNAME cannot redirect the open either. Callers pass the repo
+    root as `root`; the filesystem-root default keeps the strictest walk
+    for a caller that has no repo root to offer."""
+    parent_fd = _pinned_parent_fd(log_path.parent, root)
     try:
         try:
             os.unlink(log_path.name, dir_fd=parent_fd)
@@ -497,7 +503,7 @@ def _run_locked_gate(
     log_file = None
     try:
         if log_path is not None:
-            log_file = _open_log_sink(log_path)
+            log_file = _open_log_sink(log_path, cwd)
         (cwd / RECORD_REL).unlink(missing_ok=True)
         returncode, stdout_buf, exited = _spawn_gate(
             command,

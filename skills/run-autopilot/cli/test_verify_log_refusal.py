@@ -348,3 +348,27 @@ def test_nested_repo_store_is_refused(repo: Path) -> None:
     )
 
     assert result.returncode == 2
+
+
+def test_symlink_above_repo_root_does_not_refuse_default_sink(tmp_path: Path) -> None:
+    """A symlink in the REPOSITORY's own ancestry is not the sink's symlink.
+
+    The component walk must stop at the repo root; climbing past it (as on
+    macOS, where `/tmp` is a symlink to `/private/tmp`) refuses every run,
+    the default `docs/dev/tmp/gate-<sha7>.log` sink included.
+    """
+    if log_sink_refusal is None:
+        pytest.fail(
+            "cli.log_sink_refusal does not exist yet at this task's base commit",
+        )
+    real = tmp_path / "real"
+    real.mkdir()
+    _git_ok(real, "init", "-q")
+    _commit(real, ".gitignore", "docs/dev/tmp/\n")
+    linked_root = tmp_path / "linked"
+    linked_root.symlink_to(real)
+    assert linked_root.is_symlink()
+
+    sink = linked_root / "docs" / "dev" / "tmp" / "gate-abcdef0.log"
+
+    assert log_sink_refusal.refuse(sink, linked_root) is None
