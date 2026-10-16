@@ -335,6 +335,7 @@ run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_verification_hidden_flags.py \
   skills/run-autopilot/cli/test_verification_dirty_paths.py \
   skills/run-autopilot/cli/test_verification_log_sink.py \
+  skills/run-autopilot/cli/test_verify_log_refusal.py \
   skills/run-autopilot/cli/test_verify_truth.py \
   skills/run-autopilot/cli/test_state_no_change.py \
   skills/run-autopilot/cli/test_review_stage.py \
