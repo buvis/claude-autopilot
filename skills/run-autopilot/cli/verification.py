@@ -18,11 +18,14 @@ import os
 import re
 import selectors
 import signal
+import stat
 import subprocess
 import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
+
+from cli import log_sink_refusal
 
 # The dirty-tree and git-probe helpers live in `dirty_tree.py` (PRD 00311
 # review R3, split to keep this file under the 800-line limit); importing
@@ -376,16 +379,32 @@ def _acquire_lock(lock_fd: int, deadline: float) -> bool:
 _HEAD_MOVED = object()
 
 
+def _refuse_verify_log_path(cwd: Path, log_path: Path | None) -> str | None:
+    """The `_lock_and_check`-side mirror of `__main__._refuse_verify_log`,
+    for the library entry point (`run_gate` called directly, bypassing the
+    CLI). None when there is no log or it is safe; else the refusal reason.
+    `cwd` IS the repo root by `run_gate`'s existing contract."""
+    if log_path is None:
+        return None
+    return log_sink_refusal.refuse(log_path, cwd)
+
+
 def _lock_and_check(
     cwd: Path,
     sha: str,
     log_path: Path | None,
 ) -> tuple[tuple[str, ...], dict | object | None]:
     """The preamble of `run_gate`, called with the flock already held:
-    refuse when the tree is dirty or HEAD no longer equals `sha`. Returns
-    the log exclusion and the `_dirty_result` refusal, the `_HEAD_MOVED`
-    sentinel, or None to proceed."""
+    refuse when the log sink is unsafe (`_refuse_verify_log_path`, checked
+    first so no gate is ever spawned toward it), when the tree is dirty, or
+    when HEAD no longer equals `sha`. Returns the log exclusion and the
+    `_dirty_result` refusal, the `_HEAD_MOVED` sentinel, or None to
+    proceed."""
     extra_excluded = _untracked_log_exclusion(cwd, log_path)
+    if _refuse_verify_log_path(cwd, log_path) is not None:
+        resolved = _log_rel_and_tracked(cwd, log_path)
+        rel = resolved[0] if resolved is not None else str(log_path)
+        return extra_excluded, _dirty_result([rel])
     dirty, dirty_paths = _dirty_check(cwd, extra_excluded)
     if dirty:
         return extra_excluded, _dirty_result(dirty_paths)
@@ -393,6 +412,62 @@ def _lock_and_check(
     if head.returncode != 0 or head.stdout.strip() != sha:
         return extra_excluded, _HEAD_MOVED
     return extra_excluded, None
+
+
+def _open_log_sink(log_path: Path):
+    """Opens `log_path` for a fresh write without following a symlink at
+    ANY level, including a swapped-in parent directory.
+
+    The walk is anchored at the deepest ancestor that lstats as a real
+    directory, then descends one component at a time with
+    `O_DIRECTORY | O_NOFOLLOW`, creating missing directories against the
+    pinned descriptor -- a symlink standing in for any of those components
+    fails that level's open with ELOOP/ENOTDIR instead of being followed.
+    The leaf is unlinked (safe: the refusal check already proved an
+    existing leaf untracked, non-symlink, single-link, regular and
+    non-executable) and recreated with `O_EXCL | O_NOFOLLOW` relative to
+    that descriptor, so a later symlink swap of the PATHNAME cannot
+    redirect the open either."""
+    missing: list[str] = []
+    anchor = log_path.parent
+    while True:
+        try:
+            if stat.S_ISDIR(os.lstat(anchor).st_mode):
+                break
+        except OSError:
+            pass
+        missing.append(anchor.name)
+        anchor = anchor.parent
+    parent_fd = os.open(anchor, os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for name in reversed(missing):
+            try:
+                os.mkdir(name, dir_fd=parent_fd)
+            except FileExistsError:
+                pass
+            next_fd = os.open(
+                name,
+                os.O_DIRECTORY | os.O_NOFOLLOW,
+                dir_fd=parent_fd,
+            )
+            os.close(parent_fd)
+            parent_fd = next_fd
+        try:
+            os.unlink(log_path.name, dir_fd=parent_fd)
+        except FileNotFoundError:
+            pass
+        # 0o666 is what builtin `open` passes; os.open's own default is
+        # 0o777, which would leave the sink executable and make the NEXT
+        # run refuse its own log.
+        sink_fd = os.open(
+            log_path.name,
+            os.O_CREAT | os.O_WRONLY | os.O_EXCL | os.O_NOFOLLOW,
+            0o666,
+            dir_fd=parent_fd,
+        )
+    finally:
+        os.close(parent_fd)
+    return os.fdopen(sink_fd, "wb", buffering=0)
 
 
 def _run_locked_gate(
@@ -412,8 +487,7 @@ def _run_locked_gate(
     log_file = None
     try:
         if log_path is not None:
-            log_path.parent.mkdir(parents=True, exist_ok=True)
-            log_file = open(log_path, "wb", buffering=0)
+            log_file = _open_log_sink(log_path)
         (cwd / RECORD_REL).unlink(missing_ok=True)
         returncode, stdout_buf, exited = _spawn_gate(
             command,

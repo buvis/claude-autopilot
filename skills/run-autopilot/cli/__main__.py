@@ -240,6 +240,7 @@ from cli import (
     gate,
     handoff,
     lane_check,
+    log_sink_refusal,
     markers,
     policy,
     records,
@@ -1026,18 +1027,20 @@ def _add_verify(subparsers) -> None:
 
 
 def _refuse_verify_log(log: Path, repo_root: Path, log_path: Path) -> bool:
-    """True (refusal printed) when --log resolves inside the store. A
-    tracked-but-not-in-the-store destination is not this CLI's business;
-    `run_gate` treats it like any other log path (its own post-run dirty
-    check still never excuses an edit to a tracked file)."""
-    store = (repo_root / "docs/dev/project-management").resolve()
-    if log_path.resolve().is_relative_to(store):
-        print(
-            f"autopilot: verify: --log {log} resolves inside the store",
-            file=sys.stderr,
-        )
-        return True
-    return False
+    """True (refusal printed) when `log_sink_refusal.refuse` names a reason
+    for the UNRESOLVED candidate `log_path` -- resolving before this call
+    would follow any symlink in its ancestry. The sole place that prints
+    this refusal: ONE message string goes to stderr verbatim and into the
+    JSON line, so both carry the same text. Runs on the default
+    `docs/dev/tmp/gate-<sha7>.log` sink exactly as on a user-supplied
+    --log; there is no exempt branch."""
+    reason = log_sink_refusal.refuse(log_path, repo_root)
+    if reason is None:
+        return False
+    message = f"autopilot: verify: --log {log} {reason}"
+    print(message, file=sys.stderr)
+    print(json.dumps({"error": message, "exit": 2, "log": None}))
+    return True
 
 
 def _resolve_verify_head(repo_root: Path) -> str | None:
@@ -1095,18 +1098,16 @@ def _run_verify(args: argparse.Namespace) -> int:
     head = _resolve_verify_head(repo_root)
     if head is None:
         return 2
+    # Never resolved here: `_refuse_verify_log` needs the unresolved
+    # candidate to see a symlink in its ancestry, and `run_gate` gets the
+    # same path so its own openat chain walks the same components.
     log_path = (
         repo_root / args.log
         if args.log is not None
         else repo_root / "docs/dev/tmp" / f"gate-{head[:7]}.log"
-    ).resolve()
+    )
     log_display = args.log if args.log is not None else log_path
     if _refuse_verify_log(log_display, repo_root, log_path):
-        print(
-            json.dumps(
-                {"error": f"--log {log_display} resolves inside the store", "exit": 2},
-            ),
-        )
         return 2
     try:
         result = verification.run_gate(
@@ -1908,7 +1909,9 @@ def _run_markers(args: argparse.Namespace) -> int:
     names = args.check if args.check is not None else args.clear
     unknown = [n for n in names if n not in markers.MARKERS]
     if unknown:
-        print(f"autopilot: markers: unknown marker {', '.join(unknown)}", file=sys.stderr)
+        print(
+            f"autopilot: markers: unknown marker {', '.join(unknown)}", file=sys.stderr
+        )
         return 1
     if args.check is not None:
         print(json.dumps(markers.check(autopilot_dir, names)))
