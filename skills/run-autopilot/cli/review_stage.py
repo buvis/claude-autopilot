@@ -207,29 +207,60 @@ def _gather(repo_root: Path, since: str | None, cycle_id: str) -> dict:
     return {"ok": True, "context": context, "diff": diff}
 
 
+def _killpg_or_gone(pgid: int, sig: int) -> None:
+    """`os.killpg`, except a group that is already gone is a no-op: the race
+    where the helper exits on its own between the timeout firing and the
+    kill call must not propagate as an uncaught ProcessLookupError."""
+    try:
+        os.killpg(pgid, sig)
+    except ProcessLookupError:
+        pass
+
+
 def _run_script(
-    script: Path, args: list[str], cwd: Path, timeout: float = SCRIPT_TIMEOUT_S
+    script: Path,
+    args: list[str],
+    cwd: Path,
+    timeout: float = SCRIPT_TIMEOUT_S,
 ) -> str:
     """A helper script's stdout; a failed run says so in the block instead.
-    On timeout its session gets SIGTERM, then SIGKILL after SCRIPT_GRACE_S."""
-    proc = subprocess.Popen(
-        [sys.executable, str(script), *args],
-        cwd=cwd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        start_new_session=True,
-    )
-    try:
-        stdout, stderr = proc.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        os.killpg(proc.pid, signal.SIGTERM)
+    On timeout its session gets SIGTERM, then SIGKILL after SCRIPT_GRACE_S.
+    SIGTERM/SIGHUP landing on the caller, mirroring verification._signal_error's
+    guard shape, tears the helper's session down too and surfaces as a
+    RuntimeError naming the signal instead of leaving it orphaned."""
+    proc = None
+    with verification._deferred_signals((signal.SIGTERM, signal.SIGHUP)) as guard:
         try:
-            proc.communicate(timeout=SCRIPT_GRACE_S)
-        except subprocess.TimeoutExpired:
-            os.killpg(proc.pid, signal.SIGKILL)
-            proc.communicate()
-        return f"_{script.name} failed (timeout after {int(timeout)}s)_"
+            proc = subprocess.Popen(
+                [sys.executable, str(script), *args],
+                cwd=cwd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                start_new_session=True,
+            )
+            guard.gate_started = True
+            guard.raise_if_pending()
+            try:
+                stdout, stderr = proc.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                _killpg_or_gone(proc.pid, signal.SIGTERM)
+                try:
+                    proc.communicate(timeout=SCRIPT_GRACE_S)
+                except subprocess.TimeoutExpired:
+                    _killpg_or_gone(proc.pid, signal.SIGKILL)
+                    proc.communicate()
+                return f"_{script.name} failed (timeout after {int(timeout)}s)_"
+        except BaseException:
+            guard.cleaning = True
+            if proc is not None:
+                # A signal landing right as Popen() returns can race the
+                # helper's own exec: give it a moment to actually start
+                # running before tearing it down, or it never gets the
+                # chance to do anything, including write its own pid file.
+                time.sleep(0.1)
+            verification._kill_gate(proc)
+            raise
     if proc.returncode != 0:
         detail = stderr.strip().splitlines()[-1:] or ["no stderr"]
         return f"_{script.name} failed (exit {proc.returncode}): {detail[0]}_"
@@ -368,7 +399,7 @@ def _gate_result_line(result: dict) -> str:
     if result["lock_timeout"]:
         return (
             "Tests: (gate skipped: another gate held the lock for "
-            f"{int(verification.GATE_TIMEOUT_S)}s)"
+            f"{int(verification.GATE_LOCK_TIMEOUT_S)}s)"
         )
     if result["head_moved"]:
         return "Tests: (gate skipped: HEAD moved during the lock wait)"
