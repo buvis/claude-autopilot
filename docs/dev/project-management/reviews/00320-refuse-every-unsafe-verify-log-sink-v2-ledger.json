@@ -70,5 +70,37 @@
     "issue": "A CLI `verify` run now executes `log_sink_refusal.refuse` twice (pre-flight plus inside the lock), each pass spawning ~6 `git` subprocesses, so a gate run pays ~12 extra probes - out of scope: both enforcement points are a PRD Must-have (\"a library caller cannot bypass the CLI\"), and caching across the flock boundary would reintroduce the TOCTOU the second check exists to close",
     "file": "skills/run-autopilot/cli/log_sink_refusal.py:20",
     "reason": "accepted with the reviewer's own reasoning: the PRD requires both enforcement points, and caching across the lock boundary would reopen the TOCTOU window the in-lock check exists to close. Twelve git probes on a gate run that then executes a full test suite is not a measurable cost."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The tracked check uses `git ls-files --error-unmatch` (index), not \"tracked at HEAD\". A staged-new file counts as tracked, which is the stricter and safer reading. It is a deviation in wording only.",
+    "file": "skills/run-autopilot/cli/dirty_tree.py:255",
+    "reason": "same claim as the cycle-1 settled deferral on verification.py:403, re-raised against the helper's own line: `ls-files --error-unmatch` against the index is stricter than HEAD and fails in the safe direction. The reviewer concedes it is wording only."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "1 touched test(s) pass against the pre-change code: test_gate_log_write_failure_degrades_instead_of_crashing",
+    "file": "skills/run-autopilot/cli/test_review_stage.py",
+    "reason": "expected on an incremental base: c2bf610d already carries cycle 1's production code, and this cycle only strengthened the assertion (the cycle-1 R2 fix). The behaviour it pins was introduced in cycle 1 and was red against that cycle's base."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "1 touched test(s) pass against the pre-change code: test_run_gate_refuses_a_symlinked_log_and_leaves_its_target",
+    "file": "skills/run-autopilot/cli/test_verification_log_sink.py",
+    "reason": "same incremental-base reason; the actionable half of the observation is kept as a cap-overflow deferral (the test binds case 2, not case 3, at test_verification_log_sink.py:204)."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "10 touched test(s) pass against the pre-change code: test_cli_refuses_log_outside_toplevel, test_cli_refuses_fifo_log, test_cli_refuses_executable_target, test_cli_refuses_hardlinked_log, test_default_sink_symlink_is_refused, test_default_sink_hardlink_is_refused +4 more",
+    "file": "skills/run-autopilot/cli/test_verify_log_refusal.py",
+    "reason": "expected on an incremental base: these ten were red against the cycle-1 base and this cycle only added reason-text assertions to them. The seven genuinely new tests of this cycle are the 7 the replay reports red at base."
   }
 ]
