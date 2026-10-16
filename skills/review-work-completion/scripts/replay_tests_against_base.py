@@ -153,6 +153,7 @@ def _run_runner(
                 guard.spawned = True
                 guard.raise_if_pending()
                 stdout, stderr = proc.communicate(timeout=timeout)
+                result = stdout, stderr, proc.returncode, None
             except subprocess.TimeoutExpired:
                 guard.cleaning = True
                 try:
@@ -160,17 +161,22 @@ def _run_runner(
                 except ProcessLookupError:
                     pass
                 proc.communicate()
-                return "", "", None, f"runner did not complete: timed out after {timeout} seconds"
+                result = "", "", None, f"runner did not complete: timed out after {timeout} seconds"
             except _SignalRaised as exc:
+                guard.cleaning = True
                 try:
                     os.killpg(proc.pid, signal.SIGKILL)
                 except ProcessLookupError:
                     pass
                 proc.communicate()
-                return "", "", None, f"runner did not complete: killed by {signal.Signals(exc.signum).name}"
+                result = "", "", None, f"runner did not complete: killed by {signal.Signals(exc.signum).name}"
     except OSError as exc:
         return "", "", None, f"runner did not complete: {exc}"
-    return stdout, stderr, proc.returncode, None
+    # A signal recorded during cleanup was deferred, not consumed: re-deliver
+    # it now that the caller's handlers are back in place.
+    if guard.pending_signum is not None:
+        os.kill(os.getpid(), guard.pending_signum)
+    return result
 
 
 def _run_in_worktree(
