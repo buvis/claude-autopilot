@@ -626,12 +626,16 @@ def _spawn_gate(
             guard.raise_if_pending()
             stdout_buf, done = _drain_bounded(proc, GATE_OUTPUT_CAP, deadline, log_file)
             exited = _reap(proc, deadline, done)
-        except BaseException:
+        except BaseException as exc:
             # A log-sink write error or a guarded signal: kill and reap the
             # gate, then re-raise. A signal landing during the cleanup is
-            # recorded, never raised over it.
+            # recorded (guard.cleaning is True, so guard.handle defers it)
+            # and must still win once cleanup finishes, with the original
+            # exception kept as its cause rather than dropped.
             guard.cleaning = True
             _kill_gate(proc)
+            if guard.pending_signum is not None:
+                raise _signal_error(guard.pending_signum) from exc
             raise
     return proc.returncode, stdout_buf, exited
 
