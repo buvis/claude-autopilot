@@ -145,10 +145,7 @@ def test_cli_refuses_log_outside_toplevel(repo: Path) -> None:
 
 
 def test_cli_refuses_case_variant_store_path(repo: Path) -> None:
-    marker_dir = repo / STORE / "autopilot"
-    marker_dir.mkdir(parents=True, exist_ok=True)
-    marker = marker_dir / "marker.txt"
-    marker.write_text("m\n")
+    marker = repo / STORE / "autopilot" / "marker.txt"
     variant = repo / "docs" / "dev" / "Project-Management" / "autopilot" / "marker.txt"
     if not variant.exists():
         pytest.skip("filesystem under test is case-sensitive; no case collision")
@@ -306,20 +303,25 @@ def test_log_into_another_repos_store_is_refused(repo: Path, tmp_path_factory) -
     other = tmp_path_factory.mktemp("other-repo")
     _git_ok(other, "init", "-q")
     _commit(other, f"{STORE}/autopilot/other-marker.txt", "other\n")
+    other_marker = other / STORE / "autopilot" / "other-marker.txt"
+    before = other_marker.read_bytes()
 
-    rel = os.path.relpath(other / STORE / "autopilot" / "other-marker.txt", repo)
+    rel = os.path.relpath(other_marker, repo)
 
     result = _verify(repo, rel)
 
     assert result.returncode == 2
+    assert other_marker.read_bytes() == before
 
 
 def test_parent_dir_symlink_swap_is_refused(repo: Path, monkeypatch) -> None:
     if log_sink_refusal is None:
         pytest.fail(
-            "cli.log_sink_refusal does not exist yet at this task's base commit"
+            "cli.log_sink_refusal does not exist yet at this task's base commit",
         )
-    monkeypatch.setattr(log_sink_refusal, "refuse", lambda log_path, repo_root: None)
+    monkeypatch.setattr(log_sink_refusal, "refuse", lambda *a, **k: None)
+
+    before = (repo / ".git" / "config").read_bytes()
 
     tmp = repo / "docs" / "dev" / "tmp"
     if tmp.exists():
@@ -328,11 +330,10 @@ def test_parent_dir_symlink_swap_is_refused(repo: Path, monkeypatch) -> None:
 
     sink = tmp / "config"
 
-    with pytest.raises(Exception):
+    with pytest.raises(OSError):
         verification._open_log_sink(sink)
 
-    assert not (repo / ".git" / "config.new").exists()
-    assert (repo / ".git" / "config").read_text() != ""
+    assert (repo / ".git" / "config").read_bytes() == before
 
 
 def test_nested_repo_store_is_refused(repo: Path) -> None:
@@ -341,6 +342,9 @@ def test_nested_repo_store_is_refused(repo: Path) -> None:
     _git_ok(nested, "init", "-q")
     _commit(nested, f"{STORE}/autopilot/nested-marker.txt", "nested\n")
 
-    result = _verify(repo, "docs/dev/tmp/other/" + STORE + "/autopilot/nested-marker.txt")
+    result = _verify(
+        repo,
+        "docs/dev/tmp/other/" + STORE + "/autopilot/nested-marker.txt",
+    )
 
     assert result.returncode == 2
