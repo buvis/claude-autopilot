@@ -4,13 +4,15 @@
     "finding": "The refusal JSON line's `\"log\": None` field (the design called its absence a blocker) is not asserted by any changed test — the updated `test_cli_verify_verb.py` cases check only `error` and `exit`; run `rg -n '\\[\"log\"\\] is None' skills/run-autopilot/cli/test_cli_verify_verb.py skills/run-autopilot/cli/test_verify_truth.py` and, if it prints nothing, add that assertion to one refusal test",
     "file": "skills/run-autopilot/cli/__main__.py:1042",
     "command": "rg -n '\\[\"log\"\\] is None' skills/run-autopilot/cli/test_cli_verify_verb.py skills/run-autopilot/cli/test_verify_truth.py",
-    "source": "bob"
+    "source": "bob",
+    "result": {"exit": 0}
   },
   {
     "cycle": 1,
     "finding": "`meta/assumptions.md` was rewritten, deleting the previous PRD's (\"loop-truth-tests\") entries rather than appending under a new heading; run `rg -n 'assumptions' skills/run-autopilot/SKILL.md skills/run-autopilot/references` to confirm the skill specifies replace-per-PRD, and restore the prior section if it specifies append",
     "file": "docs/dev/project-management/meta/assumptions.md:1",
     "command": "rg -n 'assumptions' skills/run-autopilot/SKILL.md skills/run-autopilot/references",
-    "source": "bob"
+    "source": "bob",
+    "result": {"exit": 0}
   }
 ]
