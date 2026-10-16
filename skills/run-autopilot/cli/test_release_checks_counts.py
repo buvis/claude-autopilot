@@ -190,6 +190,8 @@ _REVIEW_VERB_TEST_FILES = (
     "skills/run-autopilot/cli/test_review_stage.py",
     "skills/run-autopilot/cli/test_review_stage_paths.py",
     "skills/run-autopilot/cli/test_review_stage_run_script.py",
+    "skills/run-autopilot/cli/test_review_stage_run_script_signals.py",
+    "skills/run-autopilot/cli/test_review_stage_gate_result_line.py",
     "skills/run-autopilot/cli/test_verify_truth_lock.py",
     "skills/run-autopilot/cli/test_gate.py",
     "skills/run-autopilot/cli/test_gate_findings_table.py",
