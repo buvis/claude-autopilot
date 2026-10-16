@@ -372,3 +372,145 @@ def test_symlink_above_repo_root_does_not_refuse_default_sink(tmp_path: Path) ->
     sink = linked_root / "docs" / "dev" / "tmp" / "gate-abcdef0.log"
 
     assert log_sink_refusal.refuse(sink, linked_root) is None
+
+
+def test_worktree_dotgit_file_log_is_refused(tmp_path: Path) -> None:
+    """A linked worktree's `.git` is a regular FILE pointing at the shared
+    gitdir (`gitdir: /path/to/main/.git/worktrees/<name>`), not a directory.
+    `refuse()` must still treat it as a git-internals sink: today the
+    identity walk only inspects ANCESTORS of the resolved path (it starts at
+    `resolved.parent`), so the `.git` file itself is never compared against
+    the git-dir identity targets, and it then sails through the plain
+    is-regular-file / is-executable / hardlink checks untouched."""
+    if log_sink_refusal is None:
+        pytest.fail(
+            "cli.log_sink_refusal does not exist yet at this task's base commit",
+        )
+    main = tmp_path / "main"
+    main.mkdir()
+    _git_ok(main, "init", "-q")
+    _commit(main, "src/app.py", "print(1)\n")
+    worktree = tmp_path / "wt"
+    _git_ok(main, "worktree", "add", "-q", "-b", "wtbranch", str(worktree))
+
+    git_file = worktree / ".git"
+    assert git_file.is_file()  # linked worktree: a file, not a directory
+    before = git_file.read_bytes()
+
+    result = log_sink_refusal.refuse(git_file, worktree)
+
+    assert result is not None, (
+        "a linked worktree's .git FILE must be refused as a git-internals "
+        "sink, not silently allowed through the is-regular-file check"
+    )
+    assert git_file.read_bytes() == before
+
+
+@pytest.mark.parametrize("rel", ["config", "hooks/pre-commit", "hooks/newhook"])
+def test_nested_repo_git_internals_are_refused(repo: Path, rel: str) -> None:
+    """`_in_nested_repo` treats a failing `git rev-parse --show-toplevel` as
+    "not nested", but git also fails that probe (rc 128) when run from
+    inside a `.git` directory itself -- which is exactly where
+    `resolved.parent` lands for `<nested-repo>/.git/<rel>`. The failure is
+    read as permission to fall through to the plain file-type checks
+    instead of being refused as the nested repo's own git internals."""
+    if log_sink_refusal is None:
+        pytest.fail(
+            "cli.log_sink_refusal does not exist yet at this task's base commit",
+        )
+    nested = repo / "docs" / "dev" / "tmp" / "other"
+    nested.mkdir(parents=True)
+    _git_ok(nested, "init", "-q")
+    _commit(nested, "x.txt", "x\n")
+
+    target = nested / ".git" / rel
+    if not target.exists():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("#!/bin/sh\nexit 0\n")
+
+    result = log_sink_refusal.refuse(target, repo)
+
+    assert result is not None, f"{rel} must be refused as a nested repo's git internals"
+
+
+def test_absolute_log_outside_repo_via_symlinked_ancestor_reports_outside(
+    tmp_path: Path,
+) -> None:
+    """An absolute --log path reached through a symlinked ancestor that is
+    OUTSIDE the repository (the macOS `/tmp` -> `/private/tmp` shape) must
+    be refused as "resolves outside the repository", not misreported as "is
+    a symlink": `refuse()` runs the symlink-component check before the
+    outside-toplevel check, so the symlink reason wins even though the path
+    never touches the repository at all."""
+    if log_sink_refusal is None:
+        pytest.fail(
+            "cli.log_sink_refusal does not exist yet at this task's base commit",
+        )
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_ok(repo, "init", "-q")
+    _commit(repo, "src/app.py", "print(1)\n")
+
+    real_outside = tmp_path / "real-outside"
+    real_outside.mkdir()
+    linked_outside = tmp_path / "linked-outside"
+    linked_outside.symlink_to(real_outside)
+
+    target = linked_outside / "sink.log"
+
+    result = log_sink_refusal.refuse(target, repo)
+
+    assert result == "resolves outside the repository", result
+
+
+def test_probe_failure_inside_toplevel_fails_closed_as_outside(
+    repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When `_log_rel_and_tracked` returns None (its own `ls-files` probe
+    raised an OSError), `refuse()` must fail closed as "resolves outside
+    the repository" for a target that IS inside the toplevel, not silently
+    treat the failed probe as "not tracked" and fall through to the plain
+    file-type checks, which can allow the sink through."""
+    if log_sink_refusal is None:
+        pytest.fail(
+            "cli.log_sink_refusal does not exist yet at this task's base commit",
+        )
+    monkeypatch.setattr(log_sink_refusal, "_log_rel_and_tracked", lambda *a, **k: None)
+
+    target = repo / "docs" / "dev" / "tmp" / "sink.log"
+
+    result = log_sink_refusal.refuse(target, repo)
+
+    assert result == "resolves outside the repository", result
+
+
+def test_symlinked_ancestor_component_walk_is_bounded_to_the_repo(
+    tmp_path: Path,
+) -> None:
+    """`_symlinked_component`'s walk stops at `repo_root`/`toplevel` by
+    design, but a candidate path that never passes through either --  a
+    differently-spelled, symlinked location entirely outside the repository
+    -- makes the loop keep climbing past filesystem ancestors that have
+    nothing to do with the repo, until it hits a symlink somewhere up the
+    tree and reports "is a symlink" instead of first recognizing the path
+    is outside the repository altogether."""
+    if log_sink_refusal is None:
+        pytest.fail(
+            "cli.log_sink_refusal does not exist yet at this task's base commit",
+        )
+    repo = tmp_path / "project" / "repo"
+    repo.mkdir(parents=True)
+    _git_ok(repo, "init", "-q")
+    _commit(repo, "src/app.py", "print(1)\n")
+
+    real_elsewhere = tmp_path / "elsewhere" / "real"
+    real_elsewhere.mkdir(parents=True)
+    aliased_elsewhere = tmp_path / "project" / "aliased"
+    aliased_elsewhere.symlink_to(real_elsewhere)
+
+    target = aliased_elsewhere / "deep" / "sink.log"
+
+    result = log_sink_refusal.refuse(target, repo)
+
+    assert result == "resolves outside the repository", result
