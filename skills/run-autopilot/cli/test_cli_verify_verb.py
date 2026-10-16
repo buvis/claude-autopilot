@@ -255,24 +255,24 @@ def test_verify_rejects_a_store_resolving_log_even_when_also_tracked(
     assert notes.read_text() == "keep me\n"
 
 
-def test_verify_a_tracked_log_outside_the_store_is_not_refused_but_cannot_record(
+def test_verify_refuses_a_tracked_log_outside_the_store(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # A tracked destination outside the store is not refused up front (that
-    # extra guard was scope creep beyond the spec's store-only check) -- the
-    # gate runs, but writing through a tracked file is itself an edit, so
-    # the post-run dirty check still blocks the record: exit 3, same as any
-    # other green-but-unrecorded run.
+    # PRD 00320 refuses a tracked --log destination anywhere in the repo,
+    # not only one inside the store: the gate never runs and the tracked
+    # file keeps its bytes.
     tracked = repo / "src" / "app.py"
     before = tracked.read_bytes()
 
     code = main(_verify_argv(repo, "--log", str(tracked)))
 
-    assert code == 3
-    printed = json.loads(capsys.readouterr().out)
-    assert printed["recorded"] is False
-    assert printed["dirty"] is True
-    assert tracked.read_bytes() != before
+    assert code == 2
+    captured = capsys.readouterr()
+    assert captured.err.strip().endswith("is tracked")
+    printed = json.loads(captured.out)
+    assert printed["error"].endswith("is tracked")
+    assert printed["exit"] == 2
+    assert tracked.read_bytes() == before
     assert not (repo / RECORD_REL).exists()
 
 
@@ -291,13 +291,12 @@ def test_verify_accepts_an_untracked_log_outside_docs_dev_tmp(
     assert b"out" in log.read_bytes()
 
 
-def test_verify_a_force_added_tracked_log_under_docs_dev_tmp_still_records(
+def test_verify_refuses_a_force_added_tracked_log_under_docs_dev_tmp(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # docs/dev/tmp is gitignored, but a force-added file there is tracked.
-    # It is also one of the store prefixes (scratch is never dirt, tracked
-    # or not), and outside docs/dev/project-management, so neither the CLI
-    # store check nor the dirty check touches it: the gate records.
+    # docs/dev/tmp is gitignored, but a force-added file there is tracked,
+    # and PRD 00320 refuses a tracked sink wherever it sits -- the scratch
+    # prefix does not excuse it.
     forced = repo / "docs/dev/tmp/forced.log"
     forced.parent.mkdir(parents=True)
     forced.write_text("keep me\n")
@@ -306,11 +305,13 @@ def test_verify_a_force_added_tracked_log_under_docs_dev_tmp_still_records(
 
     code = main(_verify_argv(repo, "--log", str(forced)))
 
-    assert code == 0
-    printed = json.loads(capsys.readouterr().out)
-    assert printed["recorded"] is True
-    assert printed["dirty"] is False
-    assert forced.read_text() != "keep me\n"
+    assert code == 2
+    captured = capsys.readouterr()
+    assert captured.err.strip().endswith("is tracked")
+    printed = json.loads(captured.out)
+    assert printed["error"].endswith("is tracked")
+    assert printed["exit"] == 2
+    assert forced.read_text() == "keep me\n"
 
 
 def test_verify_rejects_a_symlinked_log_that_points_at_the_record(
@@ -338,40 +339,48 @@ def test_verify_rejects_a_symlinked_log_that_points_at_the_record(
     assert record.read_bytes() == before
 
 
-def test_verify_accepts_a_store_like_path_outside_the_repo(
+def test_verify_refuses_a_store_like_path_outside_the_repo(
     repo: Path,
     tmp_path_factory: pytest.TempPathFactory,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    # The store is <repo>/docs/dev/project-management, not any directory
-    # that happens to share its name elsewhere on disk.
+    # PRD 00320 refuses any sink that resolves outside this repository, so a
+    # directory elsewhere on disk that merely shares the store's name is
+    # refused for being outside, not for looking like the store.
     scratch = tmp_path_factory.mktemp("outside")
     log = scratch / "docs/dev/project-management" / "x.log"
     assert not log.resolve().is_relative_to(repo.resolve())
 
     code = main(_verify_argv(repo, "--log", str(log)))
 
-    assert code == 0
-    printed = json.loads(capsys.readouterr().out)
-    assert Path(printed["log"]).resolve() == log.resolve()
-    assert b"out" in log.read_bytes()
+    assert code == 2
+    captured = capsys.readouterr()
+    assert captured.err.strip().endswith("resolves outside the repository")
+    printed = json.loads(captured.out)
+    assert printed["error"].endswith("resolves outside the repository")
+    assert printed["exit"] == 2
+    assert not log.exists()
 
 
-def test_verify_writes_an_absolute_out_of_repo_log_where_asked(
+def test_verify_refuses_an_absolute_out_of_repo_log(
     repo: Path,
     tmp_path_factory: pytest.TempPathFactory,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    # PRD 00320: an absolute sink outside the repository is refused, and
+    # nothing is written at the path it asked for.
     scratch = tmp_path_factory.mktemp("abslog")
     log = scratch / "gate.log"
 
     code = main(_verify_argv(repo, "--log", str(log)))
 
-    assert code == 0
-    printed = json.loads(capsys.readouterr().out)
-    assert printed["recorded"] is True
-    assert Path(printed["log"]).resolve() == log.resolve()
-    assert b"out" in log.read_bytes()
+    assert code == 2
+    captured = capsys.readouterr()
+    assert captured.err.strip().endswith("resolves outside the repository")
+    printed = json.loads(captured.out)
+    assert printed["error"].endswith("resolves outside the repository")
+    assert printed["exit"] == 2
+    assert not log.exists()
     assert list(repo.rglob("*.log")) == []
 
 

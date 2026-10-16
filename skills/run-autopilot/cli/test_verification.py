@@ -451,10 +451,8 @@ def test_run_gate_outside_a_git_repo_writes_no_record(tmp_path: Path) -> None:
     assert not (tmp_path / RECORD_REL).exists()
 
 
-def test_run_gate_streams_stdout_and_stderr_to_the_log(
-    repo: Path, tmp_path_factory
-) -> None:
-    log_path = tmp_path_factory.mktemp("log") / "gate.log"
+def test_run_gate_streams_stdout_and_stderr_to_the_log(repo: Path) -> None:
+    log_path = repo / "docs" / "dev" / "tmp" / "gate.log"
     command = "echo 'out line'; echo 'err line' 1>&2; echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'"
 
     result = verification.run_gate(command, repo, _git(repo, "rev-parse", "HEAD"), 1, log_path=log_path)
@@ -659,13 +657,14 @@ def test_concurrent_runs_serialize_on_the_gate_lock(
 
 
 def test_held_gate_lock_blocks_before_the_log_open_and_record_delete(
-    repo: Path, tmp_path_factory
+    repo: Path,
 ) -> None:
     head = _git(repo, "rev-parse", "HEAD")
     record = repo / RECORD_REL
     assert verification.run_gate(SUMMARY, repo, head, 1)["recorded"] is True
     green = record.read_bytes()
-    log_path = tmp_path_factory.mktemp("log") / "gate.log"
+    log_path = repo / "docs" / "dev" / "tmp" / "gate.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
     log_path.write_bytes(b"previous run\n")
 
     fd = _hold_gate_lock(repo)

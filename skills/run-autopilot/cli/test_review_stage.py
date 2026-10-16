@@ -291,10 +291,12 @@ def test_gate_log_write_failure_degrades_instead_of_crashing(env: dict) -> None:
         summary,
     )
 
-    # the call above must not raise; the failure is signalled through the
-    # summary instead (an errors entry, or the gate result itself saying so)
+    # the call above must not raise; an unusable sink is now refused before
+    # the open (PRD 00320) rather than raising OSError through the drain, so
+    # the failure is signalled through the summary instead (an errors entry,
+    # or a gate result that skipped the gate instead of recording a green run)
     assert "gate" in summary
-    signalled = bool(summary["errors"]) or "error" in json.dumps(summary["gate"]).lower()
+    signalled = bool(summary["errors"]) or "gate skipped" in summary["gate"]["tests_line"]
     assert signalled, summary
 
 

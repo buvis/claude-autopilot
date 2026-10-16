@@ -136,7 +136,9 @@ def _run_gate_into_a_failing_sink(
     seen = _fail_the_log_sink(monkeypatch, code)
     head = _git(repo, "rev-parse", "HEAD")
     with pytest.raises(OSError) as raised:
-        verification.run_gate(command, repo, head, 1, log_path=scratch / "gate.log")
+        verification.run_gate(
+            command, repo, head, 1, log_path=repo / "docs" / "dev" / "tmp" / "gate.log"
+        )
     return raised, int(pid_file.read_text().strip()), seen
 
 
@@ -193,32 +195,21 @@ def test_log_write_error_releases_the_gate_lock(
         _kill_group_quietly(pid)
 
 
-@pytest.mark.parametrize("via_symlink", [False, True], ids=["direct", "symlink"])
-def test_run_gate_writes_through_a_tracked_log_path(
-    repo: Path, via_symlink: bool
-) -> None:
-    # Only a store-resolving --log is refused (the CLI layer, before this
-    # function is ever reached); a tracked log elsewhere in the repo is not
-    # this function's business, scope creep that a prior cycle added and
-    # this one removes. Direct: the gate runs and the tracked file is
-    # written through like any other path -- but writing it is itself an
-    # edit, so the post-run dirty check (which never excuses a tracked log)
-    # still reports dirty and the record is not written. Symlink: the link
-    # itself is untracked, so it shows up as dirt in the ordinary pre-spawn
-    # scan and the gate never runs at all -- also dirty, also unrecorded,
-    # but the target is untouched.
+def test_run_gate_refuses_a_symlinked_log_and_leaves_its_target(repo: Path) -> None:
+    # The direct (non-symlink) tracked-log case is owned by
+    # test_verify_log_refusal.py::test_run_gate_refuses_tracked_log_without_opening.
+    # A symlinked log never reaches the gate either: the link itself is
+    # untracked, so it shows up as dirt in the ordinary pre-spawn scan and
+    # the gate never runs at all -- dirty, unrecorded, target untouched.
     head = _commit(repo, "logs/gate.log", "committed log body\n")
-    log_path = repo / "logs" / "gate.log"
-    if via_symlink:
-        log_path = repo / "link.log"
-        log_path.symlink_to(Path("logs") / "gate.log")
+    log_path = repo / "link.log"
+    log_path.symlink_to(Path("logs") / "gate.log")
 
     result = verification.run_gate(SUMMARY, repo, head, 1, log_path=log_path)
 
     assert result["recorded"] is False
     assert result["dirty"] is True
-    expected = b"committed log body\n" if via_symlink else b"PASS 1 FAIL 0 SKIP 0 EXIT 0\n"
-    assert (repo / "logs" / "gate.log").read_bytes() == expected
+    assert (repo / "logs" / "gate.log").read_bytes() == b"committed log body\n"
 
 
 @pytest.mark.parametrize("leftover", [None, b"an older run's log\n"], ids=["new", "leftover"])
