@@ -46,19 +46,23 @@ Generated: 2026-10-16 (full catchup 17:30 UTC at HEAD de92b534)
 
 ### Batch 202610161547 (in progress)
 - [x] 00320-refuse-every-unsafe-verify-log-sink-v2 (2 cycles, cap-out: 1 HIGH + 15 lower deferred)
-- [ ] 00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2 (now building)
+- [x] 00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2 (2 cycles)
 - [ ] 00322-kill-the-gate-on-every-signal-v1
 - [ ] 00323-tests-line-and-verify-record-say-red-v1
 - [ ] 00324-guard-pairs-delimiters-as-nested-runs-v1
 - [ ] 00325-sweep-reads-emoji-rows-by-character-class-v1
 - [ ] 00326-close-the-loops-remaining-verb-and-ledger-truths-v2
 - [ ] 00327-release-gate-and-notes-say-what-ships-v2
+- [ ] 00330-hand-the-tail-sweep-to-a-task-tier-session-v1
+- [ ] 00331-start-a-fresh-batch-clean-v1
+- [ ] 00332-wait-for-a-lane-in-one-call-v1
 
 Observations: 00320's review cap-out deferred two severe findings into fresh
 hold stubs (00328, 00329) rather than rework tasks; `dev/bin/release` is
 unblocked for the `verify --log` destructive-sink risk now that 00320 landed,
 but HEAD's delegation guard still has four regressions against 0.9.0 until
-00324 lands.
+00324 lands. 00321 converged cycle 2 with 13 findings, no CRITICAL/HIGH, and a
+tail sweep (tasks 8-11) that closed the full gate green.
 
 ### Batch 202610141430 (complete)
 - [x] 00277-catch-critical-rows-in-every-shape-v2 (2 cycles)

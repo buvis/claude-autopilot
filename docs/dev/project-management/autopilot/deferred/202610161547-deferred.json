@@ -261,6 +261,14 @@
       "command": "python3 skills/run-autopilot/cli/__main__.py cap-check --review-file docs/dev/project-management/reviews/00310-park-cap-regressions-v1-review-2.md --previous docs/dev/project-management/reviews/00310-park-cap-regressions-v1-review-1.md",
       "exit": 1,
       "prd": "00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md"
+    },
+    {
+      "type": "deferred_decision",
+      "issue": "__main__.py is about 1970 lines, over the 800-line limit. The diff changes one line and adds nothing, so I am not counting it against the diff.",
+      "severity": "\u26aa",
+      "file": "skills/run-autopilot/cli/__main__.py:907",
+      "reason": "deferred by review-close",
+      "prd": "00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md"
     }
   ]
 }

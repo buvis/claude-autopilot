@@ -4807,3 +4807,6 @@
 {"id":"c670f86e","kind":"pat","task":"8","queued_at":1792178474,"prompt_bytes":4278}
 {"id":"c670f86e","ended_at":1792179088,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
 {"kind":"handoff","site":"review","edge":"leave","at":1792179088,"phase":"done","prd":"00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792179144,"phase":"build","prd":"00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1792179151,"phase":"done","prd":"00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1792179204,"phase":"build","prd":"00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md"}
