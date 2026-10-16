@@ -139,11 +139,21 @@ def _raise_on_signal(signums: tuple[int, ...]) -> Iterator[_ReplaySignalGuard]:
             signal.signal(signum, handler)
 
 
+# Set when a runner is killed by SIGTERM/SIGHUP rather than a timeout, so
+# main() can terminate by that same signal once its own output is printed
+# and _run_in_worktree's worktree cleanup has already run. A second signal
+# that arrives while cleanup is already in progress is recorded on the guard
+# but otherwise dropped: the first signal already stopped the run, and
+# re-delivering it here (before cleanup) is what used to leak the worktree.
+_stop_signum: int | None = None
+
+
 def _run_runner(
     argv: list[str], worktree: Path, timeout: float
 ) -> tuple[str, str, int | None, str | None]:
     """(stdout, stderr, exit code, skip reason) of one runner process; a timeout
     or SIGTERM/SIGHUP kills its whole session."""
+    global _stop_signum
     try:
         with _raise_on_signal((signal.SIGTERM, signal.SIGHUP)) as guard:
             try:
@@ -163,6 +173,7 @@ def _run_runner(
                 proc.communicate()
                 result = "", "", None, f"runner did not complete: timed out after {timeout} seconds"
             except _SignalRaised as exc:
+                _stop_signum = exc.signum
                 guard.cleaning = True
                 try:
                     os.killpg(proc.pid, signal.SIGKILL)
@@ -172,10 +183,6 @@ def _run_runner(
                 result = "", "", None, f"runner did not complete: killed by {signal.Signals(exc.signum).name}"
     except OSError as exc:
         return "", "", None, f"runner did not complete: {exc}"
-    # A signal recorded during cleanup was deferred, not consumed: re-deliver
-    # it now that the caller's handlers are back in place.
-    if guard.pending_signum is not None:
-        os.kill(os.getpid(), guard.pending_signum)
     return result
 
 
@@ -284,7 +291,13 @@ def main(argv: list[str] | None = None) -> int:
     if top.returncode != 0:
         print("replay: skipped (no git worktree)")
         return 0
-    print(replay(Path(top.stdout.strip()), args.base, args.cmd, args.timeout))
+    print(replay(Path(top.stdout.strip()), args.base, args.cmd, args.timeout), flush=True)
+    if _stop_signum is not None:
+        # The replay was stopped by an external SIGTERM/SIGHUP (the loop's
+        # orphan sweep), not a plain timeout: die by that signal rather than
+        # swallowing it as a normal exit 0, now that the output above is
+        # flushed and _run_in_worktree's cleanup has already run.
+        os.kill(os.getpid(), _stop_signum)
     return 0
 
 
