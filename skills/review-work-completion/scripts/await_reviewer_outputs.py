@@ -29,12 +29,13 @@ def is_complete(path: str, stable_secs: float) -> bool:
     return st.st_size > 0 and (time.time() - st.st_mtime) >= stable_secs
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--budget", type=float, default=100.0,
-        help="max seconds this call blocks (keep well under the Bash tool "
-             "timeout so the harness never auto-backgrounds the call)",
+        "--budget", type=float, default=570.0,
+        help="max seconds this call blocks (fits one Bash tool call at the "
+             "600000 ms foreground timeout, so the harness never "
+             "auto-backgrounds the call)",
     )
     parser.add_argument("--poll", type=float, default=10.0)
     parser.add_argument(
@@ -42,7 +43,11 @@ def main() -> None:
         help="mtime quiet period marking a file complete",
     )
     parser.add_argument("files", nargs="+")
-    args = parser.parse_args()
+    return parser
+
+
+def main() -> None:
+    args = build_parser().parse_args()
 
     deadline = time.time() + args.budget
     while True:

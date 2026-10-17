@@ -20,7 +20,8 @@ SCRIPT = Path(__file__).with_name("await_reviewer_outputs.py")
 
 def _load_module():
     spec = importlib.util.spec_from_file_location(
-        "await_reviewer_outputs", Path(__file__).with_name("await_reviewer_outputs.py")
+        "await_reviewer_outputs",
+        Path(__file__).with_name("await_reviewer_outputs.py"),
     )
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None

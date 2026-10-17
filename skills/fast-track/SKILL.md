@@ -36,11 +36,11 @@ stops the item says so.
   gives it, quoted here verbatim (its placeholder is this item's two `-o`
   paths, the codex and the gemini output files):
 
-  > Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/await_reviewer_outputs.py --budget 100 <absolute -o output path of each CLI reviewer dispatched>` as a foreground Bash call. If the last stdout line is `WAITING`, run the same command again — up to 30 times total. Return the script's final output verbatim (`DONE`, or `WAITING` plus the pending files after 30 runs). Do nothing else: no reading the output files, no review commentary.
+  > Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/await_reviewer_outputs.py --budget 570 <absolute -o output path of each CLI reviewer dispatched>` as a foreground Bash call with the timeout parameter set to 600000. If the last stdout line is `WAITING`, run the same command again — up to 6 times total. Return the script's final output verbatim (`DONE`, or `WAITING` plus the pending files after 6 runs (~57 min)). Do nothing else: no reading the output files, no review commentary.
 
   The Watcher is scaffolding, not a reviewer: its return is never saved or
   consolidated, and once every lane has reported (or reached its terminal
-  failure) `TaskStop` it if it is still running. A `WAITING` return after 30
+  failure) `TaskStop` it if it is still running. A `WAITING` return after 6
   runs means a stalled CLI lane; count that lane as failed after its one
   retry, as the Roster says.
 - **A worktree you know.** Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/run-autopilot/cli/__main__.py dirty --state <state.json>`
