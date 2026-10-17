@@ -4912,3 +4912,5 @@
 {"kind":"handoff","site":"build","edge":"leave","at":1792199442,"phase":"done","prd":"00323-tests-line-and-verify-record-say-red-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1792199499,"phase":"done","prd":"00323-tests-line-and-verify-record-say-red-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1792199586,"phase":"build","prd":"00323-tests-line-and-verify-record-say-red-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792199655,"phase":"build","prd":"00324-guard-pairs-delimiters-as-nested-runs-v1.md"}
+{"kind":"handoff","site":"build","edge":"leave","at":1792201770,"phase":"build","prd":"00324-guard-pairs-delimiters-as-nested-runs-v1.md"}

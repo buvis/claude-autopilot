@@ -1,6 +1,6 @@
 # Project Capsule: claude-autopilot
 
-Generated: 2026-10-16 (full catchup 17:30 UTC at HEAD de92b534)
+Generated: 2026-10-17 (catchup at HEAD 1228d38b, 00323 closed, entering 00324)
 
 ## Key Invariants
 
@@ -49,7 +49,7 @@ Generated: 2026-10-16 (full catchup 17:30 UTC at HEAD de92b534)
 - [x] 00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2 (2 cycles)
 - [x] 00322-kill-the-gate-on-every-signal-v1 (2 cycles, cap-out: 4 HIGH + 12 lower deferred)
 - [x] 00323-tests-line-and-verify-record-say-red-v1 (1 cycle)
-- [ ] 00324-guard-pairs-delimiters-as-nested-runs-v1
+- [ ] 00324-guard-pairs-delimiters-as-nested-runs-v1 (in progress, full lane: opus tier, design required)
 - [ ] 00325-sweep-reads-emoji-rows-by-character-class-v1
 - [ ] 00326-close-the-loops-remaining-verb-and-ledger-truths-v2
 - [ ] 00327-release-gate-and-notes-say-what-ships-v2
