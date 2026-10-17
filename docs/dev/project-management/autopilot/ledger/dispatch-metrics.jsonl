@@ -5077,3 +5077,5 @@
 {"id":"0a2676fa","kind":"fast-track:delta","task":"00331-start-a-fresh-batch-clean-v1-c1","queued_at":1792241143,"prompt_bytes":4711}
 {"id":"0a2676fa","ended_at":1792241263,"elapsed_s":120,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1792241722,"phase":"done","prd":"00331-start-a-fresh-batch-clean-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1792242879,"phase":"done","prd":"00331-start-a-fresh-batch-clean-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1792242986,"phase":"build","prd":"00331-start-a-fresh-batch-clean-v1.md"}
