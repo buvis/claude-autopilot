@@ -241,6 +241,8 @@ def is_test_path(path: str) -> bool:
     segments = path.split("/")
     if any(segment in _TEST_DIR_SEGMENTS for segment in segments[:-1]):
         return True
+    if path == "dev/bin/release-checks":
+        return True
     return any(fnmatchcase(segments[-1], glob) for glob in _TEST_BASENAME_GLOBS)
 
 

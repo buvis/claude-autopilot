@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **work**: a tests-first task that registers its file in dev/bin/release-checks keeps the test-only skip of self-deslop and the per-task review
 - **run-autopilot**: a fresh batch no longer starts from the previous batch's session brief and contract card, and the batch-absent stop names the statectl route instead of inviting autopilot init
 - **release**: `dev/bin/release` now also refuses on an open `severity: critical` triage stub under `prds/hold` or `prds/wip`, naming the file, even when it carries no "release is blocked" phrase
 - **run-autopilot**: `autopilot verify --log` refuses a tracked, symlinked, hard-linked, out-of-repo, store, git-directory, non-regular or executable sink before opening it, and opens the sink exclusively, so a gate run can no longer overwrite committed source, git internals, a hook or the loop's own state
