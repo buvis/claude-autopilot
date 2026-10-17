@@ -76,6 +76,8 @@ def _record_shape_ok(record: dict, gate_command: str) -> bool:
         return False
     if any(record.get(key) is None for key in ("passed", "failed", "skipped")):
         return False
+    if record.get("summary_exit") not in (0, None):
+        return False
     commands = record.get("commands")
     if not isinstance(commands, list) or not commands:
         return False
@@ -174,6 +176,7 @@ def _write_record(
         "passed": result["passed"],
         "failed": persisted_failed,
         "skipped": result["skipped"],
+        "summary_exit": summary_exit,
     }
     path.write_text(json.dumps(record, indent=2) + "\n")
 

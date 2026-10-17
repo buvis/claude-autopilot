@@ -128,8 +128,10 @@ certified.
 {
   "sha": "<git rev-parse HEAD at the time of the run>",
   "cycle": <state.cycle, or null when no review cycle is in flight>,
+  "writer": "run_gate",
   "commands": [{"command": "<whitespace-collapsed, as run>", "exit": <code>}],
-  "passed": <int>, "failed": <int>, "skipped": <int>
+  "passed": <int>, "failed": <int>, "skipped": <int>,
+  "summary_exit": <the summary line's own EXIT token, kept distinct from the already-folded "failed" count>
 }
 ```
 

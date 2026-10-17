@@ -405,6 +405,13 @@ def _gate_result_line(result: dict) -> str:
         return "Tests: (gate skipped: HEAD moved during the lock wait)"
     if result["dirty"]:
         paths = ", ".join(result["dirty_paths"]) or "(no paths reported)"
+        if result["passed"] is not None:
+            counts = (result["passed"], result["failed"], result["skipped"])
+            suffix = (
+                "(suite run this cycle, then tree dirtied outside the "
+                f"store: {paths})"
+            )
+            return _tests_line(counts, suffix)
         return f"Tests: (gate skipped: working tree dirty outside the store: {paths})"
     if result["timed_out"]:
         # TESTS_RE needs counts; zeros plus the suffix say none were read.
@@ -419,7 +426,21 @@ def _gate_result_line(result: dict) -> str:
             "no PASS/FAIL/SKIP/EXIT summary line)"
         )
     counts = (result["passed"], result["failed"], result["skipped"])
-    return _tests_line(counts, "(suite run this cycle)")
+    summary_exit = None
+    if result.get("raw_line"):
+        match = verification.SUMMARY_RE.search(result["raw_line"])
+        if match:
+            summary_exit = int(match.group(4))
+    process_exit = result.get("exit")
+    if process_exit not in (0, None):
+        bad_exit = process_exit
+    elif summary_exit not in (0, None):
+        bad_exit = summary_exit
+    else:
+        return _tests_line(counts, "(suite run this cycle)")
+    return _tests_line(
+        counts, f"(suite run this cycle, exit {bad_exit}, treated as failed)"
+    )
 
 
 def run_gate_line(repo_root: Path, gate_command: str, cycle_id: str) -> dict:
@@ -449,11 +470,16 @@ def run_gate_line(repo_root: Path, gate_command: str, cycle_id: str) -> dict:
         cycle=cycle,
         log_path=log_path,
     )
+    gate_spawned = not (
+        result["lock_timeout"]
+        or result["head_moved"]
+        or (result["dirty"] and result["passed"] is None)
+    )
     return {
         "verdict": verdict,
         "tests_line": _gate_result_line(result),
         "timed_out": result["timed_out"],
-        "log": str(log_path),
+        "log": str(log_path) if gate_spawned else None,
         "dirty_paths": result["dirty_paths"],
     }
 

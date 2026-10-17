@@ -382,6 +382,7 @@ def test_run_gate_writes_last_verification_json_on_fresh_run(repo: Path) -> None
         "passed": 7,
         "failed": 2,
         "skipped": 1,
+        "summary_exit": 1,
     }
 
 
@@ -487,6 +488,7 @@ def test_run_gate_writes_the_normalized_command(repo: Path) -> None:
         "passed": 3,
         "failed": 0,
         "skipped": 0,
+        "summary_exit": 0,
     }
 
 

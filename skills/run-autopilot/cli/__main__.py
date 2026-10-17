@@ -1059,8 +1059,9 @@ def _resolve_verify_head(repo_root: Path) -> str | None:
         if proc.returncode == 0:
             return proc.stdout.strip()
         msg = f"cannot resolve HEAD in {repo_root}: {proc.stderr.strip()}"
-    print(f"autopilot: verify: {msg}", file=sys.stderr)
-    print(json.dumps({"error": msg, "exit": 2}))
+    full = f"autopilot: verify: {msg}"
+    print(full, file=sys.stderr)
+    print(json.dumps({"error": full, "exit": 2}))
     return None
 
 
