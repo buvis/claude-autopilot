@@ -5215,3 +5215,5 @@
 {"id":"3f2789d7","kind":"fast-track:delta","task":"00342-task-done-refuses-an-undefined-attempt-stamp-v1-c1","queued_at":1792257276,"prompt_bytes":4745}
 {"id":"3f2789d7","ended_at":1792257548,"elapsed_s":272,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1792258021,"phase":"done","prd":"00342-task-done-refuses-an-undefined-attempt-stamp-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1792258055,"phase":"done","prd":"00342-task-done-refuses-an-undefined-attempt-stamp-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1792258112,"phase":"build","prd":"00342-task-done-refuses-an-undefined-attempt-stamp-v1.md"}
