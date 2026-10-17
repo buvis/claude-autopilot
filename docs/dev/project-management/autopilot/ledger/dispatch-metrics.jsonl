@@ -5273,3 +5273,4 @@
 {"id":"5876712b","ended_at":1792262154,"elapsed_s":570,"outcome":"ok","detail":null}
 {"id":"df62f05a","ended_at":1792262219,"elapsed_s":628,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1792262751,"phase":"done","prd":"00348-the-security-trigger-reads-prose-as-prose-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1792262785,"phase":"done","prd":"00348-the-security-trigger-reads-prose-as-prose-v1.md"}

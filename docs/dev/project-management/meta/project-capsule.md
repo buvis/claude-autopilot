@@ -44,7 +44,7 @@ Generated: 2026-10-17 (catchup at HEAD a2858cb4, 00332 closed, entering 00333; 0
 
 ## Active Work
 
-### Batch 202610161547 (in progress)
+### Batch 202610161547 (complete)
 - [x] 00320-refuse-every-unsafe-verify-log-sink-v2 (2 cycles, cap-out: 1 HIGH + 15 lower deferred)
 - [x] 00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2 (2 cycles)
 - [x] 00322-kill-the-gate-on-every-signal-v1 (2 cycles, cap-out: 4 HIGH + 12 lower deferred)
@@ -55,6 +55,8 @@ Generated: 2026-10-17 (catchup at HEAD a2858cb4, 00332 closed, entering 00333; 0
 - [x] 00330-hand-the-tail-sweep-to-a-task-tier-session-v1 (1 cycle, micro-lane tail sweep)
 - [ ] 00327-release-gate-and-notes-say-what-ships-v2 (parked to hold/, warden blocked gate 3)
 - [x] 00331-start-a-fresh-batch-clean-v1 (1 cycle, fast-track)
+- [x] 00348-the-security-trigger-reads-prose-as-prose-v1 (1 cycle, fast-track)
+- [ ] 00347-never-run-the-release-script-as-a-card-gate-v1 (parked to hold/)
 - [x] 00332-wait-for-a-lane-in-one-call-v1 (1 cycle, fast-track)
 - [x] 00333-sweep-only-findings-two-reviewers-raised-v1 (1 cycle, full lane: uncardable)
 - [x] 00334-keep-the-test-only-skip-when-a-test-registers-itself-v1 (1 cycle, fast-track)
@@ -63,8 +65,6 @@ Generated: 2026-10-17 (catchup at HEAD a2858cb4, 00332 closed, entering 00333; 0
 - [x] 00341-devon-reviews-tests-an-earlier-task-wrote-v1 (1 cycle, solo lane)
 - [x] 00342-task-done-refuses-an-undefined-attempt-stamp-v1 (1 cycle, fast-track)
 - [x] 00345-launch-loop-sessions-with-ponytail-off-v1 (1 cycle, fast-track)
-- [ ] 00347-never-run-the-release-script-as-a-card-gate-v1 (backlog)
-- [ ] 00348-the-security-trigger-reads-prose-as-prose-v1 (backlog)
 
 Observations: 00320's review cap-out deferred two severe findings into fresh
 hold stubs (00328, 00329) rather than rework tasks; `dev/bin/release` is
@@ -104,7 +104,13 @@ loop launch env now sets `PONYTAIL_DEFAULT_MODE=off` so ponytail's minimalism
 mode cannot thin a loop session's mandated steps; Alice/Blake/Carl raised a
 docstring/CHANGELOG/test-precedence gap, all fixed in commit 6dff749; Bob's
 codex lane never initialized (sandbox PreToolUse gate), counted as a missing
-lens, not a pass. No deferred items, no doubts.
+lens, not a pass. No deferred items, no doubts. 00347 stalled to hold/
+(a card gate ran `bash dev/bin/release` directly, which warden blocks). 00348
+(fast-track, 1 task) converged cycle 1: the security trigger now skips
+doc-file prose lines so a doc mentioning "session" or similar trigger words
+no longer escalates a solo-lane review to the full gate. No deferred items,
+no doubts. Batch 202610161547 drained at this close (17 PRDs done, 2 parked
+to hold/ — 00327, 00347).
 
 ### Batch 202610141430 (complete)
 - [x] 00277-catch-critical-rows-in-every-shape-v2 (2 cycles)
