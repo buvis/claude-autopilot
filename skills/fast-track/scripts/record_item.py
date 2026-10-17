@@ -27,6 +27,8 @@ from pathlib import Path
 FILENAME = "loop-metrics.jsonl"
 OUTCOMES = ("committed", "branched", "stopped")
 PHASE = "fast-track"
+STARTED_FILE = Path("docs") / "dev" / "tmp" / "fast-track-started"
+_MAX_STARTED_AGE_SECS = 24 * 3600
 
 _RECORD_DISPATCH = (
     Path(__file__).resolve().parents[2] / "work" / "scripts" / "record_dispatch.py"
@@ -57,7 +59,12 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--item", required=True, help="the item, for the caller")
     parser.add_argument("--card", required=True, help="card path; its name is prd")
     parser.add_argument("--model", required=True)
-    parser.add_argument("--started", required=True, type=int)
+    parser.add_argument(
+        "--started",
+        required=False,
+        type=int,
+        help=f"epoch seconds; falls back to reading {STARTED_FILE} when omitted",
+    )
     parser.add_argument("--outcome", required=True, choices=OUTCOMES)
     parser.add_argument("--rework", required=True, type=int, choices=(0, 1))
     parser.add_argument("--findings", required=True, type=json.loads)
@@ -66,18 +73,51 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _read_started_file(project_root: Path) -> int | None:
+    try:
+        text = (project_root / STARTED_FILE).read_text(encoding="utf-8")
+    except OSError:
+        return None
+    try:
+        return int(text.strip())
+    except ValueError:
+        return None
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     autopilot_dir = _record_dispatch.find_autopilot_dir(Path.cwd())
     if autopilot_dir is None:
         return 0
     ts_end = int(time.time())
+
+    if args.started is None:
+        project_root = autopilot_dir.parents[3]
+        ts_start = _read_started_file(project_root)
+        if ts_start is None:
+            print(
+                f"record_item: --started not given and {STARTED_FILE} "
+                "is missing or unreadable",
+                file=sys.stderr,
+            )
+            return 2
+    else:
+        ts_start = args.started
+
+    if ts_start > ts_end or ts_start < ts_end - _MAX_STARTED_AGE_SECS:
+        print(
+            f"record_item: --started {ts_start} is more than 24 hours before "
+            f"ts_end ({ts_end}) or in the future",
+            file=sys.stderr,
+        )
+        return 2
+
     append_item_row(
         autopilot_dir,
         {
-            "ts_start": args.started,
+            "ts_start": ts_start,
             "ts_end": ts_end,
-            "wall_secs": ts_end - args.started,
+            "wall_secs": ts_end - ts_start,
             "prd": Path(args.card).name,
             "batch": PHASE,
             "phase_launched": PHASE,

@@ -315,7 +315,10 @@ def test_exact_slack_boundary_is_not_in_flight() -> None:
     last = _row(ts_end=1000.0, signal="died")
     log_mtime = last.ts_end + discovery.IN_FLIGHT_SLACK
     status = discovery.classify(
-        _state(), rows=[last], log_mtime=log_mtime, now=log_mtime
+        _state(),
+        rows=[last],
+        log_mtime=log_mtime,
+        now=log_mtime,
     )
     assert status.in_flight is False
     assert status.label.startswith("■ died")
@@ -368,7 +371,10 @@ def test_loop_status_end_to_end_populates_row_cells_from_current_batch(
             _metrics_line(batch="202607120753", ts_end=1000.0, cost_usd=1.5),
             _metrics_line(batch="202607120753", ts_end=2000.0, cost_usd=2.5),
             _metrics_line(
-                batch="OLDBATCH", ts_end=500.0, cost_usd=100.0, signal="done"
+                batch="OLDBATCH",
+                ts_end=500.0,
+                cost_usd=100.0,
+                signal="done",
             ),
         ],
     )
@@ -482,7 +488,9 @@ def test_missing_registry_returns_home_claude_when_autopilot_dir_present(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_home = tmp_path / "home-active"
-    autopilot_dir = fake_home / ".claude" / "docs" / "dev" / "project-management" / "autopilot"
+    autopilot_dir = (
+        fake_home / ".claude" / "docs" / "dev" / "project-management" / "autopilot"
+    )
     autopilot_dir.mkdir(parents=True)
     monkeypatch.setattr(discovery.Path, "home", classmethod(lambda cls: fake_home))
 
@@ -495,7 +503,9 @@ def test_discover_loops_skips_blank_and_relative_column_one_rows(
     tmp_path: Path,
 ) -> None:
     root_valid = tmp_path / "validrepo"
-    (root_valid / "docs" / "dev" / "project-management" / "autopilot").mkdir(parents=True)
+    (root_valid / "docs" / "dev" / "project-management" / "autopilot").mkdir(
+        parents=True
+    )
     registry = tmp_path / "repos.csv"
     registry.write_text(
         f"\nrelative/path,badname,,\n{root_valid},validrepo,,\n",
@@ -525,7 +535,9 @@ def test_registry_row_with_quoted_comma_path_is_parsed_via_csv_module(
     column containing a comma must yield the full path, not a truncated
     prefix up to the first comma."""
     root_with_comma = tmp_path / "my,repo"
-    (root_with_comma / "docs" / "dev" / "project-management" / "autopilot").mkdir(parents=True)
+    (root_with_comma / "docs" / "dev" / "project-management" / "autopilot").mkdir(
+        parents=True
+    )
     registry = tmp_path / "repos.csv"
     registry.write_text(f'"{root_with_comma}",name,flags\n')
 
@@ -1124,7 +1136,10 @@ def test_orphan_status_keeps_original_when_no_work_is_queued(
 
 def test_orphan_status_keeps_terminal_statuses_like_died() -> None:
     died = discovery.Status(
-        label="■ died 10:00", style="bold red", rank=1, in_flight=False
+        label="■ died 10:00",
+        style="bold red",
+        rank=1,
+        in_flight=False,
     )
     out = discovery.orphan_status(
         died,
@@ -1156,8 +1171,11 @@ def test_loop_status_marks_orphaned_when_wrapper_died_mid_batch(
         autopilot_dir / "loop-metrics.jsonl",
         [
             _metrics_line(
-                batch="B1", ts_start=now - 100, ts_end=now + 5, signal="continue"
-            )
+                batch="B1",
+                ts_start=now - 100,
+                ts_end=now + 5,
+                signal="continue",
+            ),
         ],
     )
 
@@ -1216,9 +1234,12 @@ def test_live_wrapper_pid_none_when_pid_dead_or_unregistered(
     assert discovery.live_wrapper_pid(tmp_path, loops_dir=loops_dir) is None
 
 
-def test_pid_tagged_requires_an_exact_pid_match(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_pid_tagged_requires_an_exact_pid_match(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     def fake_exec_env(pid):
         return {"_AUTOPILOT_LOOP": "4321"} if pid == 1000 else None
+
     monkeypatch.setattr(discovery, "exec_env", fake_exec_env)
     monkeypatch.setattr(discovery, "_child_pids", lambda pid: ["1000"])
     assert discovery._pid_tagged(999, 4321) is True
@@ -1331,8 +1352,11 @@ def test_loop_status_marks_an_operator_pause_paused_not_orphaned(
         autopilot_dir / "loop-metrics.jsonl",
         [
             _metrics_line(
-                batch="B1", ts_start=now - 100, ts_end=now + 5, signal="continue"
-            )
+                batch="B1",
+                ts_start=now - 100,
+                ts_end=now + 5,
+                signal="continue",
+            ),
         ],
     )
     _stamp_paused(tmp_path, now)
@@ -1354,7 +1378,9 @@ def test_discover_loops_includes_live_registry_root_absent_from_gita_csv(
     monkeypatch.setattr(discovery.Path, "home", classmethod(lambda cls: fake_home))
 
     registry_root = tmp_path / "wrapper-only-repo"
-    (registry_root / "docs" / "dev" / "project-management" / "autopilot").mkdir(parents=True)
+    (registry_root / "docs" / "dev" / "project-management" / "autopilot").mkdir(
+        parents=True
+    )
 
     gita_csv = tmp_path / "repos.csv"
     gita_csv.write_text("")
@@ -1384,7 +1410,9 @@ def test_discover_loops_dedups_root_present_in_both_gita_csv_and_registry(
     monkeypatch.setattr(discovery.Path, "home", classmethod(lambda cls: fake_home))
 
     shared_root = tmp_path / "shared-repo"
-    (shared_root / "docs" / "dev" / "project-management" / "autopilot").mkdir(parents=True)
+    (shared_root / "docs" / "dev" / "project-management" / "autopilot").mkdir(
+        parents=True
+    )
 
     gita_csv = tmp_path / "repos.csv"
     gita_csv.write_text(f"{shared_root},sharedrepo,,\n")
@@ -1414,7 +1442,9 @@ def test_discover_loops_excludes_dead_pid_registry_root(
     monkeypatch.setattr(discovery.Path, "home", classmethod(lambda cls: fake_home))
 
     dead_root = tmp_path / "dead-wrapper-repo"
-    (dead_root / "docs" / "dev" / "project-management" / "autopilot").mkdir(parents=True)
+    (dead_root / "docs" / "dev" / "project-management" / "autopilot").mkdir(
+        parents=True
+    )
 
     gita_csv = tmp_path / "repos.csv"
     gita_csv.write_text("")
@@ -1448,7 +1478,9 @@ def test_discover_loops_registry_root_survives_unreadable_gita_csv(
     monkeypatch.setattr(discovery.Path, "home", classmethod(lambda cls: fake_home))
 
     registry_root = tmp_path / "wrapper-survives-repo"
-    (registry_root / "docs" / "dev" / "project-management" / "autopilot").mkdir(parents=True)
+    (registry_root / "docs" / "dev" / "project-management" / "autopilot").mkdir(
+        parents=True
+    )
 
     loops_dir = tmp_path / "loops"
     loops_dir.mkdir()
@@ -1509,7 +1541,8 @@ def test_discover_loops_registry_root_without_autopilot_dir_is_filtered(
 
 
 def _run_wrapper_alive_guard(
-    root: Path, loops_dir: Path
+    root: Path,
+    loops_dir: Path,
 ) -> subprocess.CompletedProcess[bytes]:
     env = dict(os.environ)
     env["_AUTOPILOT_LOOPS_DIR"] = str(loops_dir)

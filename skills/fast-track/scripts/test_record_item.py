@@ -54,7 +54,9 @@ _DISPATCH_FILENAME = "dispatch-metrics.jsonl"
 # starting from the script's own location instead of the cwd would land here.
 _REPO_LEDGER = (
     Path(__file__).resolve().parents[3]
-    / "docs" / "dev" / "project-management"
+    / "docs"
+    / "dev"
+    / "project-management"
     / "autopilot"
     / _LEDGER_FILENAME
 )

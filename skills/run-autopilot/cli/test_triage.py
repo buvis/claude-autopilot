@@ -98,7 +98,10 @@ def test_mints_unowned_critical_high_and_cap_critical_stall(tree) -> None:
 
 def test_severity_is_matched_case_insensitively(tree) -> None:
     autopilot, prds = tree
-    _ledger(autopilot, [_row(severity="HIGH", issue="a"), _row(severity="Critical", issue="b")])
+    _ledger(
+        autopilot,
+        [_row(severity="HIGH", issue="a"), _row(severity="Critical", issue="b")],
+    )
     assert len(triage.mint_stubs(autopilot, prds, BATCH)["minted"]) == 2
 
 
@@ -159,7 +162,9 @@ def test_fixed_in_rework_critical_rows_do_not_mint() -> None:
     # such a row has already been addressed and must not qualify, while a
     # cap-overflow HIGH row carrying no such action text still must.
     fixed_in_rework = _row(
-        severity="critical", type="review-critical", action="fix in cycle 1 rework"
+        severity="critical",
+        type="review-critical",
+        action="fix in cycle 1 rework",
     )
     assert not triage.qualifies(fixed_in_rework)
 
@@ -178,7 +183,9 @@ def test_fixed_in_rework_critical_rows_do_not_mint() -> None:
 
 
 @pytest.mark.parametrize("lifecycle", LIFECYCLE)
-def test_key_in_first_20_lines_of_any_lifecycle_dir_claims_ownership(tree, lifecycle) -> None:
+def test_key_in_first_20_lines_of_any_lifecycle_dir_claims_ownership(
+    tree, lifecycle
+) -> None:
     autopilot, prds = tree
     row = _row()
     key = triage.ledger_key(row["issue"])
@@ -193,7 +200,9 @@ def test_key_past_line_20_does_not_claim(tree) -> None:
     autopilot, prds = tree
     row = _row()
     key = triage.ledger_key(row["issue"])
-    (prds / "backlog" / "00042-deep-v1.md").write_text("\n" * 25 + f"ledger_key: {key}\n")
+    (prds / "backlog" / "00042-deep-v1.md").write_text(
+        "\n" * 25 + f"ledger_key: {key}\n"
+    )
     _ledger(autopilot, [row])
     assert len(triage.mint_stubs(autopilot, prds, BATCH)["minted"]) == 1
 
@@ -226,7 +235,9 @@ def test_discovery_reserves_numbers_but_owns_no_keys(tree) -> None:
     row = _row()
     discovery = prds.parent / "discovery"
     discovery.mkdir()
-    (discovery / "00050-discovery.md").write_text(f"ledger_key: {triage.ledger_key(row['issue'])}\n")
+    (discovery / "00050-discovery.md").write_text(
+        f"ledger_key: {triage.ledger_key(row['issue'])}\n"
+    )
     _ledger(autopilot, [row])
     minted = triage.mint_stubs(autopilot, prds, BATCH)["minted"]
     assert minted == ["00051-triage-example-topic-v1.md"]
@@ -275,7 +286,9 @@ def test_stub_frontmatter_carries_the_ledger_provenance(tree) -> None:
 
 
 def test_stub_preserves_issue_and_detail_verbatim_in_problem(tree) -> None:
-    row = _row(issue='Unrecoverable deadlock: `foo` -> Parse("no frontmatter ---")   with   spaces')
+    row = _row(
+        issue='Unrecoverable deadlock: `foo` -> Parse("no frontmatter ---")   with   spaces'
+    )
     text = _stub_text(tree, row)
     problem = text.split("## Problem")[1].split("## Solution")[0]
     assert f"Issue: {row['issue']}" in problem
@@ -287,7 +300,10 @@ def test_stub_has_exactly_one_checkbox_and_no_phase_1_task(tree) -> None:
     text = _stub_text(tree, _row())
     assert re.findall(r"(?m)^- \[ \] .*$", text) == [triage.TRIAGE_TASK]
     phase_1 = text.split("### Phase 1: Core")[1].split("## Success Criteria")[0]
-    assert "- [" not in phase_1 and "No implementation tasks until attended triage" in phase_1
+    assert (
+        "- [" not in phase_1
+        and "No implementation tasks until attended triage" in phase_1
+    )
 
 
 def test_stall_stub_is_critical_and_titled_from_its_detail(tree) -> None:
@@ -310,14 +326,19 @@ def test_cap_regression_stall_row_mints_a_stub(tree) -> None:
     text = _stub_text(tree, row)
     assert "# Triage: Cycle 2 cap-check regressions: R5 8b3a58f2, R6 8b3a58f2." in text
     assert "site `cap_regression`" in text
-    assert "severity: high" in text, "a cap_regression stall never involves an unresolved CRITICAL - severity: critical would overstate it"
+    assert "severity: high" in text, (
+        "a cap_regression stall never involves an unresolved CRITICAL - severity: critical would overstate it"
+    )
 
 
 def test_minting_never_promotes_into_backlog_or_wip(tree) -> None:
     autopilot, prds = tree
     _ledger(autopilot, [_row(), _stall_row()])
     triage.mint_stubs(autopilot, prds, BATCH)
-    assert list((prds / "backlog").iterdir()) == [] and list((prds / "wip").iterdir()) == []
+    assert (
+        list((prds / "backlog").iterdir()) == []
+        and list((prds / "wip").iterdir()) == []
+    )
     assert len(_hold_files(prds)) == 2
 
 
@@ -335,7 +356,9 @@ def test_next_sequence_is_the_tail_across_all_five_dirs(tree) -> None:
     assert triage.next_sequence(prds) == 31
 
 
-def test_concurrent_claim_after_write_renumbers_only_this_attempts_file(tree, monkeypatch) -> None:
+def test_concurrent_claim_after_write_renumbers_only_this_attempts_file(
+    tree, monkeypatch
+) -> None:
     autopilot, prds = tree
     (prds / "done" / "00040-old-v1.md").touch()
     rival = prds / "backlog" / "00041-rival-v1.md"
@@ -366,7 +389,7 @@ def test_a_revision_of_the_same_work_unit_is_not_a_collision(tree, monkeypatch) 
     monkeypatch.setattr(triage, "_write_candidate", write_then_own_revision)
     _ledger(autopilot, [_row()])
     assert triage.mint_stubs(autopilot, prds, BATCH)["minted"] == [
-        "00043-triage-example-topic-v1.md"
+        "00043-triage-example-topic-v1.md",
     ]
 
 
@@ -413,10 +436,14 @@ def test_each_publication_uses_its_own_sidecar(tree, monkeypatch) -> None:
         triage._write_candidate(target, "second writer\n")
     assert len(sidecars) == 2 and sidecars[0] != sidecars[1], sidecars
     assert target.read_text() == "first writer\n"
-    assert [p.name for p in (prds / "hold").iterdir()] == [target.name], "sidecar litter"
+    assert [p.name for p in (prds / "hold").iterdir()] == [target.name], (
+        "sidecar litter"
+    )
 
 
-def test_a_write_cut_short_after_the_key_claims_nothing_on_retry(tree, monkeypatch) -> None:
+def test_a_write_cut_short_after_the_key_claims_nothing_on_retry(
+    tree, monkeypatch
+) -> None:
     """00195 review 1, HIGH: ledger_key sits on line 5, so a stub truncated
     mid-write must not survive as a published owner."""
     autopilot, prds = tree
@@ -437,7 +464,9 @@ def test_a_write_cut_short_after_the_key_claims_nothing_on_retry(tree, monkeypat
     assert "## Success Criteria" in _hold_files(prds)[0].read_text()
 
 
-def test_partial_write_failure_leaves_a_retry_that_mints_only_the_rest(tree, monkeypatch) -> None:
+def test_partial_write_failure_leaves_a_retry_that_mints_only_the_rest(
+    tree, monkeypatch
+) -> None:
     autopilot, prds = tree
     rows = [_row(issue="first"), _row(issue="second"), _row(issue="third")]
     _ledger(autopilot, rows)
@@ -457,7 +486,10 @@ def test_partial_write_failure_leaves_a_retry_that_mints_only_the_rest(tree, mon
     monkeypatch.setattr(triage, "_write_candidate", real_write)
     retry = triage.mint_stubs(autopilot, prds, BATCH)
     assert len(retry["minted"]) == 2 and retry["skipped"] == 1
-    keys = {re.search(r"ledger_key: (\w+)", p.read_text()).group(1) for p in _hold_files(prds)}
+    keys = {
+        re.search(r"ledger_key: (\w+)", p.read_text()).group(1)
+        for p in _hold_files(prds)
+    }
     assert keys == {triage.ledger_key(r["issue"]) for r in rows}
 
 
@@ -475,13 +507,22 @@ def test_frozen_ddb_slice_mints_twelve_then_zero(tree) -> None:
     autopilot, prds = tree
     golden = json.loads(GOLDEN.read_text(encoding="utf-8"))
     assert "00167, 00168, 00169 and 00170" in golden["provenance"]
-    assert {i["prd"][:5] for i in golden["items"]} == {"00167", "00168", "00169", "00170"}
+    assert {i["prd"][:5] for i in golden["items"]} == {
+        "00167",
+        "00168",
+        "00169",
+        "00170",
+    }
     (autopilot / "deferred" / f"{BATCH}-deferred.json").write_text(GOLDEN.read_text())
     first = triage.mint_stubs(autopilot, prds, BATCH)
     assert len(first["minted"]) == 12 and first["skipped"] == len(golden["items"]) - 12
-    counts = {p: _source_prds(prds).count(p) for p in ("00167", "00168", "00169", "00170")}
+    counts = {
+        p: _source_prds(prds).count(p) for p in ("00167", "00168", "00169", "00170")
+    }
     assert counts == {"00167": 3, "00168": 3, "00169": 4, "00170": 2}
-    stall_stubs = [p for p in _hold_files(prds) if "site `cap_critical`" in p.read_text()]
+    stall_stubs = [
+        p for p in _hold_files(prds) if "site `cap_critical`" in p.read_text()
+    ]
     assert len(stall_stubs) == 1 and "source_prd: 00168-" in stall_stubs[0].read_text()
     assert triage.mint_stubs(autopilot, prds, BATCH) == {
         "minted": [],
@@ -522,7 +563,10 @@ def test_cli_prints_the_minted_list_and_resolves_paths_by_walk_up(tmp_path) -> N
     out = json.loads(proc.stdout)
     assert len(out["minted"]) == 2 and out["skipped"] == 0
     assert [p.name for p in _hold_files(prds)] == out["minted"]
-    again = _run(["mint-stubs", "--batch", BATCH, "--state", str(autopilot / "state.json")], cwd=tmp_path)
+    again = _run(
+        ["mint-stubs", "--batch", BATCH, "--state", str(autopilot / "state.json")],
+        cwd=tmp_path,
+    )
     assert json.loads(again.stdout) == {"minted": [], "skipped": 2}
 
 
@@ -532,7 +576,15 @@ def test_cli_explicit_prds_flag_wins_over_the_state_default(tmp_path) -> None:
     (elsewhere / "hold").mkdir(parents=True)
     _ledger(autopilot, [_row()])
     proc = _run(
-        ["mint-stubs", "--batch", BATCH, "--state", str(autopilot / "state.json"), "--prds", str(elsewhere)],
+        [
+            "mint-stubs",
+            "--batch",
+            BATCH,
+            "--state",
+            str(autopilot / "state.json"),
+            "--prds",
+            str(elsewhere),
+        ],
         cwd=tmp_path,
     )
     assert proc.returncode == 0, proc.stderr
@@ -545,7 +597,9 @@ def test_cli_exits_2_on_unreadable_or_invalid_ledger(tmp_path) -> None:
     unreadable = _run(["mint-stubs", "--batch", BATCH], cwd=tmp_path)
     assert unreadable.returncode == 2 and "cannot read ledger" in unreadable.stderr
     (autopilot / "deferred" / f"{BATCH}-deferred.json").rmdir()
-    (autopilot / "deferred" / f"{BATCH}-deferred.json").write_bytes(b'{"items": [\xff]}')
+    (autopilot / "deferred" / f"{BATCH}-deferred.json").write_bytes(
+        b'{"items": [\xff]}'
+    )
     bad_bytes = _run(["mint-stubs", "--batch", BATCH], cwd=tmp_path)
     assert bad_bytes.returncode == 2 and "not valid JSON" in bad_bytes.stderr
     (autopilot / "deferred" / f"{BATCH}-deferred.json").write_text("{not json")
@@ -595,7 +649,9 @@ def test_cli_accumulates_batch_minted_stubs_across_calls(tmp_path) -> None:
     assert stubs == [p.name for p in _hold_files(prds)] and len(stubs) == 2
 
 
-def test_cli_keeps_an_earlier_count_of_12_when_the_final_call_mints_zero(tmp_path) -> None:
+def test_cli_keeps_an_earlier_count_of_12_when_the_final_call_mints_zero(
+    tmp_path,
+) -> None:
     autopilot, prds = _tree(tmp_path)
     earlier = [f"{n:05d}-triage-earlier-v1.md" for n in range(1, 13)]
     state_path = _state(autopilot, minted_stubs=earlier)

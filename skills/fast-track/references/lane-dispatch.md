@@ -278,10 +278,18 @@ exited non-zero.
 After the exit rule, one row closes the item itself.
 
 ```text
-scripts/record_item.py --item <item> --card <path> --model <m> --started <ts> --outcome committed|branched|stopped --rework 0|1 --findings <json> --confirmed <n> [--cost <usd>]
+scripts/record_item.py --item <item> --card <path> --model <m> [--started <ts>] --outcome committed|branched|stopped --rework 0|1 --findings <json> --confirmed <n> [--cost <usd>]
 ```
 
 The script sits at
 `${CLAUDE_PLUGIN_ROOT}/skills/fast-track/scripts/record_item.py`. Pass `--cost`
 when a measured USD figure exists; an absent `--cost` records unmeasured, which
 is a different fact from free.
+
+`--started` is optional. A value more than 24 hours before the row's own
+`ts_end`, or in the future, is refused (exit 2, naming the offending value) -
+a session's own clock is not trustworthy enough to take at face value. When
+`--started` is omitted, the script reads `docs/dev/tmp/fast-track-started`
+(one epoch line, under the project root the autopilot-dir walk-up finds) and
+uses it as `ts_start`; the lane writes that file at item start so a session
+never has to pass its own guessed `--started`.

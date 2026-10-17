@@ -48,15 +48,37 @@ import urllib.request
 from pathlib import Path
 
 from cli import (
-    convergence, enter, enter_io, notify_out, pause, render_metrics, routing, runner, schema,
-    state, statectl, store_tree, usage_limit, wave_slots,
+    convergence,
+    enter,
+    enter_io,
+    notify_out,
+    pause,
+    render_metrics,
+    routing,
+    runner,
+    schema,
+    state,
+    statectl,
+    store_tree,
+    usage_limit,
+    wave_slots,
 )
 from cli.loop_act import PURGE_SCRIPT, ActMixin, run_agoge, run_purge, store_git
 from cli.loop_decision import (
-    DecisionMixin, died_next, effective_signal, fingerprint, last_result_field, pause_detail,
+    DecisionMixin,
+    died_next,
+    effective_signal,
+    fingerprint,
+    last_result_field,
+    pause_detail,
     plugin_drift,
 )
-from cli.loop_gates import DEFAULT_LOOPS_DIR, GatesMixin, live_wrapper_pid, prune_registry
+from cli.loop_gates import (
+    DEFAULT_LOOPS_DIR,
+    GatesMixin,
+    live_wrapper_pid,
+    prune_registry,
+)
 from cli.procinfo import exec_env
 from cli.routing import _load_json
 
@@ -69,8 +91,8 @@ import _walk_up
 # compat re-exports: the names loop.py defined before PRD 00192 split it
 __all__ = [
     "DEFAULT_LOOPS_DIR",
-    "Loop",
     "PURGE_SCRIPT",
+    "Loop",
     "died_next",
     "fingerprint",
     "last_result_field",
@@ -151,12 +173,14 @@ def _metrics_line(
     model: str,
     effort: str,
     killed_by: str | None,
+    launched_prd: str = "",
 ) -> dict:
     line = {
         "ts_start": int(ts_start),
         "ts_end": int(ts_end),
         "wall_secs": int(ts_end) - int(ts_start),
-        "prd": decision["prd"],
+        "prd": launched_prd or decision["prd"],
+        "prd_end": decision["prd"],
         "batch": decision["batch"],
         "phase_launched": phase_launched,
         "phase_end": decision["phase_end"],
@@ -313,6 +337,7 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
         phase_launched: str,
         model: str,
         effort: str,
+        launched_prd: str = "",
     ) -> None:
         """One JSONL line per session, after the decision and before any exit
         path, plus the review_converged row when a review exits to done. Observation
@@ -328,6 +353,7 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
                 model,
                 effort,
                 self._killed_by(),
+                launched_prd,
             )
             encoded = json.dumps(line, separators=(",", ":"))
             # Primary row first: a mkdir failure below must not lose it, and
@@ -418,7 +444,11 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
         there is none to wait for), so the metrics ts_start excludes the
         queue wait."""
         current = _load_json(ap_dir / "state.json")
-        batch_id = (current.get("batch") or {}).get("id") if isinstance(current, dict) else None
+        batch_id = (
+            (current.get("batch") or {}).get("id")
+            if isinstance(current, dict)
+            else None
+        )
         self.env["GIT_COMMITTER_NAME"] = enter_io.loop_committer(batch_id)
         # ponytail: process-wide env, the loop process commits nothing else
         os.environ["GIT_COMMITTER_NAME"] = self.env["GIT_COMMITTER_NAME"]
@@ -500,6 +530,7 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
             next_phase,
             plan.model,
             plan.effort,
+            prd,
         )
         self._record_review_once_store(ap_dir, decision)
         print(
@@ -552,7 +583,11 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
         return None
 
     def _announce_and_launch(
-        self, ap_dir: Path, phase: str, prd: str, plan: routing.Route
+        self,
+        ap_dir: Path,
+        phase: str,
+        prd: str,
+        plan: routing.Route,
     ) -> float:
         """Print the launch banner and spawn the routed session. Phase
         resolution and the banner's empty-phase fallback stay with each
@@ -592,7 +627,10 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
             except FileNotFoundError:
                 pass
             except OSError as err:
-                print(f"autoclaude: pre-launch enter: state.json backdate failed: {err}", file=self.err)
+                print(
+                    f"autoclaude: pre-launch enter: state.json backdate failed: {err}",
+                    file=self.err,
+                )
 
     def _record_entry(self, state_path: Path, ap_dir: Path) -> None:
         """enter() plus the `loop_entry` write and the brief re-render.
@@ -616,7 +654,12 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
                 prd_arg=None,
                 in_loop=True,
             )
-        except (state.StateError, state.StateExistsError, OSError, schema.SchemaError) as err:
+        except (
+            state.StateError,
+            state.StateExistsError,
+            OSError,
+            schema.SchemaError,
+        ) as err:
             print(f"autoclaude: pre-launch enter failed: {err}", file=self.err)
             self._invalidate_or_mark_stale(state_path)
             return
@@ -626,13 +669,19 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
         try:
             statectl.mutate(state_path, lambda data: data.update(loop_entry=entry))
         except (OSError, state.StateError, schema.SchemaError) as err:
-            print(f"autoclaude: pre-launch enter: loop_entry write failed: {err}", file=self.err)
+            print(
+                f"autoclaude: pre-launch enter: loop_entry write failed: {err}",
+                file=self.err,
+            )
             self._invalidate_or_mark_stale(state_path)
             return
         try:
             statectl.write_brief(state_path, ap_dir / runner.BRIEF_NAME)
         except state.StateError as err:
-            print(f"autoclaude: pre-launch enter: brief write failed: {err}", file=self.err)
+            print(
+                f"autoclaude: pre-launch enter: brief write failed: {err}",
+                file=self.err,
+            )
 
     def _invalidate_or_mark_stale(self, state_path: Path) -> None:
         """Invalidate the loop_entry; when that fails, mark the child's
@@ -650,16 +699,19 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
         try:
             statectl.mutate(state_path, lambda data: data.pop("loop_entry", None))
         except (OSError, state.StateError, schema.SchemaError) as err:
-            print(f"autoclaude: pre-launch enter: loop_entry invalidation failed: {err}", file=self.err)
+            print(
+                f"autoclaude: pre-launch enter: loop_entry invalidation failed: {err}",
+                file=self.err,
+            )
             return False
         return True
 
-    def _launch_phase(self, ap_dir: Path) -> tuple[float, str, routing.Route]:
+    def _launch_phase(self, ap_dir: Path) -> tuple[float, str, routing.Route, str]:
         """Run the pre-launch enter, then read state, route it, announce
-        it, spawn it. Returns the start clock, the phase launched and the
-        route, all three needed by the metrics line the caller appends.
-        The start clock is read once the session actually launches,
-        excluding any review-slot wait."""
+        it, spawn it. Returns the start clock, the phase launched, the
+        route and the PRD launched, all four needed by the metrics line
+        the caller appends. The start clock is read once the session
+        actually launches, excluding any review-slot wait."""
         self._pre_enter(ap_dir)
         state = _load_json(ap_dir / "state.json")
         phase_launched = ""
@@ -670,9 +722,12 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
 
         plan = routing.route(phase_launched, ap_dir, env=self.env)
         ts_start = self._announce_and_launch(
-            ap_dir, phase_launched or "bootstrap", prd_launched, plan
+            ap_dir,
+            phase_launched or "bootstrap",
+            prd_launched,
+            plan,
         )
-        return ts_start, phase_launched, plan
+        return ts_start, phase_launched, plan, prd_launched
 
     def _run_loop(self) -> int:
         while True:
@@ -687,7 +742,7 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
             if code is not None:
                 return code
 
-            ts_start, phase_launched, plan = self._launch_phase(ap_dir)
+            ts_start, phase_launched, plan, prd_launched = self._launch_phase(ap_dir)
 
             decision = self._decide(ap_dir, ts_start)
             self._fingerprint_bound(decision, ap_dir / "state.json")
@@ -701,6 +756,7 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
                 phase_launched,
                 plan.model,
                 plan.effort,
+                prd_launched,
             )
             # A lane branch carries no store commits. state_touched is not
             # redundant: the first death continues as a retry. effective_signal

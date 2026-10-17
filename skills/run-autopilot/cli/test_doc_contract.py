@@ -92,6 +92,10 @@ def _check_line(subparsers, verb: str, invocation: str) -> None:
     leftover = re.sub(r"--[\w-]+\s+<[^>]*>", "", unbracketed)
     if re.search(r"<[^>]*>", leftover):
         raise AssertionError(f"{verb}: bare positional placeholder remains")
+    for g in re.findall(r"\[[^\]]*\]", invocation):
+        bracket_leftover = re.sub(r"--[\w-]+\s+<[^>]*>", "", g)
+        if re.search(r"<[^>]*>", bracket_leftover):
+            raise AssertionError(f"{verb}: bare positional placeholder remains")
 
 
 _REVIEW_STAGE_BASE = "autopilot review-stage --cycle-id <id> --gate-command <cmd>"
@@ -163,11 +167,13 @@ class DocContractTests(unittest.TestCase):
 
         text = (_REFERENCES_DIR / "state-schema.md").read_text(encoding="utf-8")
         group_rework_line = next(
-            line for line in text.splitlines()
+            line
+            for line in text.splitlines()
             if line.startswith("- `autopilot group-rework")
         )
         review_stage_line = next(
-            line for line in text.splitlines()
+            line
+            for line in text.splitlines()
             if line.startswith("- `autopilot review-stage")
         )
 
@@ -178,7 +184,8 @@ class DocContractTests(unittest.TestCase):
 
         self.assertEqual(_surface(subparsers, "group-rework")[0], {"--findings"})
         self.assertEqual(
-            _surface(subparsers, "review-stage")[0], {"--cycle-id", "--gate-command"}
+            _surface(subparsers, "review-stage")[0],
+            {"--cycle-id", "--gate-command"},
         )
         _check_line(subparsers, "group-rework", group_rework_line.split("`")[1])
         _check_line(subparsers, "review-stage", review_stage_line.split("`")[1])

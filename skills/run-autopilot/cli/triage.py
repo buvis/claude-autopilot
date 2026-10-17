@@ -163,6 +163,8 @@ def qualifies(row) -> bool:
         return False
     if row.get("type") == "stall":
         return row.get("site") in (custody.CUSTODY_SITE, REGRESSION_SITE)
+    if str(row.get("action") or "").startswith("fix in cycle"):
+        return False
     return str(row.get("severity") or "").strip().casefold() in SEVERE
 
 
@@ -244,7 +246,9 @@ def _write_candidate(path: Path, content: str) -> None:
 
 def _stage(path: Path, content: str) -> Path:
     """Write `content` to a sidecar unique to this call beside `path`."""
-    handle, name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    handle, name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+    )
     with os.fdopen(handle, "w", encoding="utf-8") as fh:
         fh.write(content)
     return Path(name)
