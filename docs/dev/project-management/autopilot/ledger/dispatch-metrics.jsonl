@@ -5187,3 +5187,5 @@
 {"kind":"handoff","site":"build","edge":"leave","at":1792254972,"phase":"done","prd":"00340-tell-the-session-it-is-the-loop-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1792255020,"phase":"done","prd":"00340-tell-the-session-it-is-the-loop-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1792255094,"phase":"build","prd":"00340-tell-the-session-it-is-the-loop-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792255130,"phase":"build","prd":"00341-devon-reviews-tests-an-earlier-task-wrote-v1.md"}
+{"kind":"handoff","site":"build","edge":"leave","at":1792255833,"phase":"done","prd":"00341-devon-reviews-tests-an-earlier-task-wrote-v1.md"}
