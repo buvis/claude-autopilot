@@ -210,7 +210,7 @@ Dispatch a separate agent to write tests from requirements only. This agent must
 
 **Tess runs as:** Claude Code subagent (Agent tool), not a helper-script implementor (`use-gemini`, `use-qwen`, `use-codex`). It's a focused task that benefits from direct file access for reading test patterns.
 
-**Skip for:** test-only, docs-only, or config-only tasks.
+**Skip for:** test-only, docs-only, or config-only tasks. Skipping Tess here does not skip step 2.9 or 2.95: when this task's Contract names test files an earlier task of this plan committed, those files are this task's tests for both steps.
 
 Render: one Bash call. **Task-authored prose never crosses the shell** — write it to a scratch file with the Write tool and pass `--set-file`; see § Passing values to render_prompt.py. Every interpolated path is `shlex.quote()`-d (or bash's `printf '%q '`) before it lands inside a `--set-cmd` value:
 ```bash
@@ -259,11 +259,13 @@ The step-2.8 test quality gate is **unchanged** and runs for every tier — only
 
 **Prose gate — Devon skips prose-pin tasks.** When every test file Tess created or changed for this task is a prose pin (its basename ends in `_prose.py`), skip Devon, record `devon: skipped:prose` in the task's attempt entry, and proceed to step 2.95. A substring pin cannot see negation, inversion or past-tense narration, so a Devon dispatch on such a task never breaks the tests (four of four on 2026-09-14/15, about 55 minutes of Opus time with no kept strengthening).
 
+**Earlier-task tests.** When step 2.7 skipped Tess because an earlier task of this plan committed this task's tests, Devon still runs at `opus` and `fable` against those files: his test-runner command names them, and an exploit routes to Tess's one strengthen dispatch exactly as for tests written in this task. A plan that splits tests from implementation must not lose the adversarial round the implementation tier bought.
+
 Devon runs once per task; when he breaks the tests, Tess strengthens once and the task proceeds on the strengthened tests with Devon never dispatched again (seven measured re-checks on 2026-09-25/26 changed no test; the one that named a real exploit was dismissed and the review caught it). See `references/adversarial-test-prompt.md` § Procedure for how Devon runs, and the file's prompt template section for what it receives. Devon prompts must satisfy the **Subagent Dispatch Budget**. Devon's prompt is filled by hand, so measure it and open his row in one call — `record_dispatch.py start --kind devon --task <task-id> --prompt-file <the written prompt>` prints the byte count that **is** his Subagent Dispatch Budget measurement, then the id — before the Agent call, and hold the id for the `end` call (§ Subagent Dispatch Budget and Watchdog, Telemetry).
 
 ### 2.95. Red-check — watch the tests fail
 
-Run the newly committed tests once, before any Ivan dispatch, at the narrowest scope (the same commands step 5.5 uses). Red is the point: a failure proves the tests bind behavior that does not exist yet (rules/testing.md fail-first). Implicitly skipped when step 2.7 was skipped (no new tests).
+Run the newly committed tests once, before any Ivan dispatch, at the narrowest scope (the same commands step 5.5 uses). Red is the point: a failure proves the tests bind behavior that does not exist yet (rules/testing.md fail-first). Implicitly skipped when step 2.7 was skipped and no earlier task of this plan committed this task's tests (nothing to run).
 
 **Read `references/red-check.md` before the first red-check of a batch** — it resolves the target module from the task's `Contract` section and carries the outcome ladder (expected red -> step 3; accidentally green -> back to Tess; cannot run -> `red_check: skipped:<cause>`, fail loud). One verdict stays here: when an **imported** Contract-named target path does not exist on disk yet, skip the invocation entirely and write `red_check = "n/a:new_module"` to the attempt entry.
 
