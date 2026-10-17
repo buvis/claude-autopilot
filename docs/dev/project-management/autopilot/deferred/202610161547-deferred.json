@@ -269,6 +269,203 @@
       "file": "skills/run-autopilot/cli/__main__.py:907",
       "reason": "deferred by review-close",
       "prd": "00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md"
+    },
+    {
+      "issue": "The supplied mechanical check identifies an either-or assertion that cannot fail as written. Replace it with the required single outcome in its owning maintenance task; the assertion predates this diff and is outside this signal/timeout PRD.",
+      "severity": "\ud83d\udfe1",
+      "file": "skills/run-autopilot/cli/test_release_checks_counts.py:326",
+      "reason": "deferred by review-close",
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+    },
+    {
+      "issue": "test_skip_ceiling_fails_the_gate_above_three hedges with or: either outcome satisfies it",
+      "severity": "\ud83d\udfe1",
+      "file": "skills/run-autopilot/cli/test_release_checks_counts.py:326",
+      "reason": "deferred by review-close",
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+    },
+    {
+      "issue": "File review_stage.py exceeds the 800-line limit (874 lines)",
+      "severity": "\ud83d\udfe1",
+      "file": "skills/run-autopilot/cli/review_stage.py:874",
+      "reason": "deferred by review-close",
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R1",
+      "issue": "Caller-signal cleanup in _run_script SIGKILLs the replay helper with no grace period (verification._kill_gate), so the replay's _raise_on_signal guard and its worktree-removal finally never run, and the pytest runner in its own session survives: a SIGTERM/SIGHUP to the review-stage caller during a replay still leaves the runner, grandchildren, a registered worktree and a replay-* temp dir. Fix: SIGTERM the helper group, wait SCRIPT_GRACE_S, then SIGKILL; add a caller-signal test on the real replay helper. (skills/run-autopilot/cli/review_stage.py:262)",
+      "severity": "high",
+      "consensus": "3/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R2",
+      "issue": "The replay signal guard is installed only inside _run_runner, not around _run_in_worktree, so a signal during git worktree add / the overlay checkout / the rest of setup takes the default action and skips the finally, leaving a registered worktree and a replay-* temp dir. The new test only signals after the runner pids appear. (skills/review-work-completion/scripts/replay_tests_against_base.py:158)",
+      "severity": "high",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R3",
+      "issue": "CHANGELOG acceptance not met: rg -n 'SIGHUP' CHANGELOG.md prints two hits (lines 99 and 100 under [Unreleased]), not the required one; the review-work-completion entry also advertises an unspecified 30-second SIGTERM grace. (CHANGELOG.md:100)",
+      "severity": "high",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R4",
+      "issue": "Replay signal protection ends before worktree removal: a second SIGTERM/SIGHUP arriving during _run_in_worktree cleanup meets the restored default handler and terminates replay before removal completes. Keep the guard installed through worktree cleanup and synchronise the regression's second signal with removal. (skills/review-work-completion/scripts/replay_tests_against_base.py:189)",
+      "severity": "high",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R5",
+      "issue": "_run_script nests to 5 levels, over the 4-level limit; move the timeout escalation into a _terminate_with_grace(proc) helper, which also trims the 48-line function. (skills/run-autopilot/cli/review_stage.py:246)",
+      "severity": "medium",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R6",
+      "issue": "test_main_exits_zero_on_a_plain_timeout_with_no_external_signal and test_main_exits_zero_on_normal_completion pass against the pre-rework code, and test_signal_before_a_refusal_is_not_swallowed still passes at base for two of three params: pin the new _SignalGuard behaviour or accept them as explicit negative controls. (skills/review-work-completion/scripts/test_replay_timeout_kill.py:390)",
+      "severity": "medium",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R7",
+      "issue": "_kill_runner_pids duplicates the pid-kill half of _kill_driver_and_runner (and the two main-process tests repeat the driver-kill block); have _kill_driver_and_runner call it. The cycle also reformatted unrelated lines in the same file. (skills/review-work-completion/scripts/test_replay_timeout_kill.py:112)",
+      "severity": "medium",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R8",
+      "issue": "Beyond-spec behaviour in the replay's main: it re-delivers the caught signal to itself via the global _stop_signum; the PRD only asks that the replay clean up and exit. (skills/review-work-completion/scripts/replay_tests_against_base.py:295)",
+      "severity": "medium",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R9",
+      "issue": "test_run_script_times_out_and_says_so passes timeout=0.1 explicitly instead of monkeypatching SCRIPT_TIMEOUT_S as the PRD says (the default is bound at definition time), nothing pins the 540 default or _append_mech_blocks' reliance on it, and the message reads 'timeout after 0s'. (skills/run-autopilot/cli/test_review_stage_run_script.py:114)",
+      "severity": "medium",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R10",
+      "issue": "Fail-first replay: 3 touched tests pass against the pre-change code, test_signal_before_a_refusal_is_not_swallowed among them, so they do not pin this change. (skills/run-autopilot/cli/test_verify_truth_lock.py:212)",
+      "severity": "medium",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R11",
+      "issue": "_stop_signum is module-global state set in _run_runner, read in main() and never reset, so an in-process main() caller after a signal test would SIGTERM itself; nothing calls main() in-process today. (skills/review-work-completion/scripts/replay_tests_against_base.py:148)",
+      "severity": "low",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R12",
+      "issue": "test_timeout_kills_the_runner_process_group (1.5 s timeout) failed twice under concurrent load (FileNotFoundError on leader.pid) and passed in three later runs; the 1.5 s budget is the fragile part, not the rework logic. (skills/review-work-completion/scripts/test_replay_timeout_kill.py:148)",
+      "severity": "low",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R13",
+      "issue": "Cycle-1 R17 (new tests outside the files the PRD names) and cycle-1 R9 (signal between _reap and the end of the with block) are still open and were not touched by the rework. (N/A)",
+      "severity": "low",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R14",
+      "issue": "The new tests are not in the files the PRD names: test_late_waiter_gate_gets_full_timeout and test_result_reports_waited_s live in test_verify_truth_lock.py, test_run_script_times_out_and_says_so in test_review_stage_run_script.py, so the PRD's acceptance command does not run them. (skills/run-autopilot/cli/test_verify_truth_lock.py:82)",
+      "severity": "low",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R15",
+      "issue": "A signal landing after the replay's inner try completes but before the with exits sees spawned=True and cleaning=False, so _SignalRaised is raised outside the except and leaves an uncaught traceback out of main (cleanup still runs). (skills/review-work-completion/scripts/replay_tests_against_base.py:158)",
+      "severity": "low",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R16",
+      "issue": "test_timeout_kills_the_runner_process_group failed once in a combined run of the six PRD test files (109 passed, 1 failed, leader.pid never written) and passed 10 of 10 alone; load flakiness, not attributed to this change. (skills/review-work-completion/scripts/test_replay_timeout_kill.py:160)",
+      "severity": "low",
+      "consensus": "1/4",
+      "action": "deferred to batch end",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
     }
   ]
 }

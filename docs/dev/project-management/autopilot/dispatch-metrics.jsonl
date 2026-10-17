@@ -4880,3 +4880,5 @@
 {"id":"7ebe6dae","ended_at":1792194941,"elapsed_s":325,"outcome":"ok","detail":"retry"}
 {"id":"efa54cbc","ended_at":1792194944,"elapsed_s":469,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"review","edge":"leave","at":1792195157,"phase":"done","prd":"00322-kill-the-gate-on-every-signal-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1792195202,"phase":"done","prd":"00322-kill-the-gate-on-every-signal-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1792195393,"phase":"build","prd":"00322-kill-the-gate-on-every-signal-v1.md"}
