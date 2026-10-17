@@ -26,6 +26,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import pytest
+
+from cli.__main__ import main
+
 CLI_DIR = Path(__file__).resolve().parent
 CLI_MAIN = CLI_DIR / "__main__.py"
 
@@ -167,6 +171,97 @@ class MarkersTests(unittest.TestCase):
             Path(output["store"]).resolve(),
             self.autopilot_dir.resolve(),
         )
+
+
+def _store_with_cleared_marker(root: Path) -> tuple[Path, Path]:
+    autopilot_dir = root / "docs" / "dev" / "project-management" / "autopilot"
+    autopilot_dir.mkdir(parents=True)
+    marker = autopilot_dir / ".handoff-requested"
+    marker.write_text("handoff requested\n", encoding="utf-8")
+    return autopilot_dir, marker
+
+
+def test_clear_refuses_when_git_toplevel_lookup_times_out(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # An unrelated autopilot store sits above cwd. A git timeout must not
+    # fall back to an unbounded walk that reaches it and clears its marker.
+    _autopilot_dir, marker = _store_with_cleared_marker(tmp_path)
+    cwd = tmp_path / "nested" / "cwd"
+    cwd.mkdir(parents=True)
+    real_run = subprocess.run
+
+    def _timeout(args, **kwargs):
+        if args[:1] == ["git"]:
+            raise subprocess.TimeoutExpired(cmd=args, timeout=10)
+        return real_run(args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", _timeout)
+    monkeypatch.chdir(cwd)
+
+    raised = False
+    code = None
+    try:
+        code = main(["markers", "--clear", "handoff-requested"])
+    except Exception:
+        raised = True
+
+    assert raised or code != 0
+    assert marker.exists(), "an unrelated store's marker was cleared after a git timeout"
+
+
+def test_clear_refuses_when_git_toplevel_lookup_raises_oserror(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _autopilot_dir, marker = _store_with_cleared_marker(tmp_path)
+    cwd = tmp_path / "nested" / "cwd"
+    cwd.mkdir(parents=True)
+    real_run = subprocess.run
+
+    def _boom(args, **kwargs):
+        if args[:1] == ["git"]:
+            raise FileNotFoundError("git: command not found")
+        return real_run(args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", _boom)
+    monkeypatch.chdir(cwd)
+
+    raised = False
+    code = None
+    try:
+        code = main(["markers", "--clear", "handoff-requested"])
+    except Exception:
+        raised = True
+
+    assert raised or code != 0
+    assert marker.exists(), "an unrelated store's marker was cleared after a git OSError"
+
+
+def test_clear_still_walks_unbounded_when_git_reports_not_a_repository(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # cwd is not inside a git repo at all: git's own explicit "not a
+    # repository" answer (not a tool failure) must still let the unbounded
+    # walk reach an autopilot store above cwd, exactly as before this fix.
+    _autopilot_dir, marker = _store_with_cleared_marker(tmp_path)
+    cwd = tmp_path / "nested" / "cwd"
+    cwd.mkdir(parents=True)
+    real_run = subprocess.run
+
+    def _not_a_repo(args, **kwargs):
+        if args[:1] == ["git"]:
+            return subprocess.CompletedProcess(
+                args, returncode=128, stdout="", stderr="fatal: not a git repository\n"
+            )
+        return real_run(args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", _not_a_repo)
+    monkeypatch.chdir(cwd)
+
+    code = main(["markers", "--clear", "handoff-requested"])
+
+    assert code == 0
+    assert not marker.exists()
 
 
 if __name__ == "__main__":

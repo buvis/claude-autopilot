@@ -179,6 +179,26 @@ def test_fixed_in_rework_critical_rows_do_not_mint() -> None:
     assert triage.qualifies(cap_overflow_without_action)
 
 
+def test_fix_in_cycle_action_only_disqualifies_review_critical_rows() -> None:
+    # The "fix in cycle" gate is scoped to type == "review-critical": a
+    # cap-overflow row carrying that same action text (coincidence, not a
+    # rework record) must still qualify, while the genuine review-critical
+    # case with an identical action remains disqualified.
+    cap_overflow_with_fix_in_cycle_action = _row(
+        severity="high",
+        type="cap-overflow",
+        action="fix in cycle 1 rework",
+    )
+    assert triage.qualifies(cap_overflow_with_fix_in_cycle_action)
+
+    review_critical_fixed_in_rework = _row(
+        severity="critical",
+        type="review-critical",
+        action="fix in cycle 1 rework",
+    )
+    assert not triage.qualifies(review_critical_fixed_in_rework)
+
+
 # --- ownership -------------------------------------------------------------
 
 
