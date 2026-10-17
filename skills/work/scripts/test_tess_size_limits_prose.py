@@ -46,6 +46,35 @@ def test_tess_retry_prompt_treats_style_lines_as_issues() -> None:
         )
 
 
+def test_tess_prompt_names_devons_exploit_classes() -> None:
+    rule_6a = _rule(_TESS_PROMPT.read_text(), _TESS_PROMPT, "6a")
+    for needle in (
+        "DEVON-PROOF",
+        "two distinct fixture values",
+        "near-miss negative",
+        "empty input",
+        "accept and a reject case",
+        "surfaced",
+        "dependency assertion",
+    ):
+        assert needle in rule_6a, (
+            f"{_TESS_PROMPT}: rule 6a lacks {needle!r}, so Tess's first draft "
+            "no longer closes the exploit class it names, and Devon's round "
+            "finds it instead."
+        )
+
+
+def test_quality_gate_checks_exploit_classes() -> None:
+    text = _TEST_AUTHOR.read_text()
+    start = text.index("## Quality gate (step 2.8)")
+    section = text[start : text.index("### Style limits on the test files", start)]
+    for needle in ("5. **Exploit classes covered?**", "rule-6a"):
+        assert needle in section, (
+            f"{_TEST_AUTHOR}: § Quality gate lacks {needle!r}, so a draft "
+            "missing a rule-6a assertion passes check 4 straight to Devon."
+        )
+
+
 def test_quality_gate_runs_the_style_script_on_test_files() -> None:
     # SKILL.md step 2.8 keeps the rule, the invocation and a read-first
     # pointer (the body is at its 500-line ceiling); test-author-prompt.md
