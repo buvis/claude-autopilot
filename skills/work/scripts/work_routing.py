@@ -108,12 +108,7 @@ def _tier(task: dict) -> str:
 
 
 def route(
-    task: dict,
-    env: dict,
-    state: dict,
-    probes: dict,
-    *,
-    file_paths: str | None = None,
+    task: dict, env: dict, state: dict, probes: dict, *, file_paths: str | None = None
 ) -> dict:
     """Pick the implementor for one claimed task."""
     tier = _tier(task)
