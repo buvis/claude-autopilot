@@ -762,6 +762,7 @@ def test_metrics_effort_follows_model_and_displaces_no_other_field(tmp_path):
         "ts_end",
         "wall_secs",
         "prd",
+        "prd_end",
         "batch",
         "phase_launched",
         "phase_end",

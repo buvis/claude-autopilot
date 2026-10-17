@@ -280,10 +280,15 @@ def test_budget_resets_after_resume_from_hold(tmp_path, monkeypatch):
     assert resumed["prd"] == PRD_A
     assert resumed["signal"] == "continue"
     assert resumed.get("park_site") != "budget"
+    # row["prd"] is now the PRD the session was *launched* with (PRD 00326),
+    # not the decision's PRD: the Phase-0-and-build entry session that parks
+    # A and selects B is still launched while state still names A, so its
+    # own row credits A, with B showing up only once a later session is
+    # itself launched against it.
     assert [(r["prd"], r["signal"]) for r in rows] == [
         (PRD_A, "park"),
-        (PRD_B, "continue"),
         (PRD_A, "continue"),
+        (PRD_B, "continue"),
         (PRD_A, "done"),
     ]
     assert not (ap / "park-requested").exists()
