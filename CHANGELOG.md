@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **run-autopilot**: the launch prompt now tells the session it was launched by the autopilot loop driver, not a human, so it does not stand down on a memory/rule meant for a human-started session
 - **run-autopilot**: `autopilot markers --check`/`--clear` replaces hand-written `ls`/`rm` on the `.handoff-requested`/`.cap-fired` markers, and `statectl.py decide` replaces hand-written `autonomous_decisions` JSON appends - both were measured as repeat sources of errored tool calls in a batch transcript census
 - **run-autopilot**: `autopilot verify` is the way to run the full suite - it runs the gate, streams the log and writes the verification record itself, so no session hand-writes `last-verification.json`
 - **run-autopilot**: the loop parks a PRD whose session metrics ledger spend since `prd_budget_since` exceeds `_AUTOPILOT_PRD_BUDGET_USD` (default 300, `0` disables), instead of burning sessions on a runaway PRD unattended

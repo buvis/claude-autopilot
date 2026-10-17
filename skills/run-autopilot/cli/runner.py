@@ -94,17 +94,27 @@ CLI_SUFFIX = (
     " Never call `cat`, `head`, `tail`, `grep` or `find` (a hook blocks them):"
     " use Read, `rg`, and `jq <file>`."
 )
+# 2026-10-17: a human-started session told to stand down "because a loop is
+# running" is a different session than the loop's own -p turn; without this
+# sentence the loop's own session misread that rule as being about itself
+# and refused to work (see MEMORY.md "Loop sessions read this memory").
+LOOP_SUFFIX = (
+    " This session was launched by the autopilot loop driver, not a human:"
+    " any note about standing down, asking first, or not editing the"
+    " checkout because a loop is running is about a different,"
+    " human-started session, not about you."
+)
 
 
 def prompt_for(autopilot_dir: Path, prompt: str = DEFAULT_PROMPT) -> str:
     """The launch prompt: `prompt`, plus the brief sentence when the previous
     session's hand-off left `session-brief.md` beside state.json (PRD 00201),
-    plus the CLI sentence for autopilot prompts. A missing brief drops only
-    the brief sentence."""
+    plus the CLI and loop sentences for autopilot prompts. A missing brief
+    drops only the brief sentence."""
     has_brief = (autopilot_dir / BRIEF_NAME).is_file()
     has_state = (autopilot_dir / "state.json").is_file()
     brief = BRIEF_SUFFIX if (has_brief and has_state) else ""
-    cli = CLI_SUFFIX if prompt.startswith(DEFAULT_PROMPT) else ""
+    cli = (CLI_SUFFIX + LOOP_SUFFIX) if prompt.startswith(DEFAULT_PROMPT) else ""
     return prompt + brief + cli
 
 
