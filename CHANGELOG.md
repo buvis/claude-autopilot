@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **release**: `dev/bin/release` now also refuses on an open `severity: critical` triage stub under `prds/hold` or `prds/wip`, naming the file, even when it carries no "release is blocked" phrase
 - **run-autopilot**: `autopilot verify --log` refuses a tracked, symlinked, hard-linked, out-of-repo, store, git-directory, non-regular or executable sink before opening it, and opens the sink exclusively, so a gate run can no longer overwrite committed source, git internals, a hook or the loop's own state
 - **run-autopilot**: `autopilot verify` takes its exit code from the gate's parsed summary line or the gate process says so, so a gate that prints `FAIL` > 0, a non-zero `EXIT` token, or whose own process exits non-zero exits 1 even when the others read clean; its exit-2 refusals now also print one JSON line with `error` (carrying the same `autopilot: verify: ` prefix its stderr line already had) and `exit`, and `log` is `null` when no gate spawned
 - **run-autopilot**: the review `Tests:` line now reports a gate as treated as failed when its own process exit or the summary line's `EXIT` token is non-zero, even when the parsed counts read clean, and keeps the parsed counts visible when a gate ran then left the tree dirty instead of discarding them; the persisted verification record also carries the summary line's `EXIT` token as `summary_exit`, and reuse now refuses a record whose `summary_exit` is non-zero independent of the already-folded `failed` count

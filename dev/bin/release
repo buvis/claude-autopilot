@@ -8,7 +8,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CENTRAL_REPO="$REPO_ROOT/../claude-plugins"
 RELEASE="$CENTRAL_REPO/scripts/release-plugin"
 
-BLOCKED="$(grep -rli "release is blocked" "$REPO_ROOT/docs/dev/project-management/prds/hold" "$REPO_ROOT/docs/dev/project-management/prds/wip" 2>/dev/null || true)"
+BLOCKED="$(grep -rli -e "release is blocked" -e "^severity: critical" "$REPO_ROOT/docs/dev/project-management/prds/hold" "$REPO_ROOT/docs/dev/project-management/prds/wip" 2>/dev/null || true)"
 if [ -n "$BLOCKED" ]; then
   echo "Error: release blocked by:" >&2
   echo "$BLOCKED" >&2
