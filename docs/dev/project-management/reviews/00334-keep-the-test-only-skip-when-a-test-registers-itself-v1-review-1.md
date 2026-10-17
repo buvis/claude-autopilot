@@ -40,6 +40,8 @@ Missing — the codex CLI lane failed on both its initial dispatch and its one r
 ⚪ `test_work_routing.py` over the 800-line file limit (pre-existing, PRD's own placement choice). Recorded, not blocking.
 R9: fail (PRD-vs-code mismatch at cycle 1) — resolved by the rework; R13: fail (file-size limit, pre-existing) — recorded, not blocking.
 
-Verdict: 4 findings (all LOW, surviving after rework; see docs/dev/tmp/00334-keep-the-test-only-skip-when-a-test-registers-itself-v1-c1-fast-track-review.md for the full consolidated table, the Verify/Rework/Delta/Exit narrative, and the surviving-set detail)
+Verdict: 4 findings
+
+All 4 are LOW severity, surviving after rework; see docs/dev/tmp/00334-keep-the-test-only-skip-when-a-test-registers-itself-v1-c1-fast-track-review.md for the full consolidated table, the Verify/Rework/Delta/Exit narrative, and the surviving-set detail.
 Tests: 7170 passed, 0 failed, 3 skipped (fast-track batch suite)
 codex_rung_guard: not fired
