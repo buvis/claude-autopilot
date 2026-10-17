@@ -26,3 +26,8 @@
 - Drove the two 24h-boundary tests via an in-process `main()` call with a monkeypatched `time.time()`, diverging from the file's dominant subprocess-CLI style, to pin the exact boundary without subprocess-startup timing slop.
 - Used non-numeric text as the "malformed" started-file shape (matching the implementation's `int(text.strip())`/`ValueError` path); the brief did not specify exact malformed content.
 - New tests live in a sibling file `test_record_item_started_bounds.py` rather than appended to `test_record_item.py`, which was already at 799 lines against the 800-line cap.
+
+## 7: [D1] skills/run-autopilot/scripts/
+
+- The usage-error message contains the literal substring "usage" (case-insensitive) in stderr; exact wording was not pinned by the finding, so the fix prints the existing `USAGE` constant alongside argparse's own usage line.
+- Used `get batch.id --default 1 --default 2` (path before both flags) for the repeated-`--default` test since the finding's example order didn't pin argument placement.
