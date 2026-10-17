@@ -5217,3 +5217,21 @@
 {"kind":"handoff","site":"build","edge":"leave","at":1792258021,"phase":"done","prd":"00342-task-done-refuses-an-undefined-attempt-stamp-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1792258055,"phase":"done","prd":"00342-task-done-refuses-an-undefined-attempt-stamp-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1792258112,"phase":"build","prd":"00342-task-done-refuses-an-undefined-attempt-stamp-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792258125,"phase":"build","prd":"00345-launch-loop-sessions-with-ponytail-off-v1.md"}
+{"id":"973f9ea8","kind":"fast-track:tess","task":"00345-launch-loop-sessions-with-ponytail-off-v1-c1","queued_at":1792258268,"prompt_bytes":66072}
+{"id":"973f9ea8","ended_at":1792258336,"elapsed_s":68,"outcome":"ok","detail":null}
+{"id":"72b14169","kind":"fast-track:ivan","task":"00345-launch-loop-sessions-with-ponytail-off-v1-c1","queued_at":1792258359,"prompt_bytes":26268}
+{"id":"72b14169","ended_at":1792258477,"elapsed_s":118,"outcome":"ok","detail":null}
+{"id":"b5c37c8f","kind":"fast-track:fanout","task":"00345-launch-loop-sessions-with-ponytail-off-v1-c1","queued_at":1792258572,"prompt_bytes":4277}
+{"id":"b5c37c8f","ended_at":1792258576,"elapsed_s":4,"outcome":"error","detail":"workflow tool refuses scriptPath under a loop session (known issue); used autopilot:alice fallback"}
+{"id":"cc761c99","kind":"fast-track:alice","task":"00345-launch-loop-sessions-with-ponytail-off-v1-c1","queued_at":1792258661,"prompt_bytes":6261}
+{"id":"4b9d0b7d","kind":"fast-track:blake","task":"00345-launch-loop-sessions-with-ponytail-off-v1-c1","queued_at":1792258665,"prompt_bytes":8665}
+{"id":"92af15f9","kind":"fast-track:eve","task":"00345-launch-loop-sessions-with-ponytail-off-v1-c1","queued_at":1792258669,"prompt_bytes":4248}
+{"id":"cc0ab5d8","kind":"fast-track:bob","task":"00345-launch-loop-sessions-with-ponytail-off-v1-c1","queued_at":1792258672,"prompt_bytes":9452}
+{"id":"b4f33253","kind":"fast-track:carl","task":"00345-launch-loop-sessions-with-ponytail-off-v1-c1","queued_at":1792258676,"prompt_bytes":6617}
+{"id":"cc761c99","ended_at":1792258998,"elapsed_s":337,"outcome":"ok","detail":null}
+{"id":"4b9d0b7d","ended_at":1792259001,"elapsed_s":336,"outcome":"ok","detail":null}
+{"id":"92af15f9","ended_at":1792259004,"elapsed_s":335,"outcome":"ok","detail":null}
+{"id":"cc0ab5d8","ended_at":1792259008,"elapsed_s":336,"outcome":"error","detail":"codex sandbox failed to initialize; PreToolUse fact-forcing gate blocked cat before any review happened"}
+{"id":"b4f33253","ended_at":1792259011,"elapsed_s":335,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"build","edge":"leave","at":1792259424,"phase":"done","prd":"00345-launch-loop-sessions-with-ponytail-off-v1.md"}
