@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: a loop session's own commits are now stamped with committer `autopilot-loop/<batch.id>`; the `catchup-probe` subcommand records a batch-scoped `gh`/`engram` health check (`state.catchup_probe`) so a full catchup knows which steps to skip before it attempts them, instead of after they fail
 - **run-autopilot**: new `autopilot cap-check --review-file --previous` classifies a loop-mode cap-out's remaining high/critical findings as regressions introduced by the rework range; the cap-overflow deferral path now runs it first and stalls the PRD (`site: cap_regression`) instead of silently deferring a finding the rework itself introduced
 - **release**: `dev/bin/release` now refuses first on a held/in-progress PRD blocking the release, before checking for the central `claude-plugins` repo; the block-phrase match is now case-insensitive
+- **run-autopilot**: a loop session's launch env now sets `PONYTAIL_DEFAULT_MODE=off`, so the operator's ponytail plugin stays quiet in headless sessions instead of thinning the work skill's per-task dispatch and review gates
 
 ### Changed
 

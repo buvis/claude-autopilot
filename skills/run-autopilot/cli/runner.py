@@ -33,6 +33,11 @@ runner needs no spawn-layer redesign.
 gives `DEFAULT_MCP_CONFIG` (Context7 only), `inherit` drops the
 `--strict-mcp-config --mcp-config` pair entirely (today's unscoped
 launch), and any other value is passed verbatim to `--mcp-config`.
+
+`PONYTAIL_DEFAULT_MODE=off` in `LAUNCH_ENV` keeps the operator's ponytail
+plugin quiet in a headless session: nobody is there to hold ponytail to
+the "never thin a skill-mandated step" rule, so the loop's own sessions
+run without it.
 """
 
 from __future__ import annotations
@@ -57,6 +62,7 @@ LAUNCH_ENV = {
     "WARDEN_UNATTENDED": "1",
     "CLAUDE_UNATTENDED": "1",
     "CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS": "0",
+    "PONYTAIL_DEFAULT_MODE": "off",
 }
 
 HOST_MARKERS = (
