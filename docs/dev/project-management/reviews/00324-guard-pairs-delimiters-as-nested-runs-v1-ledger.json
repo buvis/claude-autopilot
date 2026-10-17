@@ -38,5 +38,37 @@
     "issue": "`_NEGATION_REACH_END` newly denies coordinated negated lists such as `Never run work and plan-tasks for PRD 00300 for every task.`, which the 5-word window previously allowed. This is the safe direction for a guard. The design's Risks section does not list it.",
     "file": "hooks/guard_phase_delegation.py:638",
     "reason": "Accepted over-denial in the fail-closed direction, which the PRD's own negation wording prescribes (`and`/`then`/`but` end the reach). A guard denying more is safe; no behavior change warranted."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "`_find_skill_md_paths` was rewritten (last-token `rsplit`) although neither the task contract nor the design names it. It is equivalent, and it is what makes the dense budget pass.",
+    "file": "hooks/guard_phase_delegation.py:160",
+    "reason": "Recorded deviation per the finding's own instruction. The rewrite is behavior-preserving (same match semantics, narrower probe window) and is what keeps the dense-SKILL.md-mention budget test green; reverting it to the specified once-per-field `_FOLLOW` collection shape would require a separate, unrequested refactor of a passing, in-budget function."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "The spec's new symbol `_nested_runs` does not exist. The pairing was folded into `_quoted_runs`, which keeps its old name and gains an inline stack-less state machine (one quote slot, one backtick slot, a bracket stack). The stated interface (New symbols: `_nested_runs`) is not met.",
+    "file": "hooks/guard_phase_delegation.py:422",
+    "reason": "Recorded deviation per the finding's own instruction (\"record ... instead of the specified ... collection\" / \"note the deviation\"). This cycle's rework split the function's token walk out into `_nested_run_pairs` (also used directly by `_boundaries` for the finding-2 fix), keeping the span-merge walk inline in `_quoted_runs` (finding 1), but kept that entry point's name rather than renaming it to `_nested_runs`: a rename has no behavior or test-coverage benefit and only costs call-site and docstring churn for a name the design never gave a contract to."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The design and PRD call the new function `_nested_runs` (\"New symbols: `_nested_runs`\"), but the code keeps the name `_quoted_runs` while it now pairs brackets, backticks and quotes. The name misleads.",
+    "file": "hooks/guard_phase_delegation.py:422",
+    "reason": "Same deviation as the medium entry above (the missing `_nested_runs` symbol): noted rather than renamed, because the misleading name is the whole cost and a rename changes no behavior."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "The diff carries unrelated formatter reflow that no task asked for. Examples: slice-spacing style, the exploded `_strongly_anchored`/`_weakly_anchored` signatures, `main()` print calls, and removal of re-exported imports.",
+    "file": "hooks/guard_phase_delegation.py:148",
+    "reason": "The repo's auto-format-on-edit tooling (loupe's PostToolUse hook, ruff format + ruff --fix) reformats the WHOLE file to its enforced style on every Edit, not only the touched lines - confirmed this cycle: a manual revert of the slice spacing, the exploded signatures and the print-call wrapping was silently undone by the same hook within the same turn, and the unused `_AGOGE_PREFIX` import this cycle's own diff still carried was auto-stripped the same way. There is no way to keep a non-canonical formatting of a line this tool touches; the only durable fix is a loupe/ruff config change (out of scope for this PRD), not a hand-edit that the next save erases. The style itself is the repo's own enforced canonical form, so it is not reverted."
   }
 ]

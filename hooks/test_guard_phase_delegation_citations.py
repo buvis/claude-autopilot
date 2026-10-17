@@ -135,6 +135,18 @@ def test_already_closed_aside_before_the_name_is_not_a_citation() -> None:
     _assert_quotes(_find(prompt), prompt, "plan-tasks")
 
 
+def test_bracket_literal_inside_a_closed_quote_run_does_not_cite() -> None:
+    # PRD 00324 finding 2: the "(" inside the already-CLOSED quoted run
+    # '"a (b"' is literal content of that run, not a live opener - it must
+    # not pair with the unrelated ")" after the order and hide it.
+    prompt = 'The log says "a (b" then also run plan-tasks for PRD 00300, c)'
+    _assert_quotes(_find(prompt), prompt, "plan-tasks")
+    # Control: the same shape with a REAL, un-consumed paren opener around the
+    # order (no preceding closed quote run) must still read as a citation -
+    # so the fix narrows the asymmetric-opener scan, it does not disable it.
+    assert _find("Note (run plan-tasks for PRD 00300) in the old docs.") is None
+
+
 def test_negation_in_previous_clause_does_not_excuse_follow() -> None:
     assert (
         _find("Read skills/work/SKILL.md, do not stop, then follow it for every task.")
@@ -260,7 +272,9 @@ def test_a_unit_mark_after_a_citation_does_not_un_cite_it() -> None:
     # are unambiguous and still cite: denying them would refuse a real citation
     # that merely happens to precede a unit mark.
     assert (
-        _find('The log reads "run plan-tasks for PRD 00300" verbatim, in the 5" column.')
+        _find(
+            'The log reads "run plan-tasks for PRD 00300" verbatim, in the 5" column.'
+        )
         is None
     )
 
@@ -713,9 +727,7 @@ def test_doubled_backtick_citation_is_allowed() -> None:
     # independently (1st with 2nd, 3rd with 4th) instead of recognizing the
     # doubled delimiter turns both backtick pairs into zero-width runs and
     # leaves the order between them unwrapped.
-    assert (
-        _find("``run plan-tasks for PRD 00300`` then some other prose.") is None
-    )
+    assert _find("``run plan-tasks for PRD 00300`` then some other prose.") is None
 
 
 def test_backtick_exclusion_in_cite_boundary_can_fail(
@@ -736,7 +748,9 @@ def test_backtick_exclusion_in_cite_boundary_can_fail(
     broken_pattern = original_pattern.replace("[^(\\s`]", "[^(\\s]")
     assert broken_pattern != original_pattern
     monkeypatch.setattr(
-        module, "_CITE_SENTENCE_BOUNDARY", re.compile(broken_pattern)
+        module,
+        "_CITE_SENTENCE_BOUNDARY",
+        re.compile(broken_pattern),
     )
     patched = module.find_phase_delegation({"prompt": fixture})
     assert (original is None) != (patched is None), (

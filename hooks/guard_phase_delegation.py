@@ -25,6 +25,7 @@ import sys
 import unicodedata
 from bisect import bisect_left
 from collections.abc import Iterator, Sequence
+from functools import lru_cache
 from itertools import islice
 from pathlib import Path
 
@@ -38,7 +39,6 @@ from _common import allow, block, read_input
 # globals, and the test modules introspect them there).
 from guard_phase_delegation_lexicon import (
     _AGOGE_PERSONAS,
-    _AGOGE_PREFIX,
     _BARE_SLASH_PREFIX,
     _CITE_SENTENCE_BOUNDARY,
     _CLAUSE_BOUNDARY,
@@ -344,16 +344,17 @@ def _scratch(text: str, spans: list[tuple[int, int, bool]]) -> str:
 # earliest of all the pairs around it: it alone decides _cited's sentence-window
 # test, and it is the one entry recorded. The merge walk over the start-sorted
 # spans keeps the chain of pairs open at the span, so _cited reads one map entry
-# per candidate instead of rescanning the field around each one.
-def _quoted_runs(
-    scratch: str,
-    spans: list[tuple[int, int, bool]],
-) -> dict[tuple[int, int], list[tuple[int, int]]]:
-    """Every candidate span mapped to the innermost wrapper run around it (an
-    opener at or before `start`, its closer at or after `end`), from one
-    left-to-right pairing pass over the whole field. See the comment above for
-    the pairing rules."""
+# per candidate instead of rescanning the field around each one. Cached: a
+# second finditer pass over a dense field pushed the throughput budget over.
+_RunSpans = list[tuple[int, int]]
+_RunMap = dict[tuple[int, int], list[tuple[int, int]]]
+
+
+@lru_cache(maxsize=4)
+def _nested_run_pairs(scratch: str) -> tuple[_RunSpans, _RunSpans]:
+    """Every nested-run pair, plus the quote/backtick subset as `literal_runs`."""
     pairs: list[tuple[int, int]] = []
+    literal_runs: list[tuple[int, int]] = []
     quote_open: int | None = None
     tick_open: tuple[int, int] | None = None
     bracket_stack: list[tuple[int, str]] = []
@@ -364,12 +365,14 @@ def _quoted_runs(
             if tick_open is not None:
                 if len(token) == tick_open[1]:
                     pairs.append((tick_open[0], pos))
+                    literal_runs.append((tick_open[0], pos))
                     tick_open = None
             elif quote_open is None and not bracket_stack:
                 tick_open = (pos, len(token))
         elif token == '"':
             if quote_open is not None:
                 pairs.append((quote_open, pos))
+                literal_runs.append((quote_open, pos))
                 quote_open = None
             elif tick_open is None and not bracket_stack and not quote_skipped:
                 if pos and scratch[pos - 1].isdigit():
@@ -384,7 +387,13 @@ def _quoted_runs(
         elif bracket_stack and bracket_stack[-1][1] == token:
             pairs.append((bracket_stack.pop()[0], pos))
     pairs.sort()
-    runs: dict[tuple[int, int], list[tuple[int, int]]] = {}
+    return pairs, literal_runs  # already open-order: one quote/tick slot at a time
+
+
+def _quoted_runs(scratch: str, spans: list[tuple[int, int, bool]]) -> _RunMap:
+    """Each candidate span mapped to the innermost wrapper run around it."""
+    pairs, _literal_runs = _nested_run_pairs(scratch)
+    runs: _RunMap = {}
     chain: list[tuple[int, int]] = []
     index = 0
     for start, end, _ in spans:
@@ -408,7 +417,7 @@ def _emoticon_paren(scratch: str, pos: int) -> bool:
     return pos > 0 and _EMOTICON.match(scratch, pos - 1) is not None
 
 
-def _delim_positions(scratch: str) -> dict[str, list[int]]:
+def _delim_positions(scratch: str, literal_runs: _RunSpans) -> dict[str, list[int]]:
     """Every _WRAP_SCAN_PAIRS character mapped to its ascending positions, from
     ONE pass over the field. _cited asks "is there a closer between here and
     the sentence end" once per pair per candidate; as a `str.find` that question
@@ -416,11 +425,17 @@ def _delim_positions(scratch: str) -> dict[str, list[int]]:
     for 6 of the 8 pairs) - the whole remaining field when the field has no
     terminator - so N candidates in one long sentence cost N * field. Against
     these lists the same question is a bisect, and the per-candidate cost no
-    longer depends on the field length. An emoticon's paren is left out."""
+    longer depends on the field length. An emoticon's paren, and a literal
+    `literal_runs` bracket, are left out too."""
     positions: dict[str, list[int]] = {}
+    starts = [run[0] for run in literal_runs]
     for match in _WRAP_SCAN_CHARS.finditer(scratch):
-        if not _emoticon_paren(scratch, match.start()):
-            positions.setdefault(match.group(), []).append(match.start())
+        pos, char = match.start(), match.group()
+        idx = bisect_left(starts, pos)
+        if char not in '"`' and idx and literal_runs[idx - 1][1] > pos:
+            continue
+        if not _emoticon_paren(scratch, pos):
+            positions.setdefault(char, []).append(pos)
     return positions
 
 
@@ -461,13 +476,14 @@ def _boundaries(
     clauses = [(m.start(), m.end()) for m in _CLAUSE_BOUNDARY.finditer(scratch)]
     sentences = [m.start() for m in _SENTENCE_BOUNDARY.finditer(scratch)]
     cite_sentences = [m.start() for m in _CITE_SENTENCE_BOUNDARY.finditer(scratch)]
+    _pairs, literal_runs = _nested_run_pairs(scratch)
     return (
         [c[0] for c in clauses],
         [c[1] for c in clauses],
         sentences,
         cite_sentences,
         _quoted_runs(scratch, spans),
-        _delim_positions(scratch),
+        _delim_positions(scratch, literal_runs),
     )
 
 
@@ -650,8 +666,7 @@ def _field_delegation(text: str, per_task: bool) -> str | None:
     if not spans:
         return None
     clause_starts, clause_ends, sentences, cite_sentences, runs, marks = _boundaries(
-        text,
-        spans,
+        text, spans
     )
     marked = {
         bisect_left(sentences, match.start())
@@ -769,9 +784,7 @@ def main() -> None:
         allow()
     tool_input = payload.get("tool_input")
     if not isinstance(tool_input, dict):
-        print(
-            "guard_phase_delegation: unparseable tool_input, allowing", file=sys.stderr
-        )
+        print("guard_phase_delegation: unparseable tool_input, allowing", file=sys.stderr)
         allow()
     try:
         span = find_phase_delegation(tool_input)
