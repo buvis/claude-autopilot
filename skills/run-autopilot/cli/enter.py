@@ -237,13 +237,10 @@ def _batch_report(out: dict, state_path: Path) -> bool:
     else:
         out["batch"] = "open"
         return False
-    if out["batch"] == "absent":
-        detail = (
-            "batch absent; mint state.batch with statectl (phase-build.md Phase 0 "
-            "step 3), then run enter again; never autopilot init"
-        )
-    else:
-        detail = f"batch {out['batch']}; initialize a batch first"
+    detail = (
+        f"batch {out['batch']}; mint state.batch with statectl (phase-build.md "
+        "Phase 0 step 3), then run enter again; never autopilot init"
+    )
     _stop(out, "batch_init", detail)
     return True
 

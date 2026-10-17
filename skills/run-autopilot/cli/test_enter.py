@@ -558,20 +558,31 @@ def test_absent_and_closed_batch_stop_batch_init(
     assert env.rows == []
 
 
-def test_batch_init_detail_names_the_statectl_route(env: Env) -> None:
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        ({"phase": "build", "next_phase": "build"}, "absent"),
+        (_open_state(phase="done", next_phase=""), "closed"),
+    ],
+    ids=["absent", "closed"],
+)
+def test_batch_init_detail_names_the_statectl_route(
+    env: Env, data: dict, expected: str
+) -> None:
     # PRD 00331: the absent-batch stop used to read "initialize a batch
     # first", which a session took literally and ran `autopilot init` -
     # an existing state file makes `_run_init` refuse with exit 7. The
-    # detail now names the real route: mint state.batch via statectl.
-    env.write_state({"phase": "build", "next_phase": "build"})
+    # detail now names the real route: mint state.batch via statectl. This
+    # holds for both the absent and the closed arrangement.
+    env.write_state(data)
     env.put("wip")
 
     out = env.run()
 
     assert out["stop"] == "batch_init"
     assert out["detail"] == (
-        "batch absent; mint state.batch with statectl (phase-build.md Phase 0 "
-        "step 3), then run enter again; never autopilot init"
+        f"batch {expected}; mint state.batch with statectl (phase-build.md "
+        "Phase 0 step 3), then run enter again; never autopilot init"
     )
 
 
