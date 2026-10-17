@@ -4917,3 +4917,6 @@
 {"kind":"handoff","site":"build","edge":"resume","at":1792201789,"phase":"build","prd":"00324-guard-pairs-delimiters-as-nested-runs-v1.md"}
 {"id":"1ee925c0","kind":"ivan","task":"2","queued_at":1792201849,"prompt_bytes":102287}
 {"id":"eeb3a386","kind":"ivan","task":"2","queued_at":1792201977,"prompt_bytes":20940}
+{"id":"1ee925c0","ended_at":1792203304,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"eeb3a386","ended_at":1792203304,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1792203304,"phase":"build","prd":"00324-guard-pairs-delimiters-as-nested-runs-v1.md"}
