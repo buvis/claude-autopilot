@@ -228,6 +228,40 @@ def test_attempt_logging_devon_mirror_not_pending() -> None:
     )
 
 
+def test_devon_runs_on_tests_an_earlier_task_wrote() -> None:
+    step_2_9 = _section(_SKILL_TEXT, _SKILL_MD, "### 2.9", "\n### ")
+    for needle in (
+        "**Earlier-task tests.**",
+        "still runs at `opus` and `fable` against those files",
+    ):
+        assert needle in step_2_9, (
+            f"{_SKILL_MD}: expected {needle!r} in step 2.9 — not found. "
+            "Devon should still run against tests an earlier task of the "
+            "plan committed."
+        )
+
+
+def test_tess_skip_does_not_skip_devon() -> None:
+    step_2_7 = _section(_SKILL_TEXT, _SKILL_MD, "### 2.7", "\n### ")
+    assert "does not skip step 2.9 or 2.95" in step_2_7, (
+        f"{_SKILL_MD}: expected 'does not skip step 2.9 or 2.95' in "
+        "step 2.7 — not found. Skipping Tess for a test-only task must "
+        "not also skip Devon's round when an earlier task's tests apply."
+    )
+
+
+def test_red_check_runs_on_earlier_task_tests() -> None:
+    step_2_95 = _section(_SKILL_TEXT, _SKILL_MD, "### 2.95", "\n### ")
+    assert (
+        "no earlier task of this plan committed this task's tests"
+        in step_2_95
+    ), (
+        f"{_SKILL_MD}: expected 'no earlier task of this plan committed "
+        "this task's tests' in step 2.95 — not found. The red-check skip "
+        "condition must account for tests an earlier task wrote."
+    )
+
+
 def test_changelog_unreleased_has_one_changed_heading() -> None:
     unreleased = _section(_CHANGELOG_TEXT, _CHANGELOG, "## [Unreleased]", "\n## [")
     count = unreleased.count("### Changed")
