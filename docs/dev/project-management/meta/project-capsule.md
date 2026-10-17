@@ -52,8 +52,8 @@ Generated: 2026-10-17 (catchup at HEAD 6d7c97f3, 00325 closed, entering 00326)
 - [x] 00324-guard-pairs-delimiters-as-nested-runs-v1 (2 cycles, cap-out: 2 HIGH + 6 lower deferred)
 - [x] 00325-sweep-reads-emoji-rows-by-character-class-v1 (1 cycle, fast-track)
 - [x] 00326-close-the-loops-remaining-verb-and-ledger-truths-v2 (2 cycles, cap-out: 1 HIGH + 16 lower deferred)
-- [ ] 00327-release-gate-and-notes-say-what-ships-v2
-- [ ] 00330-hand-the-tail-sweep-to-a-task-tier-session-v1
+- [x] 00330-hand-the-tail-sweep-to-a-task-tier-session-v1 (1 cycle, micro-lane tail sweep)
+- [ ] 00327-release-gate-and-notes-say-what-ships-v2 (parked to hold/, warden blocked gate 3)
 - [ ] 00331-start-a-fresh-batch-clean-v1
 - [ ] 00332-wait-for-a-lane-in-one-call-v1
 - [ ] 00333-sweep-only-findings-two-reviewers-raised-v1
@@ -76,7 +76,10 @@ fullwidth CJK terminators); quote/backtick/curly-quote variants are fixed.
 markers toplevel guard fail-open (every nonzero git result still enables an
 unbounded ancestor walk); the remaining 16 lower-severity findings (R1-R3,
 R6-R10, R12-R13, R18 and the pre-batch deferred reflow/line-cap rows) are
-deferred, none minted as stubs.
+deferred, none minted as stubs. 00330 converged at cycle 1 (3/3 tasks);
+tail-sweep task 3 closed via the micro lane (orchestrator-edited, Pat NO
+FINDINGS). Full suite green at d288d7c4 (7143 passed, 0 failed, 3 skipped).
+No deferred items, no doubts, nothing minted to `hold/`.
 
 ### Batch 202610141430 (complete)
 - [x] 00277-catch-critical-rows-in-every-shape-v2 (2 cycles)
