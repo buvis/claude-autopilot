@@ -26,6 +26,7 @@ def test_classification_discards_single_voice_rows() -> None:
         "### Classification (per finding):", "### Settled-decisions ledger"
     )
     assert "**Single-voice Medium or Low**" in classification_section
+    assert 'with `disposition: "discarded"`' in classification_section
 
     text = PHASE_REVIEW.read_text()
     assert '| Single-voice Medium or Low | `"discard"` |' in text
@@ -37,4 +38,6 @@ def test_tail_sweep_select_excludes_single_voice_rows() -> None:
     already discards."""
     select_section = _section("**1. Select.**", "**2. Create.**")
     assert "Consensus cell is `[1/N]`" in select_section
+    assert "append each to the ledger as `discarded`" in select_section
     assert "reason `single-voice`" in select_section
+    assert "Zero such rows → skip the sweep." in select_section
