@@ -589,14 +589,10 @@ def _tail_sweep_refusal(
 ) -> dict | None:
     """The tail-sweep-only refusals, in the order the operator hears them: a
     carry row, a sweep before this cycle's decision-gate batch, an empty
-    sweep, a row above Medium, a row duplicating an open deferral.
-
-    The decision-gate-first fix for a converged cycle with no 🔴/🟠 row lives
-    in the caller's procedure (`run-autopilot/references/phase-review.md`
-    Converged Outcome), which applies an empty decision-gate batch before
-    ever calling tail-sweep, so this stamp always exists by the time a sweep
-    reaches this check.
-    """
+    sweep, a row above Medium, a single-voice row, a row duplicating an open
+    deferral. The decision-gate-first stamp always exists by the time a sweep
+    reaches this check (`run-autopilot/references/phase-review.md` Converged
+    Outcome)."""
     if any(f.get("classification") == "carry" for f in chosen_findings):
         return {
             "applied": False,
