@@ -407,25 +407,47 @@ def _gate_result_line(result: dict) -> str:
         paths = ", ".join(result["dirty_paths"]) or "(no paths reported)"
         if result["passed"] is not None:
             counts = (result["passed"], result["failed"], result["skipped"])
-            suffix = (
-                "(suite run this cycle, then tree dirtied outside the "
-                f"store: {paths})"
-            )
+            bad_exit = _red_exit(result)
+            if bad_exit is not None:
+                counts = (counts[0], max(counts[1] or 0, 1), counts[2])
+                suffix = (
+                    "(suite run this cycle, then tree dirtied outside the "
+                    f"store: {paths}, exit {bad_exit}, treated as failed, "
+                    "not recorded)"
+                )
+            else:
+                suffix = (
+                    "(suite run this cycle, then tree dirtied outside the "
+                    f"store: {paths}, not recorded)"
+                )
             return _tests_line(counts, suffix)
         return f"Tests: (gate skipped: working tree dirty outside the store: {paths})"
     if result["timed_out"]:
-        # TESTS_RE needs counts; zeros plus the suffix say none were read.
+        # TESTS_RE needs counts; forcing failed to 1 keeps the red path from
+        # ever reading "0 failed".
         suffix = (
             f"(suite timed out after {int(verification.GATE_TIMEOUT_S)}s, "
             "treated as failed)"
         )
-        return _tests_line((0, 0, 0), suffix)
+        return _tests_line((0, 1, 0), suffix)
     if result["passed"] is None:
         return (
             f"Tests: counts unavailable (suite run this cycle, exit {result['exit']}, "
             "no PASS/FAIL/SKIP/EXIT summary line)"
         )
     counts = (result["passed"], result["failed"], result["skipped"])
+    bad_exit = _red_exit(result)
+    if bad_exit is None:
+        return _tests_line(counts, "(suite run this cycle)")
+    counts = (counts[0], max(counts[1] or 0, 1), counts[2])
+    return _tests_line(
+        counts, f"(suite run this cycle, exit {bad_exit}, treated as failed)"
+    )
+
+
+def _red_exit(result: dict) -> int | None:
+    """The nonzero process exit or summary EXIT token that makes this gate
+    red, or None when neither names a nonzero exit."""
     summary_exit = None
     if result.get("raw_line"):
         match = verification.SUMMARY_RE.search(result["raw_line"])
@@ -433,14 +455,10 @@ def _gate_result_line(result: dict) -> str:
             summary_exit = int(match.group(4))
     process_exit = result.get("exit")
     if process_exit not in (0, None):
-        bad_exit = process_exit
-    elif summary_exit not in (0, None):
-        bad_exit = summary_exit
-    else:
-        return _tests_line(counts, "(suite run this cycle)")
-    return _tests_line(
-        counts, f"(suite run this cycle, exit {bad_exit}, treated as failed)"
-    )
+        return process_exit
+    if summary_exit not in (0, None):
+        return summary_exit
+    return None
 
 
 def run_gate_line(repo_root: Path, gate_command: str, cycle_id: str) -> dict:

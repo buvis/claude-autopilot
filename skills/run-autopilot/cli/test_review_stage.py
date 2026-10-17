@@ -833,6 +833,7 @@ def test_gate_line_marks_nonzero_process_exit_red() -> None:
     assert line != "Tests: 3 passed, 0 failed, 0 skipped (suite run this cycle)"
     assert "treated as failed" in line
     assert "5" in line
+    assert "0 failed" not in line
 
 
 def test_gate_line_marks_nonzero_exit_token_red() -> None:
@@ -848,6 +849,7 @@ def test_gate_line_marks_nonzero_exit_token_red() -> None:
 
     assert line != "Tests: 3 passed, 0 failed, 0 skipped (suite run this cycle)"
     assert "treated as failed" in line
+    assert "0 failed" not in line
 
 
 def test_gate_line_never_reads_zero_failed_for_a_red_gate(env: dict) -> None:
@@ -869,6 +871,7 @@ def test_gate_line_never_reads_zero_failed_for_a_red_gate(env: dict) -> None:
         "Tests: 9 passed, 0 failed, 0 skipped (suite run this cycle)"
     )
     assert "treated as failed" in out["tests_line"]
+    assert "0 failed" not in out["tests_line"]
 
 
 def test_gate_line_reports_ran_then_dirtied_with_counts() -> None:
@@ -891,6 +894,8 @@ def test_gate_line_reports_ran_then_dirtied_with_counts() -> None:
     assert "2 passed" in line
     assert "1 failed" in line
     assert "stray.txt" in line
+    assert "not recorded" in line
+    assert "treated as failed" in line
 
 
 def test_run_gate_line_log_is_none_when_no_gate_spawned(
