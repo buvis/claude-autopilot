@@ -4975,3 +4975,9 @@
 {"kind":"handoff","site":"build","edge":"leave","at":1792228512,"phase":"done","prd":"00325-sweep-reads-emoji-rows-by-character-class-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1792228576,"phase":"done","prd":"00325-sweep-reads-emoji-rows-by-character-class-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1792228635,"phase":"build","prd":"00325-sweep-reads-emoji-rows-by-character-class-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792228690,"phase":"build","prd":"00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"}
+{"id":"e9a29a4e","kind":"tess","task":"1","queued_at":1792228987,"prompt_bytes":186366}
+{"id":"fa09de10","kind":"tess","task":"1","queued_at":1792229032,"prompt_bytes":47066}
+{"id":"e9a29a4e","ended_at":1792229893,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"fa09de10","ended_at":1792229893,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1792229893,"phase":"build","prd":"00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"}

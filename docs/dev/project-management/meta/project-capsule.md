@@ -1,6 +1,6 @@
 # Project Capsule: claude-autopilot
 
-Generated: 2026-10-17 (catchup at HEAD 1228d38b, 00323 closed, entering 00324)
+Generated: 2026-10-17 (catchup at HEAD 6d7c97f3, 00325 closed, entering 00326)
 
 ## Key Invariants
 
@@ -51,7 +51,7 @@ Generated: 2026-10-17 (catchup at HEAD 1228d38b, 00323 closed, entering 00324)
 - [x] 00323-tests-line-and-verify-record-say-red-v1 (1 cycle)
 - [x] 00324-guard-pairs-delimiters-as-nested-runs-v1 (2 cycles, cap-out: 2 HIGH + 6 lower deferred)
 - [x] 00325-sweep-reads-emoji-rows-by-character-class-v1 (1 cycle, fast-track)
-- [ ] 00326-close-the-loops-remaining-verb-and-ledger-truths-v2
+- [ ] 00326-close-the-loops-remaining-verb-and-ledger-truths-v2 (in progress)
 - [ ] 00327-release-gate-and-notes-say-what-ships-v2
 - [ ] 00330-hand-the-tail-sweep-to-a-task-tier-session-v1
 - [ ] 00331-start-a-fresh-batch-clean-v1
