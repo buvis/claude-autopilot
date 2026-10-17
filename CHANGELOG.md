@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **run-autopilot**: `task-done`/`append-attempt` now refuse an attempt record carrying an invented word in a stamp field (e.g. `review: "orchestrator-reviewed"`), instead of writing it silently
 - **run-autopilot**: the loop's launch prompt tells each session it was started by the loop driver, so a live-loop rule in memory or notes no longer makes it refuse to work
 - **work**: a tests-first task that registers its file in dev/bin/release-checks keeps the test-only skip of self-deslop and the per-task review
 - **work**: Devon runs on an opus task whose tests an earlier task of the plan wrote, so a tests-first plan keeps its adversarial round

@@ -51,6 +51,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 import sys
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -224,8 +225,84 @@ def do_task_start(data: Any, task_id: str) -> None:
     _find_task(data, task_id)["status"] = "in_progress"
 
 
+# Closed grammars for the attempt stamp fields documented in
+# `skills/work/references/attempt-logging.md`. Each entry maps a field name
+# to (literals, prefixes): `literals` are exact accepted strings, `prefixes`
+# are "tag:" strings accepted with any suffix after the colon. A field absent
+# from this dict (e.g. `cause`, `model`) is free-form and unchecked. `None` is
+# always accepted for every field - the doc's universal absent/null rule.
+_STAMP_GRAMMAR: dict[str, tuple[frozenset[str], tuple[str, ...]]] = {
+    "implementor": (
+        frozenset({"claude", "gemini", "qwen", "codex", "orchestrator"}),
+        (),
+    ),
+    "red_check": (
+        frozenset(
+            {
+                "n/a:new_module",
+                "n/a:test-only-task",
+                "n/a:docs-only-task",
+                "n/a:config-only-task",
+                "n/a:micro-lane",
+            }
+        ),
+        ("skipped:",),
+    ),
+    "self_deslop": (
+        frozenset({"noop", "timeout", "skipped:trivial", "skipped:test-only"}),
+        ("committed:", "errored:"),
+    ),
+    "style_gate": (
+        frozenset({"clean", "skipped:tier"}),
+        ("fixed:", "failed:"),
+    ),
+    "split_hygiene": (
+        frozenset({"clean", "skipped:no-tests"}),
+        ("fixed:", "failed:"),
+    ),
+    "devon": (
+        frozenset({"skipped:prose", "exploit_fixed"}),
+        (),
+    ),
+}
+
+# `review` is checked separately: it is the one field the doc lets combine
+# several values with "; " (e.g. "medium-retry:fixed; resume_failed"), so each
+# "; "-separated component is validated on its own rather than the field as a
+# whole literal.
+_REVIEW_LITERALS = frozenset({"resume_failed", "skipped:test-only"})
+
+
+def _check_stamps(attempt: Any) -> None:
+    """Refuse any attempt-stamp value outside its documented grammar.
+
+    Scoped to the fields `_STAMP_GRAMMAR` (and `review`) know about; every
+    other field in the attempt payload is untouched. `None` is always
+    accepted - the doc's absent/null carve-out applies to every field.
+    """
+    if not isinstance(attempt, dict):
+        return
+    for field, (literals, prefixes) in _STAMP_GRAMMAR.items():
+        value = attempt.get(field)
+        if value is None:
+            continue
+        if value in literals or (
+            isinstance(value, str)
+            and any(value.startswith(prefix) for prefix in prefixes)
+        ):
+            continue
+        raise UsageError(f"invalid {field} stamp: {value!r}")
+    review = attempt.get("review")
+    if review is not None:
+        for part in review.split("; "):
+            if part in _REVIEW_LITERALS or re.match(r"^[\w-]+:.+$", part):
+                continue
+            raise UsageError(f"invalid review stamp: {review!r}")
+
+
 def do_task_done(data: Any, task_id: str, attempt: Any) -> None:
     """Mark a task completed, append its attempt record, recount - atomically."""
+    _check_stamps(attempt)
     task = _find_task(data, task_id)
     attempts = task.setdefault("attempts", [])
     if not isinstance(attempts, list):
@@ -244,6 +321,7 @@ def do_append_attempt(data: Any, task_id: str, attempt: Any) -> None:
     once rework appends `[D{cycle}]` follow-ups, array position stops matching
     id and an index path appends to the wrong task.
     """
+    _check_stamps(attempt)
     task = _find_task(data, task_id)
     attempts = task.setdefault("attempts", [])
     if not isinstance(attempts, list):

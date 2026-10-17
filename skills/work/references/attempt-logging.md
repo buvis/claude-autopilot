@@ -102,6 +102,8 @@ Two top-level fields, `qwen_gate_failures_consecutive` and `qwen_breaker`, track
 
 Cross-reference: `run-autopilot/references/state-schema.md` `tasks[].attempts` row defines the canonical shape.
 
+**Stamp grammar enforcement (PRD 00342-v1)**: `statectl.py`'s `task-done` and `append-attempt` writers refuse any value outside this grammar for the fields above that have one (`implementor`, `red_check`, `self_deslop`, `style_gate`, `split_hygiene`, `devon`, `review`) - an invented word like `"orchestrator-reviewed"` now exits 1 with the state file byte-unchanged, instead of landing silently.
+
 ## Dispatch-provenance fields (moved from SKILL.md, PRD 00119-v2)
 
 - **`implementor`** — `"claude"`, `"gemini"`, `"qwen"`, `"codex"`, or `"orchestrator"`, reflecting what actually dispatched, NOT what the step-3 routing table initially picked (a qwen pick that fell back to Claude on preflight failure records `"claude"`). `"orchestrator"` is the one value meaning nothing dispatched: the micro lane (`references/rework-mode.md`) edited in-session. A micro-lane attempt that overran and fell through to a real dispatch records that dispatcher instead, with `micro_lane: "overrun"` alongside.
