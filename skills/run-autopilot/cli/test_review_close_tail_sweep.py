@@ -264,6 +264,27 @@ def test_tail_sweep_refuses_a_single_voice_row(tmp_path: Path) -> None:
     assert result["applied"] is True
 
 
+@pytest.mark.parametrize(
+    "found_by",
+    ["CARL", ["CARL", "CARL"]],
+    ids=["bare-string", "duplicated-list"],
+)
+def test_tail_sweep_single_voice_guard_rejects_non_distinct_found_by(
+    tmp_path: Path, found_by: object
+) -> None:
+    """A bare string (whose `len()` can exceed 2) or a duplicated list must
+    not pass as multi-voice: the guard requires a list and counts distinct
+    entries, not `len(found_by)`."""
+    row = dict(TAIL_MED, found_by=found_by)
+    review = _review(tmp_path, consolidated=_table([row]))
+    state_path = _swept(tmp_path, review)
+
+    result = review_close.close(review, state_path, "tail-sweep", [row])
+
+    assert result["applied"] is False
+    assert result["refused"] == "tail_sweep_single_voice"
+
+
 def test_a_tail_sweep_over_a_gate_failing_review_is_refused_by_the_gate(
     tmp_path: Path,
 ) -> None:
