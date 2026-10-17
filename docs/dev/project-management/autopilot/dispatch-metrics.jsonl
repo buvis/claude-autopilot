@@ -5165,3 +5165,23 @@
 {"kind":"handoff","site":"done","edge":"leave","at":1792251896,"phase":"build","prd":"00335-tell-tess-what-devon-will-try-v1.md"}
 {"kind":"handoff","site":"build","edge":"resume","at":1792251912,"phase":"build","prd":"00335-tell-tess-what-devon-will-try-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1792252637,"phase":"build","prd":"00335-tell-tess-what-devon-will-try-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792252666,"phase":"build","prd":"00340-tell-the-session-it-is-the-loop-v1.md"}
+{"id":"a876bc61","kind":"fast-track:tess","task":"00340-tell-the-session-it-is-the-loop-v1-c1","queued_at":1792252790,"prompt_bytes":62128}
+{"id":"a876bc61","ended_at":1792252890,"elapsed_s":100,"outcome":"ok","detail":null}
+{"id":"17b25b78","kind":"fast-track:ivan","task":"00340-tell-the-session-it-is-the-loop-v1-c1","queued_at":1792252925,"prompt_bytes":25221}
+{"id":"17b25b78","ended_at":1792253132,"elapsed_s":207,"outcome":"ok","detail":null}
+{"id":"b2369351","kind":"fast-track:fanout","task":"00340-tell-the-session-it-is-the-loop-v1-c1","queued_at":1792253304,"prompt_bytes":6247}
+{"id":"f4426fec","kind":"fast-track:blake","task":"00340-tell-the-session-it-is-the-loop-v1-c1","queued_at":1792253308,"prompt_bytes":8556}
+{"id":"3b6cc612","kind":"fast-track:eve","task":"00340-tell-the-session-it-is-the-loop-v1-c1","queued_at":1792253312,"prompt_bytes":3897}
+{"id":"a62d2a35","kind":"fast-track:bob","task":"00340-tell-the-session-it-is-the-loop-v1-c1","queued_at":1792253316,"prompt_bytes":9424}
+{"id":"a0ebe4a8","kind":"fast-track:carl","task":"00340-tell-the-session-it-is-the-loop-v1-c1","queued_at":1792253320,"prompt_bytes":6603}
+{"id":"b2369351","ended_at":1792253335,"elapsed_s":31,"outcome":"error","detail":"fanout skipped: using alice fallback"}
+{"id":"d985b6ca","kind":"fast-track:alice","task":"00340-tell-the-session-it-is-the-loop-v1-c1","queued_at":1792253339,"prompt_bytes":6247}
+{"id":"d985b6ca","ended_at":1792253863,"elapsed_s":524,"outcome":"ok","detail":null}
+{"id":"f4426fec","ended_at":1792253863,"elapsed_s":555,"outcome":"ok","detail":null}
+{"id":"3b6cc612","ended_at":1792253863,"elapsed_s":551,"outcome":"ok","detail":null}
+{"id":"a62d2a35","ended_at":1792253863,"elapsed_s":547,"outcome":"error","detail":"sandbox init failed, no findings"}
+{"id":"a0ebe4a8","ended_at":1792253863,"elapsed_s":543,"outcome":"ok","detail":null}
+{"id":"cda21bfe","kind":"fast-track:delta","task":"00340-tell-the-session-it-is-the-loop-v1-c1","queued_at":1792253987,"prompt_bytes":3897}
+{"id":"cda21bfe","ended_at":1792254460,"elapsed_s":473,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"build","edge":"leave","at":1792254972,"phase":"done","prd":"00340-tell-the-session-it-is-the-loop-v1.md"}
