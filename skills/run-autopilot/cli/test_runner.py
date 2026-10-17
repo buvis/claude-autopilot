@@ -111,10 +111,7 @@ def test_build_argv_strict_mcp_default_is_context7():
 def test_build_argv_mcp_config_none_keeps_todays_argv():
     # Existing build_argv tests stay green because the default is None.
     assert build_argv("m1", "xhigh", "fb1") == build_argv(
-        "m1",
-        "xhigh",
-        "fb1",
-        mcp_config=None,
+        "m1", "xhigh", "fb1", mcp_config=None
     )
     assert "--mcp-config" not in build_argv("m1", "xhigh", "fb1")
 
@@ -230,30 +227,18 @@ def test_prompt_names_the_brief_when_present(tmp_path):
         + CLI_SUFFIX
         + LOOP_SUFFIX
     )
-    assert (
-        argv[:-1]
-        == build_argv(
-            "m",
-            "low",
-            "claude-sonnet-5[1m]",
-            mcp_config=mcp_config_for({}),
-        )[1:-1]
-    )
+    assert argv[:-1] == build_argv(
+        "m", "low", "claude-sonnet-5[1m]", mcp_config=mcp_config_for({})
+    )[1:-1]
 
 
 def test_prompt_without_a_brief_still_names_the_cli(tmp_path):
     ap = _ap_dir(tmp_path)
     argv = _launch_argv(tmp_path, ap)
     assert argv[-1] == "/autopilot:run-autopilot" + CLI_SUFFIX + LOOP_SUFFIX
-    assert (
-        argv[:-1]
-        == build_argv(
-            "m",
-            "low",
-            "claude-sonnet-5[1m]",
-            mcp_config=mcp_config_for({}),
-        )[1:-1]
-    )
+    assert argv[:-1] == build_argv(
+        "m", "low", "claude-sonnet-5[1m]", mcp_config=mcp_config_for({})
+    )[1:-1]
 
 
 def test_a_brief_that_is_a_directory_does_not_count(tmp_path):
@@ -300,9 +285,7 @@ def test_launch_prompt_forbids_blocked_coreutils(tmp_path):
     # Exact equality: nothing may precede the CLI sentence (e.g. text that
     # tells the agent to ignore the coreutils rule) and still pass.
     assert bare == DEFAULT_PROMPT + cli_sentence + rule + loop_sentence
-    assert (
-        briefed == DEFAULT_PROMPT + BRIEF_SUFFIX + cli_sentence + rule + loop_sentence
-    )
+    assert briefed == DEFAULT_PROMPT + BRIEF_SUFFIX + cli_sentence + rule + loop_sentence
     assert "Never call `cat`, `head`, `tail`, `grep` or `find`" in bare
 
 
@@ -334,11 +317,13 @@ def test_launch_prompt_says_the_session_is_the_loop(tmp_path):
     (ap / "session-brief.md").write_text("# Session brief\n")
     (ap / "state.json").write_text("{}\n")
     briefed = prompt_for(ap)
+    assert BRIEF_SUFFIX in briefed
     assert briefed.endswith(LOOP_SUFFIX)
     assert "launched by the autopilot loop driver" in briefed
     assert "never stop or ask because a loop is running" in briefed
 
     custom = prompt_for(ap, "custom")
+    assert not custom.endswith(LOOP_SUFFIX)
     assert "launched by the autopilot loop driver" not in custom
     assert "never stop or ask because a loop is running" not in custom
 
@@ -404,7 +389,7 @@ def test_spawn_requests_a_handoff_before_the_cap(tmp_path, capsys):
     )
     ap = _ap_dir(tmp_path)
     (ap / "state.json").write_text(
-        json.dumps({"phase": "build", "tasks": [{"id": "2", "status": "in_progress"}]}),
+        json.dumps({"phase": "build", "tasks": [{"id": "2", "status": "in_progress"}]})
     )
     result = spawn(
         "m",
@@ -472,8 +457,7 @@ def test_spawn_scrubs_host_markers(tmp_path, capsys):
 
 
 def test_spawn_scrub_notice_sorts_multiple_markers_comma_space_joined(
-    tmp_path,
-    capsys,
+    tmp_path, capsys
 ):
     # Seeded out of alphabetical order so an implementation that merely
     # echoed the caller's dict order (rather than sorting) would fail.
@@ -506,7 +490,7 @@ def test_spawn_scrub_notice_sorts_multiple_markers_comma_space_joined(
         if line.startswith("autopilot: scrubbed inherited host markers:")
     ]
     assert err_lines == [
-        "autopilot: scrubbed inherited host markers: CODEX_CI, CODEX_THREAD_ID, COPILOT_CLI",
+        "autopilot: scrubbed inherited host markers: CODEX_CI, CODEX_THREAD_ID, COPILOT_CLI"
     ]
 
 
