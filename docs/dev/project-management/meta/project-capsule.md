@@ -56,7 +56,7 @@ Generated: 2026-10-17 (catchup at HEAD a2858cb4, 00332 closed, entering 00333; 0
 - [ ] 00327-release-gate-and-notes-say-what-ships-v2 (parked to hold/, warden blocked gate 3)
 - [x] 00331-start-a-fresh-batch-clean-v1 (1 cycle, fast-track)
 - [x] 00332-wait-for-a-lane-in-one-call-v1 (1 cycle, fast-track)
-- [ ] 00333-sweep-only-findings-two-reviewers-raised-v1 (in progress, fell back to full lane: uncardable)
+- [x] 00333-sweep-only-findings-two-reviewers-raised-v1 (1 cycle, full lane: uncardable)
 - [ ] 00334-keep-the-test-only-skip-when-a-test-registers-itself-v1
 - [ ] 00335-tell-tess-what-devon-will-try-v1
 
@@ -82,7 +82,14 @@ FINDINGS). Full suite green at d288d7c4 (7143 passed, 0 failed, 3 skipped).
 No deferred items, no doubts, nothing minted to `hold/`. 00331 converged
 cycle 1 (fast-track, 1 task): fixed the closed-batch stop-detail gap in
 `enter.py`'s `_batch_report` that Alice/Blake/Eve/Carl all raised (confirmed
-by Victor). Suite green, 7148 passed, 0 failed, 3 skipped.
+by Victor). Suite green, 7148 passed, 0 failed, 3 skipped. 00333 converged at
+cycle 1 (6/6 tasks, full lane after falling back from uncardable): 16 review
+findings, no CRITICAL/HIGH, 11 single-voice rows discarded and 1 build
+decision settled per the landed rule, a tail sweep (tasks 4-6) closed the 4
+multi-voice findings (R1-R4). One cycle-1 assumed-ambiguity (the shared
+`_finding()` test default's `found_by` collided with the new single-voice
+refusal; bumped to two entries) deferred for awareness. Full suite green
+(7156 passed, 0 failed, 3 skipped).
 
 ### Batch 202610141430 (complete)
 - [x] 00277-catch-critical-rows-in-every-shape-v2 (2 cycles)

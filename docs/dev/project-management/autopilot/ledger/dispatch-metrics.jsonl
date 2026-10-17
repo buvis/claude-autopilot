@@ -5140,3 +5140,4 @@
 {"id":"d1f8c4a1","ended_at":1792249504,"elapsed_s":null,"outcome":"ok","detail":"closed-by: artifact"}
 {"id":"1035842b","ended_at":1792249504,"elapsed_s":null,"outcome":"ok","detail":"closed-by: artifact"}
 {"kind":"handoff","site":"review","edge":"leave","at":1792249504,"phase":"done","prd":"00333-sweep-only-findings-two-reviewers-raised-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1792249667,"phase":"build","prd":"00333-sweep-only-findings-two-reviewers-raised-v1.md"}
