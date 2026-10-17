@@ -5133,3 +5133,10 @@
 {"id":"a9242683","ended_at":1792248310,"elapsed_s":82,"outcome":"ok","detail":"retry"}
 {"id":"d9cee6f7","ended_at":1792248313,"elapsed_s":587,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"review","edge":"leave","at":1792248509,"phase":"review","prd":"00333-sweep-only-findings-two-reviewers-raised-v1.md"}
+{"id":"1cd647ca","kind":"pat","task":"4","queued_at":1792248657,"prompt_bytes":8454}
+{"id":"d1f8c4a1","kind":"pat","task":"5","queued_at":1792248797,"prompt_bytes":12628}
+{"id":"1035842b","kind":"pat","task":"6","queued_at":1792249062,"prompt_bytes":9776}
+{"id":"1cd647ca","ended_at":1792249504,"elapsed_s":null,"outcome":"ok","detail":"closed-by: artifact"}
+{"id":"d1f8c4a1","ended_at":1792249504,"elapsed_s":null,"outcome":"ok","detail":"closed-by: artifact"}
+{"id":"1035842b","ended_at":1792249504,"elapsed_s":null,"outcome":"ok","detail":"closed-by: artifact"}
+{"kind":"handoff","site":"review","edge":"leave","at":1792249504,"phase":"done","prd":"00333-sweep-only-findings-two-reviewers-raised-v1.md"}
