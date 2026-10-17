@@ -1,0 +1,98 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The shared fixture `_finding` default `found_by` was changed from `[\"bob\"]` to `[\"alice\", \"bob\"]`. This was needed to keep 10 existing tests valid and is recorded in the deferred ledger and assumptions.md, so it is acceptable. It does mean the existing suites no longer exercise single-voice rows unless a test overrides `found_by`.",
+    "file": "skills/run-autopilot/cli/test_review_close.py:101",
+    "reason": "settled at build time: the fixture bump is the recorded autonomous decision for this PRD (state.autonomous_decisions, assumptions.md); both reviewers that raised it call it acceptable"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "Select now holds two overlapping skip sentences: \"Zero such rows -> skip the sweep.\" followed by \"**Zero actionable Medium/Low → skip the sweep entirely**\". \"Such rows\" is ambiguous between the multi-voice rows and the actionable ones, so an orchestrator can read two different skip conditions. The PRD gave this wording, but fold the two into one clause so the skip condition is stated once.",
+    "file": "skills/run-autopilot/references/phase-review.md:197",
+    "reason": "single-voice"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "`phase-review.md` Classification still lists \"Low severity, any consensus\" and \"Medium severity, 1/3 consensus\" under **Auto-fix**, and the new Single-voice rule sits below them. A `[1/N]` Medium or Low row matches both, so an orchestrator reading top-down can auto-fix it. The new rule has no \"takes precedence\" wording.",
+    "file": "skills/run-autopilot/references/phase-review.md:109",
+    "reason": "single-voice"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "Finder counting lacks type validation: a string such as `\"CARL\"` counts as four finders, while an integer raises TypeError. Validate `found_by` as a list of reviewer names before counting.",
+    "file": "skills/run-autopilot/cli/review_close.py:561",
+    "reason": "single-voice (its substance is carried by the two-voice row R4 at the same file:line, which is swept)"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "Prose in phase-review.md omits required code backticks and uses ASCII arrow, and test_single_voice_prose.py asserts the un-backticked strings",
+    "file": "skills/run-autopilot/references/phase-review.md:134",
+    "reason": "single-voice (its substance is carried by the three-voice row R1 at the same file:line, which is swept)"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "`_single_voice_refusal` is one function with two unrelated rule bodies, switched on `batch_id`; any non-`decision-gate` id falls into the tail-sweep rule. Two small predicates, one per call site, would be clearer. The 🟡/⚪ literals also repeat the `_DECISION_SEVERITY` keys; a `_MEDIUM_OR_LOW` constant beside `_ABOVE_MEDIUM` would be tidier.",
+    "file": "skills/run-autopilot/cli/review_close.py:549",
+    "reason": "single-voice"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Single-voice is defined by `[1/N]`/`found_by < 2` with no check on `total_agents`. In a lane with one reviewer (`[1/1]`), every Medium or Low is discarded or refused, so it can never become a task. The PRD does not carve this out, so confirm it is intended.",
+    "file": "skills/run-autopilot/references/phase-review.md:134",
+    "reason": "single-voice"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "The Select sentence deviates from the spec text in three ways. `[1/N]` is not in backticks, \"discarded\" is not in backticks, and the arrow is `->` where the spec has `→`. It also adds a second, redundant \"Zero ... skip the sweep\" sentence next to the existing \"Zero actionable Medium/Low\" one.",
+    "file": "skills/run-autopilot/references/phase-review.md:197",
+    "reason": "single-voice"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "The decision-gate check matches only the emoji severities 🟡 and ⚪. A hand-built row whose severity is the word \"medium\" or \"low\" bypasses `single_voice_fix`, and `_findings_refusal` may not catch it. The PRD says only the emoji, so this is a note, not a deviation.",
+    "file": "skills/run-autopilot/cli/review_close.py:560",
+    "reason": "single-voice"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "The tail-sweep refusal reason names `ref or file`, where the PRD says \"naming the first offending `ref`\". It is equivalent when `ref` is present.",
+    "file": "skills/run-autopilot/cli/review_close.py:579",
+    "reason": "single-voice"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "test_review_close.py is 835 lines long, exceeding the 800-line file limit",
+    "file": "skills/run-autopilot/cli/test_review_close.py:1",
+    "reason": "single-voice"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "test_review_close_tail_sweep.py does not test missing or None found_by and omits tail_sweep_single_voice from CLI exit 2 parameterized test",
+    "file": "skills/run-autopilot/cli/test_review_close_tail_sweep.py:242",
+    "reason": "single-voice (its substance is carried by the two-voice row R2, which is swept)"
+  }
+]

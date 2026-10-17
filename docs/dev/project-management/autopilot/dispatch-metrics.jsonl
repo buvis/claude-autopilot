@@ -5125,3 +5125,11 @@
 {"id":"4dfd02b6","ended_at":1792247286,"elapsed_s":36,"outcome":"ok","detail":null}
 {"id":"4d649711","ended_at":1792247655,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1792247655,"phase":"review","prd":"00333-sweep-only-findings-two-reviewers-raised-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1792247687,"phase":"review","prd":"00333-sweep-only-findings-two-reviewers-raised-v1.md"}
+{"id":"b13c05af","kind":"bob","task":"review-20261017-00333-c1","queued_at":1792247726,"prompt_bytes":13683}
+{"id":"d9cee6f7","kind":"carl","task":"review-20261017-00333-c1","queued_at":1792247726,"prompt_bytes":6639}
+{"id":"a9242683","kind":"bob","task":"review-20261017-00333-c1","queued_at":1792248228,"prompt_bytes":89349}
+{"id":"b13c05af","ended_at":1792248301,"elapsed_s":575,"outcome":"error","detail":"lack-of-input"}
+{"id":"a9242683","ended_at":1792248310,"elapsed_s":82,"outcome":"ok","detail":"retry"}
+{"id":"d9cee6f7","ended_at":1792248313,"elapsed_s":587,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"review","edge":"leave","at":1792248509,"phase":"review","prd":"00333-sweep-only-findings-two-reviewers-raised-v1.md"}
