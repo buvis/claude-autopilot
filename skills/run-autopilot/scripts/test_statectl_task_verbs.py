@@ -226,6 +226,103 @@ class StatectlTaskVerbsTest(unittest.TestCase):
         self.assertEqual(state["tasks"][2]["attempts"], [{"attempt": 1}])
         self.assertEqual(state["tasks_completed"], 2)
 
+    # 3. stamp-grammar enforcement (PRD 00342-v1) ----------------------------
+    #
+    # Grammar: skills/work/references/attempt-logging.md:25-35. A session
+    # closed a real task with `review: "orchestrator-reviewed"` and
+    # `self_deslop: "skipped:orchestrator-reviewed"` - neither value is
+    # documented, and nothing stopped the write. These five tests bind the
+    # refusal and the acceptance of every documented value.
+
+    def test_task_done_refuses_an_undefined_review_stamp(self) -> None:
+        self.three_tasks()
+        before = self.state.read_bytes()
+        attempt = self.write_json(
+            "a.json",
+            {"attempt": 1, "review": "orchestrator-reviewed"},
+        )
+        result = self.run_cli("task-done", "2", attempt)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("review", result.stderr)
+        self.assertIn("orchestrator-reviewed", result.stderr)
+        state = self.load_state()
+        self.assertEqual(state["tasks"][1]["status"], "pending")
+        self.assertEqual(state["tasks_completed"], 1)
+        self.assertEqual(self.state.read_bytes(), before)
+
+    def test_append_attempt_refuses_an_undefined_self_deslop_stamp(self) -> None:
+        self.three_tasks()
+        attempt = self.write_json(
+            "a.json",
+            {"attempt": 1, "self_deslop": "skipped:orchestrator-reviewed"},
+        )
+        result = self.run_cli("append-attempt", "1", attempt)
+        self.assertNotEqual(result.returncode, 0)
+        state = self.load_state()
+        self.assertEqual(state["tasks"][0]["attempts"], [{"n": 0}])
+
+    def test_task_done_accepts_every_documented_stamp(self) -> None:
+        self.three_tasks()
+        attempt_payload = {
+            "attempt": 1,
+            "implementor": "claude",
+            "review": "medium-retry:fixed; resume_failed",
+            "self_deslop": "committed:abc1234",
+            "red_check": "skipped:import",
+            "devon": "exploit_fixed",
+            "style_gate": "fixed:abc1234",
+            "split_hygiene": "failed:x",
+        }
+        attempt = self.write_json("a.json", attempt_payload)
+        result = self.run_cli("task-done", "2", attempt)
+        self.assertEqual(result.returncode, 0)
+        state = self.load_state()
+        self.assertEqual(state["tasks"][1]["status"], "completed")
+        self.assertEqual(state["tasks"][1]["attempts"], [attempt_payload])
+        self.assertEqual(state["tasks_completed"], 2)
+
+    def test_null_stamps_are_accepted(self) -> None:
+        self.three_tasks()
+        attempt_payload = {"attempt": 1, "review": None, "devon": None}
+        attempt = self.write_json("a.json", attempt_payload)
+        result = self.run_cli("append-attempt", "2", attempt)
+        self.assertEqual(result.returncode, 0)
+        state = self.load_state()
+        self.assertEqual(state["tasks"][1]["attempts"], [attempt_payload])
+
+    def test_task_done_refuses_an_orchestrator_implementor_outside_the_micro_lane(
+        self,
+    ) -> None:
+        self.three_tasks()
+        bad_red_check = self.write_json(
+            "a.json",
+            {"attempt": 1, "implementor": "orchestrator", "red_check": "expected_red"},
+        )
+        result = self.run_cli("task-done", "2", bad_red_check)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.load_state()["tasks"][1]["status"], "pending")
+
+        self.three_tasks()
+        micro_lane = self.write_json(
+            "a.json",
+            {
+                "attempt": 1,
+                "implementor": "orchestrator",
+                "red_check": "n/a:micro-lane",
+            },
+        )
+        result = self.run_cli("task-done", "2", micro_lane)
+        self.assertEqual(result.returncode, 0)
+
+        self.three_tasks()
+        bad_implementor = self.write_json(
+            "a.json",
+            {"attempt": 1, "implementor": "claude-opus"},
+        )
+        result = self.run_cli("task-done", "2", bad_implementor)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.load_state()["tasks"][1]["status"], "pending")
+
 
 if __name__ == "__main__":
     unittest.main()
