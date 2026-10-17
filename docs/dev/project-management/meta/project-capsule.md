@@ -58,7 +58,7 @@ Generated: 2026-10-17 (catchup at HEAD a2858cb4, 00332 closed, entering 00333; 0
 - [x] 00332-wait-for-a-lane-in-one-call-v1 (1 cycle, fast-track)
 - [x] 00333-sweep-only-findings-two-reviewers-raised-v1 (1 cycle, full lane: uncardable)
 - [x] 00334-keep-the-test-only-skip-when-a-test-registers-itself-v1 (1 cycle, fast-track)
-- [ ] 00335-tell-tess-what-devon-will-try-v1
+- [x] 00335-tell-tess-what-devon-will-try-v1 (1 cycle, solo lane: prose-only)
 
 Observations: 00320's review cap-out deferred two severe findings into fresh
 hold stubs (00328, 00329) rather than rework tasks; `dev/bin/release` is

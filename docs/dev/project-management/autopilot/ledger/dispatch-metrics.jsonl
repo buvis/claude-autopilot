@@ -5163,3 +5163,4 @@
 {"kind":"handoff","site":"build","edge":"leave","at":1792251756,"phase":"done","prd":"00334-keep-the-test-only-skip-when-a-test-registers-itself-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1792251821,"phase":"done","prd":"00334-keep-the-test-only-skip-when-a-test-registers-itself-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1792251896,"phase":"build","prd":"00335-tell-tess-what-devon-will-try-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792251912,"phase":"build","prd":"00335-tell-tess-what-devon-will-try-v1.md"}
