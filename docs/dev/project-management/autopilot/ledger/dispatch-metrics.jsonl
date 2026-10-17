@@ -4934,3 +4934,11 @@
 {"id":"7ebd7ad2","ended_at":1792219032,"elapsed_s":588,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"review","edge":"leave","at":1792219074,"phase":"review","prd":"00324-guard-pairs-delimiters-as-nested-runs-v1.md"}
 {"kind":"handoff","site":"review","edge":"leave","at":1792221112,"phase":"review","prd":"00324-guard-pairs-delimiters-as-nested-runs-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1792223115,"phase":"review","prd":"00324-guard-pairs-delimiters-as-nested-runs-v1.md"}
+{"id":"acef204b","kind":"bob","task":"review-20261017a","queued_at":1792223736,"prompt_bytes":28089}
+{"id":"6d56fcd7","kind":"carl","task":"review-20261017a","queued_at":1792223736,"prompt_bytes":21225}
+{"id":"cdbaf18b","kind":"bob","task":"review-20261017a","queued_at":1792223893,"prompt_bytes":162222}
+{"id":"acef204b","ended_at":1792224269,"elapsed_s":533,"outcome":"error","detail":"lack-of-input"}
+{"id":"cdbaf18b","ended_at":1792224269,"elapsed_s":376,"outcome":"ok","detail":"retry"}
+{"id":"6d56fcd7","ended_at":1792224269,"elapsed_s":533,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"review","edge":"leave","at":1792224835,"phase":"done","prd":"00324-guard-pairs-delimiters-as-nested-runs-v1.md"}

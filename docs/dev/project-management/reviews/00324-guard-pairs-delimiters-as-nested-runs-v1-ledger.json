@@ -11,9 +11,9 @@
     "cycle": 1,
     "disposition": "settled-deferral",
     "severity": "low",
-    "issue": "`·` is not added to `_CITE_SENTENCE_BOUNDARY`, although the PRD Solution and Problem sections name it. The task contract and design deliberately drop it, so this is a recorded deviation and not a defect.",
+    "issue": "`\u00b7` is not added to `_CITE_SENTENCE_BOUNDARY`, although the PRD Solution and Problem sections name it. The task contract and design deliberately drop it, so this is a recorded deviation and not a defect.",
     "file": "hooks/guard_phase_delegation_lexicon.py:230",
-    "reason": "Decided at the design gate (design doc Review log, dispatch-1 non-blocker): no required payload exercises `·`, so adding an untested terminator is scope creep. Standing decision for this PRD."
+    "reason": "Decided at the design gate (design doc Review log, dispatch-1 non-blocker): no required payload exercises `\u00b7`, so adding an untested terminator is scope creep. Standing decision for this PRD."
   },
   {
     "cycle": 1,
@@ -70,5 +70,21 @@
     "issue": "The diff carries unrelated formatter reflow that no task asked for. Examples: slice-spacing style, the exploded `_strongly_anchored`/`_weakly_anchored` signatures, `main()` print calls, and removal of re-exported imports.",
     "file": "hooks/guard_phase_delegation.py:148",
     "reason": "The repo's auto-format-on-edit tooling (loupe's PostToolUse hook, ruff format + ruff --fix) reformats the WHOLE file to its enforced style on every Edit, not only the touched lines - confirmed this cycle: a manual revert of the slice spacing, the exploded signatures and the print-call wrapping was silently undone by the same hook within the same turn, and the unused `_AGOGE_PREFIX` import this cycle's own diff still carried was auto-stripped the same way. There is no way to keep a non-canonical formatting of a line this tool touches; the only durable fix is a loupe/ruff config change (out of scope for this PRD), not a hand-edit that the next save erases. The style itself is the repo's own enforced canonical form, so it is not reverted."
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "The context's gate line reads \"7087 passed, 5 failed\", while the review-1 file reported 7077 passed and 0 failed. I could not tell which five tests failed without a 25-minute full run. The seven guard test files, including the linearity budget, pass here: 732 passed. Confirm the five failures are outside this diff.",
+    "file": null,
+    "reason": "contradicts measured facts: dev/bin/release-checks was re-run twice at this same HEAD (0ef4eb05) and exited 0 both times with 0 failed, and the hooks/ suite is 974 passed, 0 failed. The staged run's five failures did not reproduce."
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "high",
+    "issue": "`\u00b7` (middle dot) is not a sentence end in `_CITE_SENTENCE_BOUNDARY`. The spec says `\u3002`, `\u00b7`, `\uff01` and `\uff1f` join it, but the pattern only has `[\u3002\uff01\uff1f]`.",
+    "file": "hooks/guard_phase_delegation_lexicon.py:233",
+    "reason": "Settled in cycle 1 (R13): the design doc states 'Do NOT add `\u00b7` \u2014 no required payload needs it', and the task contract deliberately drops it. Re-raised blind at a higher severity, same substance, same decision."
   }
 ]

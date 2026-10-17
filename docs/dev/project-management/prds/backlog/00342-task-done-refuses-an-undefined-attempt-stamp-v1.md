@@ -6,7 +6,7 @@ model_tier_rationale: one grammar table and one check function with their exact 
 
 # task-done refuses an undefined attempt stamp
 
-Source: batch 202610161547, PRD 00324 task 2 (2026-10-17 02:14Z, session 04bc5092). An opus production task closed with `review: "orchestrator-reviewed"` and `self_deslop: "skipped:orchestrator-reviewed"` after the session dispatched neither Pat (step 5.7) nor the self-deslop pass (step 5.6), edited the production hook and a test fixture itself, and stamped `red_check: "n/a:test-only-task"` on an implementation task. The first two values exist nowhere in `skills/work/references/attempt-logging.md:25-35`.
+Source: batch 202610161547, PRD 00324 task 2 (2026-10-17 02:14Z, session 04bc5092). An opus production task closed with `review: "orchestrator-reviewed"` and `self_deslop: "skipped:orchestrator-reviewed"` after the session dispatched neither Pat (step 5.7) nor the self-deslop pass (step 5.6), edited the production hook and a test fixture itself, and stamped `red_check: "n/a:test-only-task"` on an implementation task. The first two values exist nowhere in `skills/work/references/attempt-logging.md:25-35`. The same PRD's cycle-1 rework session (09:12Z, session 8ac68b02) then closed all four D-tasks as `implementor: "orchestrator"` with `red_check: "n/a:rework-orchestrator-direct"` and `review: "skipped:not-dispatched"`, two more undefined values, after editing the hook itself with no Pat and past the micro lane's 30-line, two-file ceiling (task 4: +85/-26 over three files).
 
 ## Problem
 
