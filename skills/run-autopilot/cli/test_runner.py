@@ -24,6 +24,7 @@ from cli.runner import (
     DEFAULT_PROMPT,
     HOST_MARKERS,
     LAUNCH_ENV,
+    LOOP_SUFFIX,
     build_argv,
     child_env,
     idle_secs_for,
@@ -224,6 +225,7 @@ def test_prompt_names_the_brief_when_present(tmp_path):
     assert argv[-1] == (
         "/autopilot:run-autopilot Read docs/dev/project-management/autopilot/session-brief.md first."
         + CLI_SUFFIX
+        + LOOP_SUFFIX
     )
     assert argv[:-1] == build_argv(
         "m", "low", "claude-sonnet-5[1m]", mcp_config=mcp_config_for({})
@@ -233,7 +235,7 @@ def test_prompt_names_the_brief_when_present(tmp_path):
 def test_prompt_without_a_brief_still_names_the_cli(tmp_path):
     ap = _ap_dir(tmp_path)
     argv = _launch_argv(tmp_path, ap)
-    assert argv[-1] == "/autopilot:run-autopilot" + CLI_SUFFIX
+    assert argv[-1] == "/autopilot:run-autopilot" + CLI_SUFFIX + LOOP_SUFFIX
     assert argv[:-1] == build_argv(
         "m", "low", "claude-sonnet-5[1m]", mcp_config=mcp_config_for({})
     )[1:-1]
@@ -242,7 +244,7 @@ def test_prompt_without_a_brief_still_names_the_cli(tmp_path):
 def test_a_brief_that_is_a_directory_does_not_count(tmp_path):
     ap = _ap_dir(tmp_path)
     (ap / "session-brief.md").mkdir()
-    assert prompt_for(ap) == "/autopilot:run-autopilot" + CLI_SUFFIX
+    assert prompt_for(ap) == "/autopilot:run-autopilot" + CLI_SUFFIX + LOOP_SUFFIX
 
 
 def test_prompt_names_the_cli_entry_point(tmp_path):
@@ -268,6 +270,7 @@ def test_launch_prompt_forbids_blocked_coreutils(tmp_path):
         " Never call `cat`, `head`, `tail`, `grep` or `find` (a hook blocks them):"
         " use Read, `rg`, and `jq <file>`."
     )
+    loop_sentence = LOOP_SUFFIX
     ap = _ap_dir(tmp_path)
     bare = prompt_for(ap)
     (ap / "session-brief.md").write_text("# Session brief\n")
@@ -276,8 +279,8 @@ def test_launch_prompt_forbids_blocked_coreutils(tmp_path):
     assert bare != briefed
     # Exact equality: nothing may precede the CLI sentence (e.g. text that
     # tells the agent to ignore the coreutils rule) and still pass.
-    assert bare == DEFAULT_PROMPT + cli_sentence + rule
-    assert briefed == DEFAULT_PROMPT + BRIEF_SUFFIX + cli_sentence + rule
+    assert bare == DEFAULT_PROMPT + cli_sentence + rule + loop_sentence
+    assert briefed == DEFAULT_PROMPT + BRIEF_SUFFIX + cli_sentence + rule + loop_sentence
     assert "Never call `cat`, `head`, `tail`, `grep` or `find`" in bare
 
 
@@ -291,6 +294,18 @@ def test_prompt_omits_the_brief_sentence_without_a_state_file(tmp_path):
     assert BRIEF_SUFFIX not in prompt_for(ap)
     (ap / "state.json").write_text("{}\n")
     assert BRIEF_SUFFIX in prompt_for(ap)
+
+
+def test_launch_prompt_says_the_session_is_the_loop(tmp_path):
+    # PRD 00340: a memory or rule telling a human-started session "a loop
+    # is running, stop/ask/do not edit" reads the same when the loop's own
+    # session is the one reading it. The launch prompt must say the session
+    # IS the loop, so it does not stand down on itself.
+    assert isinstance(LOOP_SUFFIX, str)
+    assert LOOP_SUFFIX != ""
+    assert "loop" in LOOP_SUFFIX.lower()
+    ap = _ap_dir(tmp_path)
+    assert prompt_for(ap) == "/autopilot:run-autopilot" + CLI_SUFFIX + LOOP_SUFFIX
 
 
 def test_warn_window_defaults_to_fifteen_minutes():
