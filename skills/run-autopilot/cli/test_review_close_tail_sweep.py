@@ -17,6 +17,7 @@ import pytest
 from cli import review_close
 from cli.test_review_close import (
     CRIT,
+    HIGH,
     LOW,
     MED,
     TAIL_MED,
@@ -239,6 +240,61 @@ def test_decision_gate_refuses_a_single_voice_fix_row(tmp_path: Path) -> None:
     assert not Path(f"{state_path}.lock").exists()
 
 
+# The decision-gate single-voice guard targets only `fix` rows at Medium/Low
+# with fewer than two found_by entries - a row outside that exact shape must
+# not be caught by a looser condition (dropping the severity or classification
+# check would still pass the suite above alone, since every `_finding()` row
+# defaults to two finders).
+MULTI_VOICE_FIX_ROW = dict(
+    _finding(MED, "src/multi.py:5", "two reviewers flagged this", "fix"),
+    ref="R10",
+)
+SINGLE_VOICE_HIGH_FIX_ROW = dict(
+    _finding(HIGH, "src/high.py:5", "one reviewer flagged this", "fix"),
+    ref="R11",
+    found_by=["CARL"],
+)
+SINGLE_VOICE_DISCARD_ROW = dict(
+    _finding(MED, "src/discard.py:5", "one reviewer flagged this", "discard"),
+    ref="R12",
+    found_by=["CARL"],
+)
+NO_FOUND_BY_FIX_ROW = dict(
+    _finding(MED, "src/none.py:5", "no found_by key at all", "fix"),
+    ref="R13",
+    found_by=None,
+)
+
+
+@pytest.mark.parametrize(
+    ("row", "expect_refused"),
+    [
+        (MULTI_VOICE_FIX_ROW, False),
+        (SINGLE_VOICE_HIGH_FIX_ROW, False),
+        (SINGLE_VOICE_DISCARD_ROW, False),
+        (NO_FOUND_BY_FIX_ROW, True),
+    ],
+    ids=["multi-voice-fix", "single-voice-high-fix", "single-voice-discard", "no-found-by-key"],
+)
+def test_decision_gate_single_voice_guard_targets_only_medium_low_fix_rows(
+    tmp_path: Path, row: dict, expect_refused: bool
+) -> None:
+    """A multi-voice `fix` row, a single-voice `fix` row above Medium/Low, a
+    single-voice non-`fix` row, and a row with no `found_by` key at all each
+    exercise one condition of the guard on its own."""
+    rows = [row]
+    review = _review(tmp_path, consolidated=_table(rows))
+    state_path = _state(tmp_path)
+
+    result = review_close.close(review, state_path, "decision-gate", rows)
+
+    if expect_refused:
+        assert result["applied"] is False
+        assert result["refused"] == "single_voice_fix"
+    else:
+        assert result["applied"] is True
+
+
 def test_tail_sweep_refuses_a_single_voice_row(tmp_path: Path) -> None:
     """The same single-voice ban applies to a tail sweep: a row fewer than two
     reviewers raised is refused there too, while a batch holding only
@@ -322,12 +378,26 @@ CARRY_DUP_STATE = dict(MATCHED_CARRY_STATE, deferred_decisions=[CRIT_DEFERRAL])
         ([CRIT_ROW], False, CRIT_DUP_STATE, "tail_sweep_before_decision_gate"),
         ([CRIT_ROW], True, CRIT_DUP_STATE, "tail_sweep_above_medium"),
         ([CARRY_ROW, CRIT_ROW], True, CARRY_DUP_STATE, "carry_in_tail_sweep"),
+        (
+            [dict(CRIT_ROW, found_by=["CARL"])],
+            True,
+            {},
+            "tail_sweep_above_medium",
+        ),
+        (
+            [dict(TAIL_MED, found_by=["CARL"])],
+            True,
+            {"deferred_decisions": [OPEN_DEFERRAL]},
+            "tail_sweep_single_voice",
+        ),
     ],
     ids=[
         "empty-and-before-gate",
         "above-medium-and-before-gate",
         "above-medium-and-duplicate-deferral",
         "carry-and-above-medium",
+        "above-medium-and-single-voice",
+        "single-voice-and-duplicate-deferral",
     ],
 )
 def test_a_tail_sweep_tripping_two_refusals_reports_the_earlier_kind(
@@ -365,6 +435,12 @@ def test_a_tail_sweep_tripping_two_refusals_reports_the_earlier_kind(
         ("carry_in_tail_sweep", [TAIL_MED, CARRY_ROW], True, MATCHED_CARRY_STATE),
         ("tail_sweep_before_decision_gate", [TAIL_MED], False, {}),
         ("tail_sweep_empty", [], True, {}),
+        (
+            "tail_sweep_single_voice",
+            [dict(TAIL_MED, found_by=["CARL"])],
+            True,
+            {},
+        ),
         (
             "tail_sweep_above_medium",
             [dict(_finding(CRIT, "src/a.py:3", "crash on empty input"), ref="R1")],
