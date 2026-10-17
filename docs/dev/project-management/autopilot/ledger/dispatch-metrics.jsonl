@@ -5033,3 +5033,5 @@
 {"id":"0b9a4f6d","ended_at":1792236965,"elapsed_s":196,"outcome":"ok","detail":null}
 {"id":"1d011689","kind":"fast-track:ivan","task":"00327-release-gate-and-notes-say-what-ships-v2-c1","queued_at":1792237010,"prompt_bytes":25713}
 {"id":"1d011689","ended_at":1792237057,"elapsed_s":47,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"build","edge":"resume","at":1792237479,"phase":"build","prd":"00330-hand-the-tail-sweep-to-a-task-tier-session-v1.md"}
+{"kind":"handoff","site":"build","edge":"leave","at":1792238024,"phase":"review","prd":"00330-hand-the-tail-sweep-to-a-task-tier-session-v1.md"}
