@@ -4882,3 +4882,31 @@
 {"kind":"handoff","site":"review","edge":"leave","at":1792195157,"phase":"done","prd":"00322-kill-the-gate-on-every-signal-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1792195202,"phase":"done","prd":"00322-kill-the-gate-on-every-signal-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1792195393,"phase":"build","prd":"00322-kill-the-gate-on-every-signal-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792195431,"phase":"build","prd":"00323-tests-line-and-verify-record-say-red-v1.md"}
+{"id":"5185a558","kind":"fast-track:tess","task":"00323-tests-line-and-verify-record-say-red-v1-c1","queued_at":1792195545,"prompt_bytes":367161}
+{"id":"5185a558","ended_at":1792195911,"elapsed_s":366,"outcome":"ok","detail":null}
+{"id":"7d7b842a","kind":"fast-track:ivan","task":"00323-tests-line-and-verify-record-say-red-v1-c1","queued_at":1792195971,"prompt_bytes":100519}
+{"id":"7d7b842a","ended_at":1792196447,"elapsed_s":476,"outcome":"ok","detail":null}
+{"id":"f1ae729a","kind":"fast-track:fanout","task":"00323-tests-line-and-verify-record-say-red-v1-c1","queued_at":1792196697,"prompt_bytes":6257}
+{"id":"71a5cc02","kind":"fast-track:blake","task":"00323-tests-line-and-verify-record-say-red-v1-c1","queued_at":1792196700,"prompt_bytes":11248}
+{"id":"f3e8e996","kind":"fast-track:eve","task":"00323-tests-line-and-verify-record-say-red-v1-c1","queued_at":1792196703,"prompt_bytes":4627}
+{"id":"f0f0fdef","kind":"fast-track:bob","task":"00323-tests-line-and-verify-record-say-red-v1-c1","queued_at":1792196706,"prompt_bytes":9444}
+{"id":"e0c66c25","kind":"fast-track:carl","task":"00323-tests-line-and-verify-record-say-red-v1-c1","queued_at":1792196710,"prompt_bytes":6613}
+{"id":"f1ae729a","ended_at":1792197673,"elapsed_s":976,"outcome":"error","detail":"Workflow refused scriptPath"}
+{"id":"645bb531","kind":"fast-track:alice","task":"00323-tests-line-and-verify-record-say-red-v1-c1","queued_at":1792197676,"prompt_bytes":6257}
+{"id":"71a5cc02","ended_at":1792197991,"elapsed_s":1291,"outcome":"ok","detail":null}
+{"id":"f3e8e996","ended_at":1792197994,"elapsed_s":1291,"outcome":"ok","detail":null}
+{"id":"645bb531","ended_at":1792197997,"elapsed_s":321,"outcome":"ok","detail":null}
+{"id":"f0f0fdef","ended_at":1792198008,"elapsed_s":1302,"outcome":"error","detail":"codex sandbox hook blocked cat reads, no usable review"}
+{"id":"e0c66c25","ended_at":1792198011,"elapsed_s":1301,"outcome":"ok","detail":null}
+{"id":"37092458","kind":"fast-track:bob","task":"00323-tests-line-and-verify-record-say-red-v1-c1","queued_at":1792198014,"prompt_bytes":9444}
+{"id":"37092458","ended_at":1792198088,"elapsed_s":74,"outcome":"error","detail":"retry also blocked by codex sandbox gateguard hook, no usable review"}
+{"id":"454713c5","kind":"fast-track:victor","task":"00323-tests-line-and-verify-record-say-red-v1-c1","queued_at":1792198173,"prompt_bytes":2109}
+{"id":"9a41cfd9","kind":"fast-track:victor","task":"00323-tests-line-and-verify-record-say-red-v1-c1","queued_at":1792198176,"prompt_bytes":2147}
+{"id":"454713c5","ended_at":1792198241,"elapsed_s":68,"outcome":"ok","detail":null}
+{"id":"9a41cfd9","ended_at":1792198241,"elapsed_s":65,"outcome":"ok","detail":null}
+{"id":"3d32d327","kind":"fast-track:ivan","task":"00323-tests-line-and-verify-record-say-red-v1-c1","queued_at":1792198267,"prompt_bytes":6823}
+{"id":"3d32d327","ended_at":1792198444,"elapsed_s":177,"outcome":"ok","detail":null}
+{"id":"e02d75c7","kind":"fast-track:delta","task":"00323-tests-line-and-verify-record-say-red-v1-c1","queued_at":1792198551,"prompt_bytes":4851}
+{"id":"e02d75c7","ended_at":1792198932,"elapsed_s":381,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"build","edge":"leave","at":1792199442,"phase":"done","prd":"00323-tests-line-and-verify-record-say-red-v1.md"}
