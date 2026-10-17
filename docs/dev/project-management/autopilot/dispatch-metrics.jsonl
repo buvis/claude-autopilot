@@ -4981,3 +4981,5 @@
 {"id":"e9a29a4e","ended_at":1792229893,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"id":"fa09de10","ended_at":1792229893,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
 {"kind":"handoff","site":"build","edge":"leave","at":1792229893,"phase":"build","prd":"00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792229910,"phase":"build","prd":"00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"}
+{"kind":"handoff","site":"build","edge":"leave","at":1792231652,"phase":"review","prd":"00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"}
