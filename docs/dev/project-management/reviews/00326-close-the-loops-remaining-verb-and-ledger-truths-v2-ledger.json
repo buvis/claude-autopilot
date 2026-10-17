@@ -78,5 +78,45 @@
     "issue": "`cli/__main__.py` and `scripts/tracon/test_discovery.py` already exceed the 800-line limit. Splitting these existing modules is outside this PRD's seven targeted fixes.",
     "file": "skills/run-autopilot/cli/__main__.py:2023",
     "reason": "Bob's own KNOWN bucket agrees it is out of scope; same deferral as the 800-line row above"
+  },
+  {
+    "cycle": 2,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`get` parsing goes beyond the spec: it rejects a repeated `--default` through `_RejectRepeatedDefault`, and it rejects an extra positional. This is a small, defensible extra. A `--default` value that starts with `-` and is not a number, such as `--default -x`, is read by argparse as an option and gives a usage error.",
+    "file": "skills/run-autopilot/scripts/statectl.py:139",
+    "reason": "the reviewer's own words call it a small, defensible extra; stricter than the PRD is not a defect and the PRD's requirement (exit 1 with usage) holds"
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "[MECH] 6 touched test(s) pass against the pre-change code: test_a_future_started_value_is_refused_naming_it, test_started_exactly_24_hours_before_ts_end_is_accepted, test_started_one_second_past_the_24_hour_boundary_is_refused, test_started_omitted_and_started_file_missing_exits_two, test_started_omitted_and_started_file_malformed_exits_two, test_an_out_of_bound_value_read_from_the_started_file_is_refused",
+    "file": "skills/fast-track/scripts/test_record_item_started_bounds.py",
+    "reason": "the only record_item.py implementation change in this incremental range (base 61029a3e) is the UnicodeDecodeError catch; these six tests pin bound behavior shipped before the base, so passing against it is expected"
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "[MECH] 1 touched test(s) pass against the pre-change code: test_review_once_with_no_prd_in_state_falls_back_to_the_decisions_prd",
+    "file": "skills/run-autopilot/cli/test_loop_metrics.py",
+    "reason": "pure test addition; no implementation changed for the launched_prd fallback in this range, so the test pins already-shipped behavior"
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "[MECH] 3 touched test(s) pass against the pre-change code: test_check_reports_absent_as_false, test_check_reports_present_as_true, test_clear_still_walks_unbounded_when_git_reports_not_a_repository",
+    "file": "skills/run-autopilot/cli/test_markers.py",
+    "reason": "two are pre-existing marker tests already ledgered in cycle 1; the not-a-repository test pins behavior present before this base"
+  },
+  {
+    "cycle": 2,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "[MECH] 1 touched test(s) pass against the pre-change code: test_c1_and_line_separator_names_are_not_selectable",
+    "file": "skills/run-autopilot/cli/test_selection.py",
+    "reason": "selection.py is not touched in this incremental range; the test pins truth 1 as shipped in task 2, before the base"
   }
 ]
