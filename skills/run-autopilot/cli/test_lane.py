@@ -347,6 +347,34 @@ def test_security_triggered_is_quiet_on_a_docs_diff() -> None:
     assert not lane.security_triggered("", [])
 
 
+def test_security_triggered_ignores_a_securityish_word_under_a_doc_header() -> None:
+    diff = (
+        "--- a/skills/run-autopilot/references/phase-review.md\n"
+        "+++ b/skills/run-autopilot/references/phase-review.md\n"
+        "@@ -1 +1 @@\n"
+        "-the review session runs the sweep\n"
+        "+the review session hands off\n"
+    )
+    changed_files = ["skills/run-autopilot/references/phase-review.md"]
+    assert not lane.security_triggered(diff, changed_files)
+
+
+def test_security_triggered_still_fires_on_a_code_hunk_after_a_doc_hunk() -> None:
+    diff = (
+        "--- a/skills/run-autopilot/references/phase-review.md\n"
+        "+++ b/skills/run-autopilot/references/phase-review.md\n"
+        "@@ -1 +1 @@\n"
+        "-the review session runs the sweep\n"
+        "+the review session hands off\n"
+        "--- a/cli/x.py\n"
+        "+++ b/cli/x.py\n"
+        "@@ -1 +1 @@\n"
+        "+token = read()\n"
+    )
+    changed_files = ["skills/run-autopilot/references/phase-review.md", "cli/x.py"]
+    assert lane.security_triggered(diff, changed_files)
+
+
 def test_security_regex_is_the_fanout_regex() -> None:
     # The JS source, ported verbatim: the same alternation, plural suffix and
     # open-ended auth stems.
