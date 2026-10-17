@@ -491,3 +491,36 @@ def test_the_fast_track_lane_whole_directory_target_is_a_gated_target() -> None:
     every test file under it counts as gated by directory, not by path."""
     text = _RELEASE_CHECKS.read_text()
     assert _dir_is_bare_target("skills/fast-track/scripts", text)
+
+
+def test_release_refuses_on_an_open_critical_triage_stub_with_no_blocking_phrase(
+    tmp_path: Path,
+) -> None:
+    """A triage stub mints with `severity: critical` frontmatter and never
+    the literal phrase "release is blocked" (00327: `dev/bin/release`'s
+    block check matches only that phrase). An open CRITICAL triage stub
+    under hold/ or wip/ must still refuse the release, the same way a PRD
+    that spells out the blocking phrase does."""
+    fixture_root, release_copy = _fixture_repo(tmp_path)
+
+    plugins_dir = tmp_path / "claude-plugins" / "scripts"
+    plugins_dir.mkdir(parents=True)
+    sentinel = tmp_path / "release-plugin-ran"
+    stub = plugins_dir / "release-plugin"
+    stub.write_text(f"#!/usr/bin/env bash\ntouch {sentinel}\n", encoding="utf-8")
+    stub.chmod(0o755)
+    subprocess.run(["git", "init", "-q", str(tmp_path / "claude-plugins")], check=True)
+
+    hold_dir = fixture_root / "docs" / "dev" / "project-management" / "prds" / "hold"
+    hold_dir.mkdir(parents=True)
+    stub_prd = hold_dir / "00307-triage-something-v1.md"
+    stub_prd.write_text(
+        "---\nseverity: critical\n---\n\n# Triage: something\n\nAn open finding.\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run([str(release_copy)], capture_output=True, text=True, check=False)
+
+    assert result.returncode == 1, (result.stdout, result.stderr)
+    assert not sentinel.exists()
+    assert str(stub_prd) in result.stderr, result.stderr
