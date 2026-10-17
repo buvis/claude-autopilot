@@ -1098,8 +1098,17 @@ def test_directory_segments_and_basename_patterns_are_test_paths(path: str) -> N
     assert work_routing.is_test_path(path) is True
 
 
-def test_release_checks_registration_is_a_test_path() -> None:
-    assert work_routing.is_test_path("dev/bin/release-checks") is True
+def test_a_release_checks_registration_counts_as_test_code_in_test_only_diff() -> None:
+    assert (
+        work_routing.test_only_diff(
+            ["skills/run-autopilot/cli/test_x.py", "dev/bin/release-checks"],
+        )
+        is True
+    )
+
+
+def test_a_release_checks_only_diff_is_not_test_only() -> None:
+    assert work_routing.test_only_diff(["dev/bin/release-checks"]) is False
 
 
 @pytest.mark.parametrize(

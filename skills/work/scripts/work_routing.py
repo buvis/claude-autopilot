@@ -99,6 +99,8 @@ _TEST_BASENAME_GLOBS = (
     *(f"*.spec.{ext}" for ext in _JS_TEST_EXTENSIONS),
 )
 
+_TEST_INFRA_PATHS = frozenset({"dev/bin/release-checks"})
+
 
 def _tier(task: dict) -> str:
     """The task's model tier. A legacy plan (no `model`, or `model: None`) is sonnet."""
@@ -106,7 +108,12 @@ def _tier(task: dict) -> str:
 
 
 def route(
-    task: dict, env: dict, state: dict, probes: dict, *, file_paths: str | None = None
+    task: dict,
+    env: dict,
+    state: dict,
+    probes: dict,
+    *,
+    file_paths: str | None = None,
 ) -> dict:
     """Pick the implementor for one claimed task."""
     tier = _tier(task)
@@ -241,14 +248,18 @@ def is_test_path(path: str) -> bool:
     segments = path.split("/")
     if any(segment in _TEST_DIR_SEGMENTS for segment in segments[:-1]):
         return True
-    if path == "dev/bin/release-checks":
-        return True
     return any(fnmatchcase(segments[-1], glob) for glob in _TEST_BASENAME_GLOBS)
 
 
 def test_only_diff(paths: list[str]) -> bool:
-    """True when every changed path is test code. An empty diff is never test-only."""
-    return bool(paths) and all(is_test_path(path) for path in paths)
+    """True when every changed path is test code. An empty diff is never test-only.
+
+    `dev/bin/release-checks`'s own registration line counts as test code here,
+    but only alongside a real test file in the same diff — filtering it out
+    must not empty the path list.
+    """
+    remaining = [path for path in paths if path not in _TEST_INFRA_PATHS]
+    return bool(remaining) and all(is_test_path(path) for path in remaining)
 
 
 def test_only_gate(paths: list[str], in_rework: bool) -> dict[str, str]:

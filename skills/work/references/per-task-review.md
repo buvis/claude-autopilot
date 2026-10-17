@@ -17,9 +17,10 @@ Before anything below, SKILL.md step 5.7 applies `test_only_gate` (from
 `git diff --name-only <task_base_sha>..HEAD`. When every changed path is test or
 fixture code and the task is **not** in rework mode, the whole step is skipped:
 no render, no dispatch, `review: "skipped:test-only"` on the attempt record and
-in the phase report. Every tier takes the skip, `fable` included. A test
-file's own registration in `dev/bin/release-checks`'s `[checks]` block counts as test code here too, so a tests-first task's diff of one test file plus its
-registration line still takes the skip.
+in the phase report. Every tier takes the skip, `fable` included.
+`dev/bin/release-checks`'s own registration line counts as test code here
+too, but only alongside a real test file in the same diff — a diff touching
+`dev/bin/release-checks` alone is never test-only.
 
 A rework task keeps its reviewer even on a test-only diff — its CLOSURE verdicts
 are what end the review cycle, so skipping him would leave nothing to close on.
