@@ -175,6 +175,14 @@ def test_gates_drop_the_release_script_loud(capsys) -> None:
     assert caught.value.field == "gates"
 
 
+def test_gates_drop_release_script_variants() -> None:
+    items = (
+        "- [ ] Run `bash ./dev/bin/release` and `bash -x dev/bin/release` and "
+        "`uv run --no-project pytest -q y`",
+    )
+    assert cards._gates(items, [], None) == ["uv run --no-project pytest -q y"]
+
+
 def test_release_checks_is_still_a_gate() -> None:
     assert cards._gates(("- [ ] Run `bash dev/bin/release-checks`",), [], None) == [
         "bash dev/bin/release-checks"

@@ -186,7 +186,9 @@ def _gates(
                 f"cards_from_prd.py: gates: dropped chained command: {command}",
                 file=sys.stderr,
             )
-        elif command.removeprefix("bash ").split()[0] in _RELEASE_SCRIPTS:
+        elif any(
+            posixpath.normpath(tok) in _RELEASE_SCRIPTS for tok in command.split()
+        ):
             print(
                 f"cards_from_prd.py: gates: dropped release command: {command}",
                 file=sys.stderr,

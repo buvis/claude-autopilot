@@ -228,12 +228,12 @@ entry stays where it is, staged and uncommitted.
 
 Run the card's `## Gates` lines in the order the card lists them, one Bash call
 each. The parser already refused a chained gate line, so each one runs on its
-own. It also drops a command that runs the release script (`dev/bin/release`),
+own. The card renderer (`cards_from_prd.py`) also drops a command that runs the release script (`dev/bin/release`),
 which is a publish action no lane runs unattended; a success criterion that
 names it stays a criterion for the human release step. `suite: per-item`
-points the test gate at this item's test files. The
-repo-wide suite runs once, after the last item, for a card carrying
-`suite: batch`; the Exit section is where that run happens.
+points the test gate at this item's test files. The repo-wide suite runs once,
+after the last item, for a card carrying `suite: batch`; the Exit section is
+where that run happens.
 
 A gate that exits non-zero stops the item with `stopped: gate <n>`, where `<n>`
 is the gate's position in the card's list. No reviewer goes out over a gate the
