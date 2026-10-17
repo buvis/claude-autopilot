@@ -76,7 +76,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
 def _read_started_file(project_root: Path) -> int | None:
     try:
         text = (project_root / STARTED_FILE).read_text(encoding="utf-8")
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         return None
     try:
         return int(text.strip())
