@@ -59,6 +59,7 @@ Generated: 2026-10-17 (catchup at HEAD a2858cb4, 00332 closed, entering 00333; 0
 - [x] 00333-sweep-only-findings-two-reviewers-raised-v1 (1 cycle, full lane: uncardable)
 - [x] 00334-keep-the-test-only-skip-when-a-test-registers-itself-v1 (1 cycle, fast-track)
 - [x] 00335-tell-tess-what-devon-will-try-v1 (1 cycle, solo lane: prose-only)
+- [x] 00340-tell-the-session-it-is-the-loop-v1 (1 cycle, fast-track)
 
 Observations: 00320's review cap-out deferred two severe findings into fresh
 hold stubs (00328, 00329) rather than rework tasks; `dev/bin/release` is
@@ -89,7 +90,11 @@ decision settled per the landed rule, a tail sweep (tasks 4-6) closed the 4
 multi-voice findings (R1-R4). One cycle-1 assumed-ambiguity (the shared
 `_finding()` test default's `found_by` collided with the new single-voice
 refusal; bumped to two entries) deferred for awareness. Full suite green
-(7156 passed, 0 failed, 3 skipped).
+(7156 passed, 0 failed, 3 skipped). 00340 (fast-track, 1 task) converged
+cycle 1: tells the loop's own headless session it is the loop so
+orchestrators stop skipping Ivan/Pat/Devon under `PONYTAIL_DEFAULT_MODE=off`.
+Suite green (7172 passed, 1 pre-existing unrelated flake, 3 skipped). No
+deferred items, no doubts.
 
 ### Batch 202610141430 (complete)
 - [x] 00277-catch-critical-rows-in-every-shape-v2 (2 cycles)
