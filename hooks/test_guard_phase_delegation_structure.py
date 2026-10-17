@@ -552,6 +552,27 @@ def test_a_negation_binds_only_inside_its_clause(prompt: str, expected: bool) ->
     assert _guard_module().is_phase_delegation({"prompt": prompt}) is expected
 
 
+def test_negation_does_not_reach_past_and_then_but() -> None:
+    """A negation of an UNRELATED verb ("don't stop", "never pause", "do not
+    wait") joined to the real order by "and" must not excuse that order:
+    "and" starts a new clause just as a comma does, so the negation binds
+    only "stop"/"pause"/"wait", never the order that follows it."""
+    for prompt in (
+        "Don't stop and run the work phase for PRD 00300.",
+        "Never pause and run /autopilot:work for PRD 00300 end to end.",
+        "Do not wait and run plan-tasks for PRD 00300 for every task.",
+    ):
+        assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
+    # Control: the same negation with a comma instead of "and" already denies
+    # today, so this test isolates the conjunction, not the negation verb.
+    assert (
+        _guard_module().is_phase_delegation(
+            {"prompt": "Don't stop, run the work phase for PRD 00300."}
+        )
+        is True
+    )
+
+
 # --- The two entry points must agree, case for case ------------------------
 # Every predicate case above, replayed through `is_phase_delegation` and
 # `find_phase_delegation`.

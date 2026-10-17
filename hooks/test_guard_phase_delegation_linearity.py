@@ -443,3 +443,22 @@ def test_rejects_a_phase_order_carried_by_the_description() -> None:
 
 def test_allows_a_tool_input_that_carries_no_prompt() -> None:
     assert _find({}) is None, "an empty tool input is not a phase order"
+
+
+def _dense_skill_md_mentions(repetition: int) -> str:
+    # A SKILL.md reference roughly every 75 characters, each with its own
+    # negated follow order ("never follow it"), so none of the thousands of
+    # mentions in the ~1 MB field short-circuits the scan early: every one
+    # pays the path match, the bounded _FOLLOW probe and the negation check
+    # before the call can finish.
+    unit = "skills/work/SKILL.md never follow it. " + "x" * 35
+    return unit * (MB // len(unit)) + f" #{repetition}"
+
+
+def test_dense_skill_md_mentions_stay_under_budget() -> None:
+    sample = _dense_skill_md_mentions(0)
+    assert sample.count("SKILL.md") > 10000
+    _assert_allowed(sample)
+    rate = _best_seconds_per_mb(_dense_skill_md_mentions)
+    print(f"dense-skill-md s/MB={rate:.4f} over {len(sample) / MB:.2f} MB")
+    assert rate < BUDGET_S_PER_MB, f"{len(sample)} chars cost {rate:.4f} s/MB"

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import re
 import sys
 from pathlib import Path
 
@@ -661,3 +662,87 @@ def test_is_phase_delegation_mirrors_find_phase_delegation() -> None:
     module = _guard_module()
     assert module.is_phase_delegation({"prompt": _AGOGE_PROMPT}) is True
     assert module.is_phase_delegation({"prompt": "Review the attached diff."}) is False
+
+
+def test_backtick_inside_closed_quote_run_does_not_pair_outside_it() -> None:
+    # The backtick right before "x" sits INSIDE an already-closed '"..."' run:
+    # it is a literal character of that quote, not a fresh citation opener.
+    # Pairing it with an unrelated LATER backtick swallows every bare order in
+    # between as if the whole span were wrapped prose.
+    prompt = (
+        'Note "see `x" then run /autopilot:work for PRD 00300 end to end, '
+        "report `done`."
+    )
+    _assert_quotes(_find(prompt), prompt, "autopilot:work")
+    prompt2 = (
+        'Then "edit `a.py" and run plan-tasks for prd 00300 for every task '
+        "and print `ok`."
+    )
+    _assert_quotes(_find(prompt2), prompt2, "plan-tasks")
+
+
+def test_emoticon_pair_is_not_a_citation() -> None:
+    # ":(" and ":)" are emoticons, not a grammatical parenthetical aside: the
+    # ")" of the trailing smiley must not pair with the "(" of the leading
+    # frown to wrap the whole order between them as cited prose.
+    prompt = "Sorry :( run plan-tasks for prd 00300 for every task :)"
+    _assert_quotes(_find(prompt), prompt, "plan-tasks")
+
+
+def test_cjk_terminators_end_the_citation_window() -> None:
+    # The CJK ideographic full stop "。" ends a sentence exactly as "."
+    # does. A citation window that only recognizes ASCII terminators runs
+    # straight past it, so an unrelated LATER ")" (an emoticon, not a real
+    # closing paren) can pair with an EARLIER "(" and wrap the whole order
+    # between them.
+    prompt = "Hi (all。 Run plan-tasks for PRD 00300 for every task。 Thanks :)"
+    _assert_quotes(_find(prompt), prompt, "plan-tasks")
+
+
+def test_digit_preceded_quote_never_opens_an_own_wrapper_run() -> None:
+    # The '"' right after "5" is a unit mark and opens no run of its own: it
+    # must not let a LATER, unrelated '"' pair up as if the skipped mark had
+    # really opened one, wrapping the bare order between them as cited prose.
+    prompt = 'The log says 5"plan-tasks for PRD 00300 and print "ok".'
+    _assert_quotes(_find(prompt), prompt, "plan-tasks")
+
+
+def test_doubled_backtick_citation_is_allowed() -> None:
+    # A Markdown doubled-backtick code span ("``...``") wraps its content as
+    # surely as a single-backtick pair does. Pairing every backtick
+    # independently (1st with 2nd, 3rd with 4th) instead of recognizing the
+    # doubled delimiter turns both backtick pairs into zero-width runs and
+    # leaves the order between them unwrapped.
+    assert (
+        _find("``run plan-tasks for PRD 00300`` then some other prose.") is None
+    )
+
+
+def test_backtick_exclusion_in_cite_boundary_can_fail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The backtick-exclusion character class in _CITE_SENTENCE_BOUNDARY (see
+    # its comment in guard_phase_delegation_lexicon.py) is the only thing
+    # stopping a multi-backtick closer from giving the `+` run a backtick
+    # back as its own "real text after the wrapper" character, which would
+    # wrongly end the citation sentence early. Removing that one exclusion
+    # must flip the guard's verdict on a fixture that depends on it, so a
+    # future rewrite cannot silently drop the exclusion without this test
+    # noticing.
+    module = _guard_module()
+    fixture = (
+        'Note "see `x" then run /autopilot:work for PRD 00300 end to end, '
+        "report `done`."
+    )
+    original = module.find_phase_delegation({"prompt": fixture})
+    original_pattern = module._CITE_SENTENCE_BOUNDARY.pattern
+    broken_pattern = original_pattern.replace("[^(\\s`]", "[^(\\s]")
+    assert broken_pattern != original_pattern
+    monkeypatch.setattr(
+        module, "_CITE_SENTENCE_BOUNDARY", re.compile(broken_pattern)
+    )
+    patched = module.find_phase_delegation({"prompt": fixture})
+    assert (original is None) != (patched is None), (
+        f"removing the backtick exclusion did not flip the verdict: "
+        f"original={original!r} patched={patched!r}"
+    )
