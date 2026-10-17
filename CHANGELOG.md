@@ -18,7 +18,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **run-autopilot**: a loop session's own commits are now stamped with committer `autopilot-loop/<batch.id>`; the `catchup-probe` subcommand records a batch-scoped `gh`/`engram` health check (`state.catchup_probe`) so a full catchup knows which steps to skip before it attempts them, instead of after they fail
 - **run-autopilot**: new `autopilot cap-check --review-file --previous` classifies a loop-mode cap-out's remaining high/critical findings as regressions introduced by the rework range; the cap-overflow deferral path now runs it first and stalls the PRD (`site: cap_regression`) instead of silently deferring a finding the rework itself introduced
 - **release**: `dev/bin/release` now refuses first on a held/in-progress PRD blocking the release, before checking for the central `claude-plugins` repo; the block-phrase match is now case-insensitive
-- **run-autopilot**: a loop session's launch env now sets `PONYTAIL_DEFAULT_MODE=off`, so the operator's ponytail plugin stays quiet in headless sessions instead of thinning the work skill's per-task dispatch and review gates
 
 ### Changed
 
@@ -35,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **run-autopilot**: loop sessions start with the ponytail plugin off, so a headless orchestrator no longer cites it to skip the work skill's implementor, reviewer and adversarial dispatches
 - **run-autopilot**: `task-done`/`append-attempt` now refuse an attempt record carrying an invented word in a stamp field (e.g. `review: "orchestrator-reviewed"`), instead of writing it silently
 - **run-autopilot**: the loop's launch prompt tells each session it was started by the loop driver, so a live-loop rule in memory or notes no longer makes it refuse to work
 - **work**: a tests-first task that registers its file in dev/bin/release-checks keeps the test-only skip of self-deslop and the per-task review

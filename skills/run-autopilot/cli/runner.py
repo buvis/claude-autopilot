@@ -3,6 +3,7 @@
 Ports the wrapper's headless launch pipeline (PRD 00014 semantics):
 
     WARDEN_UNATTENDED=1 CLAUDE_UNATTENDED=1 CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 \
+      PONYTAIL_DEFAULT_MODE=off \
       claude -p --permission-mode auto --model M --effort E \
       [--fallback-model F] --strict-mcp-config --mcp-config <DEFAULT_MCP_CONFIG or _AUTOPILOT_MCP_CONFIG> \
       --output-format stream-json --verbose "/autopilot:run-autopilot" \
@@ -34,10 +35,14 @@ gives `DEFAULT_MCP_CONFIG` (Context7 only), `inherit` drops the
 `--strict-mcp-config --mcp-config` pair entirely (today's unscoped
 launch), and any other value is passed verbatim to `--mcp-config`.
 
-`PONYTAIL_DEFAULT_MODE=off` in `LAUNCH_ENV` keeps the operator's ponytail
-plugin quiet in a headless session: nobody is there to hold ponytail to
-the "never thin a skill-mandated step" rule, so the loop's own sessions
-run without it.
+That new launch-line variable keeps the operator's ponytail plugin quiet
+in a headless session: nobody is there to hold ponytail to the "never
+thin a skill-mandated step" rule, so the loop's own sessions run without
+it. Accepted side effect: the plugin's off branch calls its
+`clearMode()`, clearing the operator's `~/.claude/.ponytail-active`
+statusline flag until their next interactive session starts; the loop's
+sessions never shared that flag on purpose, so nothing else changes for
+them.
 """
 
 from __future__ import annotations

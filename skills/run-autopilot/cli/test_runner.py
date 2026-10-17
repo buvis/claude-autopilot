@@ -435,6 +435,11 @@ def test_launch_env_turns_ponytail_off():
     assert LAUNCH_ENV["PONYTAIL_DEFAULT_MODE"] == "off"
 
 
+def test_child_env_ponytail_off_overrides_an_inherited_value():
+    env, _dropped = child_env({"PONYTAIL_DEFAULT_MODE": "full"})
+    assert env["PONYTAIL_DEFAULT_MODE"] == "off"
+
+
 def test_spawn_scrubs_host_markers(tmp_path, capsys):
     stub = _stub_runner(
         tmp_path,
