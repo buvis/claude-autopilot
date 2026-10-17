@@ -237,6 +237,26 @@ class ReplayBaselineTests(unittest.TestCase):
                 self.assertEqual(current["tag"], expected)
 
 
+# PRD 00325 (this task): the only pass-to-refuse flip outside the replay
+# baseline across 122 real reviews. Line 24 is prose, 'R1's [4/4]' - the
+# token genuinely belongs inside a fence and isn't in one, so HEAD refuses
+# this file by design; the refusal wording itself is pinned in
+# test_gate_findings_unread_shapes.py's test_prose_progress_token_error_names_token.
+# Named here, outside _ACCEPTED_FLIPS (which only tracks the emoji-lead
+# widening's flips), so a future change cannot silently start passing it.
+_PROSE_TOKEN_REVIEW = (
+    _REPO_ROOT
+    / "docs/dev/project-management/reviews/"
+    "00311-verify-reports-what-the-gate-did-v1-review-2.md"
+)
+
+
+class ProseProgressTokenReplayTests(unittest.TestCase):
+    def test_prose_token_review_file_stays_refused(self) -> None:
+        result = _replay_verdict(_PROSE_TOKEN_REVIEW)
+        self.assertEqual(result["tag"], "malformed")
+
+
 class FindingsJsonCoverageProseTests(unittest.TestCase):
     def test_findings_json_covers_every_row_prose(self) -> None:
         for path in (_PHASE_REVIEW, _REVIEW_SKILL):

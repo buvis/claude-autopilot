@@ -626,6 +626,79 @@ def test_the_detail_strips_the_indent_and_cuts_the_quote_at_120_chars() -> None:
     assert "   " not in detail
 
 
+# PRD 00325 (this task): the lead rule today strips only a fixed mark set
+# (_LEAD_MARKS), the ordinal regex, and Unicode Zs/Cf - every one of these 18
+# leads falls outside that set, so the emoji behind it is hidden from the
+# gate. A lead census over the real reviews found none of these leads in the
+# wild, so widening the rule to "any non-alphanumeric lead" flips no baseline
+# row (see test_gate_findings_real_fixtures.py's _ACCEPTED_FLIPS).
+_NON_ALPHANUMERIC_LEADS = {
+    "hyphen bullet": "⁃ ",
+    "bullet operator": "∙ ",
+    "middle dot": "· ",
+    "black circle": "● ",
+    "black small square": "▪ ",
+    "rightwards arrow": "→ ",
+    "letter-paren ordinal": "a) ",
+    "paren-digit ordinal": "(1) ",
+    "checkbox": "- [ ] ",
+    "heading": "### ",
+    "variation selector": "️",
+    "braille pattern blank": "⠀",
+    "hangul filler": "ㅤ",
+    "html comment": "<!-- note -->",
+    "details element": "<details>note</details>",
+    "strikethrough": "~~",
+    "inline code": "`note` ",
+    "link": "[text](url) ",
+}
+
+
+@pytest.mark.parametrize(
+    "name",
+    list(_NON_ALPHANUMERIC_LEADS),
+    ids=list(_NON_ALPHANUMERIC_LEADS),
+)
+def test_an_emoji_row_behind_any_non_alphanumeric_lead_is_a_row(
+    name: str,
+    tmp_path: Path,
+) -> None:
+    """None of these 18 leads is in today's stripped set (fixed marks,
+    ordinals, Zs/Cf), so each one hides a real severity-emoji row from the
+    gate. Widening `_strip_lead` to any non-alphanumeric lead must catch
+    every one of them, named with the emoji wording, not just the handful
+    of marks already covered."""
+    row = f"{_NON_ALPHANUMERIC_LEADS[name]}{CRIT} crash on empty input"
+    _assert_emoji_row_refused(row, tmp_path)
+
+
+def test_a_decorative_emoji_after_a_letter_is_prose() -> None:
+    """The widened rule still stops at the first alphanumeric character: an
+    emoji straight after a letter (no lead at all, just prose that starts
+    with a word) is never read as a row."""
+    from cli import gate
+
+    row = f"x{CRIT} crash on empty input"
+    assert gate._is_emoji_row(row) is False
+
+
+def test_prose_progress_token_error_names_token() -> None:
+    """A line carrying only a `[m/n]` token - no pipe, no table row - gets a
+    refusal that names the token, not the generic "a [m/n] token or table
+    row" wording that sends an operator hunting for a table row that is not
+    there (packet 19: HEAD refuses a real review's prose `R1's [4/4]` with
+    that misleading wording)."""
+    from cli import gate
+
+    row = "R1's [4/4] marker belongs inside a fence"
+    text = _review_text(alice=row)
+    assert gate._is_unread_line(row) is True
+    detail = gate._unread_token(text)
+    assert detail is not None
+    assert "[4/4]" in detail
+    assert "table row" not in detail
+
+
 def test_the_first_unread_line_is_the_one_named_not_the_last() -> None:
     """Two unread lines in one file: the refusal names the earlier one, the one
     the operator reaches first when repairing the file."""
