@@ -1,0 +1,82 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "Backlog PRD 00342 modified with unrequested notes and grammar additions outside PRD 00326 scope",
+    "file": "docs/dev/project-management/prds/backlog/00342-task-done-refuses-an-undefined-attempt-stamp-v1.md:9",
+    "reason": "false positive: `git log 6d7c97f3..HEAD -- <that file>` and the corresponding `git diff` are both empty, so the file is not in this PRD's range at all"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "[MECH] 1 touched test(s) pass against the pre-change code: test_state_schema_cli_rows_match_the_parsers",
+    "file": "skills/run-autopilot/cli/test_doc_contract.py",
+    "reason": "the named test is pre-existing and unchanged by this diff; the replay flags it only because another test in the same file was edited"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "[MECH] 2 touched test(s) pass against the pre-change code: test_check_reports_absent_as_false, test_check_reports_present_as_true",
+    "file": "skills/run-autopilot/cli/test_markers.py",
+    "reason": "both are pre-existing marker tests unchanged by this diff; the three new markers tests do fail against the pre-change code"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "[MECH] 1 touched test(s) pass against the pre-change code: test_newline_named_backlog_file_is_not_selectable",
+    "file": "skills/run-autopilot/cli/test_selection.py",
+    "reason": "pre-existing newline test unchanged by this diff; the new U+0085/U+2028 test is the one that pins truth 1 and it fails against the pre-change code"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "[MECH] 21 touched test(s) pass against the pre-change code: test_severity_is_matched_case_insensitively, test_key_in_first_20_lines_of_any_lifecycle_dir_claims_ownership, test_key_past_line_20_does_not_claim +15 more",
+    "file": "skills/run-autopilot/cli/test_triage.py",
+    "reason": "pre-existing triage tests unchanged by this diff; only test_fixed_in_rework_critical_rows_do_not_mint is new and it pins the new rule"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "[MECH] 14 touched test(s) pass against the pre-change code: test_exact_slack_boundary_is_not_in_flight, test_loop_status_end_to_end_populates_row_cells_from_current_batch, test_missing_registry_returns_home_claude_when_autopilot_dir_present +11 more",
+    "file": "skills/run-autopilot/scripts/tracon/test_discovery.py",
+    "reason": "pre-existing tracon discovery tests unchanged by this diff; only test_wrapper_alive_script_requires_root_arg was tightened and it fails against the pre-change assertion"
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "Unrelated formatter reflow is mixed into the diff (import blocks, `__all__` order, signatures, call sites and asserts rewrapped)",
+    "file": "skills/run-autopilot/cli/loop.py:48",
+    "reason": "the reflow is loupe's end-of-turn formatter pass, not authored churn; the fix is a CLAUDE_UNATTENDED guard in loupe's agent_end.py (a loupe release), and reverting committed reflow here would be re-applied by the same hook on the next turn"
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "skills/run-autopilot/cli/test_routing.py exceeds the 800-line limit at 804 lines",
+    "file": "skills/run-autopilot/cli/test_routing.py:804",
+    "reason": "4 lines over a soft style cap in a test file; splitting it is churn outside this PRD's seven targeted fixes"
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "The diff adds code to files already past the 800-line cap: `__main__.py` is 2030 lines and test_discovery.py is 1703",
+    "file": "skills/run-autopilot/cli/__main__.py:1951",
+    "reason": "both files were over the cap before this diff; splitting them is a separate refactor, recorded for the backlog"
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`cli/__main__.py` and `scripts/tracon/test_discovery.py` already exceed the 800-line limit. Splitting these existing modules is outside this PRD's seven targeted fixes.",
+    "file": "skills/run-autopilot/cli/__main__.py:2023",
+    "reason": "Bob's own KNOWN bucket agrees it is out of scope; same deferral as the 800-line row above"
+  }
+]
