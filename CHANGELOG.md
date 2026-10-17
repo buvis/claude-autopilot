@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **work**: Tess's prompt names the six exploit classes Devon keeps finding, with the assertion that defeats each, and the step-2.8 quality gate checks for them before a Devon round
 - **run-autopilot**: the tail sweep hands off to a session launched on the swept tasks' tier instead of running inside the opus review session
 - **run-autopilot**: the CLI now needs Python 3.11 or newer (it uses datetime.UTC); 3.10 is no longer supported
 - **run-autopilot**: `normalize_command` only collapses whitespace now - it no longer strips a leading `bash `/`sh ` or `./`, so `bash X`, `sh X`, `./X` and `X` each get their own verification record instead of sharing one; a hand-written or pre-upgrade `last-verification.json` (missing the `writer: run_gate` marker) is never reused - `autopilot verify` always reruns the gate for it
