@@ -121,7 +121,7 @@ def _run_get_with_default(state_path: Path, json_path: str, default_raw: str) ->
     try:
         tokens = parse_path(json_path)
     except UsageError as err:
-        print(str(err), file=sys.stderr)
+        print(f"{USAGE}\nstatectl: get: {err}", file=sys.stderr)
         return 1
     try:
         _, data = read_and_parse(state_path)
@@ -136,29 +136,34 @@ def _run_get_with_default(state_path: Path, json_path: str, default_raw: str) ->
     return 0
 
 
+class _RejectRepeatedDefault(argparse.Action):
+    """Reject a second `--default`, instead of argparse's default last-wins."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        if getattr(namespace, self.dest) is not None:
+            parser.error(f"{option_string} specified multiple times")
+        setattr(namespace, self.dest, values)
+
+
 def _parse_get_args(get_argv: list[str]) -> tuple[str, str] | None:
     """Parse `get` argv (path and `--default` in either order).
 
-    Returns (path, default_raw), or None when the path is missing or a
-    trailing `--default` carries no value - either is a usage error.
+    Returns (path, default_raw), or None when the path is missing, an extra
+    positional argument is present, `--default` is repeated, or a trailing
+    `--default` carries no value - each is a usage error.
     """
-    path = None
-    default_raw = None
-    i = 0
-    while i < len(get_argv):
-        token = get_argv[i]
-        if token == "--default":
-            if i + 1 >= len(get_argv):
-                return None
-            default_raw = get_argv[i + 1]
-            i += 2
-            continue
-        if path is None:
-            path = token
-        i += 1
-    if path is None or default_raw is None:
+    parser = argparse.ArgumentParser(
+        prog="statectl.py get", add_help=False, exit_on_error=True
+    )
+    parser.add_argument("path")
+    parser.add_argument("--default", action=_RejectRepeatedDefault)
+    try:
+        args = parser.parse_args(get_argv)
+    except SystemExit:
         return None
-    return path, default_raw
+    if args.default is None:
+        return None
+    return args.path, args.default
 
 
 def _dispatch(argv: list[str]) -> int:
