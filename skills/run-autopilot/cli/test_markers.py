@@ -56,7 +56,8 @@ class MarkersTests(unittest.TestCase):
     def test_check_reports_absent_as_false(self) -> None:
         # A fresh fixture dir: neither marker has ever been written.
         proc = _run(
-            ["markers", "--check", "handoff-requested", "cap-fired"], cwd=self.root
+            ["markers", "--check", "handoff-requested", "cap-fired"],
+            cwd=self.root,
         )
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
@@ -71,7 +72,8 @@ class MarkersTests(unittest.TestCase):
         (self.autopilot_dir / ".cap-fired").write_text("x", encoding="utf-8")
 
         proc = _run(
-            ["markers", "--check", "handoff-requested", "cap-fired"], cwd=self.root
+            ["markers", "--check", "handoff-requested", "cap-fired"],
+            cwd=self.root,
         )
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
@@ -124,6 +126,20 @@ class MarkersTests(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(json.loads(proc.stdout)["cap-fired"], True)
+
+    def test_state_flag_with_nonexistent_parent_exits_nonzero(self) -> None:
+        # A typo'd --state path must not resolve to an empty/missing store
+        # silently (all markers false on --check, a no-op --clear) - it
+        # must fail loud, naming the bogus parent.
+        bogus = self.root / "no-such-dir" / "state.json"
+
+        proc = _run(
+            ["markers", "--check", "cap-fired", "--state", str(bogus)],
+            cwd=self.root,
+        )
+
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn(str(bogus.resolve().parent), proc.stderr)
 
     def test_markers_walk_stops_at_the_git_toplevel(self) -> None:
         # The walk follows the physical cwd through a symlink without ever
@@ -182,7 +198,8 @@ def _store_with_cleared_marker(root: Path) -> tuple[Path, Path]:
 
 
 def test_clear_refuses_when_git_toplevel_lookup_times_out(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # An unrelated autopilot store sits above cwd. A git timeout must not
     # fall back to an unbounded walk that reaches it and clears its marker.
@@ -207,11 +224,14 @@ def test_clear_refuses_when_git_toplevel_lookup_times_out(
         raised = True
 
     assert raised or code != 0
-    assert marker.exists(), "an unrelated store's marker was cleared after a git timeout"
+    assert marker.exists(), (
+        "an unrelated store's marker was cleared after a git timeout"
+    )
 
 
 def test_clear_refuses_when_git_toplevel_lookup_raises_oserror(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _autopilot_dir, marker = _store_with_cleared_marker(tmp_path)
     cwd = tmp_path / "nested" / "cwd"
@@ -234,11 +254,14 @@ def test_clear_refuses_when_git_toplevel_lookup_raises_oserror(
         raised = True
 
     assert raised or code != 0
-    assert marker.exists(), "an unrelated store's marker was cleared after a git OSError"
+    assert marker.exists(), (
+        "an unrelated store's marker was cleared after a git OSError"
+    )
 
 
 def test_clear_still_walks_unbounded_when_git_reports_not_a_repository(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # cwd is not inside a git repo at all: git's own explicit "not a
     # repository" answer (not a tool failure) must still let the unbounded
@@ -251,7 +274,10 @@ def test_clear_still_walks_unbounded_when_git_reports_not_a_repository(
     def _not_a_repo(args, **kwargs):
         if args[:1] == ["git"]:
             return subprocess.CompletedProcess(
-                args, returncode=128, stdout="", stderr="fatal: not a git repository\n"
+                args,
+                returncode=128,
+                stdout="",
+                stderr="fatal: not a git repository\n",
             )
         return real_run(args, **kwargs)
 

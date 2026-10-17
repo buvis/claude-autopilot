@@ -152,6 +152,35 @@ def test_session_row_keeps_the_launched_prd_after_a_stall(tmp_path, monkeypatch)
     assert row["prd_end"] == "00042-other-v1.md"
 
 
+def test_review_once_with_no_prd_in_state_falls_back_to_the_decisions_prd(
+    tmp_path, monkeypatch,
+):
+    # _run_once passes state.get("prd") straight through as launched_prd,
+    # with no `_launch_phase` dance in between; an empty value (no PRD
+    # chosen yet) must still let `_metrics_line`'s `launched_prd or
+    # decision["prd"]` fall back to the decision's PRD instead of stamping
+    # an empty string.
+    lp = make_loop(tmp_path, [], spawn_fn=_spawn_fn(False, None))
+    write_state(lp._test["ap_dir"], next_phase="review", batch={"id": "b"})
+    decision = {
+        "signal": "continue",
+        "detail": "",
+        "next": "review",
+        "phase_end": "review",
+        "prd": "00001-picked-v1.md",
+        "batch": {"id": "b"},
+        "limit_wait": None,
+        "lane": None,
+        "lane_effective": None,
+        "state_touched": True,
+    }
+    monkeypatch.setattr(lp, "_decide", lambda ap_dir, ts_start: decision)
+    lp.run_once()
+    (row,) = metrics_rows(lp._test["ap_dir"])
+
+    assert row["prd"] == "00001-picked-v1.md"
+
+
 def test_prd_table_says_it_excludes_the_finalizing_session():
     # Packet 24: the per-PRD table is written inside the finalizing
     # session, whose own row lands after it - the caption must say so.

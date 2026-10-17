@@ -1936,6 +1936,12 @@ def _find_autopilot_dir_in_repo(start: Path) -> Path | None:
 def _run_markers(args: argparse.Namespace) -> int:
     if args.state is not None:
         autopilot_dir = Path(args.state).resolve().parent
+        if not autopilot_dir.is_dir():
+            print(
+                f"autopilot: markers: --state parent {autopilot_dir} does not exist",
+                file=sys.stderr,
+            )
+            return 1
     else:
         autopilot_dir = _find_autopilot_dir_in_repo(Path.cwd())
         if autopilot_dir is None:
