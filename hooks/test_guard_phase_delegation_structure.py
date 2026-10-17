@@ -573,6 +573,53 @@ def test_negation_does_not_reach_past_and_then_but() -> None:
     )
 
 
+@pytest.mark.parametrize("conjunction", ["and", "then", "but"])
+def test_negation_does_not_reach_past_the_bare_conjunction(conjunction: str) -> None:
+    """PRD 00324 finding: the test above names "and"/"then"/"but" but only
+    ever exercises "and" - its "then"/"but" controls elsewhere all carry a
+    comma that already stops negation on its own, so the conjunction itself
+    was never isolated. This payload has no comma: the conjunction alone
+    must start the new clause."""
+    prompt = f"Don't stop {conjunction} run the work phase for PRD 00300."
+    assert _guard_module().is_phase_delegation({"prompt": prompt}) is True
+
+
+@pytest.mark.parametrize("emoticon", [";(", ";)", "=)", "=("])
+def test_emoticon_variants_beyond_colon_are_not_brackets(emoticon: str) -> None:
+    """PRD 00324 finding: only ":(" / ":)" were tested, but `_EMOTICON`
+    also covers ";" and "=" mouths - neither paren of those is a bracket."""
+    text = f"ok {emoticon} done"
+    pos = text.index(emoticon[1])
+    assert _guard_module()._emoticon_paren(text, pos) is True
+
+
+def test_single_backtick_inside_a_doubled_backtick_span_is_literal() -> None:
+    """PRD 00324 finding: backticks pair by RUN LENGTH - a doubled run
+    ("``...``") is one token, and a single backtick inside it is literal,
+    never a fresh opener of its own pair."""
+    pairs, literal_runs = _guard_module()._nested_run_pairs("``a`b``")
+    assert pairs == [(0, 5)]
+    assert literal_runs == [(0, 5)]
+
+
+def test_bracket_opener_defers_while_a_quote_run_is_open() -> None:
+    """PRD 00324 finding: a bracket opener encountered while a quote run is
+    already open is a literal character of that run, never a fresh opener
+    of its own - so it never reaches `pairs`, and the LATER unrelated
+    closer it would otherwise have paired with is left alone too."""
+    pairs, literal_runs = _guard_module()._nested_run_pairs('"a(b" c)')
+    assert pairs == [(0, 4)]
+    assert literal_runs == [(0, 4)]
+
+
+def test_nested_bracket_chain_selects_the_innermost_pair() -> None:
+    """PRD 00324 finding: nested brackets form a chain, and the span-merge
+    walk must pick the INNERMOST enclosing pair around a candidate - it
+    alone decides `_cited`'s sentence-window test."""
+    runs = _guard_module()._quoted_runs("(a[b]c)", [(3, 4, False)])
+    assert runs[(3, 4)] == [(2, 4)]
+
+
 # --- The two entry points must agree, case for case ------------------------
 # Every predicate case above, replayed through `is_phase_delegation` and
 # `find_phase_delegation`.
