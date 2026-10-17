@@ -157,6 +157,36 @@ def test_gates_drop_chained_commands_loud(capsys) -> None:
     assert caught.value.field == "gates"
 
 
+def test_gates_drop_the_release_script_loud(capsys) -> None:
+    items = (
+        "- [ ] Run `bash dev/bin/release` and `uv run --no-project pytest -q y`",
+    )
+    assert cards._gates(items, [], None) == ["uv run --no-project pytest -q y"]
+    assert "dropped release command: bash dev/bin/release" in capsys.readouterr().err
+    with pytest.raises(cards.RenderError) as caught:
+        cards._gates(
+            (),
+            [],
+            [
+                "With a `severity: critical` stub in `prds/hold`, "
+                "`bash dev/bin/release` exits 1 and names it before any other output"
+            ],
+        )
+    assert caught.value.field == "gates"
+
+
+def test_release_checks_is_still_a_gate() -> None:
+    assert cards._gates(("- [ ] Run `bash dev/bin/release-checks`",), [], None) == [
+        "bash dev/bin/release-checks"
+    ]
+
+
+def test_only_the_release_script_raises_no_gates() -> None:
+    with pytest.raises(cards.RenderError) as caught:
+        cards._gates(("- [ ] Run `bash dev/bin/release`",), [], None)
+    assert caught.value.field == "gates"
+
+
 def test_glob_file_entry_is_refused(tmp_path: Path) -> None:
     with pytest.raises(cards.RenderError) as caught:
         cards._check_files(("agents/*.md",), REPO)
