@@ -51,7 +51,6 @@ from __future__ import annotations
 import copy
 import json
 import os
-import re
 import sys
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -264,21 +263,37 @@ _STAMP_GRAMMAR: dict[str, tuple[frozenset[str], tuple[str, ...]]] = {
         frozenset({"skipped:prose", "exploit_fixed"}),
         (),
     ),
+    # `review` is the one field the doc lets combine several values with "; "
+    # (e.g. "medium-retry:fixed; resume_failed"); `_check_stamps` splits on
+    # that separator and validates each part against this same closed
+    # grammar, rather than the field as a whole literal.
+    "review": (
+        frozenset(
+            {
+                "skipped:test-only",
+                "resume_failed",
+                "failed:invalid_output",
+                "medium-retry:fixed",
+                "medium-retry:unfixed",
+            }
+        ),
+        ("failed:",),
+    ),
 }
-
-# `review` is checked separately: it is the one field the doc lets combine
-# several values with "; " (e.g. "medium-retry:fixed; resume_failed"), so each
-# "; "-separated component is validated on its own rather than the field as a
-# whole literal.
-_REVIEW_LITERALS = frozenset({"resume_failed", "skipped:test-only"})
 
 
 def _check_stamps(attempt: Any) -> None:
     """Refuse any attempt-stamp value outside its documented grammar.
 
-    Scoped to the fields `_STAMP_GRAMMAR` (and `review`) know about; every
-    other field in the attempt payload is untouched. `None` is always
-    accepted - the doc's absent/null carve-out applies to every field.
+    Scoped to the fields `_STAMP_GRAMMAR` knows about; every other field in
+    the attempt payload is untouched. `None` is always accepted - the doc's
+    absent/null carve-out applies to every field. `review` additionally
+    allows its value to join several grammar-checked parts with "; ".
+
+    Also enforces the one cross-field rule the doc states: an attempt whose
+    `implementor` is `"orchestrator"` must carry `red_check` equal to
+    `"n/a:micro-lane"`, unless it is a solo-lane attempt (`pipeline` ==
+    `"solo"`), which carries no `red_check` at all by design.
     """
     if not isinstance(attempt, dict):
         return
@@ -286,18 +301,23 @@ def _check_stamps(attempt: Any) -> None:
         value = attempt.get(field)
         if value is None:
             continue
-        if value in literals or (
-            isinstance(value, str)
-            and any(value.startswith(prefix) for prefix in prefixes)
-        ):
-            continue
-        raise UsageError(f"invalid {field} stamp: {value!r}")
-    review = attempt.get("review")
-    if review is not None:
-        for part in review.split("; "):
-            if part in _REVIEW_LITERALS or re.match(r"^[\w-]+:.+$", part):
+        parts = value.split("; ") if field == "review" else [value]
+        for part in parts:
+            if part in literals or (
+                isinstance(part, str)
+                and any(part.startswith(prefix) for prefix in prefixes)
+            ):
                 continue
-            raise UsageError(f"invalid review stamp: {review!r}")
+            raise UsageError(f"invalid {field} stamp: {value!r}")
+    if (
+        attempt.get("implementor") == "orchestrator"
+        and attempt.get("red_check") != "n/a:micro-lane"
+        and attempt.get("pipeline") != "solo"
+    ):
+        raise UsageError(
+            f"invalid implementor stamp: {attempt.get('implementor')!r} requires"
+            " red_check 'n/a:micro-lane'"
+        )
 
 
 def do_task_done(data: Any, task_id: str, attempt: Any) -> None:

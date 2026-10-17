@@ -296,7 +296,11 @@ class StatectlTaskVerbsTest(unittest.TestCase):
         self.three_tasks()
         bad_red_check = self.write_json(
             "a.json",
-            {"attempt": 1, "implementor": "orchestrator", "red_check": "expected_red"},
+            {
+                "attempt": 1,
+                "implementor": "orchestrator",
+                "red_check": "n/a:test-only-task",
+            },
         )
         result = self.run_cli("task-done", "2", bad_red_check)
         self.assertNotEqual(result.returncode, 0)
@@ -320,6 +324,37 @@ class StatectlTaskVerbsTest(unittest.TestCase):
             {"attempt": 1, "implementor": "claude-opus"},
         )
         result = self.run_cli("task-done", "2", bad_implementor)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.load_state()["tasks"][1]["status"], "pending")
+
+    def test_task_done_refuses_an_orchestrator_implementor_with_no_red_check(
+        self,
+    ) -> None:
+        self.three_tasks()
+        attempt = self.write_json(
+            "a.json",
+            {"attempt": 1, "implementor": "orchestrator"},
+        )
+        result = self.run_cli("task-done", "2", attempt)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.load_state()["tasks"][1]["status"], "pending")
+
+    def test_task_done_accepts_a_solo_lane_orchestrator_attempt(self) -> None:
+        self.three_tasks()
+        attempt = self.write_json(
+            "a.json",
+            {"attempt": 1, "implementor": "orchestrator", "pipeline": "solo"},
+        )
+        result = self.run_cli("task-done", "2", attempt)
+        self.assertEqual(result.returncode, 0)
+
+    def test_task_done_refuses_an_invented_review_stamp(self) -> None:
+        self.three_tasks()
+        attempt = self.write_json(
+            "a.json",
+            {"attempt": 1, "review": "skipped:not-dispatched"},
+        )
+        result = self.run_cli("task-done", "2", attempt)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(self.load_state()["tasks"][1]["status"], "pending")
 
