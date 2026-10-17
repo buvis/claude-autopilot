@@ -231,7 +231,8 @@ run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/scripts/test_rework_tier_prose.py \
   skills/run-autopilot/scripts/test_cap_regression_prose.py \
   skills/work/scripts/test_handoff_placement_prose.py \
-  skills/run-autopilot/scripts/test_rework_groups_prose.py
+  skills/run-autopilot/scripts/test_rework_groups_prose.py \
+  skills/run-autopilot/scripts/test_single_voice_prose.py
 
 # serial: mixes files outside skills/run-autopilot/cli/, not covered by the
 # whole-cli-directory parallel-safety proof (PRD 00233)

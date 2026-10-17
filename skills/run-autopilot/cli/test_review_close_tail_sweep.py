@@ -211,6 +211,59 @@ def test_a_clean_tail_sweep_still_applies(tmp_path: Path, deferral: dict) -> Non
     assert len(open_decisions) == 2
 
 
+# A decision-gate `fix` row only one reviewer raised: Medium/Low single-voice
+# fix rows can never become rework tasks, carry row or not.
+SINGLE_VOICE_FIX_ROW = dict(
+    _finding(MED, "src/single.py:5", "one reviewer flagged this", "fix"),
+    ref="R9",
+    found_by=["CARL"],
+)
+
+
+def test_decision_gate_refuses_a_single_voice_fix_row(tmp_path: Path) -> None:
+    """A Medium or Low `fix` row with fewer than two `found_by` entries cannot
+    reach the decision gate as a task: a lone reviewer's fix classification
+    isn't consensus, so the row has to be refused before any task is built
+    from it."""
+    rows = [SINGLE_VOICE_FIX_ROW]
+    review = _review(tmp_path, consolidated=_table(rows))
+    state_path = _state(tmp_path)
+    before = state_path.read_bytes()
+
+    result = review_close.close(review, state_path, "decision-gate", rows)
+
+    assert result["applied"] is False
+    assert result["refused"] == "single_voice_fix"
+    assert SINGLE_VOICE_FIX_ROW["ref"] in result["reason"]
+    assert state_path.read_bytes() == before
+    assert not Path(f"{state_path}.lock").exists()
+
+
+def test_tail_sweep_refuses_a_single_voice_row(tmp_path: Path) -> None:
+    """The same single-voice ban applies to a tail sweep: a row fewer than two
+    reviewers raised is refused there too, while a batch holding only
+    multi-voice rows still applies."""
+    single_voice_row = dict(TAIL_MED, found_by=["CARL"])
+    review = _review(tmp_path, consolidated=_table([single_voice_row]))
+    state_path = _swept(tmp_path, review)
+    before = state_path.read_bytes()
+
+    result = review_close.close(review, state_path, "tail-sweep", [single_voice_row])
+
+    assert result["applied"] is False
+    assert result["refused"] == "tail_sweep_single_voice"
+    assert state_path.read_bytes() == before
+    assert not Path(f"{state_path}.lock").exists()
+
+    multi_voice_row = dict(TAIL_MED, found_by=["CARL", "PAT"])
+    review = _review(tmp_path, consolidated=_table([multi_voice_row]))
+    state_path = _swept(tmp_path, review)
+
+    result = review_close.close(review, state_path, "tail-sweep", [multi_voice_row])
+
+    assert result["applied"] is True
+
+
 def test_a_tail_sweep_over_a_gate_failing_review_is_refused_by_the_gate(
     tmp_path: Path,
 ) -> None:
