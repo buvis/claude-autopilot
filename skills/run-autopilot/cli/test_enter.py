@@ -558,6 +558,61 @@ def test_absent_and_closed_batch_stop_batch_init(
     assert env.rows == []
 
 
+def test_batch_init_detail_names_the_statectl_route(env: Env) -> None:
+    # PRD 00331: the absent-batch stop used to read "initialize a batch
+    # first", which a session took literally and ran `autopilot init` -
+    # an existing state file makes `_run_init` refuse with exit 7. The
+    # detail now names the real route: mint state.batch via statectl.
+    env.write_state({"phase": "build", "next_phase": "build"})
+    env.put("wip")
+
+    out = env.run()
+
+    assert out["stop"] == "batch_init"
+    assert out["detail"] == (
+        "batch absent; mint state.batch with statectl (phase-build.md Phase 0 "
+        "step 3), then run enter again; never autopilot init"
+    )
+
+
+def test_fresh_batch_bootstrap_removes_the_stale_brief_and_card(env: Env) -> None:
+    # PRD 00331: a batch's hand-off artifacts (session-brief.md,
+    # contract-card.md) stayed beside the archived state.json, so a fresh
+    # batch's first session was told to read a brief written for the
+    # previous batch. _prepare_tree now clears both when it mints a new
+    # state.json (i.e. on a genuinely fresh batch, not a resume).
+    (env.autopilot_dir / "session-brief.md").write_text("stale brief", encoding="utf-8")
+    (env.autopilot_dir / "contract-card.md").write_text("stale card", encoding="utf-8")
+    env.put("wip")
+    assert not env.state_path.exists()
+
+    env.run()
+
+    assert not (env.autopilot_dir / "session-brief.md").exists()
+    assert not (env.autopilot_dir / "contract-card.md").exists()
+    assert env.state_path.exists()
+    assert env.read_state()["phase"] == "build"
+
+
+def test_resume_keeps_the_brief_and_card(env: Env) -> None:
+    # The counterpart of the fresh-batch test above: when state.json already
+    # exists (a resume, not a fresh batch), the brief and contract card must
+    # survive - they may be the current hand-off's own artifacts.
+    (env.autopilot_dir / "session-brief.md").write_text("live brief", encoding="utf-8")
+    (env.autopilot_dir / "contract-card.md").write_text("live card", encoding="utf-8")
+    env.write_state(_open_state())
+    env.put("wip")
+
+    env.run()
+
+    assert (env.autopilot_dir / "session-brief.md").read_text(
+        encoding="utf-8"
+    ) == "live brief"
+    assert (env.autopilot_dir / "contract-card.md").read_text(
+        encoding="utf-8"
+    ) == "live card"
+
+
 # -- lane + frontmatter write (step 10) ----------------------------------------
 
 

@@ -279,6 +279,18 @@ def test_launch_prompt_forbids_blocked_coreutils(tmp_path):
     assert "Never call `cat`, `head`, `tail`, `grep` or `find`" in bare
 
 
+def test_prompt_omits_the_brief_sentence_without_a_state_file(tmp_path):
+    # PRD 00331: a fresh batch's enter() clears session-brief.md the moment
+    # it mints state.json, but between a stale brief surviving on disk and
+    # that write landing, the brief must not be read as "the current
+    # hand-off's brief" - its presence alone is no longer enough.
+    ap = _ap_dir(tmp_path)
+    (ap / "session-brief.md").write_text("# Session brief\n")
+    assert BRIEF_SUFFIX not in prompt_for(ap)
+    (ap / "state.json").write_text("{}\n")
+    assert BRIEF_SUFFIX in prompt_for(ap)
+
+
 def test_warn_window_defaults_to_fifteen_minutes():
     assert warn_secs_for({}) == 900
     assert warn_secs_for({"_AUTOPILOT_SESSION_WARN": "0"}) == 0
