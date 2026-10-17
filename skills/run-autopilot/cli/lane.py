@@ -225,20 +225,31 @@ def security_triggered(diff: str, changed_files: list[str] | tuple[str, ...]) ->
     """The `review-fanout` `securityTriggered` port: a security-ish changed
     path fires; a `---`/`+++` file header is skipped only as an adjacent
     pair; every other added or removed line is tested with `securityish`
-    (a guard disappearing is as strong a signal as one appearing)."""
+    (a guard disappearing is as strong a signal as one appearing). Lines
+    under a doc file (_DOC_SUFFIXES) are prose and never fire; only their
+    path can."""
     for path in changed_files or ():
         if securityish(path):
             return True
     lines = str(diff or "").split("\n")
+    current: str | None = None
     for index, line in enumerate(lines):
         before = lines[index - 1] if index > 0 else None
         after = lines[index + 1] if index + 1 < len(lines) else None
         is_header = (_is_dash_header(line) and _is_plus_header(after)) or (
             _is_plus_header(line) and _is_dash_header(before)
         )
+        if _is_plus_header(line):
+            current = line[4:].strip()
+            if current.startswith("b/"):
+                current = current[2:]
         if is_header:
             continue
-        if (line.startswith("+") or line.startswith("-")) and securityish(line):
+        if (
+            (line.startswith("+") or line.startswith("-"))
+            and (current is None or not current.lower().endswith(_DOC_SUFFIXES))
+            and securityish(line)
+        ):
             return True
     return False
 

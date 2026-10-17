@@ -264,8 +264,11 @@ def test_lane_check_escalates_on_a_production_path(tmp_path: Path) -> None:
 
 
 def test_lane_check_escalates_on_a_security_diff(tmp_path: Path) -> None:
+    # A test file: not production (so no unnamed_path signal first), not a
+    # doc (so the content-level security word still fires). A doc file's
+    # prose never fires on content, only on path (the fix PRD 00348 pins).
     repo, state_path = _solo_repo(tmp_path)
-    _commit(repo, "notes.md", "# notes\npassword: hunter2\n")
+    _commit(repo, "test_notes.py", "password = 'hunter2'\n")
     proc, state = _lane_check(state_path)
     assert proc.returncode == 3, proc.stderr
     assert proc.stdout.strip() == "lane: escalate security_diff"
