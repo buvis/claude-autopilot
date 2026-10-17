@@ -5051,3 +5051,29 @@
 {"kind":"handoff","site":"build","edge":"resume","at":1792239593,"phase":"build","prd":"00330-hand-the-tail-sweep-to-a-task-tier-session-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1792239602,"phase":"done","prd":"00330-hand-the-tail-sweep-to-a-task-tier-session-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1792239691,"phase":"build","prd":"00330-hand-the-tail-sweep-to-a-task-tier-session-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792239715,"phase":"build","prd":"00331-start-a-fresh-batch-clean-v1.md"}
+{"id":"52eac47d","kind":"fast-track:tess","task":"00331-start-a-fresh-batch-clean-v1-c1","queued_at":1792239850,"prompt_bytes":103862}
+{"id":"52eac47d","ended_at":1792239974,"elapsed_s":124,"outcome":"ok","detail":null}
+{"id":"350b32b3","kind":"fast-track:ivan","task":"00331-start-a-fresh-batch-clean-v1-c1","queued_at":1792240008,"prompt_bytes":51170}
+{"id":"350b32b3","ended_at":1792240180,"elapsed_s":172,"outcome":"ok","detail":null}
+{"id":"8a1830e4","kind":"fast-track:fanout","task":"00331-start-a-fresh-batch-clean-v1-c1","queued_at":1792240390,"prompt_bytes":6235}
+{"id":"8a1830e4","ended_at":1792240395,"elapsed_s":5,"outcome":"error","detail":"workflow tool refuses scriptPath under ~/.claude/workflows in a headless loop session (known issue); fallback to alice subagent"}
+{"id":"2f104ed3","kind":"fast-track:alice","task":"00331-start-a-fresh-batch-clean-v1-c1","queued_at":1792240403,"prompt_bytes":6235}
+{"id":"c69d0fcf","kind":"fast-track:blake","task":"00331-start-a-fresh-batch-clean-v1-c1","queued_at":1792240403,"prompt_bytes":11644}
+{"id":"0109d53f","kind":"fast-track:eve","task":"00331-start-a-fresh-batch-clean-v1-c1","queued_at":1792240403,"prompt_bytes":4938}
+{"id":"b8d38b2e","kind":"fast-track:bob","task":"00331-start-a-fresh-batch-clean-v1-c1","queued_at":1792240403,"prompt_bytes":9400}
+{"id":"975542cb","kind":"fast-track:carl","task":"00331-start-a-fresh-batch-clean-v1-c1","queued_at":1792240403,"prompt_bytes":6591}
+{"id":"2f104ed3","ended_at":1792240842,"elapsed_s":439,"outcome":"ok","detail":null}
+{"id":"c69d0fcf","ended_at":1792240842,"elapsed_s":439,"outcome":"ok","detail":null}
+{"id":"0109d53f","ended_at":1792240842,"elapsed_s":439,"outcome":"ok","detail":null}
+{"id":"b8d38b2e","ended_at":1792240842,"elapsed_s":439,"outcome":"ok","detail":null}
+{"id":"975542cb","ended_at":1792240842,"elapsed_s":439,"outcome":"ok","detail":null}
+{"id":"c7fb3938","kind":"fast-track:bob","task":"00331-start-a-fresh-batch-clean-v1-c1","queued_at":1792240863,"prompt_bytes":9400}
+{"id":"c7fb3938","ended_at":1792240931,"elapsed_s":68,"outcome":"error","detail":"codex's own Fact-Forcing Gate hook blocked cat; retried once, same failure; counted as failed per the one-retry budget"}
+{"id":"76beba29","kind":"fast-track:victor","task":"00331-start-a-fresh-batch-clean-v1-c1","queued_at":1792241001,"prompt_bytes":3322}
+{"id":"76beba29","ended_at":1792241027,"elapsed_s":26,"outcome":"ok","detail":null}
+{"id":"1b551526","kind":"fast-track:ivan","task":"00331-start-a-fresh-batch-clean-v1-c1","queued_at":1792241047,"prompt_bytes":5593}
+{"id":"1b551526","ended_at":1792241117,"elapsed_s":70,"outcome":"ok","detail":null}
+{"id":"0a2676fa","kind":"fast-track:delta","task":"00331-start-a-fresh-batch-clean-v1-c1","queued_at":1792241143,"prompt_bytes":4711}
+{"id":"0a2676fa","ended_at":1792241263,"elapsed_s":120,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"build","edge":"leave","at":1792241722,"phase":"done","prd":"00331-start-a-fresh-batch-clean-v1.md"}
