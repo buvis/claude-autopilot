@@ -1,6 +1,6 @@
 # Project Capsule: claude-autopilot
 
-Generated: 2026-10-17 (catchup at HEAD 6d7c97f3, 00325 closed, entering 00326)
+Generated: 2026-10-17 (catchup at HEAD a2858cb4, 00332 closed, entering 00333; 00333 is uncardable (`cards_from_prd.py`: "gates: no uv run / pytest / bash command left to run" — its Gates column names only prose/rg acceptance checks), lane_effective flipped to full)
 
 ## Key Invariants
 
@@ -56,7 +56,7 @@ Generated: 2026-10-17 (catchup at HEAD 6d7c97f3, 00325 closed, entering 00326)
 - [ ] 00327-release-gate-and-notes-say-what-ships-v2 (parked to hold/, warden blocked gate 3)
 - [x] 00331-start-a-fresh-batch-clean-v1 (1 cycle, fast-track)
 - [x] 00332-wait-for-a-lane-in-one-call-v1 (1 cycle, fast-track)
-- [ ] 00333-sweep-only-findings-two-reviewers-raised-v1
+- [ ] 00333-sweep-only-findings-two-reviewers-raised-v1 (in progress, fell back to full lane: uncardable)
 - [ ] 00334-keep-the-test-only-skip-when-a-test-registers-itself-v1
 - [ ] 00335-tell-tess-what-devon-will-try-v1
 
@@ -629,14 +629,26 @@ Not refreshed at 2026-10-11T12:49Z (task-2 resume catchup): engram was left
 alone this session because its index is readonly on this host (above) and the
 topic is unchanged; the hits above are the ones to use.
 
+Refreshed 2026-10-17 (00333 catchup): topic "claude-autopilot sweep only
+findings two reviewers raised". `engram index` failed (`database is locked`,
+contending with the background `engram harvest` kicked off the same session);
+`engram harvest` of the review files also failed non-zero in the background.
+Both repo- and portfolio-scope queries returned only the PRD's own backlog
+copy and unrelated tail-sweep/reviewer-status rows (no genuinely related
+prior work). `engram status --scope portfolio` exit 1: memory 192 (24 stale,
+1 dead), prd 9190 (0 stale, 3703 dead), code 52550 (140 stale, 805 dead, 5015
+skipped), transcripts 17713 (17604 dead), findings 29861 (clean), decision 25
+(1 stale).
+
 ## GitHub State
 
 - 0 open issues, 0 open PRs.
 - Only `origin`/`origin/master` active (pushed 2026-10-12, no stale branches).
 - No tagged GitHub releases; CHANGELOG.md tracks versions instead.
 - No workflow runs found (no CI configured, or none has run).
-- Refreshed 2026-10-12: `gh` is authenticated again on this host (account
-  `tbouska`, `~/.config/gh-agent`), so the above is live, not stale.
+- Refreshed 2026-10-17: `gh` is authenticated again on this host (account
+  `tbouska`, `~/.config/gh-agent`); same as 2026-10-12's reading, now
+  reconfirmed (0 issues, 0 PRs, no workflow runs, no releases).
 
 ## Project Health
 

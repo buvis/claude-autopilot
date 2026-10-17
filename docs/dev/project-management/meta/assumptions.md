@@ -31,3 +31,10 @@
 
 - The usage-error message contains the literal substring "usage" (case-insensitive) in stderr; exact wording was not pinned by the finding, so the fix prints the existing `USAGE` constant alongside argparse's own usage line.
 - Used `get batch.id --default 1 --default 2` (path before both flags) for the repeated-`--default` test since the finding's example order didn't pin argument placement.
+
+## PRD 00333 task 1: Add single-voice tests (fail-first)
+
+- `_finding`, `_state`, `_review`, `_swept`, `_table`, `TAIL_MED`, `MED` are usable exactly as already imported/used elsewhere in `test_review_close_tail_sweep.py`; inferred their shapes solely from existing call sites in the allowlisted file, without reading `test_review_close.py` itself.
+- `found_by` is not yet a recognized field on finding rows in the current schema/fixtures; added it as a plain dict key via `dict(_finding(...), found_by=[...])`, consistent with how other tests already override/extend finding dicts (e.g. `ref=...`).
+- For `test_tail_sweep_refuses_a_single_voice_row`'s second half ("closes the same batch without it"), built a second review/state pair in the same `tmp_path` with only the multi-voice row, since the first call never applied (state unchanged).
+- `_state(tmp_path)` with no extra kwargs assumed valid (same pattern as `_state(tmp_path, **{})` used elsewhere in the file for an empty `extra`).
