@@ -415,7 +415,7 @@ def test_spawn_sets_the_command_scoped_unattended_env(tmp_path):
         "import json\n"
         "print(json.dumps({k: os.environ.get(k) for k in "
         "('WARDEN_UNATTENDED', 'CLAUDE_UNATTENDED', "
-        "'CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS')}))",
+        "'CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS', 'PONYTAIL_DEFAULT_MODE')}))",
     )
     ap = _ap_dir(tmp_path)
     result = spawn(
@@ -429,6 +429,10 @@ def test_spawn_sets_the_command_scoped_unattended_env(tmp_path):
     )
     seen = json.loads(result.log_path.read_text())
     assert seen == {key: value for key, value in LAUNCH_ENV.items()}
+
+
+def test_launch_env_turns_ponytail_off():
+    assert LAUNCH_ENV["PONYTAIL_DEFAULT_MODE"] == "off"
 
 
 def test_spawn_scrubs_host_markers(tmp_path, capsys):
