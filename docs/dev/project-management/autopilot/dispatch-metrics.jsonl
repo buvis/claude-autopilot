@@ -5109,3 +5109,5 @@
 {"id":"6ff71053","kind":"fast-track:delta","task":"00332-wait-for-a-lane-in-one-call-v1-c1","queued_at":1792244316,"prompt_bytes":5374}
 {"id":"6ff71053","ended_at":1792244633,"elapsed_s":317,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1792245132,"phase":"done","prd":"00332-wait-for-a-lane-in-one-call-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1792245167,"phase":"done","prd":"00332-wait-for-a-lane-in-one-call-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1792245227,"phase":"build","prd":"00332-wait-for-a-lane-in-one-call-v1.md"}

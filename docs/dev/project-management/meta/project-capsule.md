@@ -55,7 +55,7 @@ Generated: 2026-10-17 (catchup at HEAD 6d7c97f3, 00325 closed, entering 00326)
 - [x] 00330-hand-the-tail-sweep-to-a-task-tier-session-v1 (1 cycle, micro-lane tail sweep)
 - [ ] 00327-release-gate-and-notes-say-what-ships-v2 (parked to hold/, warden blocked gate 3)
 - [x] 00331-start-a-fresh-batch-clean-v1 (1 cycle, fast-track)
-- [ ] 00332-wait-for-a-lane-in-one-call-v1
+- [x] 00332-wait-for-a-lane-in-one-call-v1 (1 cycle, fast-track)
 - [ ] 00333-sweep-only-findings-two-reviewers-raised-v1
 - [ ] 00334-keep-the-test-only-skip-when-a-test-registers-itself-v1
 - [ ] 00335-tell-tess-what-devon-will-try-v1
