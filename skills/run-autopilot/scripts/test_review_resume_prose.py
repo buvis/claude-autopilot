@@ -75,6 +75,38 @@ def test_tail_sweep_prose_never_says_one_task() -> None:
     )
 
 
+def test_tail_sweep_dispatch_hands_off_in_loop_mode() -> None:
+    # PRD 00330: Tail sweep step 3 hands off before the sweep's fix runs,
+    # exactly as Phase 6's "Dispatch rework" does, instead of running the
+    # sweep inside the opus review session.
+    text = _PHASE_REVIEW.read_text()
+    start = text.index("**3. Dispatch.**")
+    end = text.index("**4. Finalize.**")
+    window = text[start:end]
+    for needle in (
+        "--site review --edge leave --phase review",
+        "tail sweep queued, handing off",
+        "END TURN",
+        "PRD 00208",
+        "entered through that Phase 4 skip",
+    ):
+        assert needle in window, f"{_PHASE_REVIEW}: Tail sweep step 3 lacks {needle!r}"
+
+
+def test_tail_sweep_finalize_names_the_handoff_exception() -> None:
+    # PRD 00330: step 4's hand-off prohibitions must name the one deliberate
+    # exception the step 3 loop-mode hand-off introduces.
+    text = _PHASE_REVIEW.read_text()
+    start = text.index("**4. Finalize.**")
+    end = text.index("```", start)
+    window = text[start:end]
+    for needle in (
+        "do NOT hand off review → review",
+        "The step 3 loop-mode hand-off is the one exception",
+    ):
+        assert needle in window, f"{_PHASE_REVIEW}: Tail sweep step 4 lacks {needle!r}"
+
+
 def test_escalation_resets_the_status_before_appending_the_rework_id() -> None:
     # Review 2 of PRD 00196: the resume rule drops listed ids whose task is
     # still `completed`, so the status reset must land before the append.
