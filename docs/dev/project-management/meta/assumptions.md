@@ -12,3 +12,11 @@
 - `triage.qualifies`: assumed `action` is a plain string matched by a "starts with `fix in cycle`" rule, exactly as the task states.
 - `test_doc_contract.py`: assumed the rejection message for the new bracketed-positional case is the same `"bare positional placeholder remains"` text the existing unbracketed case already expects.
 - PRD item 4 (tracon test OR-weakness): `tracon_wrapper_alive.py` already emits both `usage` and `root` text on stderr for a missing root arg, so the tightened assertion cannot be made to fail red at base commit without asserting something false about already-correct production code. Kept the tightening (a legitimate strengthening) and recorded the discrepancy as an autonomous decision rather than forcing a false result.
+
+## 5: [D1] skills/run-autopilot/cli/
+
+- Markers `--state` toplevel failure: asserted "refuses" as either a raised exception or a nonzero exit (the task's "/" read as OR), and that the unrelated store's marker is never cleared, rather than pinning a specific stderr substring.
+- Simulated `git rev-parse --show-toplevel` timeout/OSError via `monkeypatch.setattr(subprocess, "run", ...)` in-process rather than a real subprocess+PATH shim, matching existing test-suite convention for this kind of failure.
+- Dedup of `_find_autopilot_dir_in_repo`: added an optional `stop` parameter to `_walk_up.find_autopilot_dir` rather than moving the helper into `markers.py`, since `_walk_up.py` is the documented shared walk-up helper.
+- `loop.py` `launched_prd` empty-fallback: left the `= ""` default in place (dropping it would break two existing positional callers in `test_routing.py` outside the task's file allowlist) and added a regression test instead.
+- `markers --state` nonexistent parent: validated only path existence (not "looks like an autopilot dir" shape), per the finding's "ideally" wording and to avoid unrequested scope.
