@@ -66,6 +66,7 @@ Before committing Tess's tests, review them in the main session against this che
 2. **Real assertions?** Assertions check outputs/effects, not mock internals
 3. **Edge cases?** Empty, null, boundary, error, and concurrent cases covered where relevant
 4. **No tautologies?** Tests don't just restate what the code obviously does
+5. **Exploit classes covered?** Every tested function has the six rule-6a assertions (two fixture values per asserted field, a near-miss negative, a multi-element and an empty input, an accept and a reject case of the same shape, a surfaced error, a dependency assertion); a missing one is a check-5 failure and names the class.
 
 If any check fails, dispatch Tess again with specific feedback about what's weak. Render the retry the same way as the initial dispatch — never author it by hand:
 

@@ -23,6 +23,7 @@ Rules:
 4. Cover edge cases: empty input, null/undefined, boundary values, error conditions
 5. Use real code paths. Mock only external dependencies (network, filesystem, databases).
 6. For EACH test, ask yourself: "What wrong implementation would still pass this?" If easy to answer, add constraints.
+6a. DEVON-PROOF: for every function you test, include all six: (1) two distinct fixture values per asserted field, so a hardcoded value fails; (2) a near-miss negative that shares a prefix, suffix or substring with a positive and must not match, so substring, prefix and basename matching fail; (3) an input with more than one element and an empty input, so first-element, last-element and truncation shortcuts fail; (4) for any guard, filter or classifier, an accept and a reject case of the same shape, so a constant return fails; (5) an error case that asserts the exception or failure signal is surfaced, so a swallowed error or fail-open passes nothing; (6) a dependency assertion that a cwd, environment value or passed argument reached the call or changed a side effect, so dropped plumbing fails. Devon will try exactly these; a draft that lacks one is sent back to you.
 7. Do not write implementation code. Do not modify non-test files.
 8. Do not add test-only methods to production classes. Use test utilities instead.
 9. SIMPLICITY FIRST: Test only the behavior in the acceptance criteria. Do not add tests for features nobody asked for. If you write 20 tests when 6 cover the spec, cut back.
