@@ -21,11 +21,12 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "hooks"))
 
-from guard_phase_delegation import (
-    _AGOGE_PREFIX,
-    _READ_ONLY_REVIEWERS,
-    _is_per_task_persona,
-)
+from guard_phase_delegation import _READ_ONLY_REVIEWERS, _is_per_task_persona
+
+# Read from the lexicon that defines it: the hook's own re-import of this name
+# is unused there, so a formatter's unused-import fix strips it from the
+# working tree and the replay must not depend on it.
+from guard_phase_delegation_lexicon import _AGOGE_PREFIX
 
 DEFAULT_GUARD = REPO / "hooks" / "guard_phase_delegation.py"
 DEFAULT_TRANSCRIPTS = (
