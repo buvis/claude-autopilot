@@ -145,7 +145,8 @@ def _normalize(text: str) -> str:
 
 def _is_per_task_persona(subagent_type: str | None) -> bool:
     return isinstance(subagent_type, str) and (
-        subagent_type in _PER_TASK_PERSONAS or subagent_type.startswith("autopilot:worker-")
+        subagent_type in _PER_TASK_PERSONAS
+        or subagent_type.startswith("autopilot:worker-")
     )
 
 
@@ -266,7 +267,7 @@ def _candidates(text: str) -> list[tuple[int, int, bool]]:
         for match in pattern.finditer(text):
             end = match.end()
             wrap = match.group("w")
-            if wrap and text[end:end + 1] == _WRAP_PAIR.get(wrap, wrap):
+            if wrap and text[end : end + 1] == _WRAP_PAIR.get(wrap, wrap):
                 end += 1
             suffix = _SKILL_SUFFIX.match(text, end)
             if suffix:
@@ -496,7 +497,7 @@ def _is_scoped(text: str, sentences: list[int]) -> bool:
     ranged = False
     for match in _TASK_ID.finditer(text):
         head = _nonspace_end(text, match.start())
-        if _TASK_RANGE_LEAD.search(text[max(0, head - 24):head]) or (
+        if _TASK_RANGE_LEAD.search(text[max(0, head - 24) : head]) or (
             _TASK_RANGE_TAIL.match(text, match.end())
         ):
             ranged = True
@@ -511,16 +512,24 @@ def _is_scoped(text: str, sentences: list[int]) -> bool:
 
 
 def _strongly_anchored(
-    text: str, start: int, end: int, sentences: list[int], marked: set[int]
+    text: str,
+    start: int,
+    end: int,
+    sentences: list[int],
+    marked: set[int],
 ) -> bool:
-    tail = text[end:end + 200]  # bounded: every anchor tail is a few words long
+    tail = text[end : end + 200]  # bounded: every anchor tail is a few words long
     if _STRONG_ANCHOR_TAIL.match(tail) or _PRD_PATH_TAIL.match(tail):
         return True
     return bisect_left(sentences, start) in marked
 
 
 def _weakly_anchored(
-    text: str, start: int, end: int, clause_start: int, clause_end: int
+    text: str,
+    start: int,
+    end: int,
+    clause_start: int,
+    clause_end: int,
 ) -> bool:
     if not _WEAK_ANCHOR_TAIL.match(text, end, clause_end):
         return False
@@ -622,7 +631,7 @@ def _negated(text: str, clause_start: int, start: int) -> bool:
     starts after the last "and"/"then"/"but" in it: a negation before the
     conjunction binds its own verb ("don't stop and run ...")."""
     words = list(
-        islice(_words_before(text, clause_start, start), _NEGATION_WORD_GAP + 1)
+        islice(_words_before(text, clause_start, start), _NEGATION_WORD_GAP + 1),
     )
     window_start = words[-1][0] if words else clause_start
     window = text[window_start:start]
@@ -633,7 +642,7 @@ def _negated(text: str, clause_start: int, start: int) -> bool:
 
 
 def _quote(text: str, start: int) -> str:
-    return " ".join(text[max(0, start - 10):start + 20].split())
+    return " ".join(text[max(0, start - 10) : start + 20].split())
 
 
 def _field_delegation(text: str, per_task: bool) -> str | None:
@@ -660,7 +669,7 @@ def _field_delegation(text: str, per_task: bool) -> str | None:
         clause_end = (
             clause_starts[tail_index] if tail_index < len(clause_starts) else len(text)
         )
-        if text[clause_end:clause_end + 1] == "?":
+        if text[clause_end : clause_end + 1] == "?":
             continue  # a question about the phase, not an order to run it
         if is_skill_md:
             if not _ordered_to_follow(text, end, sentences, clause_starts, clause_ends):
@@ -751,13 +760,18 @@ def main() -> None:
         allow()
     payload = read_input()
     if not payload:
-        print("guard_phase_delegation: empty/unparseable payload, allowing", file=sys.stderr)
+        print(
+            "guard_phase_delegation: empty/unparseable payload, allowing",
+            file=sys.stderr,
+        )
         allow()
     if payload.get("tool_name") != "Agent":
         allow()
     tool_input = payload.get("tool_input")
     if not isinstance(tool_input, dict):
-        print("guard_phase_delegation: unparseable tool_input, allowing", file=sys.stderr)
+        print(
+            "guard_phase_delegation: unparseable tool_input, allowing", file=sys.stderr
+        )
         allow()
     try:
         span = find_phase_delegation(tool_input)
