@@ -756,6 +756,13 @@
       "consensus": "1/4",
       "reason": "rework cap reached with this finding unresolved",
       "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+    },
+    {
+      "type": "stall",
+      "site": "fast_track_blocked",
+      "detail": "fast-track/00327-release-gate-and-notes-say-what-ships-v2-c1: stopped: gate 3 (warden blocked `bash dev/bin/release`: needs review -- it performs a real release/publish, a hard-to-reverse external action that needs human sign-off, and only covers gap 3 of the PRD's 6 gaps; gaps 1,2,4,5,6 (CHANGELOG timing/entries, SKIP_ALLOWED=2, golden test deletion, live MCP step) are untouched)",
+      "op_id": "de5ac6f81115",
+      "prd": "00327-release-gate-and-notes-say-what-ships-v2.md"
     }
   ]
 }

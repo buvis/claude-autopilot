@@ -5028,3 +5028,8 @@
 {"kind":"handoff","site":"review","edge":"leave","at":1792236468,"phase":"done","prd":"00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1792236494,"phase":"done","prd":"00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1792236611,"phase":"build","prd":"00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792236630,"phase":"build","prd":"00327-release-gate-and-notes-say-what-ships-v2.md"}
+{"id":"0b9a4f6d","kind":"fast-track:tess","task":"00327-release-gate-and-notes-say-what-ships-v2-c1","queued_at":1792236769,"prompt_bytes":207047}
+{"id":"0b9a4f6d","ended_at":1792236965,"elapsed_s":196,"outcome":"ok","detail":null}
+{"id":"1d011689","kind":"fast-track:ivan","task":"00327-release-gate-and-notes-say-what-ships-v2-c1","queued_at":1792237010,"prompt_bytes":25713}
+{"id":"1d011689","ended_at":1792237057,"elapsed_s":47,"outcome":"ok","detail":null}
