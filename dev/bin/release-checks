@@ -385,6 +385,7 @@ run_pytest uv run --no-project --with pytest python -m pytest -q \
 echo "[checks] review-work-completion scripts"
 run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/review-work-completion/scripts/test_await_reviewer_outputs.py \
+  skills/review-work-completion/scripts/test_lane_wait_prose.py \
   skills/review-work-completion/scripts/test_check_review_file.py \
   skills/review-work-completion/scripts/test_codex_resume_contract.py \
   skills/review-work-completion/scripts/test_compute_mech_facts.py \

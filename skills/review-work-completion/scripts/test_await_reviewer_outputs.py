@@ -8,6 +8,7 @@ prints WAITING; these tests bind the DONE/WAITING contract.
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import subprocess
 import sys
@@ -15,6 +16,21 @@ import time
 from pathlib import Path
 
 SCRIPT = Path(__file__).with_name("await_reviewer_outputs.py")
+
+
+def _load_module():
+    spec = importlib.util.spec_from_file_location(
+        "await_reviewer_outputs", Path(__file__).with_name("await_reviewer_outputs.py")
+    )
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_default_budget_fits_one_max_length_bash_call() -> None:
+    module = _load_module()
+    assert module.build_parser().get_default("budget") == 570.0
 
 
 def _run(*args: str) -> subprocess.CompletedProcess[str]:
