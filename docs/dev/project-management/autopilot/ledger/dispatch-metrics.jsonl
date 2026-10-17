@@ -5192,3 +5192,26 @@
 {"kind":"handoff","site":"done","edge":"resume","at":1792255879,"phase":"done","prd":"00341-devon-reviews-tests-an-earlier-task-wrote-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1792255919,"phase":"build","prd":"00341-devon-reviews-tests-an-earlier-task-wrote-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1792255926,"phase":"build","prd":"00341-devon-reviews-tests-an-earlier-task-wrote-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792255951,"phase":"build","prd":"00342-task-done-refuses-an-undefined-attempt-stamp-v1.md"}
+{"id":"061ab940","kind":"fast-track:tess","task":"00342-task-done-refuses-an-undefined-attempt-stamp-v1-c1","queued_at":1792256074,"prompt_bytes":82246}
+{"id":"061ab940","ended_at":1792256177,"elapsed_s":103,"outcome":"ok","detail":null}
+{"id":"437ca1b0","kind":"fast-track:ivan","task":"00342-task-done-refuses-an-undefined-attempt-stamp-v1-c1","queued_at":1792256216,"prompt_bytes":17547}
+{"id":"437ca1b0","ended_at":1792256427,"elapsed_s":211,"outcome":"ok","detail":null}
+{"id":"1b0339e2","kind":"fast-track:fanout","task":"00342-task-done-refuses-an-undefined-attempt-stamp-v1-c1","queued_at":1792256591,"prompt_bytes":6273}
+{"id":"257c2685","kind":"fast-track:blake","task":"00342-task-done-refuses-an-undefined-attempt-stamp-v1-c1","queued_at":1792256595,"prompt_bytes":8593}
+{"id":"54744865","kind":"fast-track:eve","task":"00342-task-done-refuses-an-undefined-attempt-stamp-v1-c1","queued_at":1792256599,"prompt_bytes":4375}
+{"id":"84c614df","kind":"fast-track:bob","task":"00342-task-done-refuses-an-undefined-attempt-stamp-v1-c1","queued_at":1792256607,"prompt_bytes":8839}
+{"id":"5aa3d350","kind":"fast-track:carl","task":"00342-task-done-refuses-an-undefined-attempt-stamp-v1-c1","queued_at":1792256610,"prompt_bytes":6629}
+{"id":"1b0339e2","ended_at":1792256618,"elapsed_s":27,"outcome":"error","detail":"workflow tool unavailable under loop session (known issue)"}
+{"id":"8b858eb7","kind":"fast-track:alice","task":"00342-task-done-refuses-an-undefined-attempt-stamp-v1-c1","queued_at":1792256622,"prompt_bytes":6273}
+{"id":"bh1sywql7","ended_at":1792256981,"elapsed_s":null,"outcome":"ok","detail":null}
+{"id":"8b858eb7","ended_at":1792257004,"elapsed_s":382,"outcome":"ok","detail":null}
+{"id":"257c2685","ended_at":1792257007,"elapsed_s":412,"outcome":"ok","detail":null}
+{"id":"54744865","ended_at":1792257010,"elapsed_s":411,"outcome":"ok","detail":null}
+{"id":"84c614df","ended_at":1792257013,"elapsed_s":406,"outcome":"ok","detail":null}
+{"id":"5aa3d350","ended_at":1792257016,"elapsed_s":406,"outcome":"ok","detail":null}
+{"id":"1fae8fbb","kind":"fast-track:ivan","task":"00342-task-done-refuses-an-undefined-attempt-stamp-v1-c1","queued_at":1792257154,"prompt_bytes":7337}
+{"id":"1fae8fbb","ended_at":1792257242,"elapsed_s":88,"outcome":"ok","detail":null}
+{"id":"3f2789d7","kind":"fast-track:delta","task":"00342-task-done-refuses-an-undefined-attempt-stamp-v1-c1","queued_at":1792257276,"prompt_bytes":4745}
+{"id":"3f2789d7","ended_at":1792257548,"elapsed_s":272,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"build","edge":"leave","at":1792258021,"phase":"done","prd":"00342-task-done-refuses-an-undefined-attempt-stamp-v1.md"}
