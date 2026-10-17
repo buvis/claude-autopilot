@@ -48,7 +48,7 @@ Generated: 2026-10-16 (full catchup 17:30 UTC at HEAD de92b534)
 - [x] 00320-refuse-every-unsafe-verify-log-sink-v2 (2 cycles, cap-out: 1 HIGH + 15 lower deferred)
 - [x] 00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2 (2 cycles)
 - [x] 00322-kill-the-gate-on-every-signal-v1 (2 cycles, cap-out: 4 HIGH + 12 lower deferred)
-- [ ] 00323-tests-line-and-verify-record-say-red-v1
+- [x] 00323-tests-line-and-verify-record-say-red-v1 (1 cycle)
 - [ ] 00324-guard-pairs-delimiters-as-nested-runs-v1
 - [ ] 00325-sweep-reads-emoji-rows-by-character-class-v1
 - [ ] 00326-close-the-loops-remaining-verb-and-ledger-truths-v2

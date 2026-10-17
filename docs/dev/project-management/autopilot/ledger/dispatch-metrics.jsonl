@@ -4910,3 +4910,5 @@
 {"id":"e02d75c7","kind":"fast-track:delta","task":"00323-tests-line-and-verify-record-say-red-v1-c1","queued_at":1792198551,"prompt_bytes":4851}
 {"id":"e02d75c7","ended_at":1792198932,"elapsed_s":381,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1792199442,"phase":"done","prd":"00323-tests-line-and-verify-record-say-red-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1792199499,"phase":"done","prd":"00323-tests-line-and-verify-record-say-red-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1792199586,"phase":"build","prd":"00323-tests-line-and-verify-record-say-red-v1.md"}
