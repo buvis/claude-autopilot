@@ -5050,3 +5050,4 @@
 {"kind":"handoff","site":"review","edge":"leave","at":1792239575,"phase":"done","prd":"00330-hand-the-tail-sweep-to-a-task-tier-session-v1.md"}
 {"kind":"handoff","site":"build","edge":"resume","at":1792239593,"phase":"build","prd":"00330-hand-the-tail-sweep-to-a-task-tier-session-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1792239602,"phase":"done","prd":"00330-hand-the-tail-sweep-to-a-task-tier-session-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1792239691,"phase":"build","prd":"00330-hand-the-tail-sweep-to-a-task-tier-session-v1.md"}
