@@ -127,17 +127,26 @@ class StatectlDecideTest(unittest.TestCase):
     # -- get --default: a present key must never be masked by the default --
 
     def test_get_default_never_masks_a_present_key(self) -> None:
-        # _dispatch finds the json-path by hardcoding argv[2], so flag-first
-        # order (`get --default VALUE path`) reads "--default" itself as the
-        # path. "--default" is absent from the state, so get_value raises
-        # UsageError and the present key's real value is silently replaced
-        # by the default instead of being returned.
-        self.write_state({"cap_rotations": 5})
+        # A falsy/null --default must never stand in for a key that is
+        # actually present in the state.
+        self.write_state({"batch": {"id": "xyz"}})
 
-        result = self.run_cli("get", "--default", "0", "cap_rotations")
+        result = self.run_cli("get", "batch.id", "--default", "null")
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout), 5)
+        self.assertEqual(json.loads(result.stdout), "xyz")
+
+    # -- get --default: a present falsy value is returned, not the default --
+
+    def test_get_present_falsy_value_is_not_masked_by_default(self) -> None:
+        self.write_state({"zero": 0, "blank_flag": False, "nothing": None})
+        cases = {"zero": 0, "blank_flag": False, "nothing": None}
+
+        for path, expected in cases.items():
+            with self.subTest(path=path):
+                result = self.run_cli("get", path, "--default", '"sentinel"')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(result.stdout), expected)
 
     def test_get_default_flag_first_order_works(self) -> None:
         self.write_state({"batch": {"id": "xyz"}})
@@ -154,17 +163,40 @@ class StatectlDecideTest(unittest.TestCase):
         )
 
     def test_get_default_malformed_path_is_a_usage_error(self) -> None:
-        # _run_get_with_default's try/except wraps both parse_path() and
-        # get_value(), so a malformed path (a doubled dot) raises UsageError
-        # and is swallowed into the default exactly like a missing key would
-        # be - the caller cannot tell "never written" from "you typed the
-        # path wrong".
+        # A malformed path (a doubled dot) must be reported as a usage
+        # error, not silently swallowed into the default - the caller
+        # cannot otherwise tell "never written" from "you typed the path
+        # wrong".
         self.write_state({"batch": {"id": "xyz"}})
 
         result = self.run_cli("get", "batch..id", "--default", "7")
 
-        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("usage", result.stderr.lower())
         self.assertNotEqual(result.stdout.strip(), "7")
+
+    # -- get --default: a repeated flag is a usage error, not last-wins -----
+
+    def test_get_repeated_default_flag_is_a_usage_error(self) -> None:
+        self.write_state({"batch": {"id": "xyz"}})
+
+        result = self.run_cli(
+            "get", "batch.id", "--default", "1", "--default", "2"
+        )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("usage", result.stderr.lower())
+        self.assertNotEqual(result.stdout.strip(), "2")
+
+    # -- get --default: an extra positional argument is a usage error -------
+
+    def test_get_extra_positional_argument_is_a_usage_error(self) -> None:
+        self.write_state({"batch": {"id": "xyz"}})
+
+        result = self.run_cli("get", "batch.id", "extra", "--default", "1")
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("usage", result.stderr.lower())
 
     def test_get_trailing_default_is_a_usage_error(self) -> None:
         self.write_state({"batch": {"id": "xyz"}})
