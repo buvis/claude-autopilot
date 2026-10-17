@@ -713,6 +713,31 @@ def test_cjk_terminators_end_the_citation_window() -> None:
     _assert_quotes(_find(prompt), prompt, "plan-tasks")
 
 
+def test_unspaced_cjk_terminator_ends_the_citation_window_before_a_real_paren() -> None:
+    # PRD 00324 finding: a lookahead-gated "。" only closed the window when
+    # whitespace or a closer followed it - but CJK prose is normally
+    # written with no space after "。", and this fixture's closer is a real
+    # ")" (not an emoticon mask, unlike the spaced fixture above), so it
+    # must still fail to pair with the earlier "(" and wrap the order.
+    prompt = "Hi (all。Run plan-tasks for PRD 00300 for every task。Thanks)"
+    _assert_quotes(_find(prompt), prompt, "plan-tasks")
+
+
+@pytest.mark.parametrize("terminator", ["。", "！", "？"])
+def test_cjk_terminators_close_the_citation_sentence_unconditionally(
+    terminator: str,
+) -> None:
+    # The lexicon regex ends a citation sentence on any of the three CJK
+    # terminators with NO lookahead, unlike "." which stays gated against
+    # dotted identifiers - checked directly against the regex (decoupled
+    # from `_normalize`, which folds the fullwidth "！"/"？" to their ASCII
+    # forms before any guard logic runs, so only "。" reaches this regex
+    # unfolded in production text).
+    match = _guard_module()._CITE_SENTENCE_BOUNDARY.search(f"a{terminator}b")
+    assert match is not None
+    assert match.start() == 1
+
+
 def test_digit_preceded_quote_never_opens_an_own_wrapper_run() -> None:
     # The '"' right after "5" is a unit mark and opens no run of its own: it
     # must not let a LATER, unrelated '"' pair up as if the skipped mark had

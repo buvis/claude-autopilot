@@ -225,9 +225,12 @@ _CITE_SENTENCE_BOUNDARY = re.compile(
     # `+ run gives one backtick back on a multi-backtick closer ("PRD 00300.``(
     # verbatim)"), the class matches that backtick, and the terminator wrongly
     # ends the citation sentence.
-    # The CJK full stop, exclamation and question marks end a sentence exactly
-    # as their ASCII forms do.
-    r"""[.!?。！？](?=\s|[]'"’”»」)]|`*\s*(?:\Z|\n)|`+[ \t]*[^(\s`])|\n""",
+    # The CJK full stop, exclamation and question marks end a sentence
+    # unconditionally, with no lookahead: unlike `.`, `!`, `?` they carry no
+    # dotted-identifier ambiguity, and CJK prose is normally written with no
+    # space after them (PRD 00324 finding: a spaced payload closed the
+    # window, the same unspaced one did not).
+    r"""[。！？]|[.!?](?=\s|[]'"’”»」)]|`*\s*(?:\Z|\n)|`+[ \t]*[^(\s`])|\n""",
 )
 
 _AGOGE_PREFIX = "agoge:"
