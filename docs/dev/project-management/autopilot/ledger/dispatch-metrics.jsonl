@@ -4993,3 +4993,28 @@
 {"id":"65af91d8","ended_at":1792232576,"elapsed_s":381,"outcome":"ok","detail":null}
 {"id":"d07287f5","ended_at":1792232576,"elapsed_s":788,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"review","edge":"leave","at":1792232612,"phase":"review","prd":"00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"}
+{"id":"7ed075b2","kind":"tess","task":"5","queued_at":1792232720,"prompt_bytes":153650}
+{"id":"b741fa3c","kind":"tess","task":"5","queued_at":1792232730,"prompt_bytes":46869}
+{"id":"28cfe121","kind":"ivan","task":"5","queued_at":1792233029,"prompt_bytes":41103}
+{"id":"878a3eb3","kind":"pat","task":"5","queued_at":1792233758,"prompt_bytes":17973}
+{"id":"1cfef524","kind":"ivan","task":"5","queued_at":1792233804,"prompt_bytes":6329}
+{"id":"ba8f419f","kind":"pat","task":"5","queued_at":1792234107,"prompt_bytes":8779}
+{"id":"d945074a","kind":"tess","task":"6","queued_at":1792234197,"prompt_bytes":42408}
+{"id":"84916b1a","kind":"ivan","task":"6","queued_at":1792234421,"prompt_bytes":10571}
+{"id":"1b7eea2c","kind":"pat","task":"6","queued_at":1792234514,"prompt_bytes":11857}
+{"id":"4d2750df","kind":"tess","task":"7","queued_at":1792234581,"prompt_bytes":19984}
+{"id":"3225789b","kind":"ivan","task":"7","queued_at":1792234702,"prompt_bytes":12982}
+{"id":"24185121","kind":"pat","task":"7","queued_at":1792234904,"prompt_bytes":11602}
+{"id":"7ed075b2","ended_at":1792235773,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"b741fa3c","ended_at":1792235773,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"28cfe121","ended_at":1792235773,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"878a3eb3","ended_at":1792235773,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"1cfef524","ended_at":1792235773,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"ba8f419f","ended_at":1792235773,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"d945074a","ended_at":1792235773,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"84916b1a","ended_at":1792235773,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"1b7eea2c","ended_at":1792235773,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"4d2750df","ended_at":1792235773,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"3225789b","ended_at":1792235773,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"id":"24185121","ended_at":1792235773,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"kind":"handoff","site":"review","edge":"leave","at":1792235773,"phase":"review","prd":"00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"}
