@@ -586,6 +586,176 @@
       "consensus": "1/4",
       "reason": "rework cap reached with this finding unresolved",
       "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md"
+    },
+    {
+      "cycle": 1,
+      "issue": "Unrelated formatter reflow is mixed into the diff (import blocks, `__all__` order, signatures, call sites and asserts rewrapped). None of it traces to the PRD, and it buries the real change in a roughly 680-line diff.",
+      "severity": "\ud83d\udfe1",
+      "file": "skills/run-autopilot/cli/loop.py:48",
+      "action": "deferred",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+    },
+    {
+      "cycle": 1,
+      "issue": "skills/run-autopilot/cli/test_routing.py exceeds the 800-line limit at 804 lines",
+      "severity": "\ud83d\udfe1",
+      "file": "skills/run-autopilot/cli/test_routing.py:804",
+      "action": "deferred",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+    },
+    {
+      "cycle": 1,
+      "issue": "The diff adds code to files already past the 800-line cap: `__main__.py` is 2030 lines and test_discovery.py is 1703.",
+      "severity": "\u26aa",
+      "file": "skills/run-autopilot/cli/__main__.py:1951",
+      "action": "deferred",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+    },
+    {
+      "cycle": 1,
+      "issue": "`cli/__main__.py` and `scripts/tracon/test_discovery.py` already exceed the 800-line limit. Splitting these existing modules is outside this PRD's seven targeted fixes.",
+      "severity": "\u26aa",
+      "file": "skills/run-autopilot/cli/__main__.py:2023",
+      "action": "deferred",
+      "reason": "deferred by review-close",
+      "type": "deferred_decision",
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R1",
+      "issue": "`_find_autopilot_dir_in_repo` lets subprocess.TimeoutExpired and OSError from `git rev-parse` escape uncaught, so `markers --check/--clear` dies with a traceback instead of a controlled refusal naming `--state` (skills/run-autopilot/cli/__main__.py:1925)",
+      "severity": "medium",
+      "consensus": "2/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R2",
+      "issue": "Both new git-failure tests assert `raised or code != 0`, an either-or hedge any unrelated exception satisfies (skills/run-autopilot/cli/test_markers.py:845)",
+      "severity": "medium",
+      "consensus": "2/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R3",
+      "issue": "lane-dispatch.md's new sentence \"No lane step writes that file today\" is time-relative prose; state the rule instead (skills/fast-track/references/lane-dispatch.md:294)",
+      "severity": "medium",
+      "consensus": "2/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R4",
+      "issue": "Every nonzero git result still enables an unrestricted ancestor walk (corruption, dubious ownership), so an unrelated parent marker can be cleared; permit unbounded discovery only for an explicit \"not a repository\" result (skills/run-autopilot/cli/__main__.py:1931)",
+      "severity": "high",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R5",
+      "issue": "The CHANGELOG entry still calls docs/dev/tmp/fast-track-started \"the epoch the lane writes at item start\" while lane-dispatch.md now says it is optional and operator-written (CHANGELOG.md:105)",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R6",
+      "issue": "markers without `--state` runs `git rev-parse` with no guard for a missing binary or a timeout, and outside a repo the walk-up is unbounded again (skills/run-autopilot/cli/__main__.py:1925; same theme as R1 and R4)",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R7",
+      "issue": "test_clear_refuses_when_git_toplevel_lookup_times_out and ..._raises_oserror hedge with 'or': either outcome satisfies them (skills/run-autopilot/cli/test_markers.py:226, :256; same defect as R2)",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R8",
+      "issue": "The new `stop` parameter on _walk_up.find_autopilot_dir has no direct test in test_walk_up.py (skills/run-autopilot/scripts/_walk_up.py:53)",
+      "severity": "low",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R9",
+      "issue": "argparse.ArgumentParser(..., exit_on_error=True) passes the default value, so the argument is redundant (skills/run-autopilot/scripts/statectl.py:156)",
+      "severity": "low",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R10",
+      "issue": "record_item.py's module docstring still says \"Every write is best-effort and exits 0\" and shows --started as mandatory, while omitting both --started and the started file now exits 2 (skills/fast-track/scripts/record_item.py:6)",
+      "severity": "low",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R12",
+      "issue": "selectable()'s docstring still says only \"below U+0020, or U+007F\" are excluded, stale now that line breaks and every Cc character are excluded (skills/run-autopilot/cli/selection.py:61)",
+      "severity": "low",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R13",
+      "issue": "The tracon test asserts `usage` and `root` as two separate stderr substrings, so it does not pin that the usage line itself names root (skills/run-autopilot/scripts/tracon/test_discovery.py:1700)",
+      "severity": "low",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+    },
+    {
+      "type": "cap-overflow",
+      "cycle": 2,
+      "ref": "R18",
+      "issue": "[MECH] 3 touched tests pass against the pre-change code, including test_get_trailing_default_is_a_usage_error, so the tightened assertions do not pin this diff's argparse change (skills/run-autopilot/scripts/test_statectl_decide.py)",
+      "severity": "medium",
+      "consensus": "1/4",
+      "reason": "rework cap reached with this finding unresolved",
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
     }
   ]
 }
