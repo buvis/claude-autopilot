@@ -5236,3 +5236,22 @@
 {"id":"b4f33253","ended_at":1792259011,"elapsed_s":335,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1792259424,"phase":"done","prd":"00345-launch-loop-sessions-with-ponytail-off-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1792259582,"phase":"build","prd":"00347-never-run-the-release-script-as-a-card-gate-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792259643,"phase":"build","prd":"00347-never-run-the-release-script-as-a-card-gate-v1.md"}
+{"id":"eec3fd47","kind":"fast-track:tess","task":"00347-never-run-the-release-script-as-a-card-gate-v1-c1","queued_at":1792259722,"prompt_bytes":65921}
+{"id":"eec3fd47","ended_at":1792259785,"elapsed_s":63,"outcome":"ok","detail":null}
+{"id":"00fc02ef","kind":"fast-track:ivan","task":"00347-never-run-the-release-script-as-a-card-gate-v1-c1","queued_at":1792259815,"prompt_bytes":12368}
+{"id":"00fc02ef","ended_at":1792259944,"elapsed_s":129,"outcome":"ok","detail":null}
+{"id":"26d6816d","kind":"fast-track:fanout","task":"00347-never-run-the-release-script-as-a-card-gate-v1-c1","queued_at":1792260075,"prompt_bytes":6271}
+{"id":"8cdc0000","kind":"fast-track:blake","task":"00347-never-run-the-release-script-as-a-card-gate-v1-c1","queued_at":1792260078,"prompt_bytes":8640}
+{"id":"e98e1d8c","kind":"fast-track:eve","task":"00347-never-run-the-release-script-as-a-card-gate-v1-c1","queued_at":1792260081,"prompt_bytes":5664}
+{"id":"52003c03","kind":"fast-track:bob","task":"00347-never-run-the-release-script-as-a-card-gate-v1-c1","queued_at":1792260083,"prompt_bytes":9472}
+{"id":"cc90ad4c","kind":"fast-track:carl","task":"00347-never-run-the-release-script-as-a-card-gate-v1-c1","queued_at":1792260087,"prompt_bytes":6627}
+{"id":"26d6816d","ended_at":1792260212,"elapsed_s":137,"outcome":"ok","detail":null}
+{"id":"8cdc0000","ended_at":1792260224,"elapsed_s":146,"outcome":"ok","detail":null}
+{"id":"52003c03","ended_at":1792260232,"elapsed_s":149,"outcome":"error","detail":"sandbox blocked, no source read"}
+{"id":"f7e9c754","kind":"fast-track:bob","task":"00347-never-run-the-release-script-as-a-card-gate-v1-c1","queued_at":1792260235,"prompt_bytes":9472}
+{"id":"cc90ad4c","ended_at":1792260341,"elapsed_s":254,"outcome":"ok","detail":null}
+{"id":"f7e9c754","ended_at":1792260348,"elapsed_s":113,"outcome":"error","detail":"sandbox blocked again on retry, no source read"}
+{"id":"8cdc0000","ended_at":1792260393,"elapsed_s":315,"outcome":"ok","detail":null}
+{"id":"e98e1d8c","ended_at":1792260393,"elapsed_s":312,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"build","edge":"leave","at":1792260923,"phase":"build","prd":"00347-never-run-the-release-script-as-a-card-gate-v1.md"}
