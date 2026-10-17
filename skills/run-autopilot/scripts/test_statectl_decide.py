@@ -181,7 +181,12 @@ class StatectlDecideTest(unittest.TestCase):
         self.write_state({"batch": {"id": "xyz"}})
 
         result = self.run_cli(
-            "get", "batch.id", "--default", "1", "--default", "2"
+            "get",
+            "batch.id",
+            "--default",
+            "1",
+            "--default",
+            "2",
         )
 
         self.assertEqual(result.returncode, 1)
@@ -203,7 +208,8 @@ class StatectlDecideTest(unittest.TestCase):
 
         result = self.run_cli("get", "batch.id", "--default")
 
-        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("usage", result.stderr.lower())
         self.assertNotIn("Traceback", result.stderr)
         self.assertNotIn("IndexError", result.stderr)
 
