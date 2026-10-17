@@ -111,6 +111,25 @@ def test_reuse_verdict_refuses_an_empty_commands_list(repo: Path) -> None:
     assert verification.reuse_verdict(empty, repo, head, gate_command=GATE) == ("stale", {})
 
 
+def test_record_with_nonzero_summary_exit_is_not_reused(repo: Path) -> None:
+    # A record whose `commands` entry exited 0 and whose `failed` count is
+    # 0, but whose `summary_exit` names the gate's dropped EXIT token (1).
+    # Reuse eligibility has to read `summary_exit` itself, not only the
+    # already-folded `failed` count: a shape check that forgets the new key
+    # would let a record like this -- failed==0, commands all green --
+    # certify a gate the EXIT token says was actually red.
+    base = _git(repo, "rev-parse", "HEAD")
+    head = _commit(repo, f"{STORE}/autopilot/state.json", "{}\n")
+
+    record = _record(base)
+    record["summary_exit"] = 1
+
+    assert verification.reuse_verdict(record, repo, head, gate_command=GATE) == (
+        "stale",
+        {},
+    )
+
+
 def test_reuse_verdict_docstring_states_the_tolerances_it_applies() -> None:
     doc = (verification.reuse_verdict.__doc__ or "").lower()
 

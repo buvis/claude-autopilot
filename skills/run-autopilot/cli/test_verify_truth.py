@@ -775,3 +775,40 @@ def test_run_gate_line_names_lock_timeout_and_head_moved(
 
         assert out["tests_line"] == expected
         assert out.get("dirty_paths") == fake["dirty_paths"]
+
+
+def test_record_keeps_true_failed_and_summary_exit(repo: Path) -> None:
+    # The summary line's own EXIT token (1) disagrees with its FAIL count
+    # (0): the gate's process exits 0. The caller-facing `result["failed"]`
+    # must stay the true parsed count (0) -- only the PERSISTED record is
+    # forced non-zero, and it must also carry the dropped EXIT token
+    # explicitly as `summary_exit`, not only as a folded `failed`.
+    head = _git(repo, "rev-parse", "HEAD")
+    command = "printf 'PASS 4 FAIL 0 SKIP 0 EXIT 1\\n'"
+
+    result = verification.run_gate(command, repo, head, 1)
+
+    assert result["recorded"] is True
+    assert result["failed"] == 0
+
+    record = json.loads((repo / verification.RECORD_REL).read_text())
+    assert record["failed"] != 0
+    assert record["summary_exit"] == 1
+
+
+def test_exit_2_json_error_carries_the_stderr_prefix(tmp_path: Path) -> None:
+    # Every exit-2 refusal's stderr line is prefixed "autopilot: verify: ".
+    # The JSON line on stdout -- the one a caller actually parses -- must
+    # carry the same prefix in its "error" field, not a bare message that
+    # silently drops the context stderr already names.
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    _git(empty, "init", "-q")
+
+    proc = _run_verify(empty, "echo 'PASS 1 FAIL 0 SKIP 0 EXIT 0'")
+
+    assert proc.returncode == 2
+    lines = proc.stdout.splitlines()
+    assert len(lines) == 1, proc.stdout
+    payload = json.loads(lines[0])
+    assert payload["error"].startswith("autopilot: verify: "), payload

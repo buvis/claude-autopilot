@@ -31,7 +31,7 @@ from pathlib import Path
 
 import pytest
 
-from cli import review_stage
+from cli import review_stage, verification
 
 GATE = "echo 'PASS 3 FAIL 0 SKIP 1 EXIT 0'"
 REPLAY = "uv run --no-project --with pytest python -m pytest"
@@ -798,6 +798,121 @@ def test_blake_gets_filesystem_notes_only_when_the_store_is_a_symlink(
     assert f"Project root: {golden['root']}" in notes
     assert f"`docs/dev/project-management` realpath: {real_store.resolve()}" in notes
     assert "`rg --files` does not descend into dot-directories" in notes
+
+
+def _gate_result(**overrides) -> dict:
+    """A `verification.run_gate`-shaped result, defaulting to a clean green
+    run so each test only overrides what it needs to probe."""
+    base = {
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0,
+        "exit": 0,
+        "raw_line": "PASS 3 FAIL 0 SKIP 0 EXIT 0",
+        "timed_out": False,
+        "recorded": True,
+        "dirty": False,
+        "dirty_paths": [],
+        "lock_timeout": False,
+        "head_moved": False,
+        "waited_s": 0.0,
+    }
+    base.update(overrides)
+    return base
+
+
+def test_gate_line_marks_nonzero_process_exit_red() -> None:
+    # The gate's own process exited 5 even though the parsed summary line
+    # reads all-clean (PASS 3 FAIL 0 SKIP 0 EXIT 0). The counts alone must
+    # not be trusted to call this green: the line has to say the gate was
+    # treated as failed, and must not read as a plain success line.
+    result = _gate_result(exit=5)
+
+    line = review_stage._gate_result_line(result)
+
+    assert line != "Tests: 3 passed, 0 failed, 0 skipped (suite run this cycle)"
+    assert "treated as failed" in line
+    assert "5" in line
+
+
+def test_gate_line_marks_nonzero_exit_token_red() -> None:
+    # The process itself exited 0, but the summary line's own EXIT token is
+    # 1 (FAIL 0). This is the "dropped failure" shape: counts alone read
+    # green, and the real EXIT token must still turn the line red.
+    result = _gate_result(
+        exit=0,
+        raw_line="PASS 3 FAIL 0 SKIP 0 EXIT 1",
+    )
+
+    line = review_stage._gate_result_line(result)
+
+    assert line != "Tests: 3 passed, 0 failed, 0 skipped (suite run this cycle)"
+    assert "treated as failed" in line
+
+
+def test_gate_line_never_reads_zero_failed_for_a_red_gate(env: dict) -> None:
+    # A gate whose test OUTPUT happens to echo a clean-looking summary line,
+    # then crashes with its own exit 2 (a shape the summary regex alone
+    # cannot distinguish from a real green run). The rendered line must not
+    # claim the gate passed.
+    gate = (
+        "python3 -c \""
+        "out = 'PASS 9 FAIL 0 SKIP 0 EXIT 0'\n"
+        "assert out == 'PASS 9 FAIL 0 SKIP 0 EXIT 0'\n"
+        "print(out)\n"
+        "import sys; sys.exit(2)\""
+    )
+
+    out = review_stage.run_gate_line(env["repo"], gate, "00001-c1")
+
+    assert out["tests_line"] != (
+        "Tests: 9 passed, 0 failed, 0 skipped (suite run this cycle)"
+    )
+    assert "treated as failed" in out["tests_line"]
+
+
+def test_gate_line_reports_ran_then_dirtied_with_counts() -> None:
+    # The gate ran and parsed real counts (2 passed, 1 failed), then left
+    # the tree dirty outside the store. The current "(gate skipped: ...)"
+    # wording throws the counts away; the fix has to keep them visible
+    # instead of reading as though no gate ran at all.
+    result = _gate_result(
+        passed=2,
+        failed=1,
+        exit=1,
+        raw_line="PASS 2 FAIL 1 SKIP 0 EXIT 1",
+        dirty=True,
+        dirty_paths=["stray.txt"],
+        recorded=False,
+    )
+
+    line = review_stage._gate_result_line(result)
+
+    assert "2 passed" in line
+    assert "1 failed" in line
+    assert "stray.txt" in line
+
+
+def test_run_gate_line_log_is_none_when_no_gate_spawned(
+    env: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A lock-timeout refusal never spawns a gate, so no log file was ever
+    # opened for it -- run_gate_line must not hand back the computed log
+    # path as though one exists.
+    refusal = _gate_result(
+        passed=None,
+        failed=None,
+        skipped=None,
+        exit=None,
+        raw_line=None,
+        recorded=False,
+        lock_timeout=True,
+    )
+    monkeypatch.setattr(verification, "run_gate", lambda *a, **k: refusal)
+
+    out = review_stage.run_gate_line(env["repo"], GATE, "00001-c1")
+
+    assert out.get("log") is None
 
 
 if __name__ == "__main__":

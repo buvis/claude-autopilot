@@ -609,3 +609,26 @@ def test_unparseable_counts_record_null_rather_than_a_guess() -> None:
         "suite whose summary line does not parse must leave no "
         "last-verification.json record, not one with guessed or null counts."
     )
+
+
+def test_final_verification_documents_writer_and_summary_exit() -> None:
+    # `run_gate`'s own record shape carries a `writer: run_gate` marker
+    # (reuse refuses any record without it) and a `summary_exit` field (the
+    # gate's parsed EXIT token, kept distinct from the already-folded
+    # `failed` count). Neither is in the documented JSON shape, so a reader
+    # who follows this doc alone cannot tell the record apart from one a
+    # session hand-wrote, or recover the dropped EXIT token at all.
+    verification = _FINAL_VERIFICATION.read_text()
+
+    assert '"writer"' in verification, (
+        "references/final-verification.md's recorded-result JSON shape has "
+        "no \"writer\" key. `_write_record` always stamps "
+        "writer: \"run_gate\", and reuse refuses any record missing it - the "
+        "documented shape must say so."
+    )
+    assert "summary_exit" in verification, (
+        "references/final-verification.md never names `summary_exit`. The "
+        "gate's own EXIT token can disagree with its FAIL count (dropped "
+        "failure); the record has to carry that token explicitly, not only "
+        "as a folded `failed` count, and the doc must say so."
+    )
