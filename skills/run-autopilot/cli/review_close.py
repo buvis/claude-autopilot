@@ -688,9 +688,10 @@ def _prelock_refusal(
         return {"applied": False, "reason": "already applied"}
     if batch_id == "tail-sweep":
         return _tail_sweep_refusal(loaded, review_file, chosen_findings)
-    single_voice = _single_voice_refusal(chosen_findings, batch_id)
-    if single_voice is not None:
-        return single_voice
+    if batch_id == "decision-gate":
+        single_voice = _single_voice_refusal(chosen_findings, batch_id)
+        if single_voice is not None:
+            return single_voice
     return _carry_refusal(loaded, chosen_findings)
 
 
