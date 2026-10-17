@@ -259,8 +259,8 @@ SINGLE_VOICE_DISCARD_ROW = dict(
     ref="R12",
     found_by=["CARL"],
 )
-NO_FOUND_BY_FIX_ROW = dict(
-    _finding(MED, "src/none.py:5", "no found_by key at all", "fix"),
+NULL_FOUND_BY_FIX_ROW = dict(
+    _finding(MED, "src/none.py:5", "found_by is null", "fix"),
     ref="R13",
     found_by=None,
 )
@@ -272,15 +272,15 @@ NO_FOUND_BY_FIX_ROW = dict(
         (MULTI_VOICE_FIX_ROW, False),
         (SINGLE_VOICE_HIGH_FIX_ROW, False),
         (SINGLE_VOICE_DISCARD_ROW, False),
-        (NO_FOUND_BY_FIX_ROW, True),
+        (NULL_FOUND_BY_FIX_ROW, True),
     ],
-    ids=["multi-voice-fix", "single-voice-high-fix", "single-voice-discard", "no-found-by-key"],
+    ids=["multi-voice-fix", "single-voice-high-fix", "single-voice-discard", "null-found-by"],
 )
 def test_decision_gate_single_voice_guard_targets_only_medium_low_fix_rows(
     tmp_path: Path, row: dict, expect_refused: bool
 ) -> None:
     """A multi-voice `fix` row, a single-voice `fix` row above Medium/Low, a
-    single-voice non-`fix` row, and a row with no `found_by` key at all each
+    single-voice non-`fix` row, and a row whose `found_by` is null each
     exercise one condition of the guard on its own."""
     rows = [row]
     review = _review(tmp_path, consolidated=_table(rows))
