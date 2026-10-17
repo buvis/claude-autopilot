@@ -50,7 +50,7 @@ Generated: 2026-10-17 (catchup at HEAD 1228d38b, 00323 closed, entering 00324)
 - [x] 00322-kill-the-gate-on-every-signal-v1 (2 cycles, cap-out: 4 HIGH + 12 lower deferred)
 - [x] 00323-tests-line-and-verify-record-say-red-v1 (1 cycle)
 - [x] 00324-guard-pairs-delimiters-as-nested-runs-v1 (2 cycles, cap-out: 2 HIGH + 6 lower deferred)
-- [ ] 00325-sweep-reads-emoji-rows-by-character-class-v1
+- [x] 00325-sweep-reads-emoji-rows-by-character-class-v1 (1 cycle, fast-track)
 - [ ] 00326-close-the-loops-remaining-verb-and-ledger-truths-v2
 - [ ] 00327-release-gate-and-notes-say-what-ships-v2
 - [ ] 00330-hand-the-tail-sweep-to-a-task-tier-session-v1

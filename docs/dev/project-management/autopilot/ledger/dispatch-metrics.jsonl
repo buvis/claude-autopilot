@@ -4973,3 +4973,5 @@
 {"id":"406aa5e3","kind":"fast-track:delta","task":"00325-sweep-reads-emoji-rows-by-character-class-v1-c1","queued_at":1792227333,"prompt_bytes":5163}
 {"id":"406aa5e3","ended_at":1792228034,"elapsed_s":701,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1792228512,"phase":"done","prd":"00325-sweep-reads-emoji-rows-by-character-class-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1792228576,"phase":"done","prd":"00325-sweep-reads-emoji-rows-by-character-class-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1792228635,"phase":"build","prd":"00325-sweep-reads-emoji-rows-by-character-class-v1.md"}
