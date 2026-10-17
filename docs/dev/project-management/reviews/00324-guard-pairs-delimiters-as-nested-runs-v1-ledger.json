@@ -1,0 +1,42 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "`_FOLLOW` matches are not collected once per field and looked up by bisect, as the spec requires. `_ordered_to_follow` still calls `_FOLLOW.search(text, end, min(sentence_end, end + 200))` for each `SKILL.md` mention, and `_boundaries` returns no `_FOLLOW` match list. The budget is met anyway (0.14 to 0.25 s/MB against the 0.3 bound), but the 0.25 s/MB case leaves little headroom and the specified design is absent.",
+    "file": "hooks/guard_phase_delegation.py:562",
+    "reason": "The design doc's own remedy path makes the once-per-field cache the fallback only if the dense-budget test goes red; it is green (0.14-0.25 s/MB against 0.3). Adding the cache now is unrequested production change."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`·` is not added to `_CITE_SENTENCE_BOUNDARY`, although the PRD Solution and Problem sections name it. The task contract and design deliberately drop it, so this is a recorded deviation and not a defect.",
+    "file": "hooks/guard_phase_delegation_lexicon.py:230",
+    "reason": "Decided at the design gate (design doc Review log, dispatch-1 non-blocker): no required payload exercises `·`, so adding an untested terminator is scope creep. Standing decision for this PRD."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "medium",
+    "issue": "The supplied fail-first replay reports that `test_backtick_exclusion_in_cite_boundary_can_fail` passes against base, contradicting Phase 0's eight-red requirement. Retained as an existing-invariant regression test: making unchanged correct behavior fail is outside a behavior-preserving review fix.",
+    "file": "hooks/test_guard_phase_delegation_citations.py:721",
+    "reason": "The test is a mutation test by construction: it swaps the shipped pattern and asserts the verdict flips, so it cannot be red at base while the exclusion is correct. Bob himself files it as KNOWN. Phase 0's eight-red acceptance holds for seven; recorded as a documented deviation."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`test_backtick_exclusion_in_cite_boundary_can_fail` passes against the pre-change code (the replay [MECH] line), so it is not red-first. That is intended: it mutates the shipped pattern and asserts the verdict flips. It would fail if the exclusion were deleted, because of its `broken_pattern != original_pattern` assertion. Task 1's \"eight tests fail at base\" acceptance therefore holds for seven only.",
+    "file": "hooks/test_guard_phase_delegation_citations.py:1255",
+    "reason": "Same fact as the KNOWN entry above and the mechanical replay line; the mutation-test shape is intended. No change."
+  },
+  {
+    "cycle": 1,
+    "disposition": "settled-deferral",
+    "severity": "low",
+    "issue": "`_NEGATION_REACH_END` newly denies coordinated negated lists such as `Never run work and plan-tasks for PRD 00300 for every task.`, which the 5-word window previously allowed. This is the safe direction for a guard. The design's Risks section does not list it.",
+    "file": "hooks/guard_phase_delegation.py:638",
+    "reason": "Accepted over-denial in the fail-closed direction, which the PRD's own negation wording prescribes (`and`/`then`/`but` end the reach). A guard denying more is safe; no behavior change warranted."
+  }
+]

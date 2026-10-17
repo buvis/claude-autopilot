@@ -1,0 +1,9 @@
+[
+  {
+    "cycle": 1,
+    "finding": "Cannot statically verify: acceptance suites, recorded replay, and timing limits. Run both Task 2 pytest commands and `python3 dev/bin/replay_delegation_guard.py`; confirm per-task `refused 1`, then measure the dense fixture at 1 MB against `BUDGET_S_PER_MB` and at 8 MB against five seconds.",
+    "file": null,
+    "command": "python3 dev/bin/replay_delegation_guard.py",
+    "source": "bob"
+  }
+]
