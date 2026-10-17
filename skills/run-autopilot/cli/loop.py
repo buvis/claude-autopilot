@@ -743,7 +743,6 @@ class Loop(GatesMixin, DecisionMixin, ActMixin):
                 return code
 
             ts_start, phase_launched, plan, prd_launched = self._launch_phase(ap_dir)
-
             decision = self._decide(ap_dir, ts_start)
             self._fingerprint_bound(decision, ap_dir / "state.json")
             self._budget_bound(decision, ap_dir)

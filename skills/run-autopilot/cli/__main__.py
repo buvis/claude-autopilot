@@ -1922,30 +1922,15 @@ def _find_autopilot_dir_in_repo(start: Path) -> Path | None:
     except OSError:
         return None
     toplevel: Path | None = None
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(current), "rev-parse", "--show-toplevel"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if result.returncode == 0:
-            toplevel = Path(result.stdout.strip()).resolve()
-    except (OSError, subprocess.TimeoutExpired):
-        toplevel = None
-    while True:
-        candidate = current / _walk_up.AUTOPILOT_REL_PATH
-        try:
-            if candidate.is_dir():
-                return candidate
-        except OSError:
-            pass
-        if toplevel is not None and current == toplevel:
-            return None
-        parent = current.parent
-        if parent == current:
-            return None
-        current = parent
+    result = subprocess.run(
+        ["git", "-C", str(current), "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    if result.returncode == 0:
+        toplevel = Path(result.stdout.strip()).resolve()
+    return _walk_up.find_autopilot_dir(current, stop=toplevel)
 
 
 def _run_markers(args: argparse.Namespace) -> int:

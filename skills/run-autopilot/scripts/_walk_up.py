@@ -50,12 +50,14 @@ AUTOPILOT_REL_PATH = Path("docs") / "dev" / "project-management" / "autopilot"
 INHERITED_MARKERS = (".handoff-requested", ".cap-fired")
 
 
-def find_autopilot_dir(start: Path) -> Path | None:
+def find_autopilot_dir(start: Path, stop: Path | None = None) -> Path | None:
     """Walk up from `start` looking for docs/dev/project-management/autopilot/.
 
     Returns the resolved path if found, None otherwise. Stops at filesystem
-    root. Resolves symlinks via `Path.resolve()` so callers get a stable
-    absolute path even when invoked through a symlinked cwd.
+    root, or at `stop` (already-resolved) if given - a caller bounding the
+    climb to e.g. a git toplevel passes it there instead of re-walking.
+    Resolves symlinks via `Path.resolve()` so callers get a stable absolute
+    path even when invoked through a symlinked cwd.
     """
     try:
         current = start.resolve()
@@ -68,6 +70,8 @@ def find_autopilot_dir(start: Path) -> Path | None:
                 return candidate
         except OSError:
             pass
+        if stop is not None and current == stop:
+            return None
         parent = current.parent
         if parent == current:
             return None

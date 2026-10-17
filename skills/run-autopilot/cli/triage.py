@@ -163,7 +163,9 @@ def qualifies(row) -> bool:
         return False
     if row.get("type") == "stall":
         return row.get("site") in (custody.CUSTODY_SITE, REGRESSION_SITE)
-    if str(row.get("action") or "").startswith("fix in cycle"):
+    if row.get("type") == "review-critical" and str(
+        row.get("action") or ""
+    ).startswith("fix in cycle"):
         return False
     return str(row.get("severity") or "").strip().casefold() in SEVERE
 
