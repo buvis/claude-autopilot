@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **fast-track**: a card never runs `dev/bin/release` as a gate; a criterion that names the release script is dropped loud and left to the human release step
 - **run-autopilot**: loop sessions start with the ponytail plugin off, so a headless orchestrator no longer cites it to skip the work skill's implementor, reviewer and adversarial dispatches
 - **run-autopilot**: `task-done`/`append-attempt` now refuse an attempt record carrying an invented word in a stamp field (e.g. `review: "orchestrator-reviewed"`), instead of writing it silently
 - **run-autopilot**: the loop's launch prompt tells each session it was started by the loop driver, so a live-loop rule in memory or notes no longer makes it refuse to work

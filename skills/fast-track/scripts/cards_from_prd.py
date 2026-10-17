@@ -32,6 +32,7 @@ _BACKTICK_SPAN = re.compile(r"`([^`]+)`")
 # PRD's acceptance line lists several tests of one file.
 _TEST_ID = re.compile(r"(?:([\w./-]+\.(?:py|sh)))?::(test_\w+)")
 _TEST_FILE = re.compile(r"[\w./-]+/test_[\w-]+\.(py|sh)")
+_RELEASE_SCRIPTS = ("dev/bin/release",)
 _PHASE_HEADING = re.compile(r"^### Phase \d+:")
 _PHASE_PARENTS = ("## Tasks", "## Implementation Phases")
 _CONSTRAINT_HEADINGS = ("## Constraints", "### Non-Goals", "## Non-Goals", "## Risks")
@@ -183,6 +184,11 @@ def _gates(
         if any(token in command for token in _CHAIN_TOKENS):
             print(
                 f"cards_from_prd.py: gates: dropped chained command: {command}",
+                file=sys.stderr,
+            )
+        elif command.removeprefix("bash ").split()[0] in _RELEASE_SCRIPTS:
+            print(
+                f"cards_from_prd.py: gates: dropped release command: {command}",
                 file=sys.stderr,
             )
         elif command not in gates:
