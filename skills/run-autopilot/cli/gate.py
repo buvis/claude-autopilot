@@ -87,7 +87,6 @@ import argparse
 import json
 import re
 import sys
-import unicodedata
 from pathlib import Path
 
 # Run by path (review_coverage_hook.py) there is no package, and the cli dir is
@@ -107,6 +106,7 @@ if __package__:
     )
     from .findings_section import TABLE_DATA_ROW_RE as TABLE_DATA_ROW_RE
     from .findings_section import _split_severity_cell as _split_severity_cell
+    from .gate_lead import _strip_lead
 else:
     from findings_section import (
         _CANDIDATE_ROW_RE,
@@ -121,6 +121,7 @@ else:
     )
     from findings_section import TABLE_DATA_ROW_RE as TABLE_DATA_ROW_RE
     from findings_section import _split_severity_cell as _split_severity_cell
+    from gate_lead import _strip_lead
 
 VERDICT_RE = re.compile(r"^Verdict: (converged|\d+ findings?)\s*$", re.MULTILINE)
 TESTS_RE = re.compile(
@@ -203,74 +204,12 @@ _FENCE_RUN_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 # followed by non-whitespace does not close, for both backtick and tilde
 # fences (CommonMark).
 _FENCE_CLOSE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
-# A mark that leads a finding-shaped line: ASCII bullets/emphasis, blockquote,
-# and the typographic bullet/dash variants a reviewer's renderer may produce.
-# PRD 00325 widened this with further single-character bullets (heading '#',
-# bullet-operator/middle-dot/black-circle/black-square/arrow, strikethrough
-# '~') found in real reviews' lead shapes.
-_LEAD_MARKS = frozenset("-*+_>•◦‣–—－#⁃∙·●▪→~")
-# Invisible single characters outside Unicode categories Zs/Cf that still show
-# up as lead in the wild: a variation selector (Mn), the braille blank (So)
-# and the Hangul filler (Lo) - each named explicitly rather than widened by
-# category, since those categories also hold ordinary letters.
-_INVISIBLE_LEAD_EXTRA = frozenset("️⠀ㅤ")
-# No `^`: re's `^` anchors to the real string start even with `.match(line,
-# i)`'s `pos` argument, which would silently stop this ever matching past
-# index 0 (`re.compile(r"^\d+[.)]").match("  1. x", 2)` is None, checked) —
-# an unanchored pattern plus `.match(line, i)` is what actually anchors the
-# match at `i`.
-_ORDINAL_LEAD_RE = re.compile(r"\d+[.)]|[A-Za-z]+\)|\(\d+\)")
-# Multi-character lead shapes consumed whole: a checkbox, an HTML comment or
-# `<details>` block, inline code, and a markdown link.
-_CHECKBOX_LEAD_RE = re.compile(r"\[[ xX]?\]")
-_HTML_COMMENT_LEAD_RE = re.compile(r"<!--.*?-->")
-_DETAILS_LEAD_RE = re.compile(r"<details>.*?</details>", re.IGNORECASE | re.DOTALL)
-_INLINE_CODE_LEAD_RE = re.compile(r"`[^`\n]*`")
-_LINK_LEAD_RE = re.compile(r"\[[^\]\n]*\]\([^)\n]*\)")
-_LEAD_SHAPE_RES = (
-    _ORDINAL_LEAD_RE,
-    _CHECKBOX_LEAD_RE,
-    _HTML_COMMENT_LEAD_RE,
-    _DETAILS_LEAD_RE,
-    _INLINE_CODE_LEAD_RE,
-    _LINK_LEAD_RE,
-)
 _EMOJI_ROW_DETAIL = "a severity emoji row the findings parser did not read:"
-
-
-def _strip_lead(line: str) -> str:
-    """Strip `line`'s lead, repeatedly, in any combination: ASCII space/tab,
-    every other Unicode category Zs or Cf code point (no-break space, zero-
-    width space, BOM/bidi-control), ASCII bullets (-, *, +), blockquote (>),
-    ordinals (\\d+[.)]), typographic bullets/dashes, and emphasis markers
-    (*, _). Stops at the first character none of these consume. Returns the
-    remainder, which may be empty. A mark repeats and nests freely: "> > ",
-    "-- " and "> > - **" are all lead, so a nested row's emoji is still the
-    first character of the content."""
-    i, n = 0, len(line)
-    while i < n:
-        ch = line[i]
-        if (
-            ch in " \t"
-            or ch in _INVISIBLE_LEAD_EXTRA
-            or unicodedata.category(ch) in ("Zs", "Cf")
-        ):
-            i += 1
-            continue
-        if ch in _LEAD_MARKS:
-            i += 1
-            continue
-        matched = False
-        for lead_re in _LEAD_SHAPE_RES:
-            m = lead_re.match(line, i)
-            if m:
-                i = m.end()
-                matched = True
-                break
-        if matched:
-            continue
-        break
-    return line[i:]
+# The `_unread_token` bare-[m/n]-token detail: distinct wording from the
+# structured-row detail below, so a prose token with no table shape around
+# it is never described as a "table row" the operator would hunt for in
+# vain.
+_PROSE_TOKEN_DETAIL = "a [m/n] progress token in prose:"
 
 
 def _is_emoji_row(line: str) -> bool:
@@ -602,11 +541,16 @@ def _unread_token(live: str) -> str | None:
                 f"line {i + 1}: a [m/n] token or table row the findings parser "
                 f"did not read: {line.strip()[:120]}"
             )
-        if _CONSENSUS_TOKEN_RE.search(line):
-            return (
-                f"line {i + 1}: a [m/n] token the findings parser "
-                f"did not read: {line.strip()[:120]}"
-            )
+        token = _CONSENSUS_TOKEN_RE.search(line)
+        if token:
+            stripped = line.strip()
+            quoted = stripped[:120]
+            if token.group(0) not in quoted:
+                # The quote budget cut before the token (a long prose lead),
+                # same fix as the emoji-row branch above: quote from the
+                # token's own position instead of the line's start.
+                quoted = stripped[stripped.index(token.group(0)) :][:120]
+            return f"line {i + 1}: {_PROSE_TOKEN_DETAIL} {quoted}"
     return None
 
 

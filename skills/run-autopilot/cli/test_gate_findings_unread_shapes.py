@@ -56,6 +56,10 @@ _EMOJI_SHAPES = {
     "tab indent, no bullet": f"\t{CRIT} crash on empty input",
     "plus bullet": f"+ {CRIT} crash on empty input",
     "paren ordinal": f"1) {CRIT} crash | src/a.py:3",
+    "colon before": f"- : {CRIT} crash",
+    "leading pipe": f"| {CRIT} x",
+    "bangs": f"!!! {CRIT} x",
+    "slashes": f"/// {CRIT} x",
 }
 
 
@@ -146,7 +150,8 @@ _EMOJI_NOT_FIRST = {
     "trailing": "- crash on empty input {}",
     "digit before": "- 3 {} crash",
     "other digit before": "- 7 {} crash",
-    "colon before": "- : {} crash",
+    # A colon is itself a non-alphanumeric lead (PRD 00325 CRITICAL finding),
+    # so it moved to _EMOJI_SHAPES below rather than staying here.
     "parenthesized word before": "- (x) {} crash",
     "letter ordinal before": "a. {} crash",
     "hash paren before": "#) {} x",
@@ -176,16 +181,17 @@ def test_an_emoji_past_the_first_character_after_the_lead_is_prose(
     _assert_prose_read(template.format(emoji))
 
 
-# Both halves of the rule are closed sets: the severity emoji, and the lead
-# marks that may precede one.
+# The severity-emoji half of the rule is a closed set: a check mark, a
+# purple circle or a puzzle piece is never read as a row even as the first
+# character. A pipe, bangs and slashes are non-alphanumeric leads like any
+# other (PRD 00325 CRITICAL finding) and moved to _EMOJI_SHAPES above.
+# Parens stay here: they are consumed only through the explicit ordinal/
+# checkbox/link shapes, never swept bare, so a lone "(" still blocks.
 _NOT_AN_EMOJI_ROW = {
     "check mark": "- ✅ all green",
     "purple circle": "- 🟣 note",
     "puzzle piece": "🧩 follow-up",
     "parenthesized emoji": f"( {CRIT} )",
-    "leading table pipe": f"| {CRIT} crash | src/a.py:3 |",
-    "bangs": f"!!! {CRIT} x",
-    "slashes": f"/// {CRIT} x",
 }
 
 
@@ -693,6 +699,22 @@ def test_prose_progress_token_error_names_token() -> None:
     row = "R1's [4/4] marker belongs inside a fence"
     text = _review_text(alice=row)
     assert gate._is_unread_line(row) is True
+    detail = gate._unread_token(text)
+    assert detail is not None
+    assert "[4/4]" in detail
+    assert "table row" not in detail
+
+
+def test_prose_progress_token_error_names_token_past_the_naive_cut() -> None:
+    """The same refusal, but with enough prose before the token that a naive
+    `line[:120]` cut lands before it - the token must still appear in the
+    detail (packet 19's real review, line 24: the token sits well past 120
+    characters of lead prose)."""
+    from cli import gate
+
+    row = "x" * 130 + " R1's [4/4] marker belongs inside a fence"
+    text = _review_text(alice=row)
+    assert len(row) > 120
     detail = gate._unread_token(text)
     assert detail is not None
     assert "[4/4]" in detail
