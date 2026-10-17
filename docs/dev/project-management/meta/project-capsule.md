@@ -49,7 +49,7 @@ Generated: 2026-10-17 (catchup at HEAD 1228d38b, 00323 closed, entering 00324)
 - [x] 00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2 (2 cycles)
 - [x] 00322-kill-the-gate-on-every-signal-v1 (2 cycles, cap-out: 4 HIGH + 12 lower deferred)
 - [x] 00323-tests-line-and-verify-record-say-red-v1 (1 cycle)
-- [ ] 00324-guard-pairs-delimiters-as-nested-runs-v1 (in progress, full lane: opus tier, design required)
+- [x] 00324-guard-pairs-delimiters-as-nested-runs-v1 (2 cycles, cap-out: 2 HIGH + 6 lower deferred)
 - [ ] 00325-sweep-reads-emoji-rows-by-character-class-v1
 - [ ] 00326-close-the-loops-remaining-verb-and-ledger-truths-v2
 - [ ] 00327-release-gate-and-notes-say-what-ships-v2
@@ -68,7 +68,10 @@ but HEAD's delegation guard still has four regressions against 0.9.0 until
 tail sweep (tasks 8-11) that closed the full gate green. 00322 cap-out at
 cycle 2 minted four fresh HIGH hold stubs (00336-00339) for the replay
 signal-cleanup gaps (_run_script SIGKILL leak, _run_in_worktree signal-guard
-coverage, CHANGELOG entry count, worktree-removal signal window).
+coverage, CHANGELOG entry count, worktree-removal signal window). 00324
+cap-out at cycle 2 minted two fresh HIGH hold stubs (00343, 00344) for
+nested-run bracket-pairing gaps (bracket-in-bracket bypass, unspaced
+fullwidth CJK terminators); quote/backtick/curly-quote variants are fixed.
 
 ### Batch 202610141430 (complete)
 - [x] 00277-catch-critical-rows-in-every-shape-v2 (2 cycles)
