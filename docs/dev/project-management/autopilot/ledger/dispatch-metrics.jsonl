@@ -5045,3 +5045,6 @@
 {"id":"30286551","ended_at":1792238569,"elapsed_s":274,"outcome":"ok","detail":null}
 {"id":"2ef46d3e","ended_at":1792238569,"elapsed_s":476,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"review","edge":"leave","at":1792238603,"phase":"review","prd":"00330-hand-the-tail-sweep-to-a-task-tier-session-v1.md"}
+{"id":"320bc3e8","kind":"pat","task":"3","queued_at":1792239156,"prompt_bytes":6152}
+{"id":"320bc3e8","ended_at":1792239575,"elapsed_s":null,"outcome":"lost","detail":"open at review/leave handoff"}
+{"kind":"handoff","site":"review","edge":"leave","at":1792239575,"phase":"done","prd":"00330-hand-the-tail-sweep-to-a-task-tier-session-v1.md"}
