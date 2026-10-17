@@ -5161,3 +5161,5 @@
 {"id":"deb1dafc","kind":"fast-track:delta","task":"00334-keep-the-test-only-skip-when-a-test-registers-itself-v1-c1","queued_at":1792250883,"prompt_bytes":4915}
 {"id":"deb1dafc","ended_at":1792251275,"elapsed_s":392,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1792251756,"phase":"done","prd":"00334-keep-the-test-only-skip-when-a-test-registers-itself-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1792251821,"phase":"done","prd":"00334-keep-the-test-only-skip-when-a-test-registers-itself-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1792251896,"phase":"build","prd":"00335-tell-tess-what-devon-will-try-v1.md"}
