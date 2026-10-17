@@ -44,27 +44,37 @@ class MarkersTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name)
-        self.autopilot_dir = self.root / "docs" / "dev" / "project-management" / "autopilot"
+        self.autopilot_dir = (
+            self.root / "docs" / "dev" / "project-management" / "autopilot"
+        )
         self.autopilot_dir.mkdir(parents=True)
 
     def test_check_reports_absent_as_false(self) -> None:
         # A fresh fixture dir: neither marker has ever been written.
-        proc = _run(["markers", "--check", "handoff-requested", "cap-fired"], cwd=self.root)
+        proc = _run(
+            ["markers", "--check", "handoff-requested", "cap-fired"], cwd=self.root
+        )
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
+        output = json.loads(proc.stdout)
+        output.pop("store", None)
         self.assertEqual(
-            json.loads(proc.stdout),
+            output,
             {"handoff-requested": False, "cap-fired": False},
         )
 
     def test_check_reports_present_as_true(self) -> None:
         (self.autopilot_dir / ".cap-fired").write_text("x", encoding="utf-8")
 
-        proc = _run(["markers", "--check", "handoff-requested", "cap-fired"], cwd=self.root)
+        proc = _run(
+            ["markers", "--check", "handoff-requested", "cap-fired"], cwd=self.root
+        )
 
         self.assertEqual(proc.returncode, 0, proc.stderr)
+        output = json.loads(proc.stdout)
+        output.pop("store", None)
         self.assertEqual(
-            json.loads(proc.stdout),
+            output,
             {"handoff-requested": False, "cap-fired": True},
         )
 
@@ -126,13 +136,17 @@ class MarkersTests(unittest.TestCase):
         container = self.root / "container"
         container.mkdir()
         (container / "docs").symlink_to(
-            second_store_repo / "docs", target_is_directory=True
+            second_store_repo / "docs",
+            target_is_directory=True,
         )
 
         nested_repo = container / "nested-repo"
         nested_repo.mkdir()
         subprocess.run(
-            ["git", "init", "-q"], cwd=nested_repo, check=True, capture_output=True
+            ["git", "init", "-q"],
+            cwd=nested_repo,
+            check=True,
+            capture_output=True,
         )
 
         proc = _run(["markers", "--check", "cap-fired"], cwd=nested_repo)
@@ -150,7 +164,8 @@ class MarkersTests(unittest.TestCase):
         output = json.loads(proc.stdout)
         self.assertIn("store", output)
         self.assertEqual(
-            Path(output["store"]).resolve(), self.autopilot_dir.resolve()
+            Path(output["store"]).resolve(),
+            self.autopilot_dir.resolve(),
         )
 
 

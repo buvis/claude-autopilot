@@ -104,7 +104,8 @@ def test_newline_named_backlog_file_is_not_selectable(tmp_path: Path) -> None:
 
     (tmp_path / "prds" / "backlog").mkdir(parents=True)
     (tmp_path / "prds" / "backlog" / name).write_text(
-        "---\n---\n\n# PRD\n", encoding="utf-8",
+        "---\n---\n\n# PRD\n",
+        encoding="utf-8",
     )
 
     prd, source, skips = selection.select_eligible(tmp_path / "prds")

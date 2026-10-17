@@ -31,6 +31,7 @@ silently truncated to five and mis-ordered.
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -45,8 +46,10 @@ def sequence(name: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
-def _has_control_char(name: str) -> bool:
-    return any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in name)
+def _has_line_break_or_control(name: str) -> bool:
+    if len(name.splitlines()) > 1:
+        return True
+    return any(unicodedata.category(ch) == "Cc" for ch in name)
 
 
 def selectable(names: Iterable[str]) -> list[str]:
@@ -62,7 +65,9 @@ def selectable(names: Iterable[str]) -> list[str]:
     picks = [
         n
         for n in names
-        if n.endswith(".md") and sequence(n) is not None and not _has_control_char(n)
+        if n.endswith(".md")
+        and sequence(n) is not None
+        and not _has_line_break_or_control(n)
     ]
     return sorted(picks, key=lambda n: (sequence(n) or 0, n))
 

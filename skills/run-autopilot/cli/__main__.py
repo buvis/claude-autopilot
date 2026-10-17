@@ -1907,24 +1907,71 @@ def _run_ensure_store(args: argparse.Namespace) -> int:
 
 def _add_markers(subparsers) -> None:
     p = subparsers.add_parser("markers")
+    p.add_argument("--state")
     group = p.add_mutually_exclusive_group(required=True)
     group.add_argument("--check", nargs="+", metavar="NAME")
     group.add_argument("--clear", nargs="+", metavar="NAME")
 
 
+def _find_autopilot_dir_in_repo(start: Path) -> Path | None:
+    """Like `_walk_up.find_autopilot_dir`, but never climbs above the git
+    toplevel of `start` - a nested repo with no store of its own must not
+    resolve an unrelated repository's store that happens to sit above it."""
+    try:
+        current = start.resolve()
+    except OSError:
+        return None
+    toplevel: Path | None = None
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(current), "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0:
+            toplevel = Path(result.stdout.strip()).resolve()
+    except (OSError, subprocess.TimeoutExpired):
+        toplevel = None
+    while True:
+        candidate = current / _walk_up.AUTOPILOT_REL_PATH
+        try:
+            if candidate.is_dir():
+                return candidate
+        except OSError:
+            pass
+        if toplevel is not None and current == toplevel:
+            return None
+        parent = current.parent
+        if parent == current:
+            return None
+        current = parent
+
+
 def _run_markers(args: argparse.Namespace) -> int:
-    autopilot_dir = _walk_up_or_exit("--state")
+    if args.state is not None:
+        autopilot_dir = Path(args.state).resolve().parent
+    else:
+        autopilot_dir = _find_autopilot_dir_in_repo(Path.cwd())
+        if autopilot_dir is None:
+            print(
+                "autopilot: --state not given and no docs/dev/project-management/autopilot "
+                "found above cwd within the git toplevel",
+                file=sys.stderr,
+            )
+            return 1
     names = args.check if args.check is not None else args.clear
     unknown = [n for n in names if n not in markers.MARKERS]
     if unknown:
         print(f"autopilot: markers: unknown marker {', '.join(unknown)}", file=sys.stderr)
         return 1
     if args.check is not None:
-        print(json.dumps(markers.check(autopilot_dir, names)))
+        result = markers.check(autopilot_dir, names)
     else:
-        before = markers.check(autopilot_dir, names)
+        result = markers.check(autopilot_dir, names)
         markers.clear(autopilot_dir, names)
-        print(json.dumps(before))
+    result["store"] = str(autopilot_dir)
+    print(json.dumps(result))
     return 0
 
 

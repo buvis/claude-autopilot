@@ -149,7 +149,8 @@ class StatectlDecideTest(unittest.TestCase):
         self.assertEqual(flag_first.returncode, 0, flag_first.stderr)
         self.assertEqual(json.loads(path_first.stdout), "xyz")
         self.assertEqual(
-            json.loads(path_first.stdout), json.loads(flag_first.stdout)
+            json.loads(path_first.stdout),
+            json.loads(flag_first.stdout),
         )
 
     def test_get_default_malformed_path_is_a_usage_error(self) -> None:

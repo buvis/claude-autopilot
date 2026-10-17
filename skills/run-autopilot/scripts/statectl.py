@@ -117,16 +117,46 @@ def _run_get_with_default(state_path: Path, json_path: str, default_raw: str) ->
         print(f"statectl: get: invalid --default JSON: {err}", file=sys.stderr)
         return 1
     try:
+        tokens = parse_path(json_path)
+    except UsageError as err:
+        print(str(err), file=sys.stderr)
+        return 1
+    try:
         _, data = read_and_parse(state_path)
     except StateError as err:
         print(f"statectl: get: {err}", file=sys.stderr)
         return 2
     try:
-        value = get_value(data, parse_path(json_path))
+        value = get_value(data, tokens)
     except UsageError:
         value = default
     print(json.dumps(value))
     return 0
+
+
+def _parse_get_args(get_argv: list[str]) -> tuple[str, str] | None:
+    """Parse `get` argv (path and `--default` in either order).
+
+    Returns (path, default_raw), or None when the path is missing or a
+    trailing `--default` carries no value - either is a usage error.
+    """
+    path = None
+    default_raw = None
+    i = 0
+    while i < len(get_argv):
+        token = get_argv[i]
+        if token == "--default":
+            if i + 1 >= len(get_argv):
+                return None
+            default_raw = get_argv[i + 1]
+            i += 2
+            continue
+        if path is None:
+            path = token
+        i += 1
+    if path is None or default_raw is None:
+        return None
+    return path, default_raw
 
 
 def _dispatch(argv: list[str]) -> int:
@@ -136,8 +166,12 @@ def _dispatch(argv: list[str]) -> int:
     if len(argv) >= 2 and argv[1] == "decide":
         return _run_decide(Path(argv[0]), argv[2:])
     if len(argv) >= 3 and argv[1] == "get" and "--default" in argv[2:]:
-        idx = argv.index("--default")
-        return _run_get_with_default(Path(argv[0]), argv[2], argv[idx + 1])
+        parsed = _parse_get_args(argv[2:])
+        if parsed is None:
+            print(USAGE, file=sys.stderr)
+            return 1
+        path, default_raw = parsed
+        return _run_get_with_default(Path(argv[0]), path, default_raw)
     return main(argv)
 
 __all__ = [

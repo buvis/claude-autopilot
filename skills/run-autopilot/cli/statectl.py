@@ -505,6 +505,9 @@ def mutate(state_path: Path, apply: Callable[[Any], Any]) -> Any:
 
 USAGE = (
     "usage: statectl.py <state-path> get|set|append|del <json-path> [value]\n"
+    "       statectl.py <state-path> get <json-path> --default <json-value>\n"
+    "       statectl.py <state-path> decide --issue I --severity S --cycle C "
+    "--action A --reason R [--type T]\n"
     "       statectl.py <state-path> task-start <task-id>\n"
     "       statectl.py <state-path> task-done <task-id> <attempt-json-file>\n"
     "       statectl.py <state-path> append-attempt <task-id> <attempt-json-file>\n"
