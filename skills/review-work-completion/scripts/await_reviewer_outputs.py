@@ -20,6 +20,8 @@ import argparse
 import os
 import time
 
+DEFAULT_BUDGET = 570.0
+
 
 def is_complete(path: str, stable_secs: float) -> bool:
     try:
@@ -32,10 +34,9 @@ def is_complete(path: str, stable_secs: float) -> bool:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--budget", type=float, default=570.0,
-        help="max seconds this call blocks (fits one Bash tool call at the "
-             "600000 ms foreground timeout, so the harness never "
-             "auto-backgrounds the call)",
+        "--budget", type=float, default=DEFAULT_BUDGET,
+        help="max seconds this call blocks; pass the Bash tool's timeout "
+             "parameter as 600000 ms so one call covers the whole wait",
     )
     parser.add_argument("--poll", type=float, default=10.0)
     parser.add_argument(

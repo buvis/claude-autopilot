@@ -36,7 +36,7 @@ stops the item says so.
   gives it, quoted here verbatim (its placeholder is this item's two `-o`
   paths, the codex and the gemini output files):
 
-  > Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/await_reviewer_outputs.py --budget 570 <absolute -o output path of each CLI reviewer dispatched>` as a foreground Bash call with the timeout parameter set to 600000. If the last stdout line is `WAITING`, run the same command again — up to 6 times total. Return the script's final output verbatim (`DONE`, or `WAITING` plus the pending files after 6 runs (~57 min)). Do nothing else: no reading the output files, no review commentary.
+  > Run `python3 ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/scripts/await_reviewer_outputs.py --budget 570 <absolute -o output path of each CLI reviewer dispatched>` as ONE foreground Bash call with the Bash tool's timeout parameter set to 600000. If the last stdout line is `WAITING`, run the same command again — up to 6 times total. Return the script's final output verbatim (`DONE`, or `WAITING` plus the pending files after 6 runs (~57 min)). Do nothing else: no reading the output files, no review commentary.
 
   The Watcher is scaffolding, not a reviewer: its return is never saved or
   consolidated, and once every lane has reported (or reached its terminal
