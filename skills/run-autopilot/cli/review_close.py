@@ -546,6 +546,42 @@ def _matches_open_deferral(findings: list[dict], deferred: list) -> str | None:
     return None
 
 
+def _single_voice_refusal(chosen_findings: list[dict], batch_id: str) -> dict | None:
+    """The single-voice refusal for `batch_id`, else None. A `decision-gate`
+    batch is refused for the FIRST `fix` row at Medium or Low with fewer than
+    two `found_by` entries (a lone reviewer's fix classification isn't
+    consensus); a `tail-sweep` batch is refused for the FIRST row of any
+    classification with fewer than two `found_by` entries. A missing
+    `found_by` counts as zero finders."""
+    if batch_id == "decision-gate":
+        for row in chosen_findings:
+            if (
+                row.get("classification") == "fix"
+                and row.get("severity") in ("\U0001f7e1", "⚪")
+                and len(row.get("found_by") or []) < 2
+            ):
+                return {
+                    "applied": False,
+                    "refused": "single_voice_fix",
+                    "reason": (
+                        "a single-voice medium/low row cannot become a task: "
+                        f"{row.get('ref')}"
+                    ),
+                }
+        return None
+    for row in chosen_findings:
+        if len(row.get("found_by") or []) < 2:
+            return {
+                "applied": False,
+                "refused": "tail_sweep_single_voice",
+                "reason": (
+                    "tail sweep refuses a single-voice row: "
+                    f"{row.get('ref') or row.get('file')}"
+                ),
+            }
+    return None
+
+
 def _tail_sweep_refusal(
     loaded: dict,
     review_file: Path,
@@ -591,6 +627,9 @@ def _tail_sweep_refusal(
             "refused": "tail_sweep_above_medium",
             "reason": f"tail sweep refuses rows above medium: {named}",
         }
+    single_voice = _single_voice_refusal(chosen_findings, "tail-sweep")
+    if single_voice is not None:
+        return single_voice
     dup = _matches_open_deferral(
         chosen_findings,
         loaded.get("deferred_decisions") or [],
@@ -653,6 +692,9 @@ def _prelock_refusal(
         return {"applied": False, "reason": "already applied"}
     if batch_id == "tail-sweep":
         return _tail_sweep_refusal(loaded, review_file, chosen_findings)
+    single_voice = _single_voice_refusal(chosen_findings, batch_id)
+    if single_voice is not None:
+        return single_voice
     return _carry_refusal(loaded, chosen_findings)
 
 

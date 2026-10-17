@@ -98,7 +98,7 @@ def _finding(sev: str, file: str, issue: str, cls: str = "fix") -> dict:
         "file": file,
         "issue": issue,
         "classification": cls,
-        "found_by": ["bob"],
+        "found_by": ["alice", "bob"],
     }
 
 
