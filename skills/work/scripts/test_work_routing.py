@@ -1098,6 +1098,33 @@ def test_directory_segments_and_basename_patterns_are_test_paths(path: str) -> N
     assert work_routing.is_test_path(path) is True
 
 
+def test_release_checks_registration_is_a_test_path() -> None:
+    assert work_routing.is_test_path("dev/bin/release-checks") is True
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "dev/bin/release",
+        "skills/run-autopilot/cli/release_checks.py",
+    ],
+)
+def test_release_checks_near_misses_stay_production(path: str) -> None:
+    assert work_routing.is_test_path(path) is False
+
+
+def test_a_test_with_its_registration_still_skips_both_lanes() -> None:
+    verdict = work_routing.test_only_gate(
+        ["skills/run-autopilot/cli/test_x.py", "dev/bin/release-checks"],
+        in_rework=False,
+    )
+
+    assert verdict == {
+        "self_deslop": "skipped:test-only",
+        "review": "skipped:test-only",
+    }
+
+
 @pytest.mark.parametrize(
     "path",
     [
