@@ -291,5 +291,6 @@ is a different fact from free.
 a session's own clock is not trustworthy enough to take at face value. When
 `--started` is omitted, the script reads `docs/dev/tmp/fast-track-started`
 (one epoch line, under the project root the autopilot-dir walk-up finds) and
-uses it as `ts_start`; the lane writes that file at item start so a session
-never has to pass its own guessed `--started`.
+uses it as `ts_start`. No lane step writes that file today - it is optional
+and, when present, operator-written; pass `--started <epoch seconds of the
+first dispatch>` from the lane itself, as `SKILL.md`'s item row does.
