@@ -62,7 +62,7 @@ Generated: 2026-10-17 (catchup at HEAD a2858cb4, 00332 closed, entering 00333; 0
 - [x] 00340-tell-the-session-it-is-the-loop-v1 (1 cycle, fast-track)
 - [x] 00341-devon-reviews-tests-an-earlier-task-wrote-v1 (1 cycle, solo lane)
 - [x] 00342-task-done-refuses-an-undefined-attempt-stamp-v1 (1 cycle, fast-track)
-- [ ] 00345-launch-loop-sessions-with-ponytail-off-v1 (backlog)
+- [x] 00345-launch-loop-sessions-with-ponytail-off-v1 (1 cycle, fast-track)
 - [ ] 00347-never-run-the-release-script-as-a-card-gate-v1 (backlog)
 - [ ] 00348-the-security-trigger-reads-prose-as-prose-v1 (backlog)
 
@@ -99,7 +99,12 @@ refusal; bumped to two entries) deferred for awareness. Full suite green
 cycle 1: tells the loop's own headless session it is the loop so
 orchestrators stop skipping Ivan/Pat/Devon under `PONYTAIL_DEFAULT_MODE=off`.
 Suite green (7172 passed, 1 pre-existing unrelated flake, 3 skipped). No
-deferred items, no doubts.
+deferred items, no doubts. 00345 (fast-track, 1 task) converged cycle 1: the
+loop launch env now sets `PONYTAIL_DEFAULT_MODE=off` so ponytail's minimalism
+mode cannot thin a loop session's mandated steps; Alice/Blake/Carl raised a
+docstring/CHANGELOG/test-precedence gap, all fixed in commit 6dff749; Bob's
+codex lane never initialized (sandbox PreToolUse gate), counted as a missing
+lens, not a pass. No deferred items, no doubts.
 
 ### Batch 202610141430 (complete)
 - [x] 00277-catch-critical-rows-in-every-shape-v2 (2 cycles)
