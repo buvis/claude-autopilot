@@ -1662,6 +1662,9 @@ def test_wrapper_alive_script_requires_root_arg() -> None:
 
     assert result.returncode != 0
     stderr_lower = result.stderr.lower()
-    assert "usage" in stderr_lower or "root" in stderr_lower
+    # Both halves, not an "or": a script that prints only "root" with no
+    # usage text (or vice versa) must not pass this check.
+    assert "usage" in stderr_lower
+    assert "root" in stderr_lower
     assert "traceback" not in stderr_lower
     assert "indexerror" not in stderr_lower

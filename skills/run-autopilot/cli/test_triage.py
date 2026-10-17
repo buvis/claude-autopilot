@@ -152,6 +152,28 @@ def test_non_dict_items_are_skipped_not_crashed(tree) -> None:
     assert triage.mint_stubs(autopilot, prds, BATCH)["skipped"] == 2
 
 
+def test_fixed_in_rework_critical_rows_do_not_mint() -> None:
+    # qualifies() mints a stub for every open CRITICAL/HIGH row with no PRD
+    # owner, including a review-critical row whose action field is literally
+    # "fix in cycle 1 rework" (or any action starting with "fix in cycle") -
+    # such a row has already been addressed and must not qualify, while a
+    # cap-overflow HIGH row carrying no such action text still must.
+    fixed_in_rework = _row(
+        severity="critical", type="review-critical", action="fix in cycle 1 rework"
+    )
+    assert not triage.qualifies(fixed_in_rework)
+
+    fixed_in_rework_other_cycle = _row(
+        severity="critical",
+        type="review-critical",
+        action="fix in cycle 2 rework of the gate command",
+    )
+    assert not triage.qualifies(fixed_in_rework_other_cycle)
+
+    cap_overflow_without_action = _row(severity="high", type="cap-overflow")
+    assert triage.qualifies(cap_overflow_without_action)
+
+
 # --- ownership -------------------------------------------------------------
 
 

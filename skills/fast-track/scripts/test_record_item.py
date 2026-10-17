@@ -742,6 +742,41 @@ def test_the_item_name_reaches_no_column_of_the_row(tmp_path: Path) -> None:
     assert rows[0] == rows[1]
 
 
+def test_started_a_year_old_exits_two(tmp_path: Path) -> None:
+    # main() accepts any --started value today with no bound, so a value a
+    # year in the past is taken at face value and the row carries a
+    # wall_secs no item ever actually ran. --started more than 24 hours
+    # before ts_end (or in the future) must be refused instead.
+    autopilot_dir = _autopilot_tree(tmp_path)
+    year_old = int(time.time()) - 365 * 24 * 3600
+
+    result = _run_cli(tmp_path, _cli_args(_card(tmp_path), started=year_old))
+
+    assert result.returncode == 2, result.stderr
+    assert not (autopilot_dir / _LEDGER_FILENAME).exists()
+
+
+def test_started_file_is_read_when_flag_absent(tmp_path: Path) -> None:
+    # record_item.py has no STARTED_FILE constant and no fallback today, so
+    # omitting --started is just a missing required flag. The fallback must
+    # read docs/dev/tmp/fast-track-started (one epoch line, under the
+    # project root the walk-up finds) and use it as ts_start.
+    autopilot_dir = _autopilot_tree(tmp_path)
+    started_file = tmp_path / "docs" / "dev" / "tmp" / "fast-track-started"
+    started_file.parent.mkdir(parents=True, exist_ok=True)
+    started = int(time.time()) - 30
+    started_file.write_text(f"{started}\n", encoding="utf-8")
+    args = _without(_cli_args(_card(tmp_path), started=started), "--started")
+
+    result = _run_cli(tmp_path, args)
+
+    assert result.returncode == 0, result.stderr
+    working_lines, mirror_lines = _ledger_lines(autopilot_dir)
+    assert working_lines == mirror_lines
+    row = json.loads(working_lines[0])
+    assert row["ts_start"] == started
+
+
 @pytest.mark.parametrize("flag", _REQUIRED_FLAGS)
 def test_a_missing_required_flag_is_refused_and_writes_nothing(
     tmp_path: Path,

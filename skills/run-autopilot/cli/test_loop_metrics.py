@@ -134,6 +134,24 @@ def test_failed_loop_entry_invalidation_prints_a_line_to_stderr(tmp_path):
     assert "loop_entry" in err.getvalue()
 
 
+def test_session_row_keeps_the_launched_prd_after_a_stall(tmp_path, monkeypatch):
+    # _metrics_line stamps "prd" from decision["prd"] - the PRD the loop
+    # decided on AFTER the session exited - not the PRD the session was
+    # actually launched with. A session that stalled on "p.md" and whose
+    # decision then moves on to a different PRD must still carry "p.md" as
+    # the session's own prd, with the decision's PRD recorded separately as
+    # prd_end.
+    row = _row_for_decision(
+        tmp_path,
+        monkeypatch,
+        signal="stall",
+        prd="00042-other-v1.md",
+    )
+
+    assert row["prd"] == "p.md"
+    assert row["prd_end"] == "00042-other-v1.md"
+
+
 def test_prd_table_says_it_excludes_the_finalizing_session():
     # Packet 24: the per-PRD table is written inside the finalizing
     # session, whose own row lands after it - the caption must say so.

@@ -89,6 +89,70 @@ class MarkersTests(unittest.TestCase):
         self.assertTrue(proc.stderr.strip())
         self.assertEqual(proc.stdout, "")
 
+    def test_markers_accepts_state_flag(self) -> None:
+        # _run_markers has no --state flag today, so passing one is an
+        # unrecognized argument - even though _walk_up_or_exit's own error
+        # message tells the caller to pass --state when the walk fails.
+        (self.autopilot_dir / ".cap-fired").write_text("x", encoding="utf-8")
+        outside = self.root / "outside-of-the-tree"
+        outside.mkdir()
+
+        proc = _run(
+            [
+                "markers",
+                "--check",
+                "cap-fired",
+                "--state",
+                str(self.autopilot_dir / "state.json"),
+            ],
+            cwd=outside,
+        )
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(json.loads(proc.stdout)["cap-fired"], True)
+
+    def test_markers_walk_stops_at_the_git_toplevel(self) -> None:
+        # The walk follows the physical cwd through a symlink without ever
+        # stopping at the git toplevel of the cwd, so a nested git repo with
+        # no store of its own can still resolve an unrelated repository's
+        # store that happens to sit above it.
+        second_store_repo = self.root / "second-store-repo"
+        second_autopilot_dir = (
+            second_store_repo / "docs" / "dev" / "project-management" / "autopilot"
+        )
+        second_autopilot_dir.mkdir(parents=True)
+        (second_autopilot_dir / ".cap-fired").write_text("x", encoding="utf-8")
+
+        container = self.root / "container"
+        container.mkdir()
+        (container / "docs").symlink_to(
+            second_store_repo / "docs", target_is_directory=True
+        )
+
+        nested_repo = container / "nested-repo"
+        nested_repo.mkdir()
+        subprocess.run(
+            ["git", "init", "-q"], cwd=nested_repo, check=True, capture_output=True
+        )
+
+        proc = _run(["markers", "--check", "cap-fired"], cwd=nested_repo)
+
+        # nested_repo is its own git toplevel and carries no autopilot store
+        # of its own, so the walk must stop there and fail rather than climb
+        # past it (through the symlink) into the unrelated repo's store.
+        self.assertEqual(proc.returncode, 1)
+        self.assertEqual(proc.stdout, "")
+
+    def test_markers_output_names_the_store(self) -> None:
+        proc = _run(["markers", "--check", "handoff-requested"], cwd=self.root)
+
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        output = json.loads(proc.stdout)
+        self.assertIn("store", output)
+        self.assertEqual(
+            Path(output["store"]).resolve(), self.autopilot_dir.resolve()
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

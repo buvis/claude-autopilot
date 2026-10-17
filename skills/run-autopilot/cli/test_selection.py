@@ -76,6 +76,24 @@ class SelectableTests(unittest.TestCase):
     def test_empty_listing_selects_nothing(self) -> None:
         self.assertEqual(selection.selectable([]), [])
 
+    def test_c1_and_line_separator_names_are_not_selectable(self) -> None:
+        # _has_control_char only checks code points below U+0020 and U+007F,
+        # so NEL (U+0085) and LINE SEPARATOR (U+2028) currently slip through
+        # selectable() unflagged - either one can forge a line break once a
+        # name is printed raw, same hazard as the ASCII control characters
+        # this guard already excludes.
+        nel_named = "00090-x\u0085bad.md"
+        line_sep_named = "00091-x bad.md"
+        good = "00089-a.md"
+        self.assertEqual(
+            selection.selectable([nel_named, line_sep_named, good]),
+            [good],
+        )
+        # A single-line name holding no Unicode category Cc character (an
+        # accented letter is category Ll) must stay selectable.
+        accented = "00092-café.md"
+        self.assertEqual(selection.selectable([accented]), [accented])
+
 
 def test_newline_named_backlog_file_is_not_selectable(tmp_path: Path) -> None:
     # Packet 17: a backlog filename holding a newline and "## Read next"

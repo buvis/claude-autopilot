@@ -124,6 +124,15 @@ _VALIDATOR_REJECTS = (
         "autopilot review-stage --cycle-id <id> [--gate-command <cmd>]",
         "--gate-command bracketed but required",
     ),
+    (
+        "bracketed bare positional",
+        # _check_line's first substitution strips bracketed groups wholesale
+        # before the bare-positional sweep ever runs, so a bare placeholder
+        # wrapped in brackets - not preceded by a "--flag " - currently
+        # passes uncaught, unlike the unbracketed "<review-file>" case above.
+        f"{_REVIEW_STAGE_BASE} [<review-file>]",
+        "bare positional placeholder remains",
+    ),
 )
 
 
