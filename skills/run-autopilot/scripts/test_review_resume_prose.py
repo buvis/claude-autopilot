@@ -89,6 +89,9 @@ def test_tail_sweep_dispatch_hands_off_in_loop_mode() -> None:
         "END TURN",
         "PRD 00208",
         "entered through that Phase 4 skip",
+        "$_AUTOPILOT_LOOP",
+        "state.cycle` are unchanged",
+        "never hands off again",
     ):
         assert needle in window, f"{_PHASE_REVIEW}: Tail sweep step 3 lacks {needle!r}"
 
@@ -103,6 +106,7 @@ def test_tail_sweep_finalize_names_the_handoff_exception() -> None:
     for needle in (
         "do NOT hand off review → review",
         "The step 3 loop-mode hand-off is the one exception",
+        "Do NOT increment `state.cycle`",
     ):
         assert needle in window, f"{_PHASE_REVIEW}: Tail sweep step 4 lacks {needle!r}"
 
