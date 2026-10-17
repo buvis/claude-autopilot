@@ -5255,3 +5255,21 @@
 {"id":"8cdc0000","ended_at":1792260393,"elapsed_s":315,"outcome":"ok","detail":null}
 {"id":"e98e1d8c","ended_at":1792260393,"elapsed_s":312,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1792260923,"phase":"build","prd":"00347-never-run-the-release-script-as-a-card-gate-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792260983,"phase":"build","prd":"00348-the-security-trigger-reads-prose-as-prose-v1.md"}
+{"id":"0029e296","kind":"fast-track:tess","task":"00348-the-security-trigger-reads-prose-as-prose-v1-c1","queued_at":1792261111,"prompt_bytes":55580}
+{"id":"0029e296","ended_at":1792261167,"elapsed_s":56,"outcome":"ok","detail":null}
+{"id":"6781041c","kind":"fast-track:ivan","task":"00348-the-security-trigger-reads-prose-as-prose-v1-c1","queued_at":1792261191,"prompt_bytes":20967}
+{"id":"6781041c","ended_at":1792261288,"elapsed_s":97,"outcome":"ok","detail":null}
+{"id":"26ab05b2","kind":"fast-track:fanout","task":"00348-the-security-trigger-reads-prose-as-prose-v1-c1","queued_at":1792261577,"prompt_bytes":4556}
+{"id":"54b4607c","kind":"fast-track:blake","task":"00348-the-security-trigger-reads-prose-as-prose-v1-c1","queued_at":1792261580,"prompt_bytes":8478}
+{"id":"5876712b","kind":"fast-track:eve","task":"00348-the-security-trigger-reads-prose-as-prose-v1-c1","queued_at":1792261584,"prompt_bytes":4208}
+{"id":"7ca959ec","kind":"fast-track:bob","task":"00348-the-security-trigger-reads-prose-as-prose-v1-c1","queued_at":1792261587,"prompt_bytes":9575}
+{"id":"df62f05a","kind":"fast-track:carl","task":"00348-the-security-trigger-reads-prose-as-prose-v1-c1","queued_at":1792261591,"prompt_bytes":6623}
+{"id":"26ab05b2","ended_at":1792261611,"elapsed_s":34,"outcome":"error","detail":"workflow skipped for this low-risk card; alice subagent used instead"}
+{"id":"c82f85a7","kind":"fast-track:alice","task":"00348-the-security-trigger-reads-prose-as-prose-v1-c1","queued_at":1792261611,"prompt_bytes":4556}
+{"id":"c82f85a7","ended_at":1792261712,"elapsed_s":101,"outcome":"ok","detail":null}
+{"id":"54b4607c","ended_at":1792261832,"elapsed_s":252,"outcome":"ok","detail":null}
+{"id":"7ca959ec","ended_at":1792261832,"elapsed_s":245,"outcome":"ok","detail":null}
+{"id":"5876712b","ended_at":1792262154,"elapsed_s":570,"outcome":"ok","detail":null}
+{"id":"df62f05a","ended_at":1792262219,"elapsed_s":628,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"build","edge":"leave","at":1792262751,"phase":"done","prd":"00348-the-security-trigger-reads-prose-as-prose-v1.md"}
