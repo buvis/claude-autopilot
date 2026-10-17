@@ -47,11 +47,17 @@ _WRAP_SCAN_CHARS = re.compile(
     + re.escape("".join(sorted({c for pair in _WRAP_SCAN_PAIRS for c in pair})))
     + "]"
 )
-# The symmetric citation delimiters, paired field-wide by _quoted_runs, with
-# the inch/unit-mark rule each one obeys: a '"' behind a digit opens nothing
-# (5" is a measurement), a backtick behind one opens a run like any other
-# (`00300`), because no unit is ever written with a backtick.
-_SYMMETRIC_DELIMS = ((re.compile('"'), True), (re.compile("`"), False))
+# The tokens _quoted_runs walks, in one position-ordered pass: a maximal run
+# of backticks is ONE token (its length is what it pairs by), every other
+# _WRAP_SCAN_PAIRS character is a token of its own.
+_NEST_TOKEN = re.compile(
+    "`+|["
+    + re.escape("".join(sorted({c for pair in _WRAP_SCAN_PAIRS for c in pair} - {"`"})))
+    + "]",
+)
+# An emoticon's paren (":(", ";)", "=)") is a face, not a bracket: matched at
+# the character before the paren, it is dropped from every paren position list.
+_EMOTICON = re.compile(r"[:;=][)(]")
 
 # A "word" for the nearest-preceding-word and negation-gap lookups, once wrap
 # characters are stripped: \w plus internal apostrophe/hyphen. The class is
@@ -186,6 +192,9 @@ _NEGATION = re.compile(
     re.IGNORECASE,
 )
 _NEGATION_WORD_GAP = 4  # words between the negation and the name, not characters
+# A conjunction starts a new clause as a comma does: a negation before it
+# binds its own verb ("don't stop and run ..."), never the name after it.
+_NEGATION_REACH_END = re.compile(r"\b(and|then|but)\b", re.IGNORECASE)
 
 # ':' must not fire INSIDE a recognized name's own span ("autopilot:work"),
 # and neither must the '.' a SKILL.md span carries by construction, so
@@ -216,7 +225,9 @@ _CITE_SENTENCE_BOUNDARY = re.compile(
     # `+ run gives one backtick back on a multi-backtick closer ("PRD 00300.``(
     # verbatim)"), the class matches that backtick, and the terminator wrongly
     # ends the citation sentence.
-    r"""[.!?](?=\s|[]'"’”»」)]|`*\s*(?:\Z|\n)|`+[ \t]*[^(\s`])|\n""",
+    # The CJK full stop, exclamation and question marks end a sentence exactly
+    # as their ASCII forms do.
+    r"""[.!?。！？](?=\s|[]'"’”»」)]|`*\s*(?:\Z|\n)|`+[ \t]*[^(\s`])|\n""",
 )
 
 _AGOGE_PREFIX = "agoge:"

@@ -43,16 +43,15 @@ from guard_phase_delegation_lexicon import (
     _CITE_SENTENCE_BOUNDARY,
     _CLAUSE_BOUNDARY,
     _DETERMINERS,
+    _EMOTICON,
     _FOLLOW,
     _MASK_TABLE,
-    _MASKED_IN_SPAN,
     _NEGATION,
+    _NEGATION_REACH_END,
     _NEGATION_WORD_GAP,
+    _NEST_TOKEN,
     _PER_TASK_PERSONAS,
-    _PHASE_BARE,
-    _PHASE_CONCEPT,
     _PHASE_NAME_FORMS,
-    _PHASE_SKILL,
     _PRD_PATH_TAIL,
     _PRD_STORE_PATH,
     _PREPOSITIONS,
@@ -61,7 +60,6 @@ from guard_phase_delegation_lexicon import (
     _SKILL_MD_PATH,
     _SKILL_SUFFIX,
     _STRONG_ANCHOR_TAIL,
-    _SYMMETRIC_DELIMS,
     _TASK_ID,
     _TASK_RANGE_LEAD,
     _TASK_RANGE_TAIL,
@@ -69,9 +67,6 @@ from guard_phase_delegation_lexicon import (
     _WHOLE_RUN_MARKERS,
     _WORD_CHAR,
     _WORD_START,
-    _WRAP,
-    _WRAP_CLOSE,
-    _WRAP_OPEN,
     _WRAP_PAIR,
     _WRAP_SCAN_CHARS,
     _WRAP_SCAN_PAIRS,
@@ -166,12 +161,18 @@ def _find_skill_md_paths(text: str) -> list[tuple[int, int]]:
     substring scan for the literal 'SKILL.md' (`str.find`, no backtracking),
     then one bounded regex match per occurrence against a <=120-char slice
     ending at it. A `.finditer` of _SKILL_MD_PATH over the whole field is
-    worst-case quadratic on a long slash-free run, so it is never run."""
+    worst-case quadratic on a long slash-free run, so it is never run.
+
+    The search runs on the slice's last whitespace-free token only (a C-level
+    `rsplit`): no part of _SKILL_MD_PATH matches whitespace, so the leftmost
+    match cannot start before that token, and probing every earlier offset of
+    the slice was the dominant cost of a field dense with SKILL.md mentions."""
     spans = []
     idx = text.find("SKILL.md")
     while idx != -1:
-        window_start = max(0, idx - 120)
-        match = _SKILL_MD_PATH.search(text[window_start:idx + len("SKILL.md")])
+        token = text[max(0, idx - 120) : idx + len("SKILL.md")].rsplit(None, 1)[-1]
+        window_start = idx + len("SKILL.md") - len(token)
+        match = _SKILL_MD_PATH.search(token)
         if match:
             spans.append((window_start + match.start(), window_start + match.end()))
         idx = text.find("SKILL.md", idx + 1)
@@ -307,64 +308,103 @@ def _scratch(text: str, spans: list[tuple[int, int, bool]]) -> str:
     return "".join(pieces)
 
 
-# A delimiter's marks pair in order (first with second, third with fourth, ...),
-# so no punctuation inside a quoted run can desynchronise the pairing the way a
-# clause-local parity count does (see _cited). A '"' behind a digit with nothing
-# open is an inch/unit mark and opens nothing: that is what keeps `the 5" gap,
-# run /autopilot:work, it is 6" wide` from pairing into one run around the name.
-# Behind a digit with a quote already open it still closes, because an order
-# quoted off a log ends on a PRD number all day long ("run plan-tasks for PRD
-# 00300"). Once a mark has been skipped every later pairing is a guess, so the
-# field gets no '"' runs at all - a guard resolves an ambiguity by denying.
+# One left-to-right walk over _NEST_TOKEN pairs every wrapper in order, so no
+# punctuation inside a quoted run can desynchronise the pairing the way a
+# clause-local parity count does (see _cited). Three delimiter classes, each
+# with its own open slot: '"' runs, backtick runs and bracket runs (the
+# asymmetric _WRAP_PAIR set, "(" included). Only ONE class may have a run open
+# at a time: an opener of any other class inside it is a literal character of
+# that run, never a fresh opener. That is what keeps the backtick in `Note "see
+# \`x" then run ... report \`done\`` from pairing with the one before "done"
+# and swallowing the order between them.
 #
-# The rule is the '"' pass ONLY (the `inch_mark` flag in _SYMMETRIC_DELIMS): no
-# unit is written with a backtick, so a backtick behind a digit opens a run like
-# any other, and skipping it would hand the opener role to its CLOSER and let
-# that bogus run swallow a later bare order.
+# Backticks pair by RUN LENGTH: a maximal backtick run is one token, and only a
+# run of the same length closes it, so "``...``" is one code span and a single
+# backtick inside it is literal. A longer run ("````") is one token too and
+# pairs only with another of its own length; a doubled-run reading of it is not
+# attempted (accepted limitation: an unpaired run cites nothing, so the guard
+# denies rather than guesses).
 #
-# Within one delimiter the pairs are disjoint and increasing, so the last pair
-# opening before a span is the only one that can enclose it: the merge walk over
-# the start-sorted spans costs one probe per span, and _cited then reads one map
-# entry per candidate instead of rescanning the field around each one.
+# A '"' behind a digit with nothing open is an inch/unit mark and opens
+# nothing: that is what keeps `the 5" gap, run /autopilot:work, it is 6" wide`
+# from pairing into one run around the name. Behind a digit with a quote
+# already open it still closes, because an order quoted off a log ends on a PRD
+# number all day long ("run plan-tasks for PRD 00300"). Once a mark has been
+# skipped every later quote pairing is a guess (`The log says 5"ready", run
+# plan-tasks for PRD 00300, print "ok".` would pair the close of "ready" with
+# the open of "ok"), so no later '"' opens a run - a guard resolves an
+# ambiguity by denying. Pairs completed BEFORE the skip stand. The rule is the
+# '"' class ONLY: no unit is written with a backtick.
+#
+# Emoticon parens (_emoticon_paren) are not brackets and never enter the walk.
+#
+# The pairs form a nested family (brackets nest, the other classes contain no
+# run of any kind), so the INNERMOST pair around a span opens latest and closes
+# earliest of all the pairs around it: it alone decides _cited's sentence-window
+# test, and it is the one entry recorded. The merge walk over the start-sorted
+# spans keeps the chain of pairs open at the span, so _cited reads one map entry
+# per candidate instead of rescanning the field around each one.
 def _quoted_runs(
     scratch: str,
     spans: list[tuple[int, int, bool]],
 ) -> dict[tuple[int, int], list[tuple[int, int]]]:
-    """Every candidate span mapped to the symmetric-delimiter runs that
-    STRICTLY enclose it (opening before `start`, closing at or after `end`),
-    from one left-to-right pairing pass per delimiter over the whole field.
-    See the comment above for the pairing rules."""
+    """Every candidate span mapped to the innermost wrapper run around it (an
+    opener at or before `start`, its closer at or after `end`), from one
+    left-to-right pairing pass over the whole field. See the comment above for
+    the pairing rules."""
+    pairs: list[tuple[int, int]] = []
+    quote_open: int | None = None
+    tick_open: tuple[int, int] | None = None
+    bracket_stack: list[tuple[int, str]] = []
+    quote_skipped = False
+    for match in _NEST_TOKEN.finditer(scratch):
+        pos, token = match.start(), match.group()
+        if token[0] == "`":
+            if tick_open is not None:
+                if len(token) == tick_open[1]:
+                    pairs.append((tick_open[0], pos))
+                    tick_open = None
+            elif quote_open is None and not bracket_stack:
+                tick_open = (pos, len(token))
+        elif token == '"':
+            if quote_open is not None:
+                pairs.append((quote_open, pos))
+                quote_open = None
+            elif tick_open is None and not bracket_stack and not quote_skipped:
+                if pos and scratch[pos - 1].isdigit():
+                    quote_skipped = True
+                else:
+                    quote_open = pos
+        elif _emoticon_paren(scratch, pos):
+            continue
+        elif token in _WRAP_PAIR:
+            if bracket_stack or (quote_open is None and tick_open is None):
+                bracket_stack.append((pos, _WRAP_PAIR[token]))
+        elif bracket_stack and bracket_stack[-1][1] == token:
+            pairs.append((bracket_stack.pop()[0], pos))
+    pairs.sort()
     runs: dict[tuple[int, int], list[tuple[int, int]]] = {}
-    for pattern, inch_mark in _SYMMETRIC_DELIMS:
-        pairs: list[tuple[int, int]] = []
-        open_at = -1
-        skipped = False
-        for match in pattern.finditer(scratch):
-            if open_at == -1:
-                if inch_mark and match.start() and scratch[match.start() - 1].isdigit():
-                    skipped = True
-                    continue
-                if skipped:
-                    # A skipped mark makes every LATER pairing a guess: the
-                    # quote that opens here may really be the skipped one's
-                    # close. `The log says 5"ready", run plan-tasks for PRD
-                    # 00300, print "ok".` pairs the close of "ready" with the
-                    # open of "ok" and swallows the order. A guard fails
-                    # closed, so pairing stops here. Pairs completed BEFORE the
-                    # skip are unambiguous and stand: wiping them would refuse
-                    # a real citation that merely precedes a unit mark.
-                    break
-                open_at = match.start()
-            else:
-                pairs.append((open_at, match.start()))
-                open_at = -1
-        index = 0
-        for start, end, _ in spans:
-            while index < len(pairs) and pairs[index][0] < start:
-                index += 1
-            if index and pairs[index - 1][1] >= end:
-                runs.setdefault((start, end), []).append(pairs[index - 1])
+    chain: list[tuple[int, int]] = []
+    index = 0
+    for start, end, _ in spans:
+        while index < len(pairs) and pairs[index][0] <= start:
+            while chain and chain[-1][1] < pairs[index][0]:
+                chain.pop()
+            chain.append(pairs[index])
+            index += 1
+        while chain and chain[-1][1] <= start:
+            chain.pop()
+        for pair in reversed(chain):
+            if pair[1] >= end:
+                runs[(start, end)] = [pair]
+                break
     return runs
+
+
+def _emoticon_paren(scratch: str, pos: int) -> bool:
+    """True iff the paren at `pos` is the mouth of an emoticon (":(", ";)"),
+    which is never a bracket for _delim_positions or _quoted_runs."""
+    return pos > 0 and _EMOTICON.match(scratch, pos - 1) is not None
 
 
 def _delim_positions(scratch: str) -> dict[str, list[int]]:
@@ -375,10 +415,11 @@ def _delim_positions(scratch: str) -> dict[str, list[int]]:
     for 6 of the 8 pairs) - the whole remaining field when the field has no
     terminator - so N candidates in one long sentence cost N * field. Against
     these lists the same question is a bisect, and the per-candidate cost no
-    longer depends on the field length."""
+    longer depends on the field length. An emoticon's paren is left out."""
     positions: dict[str, list[int]] = {}
     for match in _WRAP_SCAN_CHARS.finditer(scratch):
-        positions.setdefault(match.group(), []).append(match.start())
+        if not _emoticon_paren(scratch, match.start()):
+            positions.setdefault(match.group(), []).append(match.start())
     return positions
 
 
@@ -518,16 +559,16 @@ def _ordered_to_follow(
     return not _negated(text, verb_clause_start, verb_start)
 
 
-# An opener AT `start` is the match's own captured wrap: it cites unless its
-# close was consumed into the span (`plan-tasks` wrapped on its own is a label
-# and anchors as before). An earlier ASYMMETRIC opener counts while no close has
-# come since it, looked for from `sentence_start` because "(" always opens
-# ("(which handles catchup, design, parse and plan-tasks)"). The straight single
-# quote is left out: contractions and possessives would read as open quotes.
-#
-# A symmetric delimiter ('"', '`') has no open form of its own, so an earlier
-# one of those counts only when the field-wide pairing (_quoted_runs) put the
-# name strictly inside one of its pairs - a map lookup, built once per field.
+# The field-wide pairing (_quoted_runs) decides every run that opens AT or
+# before `start`: an opener at `start` is the match's own captured wrap, and it
+# cites unless its close was consumed into the span (`plan-tasks` wrapped on its
+# own is a label and anchors as before), because such a run closes before
+# `end` and is never recorded. A '"' the pairing refused to open (an inch mark)
+# is no wrap at all, even at `start`. Beyond the map, an earlier ASYMMETRIC
+# opener counts while no close has come since it, looked for from
+# `sentence_start` because "(" always opens ("(which handles catchup, design,
+# parse and plan-tasks)"). The straight single quote is left out: contractions
+# and possessives would read as open quotes.
 # Pairing is field-wide rather than clause-local because a parity count from the
 # clause start desynchronises on punctuation INSIDE a quoted run: the scratch
 # masks punctuation only inside recognized name spans, so in `The log says
@@ -563,8 +604,6 @@ def _cited(
         closes = marks.get(closer, ())
         if not _mark_in(closes, end, sentence_end):
             continue
-        if text[start] == opener and not _mark_in(closes, start + 1, end):
-            return True
         if opener != closer:
             open_at = _mark_before(marks.get(opener, ()), sentence_start, start)
             if open_at != -1 and not _mark_in(closes, open_at, start):
@@ -579,12 +618,18 @@ def _negated(text: str, clause_start: int, start: int) -> bool:
     """True iff a negation sits at most _NEGATION_WORD_GAP words before the
     name, inside its own clause. Takes at most _NEGATION_WORD_GAP + 1 word
     tokens (the gap words plus the negation itself) from _words_before, which
-    walks BACKWARD from the name, so the cost is O(1) per candidate."""
+    walks BACKWARD from the name, so the cost is O(1) per candidate. The window
+    starts after the last "and"/"then"/"but" in it: a negation before the
+    conjunction binds its own verb ("don't stop and run ...")."""
     words = list(
         islice(_words_before(text, clause_start, start), _NEGATION_WORD_GAP + 1)
     )
     window_start = words[-1][0] if words else clause_start
-    return bool(_NEGATION.search(text[window_start:start]))
+    window = text[window_start:start]
+    reach_end = 0
+    for reach in _NEGATION_REACH_END.finditer(window):
+        reach_end = reach.end()
+    return bool(_NEGATION.search(window, reach_end))
 
 
 def _quote(text: str, start: int) -> str:

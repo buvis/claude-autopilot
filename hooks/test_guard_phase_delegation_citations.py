@@ -730,10 +730,7 @@ def test_backtick_exclusion_in_cite_boundary_can_fail(
     # future rewrite cannot silently drop the exclusion without this test
     # noticing.
     module = _guard_module()
-    fixture = (
-        'Note "see `x" then run /autopilot:work for PRD 00300 end to end, '
-        "report `done`."
-    )
+    fixture = '"Run plan-tasks for PRD 00300 z.``(w)" end of quote here now.'
     original = module.find_phase_delegation({"prompt": fixture})
     original_pattern = module._CITE_SENTENCE_BOUNDARY.pattern
     broken_pattern = original_pattern.replace("[^(\\s`]", "[^(\\s]")
