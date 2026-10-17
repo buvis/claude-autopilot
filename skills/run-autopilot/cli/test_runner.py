@@ -219,6 +219,7 @@ def test_prompt_names_the_brief_when_present(tmp_path):
     # build_argv produced, whose last element is the prompt.
     ap = _ap_dir(tmp_path)
     (ap / "session-brief.md").write_text("# Session brief\n")
+    (ap / "state.json").write_text("{}\n")
     argv = _launch_argv(tmp_path, ap)
     assert argv[-1] == (
         "/autopilot:run-autopilot Read docs/dev/project-management/autopilot/session-brief.md first."
@@ -270,6 +271,7 @@ def test_launch_prompt_forbids_blocked_coreutils(tmp_path):
     ap = _ap_dir(tmp_path)
     bare = prompt_for(ap)
     (ap / "session-brief.md").write_text("# Session brief\n")
+    (ap / "state.json").write_text("{}\n")
     briefed = prompt_for(ap)
     assert bare != briefed
     # Exact equality: nothing may precede the CLI sentence (e.g. text that

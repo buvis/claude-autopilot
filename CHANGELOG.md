@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **run-autopilot**: a fresh batch no longer starts from the previous batch's session brief and contract card, and the batch-absent stop names the statectl route instead of inviting autopilot init
 - **release**: `dev/bin/release` now also refuses on an open `severity: critical` triage stub under `prds/hold` or `prds/wip`, naming the file, even when it carries no "release is blocked" phrase
 - **run-autopilot**: `autopilot verify --log` refuses a tracked, symlinked, hard-linked, out-of-repo, store, git-directory, non-regular or executable sink before opening it, and opens the sink exclusively, so a gate run can no longer overwrite committed source, git internals, a hook or the loop's own state
 - **run-autopilot**: `autopilot verify` takes its exit code from the gate's parsed summary line or the gate process says so, so a gate that prints `FAIL` > 0, a non-zero `EXIT` token, or whose own process exits non-zero exits 1 even when the others read clean; its exit-2 refusals now also print one JSON line with `error` (carrying the same `autopilot: verify: ` prefix its stderr line already had) and `exit`, and `log` is `null` when no gate spawned

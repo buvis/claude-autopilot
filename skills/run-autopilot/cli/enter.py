@@ -102,6 +102,8 @@ def _prepare_tree(state_path: Path, prds_dir: Path, autopilot_dir: Path) -> None
         )
     if not state_path.exists():
         state.init(state_path, {"phase": "build", "next_phase": "build"})
+        (autopilot_dir / "session-brief.md").unlink(missing_ok=True)
+        (autopilot_dir / "contract-card.md").unlink(missing_ok=True)
     for name in handoff.MARKERS:
         (autopilot_dir / name).unlink(missing_ok=True)
 
@@ -235,7 +237,14 @@ def _batch_report(out: dict, state_path: Path) -> bool:
     else:
         out["batch"] = "open"
         return False
-    _stop(out, "batch_init", f"batch {out['batch']}; initialize a batch first")
+    if out["batch"] == "absent":
+        detail = (
+            "batch absent; mint state.batch with statectl (phase-build.md Phase 0 "
+            "step 3), then run enter again; never autopilot init"
+        )
+    else:
+        detail = f"batch {out['batch']}; initialize a batch first"
+    _stop(out, "batch_init", detail)
     return True
 
 

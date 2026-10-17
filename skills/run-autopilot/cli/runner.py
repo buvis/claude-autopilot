@@ -101,7 +101,9 @@ def prompt_for(autopilot_dir: Path, prompt: str = DEFAULT_PROMPT) -> str:
     session's hand-off left `session-brief.md` beside state.json (PRD 00201),
     plus the CLI sentence for autopilot prompts. A missing brief drops only
     the brief sentence."""
-    brief = BRIEF_SUFFIX if (autopilot_dir / BRIEF_NAME).is_file() else ""
+    has_brief = (autopilot_dir / BRIEF_NAME).is_file()
+    has_state = (autopilot_dir / "state.json").is_file()
+    brief = BRIEF_SUFFIX if (has_brief and has_state) else ""
     cli = CLI_SUFFIX if prompt.startswith(DEFAULT_PROMPT) else ""
     return prompt + brief + cli
 
