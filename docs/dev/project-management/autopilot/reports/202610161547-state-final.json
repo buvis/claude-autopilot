@@ -1,0 +1,283 @@
+{
+  "phase": "done",
+  "next_phase": "",
+  "schema_version": 1,
+  "batch": {
+    "id": "202610161547",
+    "mode": "autopilot",
+    "completed_prds": [
+      {
+        "filename": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+        "cycles": 2,
+        "autonomous_decisions": 17,
+        "escalated_decisions": 0,
+        "tasks_completed": 7,
+        "tasks_total": 7,
+        "lane": "full",
+        "lane_reason": "override",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md",
+        "cycles": 2,
+        "autonomous_decisions": 29,
+        "escalated_decisions": 0,
+        "tasks_completed": 11,
+        "tasks_total": 11,
+        "lane": "full",
+        "lane_reason": "design",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00322-kill-the-gate-on-every-signal-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 20,
+        "escalated_decisions": 0,
+        "tasks_completed": 7,
+        "tasks_total": 7,
+        "lane": "full",
+        "lane_reason": "design",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00323-tests-line-and-verify-record-say-red-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 1,
+        "tasks_total": 1,
+        "lane": "fast-track",
+        "lane_reason": "card_sized",
+        "lane_effective": "fast-track",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00324-guard-pairs-delimiters-as-nested-runs-v1.md",
+        "cycles": 2,
+        "autonomous_decisions": 18,
+        "escalated_decisions": 0,
+        "tasks_completed": 7,
+        "tasks_total": 7,
+        "lane": "full",
+        "lane_reason": "hook",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00325-sweep-reads-emoji-rows-by-character-class-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 1,
+        "tasks_total": 1,
+        "lane": "fast-track",
+        "lane_reason": "card_sized",
+        "lane_effective": "full",
+        "lane_escalated": {
+          "from": "fast-track",
+          "signal": "unnamed_path"
+        }
+      },
+      {
+        "filename": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md",
+        "cycles": 2,
+        "autonomous_decisions": 25,
+        "escalated_decisions": 0,
+        "tasks_completed": 8,
+        "tasks_total": 8,
+        "lane": "full",
+        "lane_reason": "uncardable",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00330-hand-the-tail-sweep-to-a-task-tier-session-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 3,
+        "escalated_decisions": 0,
+        "tasks_completed": 3,
+        "tasks_total": 3,
+        "lane": "solo",
+        "lane_reason": "no_production_code",
+        "lane_effective": "solo",
+        "lane_escalated": {
+          "from": "solo",
+          "signal": "security_diff"
+        }
+      },
+      {
+        "filename": "00331-start-a-fresh-batch-clean-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 1,
+        "tasks_total": 1,
+        "lane": "fast-track",
+        "lane_reason": "card_sized",
+        "lane_effective": "fast-track",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00332-wait-for-a-lane-in-one-call-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 1,
+        "tasks_total": 1,
+        "lane": "fast-track",
+        "lane_reason": "card_sized",
+        "lane_effective": "fast-track",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00333-sweep-only-findings-two-reviewers-raised-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 5,
+        "escalated_decisions": 0,
+        "tasks_completed": 6,
+        "tasks_total": 6,
+        "lane": "fast-track",
+        "lane_reason": "uncardable",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00334-keep-the-test-only-skip-when-a-test-registers-itself-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 1,
+        "tasks_total": 1,
+        "lane": "fast-track",
+        "lane_reason": "card_sized",
+        "lane_effective": "fast-track",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00335-tell-tess-what-devon-will-try-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 3,
+        "tasks_total": 3,
+        "lane": "solo",
+        "lane_reason": "no_production_code",
+        "lane_effective": "solo",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00340-tell-the-session-it-is-the-loop-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 1,
+        "tasks_total": 1,
+        "lane": "fast-track",
+        "lane_reason": "card_sized",
+        "lane_effective": "fast-track",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00341-devon-reviews-tests-an-earlier-task-wrote-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 2,
+        "tasks_total": 2,
+        "lane": "solo",
+        "lane_reason": "no_production_code",
+        "lane_effective": "solo",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00342-task-done-refuses-an-undefined-attempt-stamp-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 0,
+        "tasks_total": 1,
+        "lane": "fast-track",
+        "lane_reason": "card_sized",
+        "lane_effective": "fast-track",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00345-launch-loop-sessions-with-ponytail-off-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 1,
+        "tasks_total": 1,
+        "lane": "fast-track",
+        "lane_reason": "card_sized",
+        "lane_effective": "fast-track",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00348-the-security-trigger-reads-prose-as-prose-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 1,
+        "tasks_total": 1,
+        "lane": "fast-track",
+        "lane_reason": "card_sized",
+        "lane_effective": "fast-track",
+        "lane_escalated": null
+      }
+    ],
+    "plugin_versions": {
+      "aegis@buvis-plugins": "0.4.1",
+      "warden@buvis-plugins": "0.14.1"
+    },
+    "catchup_completed_at": "2026-10-17T13:55:11Z",
+    "catchup_head_sha": "a2858cb407a2fa7b071fc603c1ba02c741203849",
+    "parks_consecutive": 0,
+    "minted_stubs": [
+      "00328-triage-consolidate-findings-py-silently-drops-r-v1.md",
+      "00329-triage-a-git-file-with-a-relative-gitdir-pointe-v1.md",
+      "00336-triage-caller-signal-cleanup-in-run-script-sigk-v1.md",
+      "00337-triage-the-replay-signal-guard-is-installed-onl-v1.md",
+      "00338-triage-changelog-acceptance-not-met-rg-n-sighup-v1.md",
+      "00339-triage-replay-signal-protection-ends-before-wor-v1.md",
+      "00343-triage-bracket-in-bracket-bypass-an-asymmetric-v1.md",
+      "00344-triage-unspaced-fullwidth-and-still-do-not-end-v1.md",
+      "00346-triage-every-nonzero-git-result-still-enables-a-v1.md"
+    ]
+  },
+  "prd": "00348-the-security-trigger-reads-prose-as-prose-v1.md",
+  "catchup_mode": "run",
+  "doubt_reviewer": "codex",
+  "consensus_engine": "legacy",
+  "session_model": "sonnet",
+  "rework_cap": 2,
+  "lane": "fast-track",
+  "lane_reason": "card_sized",
+  "lane_effective": "fast-track",
+  "tasks_total": 0,
+  "tasks_completed": 0,
+  "cycle": 1,
+  "applied_review_batches": [
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00320-refuse-every-unsafe-verify-log-sink-v2-review-1.md::decision-gate",
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2-review-1.md::decision-gate",
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2-review-2.md::tail-sweep",
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00322-kill-the-gate-on-every-signal-v1-review-1.md::decision-gate",
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00324-guard-pairs-delimiters-as-nested-runs-v1-review-1.md::decision-gate",
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00326-close-the-loops-remaining-verb-and-ledger-truths-v2-review-1.md::decision-gate",
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00330-hand-the-tail-sweep-to-a-task-tier-session-v1-review-1.md::decision-gate",
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00330-hand-the-tail-sweep-to-a-task-tier-session-v1-review-1.md::tail-sweep",
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00333-sweep-only-findings-two-reviewers-raised-v1-review-1.md::tail-sweep"
+  ],
+  "phases_completed": [
+    "review"
+  ],
+  "replan_count": 0,
+  "design_mode": "skip",
+  "work_start_sha": "1b526792898ea0613fa7fc162f549fa3c72b1424",
+  "repo_root": "/Users/bob/git/src/github.com/buvis/claude-autopilot",
+  "tasks": [],
+  "contract_card": "step: build -> done (lane_reviewed, fast-track lane, 1 card committed) | invariants: PRD 00348 fully reviewed (converged, no CRITICAL/HIGH), batch suite green 7192/0/3 | next: done gate finalizes PRD 00348, picks next PRD from backlog"
+}
