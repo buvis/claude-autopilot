@@ -205,13 +205,36 @@ _FENCE_RUN_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 _FENCE_CLOSE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
 # A mark that leads a finding-shaped line: ASCII bullets/emphasis, blockquote,
 # and the typographic bullet/dash variants a reviewer's renderer may produce.
-_LEAD_MARKS = frozenset("-*+_>•◦‣–—－")
+# PRD 00325 widened this with further single-character bullets (heading '#',
+# bullet-operator/middle-dot/black-circle/black-square/arrow, strikethrough
+# '~') found in real reviews' lead shapes.
+_LEAD_MARKS = frozenset("-*+_>•◦‣–—－#⁃∙·●▪→~")
+# Invisible single characters outside Unicode categories Zs/Cf that still show
+# up as lead in the wild: a variation selector (Mn), the braille blank (So)
+# and the Hangul filler (Lo) - each named explicitly rather than widened by
+# category, since those categories also hold ordinary letters.
+_INVISIBLE_LEAD_EXTRA = frozenset("️⠀ㅤ")
 # No `^`: re's `^` anchors to the real string start even with `.match(line,
 # i)`'s `pos` argument, which would silently stop this ever matching past
 # index 0 (`re.compile(r"^\d+[.)]").match("  1. x", 2)` is None, checked) —
 # an unanchored pattern plus `.match(line, i)` is what actually anchors the
 # match at `i`.
-_ORDINAL_LEAD_RE = re.compile(r"\d+[.)]")
+_ORDINAL_LEAD_RE = re.compile(r"\d+[.)]|[A-Za-z]+\)|\(\d+\)")
+# Multi-character lead shapes consumed whole: a checkbox, an HTML comment or
+# `<details>` block, inline code, and a markdown link.
+_CHECKBOX_LEAD_RE = re.compile(r"\[[ xX]?\]")
+_HTML_COMMENT_LEAD_RE = re.compile(r"<!--.*?-->")
+_DETAILS_LEAD_RE = re.compile(r"<details>.*?</details>", re.IGNORECASE | re.DOTALL)
+_INLINE_CODE_LEAD_RE = re.compile(r"`[^`\n]*`")
+_LINK_LEAD_RE = re.compile(r"\[[^\]\n]*\]\([^)\n]*\)")
+_LEAD_SHAPE_RES = (
+    _ORDINAL_LEAD_RE,
+    _CHECKBOX_LEAD_RE,
+    _HTML_COMMENT_LEAD_RE,
+    _DETAILS_LEAD_RE,
+    _INLINE_CODE_LEAD_RE,
+    _LINK_LEAD_RE,
+)
 _EMOJI_ROW_DETAIL = "a severity emoji row the findings parser did not read:"
 
 
@@ -227,15 +250,24 @@ def _strip_lead(line: str) -> str:
     i, n = 0, len(line)
     while i < n:
         ch = line[i]
-        if ch in " \t" or unicodedata.category(ch) in ("Zs", "Cf"):
+        if (
+            ch in " \t"
+            or ch in _INVISIBLE_LEAD_EXTRA
+            or unicodedata.category(ch) in ("Zs", "Cf")
+        ):
             i += 1
             continue
         if ch in _LEAD_MARKS:
             i += 1
             continue
-        m = _ORDINAL_LEAD_RE.match(line, i)
-        if m:
-            i = m.end()
+        matched = False
+        for lead_re in _LEAD_SHAPE_RES:
+            m = lead_re.match(line, i)
+            if m:
+                i = m.end()
+                matched = True
+                break
+        if matched:
             continue
         break
     return line[i:]
@@ -493,12 +525,13 @@ def _unfenced(text: str) -> str:
     return "\n".join(live)
 
 
-def _is_unread_line(line: str) -> bool:
-    """Whether `line` carries a [m/n] token or a finding-shaped row that,
-    left unconsumed by the findings parser, must be flagged as unread."""
+def _structured_unread_match(line: str) -> bool:
+    """Whether `line` carries a finding-shaped row - every `_is_unread_line`
+    arm except the bare `[m/n]` token search. A line matching none of these
+    but still carrying a bare token is a `[m/n]` token with no table row or
+    severity signal around it (see `_unread_token`'s wording)."""
     return bool(
-        _CONSENSUS_TOKEN_RE.search(line)
-        or _CANDIDATE_ROW_RE.match(line)
+        _CANDIDATE_ROW_RE.match(line)
         or _CONSENSUS_VARIANT_RE.search(line)
         or (_ROW_SHAPE_RE.search(line) and _CONSENSUS_VARIANT_ANY_RE.search(line))
         or _SEVERITY_WORD_CELL_RE.search(line)
@@ -516,6 +549,12 @@ def _is_unread_line(line: str) -> bool:
             )
         )
     )
+
+
+def _is_unread_line(line: str) -> bool:
+    """Whether `line` carries a [m/n] token or a finding-shaped row that,
+    left unconsumed by the findings parser, must be flagged as unread."""
+    return bool(_CONSENSUS_TOKEN_RE.search(line) or _structured_unread_match(line))
 
 
 def _unread_token(live: str) -> str | None:
@@ -558,9 +597,14 @@ def _unread_token(live: str) -> str | None:
                 # detail names. Quote from the emoji instead.
                 quoted = body[:120]
             return f"line {i + 1}: {_EMOJI_ROW_DETAIL} {quoted}"
-        if _is_unread_line(line):
+        if _structured_unread_match(line):
             return (
                 f"line {i + 1}: a [m/n] token or table row the findings parser "
+                f"did not read: {line.strip()[:120]}"
+            )
+        if _CONSENSUS_TOKEN_RE.search(line):
+            return (
+                f"line {i + 1}: a [m/n] token the findings parser "
                 f"did not read: {line.strip()[:120]}"
             )
     return None
