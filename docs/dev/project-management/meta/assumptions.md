@@ -20,3 +20,9 @@
 - Dedup of `_find_autopilot_dir_in_repo`: added an optional `stop` parameter to `_walk_up.find_autopilot_dir` rather than moving the helper into `markers.py`, since `_walk_up.py` is the documented shared walk-up helper.
 - `loop.py` `launched_prd` empty-fallback: left the `= ""` default in place (dropping it would break two existing positional callers in `test_routing.py` outside the task's file allowlist) and added a regression test instead.
 - `markers --state` nonexistent parent: validated only path existence (not "looks like an autopilot dir" shape), per the finding's "ideally" wording and to avoid unrequested scope.
+
+## 6: [D1] skills/fast-track/scripts/
+
+- Drove the two 24h-boundary tests via an in-process `main()` call with a monkeypatched `time.time()`, diverging from the file's dominant subprocess-CLI style, to pin the exact boundary without subprocess-startup timing slop.
+- Used non-numeric text as the "malformed" started-file shape (matching the implementation's `int(text.strip())`/`ValueError` path); the brief did not specify exact malformed content.
+- New tests live in a sibling file `test_record_item_started_bounds.py` rather than appended to `test_record_item.py`, which was already at 799 lines against the 800-line cap.
