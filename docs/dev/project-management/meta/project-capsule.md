@@ -60,6 +60,11 @@ Generated: 2026-10-17 (catchup at HEAD a2858cb4, 00332 closed, entering 00333; 0
 - [x] 00334-keep-the-test-only-skip-when-a-test-registers-itself-v1 (1 cycle, fast-track)
 - [x] 00335-tell-tess-what-devon-will-try-v1 (1 cycle, solo lane: prose-only)
 - [x] 00340-tell-the-session-it-is-the-loop-v1 (1 cycle, fast-track)
+- [x] 00341-devon-reviews-tests-an-earlier-task-wrote-v1 (1 cycle, solo lane)
+- [ ] 00342-task-done-refuses-an-undefined-attempt-stamp-v1 (backlog)
+- [ ] 00345-launch-loop-sessions-with-ponytail-off-v1 (backlog)
+- [ ] 00347-never-run-the-release-script-as-a-card-gate-v1 (backlog)
+- [ ] 00348-the-security-trigger-reads-prose-as-prose-v1 (backlog)
 
 Observations: 00320's review cap-out deferred two severe findings into fresh
 hold stubs (00328, 00329) rather than rework tasks; `dev/bin/release` is
