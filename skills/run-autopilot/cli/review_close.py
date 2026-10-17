@@ -558,7 +558,7 @@ def _single_voice_refusal(chosen_findings: list[dict], batch_id: str) -> dict | 
             if (
                 row.get("classification") == "fix"
                 and row.get("severity") in ("\U0001f7e1", "⚪")
-                and len(row.get("found_by") or []) < 2
+                and _found_by_count(row) < 2
             ):
                 return {
                     "applied": False,
@@ -570,7 +570,7 @@ def _single_voice_refusal(chosen_findings: list[dict], batch_id: str) -> dict | 
                 }
         return None
     for row in chosen_findings:
-        if len(row.get("found_by") or []) < 2:
+        if _found_by_count(row) < 2:
             return {
                 "applied": False,
                 "refused": "tail_sweep_single_voice",
@@ -582,17 +582,23 @@ def _single_voice_refusal(chosen_findings: list[dict], batch_id: str) -> dict | 
     return None
 
 
-def _tail_sweep_refusal(
+def _found_by_count(row: dict) -> int:
+    """Distinct finder count for `row`. A non-list `found_by` (a bare string,
+    for example) or a missing key counts as zero finders; duplicates in a
+    list count once."""
+    found_by = row.get("found_by")
+    if not isinstance(found_by, list):
+        return 0
+    return len(set(found_by))
+
+
+def _tail_sweep_preconditions(
     loaded: dict,
     review_file: Path,
     chosen_findings: list[dict],
 ) -> dict | None:
-    """The tail-sweep-only refusals, in the order the operator hears them: a
-    carry row, a sweep before this cycle's decision-gate batch, an empty
-    sweep, a row above Medium, a single-voice row, a row duplicating an open
-    deferral. The decision-gate-first stamp always exists by the time a sweep
-    reaches this check (`run-autopilot/references/phase-review.md` Converged
-    Outcome)."""
+    """The three tail-sweep refusals checked before severity: a carry row, a
+    sweep before this cycle's decision-gate batch, an empty sweep."""
     if any(f.get("classification") == "carry" for f in chosen_findings):
         return {
             "applied": False,
@@ -615,6 +621,23 @@ def _tail_sweep_refusal(
             "refused": "tail_sweep_empty",
             "reason": "tail sweep findings must not be empty",
         }
+    return None
+
+
+def _tail_sweep_refusal(
+    loaded: dict,
+    review_file: Path,
+    chosen_findings: list[dict],
+) -> dict | None:
+    """The tail-sweep-only refusals, in the order the operator hears them: a
+    carry row, a sweep before this cycle's decision-gate batch, an empty
+    sweep, a row above Medium, a single-voice row, a row duplicating an open
+    deferral. The decision-gate-first stamp always exists by the time a sweep
+    reaches this check (`run-autopilot/references/phase-review.md` Converged
+    Outcome)."""
+    precondition = _tail_sweep_preconditions(loaded, review_file, chosen_findings)
+    if precondition is not None:
+        return precondition
     above_medium = [f for f in chosen_findings if f.get("severity") in _ABOVE_MEDIUM]
     if above_medium:
         named = above_medium[0].get("ref") or above_medium[0].get("file")
