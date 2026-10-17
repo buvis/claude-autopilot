@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **review-work-completion**: Bob's first dispatch now always uses the inlined-context prompt, so the review context and diff reach him inline every time instead of only on a retry after a refusal; a retry's dispatch-ledger row is now opened with the `record_dispatch.py retry` verb
 - **run-autopilot**: the gate's `[checks] tracon` block now runs `pytest` with `--with textual`, so the 31 Textual pilot tests in `test_screens.py` no longer self-skip, and a `SKIP_ALLOWED`/`-rs` ceiling check now fails the gate when the skip count exceeds the configured limit
 - **review-work-completion**: a reviewer-lane wait is one foreground call of up to 570 s with the Bash timeout raised, in the review Watcher, the fast-track Watcher and the design review, instead of 100 s polls
+- **run-autopilot**: a Medium or Low finding raised by one reviewer is recorded in the ledger instead of becoming a rework or tail-sweep task, and review-close refuses a batch that tries
 
 ### Fixed
 
