@@ -71,7 +71,7 @@ HOST_MARKERS = (
 )
 
 DEFAULT_MCP_CONFIG = {
-    "mcpServers": {"context7": {"type": "http", "url": "https://mcp.context7.com/mcp"}}
+    "mcpServers": {"context7": {"type": "http", "url": "https://mcp.context7.com/mcp"}},
 }
 
 DEFAULT_PROMPT = "/autopilot:run-autopilot"
@@ -94,15 +94,15 @@ CLI_SUFFIX = (
     " Never call `cat`, `head`, `tail`, `grep` or `find` (a hook blocks them):"
     " use Read, `rg`, and `jq <file>`."
 )
-# 2026-10-17: a human-started session told to stand down "because a loop is
-# running" is a different session than the loop's own -p turn; without this
-# sentence the loop's own session misread that rule as being about itself
-# and refused to work (see MEMORY.md "Loop sessions read this memory").
+# PRD 00340: sessions 3c3ba0b1 (2026-10-17 01:13Z) and e717febe (2026-10-16
+# 19:33Z) each saw their own loop driver's pid via `pgrep` and stood down,
+# reading a stand-down rule meant for a human-started session as being
+# about themselves.
 LOOP_SUFFIX = (
-    " This session was launched by the autopilot loop driver, not a human:"
-    " any note about standing down, asking first, or not editing the"
-    " checkout because a loop is running is about a different,"
-    " human-started session, not about you."
+    " This session was launched by the autopilot loop driver: a"
+    " `__main__.py loop` process is your parent, not a competing session,"
+    " and this checkout is yours to edit; never stop or ask because a loop"
+    " is running."
 )
 
 
@@ -331,7 +331,9 @@ def _run_session(
         )
         if proc_slot is not None:
             proc_slot[0] = proc
-        dog = _spawn_watchdog(proc, log_path, cap_secs, grace_secs, warn_secs, idle_secs)
+        dog = _spawn_watchdog(
+            proc, log_path, cap_secs, grace_secs, warn_secs, idle_secs
+        )
         assert proc.stdout is not None
         try:
             for line in proc.stdout:
@@ -349,7 +351,9 @@ def _child_env_with_deadline(env: dict, cap_secs: float) -> dict:
     """`child_env(env)` plus `_AUTOPILOT_SESSION_DEADLINE`, and the
     host-marker scrub notice on stderr when any were dropped."""
     env_for_child, dropped = child_env(env)
-    env_for_child["_AUTOPILOT_SESSION_DEADLINE"] = str(math.ceil(time.time() + cap_secs))
+    env_for_child["_AUTOPILOT_SESSION_DEADLINE"] = str(
+        math.ceil(time.time() + cap_secs)
+    )
     if dropped:
         print(
             "autopilot: scrubbed inherited host markers: " + ", ".join(dropped),
@@ -395,7 +399,14 @@ def spawn(
 
     env_for_child = _child_env_with_deadline(env, cap_secs)
     rc, cap_fired, cap_reason = _run_session(
-        argv, log_path, env_for_child, cap_secs, grace_secs, presenter, proc_slot,
-        warn_secs=warn_secs_for(env), idle_secs=idle_secs_for(env),
+        argv,
+        log_path,
+        env_for_child,
+        cap_secs,
+        grace_secs,
+        presenter,
+        proc_slot,
+        warn_secs=warn_secs_for(env),
+        idle_secs=idle_secs_for(env),
     )
     return SpawnResult(rc, log_path, cap_fired, cap_reason)

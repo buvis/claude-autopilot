@@ -111,7 +111,10 @@ def test_build_argv_strict_mcp_default_is_context7():
 def test_build_argv_mcp_config_none_keeps_todays_argv():
     # Existing build_argv tests stay green because the default is None.
     assert build_argv("m1", "xhigh", "fb1") == build_argv(
-        "m1", "xhigh", "fb1", mcp_config=None
+        "m1",
+        "xhigh",
+        "fb1",
+        mcp_config=None,
     )
     assert "--mcp-config" not in build_argv("m1", "xhigh", "fb1")
 
@@ -227,18 +230,30 @@ def test_prompt_names_the_brief_when_present(tmp_path):
         + CLI_SUFFIX
         + LOOP_SUFFIX
     )
-    assert argv[:-1] == build_argv(
-        "m", "low", "claude-sonnet-5[1m]", mcp_config=mcp_config_for({})
-    )[1:-1]
+    assert (
+        argv[:-1]
+        == build_argv(
+            "m",
+            "low",
+            "claude-sonnet-5[1m]",
+            mcp_config=mcp_config_for({}),
+        )[1:-1]
+    )
 
 
 def test_prompt_without_a_brief_still_names_the_cli(tmp_path):
     ap = _ap_dir(tmp_path)
     argv = _launch_argv(tmp_path, ap)
     assert argv[-1] == "/autopilot:run-autopilot" + CLI_SUFFIX + LOOP_SUFFIX
-    assert argv[:-1] == build_argv(
-        "m", "low", "claude-sonnet-5[1m]", mcp_config=mcp_config_for({})
-    )[1:-1]
+    assert (
+        argv[:-1]
+        == build_argv(
+            "m",
+            "low",
+            "claude-sonnet-5[1m]",
+            mcp_config=mcp_config_for({}),
+        )[1:-1]
+    )
 
 
 def test_a_brief_that_is_a_directory_does_not_count(tmp_path):
@@ -270,7 +285,12 @@ def test_launch_prompt_forbids_blocked_coreutils(tmp_path):
         " Never call `cat`, `head`, `tail`, `grep` or `find` (a hook blocks them):"
         " use Read, `rg`, and `jq <file>`."
     )
-    loop_sentence = LOOP_SUFFIX
+    loop_sentence = (
+        " This session was launched by the autopilot loop driver: a"
+        " `__main__.py loop` process is your parent, not a competing session,"
+        " and this checkout is yours to edit; never stop or ask because a"
+        " loop is running."
+    )
     ap = _ap_dir(tmp_path)
     bare = prompt_for(ap)
     (ap / "session-brief.md").write_text("# Session brief\n")
@@ -280,7 +300,9 @@ def test_launch_prompt_forbids_blocked_coreutils(tmp_path):
     # Exact equality: nothing may precede the CLI sentence (e.g. text that
     # tells the agent to ignore the coreutils rule) and still pass.
     assert bare == DEFAULT_PROMPT + cli_sentence + rule + loop_sentence
-    assert briefed == DEFAULT_PROMPT + BRIEF_SUFFIX + cli_sentence + rule + loop_sentence
+    assert (
+        briefed == DEFAULT_PROMPT + BRIEF_SUFFIX + cli_sentence + rule + loop_sentence
+    )
     assert "Never call `cat`, `head`, `tail`, `grep` or `find`" in bare
 
 
@@ -300,12 +322,25 @@ def test_launch_prompt_says_the_session_is_the_loop(tmp_path):
     # PRD 00340: a memory or rule telling a human-started session "a loop
     # is running, stop/ask/do not edit" reads the same when the loop's own
     # session is the one reading it. The launch prompt must say the session
-    # IS the loop, so it does not stand down on itself.
-    assert isinstance(LOOP_SUFFIX, str)
-    assert LOOP_SUFFIX != ""
-    assert "loop" in LOOP_SUFFIX.lower()
+    # IS the loop, so it does not stand down on itself. Checked with and
+    # without a brief, since both are real launch shapes; a custom prompt
+    # gets neither sentence.
     ap = _ap_dir(tmp_path)
-    assert prompt_for(ap) == "/autopilot:run-autopilot" + CLI_SUFFIX + LOOP_SUFFIX
+    bare = prompt_for(ap)
+    assert bare.endswith(LOOP_SUFFIX)
+    assert "launched by the autopilot loop driver" in bare
+    assert "never stop or ask because a loop is running" in bare
+
+    (ap / "session-brief.md").write_text("# Session brief\n")
+    (ap / "state.json").write_text("{}\n")
+    briefed = prompt_for(ap)
+    assert briefed.endswith(LOOP_SUFFIX)
+    assert "launched by the autopilot loop driver" in briefed
+    assert "never stop or ask because a loop is running" in briefed
+
+    custom = prompt_for(ap, "custom")
+    assert "launched by the autopilot loop driver" not in custom
+    assert "never stop or ask because a loop is running" not in custom
 
 
 def test_warn_window_defaults_to_fifteen_minutes():
@@ -369,7 +404,7 @@ def test_spawn_requests_a_handoff_before_the_cap(tmp_path, capsys):
     )
     ap = _ap_dir(tmp_path)
     (ap / "state.json").write_text(
-        json.dumps({"phase": "build", "tasks": [{"id": "2", "status": "in_progress"}]})
+        json.dumps({"phase": "build", "tasks": [{"id": "2", "status": "in_progress"}]}),
     )
     result = spawn(
         "m",
@@ -437,7 +472,8 @@ def test_spawn_scrubs_host_markers(tmp_path, capsys):
 
 
 def test_spawn_scrub_notice_sorts_multiple_markers_comma_space_joined(
-    tmp_path, capsys
+    tmp_path,
+    capsys,
 ):
     # Seeded out of alphabetical order so an implementation that merely
     # echoed the caller's dict order (rather than sorting) would fail.
@@ -470,7 +506,7 @@ def test_spawn_scrub_notice_sorts_multiple_markers_comma_space_joined(
         if line.startswith("autopilot: scrubbed inherited host markers:")
     ]
     assert err_lines == [
-        "autopilot: scrubbed inherited host markers: CODEX_CI, CODEX_THREAD_ID, COPILOT_CLI"
+        "autopilot: scrubbed inherited host markers: CODEX_CI, CODEX_THREAD_ID, COPILOT_CLI",
     ]
 
 
