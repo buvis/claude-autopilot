@@ -9,6 +9,8 @@ severity: high
 
 # Triage: Every nonzero git result still enables an unrestricted ancestor walk (corrupt...
 
+> Closed 2026-10-18 by the operator's triage (`audit-results/backlog-review-2026-10-18.md`): holds at HEAD; carried by discovery 00363 (markers walk-up and ledger prose residue) for elicitation and review before a PRD.
+
 ## Problem
 
 Deferred finding with no PRD owner when this stub was minted: batch `202610161547`, ledger `deferred/202610161547-deferred.json`, type `cap-overflow`, cycle `2`, consensus `1/4`, raised against `00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md`.

@@ -9,6 +9,8 @@ severity: high
 
 # Triage: consolidate_findings.py silently drops reviewer finding lines that arrive bul...
 
+> Closed 2026-10-18 by the operator's triage (`audit-results/backlog-review-2026-10-18.md`): already fixed before the batch. `_LINE_RE` tolerates a leading bullet since 3d862afd (2026-10-07); the cycle-1 drop had another cause the orchestrator's workaround hid.
+
 ## Problem
 
 Deferred finding with no PRD owner when this stub was minted: batch `202610161547`, ledger `deferred/202610161547-deferred.json`, type `product-defect`, raised against `00320-refuse-every-unsafe-verify-log-sink-v2.md`.

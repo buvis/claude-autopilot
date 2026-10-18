@@ -9,6 +9,8 @@ severity: high
 
 # Triage: Replay signal protection ends before worktree removal: a second SIGTERM/SIGHU...
 
+> Closed 2026-10-18 by the operator's triage (`audit-results/backlog-review-2026-10-18.md`): holds at HEAD; carried by discovery 00361 (replay and helper signal residue) for elicitation and review before a PRD.
+
 ## Problem
 
 Deferred finding with no PRD owner when this stub was minted: batch `202610161547`, ledger `deferred/202610161547-deferred.json`, type `cap-overflow`, cycle `2`, consensus `1/4`, raised against `00322-kill-the-gate-on-every-signal-v1.md`.

@@ -6,88 +6,118 @@
       "issue": "consolidate_findings.py silently drops reviewer finding lines that arrive bullet-prefixed (`- [BOB] ...`): _LINE_RE anchors on ^\\[. Bob/codex emits exactly that shape, so in cycle 1 of 00320 all 13 of his findings were absent from the first consolidation, including the two sharpest correctness findings. Fix: tolerate an optional leading list marker in _LINE_RE, and add a fixture pinning the bullet-prefixed shape.",
       "severity": "high",
       "reason": "found while consolidating 00320 cycle 1; worked around by stripping the prefix and re-consolidating. Needs its own PRD - it is a defect in the pack, not in 00320.",
-      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "closed: already fixed before the batch (3d862afd, 2026-10-07: _LINE_RE tolerates a leading bullet); the cycle-1 drop had another cause the workaround hid"
     },
     {
       "issue": "File test_review_stage.py exceeds the 800-line limit (805 lines)",
-      "severity": "\ud83d\udfe1",
+      "severity": "🟡",
       "file": "skills/run-autopilot/cli/test_review_stage.py:805",
       "reason": "deferred by review-close",
       "type": "deferred_decision",
       "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
-      "cycle": 2
+      "cycle": 2,
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00364: files over the 800-line cap"
     },
     {
       "issue": "Additions beyond the PRD. `_in_nested_repo` refuses a sink inside any nested git repository. `_open_log_sink` takes an extra `root` parameter. The test file has three tests the spec does not name: `test_parent_dir_symlink_swap_is_refused`, `test_nested_repo_store_is_refused` and `test_symlink_above_repo_root_does_not_refuse_default_sink`. The nested-repo refusal is a fair reading of \"outside the repository\" but is not stated.",
-      "severity": "\u26aa",
+      "severity": "⚪",
       "file": "skills/run-autopilot/cli/log_sink_refusal.py:121",
       "reason": "deferred by review-close",
       "type": "deferred_decision",
       "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
-      "cycle": 2
+      "cycle": 2,
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "closed: accepted deviation, recorded by review-close in the review file"
     },
     {
       "issue": "`_lock_and_check` folds every refusal reason into a dirty result, where the spec names only tracked and symlinked sinks. It is a safe superset. The \"tracked\" test is `git ls-files --error-unmatch`, which checks the index, not HEAD, as the spec literally says.",
-      "severity": "\u26aa",
+      "severity": "⚪",
       "file": "skills/run-autopilot/cli/verification.py:403",
       "reason": "deferred by review-close",
       "type": "deferred_decision",
       "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
-      "cycle": 2
+      "cycle": 2,
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "closed: accepted deviation, recorded by review-close in the review file"
     },
     {
       "issue": "`_descend` creates missing parent directories before opening the sink. That is only reached after the refusal passes, so it is not a hole, but the gate path now makes directories.",
-      "severity": "\u26aa",
+      "severity": "⚪",
       "file": "skills/run-autopilot/cli/verification.py:458",
       "reason": "deferred by review-close",
       "type": "deferred_decision",
       "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
-      "cycle": 2
+      "cycle": 2,
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "closed: accepted deviation, recorded by review-close in the review file"
     },
     {
-      "issue": "Fail-first replay: `test_run_gate_streams_stdout_and_stderr_to_the_log` and `test_held_gate_lock_blocks_before_the_log_open_and_record_delete` pass against the pre-change code \u2014 out of scope as findings: both were only relocated from a `tmp_path_factory` sink into `docs/dev/tmp` because case 4 now refuses an out-of-repo sink, and they are pre-existing regression tests, not this PRD's behavior pins",
-      "severity": "\u26aa",
+      "issue": "Fail-first replay: `test_run_gate_streams_stdout_and_stderr_to_the_log` and `test_held_gate_lock_blocks_before_the_log_open_and_record_delete` pass against the pre-change code — out of scope as findings: both were only relocated from a `tmp_path_factory` sink into `docs/dev/tmp` because case 4 now refuses an out-of-repo sink, and they are pre-existing regression tests, not this PRD's behavior pins",
+      "severity": "⚪",
       "file": "skills/run-autopilot/cli/test_verification.py:454",
       "reason": "deferred by review-close",
       "type": "deferred_decision",
       "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
-      "cycle": 2
+      "cycle": 2,
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "closed: accepted deviation, recorded by review-close in the review file"
     },
     {
-      "issue": "Fail-first replay: `test_run_gate_refuses_a_symlinked_log_and_leaves_its_target` passes at base \u2014 out of scope: it is the surviving `symlink` arm of a deleted parametrize whose behavior was already correct at base, and its tracked arm moved to `test_verify_log_refusal.py::test_run_gate_refuses_tracked_log_without_opening` (which is red at base)",
-      "severity": "\u26aa",
+      "issue": "Fail-first replay: `test_run_gate_refuses_a_symlinked_log_and_leaves_its_target` passes at base — out of scope: it is the surviving `symlink` arm of a deleted parametrize whose behavior was already correct at base, and its tracked arm moved to `test_verify_log_refusal.py::test_run_gate_refuses_tracked_log_without_opening` (which is red at base)",
+      "severity": "⚪",
       "file": "skills/run-autopilot/cli/test_verification_log_sink.py:198",
       "reason": "deferred by review-close",
       "type": "deferred_decision",
       "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
-      "cycle": 2
+      "cycle": 2,
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "closed: accepted deviation, recorded by review-close in the review file"
     },
     {
-      "issue": "Fail-first replay: `test_untracked_tmp_log_still_records` passes at base \u2014 out of scope: the PRD and design both state this happy-path test must already pass at the task's base commit",
-      "severity": "\u26aa",
+      "issue": "Fail-first replay: `test_untracked_tmp_log_still_records` passes at base — out of scope: the PRD and design both state this happy-path test must already pass at the task's base commit",
+      "severity": "⚪",
       "file": "skills/run-autopilot/cli/test_verify_log_refusal.py:225",
       "reason": "deferred by review-close",
       "type": "deferred_decision",
       "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
-      "cycle": 2
+      "cycle": 2,
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "closed: accepted deviation, recorded by review-close in the review file"
     },
     {
-      "issue": "A CLI `verify` run now executes `log_sink_refusal.refuse` twice (pre-flight plus inside the lock), each pass spawning ~6 `git` subprocesses, so a gate run pays ~12 extra probes \u2014 out of scope: both enforcement points are a PRD Must-have (\"a library caller cannot bypass the CLI\"), and caching across the flock boundary would reintroduce the TOCTOU the second check exists to close",
-      "severity": "\u26aa",
+      "issue": "A CLI `verify` run now executes `log_sink_refusal.refuse` twice (pre-flight plus inside the lock), each pass spawning ~6 `git` subprocesses, so a gate run pays ~12 extra probes — out of scope: both enforcement points are a PRD Must-have (\"a library caller cannot bypass the CLI\"), and caching across the flock boundary would reintroduce the TOCTOU the second check exists to close",
+      "severity": "⚪",
       "file": "skills/run-autopilot/cli/log_sink_refusal.py:20",
       "reason": "deferred by review-close",
       "type": "deferred_decision",
       "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
-      "cycle": 2
+      "cycle": 2,
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "closed: accepted deviation, recorded by review-close in the review file"
     },
     {
-      "issue": "R13: two changed files exceed the 800-line limit \u2014 `skills/run-autopilot/cli/__main__.py` (~1975 lines, last function at 1968) and `skills/run-autopilot/cli/test_review_stage.py` (~802, last function at 786+16) \u2014 out of scope: both were already over before this diff, which adds ~15 and 2 net lines respectively; splitting them is its own PRD (the same precedent that split `verification.py`/`dirty_tree.py` under 00311), and the new files this PRD adds are well inside the limit (log_sink_refusal.py 133, test_verify_log_refusal.py 374, verification.py ~742)",
-      "severity": "\u26aa",
+      "issue": "R13: two changed files exceed the 800-line limit — `skills/run-autopilot/cli/__main__.py` (~1975 lines, last function at 1968) and `skills/run-autopilot/cli/test_review_stage.py` (~802, last function at 786+16) — out of scope: both were already over before this diff, which adds ~15 and 2 net lines respectively; splitting them is its own PRD (the same precedent that split `verification.py`/`dirty_tree.py` under 00311), and the new files this PRD adds are well inside the limit (log_sink_refusal.py 133, test_verify_log_refusal.py 374, verification.py ~742)",
+      "severity": "⚪",
       "file": "skills/run-autopilot/cli/__main__.py:1968",
       "reason": "deferred by review-close",
       "type": "deferred_decision",
       "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
-      "cycle": 2
+      "cycle": 2,
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00364: files over the 800-line cap"
     },
     {
       "type": "cap-overflow",
@@ -98,7 +128,10 @@
       "consensus": "3/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00360: verify log-sink refusal residue"
     },
     {
       "type": "cap-overflow",
@@ -109,7 +142,10 @@
       "consensus": "2/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00360: verify log-sink refusal residue"
     },
     {
       "type": "cap-overflow",
@@ -120,7 +156,10 @@
       "consensus": "2/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00360: verify log-sink refusal residue"
     },
     {
       "type": "cap-overflow",
@@ -131,7 +170,10 @@
       "consensus": "2/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00360: verify log-sink refusal residue"
     },
     {
       "type": "cap-overflow",
@@ -142,7 +184,10 @@
       "consensus": "2/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00360: verify log-sink refusal residue"
     },
     {
       "type": "cap-overflow",
@@ -153,7 +198,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00360: verify log-sink refusal residue"
     },
     {
       "type": "cap-overflow",
@@ -164,7 +212,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00360: verify log-sink refusal residue"
     },
     {
       "type": "cap-overflow",
@@ -175,7 +226,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00360: verify log-sink refusal residue"
     },
     {
       "type": "cap-overflow",
@@ -186,7 +240,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00360: verify log-sink refusal residue"
     },
     {
       "type": "cap-overflow",
@@ -197,7 +254,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00360: verify log-sink refusal residue"
     },
     {
       "type": "cap-overflow",
@@ -208,7 +268,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00360: verify log-sink refusal residue"
     },
     {
       "type": "cap-overflow",
@@ -219,7 +282,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00360: verify log-sink refusal residue"
     },
     {
       "type": "cap-overflow",
@@ -230,7 +296,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00360: verify log-sink refusal residue"
     },
     {
       "type": "cap-overflow",
@@ -241,7 +310,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00360: verify log-sink refusal residue"
     },
     {
       "type": "cap-overflow",
@@ -252,7 +324,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md"
+      "prd": "00320-refuse-every-unsafe-verify-log-sink-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00360: verify log-sink refusal residue"
     },
     {
       "type": "verify-escape",
@@ -260,36 +335,51 @@
       "severity": "low",
       "command": "python3 skills/run-autopilot/cli/__main__.py cap-check --review-file docs/dev/project-management/reviews/00310-park-cap-regressions-v1-review-2.md --previous docs/dev/project-management/reviews/00310-park-cap-regressions-v1-review-1.md",
       "exit": 1,
-      "prd": "00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md"
+      "prd": "00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "closed: non-zero by design, the verb's own exit code"
     },
     {
       "type": "deferred_decision",
       "issue": "__main__.py is about 1970 lines, over the 800-line limit. The diff changes one line and adds nothing, so I am not counting it against the diff.",
-      "severity": "\u26aa",
+      "severity": "⚪",
       "file": "skills/run-autopilot/cli/__main__.py:907",
       "reason": "deferred by review-close",
-      "prd": "00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md"
+      "prd": "00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00364: files over the 800-line cap"
     },
     {
       "issue": "The supplied mechanical check identifies an either-or assertion that cannot fail as written. Replace it with the required single outcome in its owning maintenance task; the assertion predates this diff and is outside this signal/timeout PRD.",
-      "severity": "\ud83d\udfe1",
+      "severity": "🟡",
       "file": "skills/run-autopilot/cli/test_release_checks_counts.py:326",
       "reason": "deferred by review-close",
-      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "resolved: 00327 v3 rewrites that test without the hedge"
     },
     {
       "issue": "test_skip_ceiling_fails_the_gate_above_three hedges with or: either outcome satisfies it",
-      "severity": "\ud83d\udfe1",
+      "severity": "🟡",
       "file": "skills/run-autopilot/cli/test_release_checks_counts.py:326",
       "reason": "deferred by review-close",
-      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "resolved: 00327 v3 rewrites that test without the hedge"
     },
     {
       "issue": "File review_stage.py exceeds the 800-line limit (874 lines)",
-      "severity": "\ud83d\udfe1",
+      "severity": "🟡",
       "file": "skills/run-autopilot/cli/review_stage.py:874",
       "reason": "deferred by review-close",
-      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00364: files over the 800-line cap"
     },
     {
       "type": "cap-overflow",
@@ -300,7 +390,10 @@
       "consensus": "3/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00361: replay and helper signal residue"
     },
     {
       "type": "cap-overflow",
@@ -311,7 +404,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00361: replay and helper signal residue"
     },
     {
       "type": "cap-overflow",
@@ -322,7 +418,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "closed: two entries describe two changes (verify and replay) and the 30 s grace is now the named SCRIPT_GRACE_S"
     },
     {
       "type": "cap-overflow",
@@ -333,7 +432,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00361: replay and helper signal residue"
     },
     {
       "type": "cap-overflow",
@@ -344,7 +446,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00361: replay and helper signal residue"
     },
     {
       "type": "cap-overflow",
@@ -355,7 +460,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00361: replay and helper signal residue"
     },
     {
       "type": "cap-overflow",
@@ -366,7 +474,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00361: replay and helper signal residue"
     },
     {
       "type": "cap-overflow",
@@ -377,7 +488,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00361: replay and helper signal residue"
     },
     {
       "type": "cap-overflow",
@@ -388,7 +502,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00361: replay and helper signal residue"
     },
     {
       "type": "cap-overflow",
@@ -399,7 +516,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00361: replay and helper signal residue"
     },
     {
       "type": "cap-overflow",
@@ -410,7 +530,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00361: replay and helper signal residue"
     },
     {
       "type": "cap-overflow",
@@ -421,7 +544,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00361: replay and helper signal residue"
     },
     {
       "type": "cap-overflow",
@@ -432,7 +558,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00361: replay and helper signal residue"
     },
     {
       "type": "cap-overflow",
@@ -443,7 +572,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00361: replay and helper signal residue"
     },
     {
       "type": "cap-overflow",
@@ -454,7 +586,10 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00361: replay and helper signal residue"
     },
     {
       "type": "cap-overflow",
@@ -465,47 +600,65 @@
       "consensus": "1/4",
       "action": "deferred to batch end",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00322-kill-the-gate-on-every-signal-v1.md"
+      "prd": "00322-kill-the-gate-on-every-signal-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00361: replay and helper signal residue"
     },
     {
       "issue": "`_FOLLOW` matches are not collected once per field and looked up by bisect, as the spec requires. The budget is met anyway (0.14 to 0.25 s/MB against the 0.3 bound), but the specified design is absent.",
-      "severity": "\ud83d\udfe1",
+      "severity": "🟡",
       "file": "hooks/guard_phase_delegation.py:562",
       "reason": "deferred by review-close",
       "type": "deferred_decision",
-      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md"
+      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "closed: accepted deviation, recorded by review-close in the review file"
     },
     {
       "issue": "The supplied fail-first replay reports that `test_backtick_exclusion_in_cite_boundary_can_fail` passes against base, contradicting Phase 0's eight-red requirement. Retained as an existing-invariant regression test.",
-      "severity": "\ud83d\udfe1",
+      "severity": "🟡",
       "file": "hooks/test_guard_phase_delegation_citations.py:721",
       "reason": "deferred by review-close",
       "type": "deferred_decision",
-      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md"
+      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "closed: accepted deviation, recorded by review-close in the review file"
     },
     {
-      "issue": "`\u00b7` is not added to `_CITE_SENTENCE_BOUNDARY`, although the PRD Solution and Problem sections name it. The task contract and design deliberately drop it.",
-      "severity": "\u26aa",
+      "issue": "`·` is not added to `_CITE_SENTENCE_BOUNDARY`, although the PRD Solution and Problem sections name it. The task contract and design deliberately drop it.",
+      "severity": "⚪",
       "file": "hooks/guard_phase_delegation_lexicon.py:230",
       "reason": "deferred by review-close",
       "type": "deferred_decision",
-      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md"
+      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "closed: accepted deviation, recorded by review-close in the review file"
     },
     {
       "issue": "`_NEGATION_REACH_END` newly denies coordinated negated lists such as `Never run work and plan-tasks for PRD 00300 for every task.`, which the 5-word window previously allowed. This is the safe direction for a guard.",
-      "severity": "\u26aa",
+      "severity": "⚪",
       "file": "hooks/guard_phase_delegation.py:638",
       "reason": "deferred by review-close",
       "type": "deferred_decision",
-      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md"
+      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "closed: accepted deviation, recorded by review-close in the review file"
     },
     {
       "issue": "`test_backtick_exclusion_in_cite_boundary_can_fail` passes against the pre-change code (the replay [MECH] line), so it is not red-first. That is intended: it mutates the shipped pattern and asserts the verdict flips.",
-      "severity": "\u26aa",
+      "severity": "⚪",
       "file": "hooks/test_guard_phase_delegation_citations.py:1255",
       "reason": "deferred by review-close",
       "type": "deferred_decision",
-      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md"
+      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "closed: accepted deviation, recorded by review-close in the review file"
     },
     {
       "type": "cap-overflow",
@@ -515,17 +668,23 @@
       "severity": "high",
       "consensus": "3/4",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md"
+      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00362: delegation guard pairing residue"
     },
     {
       "type": "cap-overflow",
       "cycle": 2,
       "ref": "R4",
-      "issue": "Unspaced fullwidth `\uff01` and `\uff1f` still do not end the citation window end to end: normalization folds them to ASCII before the new unconditional CJK branch runs, so `Hi (all\uff01Run plan-tasks for PRD 00300 for every task\uff01Thanks)` is allowed while the `\u3002` variant is denied (orchestrator-confirmed against HEAD). hooks/test_guard_phase_delegation_citations.py:727",
+      "issue": "Unspaced fullwidth `！` and `？` still do not end the citation window end to end: normalization folds them to ASCII before the new unconditional CJK branch runs, so `Hi (all！Run plan-tasks for PRD 00300 for every task！Thanks)` is allowed while the `。` variant is denied (orchestrator-confirmed against HEAD). hooks/test_guard_phase_delegation_citations.py:727",
       "severity": "high",
       "consensus": "1/4",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md"
+      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00362: delegation guard pairing residue"
     },
     {
       "type": "cap-overflow",
@@ -535,7 +694,10 @@
       "severity": "medium",
       "consensus": "2/4",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md"
+      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00362: delegation guard pairing residue"
     },
     {
       "type": "cap-overflow",
@@ -545,7 +707,10 @@
       "severity": "medium",
       "consensus": "1/4",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md"
+      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00362: delegation guard pairing residue"
     },
     {
       "type": "cap-overflow",
@@ -555,7 +720,10 @@
       "severity": "medium",
       "consensus": "1/4",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md"
+      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00362: delegation guard pairing residue"
     },
     {
       "type": "cap-overflow",
@@ -565,7 +733,10 @@
       "severity": "medium",
       "consensus": "1/4",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md"
+      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00362: delegation guard pairing residue"
     },
     {
       "type": "cap-overflow",
@@ -575,7 +746,10 @@
       "severity": "medium",
       "consensus": "1/4",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md"
+      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00362: delegation guard pairing residue"
     },
     {
       "type": "cap-overflow",
@@ -585,47 +759,62 @@
       "severity": "low",
       "consensus": "1/4",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md"
+      "prd": "00324-guard-pairs-delimiters-as-nested-runs-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00362: delegation guard pairing residue"
     },
     {
       "cycle": 1,
       "issue": "Unrelated formatter reflow is mixed into the diff (import blocks, `__all__` order, signatures, call sites and asserts rewrapped). None of it traces to the PRD, and it buries the real change in a roughly 680-line diff.",
-      "severity": "\ud83d\udfe1",
+      "severity": "🟡",
       "file": "skills/run-autopilot/cli/loop.py:48",
       "action": "deferred",
       "reason": "deferred by review-close",
       "type": "deferred_decision",
-      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "external: loupe PRD 00001 (honor unattended sessions)"
     },
     {
       "cycle": 1,
       "issue": "skills/run-autopilot/cli/test_routing.py exceeds the 800-line limit at 804 lines",
-      "severity": "\ud83d\udfe1",
+      "severity": "🟡",
       "file": "skills/run-autopilot/cli/test_routing.py:804",
       "action": "deferred",
       "reason": "deferred by review-close",
       "type": "deferred_decision",
-      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00364: files over the 800-line cap"
     },
     {
       "cycle": 1,
       "issue": "The diff adds code to files already past the 800-line cap: `__main__.py` is 2030 lines and test_discovery.py is 1703.",
-      "severity": "\u26aa",
+      "severity": "⚪",
       "file": "skills/run-autopilot/cli/__main__.py:1951",
       "action": "deferred",
       "reason": "deferred by review-close",
       "type": "deferred_decision",
-      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00364: files over the 800-line cap"
     },
     {
       "cycle": 1,
       "issue": "`cli/__main__.py` and `scripts/tracon/test_discovery.py` already exceed the 800-line limit. Splitting these existing modules is outside this PRD's seven targeted fixes.",
-      "severity": "\u26aa",
+      "severity": "⚪",
       "file": "skills/run-autopilot/cli/__main__.py:2023",
       "action": "deferred",
       "reason": "deferred by review-close",
       "type": "deferred_decision",
-      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00364: files over the 800-line cap"
     },
     {
       "type": "cap-overflow",
@@ -635,7 +824,10 @@
       "severity": "medium",
       "consensus": "2/4",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00363: markers walk-up and ledger prose residue"
     },
     {
       "type": "cap-overflow",
@@ -645,7 +837,10 @@
       "severity": "medium",
       "consensus": "2/4",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00363: markers walk-up and ledger prose residue"
     },
     {
       "type": "cap-overflow",
@@ -655,7 +850,10 @@
       "severity": "medium",
       "consensus": "2/4",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00363: markers walk-up and ledger prose residue"
     },
     {
       "type": "cap-overflow",
@@ -665,7 +863,10 @@
       "severity": "high",
       "consensus": "1/4",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00363: markers walk-up and ledger prose residue"
     },
     {
       "type": "cap-overflow",
@@ -675,7 +876,10 @@
       "severity": "medium",
       "consensus": "1/4",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00363: markers walk-up and ledger prose residue"
     },
     {
       "type": "cap-overflow",
@@ -685,7 +889,10 @@
       "severity": "medium",
       "consensus": "1/4",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00363: markers walk-up and ledger prose residue"
     },
     {
       "type": "cap-overflow",
@@ -695,7 +902,10 @@
       "severity": "medium",
       "consensus": "1/4",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00363: markers walk-up and ledger prose residue"
     },
     {
       "type": "cap-overflow",
@@ -705,7 +915,10 @@
       "severity": "low",
       "consensus": "1/4",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00363: markers walk-up and ledger prose residue"
     },
     {
       "type": "cap-overflow",
@@ -715,7 +928,10 @@
       "severity": "low",
       "consensus": "1/4",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00363: markers walk-up and ledger prose residue"
     },
     {
       "type": "cap-overflow",
@@ -725,7 +941,10 @@
       "severity": "low",
       "consensus": "1/4",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00363: markers walk-up and ledger prose residue"
     },
     {
       "type": "cap-overflow",
@@ -735,7 +954,10 @@
       "severity": "low",
       "consensus": "1/4",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00363: markers walk-up and ledger prose residue"
     },
     {
       "type": "cap-overflow",
@@ -745,7 +967,10 @@
       "severity": "low",
       "consensus": "1/4",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00363: markers walk-up and ledger prose residue"
     },
     {
       "type": "cap-overflow",
@@ -755,28 +980,40 @@
       "severity": "medium",
       "consensus": "1/4",
       "reason": "rework cap reached with this finding unresolved",
-      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md"
+      "prd": "00326-close-the-loops-remaining-verb-and-ledger-truths-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "discovery 00363: markers walk-up and ledger prose residue"
     },
     {
       "type": "stall",
       "site": "fast_track_blocked",
       "detail": "fast-track/00327-release-gate-and-notes-say-what-ships-v2-c1: stopped: gate 3 (warden blocked `bash dev/bin/release`: needs review -- it performs a real release/publish, a hard-to-reverse external action that needs human sign-off, and only covers gap 3 of the PRD's 6 gaps; gaps 1,2,4,5,6 (CHANGELOG timing/entries, SKIP_ALLOWED=2, golden test deletion, live MCP step) are untouched)",
       "op_id": "de5ac6f81115",
-      "prd": "00327-release-gate-and-notes-say-what-ships-v2.md"
+      "prd": "00327-release-gate-and-notes-say-what-ships-v2.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "resolved: superseded by 00327 v3 in backlog (test-shaped criteria only)"
     },
     {
       "type": "assumed-ambiguity",
       "question": "test_review_close.py _finding() default found_by was [\"bob\"] (one entry, already single-voice), colliding with PRD 00333 task 2 new single-voice refusal: 10 pre-existing tests built from this default (TAIL_MED, DEFER_ROW, plain _finding() callers) expect applied:True or a non-single-voice refusal, outside task 2 own file allowlist.",
       "assumption": "Bumped the shared _finding() default found_by to two entries ([\"alice\", \"bob\"]) since that is what a typical multi-reviewer finding looks like; tests that specifically need a single-voice row already override found_by explicitly. Verified 99 passed across the full named test list after the fix.",
       "prd": "00333-sweep-only-findings-two-reviewers-raised-v1.md",
-      "issue": "test_review_close.py _finding() default found_by was [\"bob\"] (one entry, already single-voice), colliding with PRD 00333 task 2 new single-voice refusal: 10 pre-existing tests built from this default (TAIL_MED, DEFER_ROW, plain _finding() callers) expect applied:True or a non-single-voice refusal, outside task 2 own file allowlist."
+      "issue": "test_review_close.py _finding() default found_by was [\"bob\"] (one entry, already single-voice), colliding with PRD 00333 task 2 new single-voice refusal: 10 pre-existing tests built from this default (TAIL_MED, DEFER_ROW, plain _finding() callers) expect applied:True or a non-single-voice refusal, outside task 2 own file allowlist.",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "closed: settled in the build, recorded in the review file"
     },
     {
       "type": "stall",
       "site": "fast_track_blocked",
       "detail": "suite red: 7189 passed, 1 failed, 3 skipped (pre-existing/unrelated: test_detect_usage_limit.py::test_limit_stuck_returns_next_reset_epoch, not touched by this card)",
       "op_id": "0d045911f51e",
-      "prd": "00347-never-run-the-release-script-as-a-card-gate-v1.md"
+      "prd": "00347-never-run-the-release-script-as-a-card-gate-v1.md",
+      "resolved": true,
+      "triaged_on": "2026-10-18",
+      "disposition": "resolved: PRD moved to done 2026-10-18; the park was a flaky test (PRD 00349)"
     }
   ]
 }

@@ -2,18 +2,20 @@
 catchup: skip
 design: skip
 ledger: deferred/202610161547-deferred.json
-ledger_key: 557e1d62e8fd
+ledger_key: 61fe1a3ae2f0
 source_prd: 00322-kill-the-gate-on-every-signal-v1.md
 severity: high
 ---
 
-# Triage: The replay signal guard is installed only inside _run_runner, not around _run...
+# Triage: CHANGELOG acceptance not met: rg -n 'SIGHUP' CHANGELOG.md prints two hits (li...
+
+> Closed 2026-10-18 by the operator's triage (`audit-results/backlog-review-2026-10-18.md`): the two SIGHUP lines describe two changes (`verify` and the replay) and the 30 s grace is the named constant `SCRIPT_GRACE_S`; the acceptance was over-specified.
 
 ## Problem
 
 Deferred finding with no PRD owner when this stub was minted: batch `202610161547`, ledger `deferred/202610161547-deferred.json`, type `cap-overflow`, cycle `2`, consensus `1/4`, raised against `00322-kill-the-gate-on-every-signal-v1.md`.
 
-Issue: The replay signal guard is installed only inside _run_runner, not around _run_in_worktree, so a signal during git worktree add / the overlay checkout / the rest of setup takes the default action and skips the finally, leaving a registered worktree and a replay-* temp dir. The new test only signals after the runner pids appear. (skills/review-work-completion/scripts/replay_tests_against_base.py:158)
+Issue: CHANGELOG acceptance not met: rg -n 'SIGHUP' CHANGELOG.md prints two hits (lines 99 and 100 under [Unreleased]), not the required one; the review-work-completion entry also advertises an unspecified 30-second SIGTERM grace. (CHANGELOG.md:100)
 
 ## Solution
 
@@ -22,7 +24,7 @@ Attended triage. A human promotes this finding into a backlog PRD through normal
 ## Requirements
 
 ### Must have
-- A triage decision for ledger key `557e1d62e8fd`: a backlog PRD, or closed.
+- A triage decision for ledger key `61fe1a3ae2f0`: a backlog PRD, or closed.
 
 ### Nice to have
 - None until triage.
@@ -31,7 +33,7 @@ Attended triage. A human promotes this finding into a backlog PRD through normal
 
 ### Module: triage
 - **Location**: `docs/dev/project-management/prds/hold/`
-- **Responsibility**: hold ledger key `557e1d62e8fd` from `00322-kill-the-gate-on-every-signal-v1.md` until a human triages it
+- **Responsibility**: hold ledger key `61fe1a3ae2f0` from `00322-kill-the-gate-on-every-signal-v1.md` until a human triages it
 - **Exports**: none
 
 ### Dependencies

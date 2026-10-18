@@ -9,6 +9,8 @@ severity: high
 
 # Triage: Unspaced fullwidth `！` and `？` still do not end the citation window end to en...
 
+> Closed 2026-10-18 by the operator's triage (`audit-results/backlog-review-2026-10-18.md`): reproduced at HEAD (both fullwidth payloads allowed, `。` denied); carried by discovery 00362 (delegation guard pairing residue) for elicitation and review before a PRD.
+
 ## Problem
 
 Deferred finding with no PRD owner when this stub was minted: batch `202610161547`, ledger `deferred/202610161547-deferred.json`, type `cap-overflow`, cycle `2`, consensus `1/4`, raised against `00324-guard-pairs-delimiters-as-nested-runs-v1.md`.
