@@ -64,10 +64,10 @@ The design step picks the rule that satisfies both fixtures while `test_paraphra
 ## Tasks
 
 ### Phase 0: Foundation
-- [ ] Add the two fixture tests. Premise: `rg -c "shared_nums\) >= 2" skills/review-work-completion/scripts/consolidate_findings.py` prints 1 before the edit; a different count means the rule already changed and the task stops and reports. - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/review-work-completion/scripts/test_consolidate_findings.py -k "review_00070 or review_00088"` fails both against the current rule.
+- [ ] Add the two fixture tests. Premise: `rg -c "shared_nums\) >= 2" skills/review-work-completion/scripts/consolidate_findings.py` prints 1 before the edit; a different count means the rule already changed and the task stops and reports. - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/review-work-completion/scripts/test_consolidate_findings.py skills/review-work-completion/scripts/test_consolidate_findings_regressions.py -k "review_00070 or review_00088"` fails both against the current rule.
 
 ### Phase 1: Core
-- [ ] Change `match` per the reviewed design, update the header comment and add the CHANGELOG entry (depends on: Phase 0) - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/review-work-completion/scripts/test_consolidate_findings.py` passes; `rg -n "review-work-completion.*distinct findings" CHANGELOG.md` prints one line under `[Unreleased]`.
+- [ ] Change `match` per the reviewed design, update the header comment and add the CHANGELOG entry (depends on: Phase 0) - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/review-work-completion/scripts/test_consolidate_findings.py skills/review-work-completion/scripts/test_consolidate_findings_regressions.py` passes; `rg -n "review-work-completion.*distinct findings" CHANGELOG.md` prints one line under `[Unreleased]`.
 
 ## Success Criteria
 

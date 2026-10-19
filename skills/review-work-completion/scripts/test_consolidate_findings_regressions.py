@@ -54,6 +54,8 @@ def test_review_00070_approvals_stay_apart_from_the_finding(tmp_path: Path) -> N
     assert len(rows) == 3, result.stdout
     for row in rows:
         assert "[1/2]" in row, row
+    assert sum(1 for row in rows if "ALICE" in row) == 1, result.stdout
+    assert sum(1 for row in rows if "BLAKE" in row) == 2, result.stdout
 
 
 _REVIEW_00088_LINES = {
@@ -107,7 +109,7 @@ def test_review_00088_substring_finding_stays_apart_from_the_dedup_finding(
     assert result.returncode == 0
     rows = [ln for ln in result.stdout.splitlines() if " | [" in ln]
     assert len(rows) == 2, result.stdout
-    assert any("[1/3]" in row for row in rows), result.stdout
+    assert any("[1/3]" in row and "ALICE" in row for row in rows), result.stdout
     assert any("[2/3]" in row and "BLAKE, BOB" in row for row in rows), result.stdout
 
 
