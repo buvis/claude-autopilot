@@ -1,6 +1,6 @@
 # Project Capsule: claude-autopilot
 
-Generated: 2026-10-17 (catchup at HEAD a2858cb4, 00332 closed, entering 00333; 00333 is uncardable (`cards_from_prd.py`: "gates: no uv run / pytest / bash command left to run" — its Gates column names only prose/rg acceptance checks), lane_effective flipped to full)
+Generated: 2026-10-19 (catchup at HEAD 844ae634, batch 202610191000 has drained 6 PRDs, entering 00368 — full lane, design)
 
 ## Key Invariants
 
@@ -51,6 +51,7 @@ Generated: 2026-10-17 (catchup at HEAD a2858cb4, 00332 closed, entering 00333; 0
 - [x] 00365-review-the-committed-range-not-the-working-tree-v1 (1 cycle, fast-track)
 - [x] 00366-fast-track-survivors-reach-the-batch-ledger-v1 (1 cycle, fast-track)
 - [x] 00367-one-finding-mints-one-stub-v1 (1 cycle, fast-track)
+- [ ] 00368-the-consolidator-keeps-distinct-findings-apart-v1 (in progress, full lane, design: fixes `consolidate_findings.py`'s `match()` numeric-token fallback and prose-overlap merge so two reviewers' distinct findings on one file stop folding into one row)
 
 Observations: 00349 converged at cycle 1 (2/2 tasks): rewrote
 `test_limit_stuck_returns_next_reset_epoch` in

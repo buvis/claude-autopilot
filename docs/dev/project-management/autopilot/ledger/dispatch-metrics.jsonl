@@ -5391,3 +5391,9 @@
 {"kind":"handoff","site":"build","edge":"leave","at":1792413770,"phase":"done","prd":"00367-one-finding-mints-one-stub-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1792413806,"phase":"done","prd":"00367-one-finding-mints-one-stub-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1792413876,"phase":"build","prd":"00367-one-finding-mints-one-stub-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792413883,"phase":"build","prd":"00368-the-consolidator-keeps-distinct-findings-apart-v1.md"}
+{"id":"1e3beb38","kind":"tess","task":"1","queued_at":1792414538,"prompt_bytes":61531}
+{"id":"553a4df4","kind":"tess","task":"1","queued_at":1792414575,"prompt_bytes":33445}
+{"id":"1e3beb38","ended_at":1792415262,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"id":"553a4df4","ended_at":1792415262,"elapsed_s":null,"outcome":"lost","detail":"open at build/leave handoff"}
+{"kind":"handoff","site":"build","edge":"leave","at":1792415262,"phase":"build","prd":"00368-the-consolidator-keeps-distinct-findings-apart-v1.md"}
