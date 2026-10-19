@@ -5281,3 +5281,4 @@
 {"id":"d7c6de4e","ended_at":1792392919,"elapsed_s":88,"outcome":"ok","detail":null}
 {"id":"2d0d30aa","kind":"fast-track:delta","task":"00327-release-gate-and-notes-say-what-ships-v3-c1","queued_at":1792392947,"prompt_bytes":1783}
 {"id":"2d0d30aa","ended_at":1792393179,"elapsed_s":232,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"build","edge":"leave","at":1792393935,"phase":"build","prd":"00327-release-gate-and-notes-say-what-ships-v3.md"}
