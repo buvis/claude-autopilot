@@ -10,6 +10,7 @@ longer aborts the whole run.
 from __future__ import annotations
 
 import ast
+import os
 import re
 import subprocess
 from collections.abc import Iterable
@@ -353,18 +354,6 @@ def test_harness_skip_lines_count_toward_the_ceiling() -> None:
     assert "ceiling" in out.lower(), out
 
 
-def test_release_runs_the_live_mcp_test_before_the_central_repo_check() -> None:
-    """dev/bin/release must run the live MCP launch test
-    (skills/run-autopilot/cli/test_launch_mcp_live.py) before it pulls the
-    central claude-plugins repo -- today the release step "run the live MCP
-    launch test by hand" lives only in audit notes and nothing ever runs it
-    (00327)."""
-    text = _RELEASE.read_text()
-    live_idx = text.index("test_launch_mcp_live")
-    pull_idx = text.index('git -C "$CENTRAL_REPO" pull')
-    assert live_idx < pull_idx, text
-
-
 def _fixture_repo(tmp_path: Path) -> tuple[Path, Path]:
     """A fixture repo with a real copy of dev/bin/release at
     <fixture>/dev/bin/release, matching dev/bin/release's own REPO_ROOT
@@ -376,6 +365,40 @@ def _fixture_repo(tmp_path: Path) -> tuple[Path, Path]:
     release_copy.write_text(_RELEASE.read_text(encoding="utf-8"), encoding="utf-8")
     release_copy.chmod(0o755)
     return fixture_root, release_copy
+
+
+def test_release_runs_the_live_mcp_test_before_the_central_repo_check(
+    tmp_path: Path,
+) -> None:
+    """dev/bin/release must actually run the live MCP launch test
+    (skills/run-autopilot/cli/test_launch_mcp_live.py) before it pulls the
+    central claude-plugins repo; a failing live test must abort the release
+    before it ever reaches the pull step (00327)."""
+    fixture_root, release_copy = _fixture_repo(tmp_path)
+
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    recorded = tmp_path / "uv-argv.txt"
+    fake_uv = fake_bin / "uv"
+    fake_uv.write_text(
+        f'#!/usr/bin/env bash\necho "$@" >> "{recorded}"\nexit 1\n',
+        encoding="utf-8",
+    )
+    fake_uv.chmod(0o755)
+
+    env = {**os.environ, "PATH": f"{fake_bin}:{os.environ['PATH']}"}
+
+    result = subprocess.run(
+        [str(release_copy)],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+    assert result.returncode != 0, (result.stdout, result.stderr)
+    assert "test_launch_mcp_live.py" in recorded.read_text(encoding="utf-8")
+    assert "claude-plugins" not in result.stderr, result.stderr
 
 
 def test_release_block_check_is_case_insensitive(tmp_path: Path) -> None:
