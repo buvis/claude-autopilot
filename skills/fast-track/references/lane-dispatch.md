@@ -180,6 +180,8 @@ Bob runs as a direct background Bash command, never inside a subagent: a
 subagent cannot hold a background job, and one that shells out to a CLI hangs
 until the item stalls. Pass absolute paths.
 
+Bob's file is the inlined shape of ${CLAUDE_PLUGIN_ROOT}/skills/review-work-completion/references/retry-policy.md § Inlined prompt (Bob's first dispatch): its head block (the one that says INLINED BELOW as text), with (no pack available this cycle) as the context pack line, the repo root, and the card's gate commands with their results as the test-results lines; the context file verbatim; its mid block with the item's <base-sha>..HEAD range; the staged diff verbatim inside a diff fence; then the render above with that section's two persona edits. Write it over docs/dev/tmp/fast-track-<item>-codex.txt before the row opens; the row, the command and the output path do not change. Codex's own sandbox cannot start inside the operator's seatbelt, so a path he must cat is a lane lost on the first run and on the retry alike; the inlined file is what he reads.
+
 ```bash
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/record_dispatch.py start --kind fast-track:bob --task <item> --prompt-file docs/dev/tmp/fast-track-<item>-codex.txt
 ```

@@ -279,7 +279,7 @@ a finding that contradicts it dies at the table instead of costing a rework.
 - **Doubt.** `autopilot:eve` runs the doubt lens on the card, the diff range and
   the changed-file list, and returns FIX / VERIFY / KNOWN plus her five `D{n}`
   verdict lines.
-- **Codex.** `codex-run.sh` carries the consensus prompt to codex.
+- **Codex.** `codex-run.sh` carries the consensus prompt to codex in the inlined shape of review-work-completion/references/retry-policy.md § Inlined prompt (Bob's first dispatch), never a prompt he must open with `cat` (references/lane-dispatch.md § Bob: codex).
 - **Gemini.** `gemini-run.sh`, when its backend resolved in the preconditions.
 
 Render each prompt from its persona. The implementation-aware lanes (consensus,
@@ -303,7 +303,8 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/work/scripts/render_prompt.py ${CLAUDE_PLUG
   `## Two lenses` and `## Rubric verdicts` sections of
   `${CLAUDE_PLUGIN_ROOT}/agents/eve.md` to the `agents/bob.md` render,
   `docs/dev/tmp/fast-track-<item>-codex.txt`, and replace `{PACK_FINDINGS}`
-  inside them with `(no pack available this cycle)`.
+  inside them with `(no pack available this cycle)`. Then rebuild that file
+  in the inlined shape (`references/lane-dispatch.md` § Bob: codex).
 - `agents/blake.md` takes `--set-file PRD=<absolute path of the staged card>`,
   `--set-file RUBRIC=${CLAUDE_PLUGIN_ROOT}/skills/review-blindly/references/rubric.md`
   and the same `--set-file OUTPUT_FORMAT=`; his render call names no diff at all.
