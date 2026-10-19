@@ -5301,3 +5301,23 @@
 {"kind":"handoff","site":"build","edge":"leave","at":1792397397,"phase":"done","prd":"00350-send-bob-the-inlined-prompt-on-the-fast-track-lane-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1792397511,"phase":"build","prd":"00350-send-bob-the-inlined-prompt-on-the-fast-track-lane-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1792397529,"phase":"build","prd":"00350-send-bob-the-inlined-prompt-on-the-fast-track-lane-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792397540,"phase":"build","prd":"00351-give-the-drain-agoge-run-two-hours-v1.md"}
+{"id":"271c3cf0","kind":"fast-track:tess","task":"00351-give-the-drain-agoge-run-two-hours-v1-c1","queued_at":1792397681,"prompt_bytes":103518}
+{"id":"271c3cf0","ended_at":1792397772,"elapsed_s":91,"outcome":"ok","detail":null}
+{"id":"c744a733","kind":"fast-track:ivan","task":"00351-give-the-drain-agoge-run-two-hours-v1-c1","queued_at":1792397816,"prompt_bytes":14203}
+{"id":"c744a733","ended_at":1792397913,"elapsed_s":97,"outcome":"ok","detail":null}
+{"id":"2141de32","kind":"fast-track:fanout","task":"00351-give-the-drain-agoge-run-two-hours-v1-c1","queued_at":1792398050,"prompt_bytes":6177}
+{"id":"9da1fe75","kind":"fast-track:blake","task":"00351-give-the-drain-agoge-run-two-hours-v1-c1","queued_at":1792398053,"prompt_bytes":7713}
+{"id":"87c43007","kind":"fast-track:eve","task":"00351-give-the-drain-agoge-run-two-hours-v1-c1","queued_at":1792398056,"prompt_bytes":6206}
+{"id":"56ec9f63","kind":"fast-track:bob","task":"00351-give-the-drain-agoge-run-two-hours-v1-c1","queued_at":1792398059,"prompt_bytes":9284}
+{"id":"78991a2c","kind":"fast-track:carl","task":"00351-give-the-drain-agoge-run-two-hours-v1-c1","queued_at":1792398062,"prompt_bytes":6533}
+{"id":"2141de32","ended_at":1792398082,"elapsed_s":32,"outcome":"error","detail":"workflow fallback: used autopilot:alice directly for this small item"}
+{"id":"4020d0f9","kind":"fast-track:alice","task":"00351-give-the-drain-agoge-run-two-hours-v1-c1","queued_at":1792398086,"prompt_bytes":6177}
+{"id":"4020d0f9","ended_at":1792398572,"elapsed_s":486,"outcome":"ok","detail":null}
+{"id":"9da1fe75","ended_at":1792398572,"elapsed_s":519,"outcome":"ok","detail":null}
+{"id":"87c43007","ended_at":1792398573,"elapsed_s":517,"outcome":"ok","detail":null}
+{"id":"56ec9f63","ended_at":1792398573,"elapsed_s":514,"outcome":"ok","detail":null}
+{"id":"78991a2c","ended_at":1792398573,"elapsed_s":511,"outcome":"ok","detail":null}
+{"id":"22878a85","kind":"fast-track:bob","task":"00351-give-the-drain-agoge-run-two-hours-v1-c1","queued_at":1792398628,"prompt_bytes":17534}
+{"id":"22878a85","ended_at":1792398772,"elapsed_s":144,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"build","edge":"leave","at":1792399332,"phase":"done","prd":"00351-give-the-drain-agoge-run-two-hours-v1.md"}
