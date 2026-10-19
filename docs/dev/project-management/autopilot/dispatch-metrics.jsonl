@@ -5323,3 +5323,16 @@
 {"kind":"handoff","site":"build","edge":"leave","at":1792399332,"phase":"done","prd":"00351-give-the-drain-agoge-run-two-hours-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1792399366,"phase":"done","prd":"00351-give-the-drain-agoge-run-two-hours-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1792399456,"phase":"build","prd":"00351-give-the-drain-agoge-run-two-hours-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792399465,"phase":"build","prd":"00365-review-the-committed-range-not-the-working-tree-v1.md"}
+{"id":"2235e32e","kind":"fast-track:tess","task":"00365-review-the-committed-range-not-the-working-tree-v1-c1","queued_at":1792399618,"prompt_bytes":73849}
+{"id":"2235e32e","ended_at":1792399717,"elapsed_s":99,"outcome":"ok","detail":null}
+{"id":"6a57a6d6","kind":"fast-track:ivan","task":"00365-review-the-committed-range-not-the-working-tree-v1-c1","queued_at":1792399750,"prompt_bytes":7343}
+{"id":"6a57a6d6","ended_at":1792399846,"elapsed_s":96,"outcome":"ok","detail":null}
+{"id":"15cebc4b","kind":"fast-track:alice","task":"00365-review-the-committed-range-not-the-working-tree-v1-c1","queued_at":1792400098,"prompt_bytes":6279}
+{"id":"4876704d","kind":"fast-track:blake","task":"00365-review-the-committed-range-not-the-working-tree-v1-c1","queued_at":1792400103,"prompt_bytes":9353}
+{"id":"e3b3014f","kind":"fast-track:eve","task":"00365-review-the-committed-range-not-the-working-tree-v1-c1","queued_at":1792400106,"prompt_bytes":6716}
+{"id":"c585ceb8","kind":"fast-track:bob","task":"00365-review-the-committed-range-not-the-working-tree-v1-c1","queued_at":1792400114,"prompt_bytes":9599}
+{"id":"2aa1bd29","kind":"fast-track:carl","task":"00365-review-the-committed-range-not-the-working-tree-v1-c1","queued_at":1792400117,"prompt_bytes":6635}
+{"id":"15cebc4b","ended_at":1792400416,"elapsed_s":318,"outcome":"ok","detail":null}
+{"id":"4876704d","ended_at":1792400419,"elapsed_s":316,"outcome":"ok","detail":null}
+{"id":"c585ceb8","ended_at":1792400423,"elapsed_s":309,"outcome":"ok","detail":null}
