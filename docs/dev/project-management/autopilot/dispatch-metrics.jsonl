@@ -5368,3 +5368,24 @@
 {"kind":"handoff","site":"build","edge":"leave","at":1792412020,"phase":"done","prd":"00366-fast-track-survivors-reach-the-batch-ledger-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1792412046,"phase":"done","prd":"00366-fast-track-survivors-reach-the-batch-ledger-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1792412116,"phase":"build","prd":"00366-fast-track-survivors-reach-the-batch-ledger-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792412122,"phase":"build","prd":"00367-one-finding-mints-one-stub-v1.md"}
+{"id":"3f439de3","kind":"fast-track:tess","task":"00367-one-finding-mints-one-stub-v1-c1","queued_at":1792412260,"prompt_bytes":87746}
+{"id":"3f439de3","ended_at":1792412395,"elapsed_s":135,"outcome":"ok","detail":null}
+{"id":"bf293cf7","kind":"fast-track:ivan","task":"00367-one-finding-mints-one-stub-v1-c1","queued_at":1792412426,"prompt_bytes":47246}
+{"id":"bf293cf7","ended_at":1792412495,"elapsed_s":69,"outcome":"ok","detail":null}
+{"id":"8f1b83fa","kind":"fast-track:fanout","task":"00367-one-finding-mints-one-stub-v1-c1","queued_at":1792412704,"prompt_bytes":5167}
+{"id":"02ac9257","kind":"fast-track:blake","task":"00367-one-finding-mints-one-stub-v1-c1","queued_at":1792412707,"prompt_bytes":8736}
+{"id":"e9bbe354","kind":"fast-track:eve","task":"00367-one-finding-mints-one-stub-v1-c1","queued_at":1792412711,"prompt_bytes":7161}
+{"id":"3fef63c6","kind":"fast-track:bob","task":"00367-one-finding-mints-one-stub-v1-c1","queued_at":1792412715,"prompt_bytes":9373}
+{"id":"594ffb11","kind":"fast-track:carl","task":"00367-one-finding-mints-one-stub-v1-c1","queued_at":1792412718,"prompt_bytes":6593}
+{"id":"8f1b83fa","ended_at":1792412730,"elapsed_s":26,"outcome":"error","detail":"workflow fanout skipped in favor of alice fallback (effort budget)"}
+{"id":"3fff04e7","kind":"fast-track:alice","task":"00367-one-finding-mints-one-stub-v1-c1","queued_at":1792412741,"prompt_bytes":6237}
+{"id":"e9bbe354","ended_at":1792412883,"elapsed_s":172,"outcome":"error","detail":"fable out of usage credits (429)"}
+{"id":"3fef63c6","ended_at":1792412887,"elapsed_s":172,"outcome":"ok","detail":null}
+{"id":"02ac9257","ended_at":1792412892,"elapsed_s":185,"outcome":"ok","detail":null}
+{"id":"3fef63c6","ended_at":1792412938,"elapsed_s":223,"outcome":"error","detail":"codex sandbox could not nest under run-agent seatbelt, no file reads succeeded"}
+{"id":"f9499546","kind":"fast-track:bob","task":"00367-one-finding-mints-one-stub-v1-c1","queued_at":1792412965,"prompt_bytes":9373}
+{"id":"3fff04e7","ended_at":1792413079,"elapsed_s":338,"outcome":"ok","detail":null}
+{"id":"f9499546","ended_at":1792413083,"elapsed_s":118,"outcome":"ok","detail":null}
+{"id":"594ffb11","ended_at":1792413166,"elapsed_s":448,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"build","edge":"leave","at":1792413770,"phase":"done","prd":"00367-one-finding-mints-one-stub-v1.md"}

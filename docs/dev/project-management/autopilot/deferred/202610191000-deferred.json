@@ -73,6 +73,50 @@
       "reason": "fast-track exit: a medium or low neither reworks nor blocks",
       "lane": "fast-track",
       "prd": "00366-fast-track-survivors-reach-the-batch-ledger-v1.md"
+    },
+    {
+      "type": "review-deferral",
+      "cycle": 1,
+      "severity": "medium",
+      "issue": "Dead variable: skipped is computed in the loop but never read; mint_stubs returns len(rows) - len(minted) instead",
+      "file": "skills/run-autopilot/cli/triage.py:389",
+      "consensus": "3/4",
+      "reason": "fast-track exit: a medium or low neither reworks nor blocks",
+      "lane": "fast-track",
+      "prd": "00367-one-finding-mints-one-stub-v1.md"
+    },
+    {
+      "type": "review-deferral",
+      "cycle": 1,
+      "severity": "medium",
+      "issue": "test_triage.py grew from 692 to 803 lines, crossing the repos 800-line file cap",
+      "file": "skills/run-autopilot/cli/test_triage.py:266",
+      "consensus": "3/4",
+      "reason": "fast-track exit: a medium or low neither reworks nor blocks",
+      "lane": "fast-track",
+      "prd": "00367-one-finding-mints-one-stub-v1.md"
+    },
+    {
+      "type": "review-deferral",
+      "cycle": 1,
+      "severity": "low",
+      "issue": "Phase-0 task prose claims all four new tests fail pre-implementation, but one passes against the pre-change code",
+      "file": "skills/run-autopilot/cli/test_triage.py:342",
+      "consensus": "1/4",
+      "reason": "fast-track exit: a medium or low neither reworks nor blocks",
+      "lane": "fast-track",
+      "prd": "00367-one-finding-mints-one-stub-v1.md"
+    },
+    {
+      "type": "review-deferral",
+      "cycle": 1,
+      "severity": "low",
+      "issue": "similar() only compares a new row against the groups first member, not transitively against all members, so a 3-row chain may not fully fold",
+      "file": "skills/run-autopilot/cli/triage.py",
+      "consensus": "1/4",
+      "reason": "fast-track exit: a medium or low neither reworks nor blocks",
+      "lane": "fast-track",
+      "prd": "00367-one-finding-mints-one-stub-v1.md"
     }
   ]
 }
