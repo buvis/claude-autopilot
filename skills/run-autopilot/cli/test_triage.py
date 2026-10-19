@@ -263,6 +263,117 @@ def test_discovery_reserves_numbers_but_owns_no_keys(tree) -> None:
     assert minted == ["00051-triage-example-topic-v1.md"]
 
 
+# --- finding groups (PRD 00367) ----------------------------------------------
+
+_PRD_00086 = "00086-use-qwen-budgets-survive-load-v1.md"
+_REASON_00086 = (
+    "not this PRD's work (in no commit of 184d2cf..HEAD); committing or "
+    "reverting another session's uncommitted work is an operator decision, "
+    "not autopilot rework"
+)
+
+
+def _head(path: Path) -> str:
+    return "".join(path.read_text(encoding="utf-8").splitlines(True)[:20])
+
+
+def test_two_rows_of_one_finding_mint_one_stub_with_both_keys(tree) -> None:
+    """The 00086 review-close row and its deferred_decision twin. Measured
+    Jaccard of their casefolded `[a-z0-9_]+` token sets: 0.5417 (>= 0.25),
+    so they fold; the distinct-findings fixture below measures 0.0417."""
+    autopilot, prds = tree
+    review_close = {
+        "type": "repo-hygiene",
+        "issue": "Uncommitted working-tree drift in skills/glean/scripts/glean.py and test_glean.py (formatter-style reformat, ~146 lines) predates PRD 00086 and belongs to no commit; three reviewers raised it against the staged diff. It also pushes cmd_scan to 54 lines, over the 50-line limit. Decide its fate: commit it as a separate formatter change, or revert it.",
+        "severity": "high",
+        "consensus": "3/4",
+        "reason": _REASON_00086,
+        "prd": _PRD_00086,
+    }
+    gate = {
+        "cycle": 1,
+        "type": "deferred_decision",
+        "issue": "Uncommitted working-tree drift in skills/glean/scripts/glean.py and test_glean.py (formatter-style reformat, ~146 lines); also pushes cmd_scan to 54 lines, over the 50-line limit",
+        "severity": "high",
+        "consensus": "3/4",
+        "action": "deferred to batch end",
+        "reason": _REASON_00086,
+        "prd": _PRD_00086,
+    }
+    _ledger(autopilot, [review_close, gate])
+    first = triage.mint_stubs(autopilot, prds, BATCH)
+    assert len(first["minted"]) == 1 and first["skipped"] == 1
+    assert len(_hold_files(prds)) == 1
+    key1 = triage.ledger_key(review_close["issue"])
+    key2 = triage.ledger_key(gate["issue"])
+    assert key1 != key2
+    head = _head(_hold_files(prds)[0])
+    assert f"ledger_key: {key1}\n" in head
+    assert f"ledger_keys: {key1}, {key2}\n" in head
+    problem = _hold_files(prds)[0].read_text().split("## Problem")[1].split("## Solution")[0]
+    assert problem.index(review_close["issue"]) < problem.index(gate["issue"])
+    assert "repo-hygiene" in problem and "deferred_decision" in problem
+    assert triage.mint_stubs(autopilot, prds, BATCH) == {"minted": [], "skipped": 2}
+    assert len(_hold_files(prds)) == 1
+
+
+def test_rows_with_one_severity_and_file_mint_one_stub(tree) -> None:
+    autopilot, prds = tree
+    first_row = _row(
+        topic=None,
+        issue="The retry loop swallows timeout errors silently.",
+        file="skills/run-autopilot/cli/loop.py:120",
+    )
+    second_row = _row(
+        topic=None,
+        issue="Docstring promises a JSON exit code that is never emitted.",
+        file="skills/run-autopilot/cli/loop.py:388",
+    )
+    _ledger(autopilot, [first_row, second_row])
+    result = triage.mint_stubs(autopilot, prds, BATCH)
+    assert len(result["minted"]) == 1 and result["skipped"] == 1
+    head = _head(_hold_files(prds)[0])
+    key1 = triage.ledger_key(first_row["issue"])
+    key2 = triage.ledger_key(second_row["issue"])
+    assert f"ledger_keys: {key1}, {key2}\n" in head
+    assert triage.mint_stubs(autopilot, prds, BATCH) == {"minted": [], "skipped": 2}
+
+
+def test_distinct_findings_of_one_prd_mint_two_stubs(tree) -> None:
+    """Measured Jaccard of the two texts: 0.0417, below the 0.25 threshold."""
+    autopilot, prds = tree
+    rows = [
+        _row(
+            topic=None,
+            issue="The retry loop in the uploader swallows timeout errors and reports success to the caller.",
+        ),
+        _row(
+            topic=None,
+            issue="Dashboard colour palette fails contrast checks for disabled buttons in dark mode.",
+        ),
+    ]
+    _ledger(autopilot, rows)
+    result = triage.mint_stubs(autopilot, prds, BATCH)
+    assert len(result["minted"]) == 2 and result["skipped"] == 0
+    for path, row in zip(_hold_files(prds), rows):
+        head = _head(path)
+        assert f"ledger_key: {triage.ledger_key(row['issue'])}\n" in head
+        assert "ledger_keys:" not in head
+
+
+def test_a_prd_quoting_any_listed_key_owns_the_group(tree) -> None:
+    autopilot, prds = tree
+    first_row = _row(topic=None, issue="Alpha defect in parser.", file="cli/parse.py:10")
+    second_row = _row(topic=None, issue="Beta defect elsewhere.", file="cli/parse.py:99")
+    owner = prds / "backlog" / "00042-hand-written-v1.md"
+    owner.write_text(
+        f"# Hand-written PRD\n\nledger_key: {triage.ledger_key(second_row['issue'])}\n"
+    )
+    _ledger(autopilot, [first_row, second_row])
+    assert triage.mint_stubs(autopilot, prds, BATCH) == {"minted": [], "skipped": 2}
+    assert _hold_files(prds) == []
+
+
 # --- template --------------------------------------------------------------
 
 

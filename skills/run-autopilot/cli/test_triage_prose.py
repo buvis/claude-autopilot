@@ -277,6 +277,20 @@ def test_changelog_added_carries_the_stub_minting_entry() -> None:
     )
 
 
+def test_stub_solution_tells_the_absorbing_prd_to_quote_its_ledger_key() -> None:
+    from cli import triage
+
+    solution = triage._STUB_TEMPLATE.split("## Solution")[1].split("## Requirements")[0]
+    sentence = (
+        "A PRD that absorbs this stub quotes its ledger_key line (every key when "
+        "there are several) in its first 20 lines, or the next finalize mints the "
+        "finding again."
+    )
+    assert sentence in " ".join(solution.replace("\\\n", "").split()), (
+        "triage._STUB_TEMPLATE: the Solution section must tell a PRD author to quote the key."
+    )
+
+
 def test_batch_identity_rollover_clears_minted_stubs() -> None:
     # Review-2 packet 5: a closed-batch rollover must reset the stub list so
     # the next batch's `{s} stubs` count starts empty.
