@@ -7,6 +7,72 @@
       "detail": "suite red: not run (pre-existing: 2 failed / 7193 passed / 2 skipped - test_changelog_states_what_review_close_refuses_truthfully and test_carry_creates_nothing_prose fail on master before and after this card's commits; unrelated to card c1)",
       "op_id": "70952f110656",
       "prd": "00327-release-gate-and-notes-say-what-ships-v3.md"
+    },
+    {
+      "type": "review-deferral",
+      "cycle": 1,
+      "severity": "medium",
+      "issue": "The CHANGELOG entry claims survivors now reach the batch deferred ledger, which the shipped code did not do",
+      "file": "CHANGELOG.md",
+      "consensus": "1/5",
+      "reason": "fast-track exit: a medium or low neither reworks nor blocks",
+      "lane": "fast-track",
+      "prd": "00366-fast-track-survivors-reach-the-batch-ledger-v1.md"
+    },
+    {
+      "type": "review-deferral",
+      "cycle": 1,
+      "severity": "medium",
+      "issue": "test_fast_track_prose.py was already 847 lines, over the 800-line limit, and this diff takes it to 885",
+      "file": "skills/fast-track/scripts/test_fast_track_prose.py",
+      "consensus": "1/5",
+      "reason": "fast-track exit: a medium or low neither reworks nor blocks",
+      "lane": "fast-track",
+      "prd": "00366-fast-track-survivors-reach-the-batch-ledger-v1.md"
+    },
+    {
+      "type": "review-deferral",
+      "cycle": 1,
+      "severity": "medium",
+      "issue": "test_ledger_rows_rows_match_record_defer_item_shape checks a contract that does not exist and repeats another test",
+      "file": "skills/fast-track/scripts/test_fast_track_plan.py",
+      "consensus": "1/5",
+      "reason": "fast-track exit: a medium or low neither reworks nor blocks",
+      "lane": "fast-track",
+      "prd": "00366-fast-track-survivors-reach-the-batch-ledger-v1.md"
+    },
+    {
+      "type": "review-deferral",
+      "cycle": 1,
+      "severity": "low",
+      "issue": "The deferred objects carry no op_id, so record_defer appends on every call; a retried exit step would duplicate survivors",
+      "file": "skills/run-autopilot/cli/records.py",
+      "consensus": "1/5",
+      "reason": "fast-track exit: a medium or low neither reworks nor blocks",
+      "lane": "fast-track",
+      "prd": "00366-fast-track-survivors-reach-the-batch-ledger-v1.md"
+    },
+    {
+      "type": "review-deferral",
+      "cycle": 1,
+      "severity": "low",
+      "issue": "Cannot statically verify: pytest gate actually passes",
+      "file": "N/A",
+      "consensus": "1/5",
+      "reason": "fast-track exit: a medium or low neither reworks nor blocks",
+      "lane": "fast-track",
+      "prd": "00366-fast-track-survivors-reach-the-batch-ledger-v1.md"
+    },
+    {
+      "type": "review-deferral",
+      "cycle": 1,
+      "severity": "medium",
+      "issue": "ledger_rows hardcodes the literal tuple (\"MEDIUM\", \"LOW\") instead of reusing the existing _BLOCKING constant",
+      "file": "skills/fast-track/scripts/fast_track_plan.py",
+      "consensus": "1/5",
+      "reason": "fast-track exit: a medium or low neither reworks nor blocks",
+      "lane": "fast-track",
+      "prd": "00366-fast-track-survivors-reach-the-batch-ledger-v1.md"
     }
   ]
 }
