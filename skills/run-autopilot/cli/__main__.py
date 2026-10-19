@@ -1858,16 +1858,35 @@ def _add_record_store(subparsers) -> None:
     p.add_argument("--prd", default="")
 
 
+def _done_site_prd(state_path: Path, fallback: str) -> str:
+    """At `--site done`, the PRD batch.completed_prds just closed (the gate's
+    last entry), not `state.prd` (the PRD selected next)."""
+    try:
+        loaded, _version = state.load(state_path)
+    except state.StateError:
+        return fallback
+    completed = loaded.get("batch", {}).get("completed_prds")
+    if isinstance(completed, list) and completed:
+        last = completed[-1]
+        if isinstance(last, dict) and isinstance(last.get("filename"), str):
+            return last["filename"]
+    return fallback
+
+
 def _run_record_store(args: argparse.Namespace) -> int:
     # A wave lane branch carries no store commits: its writes stay in the
     # lane worktree, since two lanes appending one ledger would conflict.
     if store_tree.in_wave_lane():
         return 0
+    state_path = _resolve_state_path(args.state)
+    prd = args.prd
+    if args.site == "done":
+        prd = _done_site_prd(state_path, args.prd)
     repo, store_dir, run_git = _store_repo(args.state)
     sha = store_tree.record_store(
         repo,
         args.site,
-        args.prd,
+        prd,
         store_dir,
         run_git=run_git,
     )

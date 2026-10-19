@@ -226,6 +226,25 @@ def _select(
     return False
 
 
+_EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
+
+def _stamp_work_start_sha(
+    out: dict, state_path: Path, autopilot_dir: Path,
+    git_head: Callable[[Path], str | None],
+) -> None:
+    """Step 8.5: stamp `work_start_sha` the first time a PRD is selected into
+    this build; a resume (the field already set) is left untouched."""
+    current, _ = state.load(state_path)
+    if "work_start_sha" in current:
+        return
+    head = git_head(custody.project_root(autopilot_dir))
+    sha = head if head is not None else _EMPTY_TREE_SHA
+    _mutate(state_path, "work_start_sha", lambda data: data.update(work_start_sha=sha))
+    if head is None:
+        out["detail"] = f"empty-tree sentinel stamped: {_EMPTY_TREE_SHA}"
+
+
 def _batch_report(out: dict, state_path: Path) -> bool:
     """Step 9. True when the batch is absent or closed."""
     current, _ = state.load(state_path)
@@ -362,6 +381,13 @@ def enter(
     line as a dict, plus the frontmatter write's `warnings` for the caller to
     print. A corrupt state.json raises state.StateError."""
     out = {**_EMPTY_RESULT, "warnings": []}  # per call: one list would leak
+    _head_cache: dict[str, str | None] = {}
+
+    def _cached_git_head(root: Path) -> str | None:
+        if "v" not in _head_cache:
+            _head_cache["v"] = git_head(root)
+        return _head_cache["v"]
+
     if _bootstrap(out, state_path, prds_dir, autopilot_dir):
         return out
     if _park(out, state_path, prds_dir, autopilot_dir):
@@ -381,6 +407,10 @@ def enter(
         return _stop(out, "state_write_failed", str(err))
     if halted:
         return out
+    try:
+        _stamp_work_start_sha(out, state_path, autopilot_dir, _cached_git_head)
+    except _WriteFailed as err:
+        return _stop(out, "state_write_failed", str(err))
     if _batch_report(out, state_path):
         return out
     fields = _write_prd(out, state_path, prds_dir, autopilot_dir, record_resume_row, now)
@@ -391,7 +421,7 @@ def enter(
         return _stop(out, "lane", f"lane: {fields['lane']} ({fields['lane_reason']})")
     current, _ = state.load(state_path)
     try:
-        out["catchup"] = _catchup(current, state_path, autopilot_dir, now, git_head, loop_only)
+        out["catchup"] = _catchup(current, state_path, autopilot_dir, now, _cached_git_head, loop_only)
     except _WriteFailed as err:
         return _stop(out, "state_write_failed", str(err))
     _design(out, current, autopilot_dir)
