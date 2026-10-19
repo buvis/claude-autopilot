@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **work**: `close_from_artifacts` closes Ivan, Tess and Pat rows from their own landing artifact (a matching commit or review-output mtime) instead of leaving them open at handoff
 
+### Changed
+
+- **run-autopilot**: the drained batch's agoge QA run gets two hours before the driver stops it (was one), since a profile one batch stale needs the first quarter hour for recon
+
 ### Fixed
 
 - **release**: `dev/bin/release-checks`'s shell-harness blocks now count their own SKIP: lines toward the gate's skip ceiling, the same way a pytest skip does

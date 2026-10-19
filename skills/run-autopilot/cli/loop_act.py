@@ -100,7 +100,7 @@ def run_agoge(
     prompt = f"/run-agoge {Path.cwd()}"
     if env.get("_AUTOPILOT_AGOGE_AUTHORIZED") != "0":
         prompt += " --authorized autoclaude-drain"
-    cap = routing._env_int(env, "_AUTOPILOT_AGOGE_CAP", 3600)
+    cap = routing._env_int(env, "_AUTOPILOT_AGOGE_CAP", 7200)
     rc = _run_agoge_process(claude_bin, prompt, log_path, cap, env)
     if rc == 0:
         print(
