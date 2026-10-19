@@ -234,11 +234,17 @@ def _stamp_work_start_sha(
     git_head: Callable[[Path], str | None],
 ) -> None:
     """Step 8.5: stamp `work_start_sha` the first time a PRD is selected into
-    this build; a resume (the field already set) is left untouched."""
+    this build; a resume (the field already set) is left untouched. An unborn
+    HEAD gets the empty-tree sentinel. A root git finds no work tree from (a
+    bare-repo-backed root) is left unset: only the build session knows its
+    `--git-dir`, and the sentinel there would review the whole bare repo."""
     current, _ = state.load(state_path)
     if "work_start_sha" in current:
         return
-    head = git_head(custody.project_root(autopilot_dir))
+    root = custody.project_root(autopilot_dir)
+    head = git_head(root)
+    if head is None and not enter_io.inside_work_tree(root):
+        return
     sha = head if head is not None else _EMPTY_TREE_SHA
     _mutate(state_path, "work_start_sha", lambda data: data.update(work_start_sha=sha))
     if head is None:

@@ -276,7 +276,7 @@ to another PRD in the same batch; only a new batch tries a rejected Carl again.
 
 ## Phase 3 invariants (work — full procedure: `references/phase-build.md`)
 
-**work_start_sha is stamped by autopilot enter.** The verb writes git rev-parse HEAD into state.work_start_sha when it moves a PRD into wip/, and the empty-tree sentinel 4b825dc642cb6eb9a060e54bf8d69288fbee4904 when HEAD is unborn; a resume keeps the value. Before dispatching /autopilot:work, read the field: an empty value is a verb defect, so STOP and report it instead of guessing a range.
+**work_start_sha is stamped by autopilot enter.** The verb writes git rev-parse HEAD into state.work_start_sha when it moves a PRD into wip/, only if the field is unset, and the empty-tree sentinel 4b825dc642cb6eb9a060e54bf8d69288fbee4904 when HEAD is unborn; a resume keeps the value, so do NOT re-capture it on a cap-rotation or any other build re-entry. A project root git finds no work tree from (a bare-repo-backed root such as ~/.claude) stays unset: there, before dispatching /autopilot:work, capture it only if it is still unset, with git --git-dir=<bare-git-dir> --work-tree=<work-tree> rev-parse HEAD, the git context the repo_root step records. In a plain git work tree an empty value is a verb defect, so STOP and report it instead of guessing a range.
 
 ## Phase 9 invariants (completion — full procedure: `references/phase-done.md`)
 

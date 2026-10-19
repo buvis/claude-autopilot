@@ -6,6 +6,7 @@ Split out of `enter.py` to keep that module under its line ceiling (PRD
 handoff-row dispatch, and the design-gate's review-log predicate.
 
     git_head_sha(repo_root) -> str | None
+    inside_work_tree(root) -> bool
     record_resume_row(prd, site, autopilot_dir) -> None
     review_log_has_dispatch_line(text) -> bool
     loop_committer(batch_id) -> str
@@ -39,6 +40,20 @@ def git_head_sha(repo_root: Path) -> str | None:
     except (OSError, subprocess.SubprocessError):
         return None
     return proc.stdout.strip() if proc.returncode == 0 else None
+
+
+def inside_work_tree(root: Path) -> bool:
+    """True when git finds a work tree from `root`, even one whose HEAD is
+    unborn. A bare-repo-backed root (no `.git` of its own, as `~/.claude`
+    under a `--git-dir` repo) reads False, as does any git failure."""
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--is-inside-work-tree"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return proc.returncode == 0 and proc.stdout.strip() == "true"
 
 
 def record_resume_row(prd: str, site: str, autopilot_dir: Path) -> None:
