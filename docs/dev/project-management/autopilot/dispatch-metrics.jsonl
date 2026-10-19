@@ -5416,3 +5416,22 @@
 {"kind":"handoff","site":"review","edge":"leave","at":1792417552,"phase":"done","prd":"00368-the-consolidator-keeps-distinct-findings-apart-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1792417594,"phase":"done","prd":"00368-the-consolidator-keeps-distinct-findings-apart-v1.md"}
 {"kind":"handoff","site":"done","edge":"leave","at":1792417687,"phase":"build","prd":"00368-the-consolidator-keeps-distinct-findings-apart-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792417697,"phase":"build","prd":"00369-stamp-the-build-start-and-name-the-closed-prd-v1.md"}
+{"id":"50b81c12","kind":"fast-track:tess","task":"00369-stamp-the-build-start-and-name-the-closed-prd-v1-c1","queued_at":1792417832,"prompt_bytes":303606}
+{"id":"50b81c12","ended_at":1792418164,"elapsed_s":332,"outcome":"ok","detail":null}
+{"id":"692336f3","kind":"fast-track:ivan","task":"00369-stamp-the-build-start-and-name-the-closed-prd-v1-c1","queued_at":1792418212,"prompt_bytes":72481}
+{"id":"692336f3","ended_at":1792418479,"elapsed_s":267,"outcome":"ok","detail":null}
+{"id":"9634ba6a","kind":"fast-track:fanout","task":"00369-stamp-the-build-start-and-name-the-closed-prd-v1-c1","queued_at":1792418688,"prompt_bytes":6275}
+{"id":"9634ba6a","ended_at":1792418703,"elapsed_s":15,"outcome":"error","detail":"workflow tool known to refuse scriptPath under headless loop session; skipped straight to alice fallback"}
+{"id":"214f6542","kind":"fast-track:alice","task":"00369-stamp-the-build-start-and-name-the-closed-prd-v1-c1","queued_at":1792418711,"prompt_bytes":6275}
+{"id":"42c7d203","kind":"fast-track:blake","task":"00369-stamp-the-build-start-and-name-the-closed-prd-v1-c1","queued_at":1792418711,"prompt_bytes":9561}
+{"id":"b6549738","kind":"fast-track:eve","task":"00369-stamp-the-build-start-and-name-the-closed-prd-v1-c1","queued_at":1792418711,"prompt_bytes":6066}
+{"id":"2322b826","kind":"fast-track:bob","task":"00369-stamp-the-build-start-and-name-the-closed-prd-v1-c1","queued_at":1792418711,"prompt_bytes":9480}
+{"id":"816ac3a9","kind":"fast-track:carl","task":"00369-stamp-the-build-start-and-name-the-closed-prd-v1-c1","queued_at":1792418711,"prompt_bytes":6631}
+{"id":"6066","ended_at":1792419175,"elapsed_s":null,"outcome":"error","detail":"fable model out of usage credits; failed after one retry"}
+{"id":"b6549738","ended_at":1792419180,"elapsed_s":469,"outcome":"error","detail":"fable model out of usage credits; failed after one retry"}
+{"id":"214f6542","ended_at":1792419185,"elapsed_s":474,"outcome":"ok","detail":null}
+{"id":"42c7d203","ended_at":1792419185,"elapsed_s":474,"outcome":"ok","detail":null}
+{"id":"2322b826","ended_at":1792419185,"elapsed_s":474,"outcome":"ok","detail":null}
+{"id":"816ac3a9","ended_at":1792419185,"elapsed_s":474,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"build","edge":"leave","at":1792419431,"phase":"done","prd":"00369-stamp-the-build-start-and-name-the-closed-prd-v1.md"}
