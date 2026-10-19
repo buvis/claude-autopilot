@@ -134,12 +134,13 @@ def test_output_formats_tells_writers_to_fence_example_rows() -> None:
 
 
 def _shipped_notes() -> str:
-    """`[Unreleased]` plus the newest released section. A release moves an
-    entry from the first into the second, and the prose these tests pin must
-    survive that move: the v0.10.0 cut (2026-10-18) redded this file on bare
-    master because both tests read `[Unreleased]` alone."""
-    after = CHANGELOG.split("## [Unreleased]", 1)[1]
-    return "\n## [".join(after.split("\n## [")[:2])
+    """The whole changelog from `[Unreleased]` down. A release moves an entry
+    out of `[Unreleased]` and later releases push it further down, and the
+    prose these tests pin must survive every such move: the v0.10.0 cut
+    (2026-10-18) redded this file on bare master because both tests read
+    `[Unreleased]` alone, and a window of one release would red it again at
+    the next cut (00349 review, Bob)."""
+    return CHANGELOG.split("## [Unreleased]", 1)[1]
 
 
 def test_changelog_states_what_review_close_refuses_truthfully() -> None:
