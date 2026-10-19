@@ -133,12 +133,21 @@ def test_output_formats_tells_writers_to_fence_example_rows() -> None:
     ) in FORMATS
 
 
+def _shipped_notes() -> str:
+    """`[Unreleased]` plus the newest released section. A release moves an
+    entry from the first into the second, and the prose these tests pin must
+    survive that move: the v0.10.0 cut (2026-10-18) redded this file on bare
+    master because both tests read `[Unreleased]` alone."""
+    after = CHANGELOG.split("## [Unreleased]", 1)[1]
+    return "\n## [".join(after.split("\n## [")[:2])
+
+
 def test_changelog_states_what_review_close_refuses_truthfully() -> None:
     """The old `[Unreleased]` claim - "refuses exactly what `autopilot gate`
     refuses ... every refusal exits 2" - is false: a no-section, empty-
     findings file is a gate shape gap (exit 1) review-close still applies.
     The entry must state the true claim instead."""
-    unreleased = CHANGELOG.split("## [Unreleased]", 1)[1].split("\n## [", 1)[0]
+    unreleased = _shipped_notes()
     assert "refuses exactly what" not in unreleased
     assert (
         "review-close` refuses, exit 2, every findings file `gate --findings`"
@@ -154,7 +163,7 @@ def test_carry_creates_nothing_prose() -> None:
     assert '`"verify"`, `"discard"` and `"carry"` rows create nothing.' in dispatch
     assert '`"verify"` and `"discard"` rows create nothing.' not in PHASE_REVIEW
 
-    unreleased = CHANGELOG.split("## [Unreleased]", 1)[1].split("\n## [", 1)[0]
+    unreleased = _shipped_notes()
     assert unreleased.count("carry") >= 2
     assert "findings coverage check" in unreleased
     assert "`carry` classification" in unreleased
