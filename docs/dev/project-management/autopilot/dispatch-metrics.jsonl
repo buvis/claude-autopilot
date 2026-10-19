@@ -5414,3 +5414,5 @@
 {"id":"9992150d","kind":"pat","task":"3","queued_at":1792417132,"prompt_bytes":9367}
 {"id":"9992150d","ended_at":1792417552,"elapsed_s":null,"outcome":"ok","detail":"closed-by: artifact"}
 {"kind":"handoff","site":"review","edge":"leave","at":1792417552,"phase":"done","prd":"00368-the-consolidator-keeps-distinct-findings-apart-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1792417594,"phase":"done","prd":"00368-the-consolidator-keeps-distinct-findings-apart-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1792417687,"phase":"build","prd":"00368-the-consolidator-keeps-distinct-findings-apart-v1.md"}

@@ -51,7 +51,8 @@ Generated: 2026-10-19 (catchup at HEAD 844ae634, batch 202610191000 has drained 
 - [x] 00365-review-the-committed-range-not-the-working-tree-v1 (1 cycle, fast-track)
 - [x] 00366-fast-track-survivors-reach-the-batch-ledger-v1 (1 cycle, fast-track)
 - [x] 00367-one-finding-mints-one-stub-v1 (1 cycle, fast-track)
-- [ ] 00368-the-consolidator-keeps-distinct-findings-apart-v1 (in progress, full lane, design: fixes `consolidate_findings.py`'s `match()` numeric-token fallback and prose-overlap merge so two reviewers' distinct findings on one file stop folding into one row)
+- [x] 00368-the-consolidator-keeps-distinct-findings-apart-v1 (1 cycle, full lane)
+- [ ] 00369-stamp-the-build-start-and-name-the-closed-prd-v1 (backlog)
 
 Observations: 00349 converged at cycle 1 (2/2 tasks): rewrote
 `test_limit_stuck_returns_next_reset_epoch` in
@@ -90,6 +91,16 @@ items, no doubts, nothing minted to `hold/`.
 path now folds every finding into one stub per batch instead of minting a
 stub per finding. Batch suite green (7212 passed, 0 failed, 2 skipped). No
 deferred items, no doubts, nothing minted to `hold/`.
+00368 (full lane, 3 tasks, 1 cycle) converged: fixed
+`consolidate_findings.py`'s `match()` numeric-token fallback and
+prose-overlap merge so two reviewers' distinct findings on one file stop
+folding into one row; task 3 rework closed via the micro lane. Full suite
+green (7215 passed, 0 failed, 2 skipped). Two medium findings auto-fixed by
+review-close (acceptance commands missing the sibling fixture module; fixture
+assertions not checking every row's finder cell), four single-voice
+Medium/Low findings discarded and ledgered, one low finding (00088 fixture
+passing against pre-change code) accepted as the designed non-regression
+pin. No deferred items, no doubts, nothing minted to `hold/`.
 
 ### Batch 202610161547 (complete)
 - [x] 00320-refuse-every-unsafe-verify-log-sink-v2 (2 cycles, cap-out: 1 HIGH + 15 lower deferred)
