@@ -646,6 +646,25 @@ def test_enter_mirrors_the_design_gate_awk_regex() -> None:
     )
 
 
+def test_skill_says_enter_stamps_the_start_sha() -> None:
+    # PRD 00369: `_select` stamps `work_start_sha` itself, right after the
+    # verified move into wip/, instead of leaving the capture as a build-session
+    # prose duty. The old instruction told a session to run `git rev-parse HEAD`
+    # and write it to `state.work_start_sha` before dispatching
+    # `/autopilot:work`; that duty, and the sentence that carried it, must be
+    # gone, replaced by a statement that `autopilot enter` already did it.
+    assert "stamped by autopilot enter" in _SKILL_TEXT, (
+        f"{_SKILL}: expected 'stamped by autopilot enter' somewhere in the "
+        "work_start_sha paragraph — not found."
+    )
+    assert "write it to `state.work_start_sha` before dispatching" not in _SKILL_TEXT, (
+        f"{_SKILL}: the old build-session capture instruction "
+        "('write it to `state.work_start_sha` before dispatching') is still "
+        "present — `autopilot enter` now stamps the field itself, so a session "
+        "must no longer be told to run `git rev-parse HEAD` and capture it by hand."
+    )
+
+
 def test_drained_path_skips_init_when_state_exists() -> None:
     # Packet 22: the entry verb already creates state.json before this row
     # is ever reached, so telling the operator to run `autopilot init`

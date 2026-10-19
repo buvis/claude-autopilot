@@ -10,7 +10,9 @@ record_store against a real git repo.
 
 from __future__ import annotations
 
+import inspect
 import io
+import json
 import subprocess
 import sys
 import unittest
@@ -18,14 +20,17 @@ from contextlib import redirect_stderr
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from cli import __main__ as cli_main
 from cli import store_tree
 from cli.store_tree_testutil import (
     REPO,
     SHA,
     SUBCOMMANDS,
     FakeGit,
+    _autopilot_dir,
     _one_line,
     _subcommand,
+    _write_state,
 )
 
 STORE_PATHSPEC = ":(top)docs/dev/project-management"
@@ -263,6 +268,55 @@ def test_record_store_commits_store_changes_and_leaves_other_staged_work_staged(
     assert "docs/dev/project-management/autopilot/old.json" not in tree, tree
     assert "foreign.py" not in tree, tree
     assert git("status", "--porcelain").stdout.splitlines() == ["A  foreign.py"]
+
+
+def test_done_site_names_the_prd_just_closed(tmp_path: Path, monkeypatch) -> None:
+    """At `--site done`, the CLI resolves `--prd` to the filename of the last
+    `batch.completed_prds` entry (the PRD the gate just closed), not to
+    `state.prd` (the PRD selected next)."""
+    autopilot_dir = _autopilot_dir(tmp_path)
+    state_path = _write_state(
+        autopilot_dir,
+        {
+            "prd": "00002-next-v1.md",
+            "batch": {
+                "completed_prds": [
+                    {"filename": "00000-earlier-v1.md"},
+                    {"filename": "00001-closed-v1.md"},
+                ],
+            },
+        },
+    )
+    calls: list[tuple] = []
+    signature = inspect.signature(store_tree.record_store)
+
+    def spy(*args: object, **kwargs: object) -> object:
+        calls.append(signature.bind(*args, **kwargs).args)
+        return SHA
+
+    monkeypatch.setattr(store_tree, "record_store", spy)
+
+    code = cli_main.main(
+        [
+            "record-store",
+            "--state",
+            str(state_path),
+            "--site",
+            "done",
+            "--prd",
+            "00002-next-v1.md",
+        ],
+    )
+
+    assert code == 0
+    assert len(calls) == 1
+    repo, site, prd = calls[0][:3]
+    assert site == "done"
+    assert prd == "00001-closed-v1.md", (
+        "the done site must name the PRD batch.completed_prds just closed, "
+        f"got {prd!r} - the commit subject would then read "
+        "'chore(autopilot): record done state for 00001-closed-v1.md'"
+    )
 
 
 if __name__ == "__main__":
