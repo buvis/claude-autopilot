@@ -60,6 +60,8 @@ _REVISION_RE = re.compile(r"-v\d+\.md$")
 # The cap-check regression stall site (PRD 00310/00321): mints a stub like a
 # cap_critical stall, but has no custody record.
 REGRESSION_SITE = "cap_regression"
+FOLD_JACCARD = 0.25
+_TOKEN_RE = re.compile(r"[a-z0-9_]+")
 
 TRIAGE_TASK = (
     "- [ ] triage: promote to backlog or close - Acceptance: this file is no "
@@ -77,7 +79,7 @@ catchup: skip
 design: skip
 ledger: deferred/{batch_id}-deferred.json
 ledger_key: {key}
-source_prd: {source_prd}
+{ledger_keys}source_prd: {source_prd}
 severity: {severity}
 ---
 
@@ -90,7 +92,9 @@ severity: {severity}
 
 Attended triage. A human promotes this finding into a backlog PRD through \
 normal PRD authoring and review, or closes it. Autopilot never drains \
-`docs/dev/project-management/prds/hold/`, and this stub is never auto-promoted.
+`docs/dev/project-management/prds/hold/`, and this stub is never auto-promoted. \
+A PRD that absorbs this stub quotes its ledger_key line (every key when there \
+are several) in its first 20 lines, or the next finalize mints the finding again.
 
 ## Requirements
 
@@ -319,32 +323,52 @@ def _title(row: dict, key: str) -> str:
     return text if len(text) <= _TITLE_MAX else text[: _TITLE_MAX - 3].rstrip() + "..."
 
 
-def _problem(row: dict, batch_id: str, source_prd: str) -> str:
-    lines = [
-        f"Deferred finding with no PRD owner when this stub was minted: "
-        f"{_provenance(row, batch_id)}, raised against `{source_prd}`.",
-        "",
-    ]
-    for field in ("issue", "detail"):
-        value = row.get(field)
-        if isinstance(value, str) and value.strip():
-            lines += [f"{field.capitalize()}: {value}", ""]
+def _problem(rows: list[dict], batch_id: str, source_prd: str) -> str:
+    lines = []
+    for row in rows:
+        lines += [
+            f"Deferred finding with no PRD owner when this stub was minted: "
+            f"{_provenance(row, batch_id)}, raised against `{source_prd}`.",
+            "",
+        ]
+        for field in ("issue", "detail"):
+            value = row.get(field)
+            if isinstance(value, str) and value.strip():
+                lines += [f"{field.capitalize()}: {value}", ""]
     return "\n".join(lines)
 
 
-def render_stub(row: dict, batch_id: str, key: str) -> str:
+def render_stub(rows: list[dict], batch_id: str, keys: list[str]) -> str:
     """The hold artifact: the create-prd minimal heading order, filled with
-    ledger provenance and the single triage action."""
+    every member row's ledger provenance and the single triage action. A
+    group of two or more rows also lists every key on `ledger_keys:`."""
+    row, key = rows[0], keys[0]
     source_prd = str(row.get("prd") or "unknown")
     return _STUB_TEMPLATE.format(
         batch_id=batch_id,
         key=key,
+        ledger_keys=f"ledger_keys: {', '.join(keys)}\n" if len(keys) > 1 else "",
         source_prd=source_prd,
         severity=_severity(row),
         title=_title(row, key),
-        problem=_problem(row, batch_id, source_prd),
+        problem=_problem(rows, batch_id, source_prd),
         task=TRIAGE_TASK,
     )
+
+
+def fold_key(row: dict) -> tuple:
+    """Rows fold into one finding only within one source PRD and severity."""
+    return (row.get("prd"), _severity(row))
+
+
+def similar(a: dict, b: dict) -> bool:
+    """Same cited file (line ignored), or a casefolded `[a-z0-9_]+` token-set
+    Jaccard of at least FOLD_JACCARD between the two finding texts."""
+    file_a, file_b = (str(r.get("file") or "").split(":")[0] for r in (a, b))
+    if file_a and file_a == file_b:
+        return True
+    ta, tb = (set(_TOKEN_RE.findall(finding_text(r).casefold())) for r in (a, b))
+    return bool(ta | tb) and len(ta & tb) / len(ta | tb) >= FOLD_JACCARD
 
 
 def mint_stubs(autopilot_dir: Path, prds_dir: Path, batch_id: str) -> dict:
@@ -361,8 +385,7 @@ def mint_stubs(autopilot_dir: Path, prds_dir: Path, batch_id: str) -> dict:
         return {"minted": [], "skipped": 0}
     prds_dir = Path(prds_dir)
     heads = _prd_heads(prds_dir)
-    minted: list[str] = []
-    seen: set[str] = set()
+    groups: list[tuple[list[dict], list[str]]] = []
     skipped = 0
     for row in rows:
         text = finding_text(row) if qualifies(row) else None
@@ -370,11 +393,25 @@ def mint_stubs(autopilot_dir: Path, prds_dir: Path, batch_id: str) -> dict:
             skipped += 1
             continue
         key = ledger_key(text)
-        if key in seen or any(key in head for head in heads):
-            skipped += 1
+        group = next(
+            (
+                g
+                for g in groups
+                if key in g[1]
+                or (fold_key(g[0][0]) == fold_key(row) and similar(g[0][0], row))
+            ),
+            None,
+        )
+        if group is None:
+            groups.append(([row], [key]))
+        elif key not in group[1]:
+            group[0].append(row)
+            group[1].append(key)
+    minted: list[str] = []
+    for members, keys in groups:
+        if any(key in head for key in keys for head in heads):
             continue
-        seen.add(key)
-        slug = slugify(str(row.get("topic") or text))
-        path = _allocate(prds_dir, slug, render_stub(row, batch_id, key))
+        slug = slugify(str(members[0].get("topic") or finding_text(members[0])))
+        path = _allocate(prds_dir, slug, render_stub(members, batch_id, keys))
         minted.append(path.name)
-    return {"minted": minted, "skipped": skipped}
+    return {"minted": minted, "skipped": len(rows) - len(minted)}
