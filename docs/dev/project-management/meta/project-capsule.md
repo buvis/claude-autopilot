@@ -44,6 +44,18 @@ Generated: 2026-10-17 (catchup at HEAD a2858cb4, 00332 closed, entering 00333; 0
 
 ## Active Work
 
+### Batch 202610191000
+- [x] 00349-pin-the-usage-limit-reset-test-to-a-relative-time-v1 (1 cycle, solo lane escalated to full on security_diff)
+
+Observations: 00349 converged at cycle 1 (2/2 tasks): rewrote
+`test_limit_stuck_returns_next_reset_epoch` in
+`skills/run-autopilot/scripts/test_detect_usage_limit.py` to pin against a
+relative time instead of a hardcoded wall-clock stamp, per the Solution. A
+tail-sweep task fixed the PRD's own task-line counts (the `rg -c "8:10pm"`
+premise/acceptance pair was off by one: 6 before / 5 after, not 5/4 as
+written) rather than touching test code. Full suite green (PASS 7195 FAIL 0
+SKIP 2 EXIT 0). No deferred items, no doubts, nothing minted to `hold/`.
+
 ### Batch 202610161547 (complete)
 - [x] 00320-refuse-every-unsafe-verify-log-sink-v2 (2 cycles, cap-out: 1 HIGH + 15 lower deferred)
 - [x] 00321-cap-check-classifies-every-cell-and-records-what-it-parks-v2 (2 cycles)
