@@ -334,6 +334,9 @@ run_gather_harness bash skills/review-work-completion/scripts/test_gather_contex
 echo "[checks] gather-context id"
 run_gather_harness bash skills/review-work-completion/scripts/test_gather_context_id.sh
 
+echo "[checks] gather-context committed range"
+run_gather_harness bash skills/review-work-completion/scripts/test_gather_context_committed_range.sh
+
 echo "[checks] review verbs"
 run_pytest uv run --no-project --with pytest python -m pytest -q \
   skills/run-autopilot/cli/test_verification.py \

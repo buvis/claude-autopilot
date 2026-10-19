@@ -123,8 +123,8 @@ def reuse_verdict(
         "docs/dev/project-management/" (an empty diff also counts,
         vacuously)
       - `git status --porcelain=1 -z --untracked-files=all` (cwd=repo_root)
-        reports no dirty path outside the store tree, since
-        gather-context.sh's diff is against the working tree, not just HEAD
+        reports no dirty path outside the store tree, since the gate ran
+        against the working tree, which must match what was reviewed
       - a dirty or untracked docs/dev/project-management/ path is tolerated
       - a rename or copy is judged by both of its endpoint paths, so a move
         out of the store tree counts as dirty

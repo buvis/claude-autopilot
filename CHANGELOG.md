@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **review-work-completion**: the review diff is the committed range `base..HEAD`, so uncommitted edits in the loop's checkout are no longer reviewed, deferred and minted as stubs under every PRD of the batch
 - **run-autopilot**: the drained batch's agoge QA run gets two hours before the driver stops it (was one), since a profile one batch stale needs the first quarter hour for recon
 - **release**: `dev/bin/release-checks`'s shell-harness blocks now count their own SKIP: lines toward the gate's skip ceiling, the same way a pytest skip does
 - **release**: `dev/bin/release` now runs the live MCP launch test before pulling the central `claude-plugins` repo, instead of leaving that step undocumented outside audit notes

@@ -117,7 +117,7 @@ if [[ -z "$SINCE_APPLIED" ]]; then
     echo "gather-context: empty diff against ${BASE_BRANCH}; pass --since <work_start_sha> for a full review" >&2
     exit 3
   fi
-  DIFF_QUIET_ERR="$(git -C "$PROJECT_ROOT" diff --quiet "$DIFF_BASE" ${PATH_ARGS[@]+"${PATH_ARGS[@]}"} 2>&1)" && DIFF_QUIET_EXIT=0 || DIFF_QUIET_EXIT=$?
+  DIFF_QUIET_ERR="$(git -C "$PROJECT_ROOT" diff --quiet "$DIFF_BASE" HEAD ${PATH_ARGS[@]+"${PATH_ARGS[@]}"} 2>&1)" && DIFF_QUIET_EXIT=0 || DIFF_QUIET_EXIT=$?
   if [[ "$DIFF_QUIET_EXIT" -ge 2 ]]; then
     echo "$DIFF_QUIET_ERR" >&2
     exit "$DIFF_QUIET_EXIT"
@@ -158,11 +158,11 @@ CREATED_FILES+=("$CONTEXT_FILE")
     echo "_Diff scope: ${DIFF_SCOPE}_"
     echo
     echo '```'
-    git -C "$PROJECT_ROOT" diff "$DIFF_BASE" --stat ${PATH_ARGS[@]+"${PATH_ARGS[@]}"}
+    git -C "$PROJECT_ROOT" diff "$DIFF_BASE" HEAD --stat ${PATH_ARGS[@]+"${PATH_ARGS[@]}"}
     echo '```'
     echo
     DIFF_FILE="$TMP_DIR/review-diff-${_ID}.diff"
-    git -C "$PROJECT_ROOT" diff "$DIFF_BASE" ${PATH_ARGS[@]+"${PATH_ARGS[@]}"} > "$DIFF_FILE"
+    git -C "$PROJECT_ROOT" diff "$DIFF_BASE" HEAD ${PATH_ARGS[@]+"${PATH_ARGS[@]}"} > "$DIFF_FILE"
     CREATED_FILES+=("$DIFF_FILE")
     echo "### Diff Content"
     echo "Full diff available at: $DIFF_FILE"
