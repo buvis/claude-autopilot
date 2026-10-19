@@ -15,6 +15,11 @@ if [ -n "$BLOCKED" ]; then
   exit 1
 fi
 
+cd "$REPO_ROOT"
+
+echo "[release] running the live MCP launch test"
+AUTOPILOT_LIVE=1 uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/cli/test_launch_mcp_live.py
+
 if [ ! -x "$RELEASE" ]; then
   echo "Error: $RELEASE not found - clone buvis/claude-plugins beside this repo" >&2
   exit 1
@@ -23,5 +28,4 @@ fi
 echo "[release] pulling latest claude-plugins (shared script + marketplace)"
 git -C "$CENTRAL_REPO" pull --ff-only
 
-cd "$REPO_ROOT"
 exec "$RELEASE" "$@"

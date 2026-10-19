@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **work**: `close_from_artifacts` closes Ivan, Tess and Pat rows from their own landing artifact (a matching commit or review-output mtime) instead of leaving them open at handoff
+
+### Fixed
+
+- **release**: `dev/bin/release-checks`'s shell-harness blocks now count their own SKIP: lines toward the gate's skip ceiling, the same way a pytest skip does
+- **release**: `dev/bin/release` now runs the live MCP launch test before pulling the central `claude-plugins` repo, instead of leaving that step undocumented outside audit notes
+
 ## [0.10.0] - 2026-10-18
 
 ### Added

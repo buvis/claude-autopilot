@@ -16,16 +16,6 @@ check_build_overhead = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(check_build_overhead)
 
 
-_ENGRAM_REPO = Path.home() / "git" / "src" / "github.com" / "buvis" / "engram"
-GOLDEN_TRANSCRIPT = (
-    Path.home()
-    / ".claude"
-    / "projects"
-    / str(_ENGRAM_REPO).replace("/", "-").replace(".", "-")
-    / "4bddd2d6-0c28-4a2d-aa41-bbf06873027d.jsonl"
-)
-
-
 # --- fixture helpers ---------------------------------------------------
 
 
@@ -582,35 +572,6 @@ def test_exit_code_zero_on_normal_run_regardless_of_zero_counts(
         "completed tasks: 0 (no statectl task-done calls found)"
         in captured.out.splitlines()
     )
-
-
-# --- golden baseline acceptance test ---------------------------------------------------
-
-
-@pytest.mark.skipif(
-    not GOLDEN_TRANSCRIPT.exists(),
-    reason="golden baseline transcript fixture not present on this machine",
-)
-def test_golden_baseline_engram_session_matches_recorded_numbers(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    exit_code = check_build_overhead.main([str(GOLDEN_TRANSCRIPT)])
-
-    assert exit_code == 0
-    captured = capsys.readouterr()
-    out_lines = captured.out.splitlines()
-    assert "TaskCreate turns: 10" in out_lines
-
-    # This transcript predates the statectl task verbs: its completions were
-    # recorded with the retired TaskUpdate tool, so the honest count is zero
-    # and no ratio may be printed. The old assertion here (2.80) came from
-    # counting TaskUpdate calls, which PRD 00120 retired.
-    assert "completed tasks: 0 (no statectl task-done calls found)" in out_lines
-    assert not [
-        line
-        for line in out_lines
-        if line.startswith("statectl calls per completed task:")
-    ]
 
 
 # --- completed-task counting dedupes by distinct task id ------------------

@@ -30,9 +30,8 @@ TOTAL_PASS=0
 TOTAL_FAIL=0
 TOTAL_SKIP=0
 INFRA_FAIL=0
-# The only skips this gate tolerates: two AUTOPILOT_LIVE-gated tests and one
-# golden fixture that self-skips outside its expected environment.
-SKIP_ALLOWED=3
+# The only skips this gate tolerates: two AUTOPILOT_LIVE-gated tests.
+SKIP_ALLOWED=2
 
 # Runs a pytest invocation, parses its own -q summary line for real counts.
 # Prints no block header -- the caller's own "echo [checks] ..." line is
@@ -66,12 +65,15 @@ run_pytest() {
 
 # Runs a shell-harness script. Its own final "SUMMARY: N passed, M failed"
 # line supplies the counts; without one, one pass/fail case by exit code.
+# Any "SKIP: <reason>" line the harness prints counts toward TOTAL_SKIP the
+# same way a pytest skip does, so a harness skip reaches the gate's ceiling
+# instead of vanishing.
 run_harness() {
   local out rc
   out="$("$@" 2>&1)"
   rc=$?
   echo "$out"
-  local line p f
+  local line p f sk
   line="$(echo "$out" | grep -E '^SUMMARY: [0-9]+ passed, [0-9]+ failed' | tail -1 || true)"
   if [[ -n "$line" ]]; then
     p="$(echo "$line" | sed -E 's/^SUMMARY: ([0-9]+) passed, ([0-9]+) failed.*/\1/')"
@@ -85,6 +87,12 @@ run_harness() {
     TOTAL_PASS=$((TOTAL_PASS + 1))
   else
     TOTAL_FAIL=$((TOTAL_FAIL + 1))
+  fi
+  sk="$(echo "$out" | grep -c '^SKIP:' || true)"
+  TOTAL_SKIP=$((TOTAL_SKIP + sk))
+  if [[ "$TOTAL_SKIP" -gt "$SKIP_ALLOWED" ]]; then
+    echo "release-checks: SKIP $TOTAL_SKIP exceeds the ceiling of $SKIP_ALLOWED"
+    INFRA_FAIL=1
   fi
 }
 

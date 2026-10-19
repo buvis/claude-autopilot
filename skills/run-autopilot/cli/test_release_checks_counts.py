@@ -302,17 +302,18 @@ def _copy_release_checks(tmp_path: Path) -> Path:
     return copy
 
 
-def test_skip_ceiling_fails_the_gate_above_three(tmp_path: Path) -> None:
-    """A `run_pytest` call reporting `1 passed, 4 skipped` has 4 skips, above a
-    ceiling of 3 -- the gate must fail instead of silently folding every skip
-    into TOTAL_SKIP forever (00313: SKIP_ALLOWED does not exist yet)."""
+def test_skip_ceiling_fails_the_gate_above_the_ceiling(tmp_path: Path) -> None:
+    """A `run_pytest` call reporting `1 passed, 3 skipped` has 3 skips, one
+    above the ceiling of 2 (00327: SKIP_ALLOWED drops from 3 to 2 once the
+    golden-baseline test is removed) -- the gate must fail instead of
+    silently folding every skip into TOTAL_SKIP forever."""
     copy = _copy_release_checks(tmp_path)
     text = copy.read_text()
     marker = '\necho "[checks] '
     helpers = text[: text.index(marker)]
     script = (
         f"{helpers}\n"
-        "run_pytest bash -c 'echo \"1 passed, 4 skipped in 0.01s\"; exit 0'\n"
+        "run_pytest bash -c 'echo \"1 passed, 3 skipped in 0.01s\"; exit 0'\n"
         'EXIT_CODE=0\n'
         'if [[ "$TOTAL_FAIL" -ne 0 || "$INFRA_FAIL" -ne 0 || "$TOTAL_SKIP" -gt "${SKIP_ALLOWED:?}" ]]; then EXIT_CODE=1; fi\n'
         'echo "PASS $TOTAL_PASS FAIL $TOTAL_FAIL SKIP $TOTAL_SKIP EXIT $EXIT_CODE"\n'
@@ -325,7 +326,43 @@ def test_skip_ceiling_fails_the_gate_above_three(tmp_path: Path) -> None:
     )
     out = proc.stdout + proc.stderr
     assert "EXIT 1" in out, out
+    assert "SKIP 3" in out, out
     assert "ceiling" in out.lower() or "SKIP_ALLOWED" in out, out
+
+
+def test_skip_ceiling_is_two() -> None:
+    """SKIP_ALLOWED pins to 2 once the golden-baseline test is removed
+    (00327): two AUTOPILOT_LIVE-gated tests remain the only tolerated
+    skips."""
+    text = _RELEASE_CHECKS.read_text()
+    assert "SKIP_ALLOWED=2" in text
+
+
+def test_harness_skip_lines_count_toward_the_ceiling() -> None:
+    """A shell harness' own `SKIP: <reason>` lines (e.g.
+    skills/use-codex/scripts/codex_run_test_lib.sh's `SKIP`) must count
+    toward TOTAL_SKIP the same way a pytest skip does, instead of
+    vanishing from the gate's skip ceiling (00327)."""
+    out = _run_helpers(
+        """
+        run_harness bash -c 'echo "SUMMARY: 1 passed, 0 failed"; echo "SKIP: a"; echo "SKIP: b"; echo "SKIP: c"; exit 0'
+        echo "PASS $TOTAL_PASS FAIL $TOTAL_FAIL SKIP $TOTAL_SKIP"
+        """
+    )
+    assert "PASS 1 FAIL 0 SKIP 3" in out, out
+    assert "ceiling" in out.lower(), out
+
+
+def test_release_runs_the_live_mcp_test_before_the_central_repo_check() -> None:
+    """dev/bin/release must run the live MCP launch test
+    (skills/run-autopilot/cli/test_launch_mcp_live.py) before it pulls the
+    central claude-plugins repo -- today the release step "run the live MCP
+    launch test by hand" lives only in audit notes and nothing ever runs it
+    (00327)."""
+    text = _RELEASE.read_text()
+    live_idx = text.index("test_launch_mcp_live")
+    pull_idx = text.index('git -C "$CENTRAL_REPO" pull')
+    assert live_idx < pull_idx, text
 
 
 def _fixture_repo(tmp_path: Path) -> tuple[Path, Path]:
