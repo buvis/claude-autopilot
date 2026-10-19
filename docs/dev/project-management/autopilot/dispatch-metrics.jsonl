@@ -5366,3 +5366,5 @@
 {"id":"a60827b7","ended_at":1792411324,"elapsed_s":321,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"resume","at":1792411398,"phase":"build","prd":"00366-fast-track-survivors-reach-the-batch-ledger-v1.md"}
 {"kind":"handoff","site":"build","edge":"leave","at":1792412020,"phase":"done","prd":"00366-fast-track-survivors-reach-the-batch-ledger-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1792412046,"phase":"done","prd":"00366-fast-track-survivors-reach-the-batch-ledger-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1792412116,"phase":"build","prd":"00366-fast-track-survivors-reach-the-batch-ledger-v1.md"}
