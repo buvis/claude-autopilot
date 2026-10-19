@@ -95,24 +95,22 @@ class DetectUsageLimitTests(unittest.TestCase):
 
     def test_limit_stuck_returns_next_reset_epoch(self) -> None:
         err_at = datetime.now(timezone.utc) - timedelta(minutes=5)
+        reset_at = (err_at + timedelta(hours=3)).astimezone(ZoneInfo("Europe/Prague"))
+        hour12 = reset_at.strftime("%I:%M%p").lower().lstrip("0")
         self._write(
             "a.jsonl",
             [
                 _assistant_entry(err_at - timedelta(minutes=1)),
                 _limit_entry(
                     err_at,
-                    "You've hit your session limit · resets 8:10pm (Europe/Prague)",
+                    f"You've hit your session limit · resets {hour12} (Europe/Prague)",
                 ),
                 *_meta_tail(),
             ],
         )
         epoch = self._detect()
         self.assertIsNotNone(epoch)
-        tz = ZoneInfo("Europe/Prague")
-        anchor = err_at.astimezone(tz)
-        expected = anchor.replace(hour=20, minute=10, second=0, microsecond=0)
-        if expected <= anchor:
-            expected += timedelta(days=1)
+        expected = reset_at.replace(second=0, microsecond=0)
         self.assertEqual(epoch, int(expected.timestamp()))
 
     def test_12am_and_12pm_hours_parse_correctly(self) -> None:
