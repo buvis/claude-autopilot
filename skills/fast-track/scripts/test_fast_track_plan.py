@@ -25,6 +25,7 @@ import importlib.util
 import json
 import sys
 from collections import Counter
+from dataclasses import asdict
 from pathlib import Path
 
 import pytest
@@ -642,3 +643,60 @@ def test_every_non_workflow_lane_earns_a_verification(lane: str) -> None:
     )
 
     assert verify_targets([raised]) == [raised]
+
+
+def test_ledger_rows_keeps_only_the_non_blocking_survivors() -> None:
+    # A committed item never carries a surviving CRITICAL or HIGH (exit_action
+    # would have branched instead), so the rows worth writing to the batch
+    # deferred ledger are exactly the MEDIUM and LOW findings record_item.py
+    # already stored as `findings` - the ones that otherwise vanish instead of
+    # reaching batch-end triage.
+    rows = _plan.ledger_rows([_MEDIUM, _LOW])
+
+    assert rows == [asdict(_MEDIUM), asdict(_LOW)]
+
+
+def test_ledger_rows_is_empty_when_no_findings_survive() -> None:
+    # A spotless item has nothing to defer, so the ledger gets no row rather
+    # than an empty placeholder.
+    assert _plan.ledger_rows([]) == []
+
+
+def test_ledger_rows_excludes_critical_and_high_findings() -> None:
+    # A CRITICAL or a HIGH is reworked or blocks the exit - it never reaches
+    # this function as a survivor in practice, but the filter itself must not
+    # let one through if it is ever handed one, since the ledger is for the
+    # rows that were deliberately left unresolved, not for blocking rows.
+    high = Finding(
+        severity="HIGH",
+        title="A handoff row is counted as a dispatch",
+        file="skills/fast-track/scripts/fast_track_plan.py",
+        lane="fast-track:carl",
+    )
+    critical = Finding(
+        severity="CRITICAL",
+        title="Carl is dispatched with no backend CLI installed",
+        file="skills/fast-track/scripts/fast_track_plan.py",
+        lane="fast-track:blake",
+    )
+
+    rows = _plan.ledger_rows([_MEDIUM, high, critical, _LOW])
+
+    assert rows == [asdict(_MEDIUM), asdict(_LOW)]
+
+
+def test_ledger_rows_rows_match_record_defer_item_shape() -> None:
+    # record_defer (skills/run-autopilot/cli/records.py) appends whatever
+    # dict it is handed as one deferred item, so each row here must carry
+    # exactly the four keys a Finding has - no more, no fewer - for that
+    # append to produce a row render_report.py can read back.
+    rows = _plan.ledger_rows([_MEDIUM])
+
+    expected = {
+        "severity": "MEDIUM",
+        "title": _MEDIUM.title,
+        "file": _MEDIUM.file,
+        "lane": _MEDIUM.lane,
+    }
+    assert rows == [expected]
+    assert set(rows[0].keys()) == {"severity", "title", "file", "lane"}

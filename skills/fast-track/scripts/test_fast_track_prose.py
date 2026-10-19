@@ -833,6 +833,44 @@ def test_the_lane_takes_several_cards_in_argument_order() -> None:
         _assert_unopposed(list(_passages()), claim, complaint)
 
 
+_CHANGELOG_MD = Path(__file__).parents[3] / "CHANGELOG.md"
+_DEFERRED_LEDGER_LINE = re.compile(
+    r"fast-track.*batch deferred ledger",
+    re.IGNORECASE,
+)
+
+
+def test_survivors_reach_the_batch_deferred_ledger() -> None:
+    # Verify (skills/fast-track/SKILL.md:434) writes every raised MEDIUM and
+    # LOW to the item's raised file, and record_item.py (:637) stores them as
+    # `findings` on the committed outcome - but nothing calls `record_defer`,
+    # so those rows never reach the batch deferred ledger `defer` renders at
+    # batch end. The paragraph below is the promise that they now do.
+    document = _testutil.document()
+    assert "Those rows are kept, not dropped." in document, (
+        f"{_SKILL_MD}: the literal sentence 'Those rows are kept, not "
+        "dropped.' is missing, so nothing in the document says a committed "
+        "item's MEDIUM/LOW findings reach the batch deferred ledger instead "
+        "of vanishing after Verify writes them to the raised file."
+    )
+    assert _CHANGELOG_MD.is_file(), f"missing CHANGELOG.md at {_CHANGELOG_MD}"
+    changelog = _CHANGELOG_MD.read_text(encoding="utf-8")
+    unreleased_start = changelog.index("[Unreleased]")
+    next_heading = changelog.find("\n## [", unreleased_start)
+    unreleased = changelog[unreleased_start : next_heading if next_heading != -1 else None]
+    matches = [
+        line.strip()
+        for line in unreleased.splitlines()
+        if _DEFERRED_LEDGER_LINE.search(line)
+    ]
+    assert len(matches) == 1, (
+        f"{_CHANGELOG_MD}: expected exactly one [Unreleased] line matching "
+        f"{_DEFERRED_LEDGER_LINE.pattern!r}, found {matches!r}. This entry "
+        "documents fast-track's committed items reaching the batch deferred "
+        "ledger."
+    )
+
+
 def test_the_batch_suite_and_the_push_wait_for_the_last_item() -> None:
     # The bans run first, over the whole body and the frontmatter: a push at an
     # item's own exit sends the same operator out with the same half of a batch
