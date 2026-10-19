@@ -798,6 +798,30 @@ def test_lane_reference_names_every_kind() -> None:
     assert not retired, _ref.KINDS_RETIRED.format(retired=retired[:3])
 
 
+def test_bob_receives_the_inlined_prompt_never_a_path() -> None:
+    # Codex's own sandbox cannot start inside the operator's seatbelt, so a
+    # prompt he must open with a shell read loses the lens on every card.
+    assert _ref.LANE_DISPATCH_MD.is_file(), _ref.NO_LANE_REFERENCE
+    text = _ref.LANE_DISPATCH_MD.read_text(encoding="utf-8")
+    start = text.index("### Bob: codex")
+    end = text.index("### Carl: gemini")
+    section = text[start:end]
+    for needle in ("INLINED BELOW as text", "retry-policy.md", "fast-track-<item>-codex.txt"):
+        assert needle in section, f"{needle!r} missing from the Bob: codex section"
+
+
+def test_skill_sends_codex_the_inlined_shape() -> None:
+    text = _testutil.document()
+    assert "Inlined prompt (Bob's first dispatch)" in text, (
+        "SKILL.md no longer names the inlined prompt shape sent to codex"
+    )
+    for sentence in text.split(". "):
+        if "Inlined prompt (Bob's first dispatch)" in sentence:
+            assert "codex-run.sh" in sentence, (
+                "the sentence naming the inlined shape must also name codex-run.sh"
+            )
+
+
 def test_the_lane_takes_several_cards_in_argument_order() -> None:
     # A usage line that takes one card is a lane run once per card, and a lane
     # with no stated order has no last item for the batch suite or the push to
