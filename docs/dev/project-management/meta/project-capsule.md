@@ -50,6 +50,7 @@ Generated: 2026-10-17 (catchup at HEAD a2858cb4, 00332 closed, entering 00333; 0
 - [x] 00351-give-the-drain-agoge-run-two-hours-v1 (1 cycle, fast-track)
 - [x] 00365-review-the-committed-range-not-the-working-tree-v1 (1 cycle, fast-track)
 - [x] 00366-fast-track-survivors-reach-the-batch-ledger-v1 (1 cycle, fast-track)
+- [x] 00367-one-finding-mints-one-stub-v1 (1 cycle, fast-track)
 
 Observations: 00349 converged at cycle 1 (2/2 tasks): rewrote
 `test_limit_stuck_returns_next_reset_epoch` in
@@ -84,6 +85,10 @@ severity and file, and the skill prose now sends those objects through
 `autopilot defer` under the loop so they reach the batch deferred ledger
 and batch-end triage instead of vanishing after `committed`. No deferred
 items, no doubts, nothing minted to `hold/`.
+00367 (fast-track, 1 task) converged cycle 1: the review-close ledger-rows
+path now folds every finding into one stub per batch instead of minting a
+stub per finding. Batch suite green (7212 passed, 0 failed, 2 skipped). No
+deferred items, no doubts, nothing minted to `hold/`.
 
 ### Batch 202610161547 (complete)
 - [x] 00320-refuse-every-unsafe-verify-log-sink-v2 (2 cycles, cap-out: 1 HIGH + 15 lower deferred)
