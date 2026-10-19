@@ -7,6 +7,8 @@ model_tier_rationale: four small exact edits to two shell scripts, one test dele
 
 # The release gate and the notes say what ships (v3)
 
+> Closed by hand on 2026-10-19 from the operator's monitoring session. The card landed on master (13d02bab implementation, 1fbc3256 rework after Victor confirmed Alice's HIGH), both card gates green, Eve's delta clean. The park at 09:10 CEST came from the batch suite failing two CHANGELOG prose tests in `test_review_verbs_prose.py` that read `[Unreleased]` alone and went red the moment the v0.10.0 cut moved their entries into the release section; fixed in 81c0f2b4 (the tests now read the newest release section too). Nothing in this card caused it.
+
 Source: v2 of this PRD (now under done/) was parked on 2026-10-17 at 13:44 CEST. Its fast-track card lifted the success criterion that named the release script into a gate, warden refused the publish, and the item stalled with one of six gaps landed: commit 23555ea5 with its test 2b643ac5, the release refuses on an open critical triage stub. PRD 00347 stops the card parser from lifting a release command again, but the loop runs the installed cache until the next release, so this version names no publish command anywhere a parser could lift it. Gap 1 (a measured gate time written into the CHANGELOG) is dropped on purpose: the number rots the day a check block is added, the batch reports already record every timed gate run, and 00313's unmet line stays as the record it is.
 
 ## Problem
