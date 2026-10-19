@@ -279,7 +279,7 @@ a finding that contradicts it dies at the table instead of costing a rework.
 - **Doubt.** `autopilot:eve` runs the doubt lens on the card, the diff range and
   the changed-file list, and returns FIX / VERIFY / KNOWN plus her five `D{n}`
   verdict lines.
-- **Codex.** `codex-run.sh` carries the consensus prompt to codex in the inlined shape of review-work-completion/references/retry-policy.md § Inlined prompt (Bob's first dispatch), never a prompt he must open with `cat` (references/lane-dispatch.md § Bob: codex).
+- **Codex.** `codex-run.sh` carries the consensus prompt to codex in the inlined shape of review-work-completion/references/retry-policy.md § Inlined prompt (Bob's first dispatch), never a prompt he must open with `cat` (`references/lane-dispatch.md` § Bob: codex).
 - **Gemini.** `gemini-run.sh`, when its backend resolved in the preconditions.
 
 Render each prompt from its persona. The implementation-aware lanes (consensus,
