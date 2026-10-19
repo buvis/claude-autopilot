@@ -5282,3 +5282,5 @@
 {"id":"2d0d30aa","kind":"fast-track:delta","task":"00327-release-gate-and-notes-say-what-ships-v3-c1","queued_at":1792392947,"prompt_bytes":1783}
 {"id":"2d0d30aa","ended_at":1792393179,"elapsed_s":232,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1792393935,"phase":"build","prd":"00327-release-gate-and-notes-say-what-ships-v3.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792393964,"phase":"build","prd":"00349-pin-the-usage-limit-reset-test-to-a-relative-time-v1.md"}
+{"kind":"handoff","site":"build","edge":"leave","at":1792394421,"phase":"review","prd":"00349-pin-the-usage-limit-reset-test-to-a-relative-time-v1.md"}
