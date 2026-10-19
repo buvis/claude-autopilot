@@ -48,6 +48,7 @@ Generated: 2026-10-17 (catchup at HEAD a2858cb4, 00332 closed, entering 00333; 0
 - [x] 00349-pin-the-usage-limit-reset-test-to-a-relative-time-v1 (1 cycle, solo lane escalated to full on security_diff)
 - [x] 00350-send-bob-the-inlined-prompt-on-the-fast-track-lane-v1 (1 cycle, solo lane)
 - [x] 00351-give-the-drain-agoge-run-two-hours-v1 (1 cycle, fast-track)
+- [x] 00365-review-the-committed-range-not-the-working-tree-v1 (1 cycle, fast-track)
 
 Observations: 00349 converged at cycle 1 (2/2 tasks): rewrote
 `test_limit_stuck_returns_next_reset_epoch` in
@@ -71,6 +72,11 @@ the first quarter hour on recon alone and killed the 2026-10-17 and
 the two new tests depending on host `PATH` instead of the PRD's exact `env`
 dicts; fixed in the same pass. Fast-track batch suite green (13 passed, 0
 failed, 0 skipped). No deferred items, no doubts, nothing minted to `hold/`.
+00365 (fast-track, 1 task) converged cycle 1: `review-work-completion` now
+diffs `work_start_sha..HEAD` (the committed range) instead of the dirty
+working tree when building the review diff, so a review no longer scores
+uncommitted scratch changes as part of the PRD's work. No deferred items,
+no doubts, nothing minted to `hold/`.
 
 ### Batch 202610161547 (complete)
 - [x] 00320-refuse-every-unsafe-verify-log-sink-v2 (2 cycles, cap-out: 1 HIGH + 15 lower deferred)

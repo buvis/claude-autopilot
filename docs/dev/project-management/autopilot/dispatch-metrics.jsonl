@@ -5342,3 +5342,5 @@
 {"id":"fb8e9d2e","kind":"fast-track:eve","task":"00365-review-the-committed-range-not-the-working-tree-v1-c1","queued_at":1792408409,"prompt_bytes":6716}
 {"id":"fb8e9d2e","ended_at":1792408797,"elapsed_s":388,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1792409255,"phase":"done","prd":"00365-review-the-committed-range-not-the-working-tree-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1792409297,"phase":"done","prd":"00365-review-the-committed-range-not-the-working-tree-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1792409375,"phase":"build","prd":"00365-review-the-committed-range-not-the-working-tree-v1.md"}
