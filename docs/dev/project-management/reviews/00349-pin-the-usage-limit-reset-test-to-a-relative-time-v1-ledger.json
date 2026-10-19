@@ -1,0 +1,42 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "🟡",
+    "issue": "The \"passes against pre-change code\" replay row for test_limit_stuck_returns_next_reset_epoch is expected: the rewrite fixes a time-of-day flake, so the old test also passed outside the 20:12-20:15 Prague window. Residual: err_at + timedelta(hours=3) is absolute time while the helper uses wall-clock replace (skills/run-autopilot/cli/usage_limit.py:120), so a Prague DST transition inside the 3-hour offset could shift the expected hour. The PRD mandates this exact form.",
+    "file": "skills/run-autopilot/scripts/test_detect_usage_limit.py:98",
+    "reason": "computed replay row, judged against the PRD: the PRD mandates this exact test form and the change fixes a time-of-day flake, so passing against the pre-change code outside the 20:12-20:15 window is by design, not unpinned behavior"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "🟡",
+    "issue": "F1: `_shipped_notes()` excludes v0.10.0 after the next release, making both prose tests fail again unless their historical wording is repeated. Pin the relevant release section and test a subsequent release rollover.",
+    "file": "skills/review-work-completion/scripts/test_review_verbs_prose.py:142",
+    "reason": "single-voice"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "🟡",
+    "issue": "F2: The relative reset can fall in Prague's repeated autumn hour. Formatting only `%I:%M%p` loses `fold`, potentially making the parser return an epoch one hour earlier than expected. Verify this boundary before claiming all-clock-time reliability.",
+    "file": "skills/run-autopilot/scripts/test_detect_usage_limit.py:98",
+    "reason": "single-voice"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "⚪",
+    "issue": "The diff range also holds the `_shipped_notes` change in test_review_verbs_prose.py, which is outside PRD 00349, whose \"other tests untouched\" scope covers only the usage-limit file. It was committed separately as 81c0f2b4 and the 00327 close note documents it. It is correct. No action beyond keeping it out of 00349's attribution.",
+    "file": "skills/review-work-completion/scripts/test_review_verbs_prose.py:136",
+    "reason": "single-voice"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "🟡",
+    "issue": "2 touched test(s) pass against the pre-change code: test_changelog_states_what_review_close_refuses_truthfully, test_carry_creates_nothing_prose",
+    "file": "skills/review-work-completion/scripts/test_review_verbs_prose.py",
+    "reason": "single-voice"
+  }
+]

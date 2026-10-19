@@ -5284,3 +5284,11 @@
 {"kind":"handoff","site":"build","edge":"leave","at":1792393935,"phase":"build","prd":"00327-release-gate-and-notes-say-what-ships-v3.md"}
 {"kind":"handoff","site":"build","edge":"resume","at":1792393964,"phase":"build","prd":"00349-pin-the-usage-limit-reset-test-to-a-relative-time-v1.md"}
 {"kind":"handoff","site":"build","edge":"leave","at":1792394421,"phase":"review","prd":"00349-pin-the-usage-limit-reset-test-to-a-relative-time-v1.md"}
+{"kind":"handoff","site":"review","edge":"resume","at":1792394452,"phase":"review","prd":"00349-pin-the-usage-limit-reset-test-to-a-relative-time-v1.md"}
+{"id":"a92b52b3","kind":"bob","task":"review-20261019T0730","queued_at":1792394581,"prompt_bytes":13044}
+{"id":"7ff8ad33","kind":"carl","task":"review-20261019T0730","queued_at":1792394581,"prompt_bytes":6627}
+{"id":"a92b52b3","ended_at":1792394876,"elapsed_s":295,"outcome":"ok","detail":null}
+{"id":"7ff8ad33","ended_at":1792394880,"elapsed_s":299,"outcome":"ok","detail":null}
+{"id":"a92b52b3","ended_at":1792395082,"elapsed_s":501,"outcome":"ok","detail":null}
+{"id":"7ff8ad33","ended_at":1792395082,"elapsed_s":501,"outcome":"ok","detail":null}
+{"kind":"handoff","site":"review","edge":"leave","at":1792395166,"phase":"review","prd":"00349-pin-the-usage-limit-reset-test-to-a-relative-time-v1.md"}
