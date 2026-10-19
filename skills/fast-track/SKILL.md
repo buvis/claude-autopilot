@@ -643,6 +643,11 @@ measured USD figure exists; an absent `--cost` records unmeasured, which is not
 the same fact as free. The row lands in
 `docs/dev/project-management/autopilot/loop-metrics.jsonl` and its `ledger/` mirror.
 
+On `committed`, pass the surviving set through `fast_track_plan.py`'s
+`ledger_rows` and append each row it returns to the batch deferred ledger with
+`record_defer`, so the MEDIUM and LOW findings Verify wrote to the raised file
+reach batch-end triage. Those rows are kept, not dropped.
+
 Then count what the item spent, out of the rows the `start` calls above
 appended:
 

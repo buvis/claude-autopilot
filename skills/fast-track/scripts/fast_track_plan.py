@@ -68,6 +68,11 @@ def exit_action(findings: list[Finding]) -> str:
     return "commit"
 
 
+def ledger_rows(findings: list[Finding]) -> list[dict[str, str]]:
+    """The non-blocking survivors, as rows for the batch deferred ledger."""
+    return [asdict(finding) for finding in findings if finding.severity not in _BLOCKING]
+
+
 def count_item_dispatches(ledger: Path, item: str) -> Counter[str]:
     """Dispatches opened for ``item``, by kind. A missing ledger counts none.
 

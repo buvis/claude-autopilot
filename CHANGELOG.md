@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **release**: `dev/bin/release-checks`'s shell-harness blocks now count their own SKIP: lines toward the gate's skip ceiling, the same way a pytest skip does
 - **release**: `dev/bin/release` now runs the live MCP launch test before pulling the central `claude-plugins` repo, instead of leaving that step undocumented outside audit notes
 - **fast-track**: Bob's codex lane receives the inlined prompt (context and diff in the text), so a seatbelt that blocks codex's own sandbox no longer loses the lens on every card
+- **fast-track**: a committed item's surviving MEDIUM/LOW findings now reach the batch deferred ledger instead of vanishing after Verify writes them to the raised file
 
 ## [0.10.0] - 2026-10-18
 
