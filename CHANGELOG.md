@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **fast-track**: Bob's codex lane receives the inlined prompt (context and diff in the text), so a seatbelt that blocks codex's own sandbox no longer loses the lens on every card
 - **fast-track**: a committed item's surviving MEDIUM/LOW findings now reach the batch deferred ledger instead of vanishing after Verify writes them to the raised file
 - **run-autopilot**: `mint-stubs` folds the rows of one finding into one hold stub carrying every ledger key, so a gate decision and its review-close twin no longer mint two stubs, and the stub tells a PRD author to quote the key
+- **review-work-completion**: the consolidator keeps distinct findings apart - two findings sharing only small numeric values (day counts, retry counts) no longer merge under the numeric fallback, which now requires shared tokens of at least 3 digits; this also narrows the ledger-dismissal filter, since `split_ledger_dismissed` reuses `match()`
 
 ## [0.10.0] - 2026-10-18
 

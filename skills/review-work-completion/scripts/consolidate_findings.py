@@ -28,8 +28,16 @@ match and the two descriptions share at least two distinct all-digit
 tokens, or when both descriptions carry at least OVERLAP_MIN_TOKENS tokens
 and the shorter one's containment in the longer (the overlap coefficient)
 reaches OVERLAP_THRESHOLD - the signal that catches a terse reviewer
-restating a verbose one (PRD 00198, review 00186). Merging is transitive
-inside a file group. `match()` is importable; the ledger filter reuses it.
+restating a verbose one (PRD 00198, review 00186). The numeric-token
+fallback only counts tokens at least NUMERIC_SIGNATURE_MIN_DIGITS digits
+long: measured against the pinned 00122 fixture (shared citation numbers
+763/822/800, all >= 3 digits) versus the 00070 regression fixture (shared
+day-count numbers 0-45, all 1-2 digits), a line count or line number that
+two reviewers independently cite is reliably >= 100 in this codebase's
+review corpus, while a day count, retry count, or other small test-data
+value recurs across unrelated findings and carries no defect identity.
+Merging is transitive inside a file group. `match()` is importable; the
+ledger filter reuses it.
 """
 
 from __future__ import annotations
@@ -73,6 +81,16 @@ MERGE_THRESHOLD = 0.25
 OVERLAP_THRESHOLD = 1 / 3
 OVERLAP_MIN_TOKENS = 10
 OVERLAP_MIN_RATIO = 1.5
+
+# The numeric fallback's floor on *digit length*, not count: measured against
+# the pinned 00122 fixture (shared citation numbers 763/822/800, all >= 3
+# digits) versus the 00070 regression fixture (shared day-count numbers 0-45,
+# all 1-2 digits). A line count or line number that two reviewers independently
+# cite is reliably >= 100 in this codebase's review corpus; a day count, retry
+# count, or other small test-data value recurs across unrelated findings and
+# carries no defect identity. Tokens shorter than this floor are dropped before
+# the two-distinct-tokens count below.
+NUMERIC_SIGNATURE_MIN_DIGITS = 3
 
 SEVERITY_ORDER = {"🔴": 1, "🟠": 2, "🟡": 3, "⚪": 4}
 UNKNOWN_SEVERITY_RANK = 5
@@ -257,7 +275,11 @@ def match(finding_a: Finding, finding_b: Finding) -> bool:
         return True
     if overlap(tokens_a, tokens_b) >= OVERLAP_THRESHOLD:
         return True
-    shared_nums = numeric_tokens(finding_a.desc) & numeric_tokens(finding_b.desc)
+    shared_nums = {
+        t
+        for t in numeric_tokens(finding_a.desc) & numeric_tokens(finding_b.desc)
+        if len(t) >= NUMERIC_SIGNATURE_MIN_DIGITS
+    }
     return len(shared_nums) >= 2
 
 
