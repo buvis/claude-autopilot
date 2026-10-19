@@ -5321,3 +5321,5 @@
 {"id":"22878a85","kind":"fast-track:bob","task":"00351-give-the-drain-agoge-run-two-hours-v1-c1","queued_at":1792398628,"prompt_bytes":17534}
 {"id":"22878a85","ended_at":1792398772,"elapsed_s":144,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1792399332,"phase":"done","prd":"00351-give-the-drain-agoge-run-two-hours-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1792399366,"phase":"done","prd":"00351-give-the-drain-agoge-run-two-hours-v1.md"}
+{"kind":"handoff","site":"done","edge":"leave","at":1792399456,"phase":"build","prd":"00351-give-the-drain-agoge-run-two-hours-v1.md"}

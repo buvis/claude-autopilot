@@ -47,7 +47,7 @@ Generated: 2026-10-17 (catchup at HEAD a2858cb4, 00332 closed, entering 00333; 0
 ### Batch 202610191000
 - [x] 00349-pin-the-usage-limit-reset-test-to-a-relative-time-v1 (1 cycle, solo lane escalated to full on security_diff)
 - [x] 00350-send-bob-the-inlined-prompt-on-the-fast-track-lane-v1 (1 cycle, solo lane)
-- [ ] 00351-give-the-drain-agoge-run-two-hours-v1
+- [x] 00351-give-the-drain-agoge-run-two-hours-v1 (1 cycle, fast-track)
 
 Observations: 00349 converged at cycle 1 (2/2 tasks): rewrote
 `test_limit_stuck_returns_next_reset_epoch` in
@@ -63,6 +63,14 @@ own sandboxed `sandbox-exec` (which cannot nest and fails every shell read),
 matching the full lane's fix for the same problem. One review fix backticked
 the lane-dispatch reference path in the codex roster bullet. No deferred
 items, no doubts, nothing minted to `hold/`.
+00351 (fast-track, 1 task) converged cycle 1: the drain's agoge QA session
+default wall-clock cap moves from one hour to two (`loop_act.py:103`,
+`_AUTOPILOT_AGOGE_CAP` default 7200), since a profile one batch stale burns
+the first quarter hour on recon alone and killed the 2026-10-17 and
+2026-10-03 runs before they could write a report. Eve and Bob both flagged
+the two new tests depending on host `PATH` instead of the PRD's exact `env`
+dicts; fixed in the same pass. Fast-track batch suite green (13 passed, 0
+failed, 0 skipped). No deferred items, no doubts, nothing minted to `hold/`.
 
 ### Batch 202610161547 (complete)
 - [x] 00320-refuse-every-unsafe-verify-log-sink-v2 (2 cycles, cap-out: 1 HIGH + 15 lower deferred)
