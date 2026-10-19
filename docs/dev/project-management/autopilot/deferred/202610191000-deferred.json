@@ -1,0 +1,12 @@
+{
+  "batch_id": "202610191000",
+  "items": [
+    {
+      "type": "stall",
+      "site": "fast_track_blocked",
+      "detail": "suite red: not run (pre-existing: 2 failed / 7193 passed / 2 skipped - test_changelog_states_what_review_close_refuses_truthfully and test_carry_creates_nothing_prose fail on master before and after this card's commits; unrelated to card c1)",
+      "op_id": "70952f110656",
+      "prd": "00327-release-gate-and-notes-say-what-ships-v3.md"
+    }
+  ]
+}

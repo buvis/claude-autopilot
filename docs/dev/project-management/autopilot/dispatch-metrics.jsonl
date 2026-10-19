@@ -5274,3 +5274,10 @@
 {"id":"df62f05a","ended_at":1792262219,"elapsed_s":628,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1792262751,"phase":"done","prd":"00348-the-security-trigger-reads-prose-as-prose-v1.md"}
 {"kind":"handoff","site":"done","edge":"resume","at":1792262785,"phase":"done","prd":"00348-the-security-trigger-reads-prose-as-prose-v1.md"}
+{"kind":"handoff","site":"build","edge":"resume","at":1792391810,"phase":"build","prd":"00327-release-gate-and-notes-say-what-ships-v3.md"}
+{"id":"359993e7","kind":"fast-track:victor","task":"00327-release-gate-and-notes-say-what-ships-v3-c1","queued_at":1792392750,"prompt_bytes":3314}
+{"id":"359993e7","ended_at":1792392782,"elapsed_s":32,"outcome":"ok","detail":null}
+{"id":"d7c6de4e","kind":"fast-track:ivan","task":"00327-release-gate-and-notes-say-what-ships-v3-c1","queued_at":1792392831,"prompt_bytes":5886}
+{"id":"d7c6de4e","ended_at":1792392919,"elapsed_s":88,"outcome":"ok","detail":null}
+{"id":"2d0d30aa","kind":"fast-track:delta","task":"00327-release-gate-and-notes-say-what-ships-v3-c1","queued_at":1792392947,"prompt_bytes":1783}
+{"id":"2d0d30aa","ended_at":1792393179,"elapsed_s":232,"outcome":"ok","detail":null}
