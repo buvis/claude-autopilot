@@ -261,7 +261,7 @@ def test_run_agoge_default_cap_is_two_hours(tmp_path, monkeypatch):
 
     monkeypatch.setattr(loop_act, "_run_agoge_process", fake_process)
     out = io.StringIO()
-    run_agoge(tmp_path, "b-1", 2, {"PATH": os.environ["PATH"]}, out)
+    run_agoge(tmp_path, "b-1", 2, {}, out)
     assert captured["cap"] == 7200
 
 
@@ -276,7 +276,7 @@ def test_run_agoge_cap_env_overrides_the_default(tmp_path, monkeypatch):
 
     monkeypatch.setattr(loop_act, "_run_agoge_process", fake_process)
     out = io.StringIO()
-    env = {"PATH": os.environ["PATH"], "_AUTOPILOT_AGOGE_CAP": "900"}
+    env = {"_AUTOPILOT_AGOGE_CAP": "900"}
     run_agoge(tmp_path, "b-1", 2, env, out)
     assert captured["cap"] == 900
 
