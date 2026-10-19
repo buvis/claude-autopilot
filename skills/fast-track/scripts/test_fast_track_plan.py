@@ -23,9 +23,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 from collections import Counter
-from dataclasses import asdict
 from pathlib import Path
 
 import pytest
@@ -645,28 +645,11 @@ def test_every_non_workflow_lane_earns_a_verification(lane: str) -> None:
     assert verify_targets([raised]) == [raised]
 
 
-def test_ledger_rows_keeps_only_the_non_blocking_survivors() -> None:
+def test_ledger_rows_keeps_medium_and_low_only() -> None:
     # A committed item never carries a surviving CRITICAL or HIGH (exit_action
     # would have branched instead), so the rows worth writing to the batch
-    # deferred ledger are exactly the MEDIUM and LOW findings record_item.py
-    # already stored as `findings` - the ones that otherwise vanish instead of
-    # reaching batch-end triage.
-    rows = _plan.ledger_rows([_MEDIUM, _LOW])
-
-    assert rows == [asdict(_MEDIUM), asdict(_LOW)]
-
-
-def test_ledger_rows_is_empty_when_no_findings_survive() -> None:
-    # A spotless item has nothing to defer, so the ledger gets no row rather
-    # than an empty placeholder.
-    assert _plan.ledger_rows([]) == []
-
-
-def test_ledger_rows_excludes_critical_and_high_findings() -> None:
-    # A CRITICAL or a HIGH is reworked or blocks the exit - it never reaches
-    # this function as a survivor in practice, but the filter itself must not
-    # let one through if it is ever handed one, since the ledger is for the
-    # rows that were deliberately left unresolved, not for blocking rows.
+    # deferred ledger are exactly the MEDIUM and LOW findings - the ones that
+    # otherwise vanish instead of reaching batch-end triage.
     high = Finding(
         severity="HIGH",
         title="A handoff row is counted as a dispatch",
@@ -680,23 +663,67 @@ def test_ledger_rows_excludes_critical_and_high_findings() -> None:
         lane="fast-track:blake",
     )
 
-    rows = _plan.ledger_rows([_MEDIUM, high, critical, _LOW])
+    rows = _plan.ledger_rows([critical, high, _MEDIUM, _LOW], lenses=5)
 
-    assert rows == [asdict(_MEDIUM), asdict(_LOW)]
+    assert [row["severity"] for row in rows] == ["medium", "low"]
 
 
-def test_ledger_rows_rows_match_record_defer_item_shape() -> None:
-    # record_defer (skills/run-autopilot/cli/records.py) appends whatever
-    # dict it is handed as one deferred item, so each row here must carry
-    # exactly the four keys a Finding has - no more, no fewer - for that
-    # append to produce a row render_report.py can read back.
-    rows = _plan.ledger_rows([_MEDIUM])
+def test_ledger_rows_folds_one_file_across_lanes() -> None:
+    # Two lanes raising a MEDIUM on the same file, one citing a line suffix
+    # and one not, fold into a single row: the issue and file come from the
+    # first-raised row, the file loses its suffix, and the consensus counts
+    # the distinct lanes against the lens count handed in.
+    first = Finding(
+        severity="MEDIUM",
+        title="Roster order is only implied by the docstring",
+        file="skills/fast-track/scripts/fast_track_plan.py:53",
+        lane="fast-track:alice",
+    )
+    second = Finding(
+        severity="MEDIUM",
+        title="main() runs long",
+        file="skills/fast-track/scripts/fast_track_plan.py",
+        lane="fast-track:carl",
+    )
 
-    expected = {
-        "severity": "MEDIUM",
-        "title": _MEDIUM.title,
-        "file": _MEDIUM.file,
-        "lane": _MEDIUM.lane,
-    }
-    assert rows == [expected]
-    assert set(rows[0].keys()) == {"severity", "title", "file", "lane"}
+    rows = _plan.ledger_rows([first, second], lenses=4)
+
+    assert rows == [
+        {
+            "type": "review-deferral",
+            "cycle": 1,
+            "severity": "medium",
+            "issue": first.title,
+            "file": "skills/fast-track/scripts/fast_track_plan.py",
+            "consensus": "2/4",
+            "reason": "fast-track exit: a medium or low neither reworks nor blocks",
+            "lane": "fast-track",
+        },
+    ]
+
+
+def test_ledger_rows_prints_an_empty_array_without_survivors(tmp_path: Path) -> None:
+    findings = tmp_path / "raised.json"
+    findings.write_text("[]", encoding="utf-8")
+
+    result = subprocess.run(
+        [sys.executable, str(_MODULE_PATH), "ledger-rows", str(findings), "--lenses", "5"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert result.stdout.strip() == "[]"
+
+
+def test_ledger_rows_exits_two_on_a_non_array(tmp_path: Path) -> None:
+    findings = tmp_path / "raised.json"
+    findings.write_text("{}", encoding="utf-8")
+
+    result = subprocess.run(
+        [sys.executable, str(_MODULE_PATH), "ledger-rows", str(findings), "--lenses", "5"],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2

@@ -448,6 +448,14 @@ workflow raised skip this step, because its own verifier already tested them,
 and a MEDIUM or a LOW neither reworks nor blocks the exit. It exits 2 on a file
 that is anything but that array.
 
+Those rows are kept, not dropped. Under the loop (the variable `_AUTOPILOT_LOOP`
+is set) run `ledger-rows` over the same file with `--lenses` set to the number
+of lenses that reported, and for each printed object run `autopilot defer`
+`--prd` `<the card's PRD filename>` `--batch` `<state.batch.id>` `--json`
+`'<the object>'`, so the survivors land in the batch deferred ledger beside the
+full lane's deferrals and the batch report's Deferred table and the batch-end
+triage see them. Outside the loop print the objects in the item report instead.
+
 Number the printed rows from 1. For each one, write its
 title to `docs/dev/tmp/fast-track-<item>-finding-<n>-title.txt`, the evidence
 the lane gave to `docs/dev/tmp/fast-track-<item>-finding-<n>-evidence.txt` and
@@ -642,11 +650,6 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/fast-track/scripts/record_item.py --item <i
 measured USD figure exists; an absent `--cost` records unmeasured, which is not
 the same fact as free. The row lands in
 `docs/dev/project-management/autopilot/loop-metrics.jsonl` and its `ledger/` mirror.
-
-On `committed`, pass the surviving set through `fast_track_plan.py`'s
-`ledger_rows` and append each row it returns to the batch deferred ledger with
-`record_defer`, so the MEDIUM and LOW findings Verify wrote to the raised file
-reach batch-end triage. Those rows are kept, not dropped.
 
 Then count what the item spent, out of the rows the `start` calls above
 appended:

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections import Counter
 from dataclasses import asdict, dataclass
@@ -68,9 +69,39 @@ def exit_action(findings: list[Finding]) -> str:
     return "commit"
 
 
-def ledger_rows(findings: list[Finding]) -> list[dict[str, str]]:
-    """The non-blocking survivors, as rows for the batch deferred ledger."""
-    return [asdict(finding) for finding in findings if finding.severity not in _BLOCKING]
+_TRAILING_LINES = re.compile(r":\d+(?:-\d+)?$")
+
+
+def ledger_rows(findings: list[Finding], lenses: int) -> list[dict[str, object]]:
+    """The non-blocking survivors, folded into rows for the batch deferred ledger.
+
+    Rows are folded by ``(severity, file)`` with any trailing ``:N`` or
+    ``:N-M`` line suffix stripped from the file, in first-raised order.
+    """
+    order: list[tuple[str, str]] = []
+    groups: dict[tuple[str, str], dict[str, object]] = {}
+    for finding in findings:
+        if finding.severity not in ("MEDIUM", "LOW"):
+            continue
+        file = _TRAILING_LINES.sub("", finding.file)
+        key = (finding.severity, file)
+        if key not in groups:
+            groups[key] = {"issue": finding.title, "lanes": set()}
+            order.append(key)
+        groups[key]["lanes"].add(finding.lane)
+    return [
+        {
+            "type": "review-deferral",
+            "cycle": 1,
+            "severity": severity.lower(),
+            "issue": groups[(severity, file)]["issue"],
+            "file": file,
+            "consensus": f"{len(groups[(severity, file)]['lanes'])}/{lenses}",
+            "reason": "fast-track exit: a medium or low neither reworks nor blocks",
+            "lane": "fast-track",
+        }
+        for severity, file in order
+    ]
 
 
 def count_item_dispatches(ledger: Path, item: str) -> Counter[str]:
@@ -119,6 +150,12 @@ def _parser() -> argparse.ArgumentParser:
         lanes.add_argument(flag, type=int, choices=(0, 1), required=True)
     for verb in ("verify-targets", "exit-action"):
         verbs.add_parser(verb).add_argument("findings", type=Path)
+    ledger_rows_parser = verbs.add_parser(
+        "ledger-rows",
+        help="print the non-blocking survivors as batch deferred ledger rows",
+    )
+    ledger_rows_parser.add_argument("findings", type=Path)
+    ledger_rows_parser.add_argument("--lenses", type=int, required=True)
     count = verbs.add_parser("count", help="print the item's dispatches by kind")
     count.add_argument("ledger", type=Path)
     count.add_argument("item")
@@ -139,6 +176,9 @@ def _main() -> None:
         print(json.dumps([asdict(finding) for finding in targets]))
     elif args.verb == "exit-action":
         print(exit_action(_load_findings(args.findings)))
+    elif args.verb == "ledger-rows":
+        rows = ledger_rows(_load_findings(args.findings), args.lenses)
+        print(json.dumps(rows))
     else:
         try:
             counts = count_item_dispatches(args.ledger, args.item)

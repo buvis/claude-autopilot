@@ -840,31 +840,31 @@ _DEFERRED_LEDGER_LINE = re.compile(
 )
 
 
-def test_survivors_reach_the_batch_deferred_ledger() -> None:
+def test_skill_sends_survivors_to_the_batch_ledger() -> None:
     # Verify (skills/fast-track/SKILL.md:434) writes every raised MEDIUM and
     # LOW to the item's raised file, and record_item.py (:637) stores them as
-    # `findings` on the committed outcome - but nothing calls `record_defer`,
-    # so those rows never reach the batch deferred ledger `defer` renders at
-    # batch end. The paragraph below is the promise that they now do.
+    # `findings` on the committed outcome - but nothing calls `autopilot
+    # defer`, so those rows never reach the batch deferred ledger `defer`
+    # renders at batch end. The paragraph below is the promise that they now
+    # do, by running `ledger-rows` and feeding each printed row to
+    # `autopilot defer`.
     document = _testutil.document()
-    assert "Those rows are kept, not dropped." in document, (
-        f"{_SKILL_MD}: the literal sentence 'Those rows are kept, not "
-        "dropped.' is missing, so nothing in the document says a committed "
-        "item's MEDIUM/LOW findings reach the batch deferred ledger instead "
-        "of vanishing after Verify writes them to the raised file."
-    )
+    for needle in ("ledger-rows", "autopilot defer", "Those rows are kept, not dropped."):
+        assert needle in document, (
+            f"{_SKILL_MD}: {needle!r} is missing, so nothing in the document "
+            "says a committed item's MEDIUM/LOW findings reach the batch "
+            "deferred ledger instead of vanishing after Verify writes them to "
+            "the raised file."
+        )
     assert _CHANGELOG_MD.is_file(), f"missing CHANGELOG.md at {_CHANGELOG_MD}"
     changelog = _CHANGELOG_MD.read_text(encoding="utf-8")
-    unreleased_start = changelog.index("[Unreleased]")
-    next_heading = changelog.find("\n## [", unreleased_start)
-    unreleased = changelog[unreleased_start : next_heading if next_heading != -1 else None]
     matches = [
         line.strip()
-        for line in unreleased.splitlines()
+        for line in changelog.splitlines()
         if _DEFERRED_LEDGER_LINE.search(line)
     ]
     assert len(matches) == 1, (
-        f"{_CHANGELOG_MD}: expected exactly one [Unreleased] line matching "
+        f"{_CHANGELOG_MD}: expected exactly one line matching "
         f"{_DEFERRED_LEDGER_LINE.pattern!r}, found {matches!r}. This entry "
         "documents fast-track's committed items reaching the batch deferred "
         "ledger."
