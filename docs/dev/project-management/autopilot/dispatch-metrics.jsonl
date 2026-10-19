@@ -5435,3 +5435,4 @@
 {"id":"2322b826","ended_at":1792419185,"elapsed_s":474,"outcome":"ok","detail":null}
 {"id":"816ac3a9","ended_at":1792419185,"elapsed_s":474,"outcome":"ok","detail":null}
 {"kind":"handoff","site":"build","edge":"leave","at":1792419431,"phase":"done","prd":"00369-stamp-the-build-start-and-name-the-closed-prd-v1.md"}
+{"kind":"handoff","site":"done","edge":"resume","at":1792419467,"phase":"done","prd":"00369-stamp-the-build-start-and-name-the-closed-prd-v1.md"}

@@ -52,7 +52,7 @@ Generated: 2026-10-19 (catchup at HEAD 844ae634, batch 202610191000 has drained 
 - [x] 00366-fast-track-survivors-reach-the-batch-ledger-v1 (1 cycle, fast-track)
 - [x] 00367-one-finding-mints-one-stub-v1 (1 cycle, fast-track)
 - [x] 00368-the-consolidator-keeps-distinct-findings-apart-v1 (1 cycle, full lane)
-- [ ] 00369-stamp-the-build-start-and-name-the-closed-prd-v1 (backlog)
+- [x] 00369-stamp-the-build-start-and-name-the-closed-prd-v1 (1 cycle, fast-track)
 
 Observations: 00349 converged at cycle 1 (2/2 tasks): rewrote
 `test_limit_stuck_returns_next_reset_epoch` in

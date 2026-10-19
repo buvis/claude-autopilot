@@ -1,0 +1,141 @@
+{
+  "phase": "done",
+  "next_phase": "",
+  "schema_version": 1,
+  "batch": {
+    "id": "202610191000",
+    "mode": "autopilot",
+    "completed_prds": [
+      {
+        "filename": "00349-pin-the-usage-limit-reset-test-to-a-relative-time-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 3,
+        "escalated_decisions": 0,
+        "tasks_completed": 2,
+        "tasks_total": 2,
+        "lane": "solo",
+        "lane_reason": "no_production_code",
+        "lane_effective": "full",
+        "lane_escalated": {
+          "from": "solo",
+          "signal": "security_diff"
+        }
+      },
+      {
+        "filename": "00350-send-bob-the-inlined-prompt-on-the-fast-track-lane-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 2,
+        "tasks_total": 2,
+        "lane": "solo",
+        "lane_reason": "no_production_code",
+        "lane_effective": "solo",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00351-give-the-drain-agoge-run-two-hours-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 1,
+        "tasks_total": 1,
+        "lane": "fast-track",
+        "lane_reason": "card_sized",
+        "lane_effective": "fast-track",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00365-review-the-committed-range-not-the-working-tree-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 1,
+        "tasks_total": 1,
+        "lane": "fast-track",
+        "lane_reason": "card_sized",
+        "lane_effective": "fast-track",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00366-fast-track-survivors-reach-the-batch-ledger-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 1,
+        "tasks_total": 1,
+        "lane": "fast-track",
+        "lane_reason": "card_sized",
+        "lane_effective": "fast-track",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00367-one-finding-mints-one-stub-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 1,
+        "tasks_total": 1,
+        "lane": "fast-track",
+        "lane_reason": "card_sized",
+        "lane_effective": "fast-track",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00368-the-consolidator-keeps-distinct-findings-apart-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 6,
+        "escalated_decisions": 0,
+        "tasks_completed": 3,
+        "tasks_total": 3,
+        "lane": "full",
+        "lane_reason": "design",
+        "lane_effective": "full",
+        "lane_escalated": null
+      },
+      {
+        "filename": "00369-stamp-the-build-start-and-name-the-closed-prd-v1.md",
+        "cycles": 1,
+        "autonomous_decisions": 0,
+        "escalated_decisions": 0,
+        "tasks_completed": 1,
+        "tasks_total": 1,
+        "lane": "fast-track",
+        "lane_reason": "card_sized",
+        "lane_effective": "fast-track",
+        "lane_escalated": null
+      }
+    ],
+    "plugin_versions": {
+      "aegis@buvis-plugins": "0.4.1",
+      "warden@buvis-plugins": "0.14.1"
+    },
+    "parks_consecutive": 0
+  },
+  "prd": "00369-stamp-the-build-start-and-name-the-closed-prd-v1.md",
+  "catchup_mode": "run",
+  "doubt_reviewer": "codex",
+  "consensus_engine": "legacy",
+  "session_model": "sonnet",
+  "rework_cap": 2,
+  "lane": "fast-track",
+  "lane_reason": "card_sized",
+  "lane_effective": "fast-track",
+  "tasks_total": 0,
+  "phases_completed": [
+    "review"
+  ],
+  "cycle": 1,
+  "tasks_completed": 0,
+  "replan_count": 0,
+  "applied_review_batches": [
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00349-pin-the-usage-limit-reset-test-to-a-relative-time-v1-review-1.md::decision-gate",
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00349-pin-the-usage-limit-reset-test-to-a-relative-time-v1-review-1.md::tail-sweep",
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00368-the-consolidator-keeps-distinct-findings-apart-v1-review-1.md::decision-gate",
+    "/Users/bob/git/src/github.com/buvis/claude-autopilot/docs/dev/project-management/reviews/00368-the-consolidator-keeps-distinct-findings-apart-v1-review-1.md::tail-sweep"
+  ],
+  "contract_card": "step: PRD 00369 fast-track lane closed (1 card committed, review-1.md written and gated, phase-done --outcome lane_reviewed applied) | invariants: batch.id 202610191000 preserved; review file gates with --require-codex-guard exactly as full-lane | next: done gate finalizes PRD 00369 (move wip->done, append completed_prds, render audit+report, capsule update)",
+  "prd_budget_since": "2026-10-19T13:48:17Z",
+  "design_mode": "skip",
+  "tasks": []
+}
