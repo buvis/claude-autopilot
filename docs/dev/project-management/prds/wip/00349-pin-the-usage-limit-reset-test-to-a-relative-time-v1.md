@@ -38,7 +38,7 @@ The test derives its banner from the error time the way the expired-record test 
 ## Tasks
 
 ### Phase 0: Foundation
-- [ ] Rewrite `test_limit_stuck_returns_next_reset_epoch` in `skills/run-autopilot/scripts/test_detect_usage_limit.py` as the Solution says. Premise: `rg -c "8:10pm" skills/run-autopilot/scripts/test_detect_usage_limit.py` prints 5 before the edit; a different count means the file already changed and the task stops and reports. - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/scripts/test_detect_usage_limit.py` passes 19 tests; `rg -c "8:10pm" skills/run-autopilot/scripts/test_detect_usage_limit.py` prints 4; `rg -c "def test_" skills/run-autopilot/scripts/test_detect_usage_limit.py` prints 19.
+- [ ] Rewrite `test_limit_stuck_returns_next_reset_epoch` in `skills/run-autopilot/scripts/test_detect_usage_limit.py` as the Solution says. Premise: `rg -c "8:10pm" skills/run-autopilot/scripts/test_detect_usage_limit.py` prints 6 before the edit; a different count means the file already changed and the task stops and reports. - Acceptance: `uv run --no-project --with pytest python -m pytest -q skills/run-autopilot/scripts/test_detect_usage_limit.py` passes 19 tests; `rg -c "8:10pm" skills/run-autopilot/scripts/test_detect_usage_limit.py` prints 5; `rg -c "def test_" skills/run-autopilot/scripts/test_detect_usage_limit.py` prints 19.
 
 ## Success Criteria
 
