@@ -249,6 +249,38 @@ def test_run_agoge_scrubs_host_markers(tmp_path):
     assert "CODEX_SESSION_ID" not in child_environ
 
 
+def test_run_agoge_default_cap_is_two_hours(tmp_path, monkeypatch):
+    # 00351: the drain agoge run's wall-clock cap default must be 7200s
+    # (two hours), not the old 3600s, when no env override is given.
+    (tmp_path / "reports").mkdir()
+    captured = {}
+
+    def fake_process(claude_bin, prompt, log_path, cap, env):
+        captured["cap"] = cap
+        return 0
+
+    monkeypatch.setattr(loop_act, "_run_agoge_process", fake_process)
+    out = io.StringIO()
+    run_agoge(tmp_path, "b-1", 2, {"PATH": os.environ["PATH"]}, out)
+    assert captured["cap"] == 7200
+
+
+def test_run_agoge_cap_env_overrides_the_default(tmp_path, monkeypatch):
+    # 00351: _AUTOPILOT_AGOGE_CAP still overrides the default cap.
+    (tmp_path / "reports").mkdir()
+    captured = {}
+
+    def fake_process(claude_bin, prompt, log_path, cap, env):
+        captured["cap"] = cap
+        return 0
+
+    monkeypatch.setattr(loop_act, "_run_agoge_process", fake_process)
+    out = io.StringIO()
+    env = {"PATH": os.environ["PATH"], "_AUTOPILOT_AGOGE_CAP": "900"}
+    run_agoge(tmp_path, "b-1", 2, env, out)
+    assert captured["cap"] == 900
+
+
 def test_drained_branch_runs_purge_and_agoge_with_the_count(tmp_path, monkeypatch):
     purges, agoges = [], []
     monkeypatch.setattr(loop_act, "run_purge", lambda repo: purges.append(repo))
