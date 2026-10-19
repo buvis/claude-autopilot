@@ -1,0 +1,50 @@
+[
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "The spec says the design measures every threshold it touches and records the measured band in the test docstrings. The two new fixture docstrings record no measured values. The 00088 docstring says only \"already passes under current code\". The only measured band is a prose claim in the module header: shared tokens of 3+ digits versus 1-2 digit day counts. The spec's required Jaccard and overlap figures are absent. I measured the 00088 pairs: ALICE/BLAKE Jaccard 0.042, ALICE/BOB 0.026, BLAKE/BOB 0.268 (merges, as intended). Those figures are recorded nowhere.",
+    "file": "skills/review-work-completion/scripts/test_consolidate_findings_regressions.py:91",
+    "reason": "single-voice"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "medium",
+    "issue": "The fix is a blunt digit-length floor (`NUMERIC_SIGNATURE_MIN_DIGITS = 3`). It is neither of the two candidates the spec told the design to weigh (citation-aware tokens, or a lower Jaccard floor), and no weighing is recorded. The header claims line numbers or counts that two reviewers cite are \"reliably >= 100\", which the repo's own fixtures contradict. Two reviewers who independently cite small line numbers no longer merge on the numeric signature. Shared 3+ digit test data still merges distinct findings. The class of false merge is narrowed, not closed.",
+    "file": "skills/review-work-completion/scripts/consolidate_findings.py:93",
+    "reason": "single-voice"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "The new test module imports the private helpers `_finding`, `_run` and `_write` from the sibling test module `test_consolidate_findings`. This couples the two files, so a rename or move in one breaks the other. A shared conftest or helper module would be sturdier. Not blocking.",
+    "file": "skills/review-work-completion/scripts/test_consolidate_findings_regressions.py:20",
+    "reason": "single-voice"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "The header comment says the same numeric-floor rationale twice, once in the module docstring and once above the constant. Both repeat the 00122 and 00070 measurements.",
+    "file": "skills/review-work-completion/scripts/consolidate_findings.py:31",
+    "reason": "single-voice"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "`test_review_00088_substring_finding_stays_apart_from_the_dedup_finding` passes against the pre-change code, as the mech replay shows. It means the 00088 fold the PRD cites is not reproduced by these lines, and the \"loose prose overlap\" half of the PRD's CHANGELOG wording is not addressed by any code change.",
+    "file": "skills/review-work-completion/scripts/test_consolidate_findings_regressions.py:98",
+    "reason": "the PRD and the design accept the 00088 fixture as a non-regression pin; the fail-first replay result is the designed behavior, not a defect"
+  },
+  {
+    "cycle": 1,
+    "disposition": "discarded",
+    "severity": "low",
+    "issue": "The CHANGELOG entry adds a note beyond the spec's one-sentence Fixed entry: that `split_ledger_dismissed` is also narrowed. The spec asked for the wording \"or loose prose overlap\", which is not covered because prose thresholds were not touched.",
+    "file": "CHANGELOG.md:23",
+    "reason": "single-voice"
+  }
+]
