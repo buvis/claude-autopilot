@@ -300,3 +300,49 @@ def test_drained_branch_runs_purge_and_agoge_with_the_count(tmp_path, monkeypatc
     assert purges == [lp.cwd]
     assert agoges == [("b-9", 2)]
     assert "2 PRDs completed." in lp._test["out"].getvalue()
+
+
+def test_every_pick_gated_says_blocked_and_names_the_prds(tmp_path, monkeypatch):
+    """backlog/ is not drained when every PRD in it failed its eligibility
+    gate: the closing line must say so and name them, deduplicated across
+    the selection passes that recorded the same PRD."""
+    monkeypatch.setattr(loop_act, "run_purge", lambda repo: None)
+    monkeypatch.setattr(loop_act, "run_agoge", lambda *args, **kwargs: None)
+    skips = [
+        {"prd": "00058-a-v1.md", "command": "x", "exit_code": 1, "note": ""},
+        {"prd": "00059-b-v1.md", "command": "x", "exit_code": 1, "note": ""},
+        {"prd": "00058-a-v1.md", "command": "x", "exit_code": 1, "note": ""},
+    ]
+    lp = make_loop(
+        tmp_path,
+        [terminal_step(batch="b-9", completed_prds=[], skips=skips)],
+    )
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b-9"})
+    assert lp.run() == 0
+    out = lp._test["out"].getvalue()
+    assert "Backlog blocked. 0 PRDs completed." in out
+    assert "2 still gated by eligibility: 00058, 00059." in out
+    assert "Backlog drained." not in out
+
+
+def test_a_drain_with_some_picks_gated_still_lists_them(tmp_path, monkeypatch):
+    monkeypatch.setattr(loop_act, "run_purge", lambda repo: None)
+    monkeypatch.setattr(loop_act, "run_agoge", lambda *args, **kwargs: None)
+    skips = [{"prd": "00059-b-v1.md", "command": "x", "exit_code": 2, "note": ""}]
+    lp = make_loop(
+        tmp_path,
+        [terminal_step(batch="b-9", completed_prds=["00058-a-v1.md"], skips=skips)],
+    )
+    write_state(lp._test["ap_dir"], prd="p.md", next_phase="build", batch={"id": "b-9"})
+    assert lp.run() == 0
+    out = lp._test["out"].getvalue()
+    assert "Backlog drained. 1 PRDs completed. 1 still gated by eligibility: 00059." in out
+
+
+def test_gated_prds_ignores_malformed_entries_and_keeps_odd_names():
+    assert loop_act.gated_prds(None) == []
+    assert loop_act.gated_prds([{"prd": 7}, "x", {"note": ""}, {"prd": ""}]) == []
+    assert loop_act.gated_prds([{"prd": "odd-name.md"}, {"prd": "00001-a.md"}]) == [
+        "odd-name.md",
+        "00001",
+    ]

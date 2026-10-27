@@ -35,6 +35,20 @@ PURGE_SCRIPT = (
 store_git = custody.store_git
 
 
+def gated_prds(skips: object) -> list[str]:
+    """Distinct PRD ids from `batch.skips[]`, first-seen order, shown as the
+    `00XXX` prefix when the basename carries one. Malformed entries are
+    ignored: this feeds one summary line, never a decision."""
+    seen: dict[str, None] = {}
+    for entry in skips if isinstance(skips, list) else []:
+        name = entry.get("prd") if isinstance(entry, dict) else None
+        if not isinstance(name, str) or not name:
+            continue
+        head = name.split("-", 1)[0]
+        seen[head if len(head) == 5 and head.isdigit() else name] = None
+    return list(seen)
+
+
 def run_purge(repo: Path) -> None:
     """`purge_devtmp.py --repo <repo> --apply || true`."""
     try:
@@ -188,12 +202,15 @@ class ActMixin:
         state_path = ap_dir / "state.json"
         state = _load_json(state_path)
         prds_done = None
+        gated: list[str] = []
         if isinstance(state, dict):
             # jq's `.batch.completed_prds | length` yields 0 for missing
             # keys, so a parsed state always counts; only an unreadable
             # one omits the count (and the agoge decision) entirely.
-            completed = (state.get("batch") or {}).get("completed_prds")
+            batch = state.get("batch") or {}
+            completed = batch.get("completed_prds")
             prds_done = len(completed) if isinstance(completed, list) else 0
+            gated = gated_prds(batch.get("skips"))
         stamp = decision["batch"] or _dt.datetime.now().strftime("%Y%m%d%H%M")
         store_repo, store_run_git = store_git(ap_dir)
         try:
@@ -201,10 +218,16 @@ class ActMixin:
         except OSError:
             pass
         suffix = f" {prds_done} PRDs completed." if prds_done is not None else ""
-        print(f"\nBacklog drained.{suffix}", file=self.out)
+        # "Drained" means backlog/ is empty. When every pick failed its
+        # eligibility gate the PRDs are still there, so say so and name them.
+        blocked = bool(gated) and not prds_done
+        if gated:
+            suffix += f" {len(gated)} still gated by eligibility: {', '.join(gated)}."
+        headline = "Backlog blocked." if blocked else "Backlog drained."
+        print(f"\n{headline}{suffix}", file=self.out)
         self._notify(
-            f"autopilot ✅ {self._repo_name()}",
-            f"Backlog drained.{suffix}",
+            f"autopilot {'⚠️' if blocked else '✅'} {self._repo_name()}",
+            f"{headline}{suffix}",
         )
         run_purge(self.cwd)
         run_agoge(
