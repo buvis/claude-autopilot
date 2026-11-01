@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-PROJECT_ROOT="$(pwd)"
+PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 # Parse args: optional `--since <ref>` flag, then up to two positionals.
 SINCE_REF=""
