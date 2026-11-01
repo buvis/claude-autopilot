@@ -236,6 +236,38 @@ def test_assemble_merges_drained_lanes_in_order(
     assert not _deferred(wave_path, wave_id).exists()
 
 
+def test_worktree_root_setting_moves_lane_and_assembly_worktrees_under_it(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "worktrees"
+    monkeypatch.setenv(wave.WORKTREE_ROOT_ENV, str(root))
+    repo, wave_path = _launched(tmp_path, monkeypatch, 1)
+    lane_dir = root / repo.name / f"{repo.name}-l1"
+    assert wave.load(wave_path)["lanes"][0]["worktree"] == str(lane_dir)
+    assert lane_dir.is_dir()
+    _commit(_finish(wave_path, "l1", ""), {"x/a.py": "# l1\n"}, "l1 change")
+    wave_assemble.assemble(repo, wave_path, run_checks=_checks_pass)
+    saved, _ = _saved(repo, wave_path)
+    assembly = root / repo.name / f"{repo.name}-wave-{saved['id']}"
+    assert Path(saved["assembly"]["worktree"]).resolve() == assembly.resolve()
+    beside = [p.name for p in tmp_path.iterdir() if p.name.startswith(f"{repo.name}-")]
+    assert beside == [], f"worktrees still created beside the repo: {beside}"
+
+
+def test_wave_planned_beside_the_repo_stays_valid_once_the_root_is_set(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, wave_path = _repo(tmp_path, dict(list(THREE_LANES.items())[:1]))
+    assert wave.plan(repo, wave_path, max_lanes=1) == 0
+    monkeypatch.setenv(wave.WORKTREE_ROOT_ENV, str(tmp_path / "worktrees"))
+    assert wave._structural_errors(repo, wave.load(wave_path)) == []
+    tampered = wave.load(wave_path)
+    tampered["lanes"][0]["worktree"] = str(tmp_path / "elsewhere")
+    assert wave._structural_errors(repo, tampered) != []
+
+
 def test_append_only_conflicts_keep_both_sides_in_order(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

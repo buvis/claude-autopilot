@@ -147,8 +147,18 @@ def _format_branch(wave_id: str, order: int) -> str:
     return f"wave/{wave_id}/l{order}"
 
 
+WORKTREE_ROOT_ENV = "AUTOPILOT_WORKTREE_ROOT"
+
+
+def worktree_parent(repo: Path) -> Path:
+    """Where a wave's lane and assembly worktrees go: `$AUTOPILOT_WORKTREE_ROOT/<repo>`
+    when that is set, else beside the repo."""
+    root = os.environ.get(WORKTREE_ROOT_ENV, "").strip()
+    return Path(root).expanduser() / repo.name if root else repo.parent
+
+
 def _format_worktree(repo: Path, order: int) -> str:
-    return f"{repo.parent}/{repo.name}-l{order}"
+    return f"{worktree_parent(repo)}/{repo.name}-l{order}"
 
 
 def _count_core_paths(each: Lane) -> int:
@@ -410,7 +420,10 @@ def _collect_canonical_errors(repo: Path, wave: dict) -> list[str]:
     errors: list[str] = []
     for each in wave["lanes"]:
         order = each["order"]
-        if each["worktree"] != _format_worktree(repo, order):
+        # Either layout this code writes: the current root, or beside the repo
+        # (a wave planned before AUTOPILOT_WORKTREE_ROOT was set stays valid).
+        beside = f"{repo.parent}/{repo.name}-l{order}"
+        if each["worktree"] not in {_format_worktree(repo, order), beside}:
             errors.append(
                 f"lane {each['name']}: worktree does not match the canonical path"
                 f" for order {order}",

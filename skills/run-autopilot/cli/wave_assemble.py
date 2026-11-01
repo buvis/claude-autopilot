@@ -27,6 +27,7 @@ from cli.wave import (
     locked,
     missing_message,
     save,
+    worktree_parent,
 )
 from cli.wave_launch import lane_status
 
@@ -554,7 +555,7 @@ def _open_assembly(
     record was saved)."""
     assembly = Path(
         WAVE_ASSEMBLY_WORKTREE_FMT.format(
-            repo_parent=repo.parent,
+            repo_parent=worktree_parent(repo),
             repo_name=repo.name,
             wave_id=wave["id"],
         ),

@@ -27,8 +27,11 @@ lane holding the fewest PRDs. Lanes are numbered core-touching first (most core
 paths first, where core means a force-shared file or anything under
 `skills/run-autopilot/cli/` or `skills/run-autopilot/references/`), so the lane
 most entangled with the pack's core is `l1`. Lane `l<n>` gets branch
-`wave/<wave id>/l<n>` and worktree `<repo>-l<n>` beside the repo. The plan is
-printed, one block per lane plus the held-back list.
+`wave/<wave id>/l<n>` and worktree `<repo>-l<n>` beside the repo. When
+`AUTOPILOT_WORKTREE_ROOT` is set, every wave worktree (lanes and the assembly)
+goes under `$AUTOPILOT_WORKTREE_ROOT/<repo>/` instead, with the same names; a
+wave planned beside the repo before the variable was set stays valid. The plan
+is printed, one block per lane plus the held-back list.
 
 It refuses with exit 1 and writes nothing when `wave.json` is unreadable or not
 valid JSON, when it is structurally invalid, when the wave it holds is still live

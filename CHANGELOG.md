@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **run-autopilot**: `AUTOPILOT_WORKTREE_ROOT` puts every wave worktree (lanes and assembly) under `$AUTOPILOT_WORKTREE_ROOT/<repo>/` instead of beside the repo; unset keeps today's layout
 - **work**: `close_from_artifacts` closes Ivan, Tess and Pat rows from their own landing artifact (a matching commit or review-output mtime) instead of leaving them open at handoff
 
 ### Fixed
